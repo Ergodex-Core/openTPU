@@ -267,6 +267,10 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
+    if axi == 1 and os.environ.get("OTPU_NCH"):
+        # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
+        # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
+        p["NCH"] = int(os.environ["OTPU_NCH"])
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
