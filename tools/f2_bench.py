@@ -3,6 +3,11 @@
 client's side of its streamed chat completions.
 
     python tools/f2_bench.py --dev f2:0 --json bench.json [--models qwen3-0.6b,gemma3-1b,...]
+    python tools/f2_bench.py --dev f2:0 --json spec.json --models bonsai-1.7b \
+        --serve-args "--spec-k 3 --spec-draft models/Qwen3-0.6B" --tag spec
+
+--serve-args: more otpu-serve arguments for every model (after the model's own; e.g. speculative
+decoding, docs/specdec.md); --tag: the results' key suffix and the log's (name-tag).
 
 Per model: otpu-serve is started (weights uploaded, programs compiled: the load time), one warm-up
 request, then for each prompt (a short question and a long passage to summarize) a greedy
@@ -16,6 +21,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shlex
 import signal
 import subprocess
 import sys
@@ -93,12 +99,21 @@ def main(argv=None) -> None:
     ap.add_argument("--max-tokens", type=int, default=128)
     ap.add_argument("--cap", type=int, default=2048)
     ap.add_argument("--json", type=Path, required=True)
+    ap.add_argument("--serve-args", default="", help="more otpu-serve arguments, every model")
+    ap.add_argument("--port", type=int, default=SERVE_PORT)
+    ap.add_argument("--tag", default="", help="the results' key and log suffix")
+    ap.add_argument("--backend", default="board", help="otpu-serve's backend (board-isa: the "
+                    "card's driver over the ISA simulator, no card)")
     a = ap.parse_args(argv)
+    globals()["SERVE_PORT"] = a.port        # (stream() and get() read it)
     results = json.loads(a.json.read_text()) if a.json.exists() else {}
     for name in a.models.split(","):
         label, args = MODELS[name]
-        log = open(ROOT / "build" / f"f2-bench-{name}.log", "w")
-        cmd = [sys.executable, "-m", "opentpu.serve.api", *args, "--backend", "board",
+        args = [*args, *shlex.split(a.serve_args)]
+        key = f"{name}-{a.tag}" if a.tag else name
+        (ROOT / "build").mkdir(exist_ok=True)
+        log = open(ROOT / "build" / f"f2-bench-{key}.log", "w")
+        cmd = [sys.executable, "-m", "opentpu.serve.api", *args, "--backend", a.backend,
                "--dev", a.dev, "--host", "127.0.0.1", "--port", str(SERVE_PORT),
                "--cap", str(a.cap), "--served-model-name", name]
         t0 = time.perf_counter()
@@ -124,7 +139,7 @@ def main(argv=None) -> None:
                 res["server_stats"] = get("/v1/stats")
             except OSError:
                 pass
-            results[name] = res
+            results[key] = res
             a.json.write_text(json.dumps(results, indent=1) + "\n")
         finally:
             p.send_signal(signal.SIGTERM)
