@@ -137,9 +137,9 @@ class Spec:
     def image(self, cfg: Config, cap: int, batch: int = 1, rows: int = 1,
               wformat: str = "int8", head_format: str | None = None,
               lookup: bool = False, embed_host: bool | None = None,
-              formats: str | None = None) -> "Image":
+              formats: str | None = None, spec_rows: int = 0, base: int = 0) -> "Image":
         return Image(self, cfg, cap, batch, rows, wformat, head_format, lookup, embed_host,
-                     formats)
+                     formats, spec_rows, base)
 
 
 def finite(v: np.ndarray, name: str) -> np.ndarray:
@@ -917,7 +917,8 @@ class Image(EmbedHost):
 
     def __init__(self, spec: Spec, cfg: Config, cap: int, batch: int = 1, rows: int = 1,
                  wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
-                 embed_host: bool | None = None, formats: str | None = None):
+                 embed_host: bool | None = None, formats: str | None = None,
+                 spec_rows: int = 0, base: int = 0):
         spec.check(cfg)
         if cap % cfg.D:
             raise ValueError("KV capacity must be a multiple of D")
@@ -940,7 +941,10 @@ class Image(EmbedHost):
         self.batch, self.rows = batch, rows
         self.nq_loc, self.nkv_loc = spec.n_q // S, spec.n_kv // S
         self.h_loc, self.f_loc, self.v_loc = H // S, F_ // S, spec.vocab // S
-        b = _Bump()
+        # base: the image's first byte (a speculative decoding's draft model's image, above the
+        # target's in one DRAM: specdec.draft_engine); build() fills [base, nbytes) only
+        self.base = base
+        b = _Bump(base)
         R = rows
         rd = spec.rope_dim
         self.io = {"x": b.alloc(4 * H * R), "cos": b.alloc(2 * rd * R),
@@ -1012,6 +1016,12 @@ class Image(EmbedHost):
                                     M=cfg.MCOLS, embed_host=bool(embed_host),
                                     rows=rows, imem=cfg.IMEM_WORDS,
                                     waitc=cfg.SEQ_WC) if lookup else {}
+        if spec_rows:               # speculative decoding's loop (opentpu/llm/specdec.py)
+            if not lookup:
+                raise ValueError("spec_rows: the decode loop on the card needs lookup tables")
+            from . import specdec as SD
+            self.lookup["sd"] = SD.alloc(b, cap, self.lookup["block"], spec_rows,
+                                         cfg.IMEM_WORDS, cfg.SEQ_WC)
         self.choices = {"embed_host": self.embed_host,          # (the compile worker's
                         "formats": self.formats}                # image)
         self.nbytes = b.next
@@ -1874,11 +1884,13 @@ def _lm_head_rows(x, m, spec, logit_rows):
 # =============================================================================== engine
 def device_config(spec: Spec, cap: int, batch: int = 1, rows: int = 1, wformat: str = "int8",
                   head_format: str | None = None, lookup: bool = False,
-                  experts: int | None = None, embed_host: bool | None = None, **kw) -> Config:
+                  experts: int | None = None, embed_host: bool | None = None,
+                  spec_rows: int = 0, **kw) -> Config:
     """The design configuration with DRAM sized for this model (power of two MiB)."""
     probe = spec.image(design_config(DRAM_BYTES=1 << 40, **kw), cap, batch, rows, wformat,
                        head_format, **({"lookup": True} if lookup and has_lookup(spec) else {}),
                        **({"experts": experts} if experts is not None else {}),
+                       **({"spec_rows": spec_rows} if spec_rows else {}),
                        **({"embed_host": embed_host} if embed_host is not None else {}))
     size = 1 << max(20, (probe.nbytes - 1).bit_length())
     return design_config(DRAM_BYTES=size, **kw)
@@ -2237,7 +2249,7 @@ class Engine:
                  pool_map: bool = True, prog_cache: bool | None = None,
                  prompt_runs: bool = False, layer_ahead=None, expert_major: bool = False,
                  snapshots: int = 0, batch_area: bool = False, tile_runs: bool | None = None,
-                 tile_rows: int | None = None):
+                 tile_rows: int | None = None, spec_rows: int = 0, image_base: int = 0):
         from . import prefill as PF
         self.spec, self.cap, self.block = spec, cap, block
         self.prog_cache = PC.enabled() if prog_cache is None else bool(prog_cache)
@@ -2250,6 +2262,10 @@ class Engine:
             wkw["experts"] = experts
         if embed_host is not None:          # the int8 embedding table on the host (default: the
             wkw["embed_host"] = embed_host  # image's choice, a MoE's untied table there)
+        if spec_rows:                       # speculative decoding's verify rows (specdec.py)
+            wkw["spec_rows"] = spec_rows
+        if image_base:                      # a draft model's image above the target's
+            wkw["base"] = image_base        # (specdec.draft_engine)
         # an int8 embedding is dequantized on the device (the image's tables), never the host
         int8_embed = getattr(spec, "embed", "f32") == "int8"
         # (batch > 1: the tables serve every sequence; sequence 0 keeps the resident decode,
