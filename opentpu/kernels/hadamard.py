@@ -51,9 +51,11 @@ def rotate(v, rot: Rotation | None, K: int | None = None, c0=0):
     K = n if K is None else K
     if n % B:
         raise ol.CompileError(f"rotate: {n} columns are not whole blocks of {B}")
-    y = v * ol.load(rot.sign(K, c0, n))[None, :]
     z = ol.empty([M * n])                   # contiguous: its rows laid end to end are R v
-    ol.dot(y.reshape(M * n // B0, B0), rot.H, out=z.reshape(M * n // B0, B0))
+    z.reshape(M, n).set(v * ol.load(rot.sign(K, c0, n))[None, :])
+    del v                                   # (a caller's temp: its words free for the MM)
+    zb = z.reshape(M * n // B0, B0)         # (the MM reads its QACT's copy: out may be its x)
+    ol.dot(zb, rot.H, out=zb)
     r = B // B0
     if r > 1:                               # H_r across each block's r rows of B0: in place
         g = z.reshape(M * n // B, B)        # [blocks, r B0]: column part i is row i of each

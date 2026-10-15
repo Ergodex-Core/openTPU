@@ -66,6 +66,10 @@ MODELS = {
     "bonsai2-4b-rot": ("Ternary-Bonsai-2-4B (rotated, int4)",
                        ["--model", "models/Ternary-Bonsai-2-4B", "--rotate", "--wformat", "int4",
                         "--head-format", "int4", "--slots", "1"]),
+    # speculative decoding with the checkpoint's MTP layer (the -MTP-Q8_0 GGUF's nextn layer)
+    "bonsai2-4b-mtp": ("Ternary-Bonsai-2-4B + MTP (int4, int8 head)",
+                       ["--model", "models/Ternary-Bonsai-2-4B-MTP", "--mtp", "--wformat", "int4",
+                        "--head-format", "int8", "--slots", "1"]),
 }
 # --models only: not on the card's page (local runs, --backend isa)
 LOCAL_MODELS = {

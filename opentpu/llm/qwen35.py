@@ -821,10 +821,11 @@ class Image(EmbedHost):
             self.rot = SimpleNamespace(block=B, base=B0, fmt=hf,
                                        H=b.alloc(B0 * Q.row_bytes(B0, hf, D)),
                                        signs={k: b.alloc(4 * k) for k in widths},
-                                       # a block wider than an out_proj head group: the
-                                       # groups' outputs gather here first (_flush_rotated)
-                                       onall=b.alloc(4 * self.nl * dv) if B > self.og * dv
-                                       else None)
+                                       # the heads' outputs gather here before out_proj
+                                       # (_flush_rotated): a rows run's always, a step's where
+                                       # a block is wider than a head group
+                                       onrows=b.alloc(4 * self.dnrows * self.nl * dv),
+                                       wide=B > self.og * dv)
         # the int8 embedding rows of the resident decode are the tied int8 head's (S = 1)
         shared = spec.tied and self.head_format == "int8" and S == 1
         if embed_host is None:      # an int8 table of its own on the host by default where its
@@ -1387,8 +1388,8 @@ class Image(EmbedHost):
             rot = Rotation(block=r.block, base=r.base, signs=dict(r.signs),
                            H=QTensor(Affine.of(r.H), None, (r.base, r.base),
                                      Q.row_bytes(r.base, r.fmt, D), 0, D, wf=Q.mxu_wf(r.fmt)),
-                           onall=None if r.onall is None else
-                           Tensor(r.onall, (1, nl * dv), (nl * dv, 1)))
+                           onrows=Tensor(r.onrows, (self.dnrows, nl * dv), (nl * dv, 1)),
+                           wide=r.wide)
 
         def layer(li, it=None, jt=None):
             """Descriptors of layer `li` (static), or of element li of its run's unit at
@@ -1674,8 +1675,8 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
         if rot is not None:                 # a group is whole rotation blocks: at its end
             if k == 0:
                 return
-            if rot.onall is not None:       # a block spans groups: _flush_rotated, at the end
-                ol.store(rot.onall[:, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
+            if rot.wide:                    # a block spans groups: _flush_rotated, at the end
+                ol.store(rot.onrows[0:1, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
                 return
             ol.dot(rotate(ON.reshape(1, og * dv), rot, spec.lin_heads * dv,
                           (ol.program_id() * nl + g * og) * dv), dn.wout(g), acc=y)
@@ -1765,18 +1766,18 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
         _pair_segment(p, p % 2, p + 1 >= NP, p + 2 >= NP, group(p - 1))
     post((NP - 1) % 2)
     flush(group(NP - 1), 1 if og == 4 and NP > 1 else None)
-    _flush_rotated(rot, dn, y, spec)
+    if rot is not None and rot.wide:
+        _flush_rotated(rot, dn, y, spec, 1)
     return x + ol.all_reduce(y)
 
 
-def _flush_rotated(rot, dn, y, spec):
-    """out_proj of every head group once all have run, where a rotation block spans several
-    groups (Bonsai-2-9B: B = 4096, a slice's 32 heads): their outputs, gathered in rot.onall,
-    rotated a block at a time, then each group's column part."""
-    if rot is None or rot.onall is None:
-        return
+def _flush_rotated(rot, dn, y, spec, R: int):
+    """out_proj of every head group once all have run, for R rows: their outputs, gathered in
+    rot.onrows (a rows run's always; a step's where a rotation block spans several groups,
+    Bonsai-2-9B: B = 4096, a slice's 32 heads), rotated a block at a time, then each group's
+    column part."""
     nl, og, dv, B = dn.nl, dn.og, spec.lin_dv, rot.block
-    v = ol.load(rot.onall)
+    v = ol.load(rot.onrows[0:R, :])
     for b in range(nl * dv // B):
         vb = rotate(v[:, b * B:(b + 1) * B], rot, spec.lin_heads * dv,
                     (ol.program_id() * nl * dv) + b * B)
@@ -1917,8 +1918,8 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
         if rot is not None:                 # a group is whole rotation blocks: at its end
             if k == 0:
                 return
-            if rot.onall is not None:       # a block spans groups: _flush_rotated, at the end
-                ol.store(rot.onall[:, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
+            if rot.wide:                    # a block spans groups: _flush_rotated, at the end
+                ol.store(rot.onrows[0:1, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
                 return
             ol.dot(rotate(ON.reshape(1, og * dv), rot, spec.lin_heads * dv,
                           (ol.program_id() * nl + g * og) * dv), dn.wout(g), acc=y)
@@ -1982,7 +1983,8 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
             _pair_segment(2 * i + 2, 0, False, False, None if og == 4 else 2 * i + 2)
     for p in range(1 + 2 * n_it, NP):
         _pair_segment(p, p % 2, p + 1 >= NP, p + 2 >= NP, group(p))
-    _flush_rotated(rot, dn, y, spec)
+    if rot is not None and rot.wide:
+        _flush_rotated(rot, dn, y, spec, 1)
     return x + ol.all_reduce(y)
 
 
@@ -2048,8 +2050,18 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
     CP, RP = nb * bw, nb * bw + 2 * dv                  # its convolved channels, its rows
     NP, ng, gp = nl // 2, nl // og, og // 2             # pairs, head groups, pairs per group
     TP = K * CP                                         # taps words of a pair (then its ring)
+    rot = getattr(lw, "rot", None)                      # Hadamard-folded (Spec.rot)
+    xp = None
+    if rot is not None:
+        if xs is not None:
+            raise CompileError("a tiled run of a rotated model")
+        g_in = ol.load(lw.g_in)                         # (the norm twice, and the operands
+        xs = ol.quantize(rmsnorm(x, g_in, eps), free=True)      # in ACT RAM only: no [R, H]
+        xp = ol.quantize(rotate(rmsnorm(x, g_in, eps), rot), free=True)   # tiles kept) a, b:
+        del g_in                                        # not rotated; the projections' rotated
     if xs is None:                                      # (a tiled run's: tiled.py)
         xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    xp = xs if xp is None else xp
     ab = ol.dot(xs, lw.wab)                             # [R, 2nl]: a, then b, of each head
     alog, dtb = ol.load(lw.alog), ol.load(lw.dtb)
     for r in range(R):
@@ -2077,7 +2089,11 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
     split = og == 4 and NP > 1                          # _deltanet's last group, in pairs
 
     def flush(g, ON, c0, c1):
-        """y += ON . out_proj columns [c0, c1) of head group g (heads of dv columns)."""
+        """y += ON . out_proj columns [c0, c1) of head group g (heads of dv columns); rotated,
+        ON to rot.onrows, out_proj after every group (_flush_rotated)."""
+        if rot is not None:
+            ol.store(rot.onrows[0:R, (g * og + c0) * dv:(g * og + c1) * dv], ON)
+            return
         ol.dot(ON, dn.wout(g)[:, c0 * dv:c1 * dv], acc=y)
 
     def head_in(X, taps, a, out=None, act=True):
@@ -2200,8 +2216,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
         for j in range(1, min(K, p0 + 1)):              # positions p0-K+1 ..: the window
             sl = (K - 1 - j) * CP                       # (_past)
             ol.load(win[sl:sl + CP], out=X[K - 1 - j, :])
-        ol.dot(xs, dn.wh(p)[0:CP, :], out=X[K - 1:K - 1 + R, :])
-        ol.dot(xs, dn.wh(p)[CP:RP, :], out=Z)                            # z of a, of b
+        ol.dot(xp, dn.wh(p)[0:CP, :], out=X[K - 1:K - 1 + R, :])
+        ol.dot(xp, dn.wh(p)[CP:RP, :], out=Z)                            # z of a, of b
         if window:
             store_window(p, b)
 
@@ -2285,10 +2301,10 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
         ON = ol.empty([R, og * dv])                     # the group's normed, gated o
 
         def mm_x(p, t):
-            ol.dot(xs, dn.wh(p)[0:CP, :], out=PB[t][1][K - 1:K - 1 + R, :])
+            ol.dot(xp, dn.wh(p)[0:CP, :], out=PB[t][1][K - 1:K - 1 + R, :])
 
         def mm_z(p, t):
-            ol.dot(xs, dn.wh(p)[CP:RP, :], out=PB[t][2])                 # z of a, of b
+            ol.dot(xp, dn.wh(p)[CP:RP, :], out=PB[t][2])                 # z of a, of b
 
         def fetch(p, t, taps=True):
             X = PB[t][1]
@@ -2375,6 +2391,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
 
     if NB == 2:
         _rows_pipelined()
+        if rot is not None:
+            _flush_rotated(rot, dn, y, spec, R)
         return x + ol.all_reduce(y)
     ONp = ol.empty([R, 2 * dv])                         # normed, gated o of a pair per row
     GDB = ol.empty([R, 4])                              # decays, then betas, of the pair's heads
@@ -2393,6 +2411,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
             #                     immediate)
             pair((ng - 1, q))
             flush(ng - 1, ONp, 2 * q, 2 * q + 2)
+    if rot is not None:
+        _flush_rotated(rot, dn, y, spec, R)
     return x + ol.all_reduce(y)
 
 

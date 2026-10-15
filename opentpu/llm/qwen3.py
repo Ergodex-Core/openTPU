@@ -1762,7 +1762,8 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
     layer's prompt rows in a layer-major prefill, qwen35.qwen35_mtp_kv_run)."""
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     R = rows.R if isinstance(rows, RunRows) else len(rows)
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [R, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     q = None if kv_only else ol.dot(xs, lw.wq)  # [R, nq_loc*d]
@@ -1822,7 +1823,7 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
             cols = slice(h0 * d, min(nq, h0 + mc) * d)      # a time (TMEM)
             o[:, cols].set(o[:, cols] * sigmoid(ol.dot(xs, lw.wgate[cols, :])))
     o_all = ol.all_gather(o)                    # [R, n_q*d]
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [R, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [R, H]
     return x + y
 
 
@@ -1863,7 +1864,8 @@ def _lm_head_rows(x, m, spec, logit_rows):
         return
     sid = ol.program_id()
     a, e = logit_rows[0], logit_rows[-1] + 1
-    xs = ol.quantize(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps),
+                            getattr(m, "rot", None)))
     chunk = head_rows_chunk(e - a)
     sinks = getattr(m, "lm_sinks", None)
     for c0 in range(0, m.v_loc, chunk):
