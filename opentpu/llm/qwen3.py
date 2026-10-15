@@ -243,6 +243,10 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
+    from .bonsai2 import is_bonsai2
+    if is_bonsai2(model_dir):           # Ternary-Bonsai 2: a Qwen3.5 GGUF (prism-ml)
+        from .bonsai2 import Weights as Bonsai2Weights
+        return Bonsai2Weights(model_dir, mtp)
     if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma3", "gemma3_text"):
         from .gemma3 import load_weights as gemma3_weights
         return gemma3_weights(model_dir)

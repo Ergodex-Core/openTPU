@@ -122,10 +122,12 @@ def _elem(x: np.ndarray, grid: str) -> np.ndarray:
         return np.clip(np.rint(x), -7, 7)
     if grid == "e2m1":
         return np.sign(x) * E2M1[e2m1_code(x)]
+    if grid == "t2":
+        return np.clip(np.rint(x), -1, 1)
     raise ValueError(grid)
 
 
-QMAX = {"int4": 7.0, "e2m1": E2M1_MAX}
+QMAX = {"int4": 7.0, "e2m1": E2M1_MAX, "t2": 1.0}
 SEARCH = np.linspace(0.64, 1.12, 13)          # scale candidates, x the round-to-nearest scale
 
 
@@ -263,11 +265,15 @@ def rel_err(W: np.ndarray, deq: np.ndarray) -> float:
 MX_NUMERICS = "mx1"
 DEC_INT4 = np.array([0, 1, 2, 3, 4, 5, 6, 7, -8, -7, -6, -5, -4, -3, -2, -1], np.int8)
 DEC_FP4 = np.array([0, 1, 2, 3, 4, 6, 8, 12, 0, -1, -2, -3, -4, -6, -8, -12], np.int8)
-DEC = {"int4": DEC_INT4, "fp4": DEC_FP4, "nvfp4": DEC_FP4}
+DEC_T2 = np.array([-1, 0, 1, 2], np.int8)   # t2: a 2-bit code c is c - 1 (PQ2_0 / Q2_0's)
+DEC = {"int4": DEC_INT4, "fp4": DEC_FP4, "nvfp4": DEC_FP4, "t2": DEC_T2}
 NSUB = 4                       # sub-blocks per K-block (QACT's offsets, int4 / fp4's multipliers)
 NVG = 8                        # nvfp4: E4M3 groups per K-block
-MXU_FORMATS = ("int8", "int4", "fp4", "nvfp4")
+MXU_FORMATS = ("int8", "int4", "fp4", "nvfp4")     # the general weight formats
 FOUR = ("int4", "fp4", "nvfp4")
+TWO = ("t2",)                  # 2-bit elements (docs/ternary.md): four per byte, D/4 a block;
+                               # for ternary checkpoints (lossy on any other weights)
+WEIGHT_FORMATS = MXU_FORMATS + TWO
 MMAX = 63                      # int4 / fp4: the largest 6-bit multiplier
 DW_MAX = 255                   # an offset byte
 
@@ -284,9 +290,30 @@ def pack4(codes: np.ndarray) -> np.ndarray:
     return (c[..., 0::2] | (c[..., 1::2] << 4)).astype(np.uint8)
 
 
+def unpack2(b: np.ndarray) -> np.ndarray:
+    """Bytes [..., n] -> 2-bit codes [..., 4n], element i in bits 2 (i % 4) of byte i / 4 (the
+    layout of llama.cpp's Q2_0 / PQ2_0 qs)."""
+    b = np.asarray(b, np.uint8)
+    return ((b[..., None] >> np.array([0, 2, 4, 6], np.uint8)) & 3).reshape(*b.shape[:-1],
+                                                                        4 * b.shape[-1])
+
+
+def pack2(codes: np.ndarray) -> np.ndarray:
+    """2-bit codes [..., 4n] (0..3) -> bytes [..., n]."""
+    c = np.asarray(codes, np.uint8)
+    return (c[..., 0::4] | (c[..., 1::4] << 2) | (c[..., 2::4] << 4) | (c[..., 3::4] << 6)
+            ).astype(np.uint8)
+
+
+def per_chunk(fmt: str) -> int:
+    """K-blocks per streamed D-byte chunk: int8 1, 4-bit 2, t2 4."""
+    return 4 if fmt in TWO else 1 if fmt == "int8" else 2
+
+
 def row_bytes(K: int, fmt: str, D: int = 128) -> int:
-    """DRAM bytes of one streamed row of K elements (4-bit rows padded to whole D-byte chunks)."""
-    return K if fmt == "int8" else -(-K // (2 * D)) * D
+    """DRAM bytes of one streamed row of K elements (4-bit and t2 rows padded to whole D-byte
+    chunks)."""
+    return K if fmt == "int8" else -(-K // (per_chunk(fmt) * D)) * D
 
 
 def scale_bytes(K: int, fmt: str, D: int = 128, rsc: bool = False) -> int:
@@ -303,6 +330,8 @@ def scale_bytes(K: int, fmt: str, D: int = 128, rsc: bool = False) -> int:
         return 4 + 4 * -(-KB // 4)
     if fmt in ("int4", "fp4"):
         return 8 + 8 * -(-KB // 2)
+    if fmt == "t2":                 # Sw, three reserved words, a word per block (int4's word):
+        return 16 + 16 * -(-KB // 4)    # a chunk's four words one 16-byte aligned read
     if fmt == "nvfp4":
         return 16 + 16 * -(-KB // 2)
     raise ValueError(f"unknown MXU format {fmt!r}")
@@ -331,7 +360,7 @@ def _x4(W: np.ndarray, fmt: str, D: int):
     halved), dw [N, KB] uint8, m [N, KB, NSUB] uint8, deq [N, K] float64)."""
     N, K = W.shape
     KB, sub = K // D, D // NSUB
-    grid = "int4" if fmt == "int4" else "e2m1"
+    grid = {"int4": "int4", "t2": "t2"}.get(fmt, "e2m1")
     xb = np.asarray(W, np.float64).reshape(N, KB, NSUB, sub)
     sb = np.abs(xb).max(-1) / QMAX[grid]                         # ideal sub-block scales
     top = sb.max(-1).max(-1)                                     # [N]
@@ -358,6 +387,9 @@ def _x4(W: np.ndarray, fmt: str, D: int):
     x = best_q / (unit * best_m)[..., None]                      # grid values (exact)
     if grid == "int4":
         code = np.rint(x).astype(np.int64) & 15
+        sw = Sw
+    elif grid == "t2":
+        code = np.rint(x).astype(np.int64) + 1                  # -1, 0, 1 -> 0, 1, 2
         sw = Sw
     else:
         mag = e2m1_code(x)
@@ -411,11 +443,12 @@ def pack_scales(fmt: str, Sw, dw=None, m=None, e4=None) -> np.ndarray:
     rows[:, :4] = Sw[:, None].view(np.uint8)
     if fmt == "int8":
         rows[:, 4:4 + KB] = dw
-    elif fmt in ("int4", "fp4"):
+    elif fmt in ("int4", "fp4", "t2"):
         word = np.asarray(dw, np.uint32)
         for b in range(NSUB):
             word = word | (np.asarray(m[..., b], np.uint32) << np.uint32(8 + 6 * b))
-        rows[:, 8:8 + 4 * KB] = word.astype(np.uint32).view(np.uint8).reshape(N, 4 * KB)
+        h = 16 if fmt == "t2" else 8
+        rows[:, h:h + 4 * KB] = word.astype(np.uint32).view(np.uint8).reshape(N, 4 * KB)
     elif fmt == "nvfp4":
         if np.any(np.asarray(e4) & 0x80):
             raise ValueError("an NVFP4 scale with the sign bit set")
@@ -439,8 +472,9 @@ def unpack_scales(srows: np.ndarray, fmt: str, KB: int, k0: int = 0, rsc: bool =
     if fmt == "int8":
         dw = np.repeat(srows[:, 4 + kk].astype(np.int64)[:, :, None], G, axis=2)
         return Sw, dw, np.ones((N, KB, G), np.int64)
-    if fmt in ("int4", "fp4"):
-        word = srows[:, 8:].copy().view(np.uint32)[:, kk].astype(np.int64)
+    if fmt in ("int4", "fp4", "t2"):
+        h = 16 if fmt == "t2" else 8
+        word = srows[:, h:].copy().view(np.uint32)[:, kk].astype(np.int64)
         dw = np.repeat((word & 0xFF)[:, :, None], G, axis=2)
         m = np.stack([(word >> (8 + 6 * b)) & 63 for b in range(G)], -1)
         return Sw, dw, m
@@ -454,6 +488,8 @@ def elements(rows: np.ndarray, fmt: str, K: int) -> np.ndarray:
     rows = np.asarray(rows, np.uint8)
     if fmt == "int8":
         return rows[:, :K].view(np.int8)
+    if fmt in TWO:
+        return DEC[fmt][unpack2(rows[:, :K // 4])]
     return DEC[fmt][unpack4(rows[:, :K // 2])]
 
 
@@ -496,6 +532,10 @@ def quantize_mx(W: np.ndarray, fmt: str, D: int = 128):
         code, Sw, dw, m, _ = _x4(W, fmt, D)
         rows[:, :K // 2] = pack4(code)
         return rows, pack_scales(fmt, Sw, dw=dw, m=m)
+    if fmt == "t2":
+        code, Sw, dw, m, _ = _x4(W, fmt, D)
+        rows[:, :K // 4] = pack2(code)
+        return rows, pack_scales(fmt, Sw, dw=dw, m=m)
     if fmt == "nvfp4":
         code, Sw, e4, _ = _nv(W, D)
         rows[:, :K // 2] = pack4(code)
@@ -534,6 +574,8 @@ def part_scales(srows: np.ndarray, fmt: str, k0: int, kb: int) -> np.ndarray:
         out[:, 4:4 + kb] = srows[:, 4 + k0:4 + k0 + kb]
     elif fmt in ("int4", "fp4"):
         out[:, 8:8 + 4 * kb] = srows[:, 8 + 4 * k0:8 + 4 * (k0 + kb)]
+    elif fmt == "t2":
+        out[:, 16:16 + 4 * kb] = srows[:, 16 + 4 * k0:16 + 4 * (k0 + kb)]
     else:
         out[:, 16:16 + 8 * kb] = srows[:, 16 + 8 * k0:16 + 8 * (k0 + kb)]
     return out
@@ -545,11 +587,12 @@ def part_rows(rows: np.ndarray, fmt: str, c0: int, c1: int, D: int = 128) -> np.
     rows = np.asarray(rows, np.uint8)
     if fmt == "int8":
         return np.ascontiguousarray(rows[:, c0:c1])
-    if c0 % (2 * D):
-        raise ValueError(f"a 4-bit column part starts on a whole chunk ({c0})")
+    e = 4 if fmt in TWO else 2                   # elements per byte
+    if c0 % (e * D):
+        raise ValueError(f"a {8 // e}-bit column part starts on a whole chunk ({c0})")
     out = np.zeros((rows.shape[0], row_bytes(c1 - c0, fmt, D)), np.uint8)
-    n = (c1 - c0) // 2
-    out[:, :n] = rows[:, c0 // 2:c0 // 2 + n]
+    n = (c1 - c0) // e
+    out[:, :n] = rows[:, c0 // e:c0 // e + n]
     return out
 
 

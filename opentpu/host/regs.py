@@ -62,6 +62,8 @@ R_DDR4, DDR4_STRIDE = 0x40000, 0x10000
 # power-of-two offsets. Programs and images of the previous numerics compute garbage on such a
 # bitstream and vice versa (the CFG_HASH differs too: opentpu/target.py arch_hash)
 CAP_MX = 1 << 29
+# CAPS bit28: t2 weights (MM WF 1 with rs bit 0), MM QUAD and QACT DUP4 (docs/ternary.md)
+CAP_T2 = 1 << 28
 # CAPS bit30: the decode loop on the card (docs/isa.md RLD, VOP ARGMAX, HALT CHAIN; the
 # generate programs of opentpu/llm/generate.py)
 CAP_GEN = 1 << 30
@@ -157,7 +159,7 @@ def caps(v: int) -> dict:
             "chash": bool(v & CAP_CHASH), "act_rows": bool(v & CAP_ACT),
             "args": bool(v & CAP_ARGS), "stream": bool(v & CAP_STREAM),
             "hostcal": bool(v & CAP_HOSTCAL), "gen": bool(v & CAP_GEN),
-            "waitw": bool(v & CAP_WAITW), "mx": bool(v & CAP_MX),
+            "waitw": bool(v & CAP_WAITW), "mx": bool(v & CAP_MX), "t2": bool(v & CAP_T2),
             "trace_depth": 1 << ((v >> 8) & 0xFF) if v & CAP_TRACE else 0,
             "pq_window": 1 << ((v >> 16) & 0xFF)}
 

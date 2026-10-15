@@ -1319,8 +1319,9 @@ def device_config(info: dict, **kw):
                                  f"a {k}={env} bitstream")
     caps = info.get("caps") or {}
     pair, dstep = bool(caps.get("pair")), bool(caps.get("dstep"))
-    stream = bool(caps.get("stream"))
+    stream, t2 = bool(caps.get("stream")), bool(caps.get("t2"))
     for k, have, what in (("PAIR", pair, "column reuse (CAPS bit5)"),
+                          ("T2", t2, "t2 weights (CAPS bit28)"),
                           ("DSTEP", dstep, "DSTEP (CAPS bit6)"),
                           ("STREAM", stream, "the stream engine (CAPS bit26)")):
         env = os.environ.get(f"OTPU_{k}")
@@ -1329,7 +1330,7 @@ def device_config(info: dict, **kw):
                                  f"OTPU_{k}={env}: unset OTPU_{k} (the host follows the "
                                  f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
-    dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep,
+    dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
            "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
@@ -1396,6 +1397,7 @@ def check_hash(info: dict, cfg=None) -> None:
         sizes = {k: c[k] for k in ("S", "TMEM_WORDS", "IMEM_WORDS", "ACT_BLOCKS", "DRAM_BYTES")}
         cfg = board_config(D=info["D"], MCOLS=info["MCOLS"], LANES=info["LANES"],
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
+                           T2=bool(caps.get("t2")),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:
@@ -1598,6 +1600,10 @@ class BoardBackend:
             self.board.close()
             raise ConfigMismatch("the programs use column reuse (MM PAIR / QACT DUP) and this "
                                  "bitstream lacks it (CAPS bit5 clear): use device_config")
+        if ("t2" in fmts or self.cfg.T2) and not caps.get("t2"):
+            self.board.close()
+            raise ConfigMismatch("the model image has t2 weights and this bitstream lacks them "
+                                 "(CAPS bit28 clear): use --wformat int4 or load a T2 bitstream")
         if self.cfg.DSTEP and not caps.get("dstep"):
             self.board.close()
             raise ConfigMismatch("the programs use DSTEP and this bitstream lacks it (CAPS bit6 "

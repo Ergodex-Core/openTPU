@@ -157,15 +157,16 @@ def main(argv=None):
     path = model_dir(a.model)
     cfg_json = json.loads((path / "config.json").read_text())
     family = cfg_json.get("model_type")
-    if family not in ("qwen3", "gemma3", "gemma3_text"):
-        ap.error("this probe supports Qwen3 and Gemma 3 text checkpoints")
+    if family not in ("qwen3", "gemma3", "gemma3_text", "qwen3_5", "qwen3_5_text"):
+        ap.error("this probe supports Qwen3, Qwen3.5 (Ternary-Bonsai 2 GGUF) and Gemma 3 text "
+                 "checkpoints")
     spec = load_spec(path)
     meta = checkpoint_info(path)
     image_kw = dict(wformat=a.wformat, head_format=a.head_format, lookup=True, rows=1)
     cfg = target.config(target.load(a.target))
     if a.inspect:
         img = spec.image(cfg, a.cap, **image_kw)
-        programs, _ = img.compile_decode(1, 0)
+        programs, _ = img.compile_decode(1, getattr(spec, "conv_k", 1) - 1)  # (Qwen3.5: p >= K - 1)
         meta.update(image_bytes=img.nbytes, architecture=asdict(cfg),
                     program_words=[int(isa.assemble(p).size) for p in programs],
                     wformat=a.wformat, head_format=a.head_format, capacity=a.cap)
@@ -239,7 +240,7 @@ def main(argv=None):
             save()                 # device identity survives an image build/upload failure
             engine_kw = dict(cap=a.cap, cfg=cfg, wformat=a.wformat, head_format=a.head_format,
                              resident=True, rows=1, pipeline=False)
-            if family == "qwen3":
+            if family in ("qwen3", "qwen3_5", "qwen3_5_text"):
                 engine_kw["embed_host"] = False
             t0 = time.monotonic()
             engine = Engine(spec, W, backend=backend, **engine_kw)
@@ -285,8 +286,9 @@ def main(argv=None):
             gc.collect()
             golden = hf_logits(path, history)
         else:
-            from opentpu.llm import gemma3, qwen3
-            golden = (qwen3 if family == "qwen3" else gemma3).reference_logits(spec, W, history)
+            from opentpu.llm import gemma3, qwen3, qwen35
+            ref = {"qwen3": qwen3, "qwen3_5": qwen35, "qwen3_5_text": qwen35}.get(family, gemma3)
+            golden = ref.reference_logits(spec, W, history)
         arrays["golden"] = golden[len(prompt) - 1:]
         result["golden_comparison"] = compare_logit_rows(device, arrays["golden"])
         result["golden_argmax_matches"] = sum(r["match"] for r in result["golden_comparison"])
