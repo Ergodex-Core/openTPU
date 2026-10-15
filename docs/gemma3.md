@@ -182,3 +182,117 @@ The Gemma 3 suite passed 11 tests. A bounded regression run of Gemma 4, quantiza
 and Gemma 4 prefill completed 88 tests with 3 missing-checkpoint skips and no new
 failure before interruption (7 cases excluded: resident gathers, long ring wrap,
 and board RTL). The remaining long prefill cases were not completed.
+
+## Prefill on the f2 target (2026-10-15)
+
+The card measured Gemma-3-1B int8 / int8 head at 9.4 prompt tokens/s (TTFT 28.4 s for the
+268-token bench prompt, 4.69 s for the 16-token chat prompt; docs/fpga_inference.md), about a
+third of Qwen3-0.6B's. This section is the device side: RTL co-simulation of the tiled prompt
+runs (`tools/perf_gemma_prefill.py`) on the f2 target's configuration (one slice, D = 128,
+MCOLS 4, ACT_ROWS 16, 4K-instruction IMEM) with the memory a port of 32 B a core cycle
+(`--bw 25`, the f2 image's DDR bridge as decode measures it) and 60 cycles' latency.
+
+### Where a prompt run's cycles went
+
+Before (12 rows a run, the first 6 layers: 5 sliding and 1 global, bucket 1, cycles of the
+run):
+
+| phase | cycles | share |
+|---|---:|---:|
+| MLP (gate / up / down, GeGLU, chunk QACTs) | 4,610,825 | 64% |
+| attention loop (W_q, q norm and RoPE, q.K^T, softmax, P.V) | 1,990,953 | 28% |
+| W_o | 227,333 | 3% |
+| K / V projections, norms, RoPE, appends | 212,538 | 3% |
+| post-norms (`_add_norm`) | 109,834 | 2% |
+| embedding gather (one-hot MMs from the int8 head) | 48,042 | 1% |
+| total | 7,202,748 | |
+
+The 6 layers' weights are 161 MB, 5.03M cycles at 32 B/cycle, against 3.77M of MXU (12 rows: 3
+passes of MCOLS): the run is bound by streaming the weights, once a run. Two things made it
+slow:
+
+- **12 rows a run, not 16.** At 16 rows the MLP's [16, 768] chunk activation found no TMEM gap:
+  x and the MLP's output ([16, 1152] each), the run's [16, 512] RoPE rows and the gate / up
+  pieces held it. A weight pass then served 12 rows where ACT_ROWS allows 16 (at 32 B/cycle
+  and 16 rows the MXU's 4 passes and the stream meet).
+- **One row a K / V stream, each K row a scale-line request.** G = 4 heads a KV head is MCOLS,
+  so a packed tile was one row (QPART: 2 rows of 2 heads). Gemma's K rows are 2048 B apart
+  (`gemma4._KV`: the RoPE row's stride, the row's int8 scale row after its data), so q.K^T
+  over a 256-token block makes 256 port-A scale-line requests, ~73 cycles each, one at a
+  time: 18.8K cycles for 64 KB, where P.V over V^T's same bytes (no scales) takes 1.9K. Every
+  row of the run paid that again for every block of every layer.
+
+What it did not cost: no fallback paths (every bucket's runs are tiled, the attention in
+hardware loops at level 2, the outputs whole through the I/O scratch); the LM head runs only
+on an L run's last row, and the server's prompts end in P runs (the decode loop feeds the last
+token); the device embedding gather is 1%; at 268 tokens the sliding window still reaches
+position 0 (no ring wrap, the same spans as the global layers').
+
+### What changed
+
+1. 16-row tiles (`9c0304db`): x out of TMEM while the MLP runs (spilled to the I/O rows,
+   back for the post-norm's add), a layer kind's RoPE rows loaded by its attention, the
+   MLP's gate / up in pieces of 384 or 256 columns where TMEM holds them (GEMMA_SUBS, fewer
+   instructions), `_add_norm` in groups of rows, and `tiled._sync_frames`: on Python 3.12,
+   `compiler.unnamed`'s `f_locals` reads leave snapshot dicts on the frames they walk, which
+   kept dead tiles (gate / up pieces, K / V rows) alive.
+2. Wide tiles (`3620594b`): the looped attention's packed tiles take up to ACT_ROWS query
+   rows (16: 4 rows of all 4 heads), the MXU replaying K and V^T for each MCOLS of them, the
+   row maxima (RMAX) and the accumulator's rescale (ASCALE) on the VPU where M > MCOLS (the
+   same roundings: the same bits). 4 K / V streams a layer and block where there were 12.
+
+Every row's arithmetic is unchanged: the tiled runs equal today's prompt runs bit for bit
+(test_gemma3 test_tiled_prompt_runs_are_todays; on the real checkpoint, the chat prompt and
+the 268-token prompt: the logits, the layers' DRAM and 8 greedy tokens).
+
+### Measured
+
+The first 6 layers, cycles a row (the whole model's estimate: the layers' cycles scaled to
+26):
+
+| bucket | before (12 rows) | 16 rows | + wide tiles | whole model a row | tok/s at 200 MHz |
+|---|---:|---:|---:|---|---|
+| 1 | 600,229 | 507,594 | 409,461 | 2.588M -> 1.765M | 77.3 -> 113.3 |
+| 2 | 741,437 | 644,206 | 446,917 | 3.200M -> 1.927M | 62.5 -> 103.8 |
+
+The whole model's runs (26 layers, co-simulated; the server's split: up to R_max rows a run,
+cut at a bucket's end):
+
+| run | before | after |
+|---|---:|---:|
+| bucket 1, 16 rows | | 28,234,823 |
+| bucket 1, 15 rows | | 28,030,568 |
+| bucket 1, 12 rows | 31,048,199 | |
+| bucket 1, 4 rows | 25,105,702 | |
+| bucket 1, 3 rows | 24,475,609 | |
+| bucket 2, 11 rows | 38,277,077 | 27,713,134 |
+
+| prompt | prefill runs before -> after | prefill cycles | at 200 MHz | TTFT (+ one decode step, 32.5M) |
+|---|---|---:|---:|---:|
+| chat, 16 tokens (15 prefill) | 12 + 3 -> 15 | 55.5M -> 28.0M | 0.278 -> 0.140 s | 0.44 -> 0.30 s |
+| bench, 268 tokens (267) | 21 x 12 + 4, 11 -> 16 x 16, 11 | 715.4M -> 479.5M | 3.58 -> 2.40 s | 3.74 -> 2.56 s |
+
+Device prefill of the long prompt: 74.6 -> 111.4 tokens/s. Qwen3-0.6B's whole-model 16-row run
+in bucket 1 on the same setup is 22,688,390 cycles (1.418M a row): Gemma 3's rows cost 1.82x
+Qwen's before and 1.24x now, for 1.58x the weight bytes a row (697 MB against 440 MB). The card's 28.4 s and 4.69 s TTFT
+are far above the device's 3.7 s and 0.44 s: most of Gemma 3's measured TTFT is outside the
+device's prefill (the host: the prompt programs' compile and fit probes, transfers), the
+host / TTFT track's.
+
+A run is now the MLP (4.9M of 6.55M cycles in bucket 1's 6 layers, 91% of its 32 B/cycle
+roofline) and the attention loop (0.94M, 1.55M in bucket 2). What is left there is K's
+scale-line latency, now once a tile of 4 rows: a K cache with its scale rows apart (as
+qwen3's KVDesc), 8 tokens' scales a 32-byte line, would cut it about 4x more (and decode's
+attention with it); that is the image's KV layout, shared with decode, not changed here.
+The V^T column writes of the appends (one QST of 256 bytes a token, ~1.2K cycles each) are
+next: about 20K cycles a layer.
+
+To reproduce (on a host with Verilator 5.048):
+
+```sh
+python tools/perf_gemma_prefill.py --model gemma3 --layers 6 --rows 16 --blocks 1
+python tools/perf_gemma_prefill.py --model gemma3 --layers 0 --rows 16 --blocks 1   # 26 layers
+```
+
+On the card (not run here): `python tools/f2_bench.py --dev f2:0 --models gemma3-1b --json
+bench.json --max-tokens 128`.
