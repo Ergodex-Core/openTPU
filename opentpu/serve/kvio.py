@@ -27,6 +27,7 @@ the other way scatter them: a page of Qwen3-0.6B is 896 regions, ~30 us of DMA s
 """
 from __future__ import annotations
 
+import time
 from dataclasses import dataclass
 
 import numpy as np
@@ -35,6 +36,8 @@ from ..compiler import Affine, k_scale_bytes, vt_tile
 from ..llm import snapshot as SN
 
 STAGING_MAX = 256 << 20     # the staging area's bytes at most (a batch of pages per copy)
+READ_PIECE = 64 << 10       # a background read's bytes per transport call (ContextIO.stage)
+READ_PAUSE = 2e-4           # ... and the pause after each
 
 
 @dataclass(frozen=True)
@@ -171,6 +174,53 @@ class ContextIO:
                 pairs.append((src, dst, n))
         self._copy(pairs)
 
+    def stage(self, pages, state: bool = False, then=None):
+        """read_pages(pages) and (state) read_state() with the host's part in the background:
+        the regions are copied into the staging area on the device now (LD / ST programs, a
+        few ms), and a thread reads the area back while the device runs on, then calls
+        then(each page's bytes, the state's bytes or None) and returns its result (a Future).
+        None when there is no staging area or the bytes do not fit it: read them in line.
+        The area is the host's (nothing else writes it): the moves take it in turn as a ring
+        (take), each waiting only for the reads in flight from the part it takes. Reading is
+        the slow part (the F2 small shell's BAR4 has no DMA engine: its reads are uncached
+        MMIO), not the device's copy."""
+        if self.area is None:
+            return None
+        L, S = self.layout, self.eng.cfg.S
+        regs = [L.regions(i, m) for i, m in pages]
+        st = list(L.state_in(self.slot)) if state and L.stateful else []
+        need = sum(n for r in regs for _, n in r) + sum(n for _, n in st)
+        if need > self.area[1]:
+            return None
+        at = take(self.eng, self.area, need)
+        base, pairs, o = self.area[0] + at, [], 0
+        for r in regs + [st]:
+            for a, n in r:
+                pairs.append((a, base + o, n))
+                o += n
+        if pairs:
+            self._copy(pairs)
+        eng, stats = self.eng, self.stats
+
+        def read():
+            flat = [read_slowly(eng.backend, s, base, o) for s in range(S)]
+            out, j = [], 0
+            for r in regs:
+                n = sum(x for _, x in r)
+                out.append(np.concatenate([f[j:j + n] for f in flat]))
+                j += n
+            sb = np.concatenate([f[j:o] for f in flat]) if st else None
+            stats["read"] += sum(len(b) for b in out) + (0 if sb is None else len(sb))
+            return then(out, sb) if then is not None else (out, sb)
+        pool = eng.__dict__.get("_kvio_pool")
+        if pool is None:
+            from concurrent.futures import ThreadPoolExecutor
+            pool = eng.__dict__["_kvio_pool"] = ThreadPoolExecutor(
+                1, thread_name_prefix="otpu-kv-read")
+        fut = pool.submit(read)
+        eng._kvio_ring["busy"].append((at, at + need, fut))
+        return fut
+
     # ---- state
     def read_state(self) -> np.ndarray:
         if not self.layout.stateful:
@@ -205,7 +255,8 @@ class ContextIO:
         if self.area is None:
             return [np.concatenate([be.read(s, a, n) for s in range(S) for a, n in regs])
                     for regs in regs_pages]
-        base = self.area[0]
+        base = self.area[0] + take(self.eng, self.area, sum(n for r in regs_pages
+                                                            for _, n in r))
         pairs, o = [], 0
         for regs in regs_pages:
             for a, n in regs:
@@ -234,7 +285,8 @@ class ContextIO:
                         be.write(s, a, d[o:o + n])
                         o += n
             return
-        base = self.area[0]
+        base = self.area[0] + take(self.eng, self.area, sum(n for r in regs_pages
+                                                            for _, n in r))
         per_slice = [[] for _ in range(S)]
         pairs, o = [], 0
         for regs, d in zip(regs_pages, datas):
@@ -252,6 +304,51 @@ class ContextIO:
         for p in SN.copy_programs(pairs, self.eng.cfg):
             self.eng.backend.run(p)
             self.stats["copies"] += 1
+
+
+def take(eng, area, n: int) -> int:
+    """n bytes of the staging area `area` for a move: the offset of the ring's next part (from
+    the area's start when the rest is too short), once the background reads from that part
+    (ContextIO.stage's) are done."""
+    n = -(-n // 4096) * 4096
+    ring = eng.__dict__.setdefault("_kvio_ring", {"at": 0, "busy": []})
+    at = ring["at"] if ring["at"] + n <= area[1] else 0
+    for b in list(ring["busy"]):                    # (lo, hi, Future)
+        if b[2].done() or (b[0] < at + n and at < b[1]):
+            _done(b[2])
+            ring["busy"].remove(b)
+    ring["at"] = at + n
+    return at
+
+
+def wait_staged(eng) -> None:
+    """Every read of the staging area in flight (ContextIO.stage) done; the ring from its
+    start."""
+    ring = eng.__dict__.get("_kvio_ring")
+    if ring is not None:
+        for b in ring["busy"]:
+            _done(b[2])
+        ring["busy"], ring["at"] = [], 0
+
+
+def _done(fut) -> None:
+    """Wait for fut (its error is its own: stage's caller gets it from the Future)."""
+    try:
+        fut.result()
+    except BaseException:                   # noqa: BLE001
+        pass
+
+
+def read_slowly(be, s: int, addr: int, n: int) -> np.ndarray:
+    """be.read(s, addr, n) in pieces of READ_PIECE bytes with a pause between them: a
+    background read leaves the transport (one lock over its memory and register accesses on
+    the F2) to the engine's thread between pieces, so its runs start on time."""
+    out = np.empty(n, np.uint8)
+    for o in range(0, n, READ_PIECE):
+        k = min(READ_PIECE, n - o)
+        out[o:o + k] = be.read(s, addr + o, k)
+        time.sleep(READ_PAUSE)
+    return out
 
 
 def _batches(items, room: int | None, key=lambda x: x):

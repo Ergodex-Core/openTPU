@@ -52,16 +52,27 @@ def _prompts(seed, sizes, base=None):
             for n in sizes]
 
 
-@pytest.mark.parametrize("case, card", [("qwen3", True), ("qwen3", False), ("lfm2", True),
-                                        ("qwen35", True)])
-def test_requests_in_turns_are_their_own_runs(case, card):
+def _staging(eng, cfg):
+    """A staging area past the image (a configuration with twice its DRAM: _big)."""
+    return (-(-eng.image.nbytes // 4096) * 4096, cfg.DRAM_BYTES // 4)
+
+
+@pytest.mark.parametrize("case, card, staged", [
+    ("qwen3", True, False), ("qwen3", False, False), ("lfm2", True, False),
+    ("qwen35", True, False), ("qwen3", True, True), ("qwen35", True, True)])
+def test_requests_in_turns_are_their_own_runs(case, card, staged):
     """Four requests at once, quantum 3: each runs in several turns, the others' contexts in
     between; their tokens are their own fresh runs'. Then a fifth whose prompt continues the
-    first's: it feeds only what is new."""
+    first's: it feeds only what is new. Staged: the contexts move through a staging area of
+    the device's DRAM, a finished request's save read back in the background while the next
+    one runs (store.PrefixCache.save's background)."""
+    from test_serve_kvio import _big
     W, spec, cfg = _model(case)
     stop = frozenset({int(spec.eos[0])} if spec.eos else ())
-    eng = _engine(spec, W, cfg, card)
-    w = SC.Worker(eng, _Tok(), quantum=3, max_running=4).start()
+    ecfg = _big(cfg) if staged else cfg
+    eng = _engine(spec, W, ecfg, card)
+    w = SC.Worker(eng, _Tok(), quantum=3, max_running=4,
+                  area=_staging(eng, ecfg) if staged else False).start()
     try:
         ps = _prompts(1, [21, 34, 9, 27])
         reqs = [w.submit(SC.Request(p, max_new=10, stop_ids=stop)) for p in ps]

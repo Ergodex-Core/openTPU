@@ -106,7 +106,15 @@ prefix share its whole pages. A context of n tokens is:
 Writing the pages back and setting the position (`Engine.adopt`) gives the context bit for bit,
 as `Engine.rollback` does. On the card, a save or restore is staged: LD / ST copy programs
 gather a page's ~900 regions into an area of the DRAM past the program area, and one DMA moves
-it. Each region's own DMA would cost ~30 us of set-up.
+it. Each region's own DMA would cost ~30 us of set-up. A save the worker makes when a context
+is about to be overwritten runs in the background (`PrefixCache.save(background=True)`,
+`ContextIO.stage`): the copy into the staging area runs at once, a thread reads it back in
+64 KB pieces while the device runs the next request, and the context joins the prefix cache
+when its bytes are in the store (a prompt that would continue it further waits for that). The
+moves take the staging area as a ring, each waiting only for reads from the part it takes. On
+the F2 small shell the read is the slow part (BAR4 has no DMA engine: uncached MMIO reads), and
+in line it was most of every request's time to first token: a short Qwen3-0.6B context's tail
+page is 7.5 MB (its V^T tiles whole), a Gemma 3 1B context with its sliding rings ~37 MB.
 
 **The store** (`opentpu/serve/store.py`, `BlobStore`). Pages and tails live in host RAM up to
 `--kv-ram-gb`. Past that, the least recently used go to files under `--kv-dir`, written by a
@@ -189,8 +197,8 @@ but a prompt advances only by the spare rows a run, so it takes longer to its fi
 
 **In turns** (`opentpu/serve/scheduler.py`, `Worker`: LFM2, Qwen3.5, Gemma 4, the streamed
 MoEs, whose images hold one sequence). The requests (`--max-running` at once) take the card in
-turns of `--quantum` tokens. Each switch saves the outgoing context's new pages and tail and
-restores the incoming one. A request running alone runs to its end. The prompt is fed but its
+turns of `--quantum` tokens. Each switch saves the outgoing context's new pages and tail (a
+finished request's in the background) and restores the incoming one. A request running alone runs to its end. The prompt is fed but its
 last token, which the card's decode loop feeds and picks from (when the loop takes the request's
 sampling; else the host picks the first token from the logits).
 

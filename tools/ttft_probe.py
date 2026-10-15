@@ -9,7 +9,8 @@ saves and restores, the bytes the host moved), the simulator's time taken off: h
 
 `sim` is the simulator's wall time (a card's device time is its cycles / CORE_KHZ: not known
 here); `pcie_read_mb` / `pcie_write_mb` the bytes a card's PCIe would carry (the F2 small shell's
-BAR4 has no DMA engine: its reads are uncached MMIO).
+BAR4 has no DMA engine: its reads are uncached MMIO), `pcie_read_bg_mb` those read by the KV
+store's background thread (off the request's path; "bg:" events are that thread's).
 """
 from __future__ import annotations
 
@@ -101,6 +102,13 @@ def instrument(backend: str) -> None:
         timed(obj, attr, nm)
     from opentpu.host import isaboard as IB
     timed(IB.IsaTransport, "_run", "sim.run")
+    rd = IB.IsaTransport.mem_read
+
+    def mem_read(self, ch, off, n, out=None):       # the bytes read off the worker's path
+        if threading.current_thread().name.startswith("otpu-kv-read"):
+            self.bytes_read_bg = getattr(self, "bytes_read_bg", 0) + n
+        return rd(self, ch, off, n, out)
+    IB.IsaTransport.mem_read = mem_read
     timed(IB.IsaTransport, "_load", "sim.load")
     timed(Q.IsaBackend, "run", "sim.run")
     _ = I
@@ -113,6 +121,8 @@ def sums(t0: float, t1: float) -> dict:
     with _lock:
         evs = list(EVENTS)
     for nm, a, b, th in evs:
+        if th.startswith("otpu-kv-read"):       # (the KV store's background reads)
+            nm = "bg:" + nm
         a, b = max(a, t0), min(b, t1)
         if b > a:
             out[nm] += b - a
@@ -217,9 +227,9 @@ def main(argv=None) -> None:
         print(f"{name}: loaded in {load:.1f} s", flush=True)
         for key in a.prompts.split(","):
             prompt, mt = texts[key]
-            c0 = tr.counters() if tr else None
+            c0 = {**tr.counters(), "bg": getattr(tr, "bytes_read_bg", 0)} if tr else None
             r = stream(a.port, name, prompt, mt)
-            c1 = tr.counters() if tr else None
+            c1 = {**tr.counters(), "bg": getattr(tr, "bytes_read_bg", 0)} if tr else None
             ttft = r["first"] - r["t0"]
             ev = sums(r["t0"], r["first"])
             sim = ev.get("sim.run", (0, 0))[0] + ev.get("sim.load", (0, 0))[0]
@@ -230,6 +240,7 @@ def main(argv=None) -> None:
                    "after_first": sums(r["first"], r["t1"]), "text": r["text"][:200]}
             if c0 is not None:
                 one["pcie_read_mb"] = round((c1["bytes_read"] - c0["bytes_read"]) / 2**20, 2)
+                one["pcie_read_bg_mb"] = round((c1["bg"] - c0["bg"]) / 2**20, 2)
                 one["pcie_write_mb"] = round((c1["bytes_written"] - c0["bytes_written"]) / 2**20,
                                              2)
                 one["sim_runs"] = c1["sim_runs"] - c0["sim_runs"]

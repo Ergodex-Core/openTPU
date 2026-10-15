@@ -126,7 +126,7 @@ class BatchWorker(SC.Worker):
     # ---- slots
     def _save_slot(self, s: int) -> None:
         if self.slot_dirty[s] and self.slot_dev[s]:
-            self.cache.save(self.ios[s], list(self.slot_dev[s]))
+            self.cache.save(self.ios[s], list(self.slot_dev[s]), background=True)
             self.stats["saves"] += 1
         self.slot_dirty[s] = False
 
@@ -423,6 +423,7 @@ class BatchWorker(SC.Worker):
                     self._save_slot(s)
                 except BaseException:
                     traceback.print_exc()
+            self.cache.drain()
             self.store.persist()
 
     def flush(self) -> None:
