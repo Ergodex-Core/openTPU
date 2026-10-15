@@ -42,12 +42,12 @@ def batches(eng) -> bool:
 class BatchWorker(SC.Worker):
     def __init__(self, eng, tok, store=None, model_key: str = "model", ram_bytes: int = 4 << 30,
                  area=False, quantum: int = SC.QUANTUM, prefill_budget: int = PREFILL_BUDGET,
-                 mixed: bool = False):
+                 mixed: bool = False, spec=None):
         if not batches(eng):
             raise ValueError("BatchWorker needs Engine(batch=B > 1, batch_area=True)")
         B = eng.batch
         super().__init__(eng, tok, store=store, model_key=model_key, max_running=B,
-                         quantum=quantum, ram_bytes=ram_bytes, area=area)
+                         quantum=quantum, ram_bytes=ram_bytes, area=area, spec=spec)
         if self.stateful:
             raise ValueError("batched slots hold KV caches only (no recurrent state)")
         self.B = B
@@ -383,12 +383,16 @@ class BatchWorker(SC.Worker):
         samp = self._samp(r)
         t = r.next
         r.fed.append(t)
-        got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
-                                on_token=lambda x: self._emit(r, x),
-                                stop=lambda: (r.finish is not None or r.cancelled.is_set()
-                                              or bool(self.waiting)),
-                                sampling=samp, context=list(r.fed),
-                                rng=pick.rng if samp is not None else None)
+
+        def stop() -> bool:
+            return r.finish is not None or r.cancelled.is_set() or bool(self.waiting)
+        if samp is None and self.spec is not None:      # the speculative loop (specdec.py)
+            got = self._spec_card(r, t, n, stop)
+        else:
+            got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
+                                    on_token=lambda x: self._emit(r, x), stop=stop,
+                                    sampling=samp, context=list(r.fed),
+                                    rng=pick.rng if samp is not None else None)
         r.fed += got[:-1]
         if not got:
             r.fed.pop()

@@ -134,8 +134,10 @@ class Worker:
 
     def __init__(self, eng, tok, store=None, model_key: str = "model",
                  max_running: int = 8, quantum: int = QUANTUM, ram_bytes: int = 4 << 30,
-                 area=False, mtp: bool = False):
+                 area=False, mtp: bool = False, spec=None):
         self.eng, self.tok = eng, tok
+        self.spec = spec                  # speculative decoding (llm/specdec.SpecDecoder): its
+        #                                   loop on the card decodes the greedy requests
         self.tok_lock = threading.Lock()
         self.io = KV.ContextIO(eng, area=area)      # (False: kvio.staging_area's)
         self.store = store if store is not None else ST.BlobStore(ram_bytes)
@@ -169,6 +171,8 @@ class Worker:
                       "restore_s": 0.0, "save_s": 0.0}
         if mtp:
             self.stats.update(mtp_iters=0, mtp_accepted=0, refills=0)
+        if spec is not None:
+            self.stats.update(spec_iters=0, spec_accepted=0, spec_verifies=0)
 
     # ---- the clients' side
     def start(self) -> "Worker":
@@ -639,10 +643,13 @@ class Worker:
                 def stop() -> bool:
                     return r.finish is not None or r.cancelled.is_set() or self._yield(r, k0)
                 r.fed.append(t)
-                got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
-                                        on_token=lambda x: self._emit(r, x), stop=stop,
-                                        sampling=samp, context=list(self._real(r, r.fed)),
-                                        rng=pick.rng if samp is not None else None)
+                if samp is None and self.spec is not None:
+                    got = self._spec_card(r, t, n, stop)
+                else:
+                    got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
+                                            on_token=lambda x: self._emit(r, x), stop=stop,
+                                            sampling=samp, context=list(self._real(r, r.fed)),
+                                            rng=pick.rng if samp is not None else None)
                 r.fed += got[:-1]
                 if not got:
                     r.fed.pop()
@@ -665,6 +672,18 @@ class Worker:
             if self._yield(r, k0):
                 break
         self.stats["decode_s"] += time.perf_counter() - t0
+
+    def _spec_card(self, r: Request, t: int, n: int, stop) -> list:
+        """A greedy request's tokens from the speculative loop on the card (SpecDecoder: the
+        tokens of Engine.generate_card); r.fed holds t."""
+        got = self.spec.generate_card(t, n, stop_ids=sorted(r.stop_ids),
+                                      on_token=lambda x: self._emit(r, x), stop=stop,
+                                      context=list(self._real(r, r.fed)))
+        st = self.spec.last
+        self.stats["spec_iters"] += st.iterations
+        self.stats["spec_accepted"] += st.accepted
+        self.stats["spec_verifies"] += st.verifies
+        return got
 
     def _decode_mtp(self, r: Request) -> None:
         """_decode with the MTP loop on the device (MTPDecoder.loop_card from r.next and the

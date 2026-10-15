@@ -441,13 +441,16 @@ class SubBackend:
 
 
 def draft_engine(target, model, wformat: str = "int4", head_format: str | None = None,
-                 W=None, spec=None, **kw):
+                 W=None, spec=None, embed: str | None = None, **kw):
     """The draft model's Engine on the target's device: its image at the top of the target's
     DRAM (above the target's image, its program area and kvio's staging area, which must fit
     below: else MemoryError), its vocabulary cut to the target's (a Qwen3-0.6B's padding rows
     past the tokenizer's 151669 ids: the drafts are target ids), resident (its decode step is
     the D program's), its prompts in prompt runs (its context follows the target's:
-    SpecDecoder). model: a checkpoint directory (or W and spec)."""
+    SpecDecoder). model: a checkpoint directory (or W and spec). embed: its embedding rows
+    (Spec.embed; "int8": a table of 1 byte an element instead of fp32's 4, never streamed by
+    decode, the drafts' numerics only, never the tokens; not run yet: the measured runs keep
+    the checkpoint's fp32 table, Qwen3-0.6B's draft image 1034 MiB)."""
     from dataclasses import replace
 
     from . import load_spec, model_dir
@@ -456,6 +459,8 @@ def draft_engine(target, model, wformat: str = "int4", head_format: str | None =
         path = model_dir(model)
         spec, W = load_spec(path), load_weights(path)
     V = target.spec.vocab
+    if embed is not None and hasattr(spec, "embed"):
+        spec = replace(spec, embed=embed)
     if spec.vocab < V or spec.hidden % target.cfg.D:
         raise ValueError(f"a draft model of vocabulary {spec.vocab} for one of {V}")
     if spec.vocab > V:
@@ -466,6 +471,8 @@ def draft_engine(target, model, wformat: str = "int4", head_format: str | None =
         spec = replace(spec, vocab=V)
     cfg = target.cfg
     rows = kw.pop("rows", PREFILL_ROWS)
+    if kw.get("prompt_runs", True) and cfg.S == 1:      # (the Engine's: tiled prompt runs'
+        rows = max(rows, cfg.act_rows)                  # I/O rows)
     size = spec.image(cfg, target.cap, 1, rows, wformat=wformat, head_format=head_format,
                       lookup=True).nbytes
     from .. import waits as WT
