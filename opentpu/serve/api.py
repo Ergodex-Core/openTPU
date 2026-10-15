@@ -822,10 +822,21 @@ def load(a):
             c = device_config(spec, a.cap, batch=B, rows=PREFILL_ROWS, lookup=True,
                               wformat=wformat, head_format=a.head_format, S=1)
             cfg = replace(c, DRAM_BYTES=2 * c.DRAM_BYTES)
+        prompt_runs, rows = not a.no_prompt_runs, {}
+        if B > 1 and prompt_runs:
+            # the batched worker feeds every prompt with batched steps (batch.Steps.feed), never
+            # with the prompt runs: no prompt programs (prefill.warm's thread compiled bucket 1's
+            # 32 tiled runs and their wait entries, ~30 s holding the GIL against the first
+            # requests' runs), the image's rows as the prompt runs would make them
+            from ..llm import prefill as PF
+            from ..llm.qwen3 import PREFILL_ROWS
+            prompt_runs = False
+            if PF.tile_flag(None) and cfg.S == 1 and cfg.act_rows > max(PREFILL_ROWS, B):
+                rows = {"rows": cfg.act_rows}
         eng = Engine(spec, load_weights(path), cap=a.cap, cfg=cfg, backend=backend,
                      wformat=wformat, head_format=a.head_format, resident=True,
-                     prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                     batch=B, batch_area=B > 1)
+                     prog_cache=not a.no_prog_cache, prompt_runs=prompt_runs,
+                     batch=B, batch_area=B > 1, **rows)
     weights = CH.weights_label(eng.image, wformat)
     print(f"weights: {weights}; loaded in {time.perf_counter() - t0:.1f} s", flush=True)
     tok = tokenizer()
