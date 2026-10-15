@@ -51,6 +51,21 @@ MODELS = {
                                                           "--wformat", "int4",
                                                           "--head-format", "int8",
                                                           "--slots", "1"]),
+    # Ternary-Bonsai 2 (docs/ternary.md): the GGUF beside Qwen3.5's config and tokenizer
+    "bonsai2-2b": ("Ternary-Bonsai-2-2B (int4, int8 head)",
+                   ["--model", "models/Ternary-Bonsai-2-2B", "--wformat", "int4",
+                    "--head-format", "int8", "--slots", "1"]),
+    "bonsai2-4b": ("Ternary-Bonsai-2-4B (int4, int8 head)",
+                   ["--model", "models/Ternary-Bonsai-2-4B", "--wformat", "int4",
+                    "--head-format", "int8", "--slots", "1"]),
+    # the latent ternary weights rotated on the card (docs/ternary.md 4): exact codes in int4
+    # and a ternary head in int4, on any image; t2 needs a T2 bitstream
+    "bonsai2-2b-rot": ("Ternary-Bonsai-2-2B (rotated, int4)",
+                       ["--model", "models/Ternary-Bonsai-2-2B", "--rotate", "--wformat", "int4",
+                        "--head-format", "int4", "--slots", "1"]),
+    "bonsai2-4b-rot": ("Ternary-Bonsai-2-4B (rotated, int4)",
+                       ["--model", "models/Ternary-Bonsai-2-4B", "--rotate", "--wformat", "int4",
+                        "--head-format", "int4", "--slots", "1"]),
 }
 # --models only: not on the card's page (local runs, --backend isa)
 LOCAL_MODELS = {

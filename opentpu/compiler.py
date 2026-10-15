@@ -341,8 +341,9 @@ class QTensor:
             return self.padded_cols(r0, nr, c0, nc, nc)
         if self.wf == I.W8:
             data = self.data + r0 * self.rs + c0
-        else:                     # 4-bit rows stream whole D-byte chunks of two D-blocks
-            data = self.data + r0 * self.rs + c0.div_exact(2 * self.D) * self.D
+        else:                     # 4-bit (t2) rows stream whole D-byte chunks of 2 (4) D-blocks
+            bpc = I.blocks_per_chunk(self.wf)
+            data = self.data + r0 * self.rs + c0.div_exact(bpc * self.D) * self.D
         scale, k0 = None, self.k0
         if self.scale is not None:
             # the rows' scale rows stay where they are (each starts with its Sw): a column
@@ -685,9 +686,10 @@ class Stationary:
     "MM"), so dot() runs an MM per range and adds them up (MM ACC)."""
 
     def __init__(self, src: Tile, chunks: list, KB: int, owners: list, pair: bool = False,
-                 qranges: list | None = None):
+                 qranges: list | None = None, quad: bool = False):
         self.src, self.chunks, self.KB, self.owners = src, chunks, KB, owners
-        self.pair = pair
+        self.pair = pair or quad
+        self.quad = quad            # also rows 2M..4M-1 (QACT DUP4): t2 MMs take QUAD
         self.qranges = qranges
 
     def add_qrange(self, k0: int, k1: int) -> None:
@@ -1564,17 +1566,21 @@ class Builder:
         # 4-bit MM can feed the odd K-blocks to the second half of the columns. A taller tile
         # (up to ACT_ROWS rows) replays the streamed chunks instead: PAIR would not be faster
         pair = self.cfg.PAIR and 2 * x.rows <= self.cfg.MCOLS
-        st = Stationary(x, chunks, KB, owners, pair)
+        # t2 (Config.T2): a tile of at most MCOLS/4 rows four times (QACT DUP4), so t2 MMs take
+        # a whole chunk of four blocks a cycle (MM QUAD; the copies also serve PAIR)
+        quad = getattr(self.cfg, "T2", False) and pair and 4 * x.rows <= self.cfg.MCOLS
+        st = Stationary(x, chunks, KB, owners, pair, quad=quad)
         for m0 in builtins.range(0, x.rows, self.cfg.act_rows):
             mc = min(self.cfg.act_rows, x.rows - m0)
             ab, owner = self.act_alloc(KB)
             for k in builtins.range(ab, ab + KB):   # live now: the next chunk must not take it
                 self.act_live[k] = weakref.ref(st)
             self.emit(I.qact(src + m0 * rs, mc, ab, KB, rs, cscale=cs,
-                             rscale=None if rsc is None else rsc + m0, dup=pair,
+                             rscale=None if rsc is None else rsc + m0, dup=pair and not quad,
+                             dup4=quad,
                              comment="quantize -> ACT" + (" x col scale" if cs is not None else "")
                              + (" x row scale" if rsc is not None else "")
-                             + (" dup" if pair else "")))
+                             + (" dup4" if quad else " dup" if pair else "")))
             chunks.append((ab, mc))
             owners.append(owner)
         st.loop = self.loops[-1].loop if self.loops else None     # created in this loop body
@@ -1595,7 +1601,8 @@ class Builder:
             raise CompileError(f"a stationary of {rows} rows: ACT RAM holds {self.cfg.act_rows}")
         KB = cols // D
         pair = self.cfg.PAIR and 2 * rows <= self.cfg.MCOLS
-        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[])
+        quad = getattr(self.cfg, "T2", False) and pair and 4 * rows <= self.cfg.MCOLS
+        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[], quad=quad)
         ab, owner = self.act_alloc(KB)
         for k in builtins.range(ab, ab + KB):
             self.act_live[k] = weakref.ref(st)
@@ -1626,7 +1633,8 @@ class Builder:
         (ab, mc), = st.chunks
         rs = x.rs if len(x.shape) == 2 else x.cols
         ra, src = (0, x.base) if at is None else self.addr(Affine(x.base) + Affine.of(at))
-        self.emit(I.qact(src, mc, ab + col // D, x.cols // D, rs, dup=st.pair, ra=ra,
+        self.emit(I.qact(src, mc, ab + col // D, x.cols // D, rs, dup=st.pair and not st.quad,
+                         dup4=st.quad, ra=ra,
                          cscale=None if cscale is None else cscale.base,
                          comment="quantize -> ACT (part)" + (" dup" if st.pair else "")
                          + (" x col scale" if cscale is not None else "")))
@@ -1906,34 +1914,39 @@ class Builder:
         unit = w.scale is None
         # PAIR reads a chunk's two blocks' scales at once: 8-byte (nvfp4: 16-byte) aligned rows
         # and an even first block
-        al = 16 if w.wf == I.WNV else 8
+        al = 16 if w.wf in (I.WNV, I.WT2) else 8
         pair = st.pair and w.wf != I.W8 and (unit or w.rsc or (
             w.k0 % 2 == 0 and w.srs % al == 0 and Affine.of(w.scale).const % al == 0
             and all(c * getattr(v, "align", 1) % al == 0
                     for v, c in Affine.of(w.scale).terms.items())))
+        # QUAD (t2): a chunk's four blocks a cycle from ACT rows j + c M (QACT DUP4)
+        quad = pair and w.wf == I.WT2 and getattr(st, "quad", False)
         # one MM per QACT range of the operand (an MM's rows read one Sa: docs/isa.md "MM"),
         # added up in the output: the first as asked (overwrite, ACC or ASCALE), the rest ACC;
         # RMAX on the last, whose written values are the sums
-        bpb = self.cfg.D if w.wf == I.W8 else self.cfg.D // 2   # streamed bytes per block
+        bpb = self.cfg.D // I.blocks_per_chunk(w.wf)            # streamed bytes per block
         parts = st.ranges()
         for i, (k0, k1) in enumerate(parts):
             if (k0 * bpb) % self.cfg.D:
-                raise CompileError(f"dot: a QACT range starting at block {k0} of 4-bit weights "
-                                   f"(their D-byte chunks hold two blocks): split the operand "
-                                   f"at even blocks")
+                raise CompileError(f"dot: a QACT range starting at block {k0} of 4-bit or t2 "
+                                   f"weights (their D-byte chunks hold two or four blocks): "
+                                   f"split the operand at whole chunks")
             first, last = i == 0, i == len(parts) - 1
             kp = 0 if unit or w.rsc else w.k0 + k0
             ppair = pair and kp % 2 == 0
+            pquad = quad and kp % 4 == 0
             m0 = 0
             for ab, mc in st.chunks:
                 ins = I.mm(sa + k0 * bpb, ssa, out.base + m0 * ors, N, k1 - k0, w.rs, ors, mc,
                            ab + k0, w.srs, unit=unit, acc=acc is not None or not first,
                            rmax=rowmax and last, wf=w.wf, pair=ppair, k0=kp, rsc=w.rsc,
+                           quad=pquad,
                            ascale=acc_scale.base if acc_scale is not None and first else None,
                            ra=ra, rb=rb,
                            comment=f"mm {M}x{K} . {N}x{K}^T"
                            + (f" part {k0}:{k1}" if len(parts) > 1 else "")
-                           + (" pair" if ppair else "") + (" +rowmax" if rowmax and last else "")
+                           + (" quad" if pquad else " pair" if ppair else "")
+                           + (" +rowmax" if rowmax and last else "")
                            + (" acc*=scale" if acc_scale is not None and first else ""))
                 self.emit(ins)
                 m0 += mc

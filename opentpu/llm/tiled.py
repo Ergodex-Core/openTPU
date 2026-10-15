@@ -579,7 +579,7 @@ def down_chunk(wg, wd) -> int:
     if wd.parts is not None:
         return wd.pw
     D = ol.block_size()
-    return _chunk(wg.shape[0], D, D if wd.wf == 0 else 2 * D)
+    return _chunk(wg.shape[0], D, I.blocks_per_chunk(wd.wf) * D)
 
 
 def _mlp_tile(x, lw, spec, parts: int, sub: int, act=silu, g=None, out=None, xs=None):

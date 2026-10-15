@@ -67,12 +67,19 @@ def is_bonsai2(model_dir) -> bool:
         GGUF(p).meta.get("general.architecture") == "qwen35"
 
 
-def spec(model_dir):
+def spec(model_dir, ternary: bool = False):
     """qwen35's Spec from the base model's config.json, the embedding rows int8 (gathered
-    from the tied int8 head: an fp32 table of 248320 rows would be 2-4 GB of DRAM)."""
+    from the tied int8 head: an fp32 table of 248320 rows would be 2-4 GB of DRAM). ternary:
+    the image keeps the latent ternary weights and rotates on the device (Spec.rot; Weights
+    with latent=True), its head the latent table (not tied to the embedding rows, which are
+    the model's)."""
     from dataclasses import replace
     from .qwen35 import Spec
-    return replace(Spec.from_hf(model_dir), embed="int8")
+    sp = replace(Spec.from_hf(model_dir), embed="int8")
+    if ternary:
+        g = GGUF(find_gguf(model_dir))
+        sp = replace(sp, rot=int(g.meta["prism.hadamard.block_size"]), tied=False)
+    return sp
 
 
 def hadamard(n: int) -> np.ndarray:
@@ -102,8 +109,10 @@ class Weights(Mapping):
 
     CACHE = 16 << 20
 
-    def __init__(self, model_dir, mtp: bool = False):
+    def __init__(self, model_dir, mtp: bool = False, latent: bool = False):
         p = find_gguf(model_dir)
+        self.latent = latent        # the projections in their rotated basis, as stored (the
+        #                             image rotates the activations: Spec.rot)
         if p is None:
             raise ValueError(f"{model_dir}: no GGUF")
         self.model_dir, self.g = Path(model_dir), GGUF(p)
@@ -135,6 +144,8 @@ class Weights(Mapping):
             self.H = hadamard(self.block).astype(np.float32)
         self._where = {}                                # HF name -> (gguf name, kind)
         self._where["model.embed_tokens.weight"] = ("token_embd.weight", "embed")
+        if latent:                  # the head: the latent table (lm_head of an untied Spec)
+            self._where["lm_head.weight"] = ("token_embd.weight", "proj")
         self._where["model.norm.weight"] = ("output_norm.weight", "norm1")
         for i in range(self.layers):
             b, h = f"blk.{i}.", f"model.layers.{i}."
@@ -218,7 +229,8 @@ class Weights(Mapping):
             v = self.unfold(t.dequant()) if gn in self.inverse else t.dequant()
         elif kind == "proj":
             v = t.dequant()
-            v = self.unfold(v) if gn in self.folded else v
+            if not self.latent and (gn in self.folded or gn in self.inverse):
+                v = self.unfold(v)
         elif kind == "norm1":
             v = t.array() - np.float32(1)
         elif kind == "a_log":
@@ -243,6 +255,8 @@ class Weights(Mapping):
             return self[hf][np.asarray(idx)]
         t = self.g[gn]
         v = t.dequant(rows=list(idx))
+        if kind == "proj" and self.latent:
+            return v
         return self.unfold(v) if gn in self.folded | self.inverse else v
 
     def __iter__(self):

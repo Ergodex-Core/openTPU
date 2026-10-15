@@ -53,6 +53,7 @@ from ..kernels import gather as GA
 from ..kernels.gather import gather_row, onehot, onehot_blocks
 from ..kernels.gather import operand as gather_operand
 from ..kernels.lib import rmsnorm, rope, rope_rows, sigmoid, softcap
+from ..kernels.hadamard import rotate
 from ..kernels.mlp import _chunk, down_chunk, swiglu_down
 from ..runtime import ALIGN
 
@@ -960,7 +961,7 @@ class Image(EmbedHost):
         # W_down in column parts of the MLP's F chunk: each down MM streams one part, whose
         # scales are then contiguous (with row-major scales every row would cost a DRAM beat);
         # the chunk by W_down's format
-        self.dchunks = {fd: _chunk(self.f_loc, D, D if fd == "int8" else 2 * D)
+        self.dchunks = {fd: _chunk(self.f_loc, D, Q.per_chunk(fd) * D)
                         for fd in sorted({f[2] for f in self.lf})}
         self.dchunk = self.dchunks[self.lf[0][2]]
         self.bofs, self.bsize = {}, {}                  # per layout: offsets inside its block
@@ -1335,7 +1336,8 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     kv = lw.kv
     kpos = pos.pos if isinstance(pos, RunPos) else pos
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [1, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     sg = sigmoid(ol.dot(xs, lw.wgate)) if gated else None       # [1, nq_loc*d]
@@ -1385,14 +1387,15 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
         else:
             o_loc[r0:r1, :].set((acc / l[:, None]) * sg.reshape(G * nh, d)[r0:r1, :])
     o_all = ol.all_gather(o_row)                # [1, n_q*d], slice-major head order
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [1, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [1, H]
     return x + y
 
 
 def _mlp(x, lw, spec: Spec):
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_post), spec.eps))
-    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False))
+    rot = getattr(lw, "rot", None)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_post), spec.eps), rot))
+    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False), rot=rot)
     h_loc = lw.wd.shape[0]
     mine = slice(sid * h_loc, (sid + 1) * h_loc)
     return ol.all_gather(x[:, mine] + y)
@@ -1698,7 +1701,7 @@ def _lm_head(x, m, spec):
         ol.store(split, x)
         return
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(m.g_final), spec.eps), getattr(m, "rot", None)))
     chunk = min(HEAD_CHUNK, ol.tmem_words() // 8)
     sink = getattr(m, "lm_sink", None)
     for c0 in range(0, m.v_loc, chunk):

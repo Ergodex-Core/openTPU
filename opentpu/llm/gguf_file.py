@@ -114,15 +114,24 @@ class Tensor:
 
 
 def _trits(qs: np.ndarray, qh: np.ndarray) -> np.ndarray:
-    """PTQ1_0's trits as TQ1_0 packs them (ggml-quants.c dequantize_row_tq1_0, group 128):
-    qs [.., 24] holds 5 trits a byte in 5 planes of 24 (pow3 multiply, then (x * 3) >> 8),
-    qh [.., 2] 4 a byte in 4 planes of 2. Returns int8 [.., 128] in {-1, 0, +1}."""
+    """PTQ1_0's trits as ggml-quants.c dequantize_row_ptq1_0 reads them (TQ1_0's packing at
+    group 128): qs [.., 24] holds 5 trits a byte in stages of whole chunks of ptq1_0_stages
+    (32, 16, 8 bytes; 24 = 16 + 8), a stage's elements trit-major (trit n of its byte m is
+    element n c + m); each trit is ((q 3^n mod 256) 3) >> 8. qh [.., 2] holds 4 a byte, 4
+    planes of 2. Returns int8 [.., 128] in {-1, 0, +1}."""
     pow3 = np.array([1, 3, 9, 27, 81], np.uint16)
-    a = ((qs[..., None, :].astype(np.uint16) * pow3[:, None]) & 0xFF)        # [.., 5, 24]
-    a = ((a * 3) >> 8).reshape(*qs.shape[:-1], 120)
-    h = ((qh[..., None, :].astype(np.uint16) * pow3[:4, None]) & 0xFF)       # [.., 4, 2]
-    h = ((h * 3) >> 8).reshape(*qh.shape[:-1], 8)
-    return np.concatenate([a, h], -1).astype(np.int8) - 1
+
+    def plane(b, n):                    # trits 0 .. n-1 of bytes b [.., c] -> [.., n * c]
+        t = ((b[..., None, :].astype(np.uint16) * pow3[:n, None]) & 0xFF) * 3 >> 8
+        return t.reshape(*b.shape[:-1], n * b.shape[-1])
+
+    out, j = [], 0
+    for c in (32, 16, 8):
+        while j + c <= qs.shape[-1]:
+            out.append(plane(qs[..., j:j + c], 5))
+            j += c
+    out.append(plane(qh, 4))
+    return np.concatenate(out, -1).astype(np.int8) - 1
 
 
 class GGUF:

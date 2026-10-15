@@ -140,8 +140,11 @@ def main(argv=None):
     ap.add_argument("--dev", help="f2:0, f2:<PCI BDF>, or XDMA prefix; default OTPU_DEVICE")
     ap.add_argument("--target", default="f2", help="layout for --inspect or --backend isa")
     ap.add_argument("--inspect", action="store_true")
-    ap.add_argument("--wformat", choices=("int8", "int4", "fp4"), default="int8")
-    ap.add_argument("--head-format", choices=("int8", "int4", "fp4"), default="int8")
+    ap.add_argument("--wformat", choices=("int8", "int4", "fp4", "t2"), default="int8")
+    ap.add_argument("--head-format", choices=("int8", "int4", "fp4", "t2"), default="int8")
+    ap.add_argument("--rotate", action="store_true",
+                    help="Ternary-Bonsai 2: keep the latent ternary weights and rotate on the "
+                         "device (docs/ternary.md 4; implied by --wformat t2)")
     ap.add_argument("--golden", choices=("hf", "numpy"), default="hf")
     ap.add_argument("--compare-isa", action="store_true")
     ap.add_argument("--prompt", default="Write one sentence about the Moon.")
@@ -161,6 +164,10 @@ def main(argv=None):
         ap.error("this probe supports Qwen3, Qwen3.5 (Ternary-Bonsai 2 GGUF) and Gemma 3 text "
                  "checkpoints")
     spec = load_spec(path)
+    from opentpu.llm import bonsai2
+    rotated = bonsai2.is_bonsai2(path) and (a.rotate or a.wformat == "t2")
+    if rotated:
+        spec = bonsai2.spec(path, ternary=True)
     meta = checkpoint_info(path)
     image_kw = dict(wformat=a.wformat, head_format=a.head_format, lookup=True, rows=1)
     cfg = target.config(target.load(a.target))
@@ -224,7 +231,7 @@ def main(argv=None):
     try:
         result["phase"] = "loading_weights"
         save()
-        W = load_weights(path)
+        W = bonsai2.Weights(path, latent=True) if rotated else load_weights(path)
         backend = "isa"
         try:
             if a.backend == "board":
@@ -241,7 +248,7 @@ def main(argv=None):
             engine_kw = dict(cap=a.cap, cfg=cfg, wformat=a.wformat, head_format=a.head_format,
                              resident=True, rows=1, pipeline=False)
             if family in ("qwen3", "qwen3_5", "qwen3_5_text"):
-                engine_kw["embed_host"] = False
+                engine_kw["embed_host"] = rotated    # (rotated: the model's rows on the host)
             t0 = time.monotonic()
             engine = Engine(spec, W, backend=backend, **engine_kw)
             result.update(image_bytes=engine.image.nbytes,
@@ -288,6 +295,8 @@ def main(argv=None):
         else:
             from opentpu.llm import gemma3, qwen3, qwen35
             ref = {"qwen3": qwen3, "qwen3_5": qwen35, "qwen3_5_text": qwen35}.get(family, gemma3)
+            if rotated:             # the model's own weights: the rotation unfolded, tied
+                W, spec = bonsai2.Weights(path), bonsai2.spec(path)
             golden = ref.reference_logits(spec, W, history)
         arrays["golden"] = golden[len(prompt) - 1:]
         result["golden_comparison"] = compare_logit_rows(device, arrays["golden"])
