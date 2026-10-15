@@ -178,7 +178,7 @@ def _attention_tile(res: Res, lw, c, s_, pos, T: int, spec, block: int, parts: i
     D = ol.block_size()
     dk = -(-d // D) * D
     run = isinstance(pos, RunRows)
-    kvc = lw.kvs[0]
+    kvc = lw.kvs[getattr(pos, "seq", 0)]       # (a batched image's slot: RunRows.seq)
     xs = _norm_quantize(res.x, lw.g_in, eps)   # T rows: one pass a weight
     qn, kn = _load_opt(lw.qn), _load_opt(lw.kn)
     c, s_ = _rope_gate(lw, c, s_)
@@ -357,7 +357,7 @@ def _attention_loop(lw, xs, qn, kn, c, s_, pos, T: int, spec, heads, G: int, gs:
     outputs to `oscr` ([T, n_q d], the I/O scratch): every KV head's K and V projected and
     appended first (unrolled: their run-time rows), then the heads' queries and attention."""
     d, eps = spec.head_dim, spec.eps
-    kvc = lw.kvs[0]
+    kvc = lw.kvs[pos.seq]
     for j, hh in enumerate(heads):             # every head's K / V rows at their positions
         k = ol.dot(xs, lw.wk[j * d:(j + 1) * d, :])
         v = ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
@@ -1347,6 +1347,39 @@ def compile_tile_run(img, blocks: int, T: int, kind: str, block: int = ATTN_BLOC
             "block": block, "kw": kw}, fit=fit) for s in range(img.cfg.S)]
 
     return _first_fit(trace, variants(fam, T, img.cfg.MCOLS), img.cfg, levels=True)
+
+
+def compile_feed_tile(img, area: dict, slot: int, blocks: int, T: int,
+                      block: int = ATTN_BLOCK):
+    """(programs, run_args): a batched image's feed run tiled (batch.Steps.feed): T prompt rows of KV slot `slot`
+    at a run-time position of bucket `blocks` through every layer, no LM head, qwen3_tile's
+    programs (compile_tile_run's forms) with three differences: the slot's caches (RunRows.seq),
+    the tokens from the batch area's io words (tin, then uni: a feed run picks nothing, so the
+    2 R words hold T <= 2 R tokens) and the position from its step word (tpos = p mod block,
+    the host's), so the generate area (sequence 0's: out[], its state words) is not touched.
+    The rows' arithmetic is the prompt run's, so a slot's caches are bit for bit those of
+    sequence 0's tiled prompt runs (tests/test_batch.py)."""
+    if family(img) != "qwen3":
+        raise ValueError(f"no tiled feed run for {type(img).__module__}")
+    if not img.lookup:
+        raise ValueError("a feed run needs lookup tables (lookup=True)")
+    if not 0 <= slot < img.batch:
+        raise ValueError(f"slot {slot} of {img.batch}")
+    if T > 2 * area["R"]:
+        raise ValueError(f"{T} rows: the batch area's io block holds {2 * area['R']} tokens")
+    check(img, T)
+    lo = (blocks - 1) * block
+    pos = RunRows(blocks, block, lo, img.lookup["zmask"], img.cap, T, 0, _amask(img.lookup))
+    pos.seq = slot
+    pos.toks_src = Tensor(area["tin"], (T,), (1,))
+    pos.words_src = (Tensor(area["step"], (1,), (1,)), {"tpos": 0})
+
+    def trace(kw, fit):
+        return [tile_run.trace(img.cfg, s, {
+            "m": img.descriptors(s), "kernel": qwen3_tile, "pos": pos, "T": T, "kind": "P",
+            "block": block, "kw": kw}, fit=fit) for s in range(img.cfg.S)]
+
+    return _first_fit(trace, variants("qwen3", T, img.cfg.MCOLS), img.cfg, levels=True)
 
 
 def _first_fit(trace, forms, cfg, levels: bool = False):

@@ -561,15 +561,158 @@ class Steps:
         """Tokens a feed run takes: the MXU's columns (one pass of every weight)."""
         return min(self.eng.cfg.MCOLS, self.a["R"])
 
+    # ---- tiled feed runs (tiled.compile_feed_tile, docs/tiled_prefill.md 16)
+    def _tiling(self) -> bool:
+        """Feed runs tiled: the engine's tiled prompt runs on (prefill.tiling), a Qwen3-family
+        image (tiled.qwen3_tile), and room for more rows a run than feed_rows()."""
+        if "_tile_ok" not in self.__dict__:
+            from . import prefill as PF
+            from . import tiled as TL
+            eng = self.eng
+            self._tile_T: dict = {}           # bucket -> its tile rows (0: none fits)
+            self._tile_progs: dict = {}       # (slot, bucket, rows) -> programs, or None
+            self._tile_next: dict = {}        # the same -> Future (compiling ahead)
+            self._tile_ok = bool(eng.prompt_runs and PF.tiling(eng)
+                                 and TL.family(eng.image) == "qwen3"
+                                 and min(eng.cfg.act_rows, eng.image.rows, 2 * self.a["R"])
+                                 > self.feed_rows())
+        return self._tile_ok
+
+    def tile_rows(self, p: int) -> int:
+        """Rows of a tiled feed run in the attention bucket of position p: the most whole
+        passes of MCOLS (up to ACT_ROWS, the image's rows and the io block's 2 R words) whose
+        program fits TMEM, ACT RAM and IMEM (probed once a bucket on slot 0: the slots'
+        programs differ only in their caches' addresses); 0: the untiled feed runs."""
+        if not self._tiling():
+            return 0
+        from .qwen3 import _whole_passes
+        eng = self.eng
+        b = p // eng.block + 1
+        if b not in self._tile_T:
+            mc = eng.cfg.MCOLS
+            n = _whole_passes(min(eng.cfg.act_rows, eng.image.rows, 2 * self.a["R"],
+                                  eng.block, eng.cap - (b - 1) * eng.block), mc)
+            T = 0
+            while n > self.feed_rows():
+                if self._tile_get(0, b, n) is not None:
+                    T = n
+                    break
+                n = _whole_passes(n - 1, mc)
+            self._tile_T[b] = T
+        return self._tile_T[b]
+
+    def _tile_compile(self, slot: int, b: int, n: int):
+        """The tiled feed run's programs (as the backend takes them), None where they do not
+        fit TMEM, ACT RAM or IMEM."""
+        from . import tiled as TL
+        from .qwen3 import worker_words
+        eng = self.eng
+        what = ("feed tile", slot, b, n, self.a["io"], self.a["R"])
+        try:
+            progs, ra = eng.cached(what, lambda: TL.compile_feed_tile(
+                eng.image, self.a, slot, b, n, eng.block))
+        except CompileError as e:
+            if not any(w in str(e) for w in ("TMEM", "ACT RAM", "IMEM")):
+                raise
+            return None
+        if max(map(len, progs)) > self.limit:
+            return None
+        if self._words:
+            return worker_words(eng.image, progs[0], ra)
+        prep = getattr(eng.backend, "prepare", None)
+        if prep is not None:
+            prep(progs)
+        return progs
+
+    def _tile_get(self, slot: int, b: int, n: int):
+        key = (slot, b, n)
+        if key not in self._tile_progs:
+            fut = self._tile_next.pop(key, None)
+            t0 = time.perf_counter()
+            self._tile_progs[key] = fut.result() if fut is not None else \
+                self._tile_compile(slot, b, n)
+            self.timing["compile_wait_s"] += time.perf_counter() - t0
+        return self._tile_progs[key]
+
+    def _tile_runs(self, slot: int, p: int, n: int) -> list:
+        """The tiled runs (position, rows) of n prompt tokens of `slot` from p: the bucket's
+        tile rows a run, cut at a bucket's end; up to the first bucket without a tile."""
+        out, blk = [], self.eng.block
+        while n > 0:
+            T = self.tile_rows(p)
+            if not T:
+                break
+            k = min(T, n, blk - p % blk)
+            out.append((p, k))
+            p, n = p + k, n - k
+        return out
+
+    def prefetch_prompt(self, slot: int, p: int, n: int) -> None:
+        """Compile ahead (on the batch compile thread) the tiled feed runs that a prompt's n
+        tokens from p take on `slot`: each bucket's whole tile and the last, shorter run; where
+        feed runs are not tiled, the untiled feed's last run (prefetch_feed)."""
+        if not self._tiling():
+            q = self.feed_rows()
+            head = min(n, (q - p % q) % q)
+            self.prefetch_feed(slot, p + n - (n - head) % q, (n - head) % q)
+            return
+        if not self.eng.pipeline:
+            return
+        if self._pool is None:
+            from concurrent.futures import ThreadPoolExecutor
+            self._pool = ThreadPoolExecutor(1, thread_name_prefix="otpu-batch-compile")
+        for key in dict.fromkeys((slot, q // self.eng.block + 1, k)
+                                 for q, k in self._tile_runs(slot, p, n)):
+            if key not in self._tile_progs and key not in self._tile_next:
+                self._tile_next[key] = self._pool.submit(self._tile_compile, *key)
+
+    def feed_chunk(self, p: int) -> int:
+        """Tokens a worker's feed call takes at p: a tiled run's rows, else feed_rows()."""
+        return self.tile_rows(p) or self.feed_rows()
+
+    def _feed_tile(self, slot: int, p: int, toks, progs) -> None:
+        """One tiled feed run: its tokens to the io block's tin and uni words, tpos (p mod the
+        block) to its step word."""
+        eng, a, tm = self.eng, self.a, self.timing
+        Rm = a["R"]
+        io = np.zeros(2 * Rm + 2, np.float32)
+        io[:len(toks)] = toks
+        io[2 * Rm] = p % eng.block
+        c0 = time.perf_counter()
+        for s in range(eng.cfg.S):
+            eng.backend.write(s, a["io"], io)
+        t0 = time.perf_counter()
+        tm["write_s"] += t0 - c0
+        st = eng.backend.run(progs)
+        tm["run_s"] += time.perf_counter() - t0
+        tm["cycles"] += int((st or {}).get("cycles") or 0)
+        tm["tiled"] = tm.get("tiled", 0) + 1
+        eng.stats.append(dict(st or {}, rows=len(toks)))
+        self.runs += 1
+        eng.poss[slot] += len(toks)
+
     def feed(self, slot: int, tokens) -> None:
         """Feed a prompt's tokens to `slot` at its position, in runs of up to feed_rows() (from a
         multiple of it on, so that a span program serves an attention block's runs): the KV
-        cache only, no LM head."""
+        cache only, no LM head. With tiled prompt runs on (tile_rows) the runs are tiled feed
+        runs of the bucket's tile rows instead (every weight streamed once for up to ACT_ROWS
+        rows, the attention packed: tiled.compile_feed_tile); the untiled ones only where a
+        bucket's or a run's program does not fit."""
         eng, k = self.eng, self.feed_rows()
         tokens = [int(t) for t in tokens]
         i = 0
         while i < len(tokens):
             p = eng.poss[slot]
+            run = self._tile_runs(slot, p, len(tokens) - i)[:1]
+            if run:
+                n = run[0][1]
+                if p + n > eng.cap:
+                    raise RuntimeError("KV cache full")
+                progs = self._tile_get(slot, p // eng.block + 1, n)
+                if progs is not None:
+                    self._feed_tile(slot, p, tokens[i:i + n], progs)
+                    i += n
+                    continue
             n = min(len(tokens) - i, k - p % k)
             if p + n > eng.cap:
                 raise RuntimeError("KV cache full")

@@ -179,20 +179,17 @@ class BatchWorker(SC.Worker):
         self.stats["prefill_tokens"] += 1
         if r._feed:
             self.prefilling.append(r)
-            q = self.steps.feed_rows()
-            p, n = k, len(r._feed)
-            head = min(n, (q - p % q) % q)
-            self.steps.prefetch_feed(s, p + n - (n - head) % q, (n - head) % q)
+            self.steps.prefetch_prompt(s, k, len(r._feed))
         r._bset = False
         self.stats["switch_s"] += time.perf_counter() - t0
 
     # ---- prefill and decode
     def _prefill_run(self, r: SC.Request) -> int:
-        """One feed run of r's prompt (up to MCOLS tokens, to the next multiple of it); the
-        tokens fed."""
+        """One feed run of r's prompt (up to MCOLS tokens, to the next multiple of it; with
+        tiled feed runs the bucket's tile rows: Steps.feed_chunk); the tokens fed."""
         t0 = time.perf_counter()
-        q = self.steps.feed_rows()
         p = self.eng.poss[r.slot]
+        q = self.steps.feed_chunk(p)
         part = r._feed[:q - p % q]              # (a whole run: the budget may go over by less)
         self.steps.feed(r.slot, part)
         del r._feed[:len(part)]
