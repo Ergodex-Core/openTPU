@@ -29,8 +29,11 @@
 module otpu_f2_nch #(
   parameter logic [63:0] BASE = 64'h0,    // the channel's first byte in the DIMM
   parameter int CQ  = 16,                 // command and write-data FIFOs, beats
-  parameter int RD  = 64,                 // read-data FIFO (credits), beats
-  parameter int ROD = 32,                 // reads in flight
+  // reads in flight: the DIMM's ~550 ns round trip (decode on the card: 7.0 GB/s with ROD 32)
+  // needs 2 x 64 of them at 128 B a core cycle (100 MHz); 128 leaves room for the latency the
+  // controller adds at the higher rate (tests/test_f2_rtl.py test_f2_read_throughput)
+  parameter int RD  = 128,                // read-data FIFO (credits), beats
+  parameter int ROD = 128,
   parameter int WOD = 16,                 // writes in flight
   parameter bit HAZ = 1'b1                // 0: no same-beat waits (tests only: tb_f2mem fails)
 ) (
@@ -129,14 +132,19 @@ module otpu_f2_nch #(
     for (int k = 0; k < ROD; k++) hz_r |= HAZ && rv[k] && ra[k] == c_a;
   end
 
-  // ---- issue: the head command, when its output registers are free (AW and W together)
-  logic aw_v, w_v, ar_v;
+  // ---- issue: the head command, when its output registers are free (AW and W together; AR: a
+  // two-entry queue, so that a read goes out every cycle while the arbiter takes one every cycle;
+  // the one AR register of before took a read every second cycle at most: 32 B an aclk cycle)
+  logic aw_v, w_v;
+  logic [1:0]  arn;                     // AR queue entries (registered: issue never waits on ready)
+  logic [63:0] arq1;
+  logic        ar_pop;
   logic iss_w, iss_r, b_tk, r_tk;
   // reads in flight plus the read-data FIFO's entries the core has not popped
   logic [$clog2(RD)+1:0] r_cred;
   assign r_cred = ($clog2(RD) + 2)'(rn) + ($clog2(RD) + 2)'(r_used);
   assign iss_w = c_v && c_we && d_v && !aw_v && !w_v && !wn[WW] && !hz_r;
-  assign iss_r = c_v && !c_we && !ar_v && !rn[RW] && r_cred < ($clog2(RD) + 2)'(RD) && !hz_w;
+  assign iss_r = c_v && !c_we && arn != 2'd2 && !rn[RW] && r_cred < ($clog2(RD) + 2)'(RD) && !hz_w;
   assign c_pop = iss_w || iss_r;
   assign d_pop = iss_w;
   assign b_tk = m_bvalid;               // bready is 1
@@ -146,7 +154,8 @@ module otpu_f2_nch #(
   assign m_rready = 1'b1;
   assign m_awvalid = aw_v;
   assign m_wvalid = w_v;
-  assign m_arvalid = ar_v;
+  assign m_arvalid = arn != 2'd0;
+  assign ar_pop = m_arvalid && m_arready;
 
   always_ff @(posedge aclk) begin
     if (iss_w) begin
@@ -155,18 +164,20 @@ module otpu_f2_nch #(
       m_wstrb  <= d_mask;
       wa[wt]   <= c_a;
     end
+    if (ar_pop) m_araddr <= arq1;       // the queue's head is m_araddr
     if (iss_r) begin
-      m_araddr <= BASE + {33'd0, c_a, 6'd0};
+      if (arn == 2'd0 || (arn == 2'd1 && ar_pop)) m_araddr <= BASE + {33'd0, c_a, 6'd0};
+      else arq1 <= BASE + {33'd0, c_a, 6'd0};
       ra[rt]   <= c_a;
     end
     if (arst) begin
-      aw_v <= 1'b0; w_v <= 1'b0; ar_v <= 1'b0;
+      aw_v <= 1'b0; w_v <= 1'b0; arn <= 2'd0;
       wv <= '0; wh <= '0; wt <= '0; wn <= '0;
       rv <= '0; rh <= '0; rt <= '0; rn <= '0;
     end else begin
       aw_v <= iss_w || (aw_v && !m_awready);
       w_v  <= iss_w || (w_v && !m_wready);
-      ar_v <= iss_r || (ar_v && !m_arready);
+      arn  <= arn + 2'(iss_r) - 2'(ar_pop);
       if (iss_w) begin wv[wt] <= 1'b1; wt <= wt + 1'b1; end
       if (b_tk)  begin wv[wh] <= 1'b0; wh <= wh + 1'b1; end
       wn <= wn + (WW + 1)'(iss_w) - (WW + 1)'(b_tk);

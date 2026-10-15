@@ -190,14 +190,20 @@ module otpu_f2_mem #(
   // OCL control write can pass the very first PCIS write before hb_n increments.
   assign pcis_wbusy = hb_n != 0 || h_awvalid || h_wvalid;
 
-  // ---- read path: AR granted round-robin; the host's reads wait for its writes
+  // ---- read path: AR granted round-robin into a two-entry queue toward the DIMM (granted while
+  // it has room, a registered count: one AR every cycle while the DIMM takes one every cycle;
+  // the one AR register of before granted every second cycle at most); the host's reads wait for
+  // its writes
+  localparam int ARW = 16 + 64 + 8 + 3 + 2;
   logic [2:0] arreq, ar_gnt;
   logic [1:0] ar_last;
-  logic       ar_o;
+  logic [1:0] arn;
+  logic [ARW-1:0] arq0, arq1, ar_new;
+  logic       ar_pop;
   assign arreq = {h_arvalid && !hr_n[HW] && !pcis_wbusy, c_arvalid};
   always_comb begin
     ar_gnt = '0;
-    if (!ar_o)
+    if (arn != 2'd2)
       for (int k = 1; k <= 3; k++) begin
         automatic int m = (int'(ar_last) + k) % 3;
         if (arreq[m] && ar_gnt == '0) ar_gnt[m] = 1'b1;
@@ -206,19 +212,23 @@ module otpu_f2_mem #(
   assign c_arready = ar_gnt[1:0];
   assign h_arready = ar_gnt[2];
   assign h_ar_tk = ar_gnt[2];
-  assign d_arvalid = ar_o;
+  assign d_arvalid = arn != 2'd0;
+  assign ar_pop = d_arvalid && d_arready;
+  assign {d_arid, d_araddr, d_arlen, d_arsize, d_arburst} = arq0;
+  assign ar_new = {14'd0, ar_gnt[2], ar_gnt[1],
+                   ar_gnt[2] ? h_araddr : ar_gnt[1] ? c_araddr[1] : c_araddr[0],
+                   ar_gnt[2] ? h_arlen : 8'd0, ar_gnt[2] ? h_arsize : 3'd6,
+                   ar_gnt[2] ? h_arburst : 2'b01};
   always_ff @(posedge aclk) begin
+    if (ar_pop) arq0 <= arq1;
     if (ar_gnt != '0) begin
-      d_arid    <= {14'd0, ar_gnt[2], ar_gnt[1]};
-      d_araddr  <= ar_gnt[2] ? h_araddr : ar_gnt[1] ? c_araddr[1] : c_araddr[0];
-      d_arlen   <= ar_gnt[2] ? h_arlen : 8'd0;
-      d_arsize  <= ar_gnt[2] ? h_arsize : 3'd6;
-      d_arburst <= ar_gnt[2] ? h_arburst : 2'b01;
+      if (arn == 2'd0 || (arn == 2'd1 && ar_pop)) arq0 <= ar_new;
+      else arq1 <= ar_new;
     end
     if (arst) begin
-      ar_o <= 1'b0; ar_last <= 2'd2;
+      arn <= 2'd0; ar_last <= 2'd2;
     end else begin
-      ar_o <= (ar_gnt != '0) || (ar_o && !d_arready);
+      arn <= arn + 2'(ar_gnt != '0) - 2'(ar_pop);
       if (ar_gnt != '0) ar_last <= ar_gnt[2] ? 2'd2 : ar_gnt[1] ? 2'd1 : 2'd0;
     end
   end
