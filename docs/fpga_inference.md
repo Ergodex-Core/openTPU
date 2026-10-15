@@ -354,3 +354,90 @@ fresh server per model. Outputs are identical to the baseline; decode is unchang
 The run's files are `/home/ubuntu/opt/logs/bench_ttft.json` and `.log` on the instance. The
 prefill and decode device programs are unchanged by this step; fused-kernel prefill work is in
 progress on separate branches.
+
+### 5. Bytes per token: weight formats against accuracy (2026-10-16)
+
+Decode streams every weight once a token, so with section 3's law (cycles = 0.67 M + bytes /
+31.93 B at 200 MHz) a smaller weight format is a faster token. Each lower-byte choice was held
+to the HF fp32 model before any of it goes on the card.
+
+**Method.** `tools/format_agree.py` (ISA simulator, f2 target, no card):
+
+* `ref`: 10 prompts in each checkpoint's chat template (thinking off): f2_bench's SHORT and
+  LONG, arithmetic, Python code, translation, history, explanation, a haiku, a word problem,
+  JSON. HF fp32 (eager) decodes each greedily for 32 tokens or to EOS: 276 positions (Qwen3),
+  292 (Gemma 3), 285 / 286 (Bonsai 1.7B / 4B).
+* `run`: the image in the given formats takes each prompt as a prefill and is then
+  teacher-forced along HF's tokens. Per position it records the argmax against HF's token
+  (*TF*), the logit cosine and KL(HF ‖ device) in nats. *Seq*: prompts whose free-running
+  greedy output is HF's in full (the first TF miss ends it). *Confident misses*: TF misses where
+  HF's top-1 leads its top-2 by at least 0.5 logits (the others are near ties).
+* Bytes per token: `tools/dataflow.py MODEL decode 1 32 --wformat W --head-format H`, with
+  `OTPU_FORMATS` for the mixes (DRAM read + written, QST's useful bytes not counted twice).
+  Projected tok/s = 200 MHz / (0.67 M + bytes / 31.93).
+
+**Criterion.** A config replaces the current one if all three hold:
+
+* its TF agreement is at least the current config's minus 1% of the positions;
+* every prompt's mean cosine is at least 0.99;
+* its mean KL is not clearly above the current config's (not a multiple of it).
+
+Free-running *seq* is reported but not gated: Gemma 3's own int8 image matches HF on only 2 of
+10 prompts, through near ties.
+
+| Model | Layers / head (formats) | MB / token | Projected tok/s | TF | Seq | Confident misses | KL (nats) | Cosine: min / worst prompt mean |
+|---|---|---:|---:|---:|---:|---:|---:|---|
+| Qwen3-0.6B | **int8 / int8 (current)** | 612.7 | 10.07 | 275/276 | 9/10 | 0 | 0.0051 | 0.993 / 0.999 |
+| | int8 / int4 | 539.2 | 11.39 | 268/276 | 6/10 | 1 | 0.0168 | 0.988 / 0.996 |
+| | int8 / fp4 | 539.2 | 11.39 | 264/276 | 3/10 | 4 | 0.0196 | 0.986 / 0.994 |
+| | int8 / nvfp4 | 545.3 | 11.27 | 263/276 | 1/10 | 3 | 0.0196 | 0.988 / 0.995 |
+| | int8 + gateup=int4 / int4 | 455.9 | 13.38 | 252/276 | 1/10 | 9 | 0.067 | 0.956 / 0.986 |
+| | int8 + mlp=nvfp4 / int4 | 428.2 | 14.20 | 253/276 | 0/10 | 9 | 0.071 | 0.921 / 0.985 |
+| | int8 + mlp=int4 / int4 | 415.8 | 14.61 | 253/276 | 1/10 | 9 | 0.100 | 0.939 / 0.979 |
+| | int4 / int8 | 406.0 | 14.94 | 247/276 | 0/10 | 17 | 0.178 | 0.850 / 0.964 |
+| | fp4 / int4 | 332.4 | 18.05 | 240/276 | 0/10 | 16 | 0.139 | 0.867 / 0.966 |
+| | int4 / int4 | 332.4 | 18.05 | 243/276 | 0/10 | 22 | - | 0.843 / 0.960 |
+| Gemma-3-1B-it | **int8 / int8 (current)** | 1014.9 | 6.16 | 281/292 | 2/10 | 2 | 0.0068 | 0.987 / 0.998 |
+| | int8 / int4 | 888.9 | 7.02 | 282/292 | 5/10 | 7 | 0.0305 | 0.968 / 0.994 |
+| | int8 / fp4 | 888.9 | 7.02 | 281/292 | 5/10 | 5 | 0.0313 | 0.966 / 0.994 |
+| | int8 / nvfp4 | 900.4 | 6.93 | 280/292 | 3/10 | 3 | 0.0210 | 0.978 / 0.994 |
+| | int8 + gateup=int4 / int4 | 716.0 | 8.66 | 268/292 | 0/10 | 18 | 0.152 | 0.820 / 0.970 |
+| | int8 + mlp=nvfp4 / int4 | 642.8 | 9.61 | 261/292 | 0/10 | 19 | 0.179 | 0.871 / 0.969 |
+| | int8 + mlp=int4 / int4 | 618.4 | 9.98 | 259/292 | 0/10 | 23 | 0.251 | 0.781 / 0.956 |
+| | int4 / int8 | 710.8 | 8.72 | 249/292 | 0/10 | 33 | 0.428 | 0.730 / 0.944 |
+| | fp4 / int4 | 584.7 | 10.54 | 257/292 | 0/10 | 26 | 0.224 | 0.788 / 0.958 |
+| | int4 / int4 | 584.7 | 10.54 | 250/292 | 0/10 | 30 | - | 0.712 / 0.941 |
+| Ternary-Bonsai-1.7B | int4 / int8 | 1079.7 | 5.80 | 282/285 | 7/10 | 0 | 0.00062 | 0.9992 / 0.9999 |
+| | **int4 / int4 (current)** | 932.3 | 6.70 | 282/285 | 7/10 | 0 | 0.00065 | 0.9991 / 0.9999 |
+| | int4 / fp4 | 932.3 | 6.70 | 282/285 | 7/10 | 0 | 0.00065 | 0.9991 / 0.9999 |
+| Ternary-Bonsai-4B | int4 / int8 (before) | 2356.5 | 2.69 | 284/286 | 8/10 | 0 | 0.00054 | 0.9996 / 0.9999 |
+| | **int4 / int4 (now)** | 2172.0 | 2.91 | 284/286 | 8/10 | 0 | 0.00057 | 0.9996 / 0.9999 |
+
+(KL "-": runs before the harness recorded it. Bonsai-4B int4 / fp4 has the int4 head's bytes
+and was not finished. The same TF misses, all near ties, occur with every Bonsai head.)
+
+**Choices** (`tools/f2_web/gateway.py` `MODELS`, what `tools/f2_bench.py` runs):
+
+* **Ternary-Bonsai-4B: an int4 head, 3 KV slots.** It gives the same greedy tokens as the int8
+  head on every prompt (the same two near-tie misses, KL 0.00057 against 0.00054). The token
+  is 184.5 MB (7.8%) smaller: projected 2.69 → 2.91 tok/s. Its image (3.80 GB at context
+  1024) leaves room for 3 KV slots at context 2048: 4011 of 4096 MiB with the batch and
+  program areas (`tools/format_agree.py fit`). With the int8 head 2 slots fit (4037 MiB) and
+  3 do not (4187).
+* **Ternary-Bonsai-1.7B: int4 / int4, as before.** It is already the smallest; an int8 head
+  measures the same.
+* **Qwen3-0.6B, Gemma 3 1B: int8 / int8, as before.**
+  - Every 4-bit layer kind, alone or mixed, fails clearly. Gate / up alone is the best mix,
+    and it costs Qwen3 23 TF positions and Gemma 3 13, at 13-22 times the KL. The weights are
+    not ternary: at 0.6-1 B parameters 4 bits per weight is too coarse for these checkpoints.
+  - A 4-bit head is the near miss, about 12% faster.
+    - On Qwen3 it costs 7-12 TF positions (int4 268, fp4 264, nvfp4 263 against 275).
+    - On Gemma 3 TF holds (int4 282, fp4 281, nvfp4 280 against 281) and every prompt's mean
+      cosine stays at or above 0.994. But KL triples to quintuples (nvfp4 0.021, int4 0.031,
+      against 0.0068) and confident misses rise (nvfp4 3, int4 7, against 2).
+  - Gemma 3 with an nvfp4 head (900.4 MB, 6.93 tok/s, +12.5%) is the one config close enough
+    to be a product decision rather than a measured tie. It is not the default.
+
+The run's files are on the instance in `/home/ubuntu/opt/bytes-out/`: `ref-*.npz` (HF tokens
+and logits), one `.json` per config (per prompt: TF, divergence, cosine, KL, misses with HF's
+margins), `bytes.jsonl` (the ledger runs).

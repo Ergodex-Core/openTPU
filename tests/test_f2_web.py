@@ -181,3 +181,29 @@ def test_web_function_passcode_and_proxy(gateway):
     finally:
         p.terminate()
         p.wait(5)
+
+
+def _arg(args, flag):
+    return args[args.index(flag) + 1] if flag in args else None
+
+
+@pytest.mark.parametrize("name", list(gw.MODELS))
+def test_every_card_model_fits_its_slots(name, capsys):
+    """Each card model's image, with otpu-serve's KV slots at the gateway's context, its batch
+    area and the program area, fits the f2 slice's 4 GiB (tools/format_agree.py fit: the
+    checkpoint's config only; Gemma 3 runs one sequence)."""
+    args = gw.MODELS[name][1]
+    model = _arg(args, "--model")
+    path = ROOT / "models" / {"qwen3": "Qwen3-0.6B", "gemma3": "gemma-3-1b-it"}.get(model, "") \
+        if not model.startswith("models/") else ROOT / model
+    if not (path / "config.json").exists():
+        pytest.skip(f"no checkpoint config in {path}")
+    spec_ = importlib.util.spec_from_file_location("format_agree", ROOT / "tools/format_agree.py")
+    fa = importlib.util.module_from_spec(spec_)
+    spec_.loader.exec_module(fa)
+    slots = int(_arg(args, "--slots") or 8)
+    if json.loads((path / "config.json").read_text()).get("model_type", "").startswith("gemma"):
+        slots = 1
+    fa.main(["fit", str(path), "--wformat", _arg(args, "--wformat"), "--head-format",
+             _arg(args, "--head-format"), "--cap", "2048", "--slots", str(slots)])
+    assert json.loads(capsys.readouterr().out.strip().splitlines()[-1])["fits"], name

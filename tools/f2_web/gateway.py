@@ -38,8 +38,11 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 # name -> (label, otpu-serve arguments). The Bonsai models' weights are ternary (one scale per
-# 128), which int4 holds; Bonsai-4B's int8 image (4.0 GB) is over the slice's 4 GiB besides,
-# and at int4 its 3.9 GB leave room for one KV slot (8 at context 2048 need ~1.2 GB more).
+# 128), which int4 holds, and their int4 LM heads are as good as int8 ones (docs/fpga_inference.md
+# 5: the same greedy tokens, KL to HF fp32 0.0006 nats either way). Bonsai-4B's int4 image with
+# an int4 head leaves room for 3 KV slots at context 2048 (4011 of the slice's 4096 MiB; with an
+# int8 head 2). Qwen3-0.6B and Gemma 3 keep int8 layers and heads: every 4-bit layer kind and
+# head measured costs them accuracy (5).
 MODELS = {
     "qwen3-0.6b": ("Qwen3-0.6B (int8)", ["--model", "qwen3", "--wformat", "int8",
                                          "--head-format", "int8"]),
@@ -47,10 +50,9 @@ MODELS = {
                                        "--head-format", "int8"]),
     "bonsai-1.7b": ("Ternary-Bonsai-1.7B (int4)", ["--model", "models/Ternary-Bonsai-1.7B",
                                                   "--wformat", "int4", "--head-format", "int4"]),
-    "bonsai-4b": ("Ternary-Bonsai-4B (int4, int8 head)", ["--model", "models/Ternary-Bonsai-4B",
-                                                          "--wformat", "int4",
-                                                          "--head-format", "int8",
-                                                          "--slots", "1"]),
+    "bonsai-4b": ("Ternary-Bonsai-4B (int4)", ["--model", "models/Ternary-Bonsai-4B",
+                                               "--wformat", "int4", "--head-format", "int4",
+                                               "--slots", "3"]),
 }
 # --models only: not on the card's page (local runs, --backend isa)
 LOCAL_MODELS = {
