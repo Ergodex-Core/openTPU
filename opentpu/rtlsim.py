@@ -464,9 +464,9 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         # counters; reads and writes as (commands, beats) (a native command is one beat), ar_a:
         # the A runs and SW fill reads, rmw_a: the A and SW writes with a partial byte mask
         mem = [dict(zip(("rd", "wr", "row_miss", "rmw"), map(int, m))) for m in
-               re.findall(r"MEM ch\d rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
+               re.findall(r"MEM ch\d+ rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
         nat = [dict(kv.split("=") for kv in m.split()) for m in
-               re.findall(r"NATIVE ch\d (.*)", out)]
+               re.findall(r"NATIVE ch\d+ (.*)", out)]
         nat = [{k: int(v) for k, v in d.items()} for d in nat]
         stats["native"] = nat
         stats["axi_reads"] = [(m["rd"], m["rd"]) for m in mem]
