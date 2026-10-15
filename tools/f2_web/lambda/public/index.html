@@ -122,7 +122,7 @@ $("send").onclick = async () => {
   for (const k of ["s-ttft", "s-dec", "s-tok", "s-total"]) $(k).textContent = "–";
   const model = $("model").value;
   status(`Running on the FPGA with ${model}… (a model switch reloads the card first)`);
-  const t0 = performance.now(); let tFirst = 0, nOut = 0, usage = null;
+  const t0 = performance.now(); let tFirst = 0, tLast = 0, nOut = 0, usage = null;
   try {
     const r = await api("/api/chat", { method: "POST", body: JSON.stringify({
       model, messages: [{ role: "user", content: prompt }],
@@ -141,16 +141,19 @@ $("send").onclick = async () => {
         const piece = ev.choices && ev.choices[0] && ev.choices[0].delta && ev.choices[0].delta.content;
         if (piece) {
           if (!tFirst) { tFirst = performance.now(); $("s-ttft").textContent = ((tFirst - t0) / 1000).toFixed(2) + " s"; }
-          nOut++; $("out").textContent += piece;
+          tLast = performance.now(); nOut++; $("out").textContent += piece;
         }
       }
     }
     const t1 = performance.now(), toks = usage ? usage.completion_tokens : nOut;
-    if (tFirst && toks > 1) $("s-dec").textContent = ((toks - 1) / ((t1 - tFirst) / 1000)).toFixed(1);
+    // first to last token (the stream's end waits on the usage event); a burst (the tokens of a
+    // run read at once, as the ISA simulator gives them) has no decode time to divide by
+    if (tFirst && toks > 1 && tLast - tFirst >= 50)
+      $("s-dec").textContent = ((toks - 1) / ((tLast - tFirst) / 1000)).toFixed(1);
     if (usage) $("s-tok").textContent = `${usage.prompt_tokens} + ${usage.completion_tokens}`;
     $("s-total").textContent = ((t1 - t0) / 1000).toFixed(2);
+    await loadModels();                    // (its status first: the run's replaces it)
     status(`Done on the FPGA (${model}).`, "ok");
-    loadModels();
   } catch (e) { status(e.message, "err"); }
   $("send").disabled = false;
 };

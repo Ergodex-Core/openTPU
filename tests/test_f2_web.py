@@ -88,6 +88,68 @@ def test_gateway_streams_and_limits(gateway):
     assert [m["id"] for m in d["models"]] == list(gw.MODELS) and d["loaded"] == "bonsai-1.7b"
 
 
+def test_gateway_rejects_bad_fields(gateway):
+    msgs = [{"role": "user", "content": "hi"}]
+    for bad in ({"max_tokens": "abc"}, {"temperature": "hot"}, {"top_k": [1]}):
+        st, body = _post(gateway, "/api/chat", {"model": "gemma3-1b", "messages": msgs, **bad})
+        assert st == 400 and "numbers" in body, bad
+    for raw in (b"[]", b'"x"', b"not json"):
+        c = http.client.HTTPConnection("127.0.0.1", gateway, timeout=10)
+        c.request("POST", "/api/chat", raw, {"Content-Type": "application/json"})
+        assert c.getresponse().status == 400, raw
+    assert not FakeServe.seen
+    st, _ = _post(gateway, "/api/chat", {"model": "gemma3-1b", "messages": msgs, "temperature": None})
+    assert st == 200 and FakeServe.seen[-1]["temperature"] == 0.0
+
+
+def test_gateway_backend_reaches_otpu_serve(monkeypatch, tmp_path):
+    seen = {}
+
+    class Proc:
+        returncode = 1
+
+        def __init__(self, cmd, **kw):
+            seen["cmd"] = cmd
+
+        def poll(self):
+            return 1
+    monkeypatch.setattr(gw, "ROOT", tmp_path)          # (build/ made for the log)
+    monkeypatch.setattr(gw.subprocess, "Popen", Proc)
+    for backend in ("board", "isa"):
+        with pytest.raises(RuntimeError):
+            gw.Server("f2:0", "python3", 2048, backend).select("gemma3-1b")
+        cmd = seen["cmd"]
+        assert cmd[cmd.index("--backend") + 1] == backend
+        assert cmd.count("--backend") == 1 and cmd.index("--backend") > cmd.index("--model")
+
+
+def test_gateway_models_filter(monkeypatch):
+    class Httpd:
+        def __init__(self, addr, handler):
+            pass
+
+        def serve_forever(self):
+            pass
+    monkeypatch.setattr(gw, "ThreadingHTTPServer", Httpd)
+    monkeypatch.setattr(gw, "MODELS", dict(gw.MODELS))
+    monkeypatch.setattr(gw.signal, "signal", lambda *a: None)
+    gw.main(["--backend", "isa", "--models", "gemma3-1b,functiongemma-270m", "--port", "0"])
+    assert list(gw.MODELS) == ["gemma3-1b", "functiongemma-270m"]
+    assert gw.MODELS["functiongemma-270m"] == gw.LOCAL_MODELS["functiongemma-270m"]
+    for argv in (["--models", "nope"], ["--models", "gemma3-1b", "--preload", "qwen3-0.6b"],
+                 ["--backend", "board-sim"]):
+        with pytest.raises(SystemExit):
+            gw.main(argv)
+
+
+def test_page_decode_rate_skips_a_burst():
+    """The ISA simulator hands a run's tokens over at once: the rate is first to last token,
+    none when they came together; the run's status is set after the model list's."""
+    page = (ROOT / "tools/f2_web/lambda/public/index.html").read_text()
+    assert "tLast - tFirst >= 50" in page and "(tLast - tFirst) / 1000" in page
+    assert page.index("await loadModels();") < page.index("status(`Done on the FPGA")
+
+
 def test_every_model_keeps_inference_on_the_card():
     for name, (_, args) in gw.MODELS.items():
         assert "--wformat" in args and "--per-position" not in args and "--top-k" not in args, name

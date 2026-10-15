@@ -2,6 +2,8 @@
 """The F2 demo's gateway: one otpu-serve on the slot at a time, the model chosen per request.
 
     python tools/f2_web/gateway.py --dev f2:0 --port 8080        (on the F2 host)
+    python tools/f2_web/gateway.py --backend isa --models gemma3-1b,functiongemma-270m
+                                        (anywhere: the ISA simulator, the models in models/)
 
 The web page (tools/f2_web/lambda: a Lambda web function in the host's VPC) calls it:
 
@@ -36,7 +38,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 # name -> (label, otpu-serve arguments). The Bonsai models' weights are ternary (one scale per
-# 128), which int4 holds; Bonsai-4B's int8 image (4.0 GB) is over the slice's 4 GiB besides.
+# 128), which int4 holds; Bonsai-4B's int8 image (4.0 GB) is over the slice's 4 GiB besides,
+# and at int4 its 3.9 GB leave room for one KV slot (8 at context 2048 need ~1.2 GB more).
 MODELS = {
     "qwen3-0.6b": ("Qwen3-0.6B (int8)", ["--model", "qwen3", "--wformat", "int8",
                                          "--head-format", "int8"]),
@@ -46,6 +49,13 @@ MODELS = {
                                                   "--wformat", "int4", "--head-format", "int4"]),
     "bonsai-4b": ("Ternary-Bonsai-4B (int4, int8 head)", ["--model", "models/Ternary-Bonsai-4B",
                                                           "--wformat", "int4",
+                                                          "--head-format", "int8",
+                                                          "--slots", "1"]),
+}
+# --models only: not on the card's page (local runs, --backend isa)
+LOCAL_MODELS = {
+    "functiongemma-270m": ("FunctionGemma 270M (int8)", ["--model", "functiongemma",
+                                                          "--wformat", "int8",
                                                           "--head-format", "int8"]),
 }
 TOP_K_CARD = 64                         # the card's sampler: no host sampling above
@@ -54,8 +64,8 @@ SERVE_PORT = 8000
 
 
 class Server:
-    def __init__(self, dev: str, python: str, cap: int):
-        self.dev, self.python, self.cap = dev, python, cap
+    def __init__(self, dev: str, python: str, cap: int, backend: str = "board"):
+        self.dev, self.python, self.cap, self.backend = dev, python, cap, backend
         self.proc: subprocess.Popen | None = None
         self.model: str | None = None
         self.state = "idle"             # idle | loading | ready | error
@@ -80,8 +90,9 @@ class Server:
             return
         self._stop()
         self.state, self.error = "loading", ""
+        (ROOT / "build").mkdir(exist_ok=True)
         log = open(ROOT / "build" / f"f2-web-{name}.log", "ab")
-        cmd = [self.python, "-m", "opentpu.serve.api", *MODELS[name][1], "--backend", "board",
+        cmd = [self.python, "-m", "opentpu.serve.api", *MODELS[name][1], "--backend", self.backend,
                "--dev", self.dev, "--host", "127.0.0.1", "--port", str(SERVE_PORT),
                "--cap", str(self.cap), "--served-model-name", name]
         self.proc = subprocess.Popen(cmd, cwd=ROOT, stdout=log, stderr=subprocess.STDOUT)
@@ -118,7 +129,10 @@ def make_handler(srv: Server):
 
         def _body(self) -> dict:
             n = int(self.headers.get("Content-Length") or 0)
-            return json.loads(self.rfile.read(n) or b"{}") if n else {}
+            d = json.loads(self.rfile.read(n) or b"{}") if n else {}
+            if not isinstance(d, dict):
+                raise ValueError("not an object")
+            return d
 
         def do_GET(self):
             if self.path == "/health":
@@ -150,12 +164,15 @@ def make_handler(srv: Server):
             name, msgs = body.get("model", ""), body.get("messages")
             if not isinstance(msgs, list) or not msgs:
                 return self._json(400, {"error": "messages required"})
-            req = {"model": name, "messages": msgs, "stream": True,
-                   "stream_options": {"include_usage": True},
-                   "max_tokens": max(1, min(int(body.get("max_tokens") or 256), MAX_TOKENS)),
-                   "temperature": float(body.get("temperature", 0.0)),
-                   "top_k": max(1, min(int(body.get("top_k") or TOP_K_CARD), TOP_K_CARD)),
-                   "chat_template_kwargs": {"enable_thinking": False}}
+            try:
+                req = {"model": name, "messages": msgs, "stream": True,
+                       "stream_options": {"include_usage": True},
+                       "max_tokens": max(1, min(int(body.get("max_tokens") or 256), MAX_TOKENS)),
+                       "temperature": float(body.get("temperature") or 0.0),
+                       "top_k": max(1, min(int(body.get("top_k") or TOP_K_CARD), TOP_K_CARD)),
+                       "chat_template_kwargs": {"enable_thinking": False}}
+            except (TypeError, ValueError):
+                return self._json(400, {"error": "max_tokens, temperature, top_k: numbers"})
             with srv.lock:
                 try:
                     srv.select(name)
@@ -196,15 +213,29 @@ def main(argv=None) -> None:
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8080)
     ap.add_argument("--cap", type=int, default=2048, help="otpu-serve's context, tokens")
-    ap.add_argument("--preload", choices=list(MODELS), help="load this model at startup")
+    ap.add_argument("--backend", default="board", choices=["board", "isa"],
+                    help="otpu-serve's backend: the card, or the ISA simulator (no card)")
+    ap.add_argument("--models", help="comma-separated ids to serve (default: every MODELS "
+                    f"entry; also {', '.join(LOCAL_MODELS)})")
+    ap.add_argument("--preload", help="load this model at startup")
     a = ap.parse_args(argv)
-    srv = Server(a.dev, sys.executable, a.cap)
+    if a.models:
+        avail = {**MODELS, **LOCAL_MODELS}
+        ids = [m.strip() for m in a.models.split(",") if m.strip()]
+        if bad := [m for m in ids if m not in avail]:
+            ap.error(f"unknown model(s) {', '.join(bad)}; choose from {', '.join(avail)}")
+        MODELS.clear()                          # the same dict, as importers see it
+        MODELS.update({m: avail[m] for m in ids})
+    if a.preload and a.preload not in MODELS:
+        ap.error(f"--preload {a.preload!r} is not served ({', '.join(MODELS)})")
+    srv = Server(a.dev, sys.executable, a.cap, a.backend)
     if a.preload:
         with srv.lock:
             srv.select(a.preload)
     httpd = ThreadingHTTPServer((a.host, a.port), make_handler(srv))
     signal.signal(signal.SIGTERM, lambda *_: (srv._stop(), os._exit(0)))
-    print(f"f2 gateway on http://{a.host}:{a.port} ({a.dev})", flush=True)
+    print(f"f2 gateway on http://{a.host}:{a.port} ({a.backend}, {a.dev}): "
+          f"{', '.join(MODELS)}", flush=True)
     httpd.serve_forever()
 
 
