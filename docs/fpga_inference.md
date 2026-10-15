@@ -386,3 +386,82 @@ section 2, and outputs identical to section 4's.
   the clock.
 * **Next.** A rebuild of this design at a 200 MHz core, with more reads in flight in
   `otpu_f2_nch`, is the next hardware step.
+
+### 6. Decode's memory path: calibration, the bridge's read rate, the megakernel bound (co-sim, 2026-10-15)
+
+**Two images, one rate.** This branch's DDR image (`f9e0e5bf`: 100 MHz core, the slot's DIMM
+through `otpu_f2_nch` + `otpu_f2_mem` + `sh_ddr`) decodes Qwen3-0.6B int8 at 11.48 tok/s
+(8.71 M core cycles, 7.0 GB/s, 70 B a cycle); Alex's 200 MHz HBM image at 10.0 tok/s (19.9 M
+cycles, 6.2 GB/s, 32 B a cycle). The bytes a second stay put when the core clock doubles, so the
+limit is in the memory path's own time (latency x reads in flight, or a bandwidth), not in a
+per-core-cycle mechanism of the slice; and the slice can keep far more in flight than either
+needs (`otpu_native_dram` RD 128 B and AD 64 A beats a channel, the MXU's 1024-chunk weight FIFO
+and 128 scale tags: 16 KB and more).
+
+**The co-sim model.** `otpu_native_mem` takes `+nat_rod=N`: a channel performs a read only while
+fewer than N of its reads await their data (a bridge's outstanding-read limit); `tools/perf_qwen.py
+--rod N`. Qwen3-0.6B's resident decode program (`--resident`, 1 and 2 layers and the head; a
+token = head + 28 layers), the card's feature flags (`OTPU_PAIR=1 OTPU_DSTEP=1 OTPU_STREAM=1
+OTPU_SEQ_WC=1`; int8 runs are the same without them):
+
+| Memory model | Cycles a token | B / cycle | tok/s | Card |
+|---|---:|---:|---:|---|
+| `--rod 32 --lat 50 --bw 62` (100 MHz) | 8.68 M | 70.6 | 11.52 | 11.48 (DDR image) |
+| `--rod 32 --lat 120` (200 MHz) | (stream 32.6 B / cycle) | | | 31.9 (HBM image) |
+
+`--bw 62` is the bridges' one read per two aclk cycles (below); `--lat 50` a 500 ns round trip,
+so the DDR image runs at both of its limits at once (Little's law: 2 x 32 reads x 64 B per
+~550 ns = 7.4 GB/s; the AR rate 8 GB/s). The HBM image fits 32 reads a channel and ~620 ns (its
+SmartConnect wrapper is not this tree's; the same 4 KB in flight would explain it). In the model the
+layers stream at the memory's rate: no-MM gaps are 0.2% of a layer, the generate loop's greedy
+sampler adds 4 K cycles a token (2.641 M vs 2.637 M at 2 layers).
+
+**What limits the reads in flight: the F2 bridges, not the slice or the program.** Measured
+through the bridges alone (`sim/verilator/tb_f2bw.sv`, both channels streaming against a
+fixed-latency DIMM model): `otpu_f2_nch` took a read only when its one AR register was empty
+(cleared the cycle after the handshake), and `otpu_f2_mem` granted only when its own was, so the
+two channels read at most 0.5 beats an aclk cycle (32 B, 8 GB/s, 80 B a 100 MHz core cycle) at any
+latency up to 500 ns, and ROD 32 x 2 channels (4 KB) bound the rate beyond that. Every stream the
+program could add (prefetching the next matrix or layer, splitting a matrix, the head under the last
+layers) shares those two channels and their 64 reads: no program reaches more than 4 KB in flight.
+Commit `19d713aa` gives both an AR queue of two entries (issue on a registered count: one read an
+aclk cycle) and ROD 128 / RD 128: through the bridges, 2.0 beats a core cycle (port B's 128 B) up
+to a 1 us round trip, 1.25 at a 200 MHz core (the 512-bit port at 250 MHz, 16 GB/s).
+
+**Projected decode on the DDR image** (co-sim at 100 MHz, `--lat 50`; Bonsai-4B by its bytes at
+Bonsai-1.7B int4's rates):
+
+| Model (weights / head) | MB / token | Now: cycles, B / cycle, tok/s | ROD 128 + AR queues: cycles, B / cycle, tok/s | Gain |
+|---|---:|---:|---:|---:|
+| Qwen3-0.6B int8 / int8 | 612.8 | 8.68 M, 70.6, 11.52 (card 11.48) | 5.01 M, 122.2, 19.94 | 1.73x |
+| Gemma-3-1B int8 / int8 | 1015.0 | 14.36 M, 70.7, 6.96 | 8.28 M, 122.6, 12.07 | 1.73x |
+| Bonsai-1.7B int4 / int4 | 932.3 | 13.13 M, 71.0, 7.62 | 7.66 M, 121.7, 13.05 | 1.71x |
+| Bonsai-4B int4 / int8 | 2356.5 | 33.2 M, 71.0, 3.01 | 19.4 M, 121.7, 5.16 | 1.71x |
+
+After the change decode is bound by the MXU's one weight chunk a cycle (Qwen3 at 97.6% of it,
+the int4 models 90.6%: their PAIR MMs' scale lines), the same at `--lat 70` (700 ns); the AR
+queues alone, ROD 32, give nothing (8.62 M: the reads in flight bind). It assumes the DIMM
+delivers 12.8 GB/s (75% of DDR4-2133's 17 GB/s) to single-beat reads from two windows 2 GiB apart:
+the card measures that. A 200 MHz core with the change: 7.90 M cycles, 25.3 tok/s (Qwen3), an upper
+bound that needs 16 GB/s from the DIMM (94% of its peak).
+
+**The megakernel's bound.** With the stream at the memory's rate, the work beside it is hidden:
+in the co-sim the layers stream at 99.8% of the memory model's rate today and at 97.9% of the MXU's
+after the change. What is left after it, measured: the norm -> quantize -> MM chains outlast the
+MXU's 1024-chunk prefetch (a 2048-chunk FIFO: -0.8% of a layer, MLP's gap gone), and attention's
+per-head chains at short contexts (~4 K cycles a layer; putting more heads' q.K^T ahead of a
+head's P.V, `_attend_heads` priming 2 or 4 heads: -0.05% at position 9, +0.05 to +1.3% at 300).
+So fused decode megakernels can win at most ~2% of a token after the bridge change and ~0.3% now;
+no program change is part of this step. The card's 0.67 M-cycle intercept of section 3 is not in
+the model's layers (its fit spans different images).
+
+**Benchmark** (the coordinator; the image rebuilt from this branch, `boards/f2/build.py`):
+
+```sh
+python tools/f2_bench.py --dev f2:0000:34:00.0 --json bench_megadecode.json --max-tokens 128
+python tools/fpga_inference_check.py --model qwen3 --dev f2:0000:34:00.0 --chat --steps 8 --compare-isa --json qwen3.json
+```
+
+If the rate does not move with the new image, the DIMM's efficiency binds: then the channels'
+2 GiB windows (each beat alternating between two rows of a bank) are the next suspect, and an
+interleaved map (both channels in one window, beat-interleaved) the change to try.

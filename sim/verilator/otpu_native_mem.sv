@@ -13,7 +13,10 @@
 // the read is performed plus 0..7 cycles of jitter and random bubbles. n_wdone counts the writes
 // performed, +nat_wdl=N cycles later plus 0..7 cycles of jitter and random stalls (so it may step
 // by more than 1 a cycle). Bandwidth: +axi_bw=P limits each channel to P percent of one command
-// per cycle (100 = no limit).
+// per cycle (100 = no limit). Reads in flight: +nat_rod=N lets a channel perform a read only
+// while fewer than N of its reads are performed and their data not yet returned (a bridge's
+// outstanding-read limit, e.g. otpu_f2_nch ROD; 0, the default: no limit), so with it the read
+// rate is at most N beats per LAT + 4 cycles (Little's law).
 //
 // DDR3 timing (+axi_dram=1, replaces +axi_bw): a bank model (+axi_map, +axi_trcd +axi_trp
 // +axi_tras +axi_trc +axi_trtp +axi_trefi +axi_trfc +axi_tturn, +axi_tpc / +axi_tpu, +axi_trmw
@@ -73,6 +76,7 @@ module otpu_native_mem #(
   int cqd = 16, wqd = 16;                // command / write-data FIFO entries
   int wdl = 4;                           // n_wdone lag, cycles (+ 0..7)
   int ahead = 16;                        // DDR3 model: data-bus backlog, controller cycles
+  int rod = 0;                           // reads in flight per channel (0: no limit)
   longint n_rd [2], n_wr [2], n_miss [2], n_rmw [2];
   // DDR3 model
   int dram = 0, amap = 0;
@@ -202,6 +206,7 @@ module otpu_native_mem #(
         // perform the oldest command (taken in an earlier cycle): a write once its data is in
         if (cq[c].size() != 0 && cq[c][0].t < cyc && cr >= 100 &&
             (!cq[c][0].we || wq_d[c].size() != 0) &&
+            (cq[c][0].we || rod == 0 || rq[c].size() < rod) &&
             (dram == 0 || bus[c] <= (cyc + longint'(ahead)) * tpc)) begin
           int b;
           longint t;
@@ -281,6 +286,7 @@ module otpu_native_mem #(
     void'($value$plusargs("nat_wq=%d", wqd));
     void'($value$plusargs("nat_wdl=%d", wdl));
     void'($value$plusargs("nat_ahead=%d", ahead));
+    void'($value$plusargs("nat_rod=%d", rod));
     n_rd = '{0, 0}; n_wr = '{0, 0}; n_miss = '{0, 0}; n_rmw = '{0, 0};
     begin
       int seed;
