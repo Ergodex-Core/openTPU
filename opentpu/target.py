@@ -87,7 +87,12 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           # the F2 slot's: its top, cl_opentpu (boards/f2/design), takes the AWS shell's ports
           # and sh_ddr from the HDK, so it is the HDK flow's, not in this list
           "f2": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_nch.sv",
-                 "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"]}
+                 "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
+          # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
+          # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
+          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_hbm_nch.sv",
+                     "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
+                     "boards/f2/otpu_f2_hbm_mem.sv", "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -294,7 +299,10 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
-        "DRAM_LOG2": (a["DRAM_BYTES"] - 1).bit_length(),
+        # what a slice's channels hold: the arch's DRAM_BYTES (what its programs address), or
+        # the platform's slice_bytes where the channels hold more (f2-hbm16: 16 x 512 MiB = 8
+        # GiB, of which the slice's 32-bit byte addresses reach 4 GiB today; docs/f2_hbm.md)
+        "DRAM_LOG2": (p.get("slice_bytes", a["DRAM_BYTES"]) - 1).bit_length(),
         "PLATFORM": t.platform_id,
         "ARCH_HASH": arch_hash(cfg),
     }
@@ -309,7 +317,10 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    board = t.platform["board"]
+    if board == "f2" and t.platform.get("mem") == "hbm":
+        board = "f2-hbm"
+    return core + SHELL + BOARDS.get(board, [])
 
 
 def build_config(t: Target | str | None = None, **knobs):
