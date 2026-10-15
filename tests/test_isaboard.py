@@ -31,3 +31,21 @@ def test_the_cards_driver_on_the_isa_simulator_gives_the_isas_bits():
     assert c["sim_runs"] >= 2 and c["bytes_written"] >= eng.image.nbytes
     assert c["bytes_read"] > 0 and c["sim_s"] > 0
 
+
+def test_every_buckets_prompt_runs_compiled_ahead_in_processes():
+    """On the card's driver (the engine's compile worker processes) prefill.warm compiles every
+    bucket's tiled runs in processes of its own: a prompt crossing into bucket 2 takes its
+    runs from them (none compiled in the engine), with the ISA backend's logits."""
+    from opentpu.llm import prefill as PF
+    W, spec, _ = _model("qwen3")
+    backend, cfg = CH.make_backend("board-isa", spec, 512, None)
+    eng = Engine(spec, W, cap=512, cfg=cfg, backend=backend, resident=True, prompt_runs=True)
+    assert eng._procs and PF.tiling(eng)
+    eng._prompt_warm.join(600)
+    assert not eng._prompt_warm.is_alive()
+    assert not eng._prompt_pre                      # every Future taken by programs()
+    assert {w[3] for w in eng._prompt_progs if w[0] == "prompt tile"} == {1, 2}
+    ref = Engine(spec, W, cap=512, cfg=cfg, resident=True, prompt_runs=True)
+    prompt = [int(x) for x in np.random.default_rng(2).integers(0, 1000, 300)]
+    a, b = eng.prefill(prompt), ref.prefill(prompt)
+    assert np.array_equal(a.view(np.uint32), b.view(np.uint32))
