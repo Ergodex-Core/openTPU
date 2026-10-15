@@ -272,53 +272,85 @@ serving.
 **Method.** Bytes per token come from the ISA ledger (`tools/dataflow.py MODEL decode 1 32
 --wformat W --head-format H`: every DRAM byte the decode program reads and writes, zero
 image, f2 target); cycles per token are the card's counters above (`timing.decode_cycles /
-decode_runs` of the section 1 JSON files, the same images). No RTL simulation: Verilator is
-not on the instance, so there is no per-phase cycle split from a co-sim here.
+decode_runs` of the section 1 JSON files, the same images). No RTL co-simulation went into
+this table (no per-phase cycle split).
 
 **One law fits every model.** The two Bonsai-1.7B images run the same program with other
 weight bytes; their difference gives the memory rate alone: 25.49 M cycles for 815.2 MB, 31.99
 bytes a core cycle. A least-squares fit over all five images gives cycles = 0.67 M + bytes /
 31.93 B, every residual under 64 K cycles (0.3%):
 
-| Model | MB / token (layers, head, scales, KV) | Cycles / token | GB/s | Not streaming | VPU issue | 12.8 GB/s | 16 GB/s | Gap |
-|---|---|---:|---:|---:|---:|---:|---:|---:|
-| Qwen3-0.6B int8 / int8 | 612.8 (440.4, 155.6, 7.4, 8.4) | 19.90 M | 6.16 | 0.74 M (3.7%) | 0.22 M | 20.9 tok/s | 26.1 tok/s | 2.60× |
-| Gemma-3-1B int8 / int8 | 1015.0 (697.8, 302.0, 11.7, 1.9) | 32.46 M | 6.25 | 0.73 M (2.2%) | 0.35 M | 12.6 | 15.8 | 2.56× |
-| Bonsai-1.7B int4 / int4 | 932.3 (704.6, 155.3, 62.8, 8.4) | 29.85 M | 6.25 | 0.70 M (2.4%) | 0.33 M | 13.7 | 17.2 | 2.56× |
-| Bonsai-1.7B int8 / int8 | 1747.4 (1409.3, 310.6, 17.9, 8.4) | 55.34 M | 6.32 | 0.70 M (1.3%) | 0.33 M | 7.3 | 9.2 | 2.53× |
-| Bonsai-4B int4 / int8 | 2356.5 (1816.7, 388.3, 139.3, 10.8) | 74.52 M | 6.32 | 0.84 M (1.1%) | 0.68 M | 5.4 | 6.8 | 2.53× |
+| Model | MB / token (layers, head, scales, KV) | Cycles / token | GB/s | Not streaming | VPU issue | At 25.6 GB/s | Gap |
+|---|---|---:|---:|---:|---:|---:|---:|
+| Qwen3-0.6B int8 / int8 | 612.8 (440.4, 155.6, 7.4, 8.4) | 19.90 M | 6.16 | 0.74 M (3.7%) | 0.22 M | 41.8 tok/s | 4.16× |
+| Gemma-3-1B int8 / int8 | 1015.0 (697.8, 302.0, 11.7, 1.9) | 32.46 M | 6.25 | 0.73 M (2.2%) | 0.35 M | 25.2 tok/s | 4.09× |
+| Bonsai-1.7B int4 / int4 | 932.3 (704.6, 155.3, 62.8, 8.4) | 29.85 M | 6.25 | 0.70 M (2.4%) | 0.33 M | 27.5 tok/s | 4.10× |
+| Bonsai-1.7B int8 / int8 | 1747.4 (1409.3, 310.6, 17.9, 8.4) | 55.34 M | 6.32 | 0.70 M (1.3%) | 0.33 M | 14.7 tok/s | 4.05× |
+| Bonsai-4B int4 / int8 | 2356.5 (1816.7, 388.3, 139.3, 10.8) | 74.52 M | 6.32 | 0.84 M (1.1%) | 0.68 M | 10.9 tok/s | 4.05× |
 
 * *Not streaming*: the cycles minus bytes / 31.99 B, everything the token spends beyond the
   weight stream at the memory's rate (VPU chains, barriers, the head's tail, the program's
   start). *VPU issue*: the ledger's VPU issue cycles (`vpu_hack`'s model) if none overlapped:
   GLU 44-78% of them, RoPE and q/k norms 10-16% each (Qwen3 family).
-* *12.8 / 16 GB/s*: tokens a second if the token's bytes moved at 80% of / at the DIMM's AXI
-  port (512 bits at 250 MHz, 16 GB/s; DDR4-2133 x64 is 17.1 GB/s). *Gap*: measured time over
-  bytes at 16 GB/s.
-* The image's memory is the slot's DDR4 DIMM through `sh_ddr`, not HBM: its source tree
-  (`/home/ubuntu/src/opentpu-7e42a626-d6cea33c`, `boards/f2/design/cl_opentpu.sv`) ties the
-  HBM interfaces off.
+* *At 25.6 GB/s*: tokens a second if the token's bytes moved at port B's full rate, 128 bytes a
+  core cycle at 200 MHz: the slice's own limit. *Gap*: measured cycles over bytes / 128 B.
+* The image's memory is HBM, not the DDR4 DIMM: its AFI's own timing report (AWS's ingestion
+  output, `s3://.../opentpu-alex/afi-logs/`) has the HBM controller
+  (`WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top`, both stacks) on two HBM AXI ports
+  at 450 MHz behind a SmartConnect (`WRAPPER/CL/u_mem/f2_mem_i/memory_sc`), and no `sh_ddr`
+  cell on any path. It is Alex's wrapper, not this branch's `boards/f2` (whose
+  `otpu_f2_nch` / `otpu_f2_mem` DDR bridge is not in that image).
 
 **What this says.**
 
 * **Decode moves 6.2-6.3 GB/s whatever the model, 32 bytes a core cycle at 200 MHz,** a
-  quarter of port B (128 B a cycle) and 39% of the DIMM's port. Every model sits 2.5-2.6×
-  above its 16 GB/s roofline for this one reason.
+  quarter of port B (128 B a cycle). Every model sits about 4× above port B's roofline for
+  this one reason.
 * **Everything that is not the weight stream is 1.1-3.7% of a token** (0.7-0.84 M cycles).
   That is the upper bound for decode megakernels (fused norm / RoPE / quant epilogues, fewer
   barriers, VPU overlapped with the stream) on this image: Qwen3-0.6B 10.05 -> 10.44 tok/s,
   Gemma 3 6.16 -> 6.30, Bonsai-1.7B int4 6.70 -> 6.86, Bonsai-4B 2.68 -> 2.71 if all of it
   went away. The VPU's whole issue time is under its share, so the VPU already overlaps the
   stream almost entirely.
-* **The rate is the memory adapter's.** `otpu_f2_nch` issues one single-beat AXI read (64
-  bytes, len 0) per command, at most `ROD` = 32 in flight per channel, two channels: 4 KB in
-  flight. At 32 B a cycle that is a 128-cycle (640 ns) round trip, a plausible `sh_ddr` read
-  latency through the two clock crossings, so decode is latency × outstanding bound (Little's
-  law; inferred, not measured on the card). More reads in flight (`ROD`, `RD`'s credits) or
-  multi-beat bursts would raise it toward the port's 80 B a core cycle: an RTL change and an
-  FPGA build.
+* **The rate is the memory path's, and its cause is open.** 32 bytes a core cycle whatever
+  the model is a quarter of port B and far below two HBM stacks. Candidates, none measured:
+  the SmartConnect's configuration (outstanding transactions, burst handling, width
+  conversion), single 64-byte transactions through it, the slice adapter's reads in flight,
+  and the crossings into the HBM's 450 MHz domain. Raising it is an RTL / block-design change
+  and an FPGA build; it is worth up to 4× on every model's decode.
 * **Bytes are the other lever.** The int8 LM head is 25% of Qwen3-0.6B's token, 30% of
   Gemma 3's and 16% of Bonsai-4B's; an int4 head (as Bonsai-1.7B already runs, 8/8 HF argmax)
   halves it, block scales included: about -12% (Qwen3), -14% (Gemma 3), -8% (Bonsai-4B) of
   the cycles, a numerics
   decision. The int4 images' fp32 block scales are 6-7% of their bytes.
+
+### 4. Host TTFT optimization: before and after on the FPGA (2026-10-15)
+
+**What changed.** The fixed ~2.2 s short-prompt TTFT was not compilation, so the fix is host
+only, with no device program changed. These are the commits `18da545b`..`107bd2c1`:
+
+* **Contexts stay on the card.** The baseline read the previous request's KV context back to
+  the host over BAR4 before each request's first token. BAR4 reads are uncached MMIO with no
+  DMA engine. Now a context about to be overwritten moves to a free KV slot on the card.
+* **Unavoidable saves run in the background.** They are staged on the card and read in 64 KB
+  pieces while the next request runs.
+* **Prompt programs compile ahead.** Every prompt bucket's programs are compiled in worker
+  processes at nice 10, no longer by a server thread that held the GIL during requests, and
+  are kept in a disk program cache.
+
+`tools/ttft_probe.py` and the `board-isa` backend (`opentpu/host/isaboard.py`: the card's
+driver over the ISA simulator) measured the host side; `docs/serve.md` has the details.
+
+**Measured.** `tools/f2_bench.py` on the same card, image, prompts and settings as section 2,
+fresh server per model. Outputs are identical to the baseline; decode is unchanged.
+
+| Model | TTFT short, before → after | TTFT long, before → after | Prefill long, before → after | Decode |
+|---|---:|---:|---:|---:|
+| Qwen3-0.6B int8 | 2.16 → **0.57 s** (3.8×) | 9.86 → **6.36 s** (1.55×) | 27.8 → 43.1 tok/s | 10.0 tok/s |
+| Gemma-3-1B int8 | 4.69 → **0.55 s** (8.5×) | 28.4 → **9.60 s** (3.0×) | 9.4 → 27.9 tok/s | 6.1 tok/s |
+| Ternary-Bonsai-1.7B int4 | 2.32 → **0.88 s** (2.7×) | 14.4 → **9.81 s** (1.5×) | 19.0 → 27.9 tok/s | 6.7 tok/s |
+| Ternary-Bonsai-4B int4 | 2.25 → **1.34 s** (1.7×) | 55.4 → **15.2 s** (3.6×) | 4.9 → 18.0 tok/s | 2.7 tok/s |
+
+The run's files are `/home/ubuntu/opt/logs/bench_ttft.json` and `.log` on the instance. The
+prefill and decode device programs are unchanged by this step; fused-kernel prefill work is in
+progress on separate branches.
