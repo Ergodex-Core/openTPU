@@ -86,3 +86,24 @@ norm's gain expanded per head (out_proj's input). H is one MM of the activation,
 | Ternary-Bonsai-2-4B | 2.66 GB | 6.28 | 20 / 20 |
 | Ternary-Bonsai-2-9B | 5.45 GB | does not fit 4 GiB | |
 | Ternary-Bonsai-2-27B | ~7 GB (t2) | does not fit 4 GiB | |
+
+### Serving (otpu-serve, the card's greedy sampler; tools/f2_bench.py, 128 tokens at most)
+
+On the same image, 2026-10-16. The probe above reads every token's 248K logits back over the
+BAR (about 45 ms a 2B token); the server samples on the card. "rotated int4": the latent
+ternary weights (exact codes) and the latent ternary head in int4, the rotation on the card
+(section 4; runs on any image); its prefill runs rotate too.
+
+| Model | Weights | Decode tok/s (short / long) | Prefill tok/s (274-token prompt) |
+|---|---|---|---|
+| 2B | int4, int8 head | 16.8 / 16.7 | 4.6 |
+| 2B | rotated int4 | 19.3 / 19.3 | 14.3 |
+| 4B | int4, int8 head | 8.0 / 8.0 | 3.6 |
+| 4B | rotated int4 | 8.6 / 8.6 | 5.0 |
+| 4B + MTP | int4, int8 head, --mtp | 10.9 / 6.2 | 3.6 |
+
+One decode step's cost on the ISA simulator (opentpu.profile's nominal unit cycles, the MMs
+at their chunk counts; b2-scripts/step_costs.py): the 2B in int4 + int8 head streams 9.69 M
+D-byte chunks (the int8 head 3.99 M of them); measured 12.36 M cycles a token, 78% of the
+port's rate. In t2 with QUAD and the rotation: 4.26 M chunks (the rotations' H MMs 0.03 M),
+5.44 M unit cycles: about 2.3x fewer cycles a token at the same efficiency.
