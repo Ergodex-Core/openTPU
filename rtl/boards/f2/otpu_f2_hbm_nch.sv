@@ -289,18 +289,23 @@ module otpu_f2_hbm_nch #(
     end
   end
 
-  // ---- R: two AXI beats a native beat, back to the core
-  logic         r_half;
-  logic [255:0] r_lo;
+  // ---- R: registered (the HBM's R off the return FIFO's write enables: the 89bbb6bc synthesis,
+  // -0.21 ns at 450 MHz), then two AXI beats a native beat, back to the core
+  logic         r_half, rr_v;
+  logic [255:0] r_lo, rr_d;
   always_ff @(posedge hclk) begin
-    if (hrst) r_half <= 1'b0;
-    else if (r_tk) begin
-      r_half <= !r_half;
-      if (!r_half) r_lo <= m_rdata;
+    rr_d <= m_rdata;
+    if (hrst) begin r_half <= 1'b0; rr_v <= 1'b0; end
+    else begin
+      rr_v <= r_tk;
+      if (rr_v) begin
+        r_half <= !r_half;
+        if (!r_half) r_lo <= rr_d;
+      end
     end
   end
   otpu_afifo #(.W(512), .DEPTH(RD)) u_rq (
-    .wclk(hclk), .wrst(hrst), .wvalid(r_tk && r_half), .wready(), .wdata({m_rdata, r_lo}),
+    .wclk(hclk), .wrst(hrst), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
     .wslot('0), .wcommit(), .wused(), .rused(),
     .rclk(clk), .rrst(rst), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));
   assign n_rvalid = xr_v;

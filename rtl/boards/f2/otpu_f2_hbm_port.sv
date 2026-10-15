@@ -73,8 +73,12 @@ module otpu_f2_hbm_port (
   end
   assign s_awready = aw_gnt;
   assign m_awvalid = aw_o;
-  wire w_take = wbusy && s_wvalid[wsel] && (!w_o || m_wready);
-  assign s_wready = {w_take && wsel, w_take && !wsel};
+  // the W readies from the arbiter's state alone (AXI lets ready wait for no valid): a master's
+  // pop does not run through the other master's valid (the 89bbb6bc synthesis: a bridge's W
+  // FIFO count into the host's state through the W select, -0.31 ns at 450 MHz)
+  wire w_room = wbusy && (!w_o || m_wready);
+  assign s_wready = {w_room && wsel, w_room && !wsel};
+  wire w_take = w_room && s_wvalid[wsel];
   assign m_wvalid = w_o;
   always_ff @(posedge hclk) begin
     if (aw_gnt != '0) begin

@@ -196,9 +196,11 @@ module otpu_f2_hbm_host #(
   assign xw_pop = xw_v && !hw_v;
   logic [15:0] btarget, bcnt, bgray;
   logic [5:0]  bsum;
+  logic [NPORT-1:0] b_q;                // the ports' host B's, registered (off the HBM's pins)
+  always_ff @(posedge hclk) b_q <= hrst ? '0 : p_bvalid;
   always_comb begin
     bsum = '0;
-    for (int p = 0; p < NPORT; p++) bsum += 6'(p_bvalid[p]);
+    for (int p = 0; p < NPORT; p++) bsum += 6'(b_q[p]);
   end
   always_ff @(posedge hclk) begin
     if (xw_pop) begin
@@ -235,10 +237,14 @@ module otpu_f2_hbm_host #(
   logic [NPORT-1:0] hr_sel;
   logic          rq_v;
   logic [255:0]  rq_d;
+  // the head read may go once its port is the reads' in flight or none is in flight; its AR
+  // valid is a register (ar_sel, set the cycle after: the 89bbb6bc synthesis had cur -> the
+  // compare -> the ports' grants -> back into cur at -0.51 ns)
+  logic [NPORT-1:0] ar_sel;
   wire r_ok = hr_v && (h_out == 0 || hr_port == cur);
-  assign p_arvalid = (r_ok && !hr_null) ? hr_sel : '0;
+  assign p_arvalid = ar_sel;
   assign p_araddr = {hr_a, 6'd0};
-  wire hr_ar = |(p_arvalid & p_arready);
+  wire hr_ar = |(ar_sel & p_arready);
   wire r_zero = r_ok && hr_null && h_out == 0;        // a read past the last port: zeros
   assign xr_pop = xr_v && !hr_v;
   assign rt_push = (rq_v && r_hi) || r_zero;
@@ -253,8 +259,11 @@ module otpu_f2_hbm_host #(
     for (int p = 0; p < NPORT; p++) if (cur_sel[p]) rq_d <= p_rdata[p];
     if (hrst) begin
       cur <= '0; cur_sel <= '0; h_out <= '0; r_hi <= 1'b0; hr_v <= 1'b0; rq_v <= 1'b0;
+      ar_sel <= '0;
     end else begin
       hr_v <= xr_pop || (hr_v && !hr_ar && !r_zero);
+      // shown from the cycle after it may go until taken (h_out counts it from the take)
+      ar_sel <= hr_ar ? '0 : (ar_sel != '0) ? ar_sel : (r_ok && !hr_null) ? hr_sel : '0;
       if (hr_ar) begin cur <= hr_port; cur_sel <= hr_sel; end
       // the port's R (one ID, one port: in order), a cycle late
       rq_v <= |(p_rvalid & cur_sel) && h_out != 0;
