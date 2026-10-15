@@ -70,6 +70,9 @@ MODELS = {
     "bonsai2-4b-mtp": ("Ternary-Bonsai-2-4B + MTP (int4, int8 head)",
                        ["--model", "models/Ternary-Bonsai-2-4B-MTP", "--mtp", "--wformat", "int4",
                         "--head-format", "int8", "--slots", "1"]),
+    "bonsai2-4b-rot-mtp": ("Ternary-Bonsai-2-4B + MTP (rotated, int4)",
+                           ["--model", "models/Ternary-Bonsai-2-4B-MTP", "--mtp", "--rotate",
+                            "--wformat", "int4", "--head-format", "int4", "--slots", "1"]),
 }
 # --models only: not on the card's page (local runs, --backend isa)
 LOCAL_MODELS = {

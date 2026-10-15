@@ -815,10 +815,16 @@ def load(a):
                          formats=formats, prog_cache=not a.no_prog_cache, snapshots=0, **mtp)
     elif getattr(a, "mtp", False):          # (a dense Qwen3.5 with its own mtp.* layer)
         from ..llm.mtp import mtp_engine
-        eng = mtp_engine(spec, load_weights(path, mtp=True), cap=a.cap, cfg=cfg, backend=backend,
+        if rotated:                         # (Ternary-Bonsai 2's -MTP GGUF, rotated)
+            from ..llm import bonsai2
+            W = bonsai2.Weights(path, mtp=True, latent=True, ffn=spec.ffn)
+            rkw = dict(embed_host=True)
+        else:
+            W, rkw = load_weights(path, mtp=True), {}
+        eng = mtp_engine(spec, W, cap=a.cap, cfg=cfg, backend=backend,
                          wformat=wformat, head_format=a.head_format,
-                         prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                         snapshots=0)
+                         prog_cache=not a.no_prog_cache,
+                         prompt_runs=not a.no_prompt_runs and not rotated, snapshots=0, **rkw)
     else:
         B = a.slots if batchable(spec) else 1
         if B > 1 and cfg is None:           # the simulator: room for the slots and their area, one
@@ -832,8 +838,8 @@ def load(a):
         if rotated:                         # (the prompt runs' kernels do not rotate yet: the
             from ..llm import bonsai2       # prompt goes token by token through the step program)
             rot = dict(embed_host=True)
-        eng = Engine(spec, bonsai2.Weights(path, latent=True) if rotated else load_weights(path),
-                     cap=a.cap, cfg=cfg, backend=backend,
+        W = bonsai2.Weights(path, latent=True, ffn=spec.ffn) if rotated else load_weights(path)
+        eng = Engine(spec, W, cap=a.cap, cfg=cfg, backend=backend,
                      wformat=wformat, head_format=a.head_format, resident=True,
                      prog_cache=not a.no_prog_cache,
                      prompt_runs=not a.no_prompt_runs and not rotated,

@@ -67,18 +67,23 @@ def is_bonsai2(model_dir) -> bool:
         GGUF(p).meta.get("general.architecture") == "qwen35"
 
 
-def spec(model_dir, ternary: bool = False):
+def spec(model_dir, ternary: bool = False, slices: int = 1):
     """qwen35's Spec from the base model's config.json, the embedding rows int8 (gathered
     from the tied int8 head: an fp32 table of 248320 rows would be 2-4 GB of DRAM). ternary:
     the image keeps the latent ternary weights and rotates on the device (Spec.rot; Weights
     with latent=True), its head the latent table (not tied to the embedding rows, which are
-    the model's)."""
+    the model's). A GGUF with its own output.weight (27B: prism.hadamard.version 1) is untied.
+    slices: the MLP's width is padded with zero rows / columns to whole rotation blocks per
+    slice (27B: 17408 = 17 blocks of 1024 -> 18432 on 2 slices; Weights(ffn=) pads the same)."""
     from dataclasses import replace
     from .qwen35 import Spec
+    g = GGUF(find_gguf(model_dir))
     sp = replace(Spec.from_hf(model_dir), embed="int8")
+    if "output.weight" in g:
+        sp = replace(sp, tied=False)
     if ternary:
-        g = GGUF(find_gguf(model_dir))
-        sp = replace(sp, rot=int(g.meta["prism.hadamard.block_size"]), tied=False)
+        B = int(g.meta["prism.hadamard.block_size"])
+        sp = replace(sp, rot=B, tied=False, ffn=-(-sp.ffn // (slices * B)) * slices * B)
     return sp
 
 
@@ -109,7 +114,8 @@ class Weights(Mapping):
 
     CACHE = 16 << 20
 
-    def __init__(self, model_dir, mtp: bool = False, latent: bool = False):
+    def __init__(self, model_dir, mtp: bool = False, latent: bool = False,
+                 ffn: int | None = None):
         p = find_gguf(model_dir)
         self.latent = latent        # the projections in their rotated basis, as stored (the
         #                             image rotates the activations: Spec.rot)
@@ -144,8 +150,15 @@ class Weights(Mapping):
             self.H = hadamard(self.block).astype(np.float32)
         self._where = {}                                # HF name -> (gguf name, kind)
         self._where["model.embed_tokens.weight"] = ("token_embd.weight", "embed")
-        if latent:                  # the head: the latent table (lm_head of an untied Spec)
+        if "output.weight" in self.g:   # an untied head (27B)
+            self._where["lm_head.weight"] = ("output.weight", "proj")
+        elif latent:                # the head: the latent table (lm_head of an untied Spec)
             self._where["lm_head.weight"] = ("token_embd.weight", "proj")
+        self.ffn0 = int(m[a + "feed_forward_length"])
+        self.ffn = ffn or self.ffn0         # the MLP's width with zero padding (spec(slices=))
+        if self.ffn > self.ffn0 and self.block:
+            self._signs[self.ffn] = np.concatenate(
+                [self._signs[self.ffn0], np.ones(self.ffn - self.ffn0, np.float32)])
         self._where["model.norm.weight"] = ("output_norm.weight", "norm1")
         for i in range(self.layers):
             b, h = f"blk.{i}.", f"model.layers.{i}."
@@ -239,6 +252,7 @@ class Weights(Mapping):
             v = t.array()
         if hf.endswith("conv1d.weight"):
             v = v.reshape(v.shape[0], 1, -1)
+        v = self._pad(hf, v)
         v = np.ascontiguousarray(self._order(hf, v), np.float32)
         if not np.isfinite(v).all():
             raise ValueError(f"{hf}: NaN or infinity")
@@ -248,10 +262,19 @@ class Weights(Mapping):
             self._big = (hf, v)
         return v
 
+    def _pad(self, hf: str, v: np.ndarray) -> np.ndarray:
+        """The MLP's projections with zero rows (gate, up) or columns (down) to self.ffn."""
+        n = self.ffn - self.ffn0
+        if n and hf.endswith(("mlp.gate_proj.weight", "mlp.up_proj.weight")):
+            return np.concatenate([v, np.zeros((n, v.shape[1]), v.dtype)])
+        if n and hf.endswith("mlp.down_proj.weight"):
+            return np.concatenate([v, np.zeros((v.shape[0], n), v.dtype)], axis=1)
+        return v
+
     def rows(self, hf: str, idx) -> np.ndarray:
         """Rows of a projection or the embedding table (model basis), without the rest."""
         gn, kind = self._where[hf]
-        if kind not in ("embed", "proj") or self._vrows(hf) is not None:
+        if kind not in ("embed", "proj") or self._vrows(hf) is not None or "mlp." in hf:
             return self[hf][np.asarray(idx)]
         t = self.g[gn]
         v = t.dequant(rows=list(idx))

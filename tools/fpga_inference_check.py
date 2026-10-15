@@ -231,7 +231,7 @@ def main(argv=None):
     try:
         result["phase"] = "loading_weights"
         save()
-        W = bonsai2.Weights(path, latent=True) if rotated else load_weights(path)
+        W = bonsai2.Weights(path, latent=True, ffn=spec.ffn) if rotated else load_weights(path)
         backend = "isa"
         try:
             if a.backend == "board":

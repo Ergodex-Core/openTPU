@@ -212,8 +212,7 @@ class Spec:
                       f"widths (the MLP's per slice) in blocks of {B}"),
                      (B % 512 == 0 and (self.lin_heads // S) * self.lin_dv % B == 0,
                       f"a slice's DeltaNet heads in whole blocks of {B} (a multiple of 512)"),
-                     (self.n_q * self.head_dim % B == 0, f"o_proj's input in blocks of {B}"),
-                     (not self.mtp, "rotated weights without the MTP layer (for now)")]
+                     (self.n_q * self.head_dim % B == 0, f"o_proj's input in blocks of {B}")]
         if self.moe is not None:
             mo = self.moe
             need += [(S == 1, "MoE layers run on one slice"),
@@ -1094,7 +1093,9 @@ class Image(EmbedHost):
                          ("gm", "norm")):
                 put(0, mo[k], g1(f"mtp.{n}.weight"))
             put_q(mo["fc"], [W["mtp.fc.weight"]], self.mtp_fc)
-            put_q(mo["dh"], [head[:self.nd]], "fp4")
+            # (rotated: the draft head takes the MTP's normed rows, in the model's basis)
+            dh = W["model.embed_tokens.weight"] if spec.rot else head
+            put_q(mo["dh"], [dh[:self.nd]], "fp4")
         put_head(self, W, qb, put, put_q, rows)     # (and the tied int8 head's gather scales)
         if self.rot is not None:
             from .bonsai2 import hadamard
@@ -1405,7 +1406,9 @@ class Image(EmbedHost):
             lofs, mf = lay.lofs[kind], lay.mf
             ns = SimpleNamespace(g_in=Tensor(off + lofs["g_in"], (H,), (1,)),
                                  g_post=Tensor(off + lofs["g_post"], (H,), (1,)),
-                                 moe=spec.moe is not None, kind=kind, rot=rot)
+                                 moe=spec.moe is not None, kind=kind,
+                                 # (the MTP layer is the checkpoint's plain weights)
+                                 rot=None if li == spec.layers else rot)
             if ns.moe:
                 E = spec.moe.E
                 da, sa = lofs["router"]
