@@ -189,8 +189,7 @@ class BatchWorker(SC.Worker):
         tiled feed runs the bucket's tile rows: Steps.feed_chunk); the tokens fed."""
         t0 = time.perf_counter()
         p = self.eng.poss[r.slot]
-        q = self.steps.feed_chunk(p)
-        part = r._feed[:q - p % q]              # (a whole run: the budget may go over by less)
+        part = r._feed[:self.steps.feed_chunk(p)]  # (a whole run: the budget may go over)
         self.steps.feed(r.slot, part)
         del r._feed[:len(part)]
         r.fed += part

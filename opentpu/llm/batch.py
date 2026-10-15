@@ -33,6 +33,7 @@ compiles one per span, ahead, instead of one per step.
 """
 from __future__ import annotations
 
+import threading
 import time
 from collections import OrderedDict
 from types import SimpleNamespace
@@ -571,7 +572,7 @@ class Steps:
             eng = self.eng
             self._tile_T: dict = {}           # bucket -> its tile rows (0: none fits)
             self._tile_progs: dict = {}       # (slot, bucket, rows) -> programs, or None
-            self._tile_next: dict = {}        # the same -> Future (compiling ahead)
+            self._tile_lock = threading.Lock()    # (the compile thread probes and compiles too)
             self._tile_ok = bool(eng.prompt_runs and PF.tiling(eng)
                                  and TL.family(eng.image) == "qwen3"
                                  and min(eng.cfg.act_rows, eng.image.rows, 2 * self.a["R"])
@@ -585,21 +586,45 @@ class Steps:
         programs differ only in their caches' addresses); 0: the untiled feed runs."""
         if not self._tiling():
             return 0
+        b = p // self.eng.block + 1
+        return self._once(self._tile_T, b, lambda: self._tile_probe(b))
+
+    def _once(self, table: dict, key, make):
+        """table[key], made once (make()) by whichever thread asks first (the worker, or the
+        compile thread ahead of it); the others wait for it."""
+        from concurrent.futures import Future
+        with self._tile_lock:
+            v = table.get(key, table)
+            if v is table:
+                fut = table[key] = Future()
+            elif isinstance(v, Future):
+                fut = None
+            else:
+                return v
+        if fut is None:
+            return v.result()
+        try:
+            r = make()
+        except BaseException as e:
+            with self._tile_lock:
+                del table[key]
+            fut.set_exception(e)
+            raise
+        with self._tile_lock:
+            table[key] = r
+        fut.set_result(r)
+        return r
+
+    def _tile_probe(self, b: int) -> int:
         from .qwen3 import _whole_passes
-        eng = self.eng
-        b = p // eng.block + 1
-        if b not in self._tile_T:
-            mc = eng.cfg.MCOLS
-            n = _whole_passes(min(eng.cfg.act_rows, eng.image.rows, 2 * self.a["R"],
-                                  eng.block, eng.cap - (b - 1) * eng.block), mc)
-            T = 0
-            while n > self.feed_rows():
-                if self._tile_get(0, b, n) is not None:
-                    T = n
-                    break
-                n = _whole_passes(n - 1, mc)
-            self._tile_T[b] = T
-        return self._tile_T[b]
+        eng, mc = self.eng, self.eng.cfg.MCOLS
+        n = _whole_passes(min(eng.cfg.act_rows, eng.image.rows, 2 * self.a["R"], eng.block,
+                              eng.cap - (b - 1) * eng.block), mc)
+        while n > self.feed_rows():
+            if self._tile_get(0, b, n) is not None:
+                return n
+            n = _whole_passes(n - 1, mc)
+        return 0
 
     def _tile_compile(self, slot: int, b: int, n: int):
         """The tiled feed run's programs (as the backend takes them), None where they do not
@@ -625,14 +650,12 @@ class Steps:
         return progs
 
     def _tile_get(self, slot: int, b: int, n: int):
-        key = (slot, b, n)
-        if key not in self._tile_progs:
-            fut = self._tile_next.pop(key, None)
-            t0 = time.perf_counter()
-            self._tile_progs[key] = fut.result() if fut is not None else \
-                self._tile_compile(slot, b, n)
+        t0 = time.perf_counter()
+        try:
+            return self._once(self._tile_progs, (slot, b, n),
+                              lambda: self._tile_compile(slot, b, n))
+        finally:
             self.timing["compile_wait_s"] += time.perf_counter() - t0
-        return self._tile_progs[key]
 
     def _tile_runs(self, slot: int, p: int, n: int) -> list:
         """The tiled runs (position, rows) of n prompt tokens of `slot` from p: the bucket's
@@ -658,17 +681,27 @@ class Steps:
             return
         if not self.eng.pipeline:
             return
+        blk = self.eng.block
+
+        def ahead():                    # (the buckets' probes too: off the worker's path)
+            for q, k in self._tile_runs(slot, p, n):
+                self._tile_get(slot, q // blk + 1, k)
+        self._compile_pool().submit(ahead)
+
+    def _compile_pool(self):
         if self._pool is None:
             from concurrent.futures import ThreadPoolExecutor
             self._pool = ThreadPoolExecutor(1, thread_name_prefix="otpu-batch-compile")
-        for key in dict.fromkeys((slot, q // self.eng.block + 1, k)
-                                 for q, k in self._tile_runs(slot, p, n)):
-            if key not in self._tile_progs and key not in self._tile_next:
-                self._tile_next[key] = self._pool.submit(self._tile_compile, *key)
+        return self._pool
 
     def feed_chunk(self, p: int) -> int:
-        """Tokens a worker's feed call takes at p: a tiled run's rows, else feed_rows()."""
-        return self.tile_rows(p) or self.feed_rows()
+        """Tokens a worker's feed call takes at p: a tiled run's (the bucket's tile rows, up
+        to the bucket's end), else the MCOLS-aligned feed run's."""
+        T = self.tile_rows(p)
+        if T:
+            return min(T, self.eng.block - p % self.eng.block)
+        q = self.feed_rows()
+        return q - p % q
 
     def _feed_tile(self, slot: int, p: int, toks, progs) -> None:
         """One tiled feed run: its tokens to the io block's tin and uni words, tpos (p mod the
@@ -724,6 +757,10 @@ class Steps:
         """Compile in the background each slot's feed program of the first attention block
         (every prompt's first runs; a server's first requests)."""
         q, kinds = self.feed_rows(), (FEED,) * self.feed_rows()
+        if self._tiling():                  # tiled feed runs: bucket 1's tile rows (and slot
+            if self.eng.pipeline:           # 0's program: the probe's) on the compile thread
+                self._compile_pool().submit(self.tile_rows, 0)
+            return
         for s in range(self.a["B"]):
             self._prefetch(self._key([(s, j) for j in range(q)], kinds))
 

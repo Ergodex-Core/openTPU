@@ -1346,14 +1346,14 @@ def compile_tile_run(img, blocks: int, T: int, kind: str, block: int = ATTN_BLOC
 
 def compile_feed_tile(img, area: dict, slot: int, blocks: int, T: int,
                       block: int = ATTN_BLOCK):
-    """(programs, run_args): a batched image's feed run tiled (batch.Steps.feed): T prompt rows of KV slot `slot`
-    at a run-time position of bucket `blocks` through every layer, no LM head, qwen3_tile's
-    programs (compile_tile_run's forms) with three differences: the slot's caches (RunRows.seq),
-    the tokens from the batch area's io words (tin, then uni: a feed run picks nothing, so the
-    2 R words hold T <= 2 R tokens) and the position from its step word (tpos = p mod block,
-    the host's), so the generate area (sequence 0's: out[], its state words) is not touched.
-    The rows' arithmetic is the prompt run's, so a slot's caches are bit for bit those of
-    sequence 0's tiled prompt runs (tests/test_batch.py)."""
+    """(programs, run_args): a batched image's feed run tiled (batch.Steps.feed): T prompt
+    rows of KV slot `slot` at a run-time position of bucket `blocks` through every layer, no
+    LM head: qwen3_tile's programs (compile_tile_run's forms) with three differences: the
+    slot's caches (RunRows.seq), the tokens from the batch area's io words (tin, then uni: a
+    feed run picks nothing, so the 2 R words hold T <= 2 R tokens) and the position from its
+    step word (tpos = p mod block, the host's), so the generate area (sequence 0's: out[], its
+    state words) is not touched. The rows' arithmetic is the prompt run's, so a slot's caches
+    are bit for bit the untiled feed's (tests/test_batch_steps.py)."""
     if family(img) != "qwen3":
         raise ValueError(f"no tiled feed run for {type(img).__module__}")
     if not img.lookup:
