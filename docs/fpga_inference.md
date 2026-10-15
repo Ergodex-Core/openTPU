@@ -157,3 +157,112 @@ transport closes; chat identity/configuration probe failures also close the newl
 opened transport. An incomplete oracle logit history is rejected instead of
 reporting a partial comparison as complete. These tests do not establish physical
 FPGA inference. Actual board result files are required for that claim.
+
+## FPGA results and methodology (2026-10-15)
+
+### Setup
+
+* **Instance and image.** EC2 `i-0c78de2253f66519d` (`opentpu-f2`, f2.6xlarge, us-east-1),
+  slot 0, AppPF `0000:34:00.0` (`--dev f2:0000:34:00.0`). The image was Alex's
+  `agfi-0fb51b57637d7fac0` (`opentpu-200mhz-20261014_42_afi`). It is this tree's f2 target
+  (BAR0 reports `ID` OTPU, `BUILD_ID` `7e42a626`, `CFG_PLATFORM` 3, `CFG_HASH` `4ffd1e17`)
+  built with a 200 MHz core, 400 MHz TMEM and HBM. This branch's own image,
+  `afi-0ee1306df4f9f9ed4` (build `f9e0e5bf`, 100 MHz, DDR), has not been run on hardware yet.
+* **Load.** After `fpga-load-local-image`, `fpga-describe-local-image -S 0 -R -H` (a PCI
+  rescan) is needed: before it the AppPF shows device `0x9048`, after it the AFI's `0xf001`.
+* **Smoke test first.** The full `tools/f2_smoke.py` passed in about 4 s: calibration, BAR4
+  round trips on both channels, 200 partial writes, interleave, kernels and masked stores
+  against the ISA simulator, and host ordering. It ran with a one-off local copy that also
+  accepts `CORE_KHZ` 200000; the tool itself expects the target's 100 MHz.
+* **Software.** Python 3.12 venv, numpy 2.5.4, torch 2.14.1+cpu, transformers 5.19.0,
+  `OMP_NUM_THREADS=8`. Checkpoints:
+  - `Qwen/Qwen3-0.6B` @ `c1899de2`;
+  - `google/gemma-3-1b-it` @ `dcc83ea8`;
+  - `prism-ml/Ternary-Bonsai-1.7B-unpacked` @ `3aca8400`;
+  - `prism-ml/Ternary-Bonsai-4B-unpacked` @ `4485fae7`.
+  The Bonsai checkpoints are Qwen3 with YaRN RoPE (factor 4 of 8192): `qwen3.Spec` takes it
+  as LongRoPE's divisors and attention factor (`llm.yarn_rope`, tests/test_yarn.py).
+* **Device-only inference.** The model is computed and sampled on the card. The host
+  compiles token ids into the resident programs, moves bytes and polls registers; the
+  sampler is the card's (top-k at most 64), with greedy decoding (temperature 0) and no
+  thinking mode. The HF and ISA comparisons below run on the host afterwards, from the
+  board's own token history.
+
+### 1. Correctness: `tools/fpga_inference_check.py`
+
+**Prompt.** `Write one sentence about the Moon.` in each checkpoint's chat template
+(`--chat`): 19 tokens for Qwen3 and Bonsai, 16 for Gemma 3.
+
+**Run.** 8 greedy tokens, capacity 1024, `--compare-isa`; the HF fp32 golden is the default.
+The prompt is fed token by token through the decode program, so this run's prefill time is
+not a prefill measurement.
+
+```sh
+python tools/fpga_inference_check.py --model qwen3  --dev f2:0000:34:00.0 --chat --steps 8 --compare-isa --json qwen3.json
+python tools/fpga_inference_check.py --model gemma3 --dev f2:0000:34:00.0 --chat --steps 8 --compare-isa --json gemma3.json
+python tools/fpga_inference_check.py --model models/Ternary-Bonsai-1.7B --dev f2:0000:34:00.0 --chat --steps 8 --compare-isa --json bonsai17.json
+python tools/fpga_inference_check.py --model models/Ternary-Bonsai-1.7B --dev f2:0000:34:00.0 --chat --steps 8 --wformat int4 --head-format int4 --compare-isa --json bonsai17_int4.json
+python tools/fpga_inference_check.py --model models/Ternary-Bonsai-4B --dev f2:0000:34:00.0 --chat --steps 8 --wformat int4 --head-format int8 --compare-isa --json bonsai4.json
+```
+
+| Model | Weights / head | Image | FPGA output (8 tokens) | HF fp32 argmax | ISA bit-exact |
+|---|---|---:|---|---:|---|
+| Qwen3-0.6B | int8 / int8 | 1.29 GB | `The Moon is a natural satellite of Earth` | 8 / 8 | yes |
+| Gemma-3-1B-it | int8 / int8 | 1.08 GB | `The Moon is a celestial body that orbits` | 8 / 8 (cosine 0.9993–0.9997) | yes |
+| Ternary-Bonsai-1.7B | int8 / int8 | 3.05 GB | `The Moon is the only natural satellite of` | 8 / 8 | yes |
+| Ternary-Bonsai-1.7B | int4 / int4 | 2.23 GB | the same tokens | 8 / 8 | yes |
+| Ternary-Bonsai-4B | int4 / int8 | 3.98 GB | `The Moon is Earth's only natural satellite` | 8 / 8 | yes |
+
+Device decode cycles per token at 200 MHz:
+
+| Model | Cycles / token | Time | Wall per token |
+|---|---:|---:|---:|
+| Qwen3-0.6B | 19.9 M | 99.5 ms | 113–120 ms |
+| Gemma-3-1B | 32.5 M | 162 ms | 167–170 ms |
+| Bonsai-1.7B int8 | 55.3 M | 277 ms | 279 ms |
+| Bonsai-1.7B int4 | 29.9 M | 149 ms | 157 ms |
+| Bonsai-4B | 74.5 M | 373 ms | 375 ms |
+
+Decode is memory-bound: every token streams all the layers' weights from HBM.
+
+### 2. Serving: `tools/f2_bench.py`
+
+* **Server.** Each model through `otpu-serve --backend board`: context 2048, batched prefill
+  (prompt runs, chunked prefill 64), the card's sampler, the arguments of
+  `tools/f2_web/gateway.py` `MODELS`. Bonsai-4B runs with `--slots 1`: its 3.9 GB int4 image
+  leaves room for one KV slot, while the default 8 need 4924 MiB against the slice's 4096.
+* **Per model.** Start the server (load time: weights and compile), one warm-up request
+  (`Hi.`, 4 tokens), then two streamed greedy chat completions of at most 128 tokens:
+  - *short*: the prompt above;
+  - *long*: `Summarize the following passage in two sentences.`, then the passage in
+    `tools/f2_bench.py` (`LONG`, about 250 words on FPGAs). It is 268 tokens for Gemma 3
+    and 274 for the others.
+* **Measured at the client.**
+  - TTFT: request sent to first streamed token, the prompt's prefill plus the first decode
+    step.
+  - Prefill tok/s: prompt tokens / TTFT.
+  - Decode tok/s: (tokens − 1) / (last token − first token).
+
+```sh
+python tools/f2_bench.py --dev f2:0000:34:00.0 --json bench.json --max-tokens 128
+```
+
+| Model | Weights / head | Load | TTFT short | TTFT long | Prefill long | Decode |
+|---|---|---:|---:|---:|---:|---:|
+| Qwen3-0.6B | int8 / int8 | 13.3 s | 2.16 s | 9.86 s | 27.8 tok/s | 10.0 tok/s |
+| Gemma-3-1B-it | int8 / int8 | 11.2 s | 4.69 s | 28.4 s | 9.4 tok/s | 6.1 tok/s |
+| Ternary-Bonsai-1.7B | int4 / int4 | 30.4 s | 2.32 s | 14.4 s | 19.0 tok/s | 6.7 tok/s |
+| Ternary-Bonsai-4B | int4 / int8 | 39.7 s | 2.25 s | 55.4 s | 4.9 tok/s | 2.7 tok/s |
+
+Open problems these numbers show:
+
+* The short-prompt TTFT is about 2 s whatever the model: a fixed cost before the first
+  token, likely on the host.
+* Gemma 3's and Bonsai-4B's long-prompt prefill is 3–6 times slower per token than
+  Qwen3-0.6B's.
+* Decode tracks the bytes of weights streamed per token: int4 Bonsai-1.7B decodes 1.8×
+  faster than its int8 image.
+
+The result files are on the instance in `/home/ubuntu/opentpu/build/alex-inference/`:
+`*.json` and `*.log` for the correctness runs, `bench_alex200.json` and `bench*.out` for
+serving.
