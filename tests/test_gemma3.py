@@ -137,10 +137,11 @@ def test_tiled_prompt_matches_decode(tiny):
 
 @pytest.mark.parametrize("P1, P2", [(20, 7), (250, 20)])
 def test_tiled_prompt_runs_are_todays(tiny, P1, P2):
-    """Gemma 3's tiled prompt runs (16 rows: x out of TMEM in the MLP, the MLP's gate / up in
-    pieces of tiled.GEMMA_SUBS, the RoPE rows a layer kind's) against today's prompt runs of
-    4 rows: the logits after each prompt (the second across the first bucket's end), the
-    layers' DRAM (KV caches, sliding rings) and the next step's logits, bit for bit."""
+    """Gemma 3's tiled prompt runs (16 rows; the looped attention's wide tiles: 4 rows of the
+    2 heads a K / V stream, row maxima and the accumulator's rescale on the VPU; the MLP's
+    gate / up in pieces of tiled.GEMMA_SUBS; x out of TMEM in the MLP) against today's prompt
+    runs of 4 rows: the logits after each prompt (the second across the first bucket's end),
+    the layers' DRAM (KV caches, sliding rings) and the next step's logits, bit for bit."""
     import dataclasses
     _, W, spec, _ = tiny
     cfg = dataclasses.replace(board_config(DRAM_BYTES=1 << 26), MCOLS=4, ACT_ROWS=16)

@@ -52,8 +52,9 @@ from types import SimpleNamespace
 from .. import isa as I
 from .. import language as ol
 from ..compiler import Affine, CompileError, Tensor, current, trace_fit
-from ..kernels.attention import (Additive, RowMasks, RowTiles, TileSeq, _attend_heads, _finish,
-                                 _scores)
+from ..kernels.attention import (Additive, RowMasks, RowTiles, TileSeq, _attend_heads)
+from ..kernels.attention import _finish as _att_finish
+from ..kernels.attention import _scores as _att_scores
 from ..kernels.lib import sigmoid, silu
 from ..kernels.mlp import _chunk
 from .qwen3 import (ATTN_BLOCK, ATTN_DEPTH, RunRows, RunWords, _amask, _inputs_rows, _layers,
@@ -65,6 +66,52 @@ SHALLOW = 2     # the attention pipeline's depth of a run over IMEM at ATTN_DEPT
 LOOP = True     # a prompt run's attention in hardware loops over KV heads and packed tiles
 LOOPS = (2, 1, 0)   # their levels, tried in order (_first_fit): heads and tiles, tiles, none
 PEEL = False    # the last full tile after the loop (no prime of a tile past T: _heads_loop)
+WIDE = True     # Gemma's looped attention: tiles of up to ACT_ROWS query rows (_scores, _finish)
+
+
+def _scores(st, t0, n, out):
+    """attention._scores of a packed tile, also of more query rows than MCOLS (st.G: the MXU
+    replays K's streamed rows for each group of MCOLS, docs/isa.md MM): there the MM writes no
+    row maxima (RMAX needs M <= MCOLS), so an RMAX VOP over its n columns writes them where the
+    MXU's epilogue would (out.rowmax: the same fold over the same values, the same bits)."""
+    row = st.masks.get(t0) if isinstance(t0, int) else None
+    if st.G <= ol.mxu_columns() or not (row is None or isinstance(
+            row, (Additive, RowMasks, RowTiles))):
+        return _att_scores(st, t0, n, out)
+    if isinstance(row, Additive):
+        ol.load(row.tile(st.G, n), out=out)
+    elif row is not None:
+        row.fill(out, n)
+    ol.dot(st.qs, st.K[t0:t0 + n, :], acc=out if row is not None else None,
+           out=None if row is not None else out)
+    out.rowmax.set(ol.max(out[:, 0:n], axis=1))
+    return out
+
+
+def _finish(st, s, t0, n):
+    """attention._finish, also of more query rows than MCOLS: there the accumulator's rescale
+    (MM ASCALE: a rounded multiply, then the add, M <= MCOLS) is a VOP multiply before the MM
+    accumulates P.V (the same two roundings: the same bits)."""
+    if st.G <= ol.mxu_columns():
+        return _att_finish(st, s, t0, n)
+    D = ol.block_size()
+    vs = ol.load(st.VS[t0:t0 + n])
+    rm = st.rowmax.pop(t0) if isinstance(t0, int) and t0 in st.rowmax else s.rowmax
+    m_new = ol.maximum(st.m, rm)
+    p = ol.exp2(s - m_new[:, None])
+    alpha = ol.exp2(st.m - m_new)
+    npad = -(-n // D) * D
+    if npad == n:
+        pq = ol.quantize(p * vs[None, :])
+    else:
+        pp = ol.zeros([st.G, npad])
+        pp[:, :n].set(p * vs[None, :])
+        pq = ol.quantize(pp)
+    vt = st.VT.padded_cols(0, st.VT.shape[0], t0, npad, n)
+    st.acc.set(st.acc * alpha[:, None])
+    ol.dot(pq, vt, acc=st.acc)
+    st.m.set(m_new)
+    st.l.set(st.l * alpha + ol.sum(p, axis=1))
 
 
 def packing(mcols: int, G: int) -> int:
@@ -980,7 +1027,7 @@ def _rope_rows_g(x, c, s, out):
 
 def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: int,
                           parts: int, depth: int = ATTN_DEPTH, whole: bool = True,
-                          oscr=None, loop: int = 0):
+                          oscr=None, loop: int = 0, wide: int = 0):
     """gemma4._attention tiled for T rows of a prompt run: x += norm(W_o attention(norm(x))).
     Per KV head its K / V (own layers: projected for the T rows, normed, K RoPE'd, appended a
     row at a time to its slot: the sliding ring's or the cache's), then its query group in
@@ -992,8 +1039,10 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
     d] tile), or quantized as the part ends (a QACT range each, as _attention_tile's); then W_o
     by output parts into [T, H] and the post-norm. Each row's arithmetic is _attention's. x:
     res.x, spilled while the heads attend (Res). loop: the heads' and tiles' hardware loops
-    (_gemma_attention_loop) at this level where they apply (_attention_tile's). ropes: [T, rw]
-    RoPE rows, or ropes(c0, n) loading the layer kind's n columns from c0."""
+    (_gemma_attention_loop) at this level where they apply (_attention_tile's). wide: the looped
+    tiles' rows (WIDE): 0 today's P gs <= MCOLS; 1 up to ACT_ROWS query rows; 2 that, a part's
+    queries up to TMEM / (QPART / 2) words (more heads a part: K / V streamed once for them).
+    ropes: [T, rw] RoPE rows, or ropes(c0, n) loading the layer kind's n columns from c0."""
     from ..kernels.lib import rmsnorm
     from .gemma4 import SLIDE, _RowPos, _add_norm, _full_seq, _slide_seq, _slot
     spec = m.spec
@@ -1013,10 +1062,33 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
     res.spill()                                # (after the tiles that outlive the heads)
     mc = ol.mxu_columns()
     gs = min(G, mc)
-    while gs % 2 == 0 and T * gs * d > ol.tmem_words() // QPART:
+    qp = QPART // 2 if wide >= 2 and WIDE else QPART
+    while gs % 2 == 0 and T * gs * d > ol.tmem_words() // qp:
         gs //= 2                               # a part's [T, gs d] queries in an eighth of TMEM
     P = packing(mc, gs)                        # rows of gs heads a tile: K / V streamed G / mc
     #                                            times a row whatever gs (P gs = MCOLS)
+    heads = list(range(nkv))
+
+    def tspan(t, n=None):                      # tile t's span (its n rows t P ..: t a loop's
+        n = P if n is None else n              # index)
+        return _span_blocks(pack_seq([span(m, _RowPos(pos, Affine.of(t) * P + i), block)
+                                      for i in range(n)], gs, block, kv.cap), block, kv.cap)
+
+    # looped: tiles of more rows where ACT RAM's rows hold them (WIDE: P gs > MCOLS query rows,
+    # the MXU replaying K's and V^T's streamed rows for each MCOLS of them), so each K / V
+    # stream serves P rows; at most MCOLS rows (the phantom tile's masks: qwen3.AMASK_PAD)
+    cands = [P]
+    if WIDE and wide and whole and oscr is not None:
+        Pw = min(mc, current().cfg.act_rows // gs, T)
+        cands = [Pw, P] if Pw > P else cands
+    looped = False
+    for P in cands:                            # (wide: the form's, _first_fit)
+        looped = LOOP and loop and whole and oscr is not None and _loopable(
+            pos, T, P, G, gs, kv, heads, block, loop, True, tspan)
+        if looped:
+            break
+    else:
+        P = cands[-1]
     tiles = [(r0, min(P, T - r0)) for r0 in range(0, T, P)]
     gparts = [(g0, min(G, g0 + gs)) for g0 in range(0, G, gs)]
     if whole and oscr is None:                 # the outputs, quantized once (W_o's operand)
@@ -1025,14 +1097,6 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
         o_all, ost = None, None if whole else ol.stationary(T, spec.n_q * d)
     if oscr is not None:                       # (the scratch as [T, n_q d]: one load back)
         oscr = Tensor(oscr.base, (T, spec.n_q * d), (spec.n_q * d, 1))
-    heads = list(range(nkv))
-
-    def tspan(t, n=P):                         # tile t's span (its n rows t P ..: t a loop's
-        return _span_blocks(pack_seq([span(m, _RowPos(pos, Affine.of(t) * P + i), block)
-                                      for i in range(n)], gs, block, kv.cap), block, kv.cap)
-
-    looped = LOOP and loop and whole and oscr is not None and _loopable(
-        pos, T, P, G, gs, kv, heads, block, loop, True, tspan)
     if looped:                                 # (the outputs to the scratch, as below)
         if lw.own:                             # every head's K / V rows at their slots
             for j in heads:
@@ -1136,14 +1200,15 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
 @ol.jit
 def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool = False,
                 depth: int = ATTN_DEPTH, whole: bool = True, oscr: bool = True, loop: int = 2,
-                sub: int = 0):
+                sub: int = 0, wide: int = 0):
     """gemma4_step's rows tiled: T rows of a prompt run (pos a RunRows with the image's mask
     tiles), their tokens gathered from out[] and per-layer inputs as gemma4_step's; per layer
     the tiled attention, the dense MLP (GeGLU) tiled into [T, H] for its post-norm, the
     per-layer input block as gemma4._ple. spill: x in the I/O area's input rows while each
     layer's heads attend and W_o runs (Res). depth, whole: as qwen3_tile's. sub: the MLP's
     gate / up columns an MM where it divides a layer's down chunk and is wider than mlp_sub's
-    (0, or not: mlp_sub's)."""
+    (0, or not: mlp_sub's). wide:
+    the looped attention's tiles (_gemma_attention_tile's)."""
     from ..kernels.lib import gelu_tanh
     from .gemma4 import _add_norm, _gathered_out, _ple, _ple_inputs, _pos_rows
     from .qwen3 import fill_logits
@@ -1175,7 +1240,7 @@ def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool
     def layer(li, it=None, jt=None):
         lw = m.layer(li, it, jt)
         _gemma_attention_tile(res, lw, m, pos, ropes, T, block, parts, depth, whole,
-                              _oscr(m, oscr), loop)
+                              _oscr(m, oscr), loop, wide=wide)
         _sync_frames()
         y = ol.empty([T, spec.hidden])          # the MLP's output rows, then its chunk's
         C, sb = down_chunk(lw.wg, lw.wd), sub_of(lw)    # activation (_mlp_tile's abuf)
@@ -1449,8 +1514,9 @@ def variants(fam: str, T: int, mcols: int) -> list:
     gathered in TMEM (wholes); a prompt run whose outputs do not fit takes fewer rows
     (prefill._probe_tile)."""
     out = [{}, {"spill": True}]
-    if fam == "gemma4":             # (the MLP's wider gate / up MMs first: fewer instructions)
-        out = [dict(f, sub=s) for f in out for s in GEMMA_SUBS] + out
+    if fam == "gemma4":             # (the attention's wide tiles first, then the MLP's wider
+        out = [dict(f, sub=s) for f in out for s in GEMMA_SUBS] + out   # gate / up MMs)
+        out = [dict(f, wide=w) for w in (2, 1, 0) for f in out]
     if fam == "qwen35":
         d = T
         while d > 1:

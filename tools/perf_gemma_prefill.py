@@ -61,9 +61,13 @@ def main():
     ap.add_argument("--head-format", default="int8")
     ap.add_argument("--cap", type=int, default=2048)
     ap.add_argument("--compile-only", action="store_true")
+    ap.add_argument("--narrow", action="store_true",
+                    help="the attention's tiles of at most MCOLS query rows (tiled.WIDE off)")
     ap.add_argument("--dump", help="write every instruction's record (JSON lines) here")
     a = ap.parse_args()
     from opentpu.llm import tiled
+    if a.narrow:
+        tiled.WIDE = False
     spec0 = load_spec(model_dir(a.model))
     spec = spec0.truncated(range(a.layers)) if a.layers else spec0
     L = spec0.layers
