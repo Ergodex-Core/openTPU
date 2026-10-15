@@ -1,8 +1,8 @@
 [target]
 name = "f2-hbm200"
 kind = "fpga"
-platform_id = 3
-description = "AWS F2 VU47P: Small Shell, HBM, preserved openTPU m4 compute"
+platform_id = 4                 # (Alex's image itself reports f2's 3: its target file, software/f2.toml)
+description = "AWS F2 VU47P: Small Shell, HBM, preserved openTPU m4 compute (Alex's burst200, agfi-0d06cb48544a02106)"
 [arch]
 S = 1
 D = 128
@@ -53,3 +53,6 @@ beat_bytes = 64
 host = "pcie"
 pcie_gen = 4
 pcie_lanes = 8
+
+[variants.t2]                   # the same with T2 (docs/ternary.md): ISA and planning until built
+T2 = true

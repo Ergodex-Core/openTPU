@@ -47,6 +47,7 @@ module otpu_asic_top
   parameter int TMEM_PRK   = 0,
   parameter int TMEM_SDM   = -1,
   parameter bit SEQ_WC     = 1'b0,      // the sequencer's wait entries (otpu_slice)
+  parameter bit T2         = 1'b0,      // t2 weights, MM QUAD, QACT DUP4 (otpu_slice)
   parameter bit COLL_GATHER = 1'b1      // 0: the collective unit runs BAR alone (otpu_coll_bar)
 ) (
   input  logic                clk,
@@ -121,7 +122,7 @@ module otpu_asic_top
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM),
-               .SEQ_WC(SEQ_WC)) u_slice (
+               .SEQ_WC(SEQ_WC), .T2(T2)) u_slice (
     // clk_f: TMEM_PMP 0 (above), so no 2x clock
     .clk, .clk_f(1'b0), .sys_rst, .rst, .rinit(rinit_a), .ld_start, .ld_addr, .ld_n, .ld_busy,
     .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,

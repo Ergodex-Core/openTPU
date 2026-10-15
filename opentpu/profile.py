@@ -128,14 +128,16 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         N, KB, M = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[5] >> 16) & 0xFF
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
-        wf = (ins.flags >> I.WF_SHIFT) & 3
+        wf, pair, quad = I.mm_format(ins)
         if wf == I.W8:
             return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", N * KB, N * KB, scales
-        # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle
-        pair = bool(ins.flags & I.F_PAIR)
-        return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {'int4' if wf == I.W4I else 'fp4'}"
-                      f"{' pair' if pair else ''}{acc}",
-                N * (-(-KB // 2) if pair else KB), N * -(-KB // 2), scales)
+        # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle.
+        # t2 (docs/ternary.md): four blocks a chunk, one a cycle, PAIR two, QUAD four
+        per = 4 if quad else 2 if pair else 1           # blocks an advance
+        name = "int4" if wf == I.W4I else "t2" if wf == I.WT2 else "fp4"
+        return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {name}"
+                      f"{' quad' if quad else ' pair' if pair else ''}{acc}",
+                N * -(-KB // per), N * -(-KB // I.blocks_per_chunk(wf)), scales)
     if op == I.QACT:
         rows, KB = w[1] & 0xFF, w[1] >> 16
         n = rows * KB * D
@@ -183,7 +185,9 @@ class Profile:
             b = sum(r.portb for r in rs)
             a = sum(r.porta for r in rs)
             # port A delivers one scale word per MXU cycle, a PAIR MM's 8-byte scale pair at once
-            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else r.porta
+            # (QUAD's four words)
+            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else
+                     r.porta // 4 if r.detail.endswith((" quad", " quad +acc")) else r.porta
                      for r in rs)
             m = sum(r.work for r in rs if r.op == I.MM)
             per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m,

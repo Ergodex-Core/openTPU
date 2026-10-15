@@ -133,6 +133,7 @@ module otpu_quant
   parameter int LANES = 8,
   parameter int GR    = 1024,               // group maxes of a row (QACT 4*KB, QST KB; not ROW)
   parameter int XD    = 1024,               // row buffer chunks (QACT rows <= XD*LANES); 0: none
+  parameter bit T2    = 1'b0,               // QACT DUP4 (docs/ternary.md)
   parameter int SID   = 0
 ) (
   input  logic                    clk,
@@ -158,6 +159,7 @@ module otpu_quant
   output logic [31:0]             act_idx,
   output logic [LANES-1:0][7:0]   act_data,
   output logic                    act_dup,    // QACT DUP: also rows act_row + act_off
+  output logic                    act_dup4,   // QACT DUP4 (T2): also + 2 act_off, + 3 act_off
   output logic [7:0]              act_off,
   output logic                    asc_we,
   output logic [7:0]              asc_row,
@@ -197,7 +199,7 @@ module otpu_quant
   wire en = gnt;
 
   // ------------------------------------------------------------------ command
-  logic        busy, is_st, rowm, csf, rsf, ackw, dup;
+  logic        busy, is_st, rowm, csf, rsf, ackw, dup, dup4;
   logic        bm;                           // QACT through the row buffer
   logic [31:0] csb, rsb, srs, drs, es;
   logic [15:0] rows, KB;
@@ -621,6 +623,7 @@ module otpu_quant
   assign a_want = (busy && !ackw && wqd.v && wqd.st) || sw_ph;
 
   assign act_dup = dup;
+  assign act_dup4 = T2 && dup4;
   assign act_off = rows[7:0];
 
   always_comb begin
@@ -719,6 +722,7 @@ module otpu_quant
       rsf   <= !qst && cmd.flags[2];
       rsb   <= cmd.w5;
       dup   <= !qst && cmd.flags[3];
+      dup4  <= T2 && !qst && cmd.flags[4];
       rows  <= nr;
       KB    <= kb;
       G     <= 32'(kb) * D;

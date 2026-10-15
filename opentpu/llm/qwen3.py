@@ -2078,7 +2078,7 @@ def fit_chunk(image, block: int, seq: int, p0: int, n: int, left: int, fit: int,
 
 def mxu_time(progs) -> float:
     """A run's MXU time, statically, in weight blocks: each MM's streamed rows times its K
-    blocks, half of that PAIRed (two 4-bit blocks a cycle), times its loops' counts (a loop
+    blocks, half of that PAIRed (two 4-bit blocks a cycle), a quarter with QUAD, times its loops' counts (a loop
     with a run-time count once); the slowest slice's."""
     best = 0.0
     for prog in progs:
@@ -2090,8 +2090,9 @@ def mxu_time(progs) -> float:
                 loops.append((pc + ins.w[0], ins.w[1] if ins.ra == 0 else 1))
             elif ins.op == I.MM:
                 mult = math.prod(c for _, c in loops)
+                wf, pair, quad = I.mm_format(ins)        # (QUAD: a t2 chunk, 4 blocks, a cycle)
                 t += mult * (ins.w[3] & 0xFFFF) * ((ins.w[3] >> 16) & 0xFF) * \
-                    (0.5 if ins.flags & I.F_PAIR else 1.0)
+                    (0.25 if quad else 0.5 if pair else 1.0)
         best = max(best, t)
     return best
 

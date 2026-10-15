@@ -107,3 +107,53 @@ at their chunk counts; b2-scripts/step_costs.py): the 2B in int4 + int8 head str
 D-byte chunks (the int8 head 3.99 M of them); measured 12.36 M cycles a token, 78% of the
 port's rate. In t2 with QUAD and the rotation: 4.26 M chunks (the rotations' H MMs 0.03 M),
 5.44 M unit cycles: about 2.3x fewer cycles a token at the same efficiency.
+## 6. The RTL (T2 builds)
+
+A top-level parameter `T2` (otpu_top, otpu_board, otpu_asic_top, otpu_slice; default 0) builds
+the format into otpu_mxu, otpu_actram and otpu_quant and sets CAPS bit28 (otpu_ctrl).
+`rtl_params` and `sim_uarch` pass the target's `T2`, rtlsim builds tb_top with `T2 = 1` for a
+`Config(T2=True)`. Without T2 every t2 term is the constant 0 (the selects fold away: int8, int4,
+fp4, NVFP4 and PAIR keep their paths); the one change for every build is the stride, `rs & ~3`.
+
+* **Issue.** A t2 row is ceil(KB/4) chunks; a chunk request every fourth advance (PAIR every
+  second, QUAD each), the scale offset `16 + 4 k0` and step 4 / 8 / 16 bytes. A scale entry holds
+  the chunk's four words, `{Sw, w1, w0}` and `{w3, w2}` in the two entry RAMs: QUAD writes both
+  halves from one 16-byte group of the line, PAIR one half an advance (its 8-byte pair, as int4
+  without PAIR writes a word), plain t2 stages block 4c (4c+2) in a register and writes it with
+  4c+1 (4c+3), a row's odd last block alone. The FIFOs, the tags and the port A requests are
+  as before (one line per advance).
+* **Decode (S1).** Element `i` of block `q` is bits `2D q + 2i`: per lane a 4:1 select of 2-bit
+  fields and `{6{c == 0}, c - 1}`, on the 8-bit element path. The low stream is block `q` (plain:
+  `k mod 4`; PAIR: `2 (k mod 2)`; QUAD: 0), the high `q | 1`; the block scales the same words.
+* **QUAD (four columns, two DSP inputs).** The array's DSPs take two weight streams on their
+  pre-adder (A low, D high, INMODE by the column's `hi`). T2 makes it four: S1 decodes all four
+  blocks of the chunk, every column hop carries 32 bits instead of 16, and in front of each PE's
+  A / D a 2:1 select by the column's `hq` (a per-command constant: `j >= 2M`) picks `{4c+3,
+  4c+2}` instead of `{high, low}`; `hi` is then `c` odd. So column `c M + j` multiplies block
+  `4c' + c` with its ACT row's block, the column end applies that block's B (a 4:1 of the four
+  decoded scale streams per column, where PAIR had a 2:1) and the four columns' integers of row
+  `j` are added before the result FIFO, two 48-bit adders deep. The ACT RAM reads four blocks a
+  cycle: r_blk3 / r_blk4 for the rows in `r_hq` (a 4:1 on each column's block address); past a KB
+  that is not a multiple of 4 a column reads block 4c again (its multipliers are zero), as PAIR.
+  Consecutive QUAD MMs of one M share the pipeline (the two heads), QUAD and non-QUAD do not.
+* **DUP4.** The quantizer marks its writes (flag bit4); the ACT RAM's column select takes rows
+  `r + c rows` (c = 1..3; all below MCOLS, so group 0) in the same cycles.
+* **Cost at D = 128, MCOLS = 4 (estimated, not synthesized).** The hop registers of columns
+  1..3 (+6.1K flip-flops), the S1 decode's two more streams and their skew lines (~2K SRL LUTs,
+  ~2K flip-flops), the PE input selects (384 PEs x 16 bits, ~3K LUTs), two more scale decoders
+  and the 4:1 per column end, the QUAD row adders (one 48-bit adder per QUAD row) and the ACT
+  address 4:1: ~7K LUTs and ~10K flip-flops, no DSP or block RAM. Timing at 200 MHz (5 ns): the
+  new levels are one LUT each (the PE select between a hop register and the DSP's A/D register,
+  the 4:1 of 2-bit fields after the chunk FIFO's read register, the 4:1 of scale words before
+  the dw subtract) and the row sum's second adder; the per-column `hq` drives D x 8 select LUTs
+  (a high fanout, like `hi` into the DSPs' INMODE registers today) and may want replication.
+* **Tests** (tests/test_t2_rtl.py, Verilator, D = 32): plain / PAIR / QUAD with KB 1 to 9, k0
+  0 to 8, M 1, 2, 4, MCOLS 4 and 8, UNIT, ACC, RMAX, ASCALE, a replayed t2 row (M 8 > MCOLS 4),
+  QUAD's row choice on distinct ACT rows, a program of every format back to back, and the other
+  formats' MM cases on a T2 build: bit-exact against the ISA simulator.
+* **Throughput** (Verilator, behavioural DRAM, one row, M = 1, the cycles 256 more weight rows
+  add): QUAD takes a chunk a cycle with one port A line request a chunk (its four words in one
+  16-byte group, no Sw-alone requests at srs = 16 + 16 ceil(KB/4)). D = 32, KB 16: QUAD 1,024
+  cycles for 1,024 chunks, int4 PAIR 2,048 for 2,048; D = 128, KB 48: QUAD 3,072 for 3,072,
+  int4 PAIR 6,144 for 6,144 (1.000 cycles a chunk both: QUAD half PAIR's cycles for the same
+  weights). tests/test_t2_rtl.py test_quad_takes_a_chunk_a_cycle_rtl checks it.

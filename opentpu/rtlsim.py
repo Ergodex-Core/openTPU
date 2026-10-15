@@ -265,6 +265,8 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "DRAM_WORDS": (dram_bytes or cfg.DRAM_BYTES) // 4, "DRAM_LAT": dram_lat,
          "LANES": cfg.LANES,
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
+    if getattr(cfg, "T2", False):       # t2 weights, MM QUAD, QACT DUP4 (otpu_slice T2; only
+        p["T2"] = 1                     # when on: the other builds' cache keys stay)
     p.update(UARCH)
     p.update(uarch or {})
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:

@@ -271,6 +271,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d["MXU_E"] = u["MXU_E"]
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
+    if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
+        d["T2"] = 1
     return d
 
 
@@ -290,7 +292,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
-        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]),
+        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
@@ -314,7 +316,7 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC; the CFG_HASH it reports): ACT_ROWS equal to
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2; the CFG_HASH it reports): ACT_ROWS equal to
     MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
@@ -327,6 +329,8 @@ def build_config(t: Target | str | None = None, **knobs):
         a["DSTEP"] = a["STREAM"] = bool(int(knobs["DSTEP"]))
     if knobs.get("SEQ_WC") is not None:
         a["SEQ_WC"] = bool(int(knobs["SEQ_WC"]))
+    if knobs.get("T2") is not None:
+        a["T2"] = bool(int(knobs["T2"]))
     return config(t, **a)
 
 
