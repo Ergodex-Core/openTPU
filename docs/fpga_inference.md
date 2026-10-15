@@ -354,3 +354,35 @@ fresh server per model. Outputs are identical to the baseline; decode is unchang
 The run's files are `/home/ubuntu/opt/logs/bench_ttft.json` and `.log` on the instance. The
 prefill and decode device programs are unchanged by this step; fused-kernel prefill work is in
 progress on separate branches.
+
+### 5. This branch's own image on the card (2026-10-15)
+
+**Image.** `afi-0ee1306df4f9f9ed4` / `agfi-0014449e89d7fceee`: build `f9e0e5bf`, a 100 MHz core,
+200 MHz TMEM, and the slot's DDR4 DIMM through `otpu_f2_nch` / `otpu_f2_mem` / `sh_ddr`.
+
+**Smoke test.** The full `tools/f2_smoke.py --expect-build f9e0e5bf` passed on its first
+hardware run: identity, DDR calibration, BAR4 on both channels, 200 partial writes,
+interleave, kernels and masked stores against the ISA, and host ordering.
+
+**Benchmark.** `tools/f2_bench.py`, with the host-TTFT changes of section 4, the prompts of
+section 2, and outputs identical to section 4's.
+
+| Model | TTFT short | TTFT long | Prefill long | Decode | Decode on Alex's 200 MHz HBM image |
+|---|---:|---:|---:|---:|---:|
+| Qwen3-0.6B int8 | 0.48 s | 5.51 s | 49.7 tok/s | **11.5 tok/s** | 10.0 tok/s |
+| Gemma-3-1B int8 | 0.58 s | 5.16 s | 51.9 tok/s | **7.0 tok/s** | 6.1 tok/s |
+| Ternary-Bonsai-1.7B int4 | 0.80 s | 10.06 s | 27.2 tok/s | **7.6 tok/s** | 6.7 tok/s |
+| Ternary-Bonsai-4B int4 | 1.66 s | 22.5 s | 12.2 tok/s | **3.1 tok/s** | 2.7 tok/s |
+
+**What it shows.**
+
+* **Decode is 14% faster at half the core clock.** The weight stream runs at about 7.0 GB/s
+  (Qwen3-0.6B: 612.8 MB × 11.48 tok/s), 70 bytes a core cycle at 100 MHz, against 6.3 GB/s on
+  the HBM image.
+* **The memory path, not the clock, sets decode.** Neither image comes near its memory: the
+  DIMM port is 16 GB/s, and port B at 200 MHz is 25.6 GB/s.
+* **Prefill is mixed.** The long prompts of Qwen3 and Gemma 3 are faster here, and Bonsai-4B's
+  is slower (22.5 s against 15.2 s): its prefill is compute-bound, and this core runs at half
+  the clock.
+* **Next.** A rebuild of this design at a 200 MHz core, with more reads in flight in
+  `otpu_f2_nch`, is the next hardware step.
