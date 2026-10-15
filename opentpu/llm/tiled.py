@@ -216,11 +216,7 @@ def _attention_tile(res: Res, lw, c, s_, pos, T: int, spec, block: int, parts: i
             v = ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
             kj = _rope_rows_padded(_norm_heads(k, kn, eps), c, s_)
             vj = _padded(v)
-            if run:                            # V^T at a run-time position: a row at a time
-                for r in range(T):
-                    ol.kv_append(kvc, hh, pos.pos + r, kj[r:r + 1, :], vj[r:r + 1, :])
-            else:
-                ol.kv_append(kvc, hh, pos, kj, vj)
+            ol.kv_append(kvc, hh, pos.pos if run else pos, kj, vj)   # (T rows: one QST each)
             del k, v, kj, vj
         w = g1 - g0
         q = ol.dot(xs, lw.wq[(j * G + g0) * d:(j * G + g1) * d, :])    # [T, w d]
@@ -363,8 +359,7 @@ def _attention_loop(lw, xs, qn, kn, c, s_, pos, T: int, spec, heads, G: int, gs:
         v = ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
         kj = _rope_rows_padded(_norm_heads(k, kn, eps), c, s_)
         vj = _padded(v)
-        for r in range(T):
-            ol.kv_append(kvc, hh, pos.pos + r, kj[r:r + 1, :], vj[r:r + 1, :])
+        ol.kv_append(kvc, hh, pos.pos, kj, vj)      # (the T rows in their bucket: one QST each)
         del k, v, kj, vj
 
     def query(hq, Qv):
