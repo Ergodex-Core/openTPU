@@ -39,6 +39,8 @@ from . import store as ST
 IMAGE_BYTES = 32 << 20      # an image_url's file at most
 FETCH_S = 20.0              # an http(s) image's fetch timeout (--image-fetch)
 MAX_SLICES = 36             # a request's max_slices at most
+# the program cache's disk where progcache has none (OTPU_PROG_CACHE unset, no ~/otpu-build)
+PROG_CACHE = Path.home() / ".cache" / "otpu" / "prog"
 
 
 WARM_CAP = 300.0         # /health's 503 "warming" at most this long (s; the card host's HDD
@@ -948,6 +950,13 @@ def main(argv=None):
                     help="a streamed MoE: /health says 503 'warming' while its expert pool is "
                          "read into the page cache, at most this many seconds (0: never)")
     a = ap.parse_args(argv)
+    if not a.no_prog_cache:
+        from .. import progcache as PC
+        if PC.cache_dir() is None:
+            # a host without ~/otpu-build (the F2 instance): the programs and their wait entries
+            # on disk all the same, so a server's compiles (its generate loop's buckets, its
+            # prompt runs) are done once per tree, not once per start (gen_warm needs it)
+            os.environ["OTPU_PROG_CACHE"] = str(PROG_CACHE)
     return busy_exits(_main)(a)
 
 
