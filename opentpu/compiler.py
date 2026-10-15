@@ -2084,7 +2084,8 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
     """The MMs of `prog` whose drain cannot keep up with their array: [(pc, comment)].
 
     The array consumes a streamed row's chunks once per group of MCOLS stationary rows (replay:
-    ceil(M / MCOLS) groups), KB advances a group (ceil(KB / 2) with PAIR). The drain writes a
+    ceil(M / MCOLS) groups), KB advances a group (ceil(KB / 2) with PAIR, ceil(KB / 4) with
+    QUAD). The drain writes a
     group's results, one a row at the output's row stride (ors), `lanes` a cycle (the MXU's
     epilogue lanes; production's MCOLS) from distinct TMEM banks only: its pick takes rows in
     order up to the first bank conflict (bank = address mod LANES). At a row stride that is a
@@ -2098,7 +2099,8 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
         if ins.op != I.MM:
             continue
         ors, M, KB = ins.w[5] & 0xFFFF, (ins.w[5] >> 16) & 0xFF, (ins.w[3] >> 16) & 0xFF
-        adv = -(-KB // 2) if ins.flags & I.F_PAIR else KB
+        _, pair, quad = I.mm_format(ins)        # advances a group: QUAD four t2 blocks, PAIR two
+        adv = -(-KB // 4) if quad else -(-KB // 2) if pair else KB
         steps, j, rows = 0, 0, min(M, cfg.MCOLS)
         while j < rows:
             banks = set()

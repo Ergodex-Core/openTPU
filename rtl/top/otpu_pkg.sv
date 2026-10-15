@@ -304,12 +304,15 @@ package otpu_pkg;
           f.rd[0] = mk(SP_DRAM, c.w1, p.p0 + kb * D);
           // a scale row's bytes up to block k0 + KB's (docs/isa.md "Weight formats"; PAIR's odd
           // KB: one block more): RSC Sw; int8x Sw and a byte a block; int4x / fp4x6 Sw, a
-          // reserved word and a word a block; NVFP4 Sw, three reserved words and 8 bytes a block
+          // reserved word and a word a block; NVFP4 Sw, three reserved words and 8 bytes a block;
+          // t2 (WF 1, rs bit 0) Sw, three reserved words and a word a block, rounded up to a
+          // chunk's four (QUAD reads them as one 16-byte group: 28 covers it)
           if (!c.flags[0])
             f.rd[1] = mk(SP_DRAM, c.w2, p.p1 + (c.flags[7] ? 32'd4 :
                          (c.flags[5:4] == 2'd0) ? 32'd4 + 32'(c.w4[31:24]) + kb :
                          (c.flags[5:4] == 2'd3) ? 32'd24 + ((32'(c.w4[31:24]) + kb) << 3) :
-                                                  32'd12 + ((32'(c.w4[31:24]) + kb) << 2)));
+                         c.w5[0] ? 32'd28 + ((32'(c.w4[31:24]) + kb) << 2) :
+                                   32'd12 + ((32'(c.w4[31:24]) + kb) << 2)));
           if (c.flags[3])  f.rd[3] = mk(SP_TMEM, c.w2, m);                         // ASCALE
           f.rd[2] = mk(SP_ACT, 32'(c.w6[31:24]), kb);
           f.wr[0] = mk(SP_TMEM, c.w3, p.p2 + n);
