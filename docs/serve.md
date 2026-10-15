@@ -135,8 +135,11 @@ batch_area=True)`). Each iteration of the worker:
    requests (a step runs each block in a run of its own, so four requests in one block take
    one run a step, spread over two they take two); then the one holding the longest prefix of
    the prompt, slot 0, the least recently used. The prompt continues the longest prefix found
-   in that slot, in another slot (its pages copied on the card, no PCIe) or in the store. A slot's
-   context is saved to the store before it is overwritten.
+   in that slot, in another slot (its pages copied on the card, no PCIe) or in the store. A
+   request alone takes slot 0 (the card's decode loop), its prefix copied there from another
+   slot. A slot's context about to be overwritten moves on the card to a free slot holding
+   nothing (a later prompt finds it there), unless the request keeps at least half of it or
+   no such slot is free: then it is saved to the store (in the background on the card).
 2. Feed runs of the prompts being fed, oldest first, up to `--chunked-prefill-size` tokens
    (default 64, SGLang's chunked prefill; more: a shorter time to first token, longer pauses
    of the decoding requests). A feed run takes up to MCOLS (4) tokens of a prompt, every
