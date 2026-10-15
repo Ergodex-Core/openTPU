@@ -84,6 +84,31 @@ def test_shared_prefix_from_another_slot_and_from_the_store():
         w.stop()
 
 
+def test_a_lone_requests_slot_context_moves_on_the_device():
+    """Requests one at a time each take slot 0 (the card's loop): the context there moves to a
+    free slot on the device instead of a save to the store (whose read back is on the next
+    request's time to first token), and a request continuing the first conversation copies
+    its pages back into slot 0 from that slot; every reply is its fresh run's."""
+    eng, W, spec, cfg1 = _setup()
+    stop = frozenset()
+    w = BW.BatchWorker(eng, _Tok()).start()
+    try:
+        a, b = _prompts(11, [30, 25])
+        ra = w.submit(SC.Request(a, max_new=6, stop_ids=stop)).wait(900)
+        rb = w.submit(SC.Request(b, max_new=6, stop_ids=stop)).wait(900)
+        assert ra.slot == rb.slot == 0
+        assert w.stats["slot_moves"] == 1 and w.stats["saves"] == 0
+        c = a + ra.out + _prompts(12, [5])[0]
+        rc = w.submit(SC.Request(c, max_new=5, stop_ids=stop)).wait(900)
+        assert rc.slot == 0 and rc.cached >= len(a) + len(ra.out) - 1
+        assert w.stats["slot_copies"] == 1 and w.stats["slot_moves"] == 2
+        assert w.stats["saves"] == 0 and w.stats["card_loops"] >= 3
+        for p, r, n in ((a, ra, 6), (b, rb, 6), (c, rc, 5)):
+            assert r.out == _ref(spec, W, cfg1, p, n, stop)
+    finally:
+        w.stop()
+
+
 def test_sampled_requests_alone_and_together():
     """A seeded sampled request's tokens are the same alone (slot 0: the card's loop) and with
     others batched beside it (each row its own uniforms, picked on the device)."""

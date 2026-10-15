@@ -137,3 +137,38 @@ def test_pages_of_a_shared_prefix_are_the_same_bytes():
         out.append(io.read_pages(io.layout.split(296)))
     assert np.array_equal(out[0][0], out[1][0])
     assert not np.array_equal(out[0][1], out[1][1])
+
+
+@pytest.mark.parametrize("case", ["qwen3", "qwen35"])
+def test_a_staged_read_in_the_background_is_the_context(case):
+    """ContextIO.stage: the pages and the state copied into the staging area at once and read
+    back on a thread while the device runs another context: the bytes are read_pages' and
+    read_state's of the context as it was; two stages in flight take the area in turn (the
+    ring), and an in-line move after them waits for both."""
+    W, spec, cfg = _model(case)
+    cfg = _big(cfg)
+    eng = Engine(spec, W, cap=512, cfg=cfg, resident=True, prompt_runs=True)
+    area = (-(-eng.image.nbytes // 4096) * 4096, cfg.DRAM_BYTES // 4)
+    io = KV.ContextIO(eng, area=area)
+    r = np.random.default_rng(4)
+    want, futs, parts = [], [], []
+    for n in (300, 40):
+        A = [int(x) for x in r.integers(0, 1000, n)]
+        eng.reset()
+        eng.prefill(A)
+        pages = io.layout.split(n)
+        want.append((io.read_pages(pages), io.read_state() if io.layout.stateful else None))
+        futs.append(io.stage(pages, state=True))
+        assert futs[-1] is not None
+        parts.append(eng._kvio_ring["busy"][-1][:2])
+    eng.reset()
+    eng.prefill([int(x) for x in r.integers(0, 1000, 280)])     # the device runs on
+    for f, (pages, state) in zip(futs, want):
+        got, st = f.result()
+        assert len(got) == len(pages) and all(np.array_equal(x, y) for x, y in zip(got, pages))
+        assert (st is None and state is None) or np.array_equal(st, state)
+    assert parts[0][1] <= parts[1][0]                              # (disjoint parts)
+    ring = eng._kvio_ring
+    KV.wait_staged(eng)
+    assert ring == {"at": 0, "busy": []}
+    assert io.stage([(0, 256)] * 10**4) is None                  # (more than the area)

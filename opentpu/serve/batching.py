@@ -61,8 +61,8 @@ class BatchWorker(SC.Worker):
         self.steps = BA.Steps(eng)
         self.steps.warm()
         self.prefilling: list = []                # requests being fed, oldest first
-        self.stats.update(steps=0, step_rows=0, step_runs=0, slot_copies=0, card_loops=0,
-                          step_s=0.0)
+        self.stats.update(steps=0, step_rows=0, step_runs=0, slot_copies=0, slot_moves=0,
+                          card_loops=0, step_s=0.0)
 
     # ---- the loop
     def _loop(self) -> None:
@@ -126,9 +126,32 @@ class BatchWorker(SC.Worker):
     # ---- slots
     def _save_slot(self, s: int) -> None:
         if self.slot_dirty[s] and self.slot_dev[s]:
-            self.cache.save(self.ios[s], list(self.slot_dev[s]))
+            self.cache.save(self.ios[s], list(self.slot_dev[s]), background=True)
             self.stats["saves"] += 1
         self.slot_dirty[s] = False
+
+    def _evict(self, s: int, k: int) -> None:
+        """Slot s's context is about to be overwritten past its first k tokens (by the prompt,
+        or by a longer prefix copied from another slot or restored from the store, which before
+        overwrote a shorter context unsaved). Unless the request keeps most of it (k at least
+        half), it moves on the device into a free slot that holds nothing (its pages copied by
+        LD / ST programs: no bytes cross the host's link), where a later prompt finds it as
+        another slot's prefix; else it is saved to the store (in the background where the
+        device has a staging area: PrefixCache.save). A save in line reads the context back to
+        the host (a partial page's V^T tiles whole: 7.5 MB for any short Qwen3-0.6B context)
+        on the time to first token of the request taking the slot: ~1 s at the F2 small
+        shell's BAR4."""
+        if not (self.slot_dirty[s] and self.slot_dev[s]):
+            return
+        spare = [x for x in self._free_slots() if x != s and not self.slot_dev[x]]
+        if not spare or 2 * k >= len(self.slot_dev[s]):
+            return self._save_slot(s)
+        f, n, P = spare[-1], len(self.slot_dev[s]), self.io.layout.P
+        self.ios[f].copy_from(self.ios[s], [(i, min(P, n - i * P)) for i in range(-(-n // P))])
+        self.slot_dev[f], self.slot_dirty[f] = list(self.slot_dev[s]), True
+        self.slot_used[f] = self.slot_used[s]
+        self.slot_dirty[s] = False
+        self.stats["slot_moves"] += 1
 
     def _bind(self, r: SC.Request) -> None:
         """r into a free slot, its prompt's longest prefix in place."""
@@ -145,13 +168,16 @@ class BatchWorker(SC.Worker):
         held = [sum(y // q == x // q for y in range(self.B) if self.slot_req[y] is not None)
                 for x in range(self.B)]
         s = max(free, key=lambda x: (held[x], min(common[x], limit), x == 0, -self.slot_used[x]))
+        if 0 in free and self.eng.can_generate and not self.waiting and \
+                [x for x in self.running if x.finish is None] == [r]:
+            s = 0       # alone: the card's decode loop (slot 0), the prefix copied from its slot
         own = min(common[s], limit)
         other = max((x for x in range(self.B) if x != s), key=lambda x: common[x], default=None)
         k_other = min(common[other], limit) if other is not None else 0
         m = self.cache.match(want, limit=limit)
         k = max(own, k_other, m.k)
-        if k < len(self.slot_dev[s]):             # the slot's context past k is overwritten
-            self._save_slot(s)
+        if own < len(self.slot_dev[s]):           # the slot's context past own is overwritten
+            self._evict(s, own)
         if k == own:
             self.eng.adopt(own, seq=s)
             if own:
@@ -397,6 +423,7 @@ class BatchWorker(SC.Worker):
                     self._save_slot(s)
                 except BaseException:
                     traceback.print_exc()
+            self.cache.drain()
             self.store.persist()
 
     def flush(self) -> None:

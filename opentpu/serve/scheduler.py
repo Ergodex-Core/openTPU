@@ -190,6 +190,7 @@ class Worker:
                 self._save_device()
             except BaseException:
                 traceback.print_exc()
+            self.cache.drain()
             self.store.persist()
 
     def submit(self, r: Request) -> Request:
@@ -316,7 +317,8 @@ class Worker:
             return
         t0 = time.perf_counter()
         self._settle()
-        e = self.cache.save(self.io, list(self.dev), pin=pin_for is not None, follow=self.follow)
+        e = self.cache.save(self.io, list(self.dev), pin=pin_for is not None, follow=self.follow,
+                            background=pin_for is None)
         self.stats["saves"] += 1
         self.stats["save_s"] += time.perf_counter() - t0
         self.dirty = False
@@ -500,7 +502,7 @@ class Worker:
                     self.stats["prefill_s"] += time.perf_counter() - t0
                     return
             if b != len(ids):                   # a saved context where the next turn parts
-                self.cache.save(self.io, list(r.fed))
+                self.cache.save(self.io, list(r.fed), background=True)
                 self.stats["saves"] += 1
         self.stats["prefill_s"] += time.perf_counter() - t0
         if last < len(ids):                     # (the prompt's last token: the decode feeds it)

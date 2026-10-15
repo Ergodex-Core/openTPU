@@ -598,6 +598,15 @@ class SimTransport:
 
 
 # ------------------------------------------------------------------------------ the board
+def open_transport(dev: str | None = None, dma: bool = True):
+    """Open OTPU_DEVICE (default /dev/xdma0), or an explicit XDMA prefix / f2:slot / f2:BDF."""
+    dev = os.environ.get("OTPU_DEVICE", "/dev/xdma0") if dev is None else dev
+    if dev.startswith("f2:"):
+        from .f2 import F2Transport
+        return F2Transport(dev, dma=dma)
+    return XdmaTransport(dev) if dma else XdmaTransport(dev, dma=False)
+
+
 def _lock(t) -> DeviceLock | None:
     """The device lock, shared by every Board on the same transport object (a transport is one
     open of the device); a second transport on the same device, in this process or another,
@@ -656,11 +665,13 @@ class Board:
     the trace buffer."""
 
     def __init__(self, transport=None, check: bool = True, lock: bool = True,
-                 calibrate: bool = True):
+                 calibrate: bool = True, own_transport: bool | None = None):
         """check: the card must answer as openTPU; calibrate: then calibrate its DDR3 if the
         bitstream wants the host to (LiteDRAM, CAPS bit27: memcal.ensure; once per
-        configuration, as the STATUS calibration bits say)."""
-        self.t = transport or XdmaTransport()
+        configuration, as the STATUS calibration bits say). own_transport transfers cleanup
+        responsibility for a supplied transport; by default supplied transports are borrowed."""
+        self._owns_transport = transport is None if own_transport is None else own_transport
+        self.t = open_transport(dma=lock) if transport is None else transport
         self.lock = _lock(self.t) if lock else None
         self._info = None
         self._trace = None              # (depth, keep_first) of a started traced run
@@ -690,6 +701,8 @@ class Board:
         if self._pool is not None:
             self._pool.shutdown()
             self._pool = None
+        if self._owns_transport and hasattr(self.t, "close"):
+            self.t.close()
         if self.lock is not None:
             self.lock.release()
             self.t._otpu_lock = None
@@ -1485,11 +1498,19 @@ class BoardBackend:
     /tmp/otpu/<dev>.json (runstate.RunnerStatus) until close() or exit."""
 
     def __init__(self, cfg, images: list, transport=None, model: str | None = None,
-                 status: bool = True):
+                 status: bool = True, own_transport: bool | None = None):
         from opentpu import isa as I
         self.I = I
         self.cfg = cfg
-        self.board = Board(transport)
+        self.board = Board(transport, own_transport=own_transport)
+        self.status = None
+        try:
+            self._initialize(cfg, images, model, status)
+        except BaseException:
+            self.close()
+            raise
+
+    def _initialize(self, cfg, images: list, model: str | None, status: bool) -> None:
         self.board.scrub()
         info = self.info = self.board.info()
         try:
