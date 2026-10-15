@@ -1254,6 +1254,10 @@ class RunPos:
     run_args."""
 
     tok, ring = RunVar("tok"), RunVar("ring")
+    seq = 0             # the sequence (an Engine(batch=B) image's KV slot) whose caches it runs
+    toks_src = None     # RunRows: its tokens from these DRAM words (a Tensor of R), not out[]
+    words_src = None    # RunWords: its run-time words from (a DRAM Tensor, {name: its word}),
+    #                     not the generate state's (RUN_WORDS)
 
     def __init__(self, blocks: int, block: int, lo: int, zmask: int, cap: int):
         self.blocks, self.block, self.lo = blocks, block, lo
@@ -1549,10 +1553,12 @@ class RunWords:
     def __enter__(self):
         if self.run:
             b = current()
-            n = max(RUN_WORDS.values()) + 1
-            self.st = ol.load(self.m.gen.state[0:n])
+            src, names = self.pos.words_src or (None, RUN_WORDS)
+            if src is None:
+                src = self.m.gen.state[0:max(RUN_WORDS.values()) + 1]
+            self.st = ol.load(src)
             self.at = b.stack[-1][-1]
-            b.run_words = {k: self.st.base + w for k, w in RUN_WORDS.items()}
+            b.run_words = {k: self.st.base + w for k, w in names.items()}
             self.pos.words = dict(b.run_words)          # (TMEM addresses for the kernel's RLDs)
         return self
 
@@ -1620,9 +1626,12 @@ def _inputs_rows(m, rows, tokens=None, embed: bool = True):
         s_ = ol.empty([R, m.sinr.shape[1]], dense=True)
         ol.load(m.cos_t[rows.pos:rows.pos + R, :], out=c)
         ol.load(m.sin_t[rows.pos:rows.pos + R, :], out=s_)
-        if rows.toks_at is not None:        # the tokens from out[] (docs/prefill.md)
-            k = rows.toks_at
-            tk = ol.load(m.gen.out[rows.pos + k:rows.pos + k + R])
+        if rows.toks_src is not None or rows.toks_at is not None:
+            if rows.toks_src is not None:   # (a batched slot's feed: the run's token words)
+                tk = ol.load(rows.toks_src)
+            else:                           # the tokens from out[] (docs/prefill.md)
+                k = rows.toks_at
+                tk = ol.load(m.gen.out[rows.pos + k:rows.pos + k + R])
             for r in range(R):
                 x[r:r + 1, :].set(_embed_word(m, tk[r:r + 1]))
             del tk

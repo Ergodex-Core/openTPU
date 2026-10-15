@@ -141,7 +141,9 @@ def programs(eng, p: int, R: int, kind: str, hidden: bool = False, slot: int = 0
                     raise CompileError(got[1])
                 names = set(got[1]) | (set(getattr(eng.image, "prompt_words", ())) if blocks
                                        else set())
-                done[what] = (got[0], sorted(names))
+                e = _Entry((got[0], sorted(names)))     # (warm's processes: the card's form)
+                e.ra, e.words, e.ready = None, got[0], True
+                done[what] = e
             else:
                 done[what] = _prepared(eng, what, blocks, *eng.cached(what, compile))
     return done[what]
@@ -179,15 +181,39 @@ def _prepared(eng, what, blocks: int, progs, ra):
     # step (Program.run_seen: a register loaded from the word before the loop, no argument)
     names = {v.name for v, _ in ra or ()} | \
         {v.name for p in progs for v, _ in getattr(p, "run_seen", ())}
-    prep = getattr(eng.backend, "prepare", None)
-    if getattr(eng.backend, "runs_words", False) and len(progs) == 1:   # (Words: run_args;
-        from .qwen3 import worker_words                                 # WAITC: the entries)
-        progs = worker_words(img, progs[0], ra or getattr(progs[0], "run_args", ()))
-    elif prep is not None:
-        prep(progs)
     if blocks:                      # a run-time run: and the words its kernel reads itself
         names |= set(getattr(img, "prompt_words", ()))
-    return progs, sorted(names)
+    # the backend's form (the card: the words with their wait entries, 1-3 s of the host's a
+    # tile program on the F2) when the run first runs (_ready), not for the probes' fit checks
+    e = _Entry((progs, sorted(names)))
+    e.ra = ra
+    return e
+
+
+class _Entry(tuple):
+    """programs()' entry: (programs, the state words the run reads), the programs in the
+    backend's form once _ready made them so."""
+    ready = False
+
+
+def _ready(eng, entry: _Entry):
+    """entry's programs as the backend takes them: on the card (runs_words) assembled once
+    with their wait entries (WAITC), else prepared (assembled ahead); made at the first run."""
+    if not entry.ready:
+        with _lock(eng):
+            if not entry.ready:
+                progs, ra = entry[0], entry.ra
+                prep = getattr(eng.backend, "prepare", None)
+                if getattr(eng.backend, "runs_words", False) and len(progs) == 1:
+                    from .qwen3 import worker_words         # (Words: run_args; the entries)
+                    entry.words = worker_words(eng.image, progs[0],
+                                               ra or getattr(progs[0], "run_args", ()))
+                else:
+                    if prep is not None:
+                        prep(progs)
+                    entry.words = progs
+                entry.ready = True
+    return entry.words
 
 
 def r_max(eng, blocks: int = 1) -> int:
@@ -218,6 +244,9 @@ def tiled(eng, blocks: int) -> bool:
         return False
     if T >= _probe_top(eng, blocks):
         return True
+    prev = eng.__dict__.get("_prompt_rmax", {}).get(blocks - 1)
+    if prev is not None and T > prev[0]:    # (today's rows do not grow with the bucket: its
+        return True                         # programs do; no probe of today's runs here)
     try:
         R, covered = _fit(eng, blocks)
     except CompileError:                # (no prompt run of today's fits the bucket)
@@ -323,10 +352,17 @@ def _probe_tile(eng, blocks: int) -> int:
     while n:
         sizes.append(n)
         n = _whole_passes(n - 1, mc)
+    prev = eng.__dict__.get("_prompt_tile", {}).get(blocks - 1)
+    if prev and prev in sizes:              # (a later bucket's tile is no larger: its program
+        sizes = sizes[sizes.index(prev):]   # grows with the blocks; no trace of larger ones)
     kinds = _kinds(eng)
+    lazy = not getattr(eng.spec, "mtp", False)
     for T in sizes:
-        if all(_fits(lambda: programs(eng, p, r, k, h, tile=k != "M")) for r in range(T, 0, -1)
-               for k, h in kinds):
+        # a plain prompt's runs of fewer rows are compiled when a prompt asks for them (chunks:
+        # one that does not fit then runs in pieces): only T's programs here, not every R <= T
+        # (Ternary-Bonsai-4B on the F2: 16 tile programs a bucket, docs/tiled_prefill.md 16)
+        if all(_fits(lambda: programs(eng, p, r, k, h, tile=k != "M"))
+               for r in ([T] if lazy else range(T, 0, -1)) for k, h in kinds):
             break
     else:
         return 0
@@ -412,9 +448,9 @@ def warm(eng) -> None:
                 todo += [(p0, r, k) for r in range(R, 0, -1)
                          for k in (("P", "L") if r == R else ("L",))]
                 for p, r, k in todo:
-                    programs(eng, p, r, k, mtp, 0)
+                    _ready(eng, programs(eng, p, r, k, mtp, 0))    # (the backend's form)
                     if mtp:
-                        programs(eng, p, r, "M")
+                        _ready(eng, programs(eng, p, r, "M"))
                 for w in [w for w in list(pre) if w[3] == b]:      # (runs no prompt takes)
                     f = pre.pop(w, None)
                     if f is not None:
@@ -522,7 +558,7 @@ def words(eng, names, p: int, R: int) -> dict:
 def run(eng, entry, p: int, R: int, tokens=()) -> dict:
     """One run at position p (programs' entry): the state words it reads written first, and
     on an image whose prompt runs read host rows (prompt_host_rows) the run's tokens' rows."""
-    progs, names = entry
+    progs, names = _ready(eng, entry), entry[1]
     if getattr(eng.image, "prompt_host_rows", False):
         eng._write_host_rows(tokens)
     if names:
@@ -566,13 +602,23 @@ def chunks(eng, tokens, head: bool = True):
         return
     write_tokens(eng, p0, tokens)
     for p, R, kind in split(p0, P, lambda b: r_max(eng, b), eng.block, conv_k(eng)):
-        kind = kind if head else "P"
-        progs = programs(eng, p, R, kind)
-        if kind == "L":
-            eng._prefetch(P)            # the first decode step's, while the device runs
-        eng.stats.append(run(eng, progs, p, R, tokens[p - p0:p - p0 + R]))
-        eng.poss[0] = p + R
-        yield tokens[p - p0:p - p0 + R], logits(eng, R) if kind == "L" else None
+        for q, n, k in _pieces(eng, p, R, kind if head else "P"):
+            if k == "L":
+                eng._prefetch(P)        # the first decode step's, while the device runs
+            eng.stats.append(run(eng, programs(eng, q, n, k), q, n, tokens[q - p0:q - p0 + n]))
+            eng.poss[0] = q + n
+            yield tokens[q - p0:q - p0 + n], logits(eng, n) if k == "L" else None
+
+
+def _pieces(eng, p: int, R: int, kind: str) -> list:
+    """A run of R rows at p as runs whose programs fit (the bucket's probe checks its tile
+    rows' only: _probe_tile): itself, or where its program does not fit TMEM, ACT RAM or IMEM
+    two halves (the last keeps the kind), each the same way. Every row's bits are the same
+    whatever its run (docs/tiled_prefill.md 11)."""
+    if R == 1 or _fits(lambda: programs(eng, p, R, kind)):
+        return [(p, R, kind)]
+    h = -(-R // 2)
+    return _pieces(eng, p, h, "P") + _pieces(eng, p + h, R - h, kind)
 
 
 def mtp(dec, tokens, st, pick=None, on_run=None, follow: int | None = None):
