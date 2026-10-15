@@ -944,6 +944,13 @@ def make_backend(name: str, spec, cap: int, dev: str | None, model: str | None =
             raise
         return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
                                             own_transport=True)), cfg
+    if name == "board-isa":                 # the card's driver over the ISA simulator
+        from opentpu.host.board import Board, BoardBackend, device_config
+        from opentpu.host.isaboard import IsaTransport
+        tr = IsaTransport()
+        tr.cfg = cfg = device_config(Board(tr, lock=False).info())
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "board-sim":
         from opentpu.host.board import BoardBackend, SimTransport, sim_config
         cfg = sim_config(spec, cap, lookup=lookup, wformat=wformat, head_format=head_format)
@@ -982,7 +989,8 @@ def panel_meta(eng, backend: str, dev: str, model: str, sp: dict, max_new: int,
     info = getattr(eng.backend, "info", None)
     meta = {"model": model, "backend": backend, "sampling": {**sp, "max_new": max_new},
             "weights": weights,
-            "device": {"board": dev, "board-sim": "Verilator board model"}.get(
+            "device": {"board": dev, "board-sim": "Verilator board model",
+                       "board-isa": "the card's driver on the ISA simulator"}.get(
                 backend, "ISA simulator (host)"), "dram": None,
             "short": f"{backend} {clock_mhz:g} MHz" if clock_mhz else backend}
     if getattr(eng, "server", None) is not None:        # a streamed MoE
@@ -1009,7 +1017,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="otpu-chat", description=__doc__.split("\n")[0])
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
-    ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
+    ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-isa", "board-sim",
+                                                             "rtl"])
     ap.add_argument("--dev", default=None,
                     help="board device (default: OTPU_DEVICE or /dev/xdma0; f2:0 for F2 slot 0)")
     ap.add_argument("--clock-mhz", type=float,

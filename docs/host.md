@@ -656,7 +656,13 @@ otpu-chat --backend board --model lfm2-8b --pool /data/lfm8b.bin  # a pool elsew
 - `--mtp`, `--per-position` and `--backend board-sim` are not supported.
 
 `--backend board-sim` runs the same driver against the Verilator board model (bit-exact, but
-minutes per token for the real model; use it with small models).
+minutes per token for the real model; use it with small models). `--backend board-isa`
+(otpu-chat, otpu-serve) runs it against the ISA simulator (opentpu/host/isaboard.py: the
+card's registers and memory over the simulator's DRAM; program loads with their wait entries,
+run arguments, the decode loop's token reads, staged KV copies, the compile worker processes),
+the ISA's bits at the ISA simulator's speed: the card's host path on a host without one. Its
+transport counts the simulator's seconds and the bytes the host moved (`counters()`);
+tools/ttft_probe.py times a served request's host work with it.
 
 ### The KV cache across turns
 
