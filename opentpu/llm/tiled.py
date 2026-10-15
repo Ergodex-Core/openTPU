@@ -1012,7 +1012,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
                 k = ol.dot(xs, lw.wk[j * d:(j + 1) * d, :])
                 v = k if lw.same else ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
                 kr = _rope_rows_g(rmsnorm(k, kn, eps), c, s_, ol.empty([T, d]))
-                vr = rmsnorm(v, None, eps)
+                vr = rmsnorm(v, None, eps) if spec.v_norm else v
                 for r in range(T):
                     ol.kv_append(kv, j, _slot(m, lw.kind, rows[r]), kr[r:r + 1, :],
                                  vr[r:r + 1, :])
@@ -1027,7 +1027,8 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
                 del qg
             del q
 
-        _heads_loop(kv, heads, T, G, gs, P, d, d, block, depth, ol.LOG2E, oscr, loop >= 2,
+        _heads_loop(kv, heads, T, G, gs, P, d, d, block, depth, ol.LOG2E * spec.attn_scale,
+                    oscr, loop >= 2,
                     lquery, tspan)
     made, ent, qhs, kvh, seqs = {}, [], [], [], []
 
@@ -1038,7 +1039,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
             k = ol.dot(xs, lw.wk[j * d:(j + 1) * d, :])
             v = k if lw.same else ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
             kr = _rope_rows_g(rmsnorm(k, kn, eps), c, s_, ol.empty([T, d]))
-            vr = rmsnorm(v, None, eps)
+            vr = rmsnorm(v, None, eps) if spec.v_norm else v
             for r in range(T):
                 ol.kv_append(kv, j, _slot(m, lw.kind, rows[r]), kr[r:r + 1, :], vr[r:r + 1, :])
             del k, v, kr, vr
@@ -1088,7 +1089,8 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
         del o
 
     if not looped:
-        _attend_heads(qhs, kv, kvh, seqs, block, ol.LOG2E, depth=depth, emit=emit)
+        _attend_heads(qhs, kv, kvh, seqs, block, ol.LOG2E * spec.attn_scale,
+                      depth=depth, emit=emit)
     xs = qn = kn = None                        # (the norm gains: _attention_tile's)
     if whole:                                  # (the scratch's rows back: the stores before)
         if o_all is None:
@@ -1133,7 +1135,8 @@ def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool
         x = res.x
         y = ol.empty([T, spec.hidden])
         _mlp_tile(x, lw, spec, parts, sub(lw), act=gelu_tanh, g=lw.g_pre, out=y)
-        _add_norm(x, y, ol.load(lw.g_ffn), spec.eps, None if spec.ple_dim else ol.load(lw.ls))
+        _add_norm(x, y, ol.load(lw.g_ffn), spec.eps,
+                  None if spec.ple_dim or not spec.layer_scale else ol.load(lw.ls))
         del y
         if spec.ple_dim:
             _ple(x, lw, spec)

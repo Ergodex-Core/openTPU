@@ -67,7 +67,8 @@ from opentpu.llm.qwen3 import Engine, load_weights
 # command-line flags override them. LFM2's are LFM2.5-230M's generation_config.json; Qwen3's
 # and Qwen3.5's their model cards' non-thinking settings (Qwen3.5's without the presence
 # penalty); Gemma 4's its checkpoints' generation_config.json (the instruct and base ones').
-SAMPLING = {"qwen3": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
+SAMPLING = {"gemma3": dict(temperature=1.0, top_k=64, top_p=0.95, repetition_penalty=1.0),
+            "qwen3": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
             "lfm2": dict(temperature=0.1, top_k=50, top_p=1.0, repetition_penalty=1.05),
             "qwen35": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
             "gemma4": dict(temperature=1.0, top_k=64, top_p=0.95, repetition_penalty=1.0)}
@@ -927,23 +928,28 @@ def load_tokenizer(path):
     return get
 
 
-def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
+def make_backend(name: str, spec, cap: int, dev: str | None, model: str | None = None,
                  lookup: bool = False, wformat: str = "int8", head_format: str | None = None):
     """(backend, configuration) for Engine (lookup: room for the resident decode's tables;
     the weight formats size the board model's DRAM where an int8 image would not fit)."""
     if name == "isa":
         return "isa", None
     if name == "board":
-        from opentpu.host.board import (Board, BoardBackend, XdmaTransport,   # the PCIe driver
-                                        device_config)
-        tr = XdmaTransport(dev)
-        cfg = device_config(Board(tr, lock=False).info())     # MCOLS / LANES of the bitstream
-        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
+        from opentpu.host.board import Board, BoardBackend, device_config, open_transport
+        tr = open_transport(dev)
+        try:
+            cfg = device_config(Board(tr, lock=False).info())  # MCOLS / LANES of the bitstream
+        except BaseException:
+            tr.close()
+            raise
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "board-sim":
         from opentpu.host.board import BoardBackend, SimTransport, sim_config
         cfg = sim_config(spec, cap, lookup=lookup, wformat=wformat, head_format=head_format)
         tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
-        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "rtl":
         from opentpu.llm.rtl_backend import RtlBackend
         return RtlBackend, None
@@ -1004,7 +1010,8 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
     ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
-    ap.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix (--backend board)")
+    ap.add_argument("--dev", default=None,
+                    help="board device (default: OTPU_DEVICE or /dev/xdma0; f2:0 for F2 slot 0)")
     ap.add_argument("--clock-mhz", type=float,
                     help="core clock, to turn device cycles into tokens/s (default: the "
                          "bitstream's CORE_KHZ, or 100 on a register map 1 bitstream)")
