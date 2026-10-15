@@ -136,6 +136,21 @@ class Res:
         return self.x
 
 
+def _sync_frames() -> None:
+    """Re-read the cached locals of the frames from the caller's up (compiler.unnamed reads
+    f_locals; on Python <= 3.12 that leaves a snapshot dict on each frame it walks, which keeps
+    tiles alive after their names are deleted or rebound, until the frame's locals are read
+    again: TMEM a tiled run's next tiles cannot have). Reading them drops the stale names.
+    Python 3.13's f_locals is a view (PEP 667): nothing to do."""
+    import sys
+    if sys.version_info >= (3, 13):
+        return
+    f = sys._getframe(1)
+    while f is not None:
+        f.f_locals
+        f = f.f_back
+
+
 def _alloc_at(base: int, shape, rs: int):
     """A tile at TMEM word `base` (Res.back: a loop-carried tile back in its own words), which
     no live tile may hold."""
@@ -582,15 +597,22 @@ def down_chunk(wg, wd) -> int:
     return _chunk(wg.shape[0], D, D if wd.wf == 0 else 2 * D)
 
 
-def _mlp_tile(x, lw, spec, parts: int, sub: int, act=silu, g=None, out=None, xs=None):
+def _mlp_tile(x, lw, spec, parts: int, sub: int, act=silu, g=None, out=None, xs=None,
+              res=None, abuf=None):
     """x + W_down(act(W_gate xn) * (W_up xn)) for T rows (xn: x normed by g, default
     lw.g_post): every chunk's activation quantized once and kept in ACT RAM (the C columns of
     a W_down part: one QACT, as swiglu_down's, of the chunk made `sub` columns at a time into
     a [T, C] tile when sub < C), then the down projection by `parts` parts of its output
     columns, each summing the chunks in swiglu_down's order (the same bits). out: the MLP's
     output into that [T, H] tile instead (_add_parts). xs: the operand, quantized already (x
-    then may be None, with out)."""
-    if xs is None:
+    then may be None, with out). res (x None, with out): the rows are res.x, spilled once
+    the operand is quantized (Res.spill: their TMEM free for the MLP's tiles; Res.back
+    after). abuf: a [T, C] tile (the caller's) for the chunks' activations when sub < C, in
+    place of one a chunk."""
+    if res is not None:
+        xs = _norm_quantize(res.x, lw.g_post if g is None else g, spec.eps)
+        res.spill()
+    elif xs is None:
         xs = _norm_quantize(x, lw.g_post if g is None else g, spec.eps)
     wg, wu, wd = lw.wg, lw.wu, lw.wd
     T = (out if x is None else x).rows
@@ -612,12 +634,14 @@ def _mlp_tile(x, lw, spec, parts: int, sub: int, act=silu, g=None, out=None, xs=
             acts[c0] = ol.quantize(act(g) * u, free=True)
         else:
             if s0 == 0:
-                a = ol.empty([T, C])
+                a = ol.empty([T, C]) if abuf is None else abuf
             a[:, s0:s0 + sub].set(act(g) * u)
             if s0 + sub == C:
                 acts[c0] = ol.quantize(a, free=True)
                 a = None
         del g, u
+        if res is not None:             # (the pieces' tiles free: Gemma's tiles fill TMEM)
+            _sync_frames()
     xs = nxt = None                     # the operand's ACT blocks are free for the down MMs
     _add_parts(out if x is None else x, [acts[c0] for c0 in starts],
                [wd[:, c0:c0 + C] for c0 in starts], parts, out)
@@ -968,14 +992,17 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
     d] tile), or quantized as the part ends (a QACT range each, as _attention_tile's); then W_o
     by output parts into [T, H] and the post-norm. Each row's arithmetic is _attention's. x:
     res.x, spilled while the heads attend (Res). loop: the heads' and tiles' hardware loops
-    (_gemma_attention_loop) at this level where they apply (_attention_tile's)."""
+    (_gemma_attention_loop) at this level where they apply (_attention_tile's). ropes: [T, rw]
+    RoPE rows, or ropes(c0, n) loading the layer kind's n columns from c0."""
     from ..kernels.lib import rmsnorm
     from .gemma4 import SLIDE, _RowPos, _add_norm, _full_seq, _slide_seq, _slot
     spec = m.spec
     d, nkv, eps = lw.hd, lw.nkv, spec.eps
     G = spec.n_q // nkv
     c0, nr = (0, spec.head_dim // 2) if lw.kind == SLIDE else (spec.head_dim, spec.global_rot)
-    c, s_ = ropes[:, c0:c0 + nr], ropes[:, c0 + nr:c0 + 2 * nr]
+    rp = ropes(c0, 2 * nr) if callable(ropes) else ropes[:, c0:c0 + 2 * nr]
+    c, s_ = rp[:, 0:nr], rp[:, nr:2 * nr]
+    del rp
     kv = lw.kv
     rows = [_RowPos(pos, r) for r in range(T)]
     span = _slide_seq if lw.kind == SLIDE else _full_seq
@@ -1017,6 +1044,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
                     ol.kv_append(kv, j, _slot(m, lw.kind, rows[r]), kr[r:r + 1, :],
                                  vr[r:r + 1, :])
                 del k, v, kr, vr
+                _sync_frames()                 # (their TMEM for the queries)
 
         def lquery(hq, Qv):                    # heads hq .. hq + gs, normed and RoPE'd in place
             q = Qv[0:T, :]
@@ -1030,6 +1058,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
         _heads_loop(kv, heads, T, G, gs, P, d, d, block, depth, ol.LOG2E * spec.attn_scale,
                     oscr, loop >= 2,
                     lquery, tspan)
+        _sync_frames()
     made, ent, qhs, kvh, seqs = {}, [], [], [], []
 
     def part(j, g0, g1):
@@ -1091,7 +1120,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
     if not looped:
         _attend_heads(qhs, kv, kvh, seqs, block, ol.LOG2E * spec.attn_scale,
                       depth=depth, emit=emit)
-    xs = qn = kn = None                        # (the norm gains: _attention_tile's)
+    xs = qn = kn = c = s_ = None               # (the norm gains: _attention_tile's; RoPE)
     if whole:                                  # (the scratch's rows back: the stores before)
         if o_all is None:
             o_all = ol.load(oscr[0:T, 0:spec.n_q * d])
@@ -1106,12 +1135,15 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
 
 @ol.jit
 def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool = False,
-                depth: int = ATTN_DEPTH, whole: bool = True, oscr: bool = True, loop: int = 2):
+                depth: int = ATTN_DEPTH, whole: bool = True, oscr: bool = True, loop: int = 2,
+                sub: int = 0):
     """gemma4_step's rows tiled: T rows of a prompt run (pos a RunRows with the image's mask
     tiles), their tokens gathered from out[] and per-layer inputs as gemma4_step's; per layer
     the tiled attention, the dense MLP (GeGLU) tiled into [T, H] for its post-norm, the
     per-layer input block as gemma4._ple. spill: x in the I/O area's input rows while each
-    layer's heads attend and W_o runs (Res). depth, whole: as qwen3_tile's."""
+    layer's heads attend and W_o runs (Res). depth, whole: as qwen3_tile's. sub: the MLP's
+    gate / up columns an MM where it divides a layer's down chunk and is wider than mlp_sub's
+    (0, or not: mlp_sub's)."""
     from ..kernels.lib import gelu_tanh
     from .gemma4 import _add_norm, _gathered_out, _ple, _ple_inputs, _pos_rows
     from .qwen3 import fill_logits
@@ -1119,22 +1151,38 @@ def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool
     spec = m.spec
     if not isinstance(pos, RunRows) or pos.amask is None or spec.experts:
         raise CompileError("a tiled Gemma 4 run is a dense model's prompt run with mask tiles")
-    ropes = _pos_rows(m, pos, T, masks=False)   # (first: x's gather leaves the next-fit
-    x = _gathered_out(m, pos)                   # cursor past its temporaries, TMEM split)
-    x.set(x * math.sqrt(spec.hidden))           # (in place: one [T, H] tile)
-    if spec.ple_dim:
-        _ple_inputs(m, x, None)
-    res = Res(x, m.x[0:T, :] if spill else None)
-    del x
-    parts, sub = _widths(m, T)
+
+    def ropes(c0, n):                           # a layer kind's RoPE rows, in its attention
+        return ol.load(m.rope_t[pos.pos:pos.pos + T, c0:c0 + n])  # (TMEM for the MLP's)
+
+    if T * m.rw <= ol.tmem_words() // 16:       # (small: once for the run, fewer loads)
+        ropes = _pos_rows(m, pos, T, masks=False)
+
+    def embed():                                # (x a local of its own frame: none of this
+        x = _gathered_out(m, pos)               # one's, whose locals a trace's snapshot can
+        x.set(x * math.sqrt(spec.hidden))       # keep, holds it once Res spills it)
+        if spec.ple_dim:
+            _ple_inputs(m, x, None)
+        return x
+
+    res = Res(embed(), m.x[0:T, :] if spill else None)
+    parts, subw = _widths(m, T)
+
+    def sub_of(lw):                             # (the form's where wider than mlp_sub's)
+        C, w = down_chunk(lw.wg, lw.wd), subw(lw)
+        return sub if w < sub < C and C % sub == 0 and sub % ol.block_size() == 0 else w
 
     def layer(li, it=None, jt=None):
         lw = m.layer(li, it, jt)
         _gemma_attention_tile(res, lw, m, pos, ropes, T, block, parts, depth, whole,
                               _oscr(m, oscr), loop)
-        x = res.x
-        y = ol.empty([T, spec.hidden])
-        _mlp_tile(x, lw, spec, parts, sub(lw), act=gelu_tanh, g=lw.g_pre, out=y)
+        _sync_frames()
+        y = ol.empty([T, spec.hidden])          # the MLP's output rows, then its chunk's
+        C, sb = down_chunk(lw.wg, lw.wd), sub_of(lw)    # activation (_mlp_tile's abuf)
+        _mlp_tile(None, lw, spec, parts, sb, act=gelu_tanh, g=lw.g_pre, out=y, res=res,
+                  abuf=ol.empty([T, C]) if sb < C else None)
+        _sync_frames()
+        x = res.back()                          # (x out of TMEM in the MLP: its tiles')
         _add_norm(x, y, ol.load(lw.g_ffn), spec.eps,
                   None if spec.ple_dim or not spec.layer_scale else ol.load(lw.ls))
         del y
@@ -1157,6 +1205,7 @@ def gemma4_tile(m, pos, T: int, logit_rows, block: int = ATTN_BLOCK, spill: bool
             continue
         for it in ol.range(reps):
             unit(first, it)
+    _sync_frames()
     if logit_rows:
         _lm_head_rows(res.x, m, spec, list(logit_rows))
 
@@ -1389,6 +1438,9 @@ def _first_fit(trace, forms, cfg, levels: bool = False):
     raise err or skip
 
 
+GEMMA_SUBS = (384, 256)    # gemma4_tile's MLP piece widths tried before mlp_sub's (variants)
+
+
 def variants(fam: str, T: int, mcols: int) -> list:
     """A tiled run's forms, tried in order until one fits TMEM and ACT RAM: as it is; x spilled
     while the heads attend (Res); Qwen3.5's DeltaNet layers in runs of fewer rows (whole passes
@@ -1397,6 +1449,8 @@ def variants(fam: str, T: int, mcols: int) -> list:
     gathered in TMEM (wholes); a prompt run whose outputs do not fit takes fewer rows
     (prefill._probe_tile)."""
     out = [{}, {"spill": True}]
+    if fam == "gemma4":             # (the MLP's wider gate / up MMs first: fewer instructions)
+        out = [dict(f, sub=s) for f in out for s in GEMMA_SUBS] + out
     if fam == "qwen35":
         d = T
         while d > 1:

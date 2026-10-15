@@ -1675,10 +1675,13 @@ def _attention(x, lw, m, pos, ropes, block: int):
 
 def _add_norm(x, y, g, eps, scale=None):
     """x += norm(y) in place, then x *= scale (a [1] tile) if given. Rows of more than an
-    eighth of TMEM (4 prefill rows of E4B's hidden 2560) a row at a time, so the temporaries
-    are one row's; smaller ones as one tile (fewer instructions)."""
-    rows = [slice(0, x.rows)] if x.rows * x.cols <= ol.tmem_words() // 8 else \
-        [slice(r, r + 1) for r in range(x.rows)]
+    eighth of TMEM (4 prefill rows of E4B's hidden 2560) in groups of as many rows as a
+    sixteenth holds (at least one: E4B's a row at a time), so the temporaries are a group's;
+    smaller ones as one tile (fewer instructions). Each row's arithmetic is the same either
+    way."""
+    W = ol.tmem_words()
+    n = x.rows if x.rows * x.cols <= W // 8 else max(1, (W // 16) // x.cols)
+    rows = [slice(r, min(x.rows, r + n)) for r in range(0, x.rows, n)]
     for sl in rows:
         if scale is None:
             x[sl, :].set(x[sl, :] + rmsnorm(y[sl, :], g, eps))

@@ -135,6 +135,35 @@ def test_tiled_prompt_matches_decode(tiny):
     assert expected.argmax() == got.argmax()
 
 
+@pytest.mark.parametrize("P1, P2", [(20, 7), (250, 20)])
+def test_tiled_prompt_runs_are_todays(tiny, P1, P2):
+    """Gemma 3's tiled prompt runs (16 rows: x out of TMEM in the MLP, the MLP's gate / up in
+    pieces of tiled.GEMMA_SUBS, the RoPE rows a layer kind's) against today's prompt runs of
+    4 rows: the logits after each prompt (the second across the first bucket's end), the
+    layers' DRAM (KV caches, sliding rings) and the next step's logits, bit for bit."""
+    import dataclasses
+    _, W, spec, _ = tiny
+    cfg = dataclasses.replace(board_config(DRAM_BYTES=1 << 26), MCOLS=4, ACT_ROWS=16)
+    r = np.random.default_rng(P1)
+    p1, p2 = ([int(t) for t in r.integers(0, 256, n)] for n in (P1, P2))
+    a = Engine(spec, W, cap=1024, cfg=cfg, wformat="int8", resident=True, rows=16,
+               prompt_runs=True, tile_runs=True)
+    got = [a.prefill(p1), a.prefill(p2)]
+    assert max(a._prompt_tile.values()) == 16
+    b = Engine(spec, W, cap=1024, cfg=cfg, wformat="int8", resident=True, rows=16,
+               prompt_runs=True, tile_runs=False)
+    b._prompt_rmax = {k: (4, True) for k in range(5)}
+    want = [b.prefill(p1), b.prefill(p2)]
+    for x, y in zip(got, want):
+        assert np.array_equal(x.view(np.uint32), y.view(np.uint32))
+    img = a.image
+
+    def layers(e):
+        return e.backend.machine.slices[0].dram[img.layer0:img.head[0]]
+    assert np.array_equal(layers(a), layers(b))
+    assert np.array_equal(a.step(5), b.step(5))
+
+
 def test_gguf_lazy_weights(tmp_path):
     gguf = pytest.importorskip("gguf")
     from opentpu import quant as Q
