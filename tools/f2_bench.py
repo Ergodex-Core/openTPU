@@ -130,11 +130,11 @@ def main(argv=None) -> None:
             load = time.perf_counter() - t0
             stream(name, "Hi.", 4)                                      # warm-up
             res = {"label": label, "load_s": load, "args": args}
-            for key, prompt in (("short", SHORT), ("long", LONG)):
-                res[key] = stream(name, prompt, a.max_tokens)
-                print(name, key, {k: (round(v, 3) if isinstance(v, float) else v)
-                                  for k, v in res[key].items() if k != "text"},
-                      repr(res[key]["text"][:120]), flush=True)
+            for which, prompt in (("short", SHORT), ("long", LONG)):
+                res[which] = stream(name, prompt, a.max_tokens)
+                print(name, which, {k: (round(v, 3) if isinstance(v, float) else v)
+                                    for k, v in res[which].items() if k != "text"},
+                      repr(res[which]["text"][:120]), flush=True)
             try:
                 res["server_stats"] = get("/v1/stats")
             except OSError:
