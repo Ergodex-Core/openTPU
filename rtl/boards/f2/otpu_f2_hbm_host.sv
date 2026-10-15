@@ -175,23 +175,25 @@ module otpu_f2_hbm_host #(
     .rclk(aclk), .rrst(arst), .rvalid(rr_v), .rready(r_tk), .rdata(rr_d));
 
   // ================================================================== hclk: writes
+  // The head beat in registers (hw_*: its port one-hot, or none past the last port), so the
+  // ports' valids are flip-flops and the crossing's LUT RAM read and gray compare stay off the
+  // ports' arbitration (the f278ff5f synthesis: -0.9 ns at 450 MHz without them)
   logic [1:0]  ws;                      // 0: AW, 1: W low, 2: W high (last)
-  wire [PW-1:0] w_port = xw_a[27:23];
-  wire w_null = 32'(w_port) >= NPORT;
-  always_comb begin
-    p_awvalid = '0; p_wvalid = '0;
-    if (xw_v && !w_null) begin
-      if (ws == 2'd0) p_awvalid[w_port] = 1'b1;
-      else p_wvalid[w_port] = 1'b1;
-    end
-  end
-  assign p_awaddr = {xw_a, 6'd0};
-  assign p_wdata = ws == 2'd2 ? xw_d[511:256] : xw_d[255:0];
-  assign p_wstrb = ws == 2'd2 ? xw_s[63:32] : xw_s[31:0];
+  logic        hw_v, hw_null;
+  logic [27:0] hw_a;
+  logic [511:0] hw_d;
+  logic [63:0] hw_s;
+  logic [NPORT-1:0] hw_sel;
+  assign p_awvalid = (hw_v && ws == 2'd0) ? hw_sel : '0;
+  assign p_wvalid = (hw_v && ws != 2'd0) ? hw_sel : '0;
+  assign p_awaddr = {hw_a, 6'd0};
+  assign p_wdata = ws == 2'd2 ? hw_d[511:256] : hw_d[255:0];
+  assign p_wstrb = ws == 2'd2 ? hw_s[63:32] : hw_s[31:0];
   assign p_wlast = ws == 2'd2;
   wire hw_aw = |(p_awvalid & p_awready);
   wire hw_w = |(p_wvalid & p_wready);
-  assign xw_pop = xw_v && (w_null || (ws == 2'd2 && hw_w));
+  wire hw_end = hw_v && (hw_null || (ws == 2'd2 && hw_w));
+  assign xw_pop = xw_v && !hw_v;
   logic [15:0] btarget, bcnt, bgray;
   logic [5:0]  bsum;
   always_comb begin
@@ -199,46 +201,65 @@ module otpu_f2_hbm_host #(
     for (int p = 0; p < NPORT; p++) bsum += 6'(p_bvalid[p]);
   end
   always_ff @(posedge hclk) begin
+    if (xw_pop) begin
+      hw_a <= xw_a; hw_d <= xw_d; hw_s <= xw_s;
+      hw_null <= 32'(xw_a[27:23]) >= NPORT;
+      for (int p = 0; p < NPORT; p++) hw_sel[p] <= xw_a[27:23] == 5'(p);
+    end
     if (hrst) begin
-      ws <= '0; btarget <= '0; bcnt <= '0; bgray <= '0;
+      ws <= '0; hw_v <= 1'b0; btarget <= '0; bcnt <= '0; bgray <= '0;
     end else begin
-      if (xw_v && !w_null) begin
+      hw_v <= xw_pop || (hw_v && !hw_end);
+      if (hw_v && !hw_null) begin
         if (ws == 2'd0 && hw_aw) ws <= 2'd1;
         else if (ws != 2'd0 && hw_w) ws <= ws == 2'd2 ? 2'd0 : 2'd2;
       end
       // a B per beat (the ports' host B's, bready 1); a dropped beat counts at once
-      btarget <= btarget + 16'(bsum) + 16'(xw_v && w_null);
+      btarget <= btarget + 16'(bsum) + 16'(hw_v && hw_null);
       if (bcnt != btarget) bcnt <= bcnt + 1'b1;
       bgray <= bcnt ^ (bcnt >> 1);
     end
   end
 
   // ================================================================== hclk: reads
+  // the head read in registers (hr_*) as the head write; the port's R beats registered (rq_*)
+  // before they pair and cross
   logic [PW-1:0] cur;                   // the port the reads in flight are on
-  logic [RW:0]   h_out;                 // reads issued to it, not yet back
+  logic [NPORT-1:0] cur_sel;
+  logic [RW:0]   h_out;                 // reads issued to it, not yet back (or in rq)
   logic          r_hi;
   logic [255:0]  r_lo;
-  wire [PW-1:0] r_port = xr_a[27:23];
-  wire r_null = 32'(r_port) >= NPORT;
-  wire r_ok = xr_v && (h_out == 0 || r_port == cur);
-  always_comb begin
-    p_arvalid = '0;
-    if (r_ok && !r_null) p_arvalid[r_port] = 1'b1;
-  end
-  assign p_araddr = {xr_a, 6'd0};
+  logic          hr_v, hr_null;
+  logic [27:0]   hr_a;
+  logic [PW-1:0] hr_port;
+  logic [NPORT-1:0] hr_sel;
+  logic          rq_v;
+  logic [255:0]  rq_d;
+  wire r_ok = hr_v && (h_out == 0 || hr_port == cur);
+  assign p_arvalid = (r_ok && !hr_null) ? hr_sel : '0;
+  assign p_araddr = {hr_a, 6'd0};
   wire hr_ar = |(p_arvalid & p_arready);
-  // the port's R: two beats a host beat (in order: one ID, one port)
-  wire hr_r = p_rvalid[cur] && h_out != 0;
-  assign xr_pop = hr_ar || (r_ok && r_null && h_out == 0);
-  assign rt_push = (hr_r && r_hi) || (r_ok && r_null && h_out == 0);
-  assign rt_d = (r_ok && r_null && h_out == 0) ? '0 : {p_rdata[cur], r_lo};
+  wire r_zero = r_ok && hr_null && h_out == 0;        // a read past the last port: zeros
+  assign xr_pop = xr_v && !hr_v;
+  assign rt_push = (rq_v && r_hi) || r_zero;
+  assign rt_d = r_zero ? '0 : {rq_d, r_lo};
   always_ff @(posedge hclk) begin
+    if (xr_pop) begin
+      hr_a <= xr_a; hr_port <= xr_a[27:23];
+      hr_null <= 32'(xr_a[27:23]) >= NPORT;
+      for (int p = 0; p < NPORT; p++) hr_sel[p] <= xr_a[27:23] == 5'(p);
+    end
+    rq_d <= '0;
+    for (int p = 0; p < NPORT; p++) if (cur_sel[p]) rq_d <= p_rdata[p];
     if (hrst) begin
-      cur <= '0; h_out <= '0; r_hi <= 1'b0;
+      cur <= '0; cur_sel <= '0; h_out <= '0; r_hi <= 1'b0; hr_v <= 1'b0; rq_v <= 1'b0;
     end else begin
-      if (hr_ar) cur <= r_port;
-      h_out <= h_out + (RW + 1)'(hr_ar) - (RW + 1)'(hr_r && r_hi);
-      if (hr_r) begin r_hi <= !r_hi; if (!r_hi) r_lo <= p_rdata[cur]; end
+      hr_v <= xr_pop || (hr_v && !hr_ar && !r_zero);
+      if (hr_ar) begin cur <= hr_port; cur_sel <= hr_sel; end
+      // the port's R (one ID, one port: in order), a cycle late
+      rq_v <= |(p_rvalid & cur_sel) && h_out != 0;
+      h_out <= h_out + (RW + 1)'(hr_ar) - (RW + 1)'(rq_v && r_hi);
+      if (rq_v) begin r_hi <= !r_hi; if (!r_hi) r_lo <= rq_d; end
     end
   end
 
@@ -255,7 +276,7 @@ module otpu_f2_hbm_host #(
 `ifndef SYNTHESIS
   always_ff @(posedge hclk) if (!hrst) begin
     if (|(p_rvalid & ~(NPORT'(1) << cur))) $fatal(1, "otpu_f2_hbm_host: R from a port not read");
-    if (hr_r && h_out == 0) $fatal(1, "otpu_f2_hbm_host: R with no read in flight");
+    if (|(p_rvalid & cur_sel) && h_out == 0) $fatal(1, "otpu_f2_hbm_host: R with no read in flight");
   end
 `endif
 endmodule
