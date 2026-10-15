@@ -266,3 +266,59 @@ Open problems these numbers show:
 The result files are on the instance in `/home/ubuntu/opentpu/build/alex-inference/`:
 `*.json` and `*.log` for the correctness runs, `bench_alex200.json` and `bench*.out` for
 serving.
+
+### 3. Decode profile and roofline (2026-10-15)
+
+**Method.** Bytes per token come from the ISA ledger (`tools/dataflow.py MODEL decode 1 32
+--wformat W --head-format H`: every DRAM byte the decode program reads and writes, zero
+image, f2 target); cycles per token are the card's counters above (`timing.decode_cycles /
+decode_runs` of the section 1 JSON files, the same images). No RTL simulation: Verilator is
+not on the instance, so there is no per-phase cycle split from a co-sim here.
+
+**One law fits every model.** The two Bonsai-1.7B images run the same program with other
+weight bytes; their difference gives the memory rate alone: 25.49 M cycles for 815.2 MB, 31.99
+bytes a core cycle. A least-squares fit over all five images gives cycles = 0.67 M + bytes /
+31.93 B, every residual under 64 K cycles (0.3%):
+
+| Model | MB / token (layers, head, scales, KV) | Cycles / token | GB/s | Not streaming | VPU issue | 12.8 GB/s | 16 GB/s | Gap |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| Qwen3-0.6B int8 / int8 | 612.8 (440.4, 155.6, 7.4, 8.4) | 19.90 M | 6.16 | 0.74 M (3.7%) | 0.22 M | 20.9 tok/s | 26.1 tok/s | 2.60× |
+| Gemma-3-1B int8 / int8 | 1015.0 (697.8, 302.0, 11.7, 1.9) | 32.46 M | 6.25 | 0.73 M (2.2%) | 0.35 M | 12.6 | 15.8 | 2.56× |
+| Bonsai-1.7B int4 / int4 | 932.3 (704.6, 155.3, 62.8, 8.4) | 29.85 M | 6.25 | 0.70 M (2.4%) | 0.33 M | 13.7 | 17.2 | 2.56× |
+| Bonsai-1.7B int8 / int8 | 1747.4 (1409.3, 310.6, 17.9, 8.4) | 55.34 M | 6.32 | 0.70 M (1.3%) | 0.33 M | 7.3 | 9.2 | 2.53× |
+| Bonsai-4B int4 / int8 | 2356.5 (1816.7, 388.3, 139.3, 10.8) | 74.52 M | 6.32 | 0.84 M (1.1%) | 0.68 M | 5.4 | 6.8 | 2.53× |
+
+* *Not streaming*: the cycles minus bytes / 31.99 B, everything the token spends beyond the
+  weight stream at the memory's rate (VPU chains, barriers, the head's tail, the program's
+  start). *VPU issue*: the ledger's VPU issue cycles (`vpu_hack`'s model) if none overlapped:
+  GLU 44-78% of them, RoPE and q/k norms 10-16% each (Qwen3 family).
+* *12.8 / 16 GB/s*: tokens a second if the token's bytes moved at 80% of / at the DIMM's AXI
+  port (512 bits at 250 MHz, 16 GB/s; DDR4-2133 x64 is 17.1 GB/s). *Gap*: measured time over
+  bytes at 16 GB/s.
+* The image's memory is the slot's DDR4 DIMM through `sh_ddr`, not HBM: its source tree
+  (`/home/ubuntu/src/opentpu-7e42a626-d6cea33c`, `boards/f2/design/cl_opentpu.sv`) ties the
+  HBM interfaces off.
+
+**What this says.**
+
+* **Decode moves 6.2-6.3 GB/s whatever the model, 32 bytes a core cycle at 200 MHz,** a
+  quarter of port B (128 B a cycle) and 39% of the DIMM's port. Every model sits 2.5-2.6×
+  above its 16 GB/s roofline for this one reason.
+* **Everything that is not the weight stream is 1.1-3.7% of a token** (0.7-0.84 M cycles).
+  That is the upper bound for decode megakernels (fused norm / RoPE / quant epilogues, fewer
+  barriers, VPU overlapped with the stream) on this image: Qwen3-0.6B 10.05 -> 10.44 tok/s,
+  Gemma 3 6.16 -> 6.30, Bonsai-1.7B int4 6.70 -> 6.86, Bonsai-4B 2.68 -> 2.71 if all of it
+  went away. The VPU's whole issue time is under its share, so the VPU already overlaps the
+  stream almost entirely.
+* **The rate is the memory adapter's.** `otpu_f2_nch` issues one single-beat AXI read (64
+  bytes, len 0) per command, at most `ROD` = 32 in flight per channel, two channels: 4 KB in
+  flight. At 32 B a cycle that is a 128-cycle (640 ns) round trip, a plausible `sh_ddr` read
+  latency through the two clock crossings, so decode is latency × outstanding bound (Little's
+  law; inferred, not measured on the card). More reads in flight (`ROD`, `RD`'s credits) or
+  multi-beat bursts would raise it toward the port's 80 B a core cycle: an RTL change and an
+  FPGA build.
+* **Bytes are the other lever.** The int8 LM head is 25% of Qwen3-0.6B's token, 30% of
+  Gemma 3's and 16% of Bonsai-4B's; an int4 head (as Bonsai-1.7B already runs, 8/8 HF argmax)
+  halves it, block scales included: about -12% (Qwen3), -14% (Gemma 3), -8% (Bonsai-4B) of
+  the cycles, a numerics
+  decision. The int4 images' fp32 block scales are 6-7% of their bytes.
