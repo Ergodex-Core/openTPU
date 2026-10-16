@@ -126,6 +126,7 @@ def test_cfg_registers(have_verilator):
     # the board model's sequencer takes wait entries as the simulators' (rtlsim.UARCH SEQ_WC)
     assert cfg == T.build_config(T.current(), MCOLS=CFG.MCOLS, LANES=CFG.LANES,
                                  ACT_ROWS=CFG.act_rows, DSTEP=1, PORTB=CFG.PORTB,
+                                 ROWLANES=int(CFG.ROWLANES),
                                  SEQ_WC=int(bool(rtlsim.UARCH.get("SEQ_WC"))))
     assert t.reg_read(R.R_CFG_WIN0) == 0xDEADBEEF    # reserved
 
@@ -161,6 +162,7 @@ def test_caps2_coll_bar(have_verilator):
     # (the full unit named: the board's uarch builds the card's, BAR alone; rtlsim.BOARD_UARCH)
     full = SimTransport(ch_bytes=1 << 20, params={"COLL_GATHER": 1})
     pb = CFG.PORTB << R.CAP2_PORTB_SHIFT if CFG.PORTB > 1 else 0    # [3:1]: the wide port B
+    pb |= R.CAP2_ROWLANES if CFG.ROWLANES else 0                   # bit4: row lanes
     assert full.gather and full.reg_read_many([R_REGMAP, R.R_CAPS2]) == [5, pb | 1]
     # (SEQ_WC 0: the raw load below loads no wait entries, which the board's uarch would need)
     t = SimTransport(ch_bytes=1 << 20, params={"COLL_GATHER": 0, "SEQ_WC": 0},

@@ -401,6 +401,20 @@ GB/s: 83.5 tok/s (1.03 GB a token at 85% of the port).** On the card (78% of the
 Alex's image, docs/wide_port.md "Baseline on the board") the int4 point would be ~105-120: the
 int4 route halves the bytes, which is what the card's port efficiency needs.
 
+**The regression suites with the mode** (2026-10-17, Verilator 5.048; the mode on under
+`OTPU_ROWLANES=1 OTPU_PORTB=2 OTPU_PAIR=1`, the native path on `OTPU_NCH=4`; the machine
+shared, load ~24):
+| suite | mode off | mode on |
+|---|---|---|
+| tests/test_wide_port_rtl.py | 53 + 43 row-lane tests passed (its own matrix) | " |
+| tests/test_rtl.py (the board path) | 176 passed, 1 skipped (41 min) | 176 passed, 1 skipped |
+| tests/test_t2_rtl.py | 24 passed | 24 passed |
+| tests/test_observability.py (tb_board, SimTransport) | 18 passed | 18 passed (CAPS2 bit4, CFG_HASH of Config(PORTB=2, ROWLANES=True)) |
+| tests/test_row_lanes.py (ISA), test_wide_port, test_pair, test_target, test_compiler, test_t2, test_mx, test_f2_build (the p4rl / p4rl8 / p2rl snapshots) | 38 + 186 + 105 passed | - |
+Cycles at PORTB 1 and at PORTB 2 without the mode are unchanged: every RL term is a constant
+or a generate branch not taken (the PORTB 1 build's RL is 0), and the exact-cycle tests
+(test_wide_port_rtl's throughput, test_rtl's) pass as before.
+
 **Bonsai-2 2B**, the unfolded int4 path of docs/ternary.md 5 (9.69 M chunks a token: int4 5.70
 M, the int8 head 3.99 M; K = 2048, KB 16): at PORTB 2 row lanes buy nothing (int4 L 2 = N / 2 x
 8 advances = QUAD's N x 4; the rows align to the pair groups already); at PORTB 4 on MCOLS 8
