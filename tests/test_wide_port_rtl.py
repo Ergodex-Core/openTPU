@@ -94,9 +94,13 @@ CASES = [
 def test_wide_mm_rtl(have_verilator, monkeypatch, mem, fmt, mode, portb, KB, k0, M, mcols, soff):
     """QACT (DUP for PAIR, DUP4 for QUAD), then MMs over its rows: with scales, UNIT with RMAX,
     ACC with RMAX onto the first, UNIT with ACC and ASCALE."""
+    _wide_mm(monkeypatch, mem, fmt, mode, portb, KB, k0, M, mcols, soff)
+
+
+def _wide_mm(monkeypatch, mem, fmt, mode, portb, KB, k0, M, mcols, soff, aline=32):
     pair, quad = mode != "plain", mode == "quad"
     cfg = Config(S=1, D=D, MCOLS=mcols, PAIR=True, T2=fmt == "t2", PORTB=portb,
-                 DRAM_BYTES=1 << 20)
+                 DRAM_BYTES=1 << 20, ALINE=aline)
     rng = np.random.default_rng(1000 * KB + 100 * k0 + 10 * M + mcols + 7 * pair + 3 * quad +
                                 portb + soff + len(fmt))
     N = 11
@@ -267,17 +271,18 @@ def _rl_matrix(rng, fmt, N, K):
 def _rl_prog(cfg, fmt, L, N, KB, k0, x, rows, srows, rsc_mm=True):
     """QACT with L x blocks-a-chunk copies, then MM RL over the groups: with scales, UNIT with
     RMAX, ACC with RMAX onto the first, UNIT with ACC and ASCALE, and (rsc_mm) RSC over the
-    groups' Sw words alone; the weight groups at WB, the scale groups at SB, the RSC words at
-    SB2. Returns (prog, dram)."""
+    groups' Sw words alone; the weight groups at WB, the scale groups at SB (port-A lines of
+    cfg.ALINE), the RSC words at SB2. Returns (prog, dram)."""
     wf = Q.mxu_wf(fmt)
     bpc = I.blocks_per_chunk(wf)
     copies = L * bpc
     K = (k0 + KB) * D
+    line = cfg.ALINE
     dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
     _put(dram, X, x)
-    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D)
+    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D, line)
     _put(dram, WB, Q.rl_rows(rows, L, D))
-    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D))
+    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D, line))
     _put(dram, SB2, np.ascontiguousarray(srows[:, :4]))
     alpha = np.array([1.25], np.float32)
     _put(dram, AL, alpha)
@@ -326,15 +331,16 @@ def test_row_lanes_mm_rtl(have_verilator, monkeypatch, mem, fmt, L, portb, KB, k
         assert st["native_b"][0]["wide"] > 0 and st["native_b"][0]["split"] == 0, st["native_b"]
 
 
-@pytest.mark.parametrize("mem,nch", [("dram", None), ("nch", 8), ("nch", 16)])
-def test_row_lanes_mixed_rtl(have_verilator, monkeypatch, mem, nch):
+@pytest.mark.parametrize("mem,nch,aline", [("dram", None, 32), ("nch", 8, 32), ("nch", 16, 32),
+                                           ("dram", None, 64), ("nch", 8, 64)])
+def test_row_lanes_mixed_rtl(have_verilator, monkeypatch, mem, nch, aline):
     """One program at PORTB 4, MCOLS 8, T2, RL 8: QACT DUP8, then int8 RL 4, int4 RL 4 (eight
     streams), int8 QUAD, int4 RL 2, t2 RL 2, plain int8, int8 PAIR, nvfp4 RL 2, int8 RL 4 with
     ACC, fp4 QUAD, int8 RL 2 and int8 RL 4 with RSC, back to back: RL and non-RL commands
-    through the MXU's two heads."""
+    through the MXU's two heads; at a port-A line of 32 and of 64 bytes (ALINE)."""
     KB, N = 6, 13
     cfg = Config(S=1, D=D, MCOLS=8, PAIR=True, T2=True, PORTB=4, ROWLANES=True,
-                 DRAM_BYTES=1 << 21)
+                 DRAM_BYTES=1 << 21, ALINE=aline)
     rng = np.random.default_rng(41)
     dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
     x = _xrows(rng, 1, KB * D, D // 4, 3.0)
@@ -358,9 +364,9 @@ def test_row_lanes_mixed_rtl(have_verilator, monkeypatch, mem, nch):
                 ins = I.mm(wa, sa, out, N, KB, Q.rl_row_stride(K, fmt, L, D), N, 1, 0, 4 * L,
                            wf=wf, rl=L, rsc=True)
             else:
-                _put(dram, sa, Q.rl_scales(srows, fmt, K, L, D))
+                _put(dram, sa, Q.rl_scales(srows, fmt, K, L, D, aline))
                 ins = I.mm(wa, sa, out, N, KB, Q.rl_row_stride(K, fmt, L, D), N, 1, 0,
-                           Q.rl_scale_bytes(K, fmt, L, D), wf=wf, rl=L, acc=mode == "acc")
+                           Q.rl_scale_bytes(K, fmt, L, D, aline), wf=wf, rl=L, acc=mode == "acc")
         else:
             _put(dram, wa, rows)
             _put(dram, sa, srows)
@@ -431,3 +437,104 @@ def test_row_lanes_throughput_rtl(have_verilator, monkeypatch, mem):
         assert got == {"quad": 256 * 3, "rl": 256 * 9 // 4}, got
     else:
         assert got["rl"] < 0.85 * got["quad"] and split["rl"] == 0 and split["quad"] > 0, (got, split)
+
+
+# ======================================================= port A at 64 bytes a line (ALINE 64)
+# otpu_mxu / otpu_dram / otpu_native_dram ALINE (docs/row_lanes.md "Port A at 64 bytes"): a
+# scale request returns the aligned 64 bytes; the RL scale groups are 64-byte lines, so a group
+# whose header and first advance take more than 32 bytes (int4 L 4: H = A = 32) has its Sw in
+# the first advance's line instead of a request of its own: one port-A line an advance.
+A64_RL_CASES = [  # fmt, L, PORTB, KB, k0, N, MCOLS
+    ("int8", 4, 4, 9, 0, 13, 4), ("int8", 2, 2, 9, 2, 12, 4), ("int4", 4, 4, 9, 0, 13, 8),
+    ("int4", 4, 4, 3, 2, 5, 8), ("fp4", 4, 4, 6, 4, 9, 8), ("int4", 2, 2, 5, 2, 7, 4),
+    ("nvfp4", 2, 4, 4, 0, 8, 8), ("t2", 2, 2, 9, 0, 7, 8),
+]
+
+
+@pytest.mark.parametrize("mem", MEMS)
+@pytest.mark.parametrize("fmt,L,portb,KB,k0,N,mcols", A64_RL_CASES)
+def test_row_lanes_mm_aline64_rtl(have_verilator, monkeypatch, mem, fmt, L, portb, KB, k0, N,
+                                  mcols):
+    """MM RL over row-lane groups at 64-byte lines: bit for bit the ISA simulator's, and no
+    group's Sw fetched alone (stats["mxu_scale"] sw == 0: every group's Sw rides its first
+    advance's line, where at 32 bytes int4 L 4's took a request of its own)."""
+    cfg = Config(S=1, D=D, MCOLS=mcols, PAIR=True, T2=fmt == "t2", PORTB=portb, ROWLANES=True,
+                 DRAM_BYTES=1 << 20, ALINE=64)
+    rng = np.random.default_rng(1000 * KB + 100 * k0 + 10 * N + mcols + L + portb + len(fmt))
+    rows, srows = _rl_matrix(rng, fmt, N, (k0 + KB) * D)
+    x = _xrows(rng, 1, KB * D, D // 4)
+    prog, dram = _rl_prog(cfg, fmt, L, N, KB, k0, x, rows, srows,
+                          rsc_mm=fmt not in ("nvfp4", "t2"))
+    st = _run_both(cfg, prog, dram, mem, monkeypatch)
+    G, KBc = -(-N // L), -(-KB // I.blocks_per_chunk(Q.mxu_wf(fmt)))
+    rsc = fmt not in ("nvfp4", "t2")
+    # the scaled MM and the ACC one: a line an advance, the group's Sw in the first advance's
+    # line unless k0 puts that advance's data past the first line (so = H + k0 L bs >= 64);
+    # RSC: a line an advance too
+    alone = Q.rl_header(fmt, L) + k0 * L * Q.rl_block_bytes(fmt) >= 64
+    assert st["mxu_scale"][0] == {"areq": 2 * G * (KBc + alone) + (G * KBc if rsc else 0),
+                                  "sw": 2 * G * alone}, st["mxu_scale"]
+    if mem == "nch":
+        assert st["native_b"][0]["wide"] > 0 and st["native_b"][0]["split"] == 0, st["native_b"]
+
+
+# fmt, mode, PORTB, KB, k0, M, MCOLS, sa offset: a 4-bit / NVFP4 QUAD advance's 16 / 32 scale
+# bytes across a 64-byte line (int4: an advance's data at 56 of a line; nvfp4: at 48), and
+# across a 32-byte boundary inside a 64-byte line (no longer two requests)
+A64_CASES = [
+    ("int4", "quad", 2, 9, 8, 1, 4, 8), ("int4", "quad", 2, 9, 4, 2, 8, 24),
+    ("fp4", "quad", 4, 7, 4, 1, 4, 56), ("nvfp4", "quad", 2, 9, 0, 1, 4, 16),
+    ("nvfp4", "quad", 2, 5, 4, 1, 4, 48), ("int8", "quad", 4, 9, 0, 1, 4, 0),
+    ("int8", "pair", 2, 5, 2, 1, 4, 0), ("t2", "quad", 2, 9, 0, 1, 4, 0),
+    ("int8", "plain", 2, 4, 1, 4, 4, 0),
+]
+
+
+@pytest.mark.parametrize("mem", MEMS)
+@pytest.mark.parametrize("fmt,mode,portb,KB,k0,M,mcols,soff", A64_CASES)
+def test_wide_mm_aline64_rtl(have_verilator, monkeypatch, mem, fmt, mode, portb, KB, k0, M,
+                             mcols, soff):
+    """The wide port's column reuse (every format, PAIR / QUAD / plain) at a 64-byte port-A
+    line, bit for bit the ISA simulator's: the two-line QUAD reads at the line's new
+    boundaries, the Sw-line logic at 64."""
+    _wide_mm(monkeypatch, mem, fmt, mode, portb, KB, k0, M, mcols, soff, aline=64)
+
+
+@pytest.mark.parametrize("mem", ["dram", "nch"])
+def test_aline64_one_line_an_advance_rtl(have_verilator, monkeypatch, mem):
+    """int4 RL 4 at PORTB 4 / MCOLS 8 over 9-block rows (Gemma's K = 1152; 5 advances a group):
+    at 32-byte lines the group's Sw line is a request of its own (6 lines a group: the issuer
+    port-A bound at 1.2 lines an advance), at 64 it shares the first advance's line (5: one line
+    an advance, the MXU's rate) -- measured as the cycles 1024 more rows add (the issuer's head
+    start while the QACT runs, and the FIFO, hide 64 groups' lag: 256 groups show it) and the
+    scale reads counted."""
+    KB = 9
+    got, lines = {}, {}
+    for aline in (32, 64):
+        cfg = Config(S=1, D=D, MCOLS=8, PAIR=True, PORTB=4, ROWLANES=True, ALINE=aline,
+                     DRAM_BYTES=1 << 22)
+        rng = np.random.default_rng(11)
+        dram = rng.integers(0, 256, cfg.DRAM_BYTES, dtype=np.uint8)
+        x = rng.standard_normal((1, KB * D)).astype(np.float32)
+        _put(dram, X, x)
+        K = KB * D
+        cyc, ln = [], []
+        for N in (1024, 2048):
+            mm = I.mm(0x40000, 0x300000, OUT, N, KB, Q.rl_row_stride(K, "int4", 4, D), 1, 1, 0,
+                      Q.rl_scale_bytes(K, "int4", 4, D, aline), wf=I.W4I, rl=4)
+            prog = [I.ld(X, 0, x.size), I.qact(0, 1, 0, KB, KB * D, dup8=True), mm, I.halt()]
+            if mem == "nch":
+                monkeypatch.setenv("OTPU_NCH", "8")
+            _, _, st = rtlsim.run(cfg, [prog], [dram.copy()], axi=mem == "nch")
+            cyc.append(st["cycles"])
+            ln.append(st["mxu_scale"][0]["areq"])
+        got[aline] = cyc[1] - cyc[0]
+        lines[aline] = ln[1] - ln[0]
+    print(f"int4 RL 4 ({mem}): cycles for 1024 rows x {KB} blocks: {got}, port-A lines {lines}")
+    assert lines == {32: 256 * 6, 64: 256 * 5}, lines
+    if mem == "dram":
+        assert got[64] == 256 * 5 and 256 * 5 + 200 <= got[32] <= 256 * 6, got
+    else:       # (the native model's 20% stalls bound both at ~7 cycles a group here: the
+        assert got[64] <= 1.03 * got[32], got     # lines are the evidence; the whole-model
+                                                  # run on the HBM model is the measurement)
+

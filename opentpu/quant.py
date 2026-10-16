@@ -362,24 +362,40 @@ def rl_header(fmt: str, L: int) -> int:
     return max(4 * L, rl_adv_bytes(fmt, L))
 
 
+RL_ADV_MAX = 32     # the most scale bytes an RL advance reads (the MXU's scale entry: eight
+                    # slots of a word, nvfp4 four of eight bytes), whatever the port-A line
+
+
+def rl_sw_alone(fmt: str, L: int, line: int = 32) -> bool:
+    """Whether a group's Sw words take a port-A request of their own: the header and the first
+    advance's A bytes do not fit one line of `line` bytes (Config.ALINE: 32, or 64). int4 L 4
+    (H = A = 32) and int8 L 8 (H = 32, A = 8) do at 32, not at 64; int8 L 2 / 4 and int4 L 2
+    share the first advance's line at either."""
+    return rl_header(fmt, L) + rl_adv_bytes(fmt, L) > line
+
+
 def rl_lanes(fmt: str, portb: int, mcols: int) -> int:
     """The widest row-lane count L (2, 4, 8; 0: none) of a format on a configuration: L <=
     PORTB chunks a cycle, L x blocks-a-chunk columns (M = 1), and the advance's scale data
-    within one 32-byte port-A line."""
+    within the MXU's 32-byte scale entry (RL_ADV_MAX: one aligned read of a port-A line of
+    either size)."""
     best = 0
     for L in (2, 4, 8):
-        if L <= portb and L * per_chunk(fmt) <= mcols and rl_adv_bytes(fmt, L) <= 32:
+        if L <= portb and L * per_chunk(fmt) <= mcols and rl_adv_bytes(fmt, L) <= RL_ADV_MAX:
             best = L
     return best
 
 
-def rl_scale_bytes(K: int, fmt: str, L: int, D: int = 128) -> int:
+def rl_scale_bytes(K: int, fmt: str, L: int, D: int = 128, line: int = 32) -> int:
     """Bytes of one scale group (the MM's srs): the header, then a chunk's blocks of the L rows
-    per advance, rounded to 32-byte lines (the groups and their Sw line-aligned)."""
+    per advance, rounded to port-A lines of `line` bytes (Config.ALINE: the groups and their Sw
+    line-aligned, so the Sw shares the first advance's line where rl_sw_alone says it can)."""
     if K % D:
         raise ValueError(f"inner dimension {K} is not a multiple of D={D}")
+    if line not in (32, 64):
+        raise ValueError(f"a port-A line of {line} bytes (32 or 64)")
     KBc = -(-(K // D) // per_chunk(fmt))
-    return -(-(rl_header(fmt, L) + KBc * rl_adv_bytes(fmt, L)) // 32) * 32
+    return -(-(rl_header(fmt, L) + KBc * rl_adv_bytes(fmt, L)) // line) * line
 
 
 def rl_row_stride(K: int, fmt: str, L: int, D: int = 128) -> int:
@@ -405,17 +421,18 @@ def rl_rows(rows: np.ndarray, L: int, D: int = 128) -> np.ndarray:
                                 ).reshape(G, L * rb)
 
 
-def rl_scales(srows: np.ndarray, fmt: str, K: int, L: int, D: int = 128) -> np.ndarray:
+def rl_scales(srows: np.ndarray, fmt: str, K: int, L: int, D: int = 128,
+              line: int = 32) -> np.ndarray:
     """Scale rows [N, srs] (quantize_mxu's) in row-lane groups: [ceil(N / L), rl_scale_bytes],
     group g = the L rows' Sw, then block k's data of row g L + l at header + k L bs + l bs (rows
-    past N: Sw 0, data 0)."""
+    past N: Sw 0, data 0); `line`: the port-A line the groups are rounded to (Config.ALINE)."""
     srows = np.asarray(srows, np.uint8)
     N = srows.shape[0]
     KB = K // D
     bs, H = rl_block_bytes(fmt), rl_header(fmt, L)
     G = rl_groups(N, L)
     hdr = {"int8": 4, "int4": 8, "fp4": 8, "t2": 16, "nvfp4": 16}[fmt]
-    out = np.zeros((G, rl_scale_bytes(K, fmt, L, D)), np.uint8)
+    out = np.zeros((G, rl_scale_bytes(K, fmt, L, D, line)), np.uint8)
     sw = np.zeros((G * L, 4), np.uint8)
     sw[:N] = srows[:, :4]
     out[:, :4 * L] = sw.reshape(G, 4 * L)

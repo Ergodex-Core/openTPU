@@ -142,7 +142,8 @@ module otpu_native_dram #(
   // between the scale stream and the others
   parameter int APF = 32,
   parameter int NCH = 2,                             // channels (a power of two; see the top)
-  parameter int PORTB = 1                            // B chunks a request and response (see the top)
+  parameter int PORTB = 1,                           // B chunks a request and response (see the top)
+  parameter int ALINE = 32                           // port A's line: 32 (half a beat) or 64 (a beat)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -155,7 +156,7 @@ module otpu_native_dram #(
   input  logic [31:0]       a_wdata_x,
   input  logic [3:0]        a_be_x,
   output logic              a_rvalid,
-  output logic [255:0]      a_rdata,    // the aligned 32 bytes holding word a_addr (half a beat)
+  output logic [8*ALINE-1:0] a_rdata,   // the aligned ALINE bytes holding word a_addr (half a beat, or the beat)
   output logic              sw_rdy,
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,    // word address
@@ -728,7 +729,8 @@ module otpu_native_dram #(
   // MXU's scale FIFO block RAM in one cycle)
   always_ff @(posedge clk) begin
     a_rvalid <= !rst && a_out;
-    a_rdata <= a_src[256 * aoh.idx[3] +: 256];
+    if (ALINE >= 64) a_rdata <= a_src[8*ALINE-1:0];        // the whole 64-byte beat
+    else a_rdata <= a_src[256 * aoh.idx[3] +: 256];
   end
 
   // the tag FIFO writes its tail every cycle too (the slot is not live unless the FIFO is full),

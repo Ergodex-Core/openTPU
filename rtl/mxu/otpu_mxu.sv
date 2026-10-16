@@ -1,6 +1,6 @@
 // MXU, the MX column (docs/isa.md MM, docs/mx_mxu.md): streams N rows x KB blocks of weights from
 // DRAM (port B, one D-byte chunk per cycle, prefetched through a FIFO) and their scale rows (port
-// A, 32-byte lines), and reuses each chunk across up to MCOLS stationary rows held in ACT RAM. Each
+// A, ALINE-byte lines), and reuses each chunk across up to MCOLS stationary rows held in ACT RAM. Each
 // output is one exact integer, accumulated in its column end over the whole row:
 //   c   = sum_{i in g} act[j][i] * w[i]              group g: D/8 elements, a chain of the array
 //   sh  = W - dw(n, k, g) - da[j][k][g/2]            W 16 (int8x), 11 (int4x, fp4x6), 13 (nvfp4)
@@ -43,6 +43,13 @@
 // (the entry's L Sw words, per column into the result FIFO), RMAX the max over the lanes'
 // columns, ASCALE's one factor. RL is the streams the build has: 4 (QUAD's) or 8 (MCOLS 8: the
 // hops 64 bits a position, the PE select 4:1, four more scale decoders and entry slots).
+// Port A's line (ALINE, 32 or 64 bytes; docs/row_lanes.md "Port A at 64 bytes"): what one scale
+// request returns, the aligned ALINE bytes holding the word asked for. Every window into the
+// line (the tags' byte offset, the Sw word, the same-line compares, a QUAD advance's data across
+// two lines) is indexed by the line's size; an RL advance's A <= 32 bytes and a group's Sw words
+// never cross a line of either size, and at 64 the Sw of a group whose header and first advance
+// take 33 .. 64 bytes (int4 L 4: H = A = 32; int8 L 8) shares the first advance's line instead
+// of a request of its own: one line an advance.
 //
 // The array is the systolic one (docs/mxu_systolic.md): chains of CLS = min(CL, D/8) products
 // (DSP48 cascades), so that every chain end is one group. A column end (otpu_mxce, rtl/tech) takes
@@ -54,7 +61,7 @@
 // to nearest even), the two multiplies, then the TMEM write or the read-modify-write (ACC, ASCALE)
 // as before; everything after the result FIFO advances only while the TMEM grant is given.
 //
-// The scale reader: for every advance the issuer asks port A for the 32-byte line that holds the
+// The scale reader: for every advance the issuer asks port A for the ALINE-byte line that holds the
 // advance's block data (int8x: one byte; int4x / fp4x6: a word, PAIR two; NVFP4: eight bytes,
 // PAIR sixteen; RSC: Sw), and for a row's Sw: in the same line when Sw is in the line of the row's
 // first advance or of the previous row's last one, else in a request of its own (a cycle without
@@ -87,6 +94,7 @@ module otpu_mxu
   parameter bit T2    = 1'b0,    // t2 weights and MM QUAD (docs/ternary.md; CAPS bit28)
   parameter int PORTB = 1,       // chunks a cycle on port B (1, 2, 4; docs/wide_port.md)
   parameter int RL    = 0,       // row lanes: the weight streams, 0 (none), 4 or 8 (docs/row_lanes.md)
+  parameter int ALINE = 32,      // port A's line, bytes (32, 64): a scale request's response
   parameter int SID   = 0
 ) (
   input  logic                  clk,
@@ -120,7 +128,7 @@ module otpu_mxu
   output logic [31:0]           a_addr,
   input  logic                  a_gnt,
   input  logic                  a_rvalid,
-  input  logic [255:0]          a_rdata,     // the aligned 32 bytes holding word a_addr
+  input  logic [8*ALINE-1:0]    a_rdata,     // the aligned ALINE bytes holding word a_addr
   output logic                  b_req,
   output logic [31:0]           b_addr,
   output logic [1:0]            b_n,         // PORTB > 1: the request's chunks - 1 (0 else)
@@ -178,6 +186,11 @@ module otpu_mxu
   localparam int NS = (RL >= 8) ? 8 : QD ? 4 : 2;
   localparam int NSW = (NS >= 8) ? 2 : 1;
   localparam int NSX = (NS >= 8) ? 8 : 4;
+  // port A's line: LB address bits, LW bits of data, LWW bits of word index
+  localparam int LB  = $clog2(ALINE);
+  localparam int LW  = 8 * ALINE;
+  localparam int LWW = LB - 2;
+  initial if (ALINE != 32 && ALINE != 64) $fatal(1, "otpu_mxu: ALINE 32 or 64");
 
   // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL
   function automatic logic [MW-1:0] drain_run(input logic [15:0] ors);
@@ -505,7 +518,7 @@ module otpu_mxu
   // offset 24 / 16; the ISA aligns them to 8 / 16 bytes): the first line alone first (i_spx, a
   // cycle without a chunk, as i_sws), then the advance with the second line (i_sp2)
   wire i_qw     = WP && i_qd && !i_t2 && i_w4 && !i_unit && !i_rsc && !i_rl;
-  wire i_spx    = i_qw && !i_sws && !i_sp2 && (i_wf == WF_NV ? scale_addr[4] : &scale_addr[4:3]);
+  wire i_spx    = i_qw && !i_sws && !i_sp2 && (i_wf == WF_NV ? &scale_addr[LB-1:4] : &scale_addr[LB-1:3]);
   wire need_b   = !i_sws && !i_spx && adv_b;
   wire need_a   = !i_unit && (i_sws || !i_rsc || adv_b);
   wire want_iss = i_act && (!need_b || occ < (PW+1)'(DEPTH)) && (!need_a || !tg_n[TDW]);
@@ -514,14 +527,14 @@ module otpu_mxu
   typedef struct packed {
     logic [1:0] wf;
     logic       pair, rsc;
-    logic [4:0] doff;          // the block data's byte in the line
+    logic [LB-1:0] doff;       // the block data's byte in the line
     logic [1:0] hv;            // the entry's halves it writes (01 low, 10 high, 11 both)
     logic       ent;           // it writes the entry (data, or RSC's Sw)
     logic       cpl;           // ... and completes it
     logic       swe;           // the entry's Sw is this line's word swo
-    logic [2:0] swo;
+    logic [LWW-1:0] swo;
     logic       swr;           // the next rows' Sw is this line's word sro (Sw-only: the row's)
-    logic [2:0] sro;
+    logic [LWW-1:0] sro;
     // t2 (T2): the entry holds the chunk's four words, {Sw, w1, w0} and {w3, w2}. Without PAIR
     // block 4c (4c+2) is staged (stg: r_pw) and written with 4c+1 (4c+3) as {w, r_pw} (pk); a
     // row's last block alone is written as {0, w}. PAIR: the two words of an advance (x8), as
@@ -542,9 +555,9 @@ module otpu_mxu
     a_tag.wf = i_wf; a_tag.pair = i_pair; a_tag.rsc = i_rsc;
     a_tag.t2 = i_t2; a_tag.qd = i_qd;
     a_tag.rl = i_rl; a_tag.lg = i_lg;
-    a_tag.doff = scale_addr[4:0];
-    a_tag.swo = srow_addr[4:2];
-    a_tag.sro = i_sws ? srow_addr[4:2] : srow_next[4:2];
+    a_tag.doff = scale_addr[LB-1:0];
+    a_tag.swo = srow_addr[LB-1:2];
+    a_tag.sro = i_sws ? srow_addr[LB-1:2] : srow_next[LB-1:2];
     if (i_sws) begin
       a_tag.swr = 1'b1;
     end else if (i_rsc) begin
@@ -672,7 +685,7 @@ module otpu_mxu
   logic [TDW-1:0] tg_t, tg_h;
   always_ff @(posedge clk) if (a_req) tgm[tg_t] <= a_tag;
   logic        rv1;
-  logic [255:0] ln1;
+  logic [LW-1:0] ln1;
   atag_t       tg1;
   always_ff @(posedge clk) begin
     rv1 <= !rst && a_rvalid;
@@ -690,27 +703,28 @@ module otpu_mxu
   logic [127:0] r_wd3;                      // RL 8: slots 4 .. 7 (32 bits each)
   logic [7:1][31:0] r_swh;                  // RL: the group's other lanes' Sw words (0: r_sw)
   logic        r_we0, r_we1, r_we2;
-  logic [255:0] r_stl;                      // PORTB > 1: the staged first line (spl)
+  logic [LW-1:0] r_stl;                     // PORTB > 1: the staged first line (spl)
   always_comb begin
     logic [7:0]   xb, xb2;
     logic [31:0]  xw;
     logic [63:0]  x8;
     logic [127:0] x16;
-    logic [511:0] x2;
-    logic [255:0] x32, xa;
+    logic [2*LW-1:0] x2;
+    logic [255:0] x32, x32l, xa;
     logic [63:0]  h0, h1;
     logic [127:0] h2, h3;
     logic [15:0]  x2b;
     xb  = ln1[8 * tg1.doff +: 8];
-    xb2 = ln1[8 * {tg1.doff[4:1], 1'b1} +: 8];          // int8 PAIR: the odd block's byte
-    x2b = ln1[16 * tg1.doff[4:1] +: 16];
-    xw  = ln1[32 * tg1.doff[4:2] +: 32];
-    x8  = ln1[64 * tg1.doff[4:3] +: 64];
-    x16 = ln1[128 * tg1.doff[4] +: 128];
+    xb2 = ln1[8 * {tg1.doff[LB-1:1], 1'b1} +: 8];       // int8 PAIR: the odd block's byte
+    x2b = ln1[16 * tg1.doff[LB-1:1] +: 16];
+    xw  = ln1[32 * tg1.doff[LB-1:2] +: 32];
+    x8  = ln1[64 * tg1.doff[LB-1:3] +: 64];
+    x16 = ln1[128 * tg1.doff[LB-1:4] +: 128];
+    x32l = 256'(ln1 >> (256 * (tg1.doff >> 5)));          // the aligned 32 bytes (ALINE 64)
     // a 4-bit / NVFP4 QUAD advance's 16 / 32 bytes (8-byte aligned): from the line, or across
     // the staged line and this one (sp2)
     x2  = (WP && tg1.sp2) ? {ln1, r_stl} : {ln1, ln1};
-    x32 = x2[64 * tg1.doff[4:3] +: 256];
+    x32 = x2[64 * tg1.doff[LB-1:3] +: 256];
     // RL: the advance's A-byte window (A-aligned: 2, 4, 8, 16 or 32 bytes by the format and
     // L), slot s = its bytes s bs .. (lane s mod L, block s / L)
     case ((tg1.wf == WF_W8) ? 32'(1) << tg1.lg : (tg1.wf == WF_NV) ? 32'(16) << tg1.lg :
@@ -719,7 +733,7 @@ module otpu_mxu
       4: xa = 256'(xw);
       8: xa = 256'(x8);
       16: xa = 256'(x16);
-      default: xa = ln1;
+      default: xa = x32l;
     endcase
     h2  = '0; h3 = '0;
     if (tg1.rsc) begin
@@ -768,8 +782,8 @@ module otpu_mxu
   // group's), r_swl[0] being r_sw itself
   wire [7:0][31:0] r_swle, r_swlr;
   for (genvar c = 0; c < 8; c++) begin : g_swl
-    assign r_swle[c] = ln1[32 * 3'(tg1.swo + 3'(c)) +: 32];
-    assign r_swlr[c] = ln1[32 * 3'(tg1.sro + 3'(c)) +: 32];
+    assign r_swle[c] = ln1[32 * LWW'(tg1.swo + LWW'(c)) +: 32];
+    assign r_swlr[c] = ln1[32 * LWW'(tg1.sro + LWW'(c)) +: 32];
   end
   always_ff @(posedge clk)
     if (rv1) begin
@@ -779,7 +793,7 @@ module otpu_mxu
         if (tg1.swr) r_swh <= r_swlr[7:1];
         else if (tg1.swe) r_swh <= r_swle[7:1];
       end
-      if (T2 && tg1.stg) r_pw <= ln1[32 * tg1.doff[4:2] +: 32];
+      if (T2 && tg1.stg) r_pw <= ln1[32 * tg1.doff[LB-1:2] +: 32];
       if (WP && tg1.spl) r_stl <= ln1;
     end
   logic [95:0] sr0;                          // the S0 scale entry: {Sw, low block}, high block
@@ -1364,7 +1378,7 @@ module otpu_mxu
     if (a_req && i_rl && !i_sws && !i_rsc && (scale_addr & (32'(i_sstep) - 1)) != 0)
       $fatal(1, "otpu_mxu: RL scales misaligned (%h, %0d bytes an advance)", scale_addr, i_sstep);
   always @(posedge clk)
-    if (a_req && i_rl && (i_sws || i_rsc) && (srow_addr[4:0] & 5'((32'd4 << i_lg) - 1)) != 0)
+    if (a_req && i_rl && (i_sws || i_rsc) && (srow_addr[LB-1:0] & LB'((32'd4 << i_lg) - 1)) != 0)
       $fatal(1, "otpu_mxu: RL Sw words misaligned (%h)", srow_addr);
   // t2's QUAD reads a chunk's four words in one 16-byte group; int8's QUAD four bytes in a
   // word (4-bit and NVFP4: 8 / 16-byte aligned, across a line in two requests)
@@ -1661,7 +1675,7 @@ module otpu_mxu
 
   // the issuer's next line compares (on the next addresses, registered)
   function automatic logic same_line(input logic [31:0] a, input logic [31:0] b);
-    return a[31:5] == b[31:5];
+    return a[31:LB] == b[31:LB];
   endfunction
 
   always_ff @(posedge clk) begin
@@ -1789,7 +1803,7 @@ module otpu_mxu
           i_sws <= 1'b0;
         end else if (i_spx) begin
           i_sp2 <= 1'b1;
-          i_sa2 <= scale_addr + 32'd32;
+          i_sa2 <= scale_addr + 32'(ALINE);
           if (i_k == 0 && !i_swd && i_swh) i_swd <= 1'b1;   // (the row's Sw came with it)
         end else begin
           i_sp2 <= 1'b0;

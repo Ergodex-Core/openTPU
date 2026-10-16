@@ -1,8 +1,9 @@
 # Row lanes: an MM mode for decode past the ISA's column reuse
 
-Status: design (this page), with the cycle tally of tools/tally_decode.py. The ISA, the
-simulator, the compiler, the RTL and the measurements follow in the sections marked as they
-land (docs/wide_port.md "Row lanes" holds the measured table).
+Status: landed (ISA, simulator, compiler, images, RTL, measured on the RTL; docs/wide_port.md
+"Row lanes" holds the measured table), with the cycle tally of tools/tally_decode.py. The
+follow-up of 2026-10-17 is the last section: port A at 64 bytes a line (int4 L 4 off the
+port-A bound).
 
 ## Why
 
@@ -46,9 +47,10 @@ streams its N rows L at a time, the L rows of a group side by side:
   block k's data of the L rows: row gL + l's at `H + k L bs + l bs` (the same byte / word /
   eight bytes as docs/isa.md's per-row scale rows: `dw` and `m` are read as before). An
   advance reads blocks `k .. k + bpc - 1` of the L rows: A contiguous bytes at `H + k L bs`,
-  A-aligned, never across a line. `ssa` and `srs` are multiples of 32 (the Sw and the first
-  advances share a line where `H + A <= 32`: int8 L 2 / 4, int4 L 2; else the group's Sw is a
-  request of its own, as a row's lone Sw is today). RSC: the group is its L `Sw` words, which
+  A-aligned, never across a line. `ssa` and `srs` are multiples of the port-A line,
+  `Config.ALINE` (32, or 64: "Port A at 64 bytes" below; the Sw and the first advance share a
+  line where `H + A <= ALINE`: at 32 int8 L 2 / 4 and int4 L 2, at 64 every layout; else the
+  group's Sw is a request of its own, as a row's lone Sw is today). RSC: the group is its L `Sw` words, which
   is what the standard RSC rows (the K cache, one word a token) already are. UNIT: nothing.
 * **The result** is a plain MM's: `T[out + n]` for n < N, RMAX the max over them (into `out +
   ors`), ACC and ASCALE as before (ASCALE's one factor, M = 1).
@@ -326,3 +328,58 @@ and MCOLS 4 / 8; the throughput: int8 over 9-block rows, QUAD's 3 advances a row
 
 docs/wide_port.md "Row lanes": the table (4 layers + head, every point; the whole model), the
 comparison with the tally, the Bonsai-2 line, what the nightly needs.
+
+## Port A at 64 bytes a line (ALINE 64; landed 2026-10-17)
+
+**The bound.** int4 L 4 at PORTB 4 / MCOLS 8 measured port-A bound: 1,474,025 cycles a token
+against the MXU's 1,065,924 advances, because a group's scale data is `H + KBc A` bytes with `H
+= A = 32` (the four lanes' Sw words, 16 bytes, padded to the advance's 32), so the Sw line is a
+request of its own every group: `(KBc + 1) / KBc` lines an advance, 1.2 on Gemma's 9-block rows
+(KBc 5). Port A fetches one line a cycle, one request an advance plus that one a group.
+
+**The arithmetic, per layout** (`quant.rl_sw_alone`; H = max(4 L, A), A = L bpc bs; Gemma-3-1B's
+K = 1152, KB 9):
+
+| layout | H | A | H + A | lines an advance at 32 | at 64 | two groups' Sw in one 32-byte line |
+|---|---|---|---|---|---|---|
+| int8 L 4 (PORTB 4) | 16 | 4 | 20 | 1.0 (KBc 9, the Sw in advance 0's line) | 1.0 | no gain |
+| int8 L 8 (PORTB 8, f2-hbm16) | 32 | 8 | 40 | 10 / 9 = 1.11 | 1.0 | impossible (2 x 32 bytes) |
+| int4 L 4 (PORTB 4, MCOLS 8) | 32 | 32 | 64 | 6 / 5 = **1.2** | **1.0** | 11 / 10 = 1.1 |
+| int4 / int8 L 2 (PORTB 2) | 16 / 8 | 16 / 2 | 32 / 10 | 1.0 | 1.0 | no gain |
+
+The 64-byte line takes every layout to one line an advance (the Sw and the first advance's A
+bytes fit 64 whenever A <= 32, which the scale entry demands anyway); two groups' Sw in one
+32-byte line reaches only 1.1 on int4 L 4, nothing on int8 L 8, and it is a layout of its own
+(a header shared by a pair of groups: the issuer would keep the pair's parity and a second
+stride, the ISA a third address). So: **port A at 64 bytes a line**, a parameter (`ALINE`, 32 or
+64) so that every existing build and image stays at 32: f2-hbm's images are untouched, the
+hash takes ALINE only when 64 (`f2-hbm:p4rl8a64`, CFG_HASH dd6b92a6; CAPS2 bit5 for the host).
+The adapter's beat is 64 bytes already (otpu_native_dram: a port-A read fetched the beat and
+returned half of it), so the line costs no memory traffic; what grows is the MXU's line
+register and tag RAM (512 bits in place of 256) and the window selects.
+
+**What changed.** `Config.ALINE` (OTPU_ALINE; isasim: the RL scale groups are ALINE aligned,
+the advance's A <= 32 as before: `quant.RL_ADV_MAX`, the entry's size); the layout
+(`quant.rl_scale_bytes(line=)`, `rl_scales(line=)`, `rl_sw_alone`: the groups rounded to the
+line, qwen3 / gemma4 `rl_alloc(line=)`, `QTensor.weight(line=)`); profile.py's and
+tally_decode's lines an advance; otpu_mxu `ALINE` (the line register `ln1`, the staged line, the
+tags' byte offset and Sw word index, `same_line` on `[31:LB]`, the windows `xb` .. `x32` indexed by
+the line, the QUAD two-line crossings at 56 / 48 instead of 24 / 16, the RL window's aligned 32
+bytes `x32l`); otpu_dram (ALINE / 4 words a read), otpu_native_dram (the beat whole), otpu_slice
+/ otpu_top / otpu_board / tb_top / tb_board / the F2 tops (`ALINE` through), otpu_ctrl CAPS2
+bit5, `target.rtl_params["ALINE"]`, `build_config(ALINE=)`, rtlsim `top_params` (only when
+64), the host (`regs.caps2["aline"]`, device_config, OTPU_ALINE must agree, FakeTransport),
+tools/perf_qwen.py `--aline 64`. PORTB 1 and every ALINE 32 build: not a bit of the netlist
+changes (the parameter's default), the regression cycles are unchanged.
+
+**Tests.** tests/test_row_lanes.py: the RL MM bit for bit the plain MM's at 32 and at 64
+(every format and L; a 32-byte group on an ALINE 64 configuration refused);
+tests/test_wide_port_rtl.py: 8 RL cases x DRAM / native at 64 with `stats["mxu_scale"]` counting
+one line an advance and no Sw alone, the wide port's PAIR / QUAD / plain cases at 64 (the
+two-line QUAD reads at the new boundaries), the mixed program at 64 (DRAM and NCH 8), and the
+lines-an-advance measurement: int4 RL 4 over 1024 rows of 9 blocks, 6 lines a group at 32 (the
+issuer at 5.9 cycles a group once the FIFO's head start is spent) against 5 at 64 (the MXU's
+5); tests/test_target.py the variants' hashes; test_host / test_observability CAPS2 bit5.
+
+**Measured** (tools/perf_qwen.py `--rowlanes --aline 64`, the method of docs/wide_port.md "Row
+lanes"): docs/wide_port.md "Port A at 64 bytes" -- the table there.

@@ -38,6 +38,10 @@ class Config:
     ROWLANES: bool = False   # MM RL (rs bits 3:2: L = 2, 4, 8 row lanes at M = 1, the weights
     #                          and scales in groups of L rows) and QACT DUP8 (docs/row_lanes.md;
     #                          CAPS2 bit4)
+    ALINE: int = 32          # port A's line, bytes (32, or 64: CAPS2 bit5): what one scale
+    #                          request returns; an RL scale group is ALINE aligned, so its Sw
+    #                          words share the first advance's line where the header and the
+    #                          advance's bytes fit it (docs/row_lanes.md "Port A at 64 bytes")
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries
     #                          (WAITC, docs/isa.md "Wait counts"): the host writes them after
     #                          every program (opentpu.waits), the chain slots hold them. The
@@ -84,7 +88,8 @@ def board_config(**kw) -> Config:
                 SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
                 T2=bool(int(env.get("OTPU_T2", 0))),
                 PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))),
-                ROWLANES=bool(int(env.get("OTPU_ROWLANES", a.get("ROWLANES", 0)))))
+                ROWLANES=bool(int(env.get("OTPU_ROWLANES", a.get("ROWLANES", 0)))),
+                ALINE=int(env.get("OTPU_ALINE", a.get("ALINE", 32))))
     base.update(kw)
     return Config(**base)
 
@@ -484,10 +489,13 @@ class Slice:
         if unit:
             return (np.ones(N, np.float32), np.zeros((N, KB, G), np.int64),
                     np.ones((N, KB, G), np.int64))
-        # (RSC: a group is its L Sw words, the standard RSC rows: 4 L aligned, in one line)
-        if ssa % (4 * L if rsc else 32) or srs % (4 * L if rsc else 32):
-            raise SimError(f"MM: RL scale groups (ssa, srs) must be multiples of "
-                           f"{4 * L if rsc else 32}")
+        # (RSC: a group is its L Sw words, the standard RSC rows: 4 L aligned, in one line;
+        # else the groups are port-A lines, Config.ALINE: the Sw and the first advance's data
+        # share a line where they fit it)
+        al = 4 * L if rsc else self.cfg.ALINE
+        if ssa % al or srs % al:
+            raise SimError(f"MM: RL scale groups (ssa, srs) must be multiples of {al}"
+                           f"{'' if rsc else ' (the port-A line, Config.ALINE)'}")
         fmt = ["int8", "int4", "fp4", "nvfp4", "t2"][wf]
         n = np.arange(N)
         grp = ssa + (n // L) * srs
@@ -571,13 +579,15 @@ class Slice:
             if k0 % bpc:
                 raise SimError("MM: RL needs k0 a multiple of the blocks a chunk")
             if not unit and not rsc and L * bpc * Q.rl_block_bytes(
-                    ["int8", "int4", "fp4", "nvfp4", "t2"][wf]) > 32:
-                raise SimError("MM: RL's scale data of an advance must fit a 32-byte line")
+                    ["int8", "int4", "fp4", "nvfp4", "t2"][wf]) > Q.RL_ADV_MAX:
+                raise SimError(f"MM: RL's scale data of an advance must fit the MXU's "
+                               f"{Q.RL_ADV_MAX}-byte scale entry")
             R = L * bpc                                   # the ACT rows read (copies of row 0)
             G = -(-N // L)
             KBc = -(-KB // bpc)
             if sa % (L * D) or rs % (L * D) or sa + (G - 1) * rs + KBc * L * D > cfg.DRAM_BYTES:
-                raise SimError("MM: RL groups must be L D aligned and in range")
+                raise SimError(f"MM: RL groups must be L D aligned and in range (sa {sa:#x}, "
+                               f"rs {rs}, L {L}, {G} groups of {KBc} chunks; {ins.comment})")
             # group g: chunk q of row g L + l at g rs + (q L + l) D: a [G, KBc, L, D] view, read
             # back as rows [G L, KBc D] (a copy of the groups' bytes), the rows' blocks
             gv = np.lib.stride_tricks.as_strided(self.dram[sa:], (G, KBc, L, D),

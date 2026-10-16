@@ -94,7 +94,7 @@ from . import moe as MO
 from .lfm2 import plan
 from ..host.offload import LINE, BackendDram, ExpertServer, Layout, RowLayout, RowServer
 from .qwen3 import (ATTN_BLOCK, ATTN_DEPTH, RunPos, _Bump, _lm_head, _lm_head_rows, _qdesc,
-                    rl_alloc, rl_lanes_of,
+                    rl_alloc, rl_lanes_of, rl_line,
                     _tdesc, amask_bytes, amask_table, fill_logits, finite,
                     step_descriptors)
 
@@ -888,7 +888,8 @@ class Image:
                 self.io["moe_scratch"] = b.alloc(4 * H * (LINE // 4 + 1))
         sb = lambda k, f: Q.scale_bytes(k, f, D)                        # noqa: E731
         self.wproj_rl = rl_lanes_of(cfg, self.pformat) if P else 0
-        self.wproj = (rl_alloc(b, L * P, H, self.pformat, D, self.wproj_rl) if self.wproj_rl else
+        self.wproj = (rl_alloc(b, L * P, H, self.pformat, D, self.wproj_rl, rl_line(cfg))
+                      if self.wproj_rl else
                       (b.alloc(L * P * rb(H, self.pformat)), b.alloc(L * P * sb(H, self.pformat)))) \
             if P else None
         # layer blocks: one layout per key
@@ -923,10 +924,10 @@ class Image:
             o["rl"] = {n: rl_lanes_of(cfg, f) for n, (_, _, f) in mats.items()}
             o["rl"]["wd"] = rl_lanes_of(cfg, fd)
             for n, (r, c, f) in mats.items():
-                o[n] = rl_alloc(lb, r, c, f, D, o["rl"][n]) if o["rl"][n] else \
+                o[n] = rl_alloc(lb, r, c, f, D, o["rl"][n], rl_line(cfg)) if o["rl"][n] else \
                     (lb.alloc(r * rb(c, f)), lb.alloc(r * sb(c, f)))
             C = self.dchunk[ff, fd]
-            o["wd"] = [rl_alloc(lb, H, C, fd, D, o["rl"]["wd"]) if o["rl"]["wd"] else
+            o["wd"] = [rl_alloc(lb, H, C, fd, D, o["rl"]["wd"], rl_line(cfg)) if o["rl"]["wd"] else
                        (lb.alloc(H * rb(C, fd)), lb.alloc(H * sb(C, fd)))
                        for _ in range(fp_ // C)]
             if own:
@@ -965,8 +966,8 @@ class Image:
         # row lanes: the head the LM-head MMs stream, in groups (the rows above stay for the
         # gather: a group's row is not affine in its index, docs/row_lanes.md)
         self.head_rl = rl_lanes_of(cfg, self.head_format)
-        self.head_rlq = rl_alloc(b, spec.vocab, H, self.head_format, D, self.head_rl) \
-            if self.head_rl else None
+        self.head_rlq = rl_alloc(b, spec.vocab, H, self.head_format, D, self.head_rl,
+                                 rl_line(cfg)) if self.head_rl else None
         self.ple = b.alloc((rows if self.ple_host else spec.vocab) * self.ple_rec)
         self.ple_store = None           # ple_host: [vocab, ple_rec] uint8, filled by build
         self.lookup = {}
@@ -1084,7 +1085,8 @@ class Image:
             if self.head_rl:                # (the groups' copy: chunks at whole groups)
                 L = self.head_rl
                 addrs += (self.head_rlq[0] + (r // L) * Q.rl_row_stride(H, hf, L, D),
-                          self.head_rlq[1] + (r // L) * Q.rl_scale_bytes(H, hf, L, D))
+                          self.head_rlq[1] + (r // L) * Q.rl_scale_bytes(H, hf, L, D,
+                                                                         rl_line(self.cfg)))
             tasks.append((addrs, ("gather", head, ("rowrange", r, e), 1.0, hf, D),
                           (self.head_rl, H, "head")))
         if self.ple_host:                               # the host's store: record t at t rec
@@ -1099,14 +1101,14 @@ class Image:
         for (addrs, job, rl), arrays in zip(tasks, _run_tasks(W, [t[1] for t in tasks], jobs)):
             if rl and rl[0]:                            # row-lane groups (docs/row_lanes.md)
                 L, K = rl[0], rl[1]
-                fmt = job[4]
+                fmt, line = job[4], rl_line(self.cfg)
                 if len(rl) > 2:                         # the head: its rows, scales, gather
                     q, sc, gs = arrays                  # scales, then the groups' copy
-                    arrays = (q, sc, gs, Q.rl_rows(q, L, D), Q.rl_scales(sc, fmt, K, L, D))
+                    arrays = (q, sc, gs, Q.rl_rows(q, L, D), Q.rl_scales(sc, fmt, K, L, D, line))
                 else:                                   # a matrix, or column parts (pairs)
                     arrays = tuple(x for i in range(0, len(arrays), 2)
                                    for x in (Q.rl_rows(arrays[i], L, D),
-                                             Q.rl_scales(arrays[i + 1], fmt, K, L, D)))
+                                             Q.rl_scales(arrays[i + 1], fmt, K, L, D, line)))
             for addr, arr in zip(addrs, arrays):
                 if addr < 0:                            # PLE records from row -1 - addr
                     v = np.ascontiguousarray(arr).view(np.uint8).reshape(-1, self.ple_rec)
@@ -1405,9 +1407,11 @@ class Image:
             ns.qn = Tensor(off + o["qn"], (d,), (1,))
             for n, (r, c, f) in o["mats"].items():
                 da, sa = o[n]
-                setattr(ns, n, QTensor.weight(off + da, off + sa, r, c, f, D, rl=o["rl"][n]))
+                setattr(ns, n, QTensor.weight(off + da, off + sa, r, c, f, D, rl=o["rl"][n],
+                                              line=rl_line(cfg)))
             C = self.dchunk[ff, fd]
-            parts = tuple(QTensor.weight(off + da, off + sa, H, C, fd, D, rl=o["rl"]["wd"])
+            parts = tuple(QTensor.weight(off + da, off + sa, H, C, fd, D, rl=o["rl"]["wd"],
+                                         line=rl_line(cfg))
                           for da, sa in o["wd"])
             ns.wd = QTensor(parts[0].data, parts[0].scale, (H, C * len(parts)), parts[0].rs,
                             parts[0].srs, D, parts=parts, pw=C, wf=parts[0].wf)
@@ -1448,10 +1452,11 @@ class Image:
             pli=_tdesc(self.io["pli"], (R, L, P)),
             mask=_tdesc(self.io["mask"], (2, self.block)), z2=self.io["z2"],
             xbuf=_tdesc(self.io["xbuf"], (self.prefill_rows, H)) if self.prefill_rows else None,
-            wproj=QTensor.weight(*self.wproj, L * P, H, self.pformat, D, rl=self.wproj_rl)
+            wproj=QTensor.weight(*self.wproj, L * P, H, self.pformat, D, rl=self.wproj_rl,
+                                 line=rl_line(cfg))
             if P else None,
             head=QTensor.weight(*self.head_rlq, spec.vocab, H, self.head_format, D,
-                                rl=self.head_rl) if self.head_rl
+                                rl=self.head_rl, line=rl_line(cfg)) if self.head_rl
             else _qdesc(*self.head, spec.vocab, H, D, self.head_format), v_loc=spec.vocab,
             head_tab=GA.table(self.head[0], self.head_gs, spec.vocab, H, self.head_format, D),
             ple=GA.record_table(self.ple, R if self.ple_host else spec.vocab, self.ple_S,

@@ -277,6 +277,8 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         p["PORTB"] = cfg.PORTB          # other builds' cache keys stay); the Config's, always
     if getattr(cfg, "ROWLANES", False):     # row lanes (otpu_mxu RL: its streams; only when on)
         p["RL"] = _target.rl_streams(cfg)
+    if getattr(cfg, "ALINE", 32) != 32:     # port A's 64-byte line (otpu_mxu / otpu_dram /
+        p["ALINE"] = cfg.ALINE              # otpu_native_dram ALINE; only when wide)
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4

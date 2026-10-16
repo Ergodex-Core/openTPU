@@ -275,14 +275,19 @@ docs/row_lanes.md): the MM streams its rows L at a time, each lane its own row, 
 chunks in one cycle. `M = 1`; not with PAIR (a lane's reuse is its whole chunk: `bpc` = 1 (int8),
 2 (4-bit) or 4 (t2) blocks); `L <= Config.PORTB`; `L bpc <= MCOLS`; `k0` a multiple of bpc; and
 unless UNIT or RSC, `L bpc bs <= 32` where bs is a block's scale bytes (int8 1, int4 / fp4 / t2
-4, nvfp4 8): int8 L 2, 4, 8; int4 / fp4 L 2, 4; nvfp4 and t2 L 2.
+4, nvfp4 8; the MXU's scale entry holds 32 bytes an advance, whatever the port-A line): int8 L
+2, 4, 8; int4 / fp4 L 2, 4; nvfp4 and t2 L 2.
 
 The rows are stored in groups of L (`quant.rl_rows`): group g (rows gL .. gL + L - 1) at `sa +
 g rs`, chunk q of row gL + l at `sa + g rs + (q L + l) D`; `sa` and `rs` are multiples of L D.
 The scale rows likewise (`quant.rl_scales`): group g at `ssa + g srs`, the L rows' `Sw` words
 first (`Sw[gL + l]` at `+ 4 l`), then from `H = max(4 L, L bpc bs)` block k's data of the L rows,
 row gL + l's at `H + k L bs + l bs` (the byte / word / eight bytes of the table above); `ssa` and
-`srs` are multiples of 32. RSC: a group is its L `Sw` words (`ssa`, `srs` multiples of 4 L: the
+`srs` are multiples of the port-A line, `Config.ALINE` (32 bytes, or 64 on a build with CAPS2
+bit5: `quant.rl_scale_bytes(line=)`), so that the group's Sw words share its first advance's line
+where the header and the advance's bytes fit one (`H + L bpc bs <= ALINE`: every layout at 64;
+at 32 not int4 / fp4 L 4 nor int8 L 8, whose Sw is a request of its own, docs/row_lanes.md
+"Port A at 64 bytes"). RSC: a group is its L `Sw` words (`ssa`, `srs` multiples of 4 L: the
 standard RSC rows as they are). UNIT: nothing is read. Rows gL + l >= N of the last group are
 streamed and dropped (their bytes must be readable).
 

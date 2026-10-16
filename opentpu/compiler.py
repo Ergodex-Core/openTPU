@@ -299,15 +299,17 @@ class QTensor:
     rl: int = 0
 
     @staticmethod
-    def weight(data, scale, n: int, k: int, fmt: str, D: int, rl: int = 0, **kw) -> "QTensor":
+    def weight(data, scale, n: int, k: int, fmt: str, D: int, rl: int = 0, line: int = 32,
+               **kw) -> "QTensor":
         """The descriptor of an [n, k] matrix in MXU format `fmt` ("int8", "int4", "fp4",
         "nvfp4", opentpu/quant.py quantize_mxu's rows): element rows row_bytes apart, scale rows
         scale_bytes apart; with `rl`, in row-lane groups of rl rows (quant.rl_row_stride,
-        rl_scale_bytes)."""
+        rl_scale_bytes; `line`: the port-A line the scale groups are rounded to, Config.ALINE)."""
         from . import quant as Q
         if rl:
             return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.rl_row_stride(k, fmt, rl, D),
-                           Q.rl_scale_bytes(k, fmt, rl, D), D, wf=Q.mxu_wf(fmt), rl=rl, **kw)
+                           Q.rl_scale_bytes(k, fmt, rl, D, line), D, wf=Q.mxu_wf(fmt), rl=rl,
+                           **kw)
         return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.row_bytes(k, fmt, D),
                        Q.scale_bytes(k, fmt, D), D, wf=Q.mxu_wf(fmt), **kw)
 

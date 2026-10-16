@@ -15,7 +15,7 @@ from opentpu import isa as I, quant as Q
 from opentpu.isasim import Config, Machine, SimError
 
 D = 32
-X, WA, SA, WB, SB, OUT, AL = 0, 0x8000, 0x20000, 0x30000, 0x50000, 0x1000, 0x7000
+X, WA, SA, WB, SB, OUT, AL = 0, 0x8000, 0x20000, 0x30000, 0x50000, 0x6000, 0x7000
 FMTS = ["int8", "int4", "fp4", "nvfp4", "t2"]
 REAL = Path(__file__).resolve().parent.parent / "models" / "gemma-3-1b-it"
 
@@ -40,19 +40,21 @@ def _matrix(rng, fmt, N, K):
 def _prog(cfg, fmt, rows, srows, N, KB, k0, L, x, mode):
     """QACT (the copies an RL MM of L lanes needs), then the MM pair: plain over the standard
     rows at WA / SA and RL over the groups at WB / SB (the same k0: the rows hold k0 + KB
-    blocks), each in mode plain / unit+rmax / acc+rmax / ascale / rsc."""
+    blocks; the groups at cfg.ALINE lines), each in mode plain / unit+rmax / acc+rmax /
+    ascale / rsc."""
     wf = Q.mxu_wf(fmt)
     bpc = I.blocks_per_chunk(wf)
     copies = L * bpc
     K = (k0 + KB) * D
+    line = cfg.ALINE
     dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
     _put(dram, X, x)
     rs, srs = Q.row_bytes(K, fmt, D), Q.scale_bytes(K, fmt, D)
     _put(dram, WA, rows)
     _put(dram, SA, srows)
-    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D)
+    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D, line)
     _put(dram, WB, Q.rl_rows(rows, L, D))
-    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D))
+    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D, line))
     rsc = mode == "rsc"
     if rsc:                     # RSC: the rows' Sw alone (standard RSC rows = the RL groups)
         sw = np.ascontiguousarray(srows[:, :4])
@@ -96,13 +98,15 @@ CASES = [  # fmt, L, KB, k0, N, mode
 ]
 
 
+@pytest.mark.parametrize("aline", [32, 64])
 @pytest.mark.parametrize("fmt,L,KB,k0,N,mode", CASES)
-def test_row_lanes_change_no_bit(fmt, L, KB, k0, N, mode):
+def test_row_lanes_change_no_bit(fmt, L, KB, k0, N, mode, aline):
     """The RL MM over the groups writes the plain MM's words: y, the RMAX, ACC's sums and
-    ASCALE's rescale, over L lanes with N not a multiple of L."""
+    ASCALE's rescale, over L lanes with N not a multiple of L; the groups at 32- and at
+    64-byte port-A lines (Config.ALINE)."""
     bpc = I.blocks_per_chunk(Q.mxu_wf(fmt))
     cfg = Config(S=1, D=D, MCOLS=max(8, L * bpc), ACT_BLOCKS=32, PAIR=True, T2=True, PORTB=8,
-                 ROWLANES=True, DRAM_BYTES=1 << 20)
+                 ROWLANES=True, DRAM_BYTES=1 << 20, ALINE=aline)
     rng = np.random.default_rng(100 * KB + 10 * k0 + N + L + len(fmt) + len(mode))
     rows, srows = _matrix(rng, fmt, N, (k0 + KB) * D)
     x = (rng.standard_normal((1, KB * D)) * 3).astype(np.float32)
@@ -135,6 +139,9 @@ def test_the_simulator_refuses_what_the_isa_forbids():
         I.mm(WB, SB, OUT, 8, 2, 4 * 2 * D, 9, 2, 0, 64, rl=4)
     with pytest.raises(ValueError, match="blocks a chunk"):
         I.mm(WB, SB, OUT, 8, 2, 4 * 2 * D, 9, 1, 0, 64, wf=I.W4I, k0=1, rl=4)
+    # a scale group at 32 bytes on a configuration whose port-A line is 64
+    with pytest.raises(SimError, match="ALINE"):
+        _run(dataclasses.replace(cfg, ALINE=64), prog, dram)
     with pytest.raises(SimError, match="DUP8"):
         _run(dataclasses.replace(cfg, ROWLANES=False, MCOLS=8), [
             I.ld(X, 0, x.size), I.qact(0, 1, 0, 2, 2 * D, dup8=True), I.halt()], dram)

@@ -44,6 +44,7 @@ module otpu_top
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (otpu_slice)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (otpu_slice)
   parameter int RL         = 0,       // row lanes (MM RL, QACT DUP8; otpu_mxu's streams: 0, 4, 8)
+  parameter int ALINE      = 32,      // port A's line, bytes (32, 64; otpu_slice, otpu_dram, otpu_native_dram)
   parameter int PORTB      = 1,       // chunks a cycle on port B (otpu_slice; the memory path
                                       // delivers them: otpu_dram, otpu_native_dram NCH >= 2 PORTB)
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
@@ -79,7 +80,7 @@ module otpu_top
     logic [D/4-1:0] b_wmask;
     logic [D*8-1:0] b_wdata;
     logic [31:0]   a_addr, a_wdata, b_addr;
-    logic [255:0]  a_rdata;
+    logic [8*ALINE-1:0] a_rdata;
     logic [3:0]    a_be;
     logic [1:0]    b_n;
     logic [PORTB*D*8-1:0] b_rdata;
@@ -93,7 +94,7 @@ module otpu_top
       assign sw_rdy = 1'b1;
       assign b_rdy = 1'b1;
       assign wr_idle = 1'b1;
-      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s), .PORTB(PORTB)) u_dram (
+      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s), .PORTB(PORTB), .ALINE(ALINE)) u_dram (
         .clk, .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
         .sw_req, .sw_addr, .sw_wdata, .sw_be,
         .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_n, .b_rvalid, .b_rtag, .b_rdata,
@@ -104,7 +105,7 @@ module otpu_top
       logic [NCH-1:0][511:0] wdata, rdata;
       logic [NCH-1:0][63:0] wmask;
       logic [NCH-1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .PORTB(PORTB)) u_adapt (
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .PORTB(PORTB), .ALINE(ALINE)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -150,7 +151,7 @@ module otpu_top
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                  .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                  .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC),
-                 .T2(T2), .PORTB(PORTB), .RL(RL))
+                 .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE))
     u_slice (
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,

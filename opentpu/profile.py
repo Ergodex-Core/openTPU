@@ -132,11 +132,12 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         L = I.mm_lanes(ins)
         if L:                           # row lanes (docs/row_lanes.md): ceil(N / L) groups of
             # ceil(KB / bpc) advances, L chunks each; port A a line an advance, and the group's
-            # Sw line where it is not the first advance's (porta: lines, not words)
+            # Sw line where it is not the first advance's (porta: lines, not words; the line
+            # Config.ALINE: int4 L 4's Sw shares the first advance's 64-byte line, not a 32)
             from . import quant as Q
             fmt = ["int8", "int4", "fp4", "nvfp4", "t2"][wf]
             G, KBc = -(-N // L), -(-KB // I.blocks_per_chunk(wf))
-            sw_alone = Q.rl_header(fmt, L) + Q.rl_adv_bytes(fmt, L) > 32
+            sw_alone = Q.rl_sw_alone(fmt, L, getattr(cfg, "ALINE", 32))
             lines = 0 if ins.flags & I.F_UNIT else G * (KBc + (1 if sw_alone else 0))
             return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T{' ' + fmt if fmt != 'int8' else ''}"
                           f" rl{L}{acc}", G * KBc, G * L * KBc, lines)

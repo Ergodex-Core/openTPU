@@ -1420,9 +1420,15 @@ def device_config(info: dict, **kw):
         raise ConfigMismatch(f"the bitstream {'has' if rowlanes else 'lacks'} row lanes (CAPS2 "
                              f"bit4) but OTPU_ROWLANES={env}: unset OTPU_ROWLANES (the host "
                              f"follows the bitstream)")
+    aline = int((info.get("caps2") or {}).get("aline", 32))
+    env = os.environ.get("OTPU_ALINE")
+    if env is not None and int(env) != aline:
+        raise ConfigMismatch(f"the bitstream's port A reads {aline}-byte lines (CAPS2 bit5) "
+                             f"but OTPU_ALINE={env}: unset OTPU_ALINE (the host follows the "
+                             f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
-           "PORTB": portb, "ROWLANES": rowlanes, "STREAM": stream,
+           "PORTB": portb, "ROWLANES": rowlanes, "ALINE": aline, "STREAM": stream,
            "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
@@ -1492,6 +1498,7 @@ def check_hash(info: dict, cfg=None) -> None:
                            T2=bool(caps.get("t2")),
                            PORTB=(info.get("caps2") or {}).get("portb", 1),
                            ROWLANES=bool((info.get("caps2") or {}).get("rowlanes", False)),
+                           ALINE=int((info.get("caps2") or {}).get("aline", 32)),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:

@@ -20,6 +20,7 @@ SEQ_WC = true
 T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
 PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
 ROWLANES = false                # MM RL row lanes and QACT DUP8 (docs/row_lanes.md; CAPS2 bit4)
+ALINE = 32                      # port A's line, bytes: 32, or 64 (CAPS2 bit5; docs/row_lanes.md)
 [uarch]
 MXU_IMPL = 2
 MXU_CL = 16
