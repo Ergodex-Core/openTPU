@@ -65,8 +65,10 @@ int8) 85.5 ms, 11.7 Hz (the paper's measurements).
 ## 5. The VLA variant `f2-vla` (target, estimate)
 
 S = 4, MCOLS = 16 (packed int8 DSPs), ACT_ROWS = 128, ACT_BLOCKS = 128, TMEM_WORDS = 512K,
-LANES = 32, the fused activation unit, NCH = 8 a slice (all 32 HBM ports), PORTB = 2 (two port-B
-lanes a slice: 64 GB/s a slice at 250 MHz, 256 GB/s in all, ~55% of the HBM's raw ~460 GB/s), a
+LANES = 32, the fused activation unit, NCH = 8 a slice (all 32 HBM ports), port B in two steps:
+PORTB = 2 first (two lanes a slice: 64 GB/s a slice at 250 MHz, 256 GB/s in all, ~55% of the
+HBM's raw ~460 GB/s), then PORTB = 4 (four lanes, one channel pair each of the slice's 8: 128 GB/s
+asked a slice against its 8 ports' ~115 GB/s raw, so ~460 GB/s in all, the HBM's own limit), a
 DMA lane for activation tiles, core 250 MHz.
 Peak 4 x 16 x 128 = 8192 MAC/cycle x 250 MHz = 2.05 TMAC/s (20x today); DSP ~5K of 9024,
 LUT ~0.75-0.9M of 1.3M, URAM ~460 of 960 (estimates, to be checked by the nightly synthesis).
@@ -88,13 +90,13 @@ each, ~460 GB/s in all. f2-vla takes all 32 (4 slices x 8). A slice consumes one
 cycle on port B (32 GB/s at 250 MHz) of its 8 ports' ~115 GB/s; PORTB = 2 doubles that (the
 LLM branch's wide port, built as independent lanes: docs/wide_port.md "Future improvements").
 
-| traffic | per chunk, all slices | at PORTB 1 (128 GB/s) | at PORTB 2 (256 GB/s) |
-|---|---|---|---|
-| weights, prefix: ceil(R / ACT_ROWS) passes x ~2.5 GB (R ~900) | ACT_ROWS 128: ~18 GB; 64: ~35 GB | 0.14 s / 0.27 s | 0.07 s / 0.14 s |
-| weights, vision (one pass for the 3 views at ACT_ROWS >= 256 rows... 768 rows: 6 passes x 0.8 GB) | ~5 GB | 0.04 s | 0.02 s |
-| weights, expert: 10 steps x 0.6 GB (bf16->int8 0.3 B params, 50 rows: one pass a step) | ~3 GB | 0.02 s | 0.01 s |
-| activation tiles and KV (tiled prefill: x, MLP hidden in int8, q / k / v, KV appends), ~40 MB a layer | ~0.8 GB | 0.01 s | — |
-| total | ~27-44 GB | ~0.2-0.35 s | ~0.1-0.17 s |
+| traffic | per chunk, all slices | PORTB 1 (128 GB/s) | PORTB 2 (256 GB/s) | PORTB 4 (~460 GB/s, HBM-bound) |
+|---|---|---|---|---|
+| weights, prefix: ceil(R / ACT_ROWS) passes x ~2.5 GB (R ~900) | ACT_ROWS 128: ~18 GB; 64: ~35 GB | 0.14 / 0.27 s | 0.07 / 0.14 s | 0.04 / 0.08 s |
+| weights, vision (768 rows: 6 passes x 0.8 GB at ACT_ROWS 128) | ~5 GB | 0.04 s | 0.02 s | 0.01 s |
+| weights, expert: 10 steps x ~0.3 GB (int8, 50 rows: one pass a step) | ~3 GB | 0.02 s | 0.01 s | 0.01 s |
+| activation tiles and KV (tiled prefill: x, MLP hidden in int8, q / k / v, KV appends), ~40 MB a layer | ~0.8 GB | 0.01 s | — | — |
+| total | ~27-44 GB | ~0.2-0.35 s | ~0.1-0.17 s | ~0.06-0.1 s |
 
 Against ~1.4 s of MAC work, PORTB 1 already keeps π0.5 compute-bound at ACT_ROWS 128; PORTB 2
 buys three things: (1) ACT_ROWS 64 (half the ACT RAM's URAM) at the same time; (2) headroom for
@@ -113,7 +115,8 @@ which still holds.
 | 2 | L4 fused activation unit: ISA op + RTL + tests | bit-exact; VPU share < 10% |
 | 3 | L2 MCOLS 16 with DSP packing; L5 LANES 32; L6 TMEM 512K | RTL timing of a cut model at MCOLS 16 |
 | 4 | L3 four slices with VLA sharding | ISA S=4 run exact; RTL S=2 timing |
-| 4a | L10: merge the wide-port lanes (PORTB 2) from ternary-bonsai, NCH 8 a slice on all 32 ports, the DMA activation lane | RTL timing of a cut prefix at PORTB 1 vs 2: port-B stalls < 5% at MCOLS 16 |
+| 4a | L10 first doubling: merge the wide-port lanes (PORTB 2) from ternary-bonsai, NCH 8 a slice on all 32 ports, the DMA activation lane | RTL timing of a cut prefix at PORTB 1 vs 2: 2x the port-B bytes a cycle, port-B stalls < 5% at MCOLS 16 |
+| 4b | L10 second doubling: PORTB 4 (four lanes a slice, one HBM channel pair each) | RTL timing at PORTB 4 on the HBM memory model: ~1.8x over PORTB 2 (the HBM's 8 ports a slice cap it); kept if the π0.5 stretch (MCOLS 24 / 6 slices) needs it |
 | 5 | RhinoVLA port (Qwen3-VL ViT new; Qwen3 LM kernels exist; expert / flow loop shared with π0.5) | action error vs its reference |
 | 6 | f2-vla target; nightly synthesis at 250 MHz; AFI; board run | ≥ 1 Hz RhinoVLA on the F2 (measured) |
 | 7 | L8 W8A16 where Phase 0 / 5 show int8 activations hurt | success-rate parity on LIBERO |
