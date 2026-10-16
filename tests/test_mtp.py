@@ -503,9 +503,13 @@ def test_mtp_loop_programs_warmed_ahead(tmp_path, monkeypatch):
     the 4B's long-prompt replies slower than its short ones on the F2, docs/ternary.md 8);
     the tokens read back are plain greedy decode's. A second warm compiles nothing, and
     start() on an MTP engine runs warm_mtp."""
+    import shutil
+
     from opentpu import progcache as PC
     from opentpu.host import gen_warm as GW
     from opentpu.llm import mtp as M
+    if shutil.disk_usage(tmp_path).free < PC.FREE_FLOOR + (1 << 30):
+        pytest.skip("the program cache writes nothing when the disk is under its free floor")
     monkeypatch.setenv("OTPU_PROG_CACHE", str(tmp_path / "a"))
     PC.clear()
     _, W, spec = _tiny_model(8, init=0.2)
