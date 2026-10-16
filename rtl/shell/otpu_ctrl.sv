@@ -60,8 +60,8 @@
 //   0x5C CAPS2     RO  (version 5; CAPS is full) bit0 GATHER: the collective unit runs GATHER
 //                      (always at S > 1; at S = 1 unless built without it, otpu_board COLL_GATHER:
 //                      then BAR alone, and a GATHER raises ERROR), [3:1] PORTB: the D-byte chunks
-//                      a cycle port B and the MXU's stream take (1, 2, 4: MM PAIR / QUAD for
-//                      every format, QACT DUP4; docs/wide_port.md; 0 before it: 1)
+//                      a cycle port B and the MXU's stream take, 2 or 4 (MM PAIR / QUAD for
+//                      every format, QACT DUP4; docs/wide_port.md); 0: one (every build before)
 //   0x60 + 4k      RW  ARG0..ARG7: the run's arguments, R8..R15 when RUN rises (CAPS bit25;
 //                      docs/isa.md "Arguments"); reset 0
 //   0x80 CFG_SLICES   RO  slices S (version 4: the configuration the target file built,
@@ -198,7 +198,8 @@ module otpu_ctrl #(
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  localparam logic [31:0] CAPS2 = {28'd0, 3'(PORTB), COLL_GATHER || S > 1};   // [3:1] PORTB, bit0 GATHER
+  localparam logic [31:0] CAPS2 = {28'd0, 3'((PORTB > 1) ? PORTB : 0),        // [3:1] PORTB
+                                   COLL_GATHER || S > 1};                     // bit0 GATHER
 
   logic [63:0] cycles;
   logic [31:0] n_brd, n_bwr, n_ard, n_awr, n_bst, scratch;

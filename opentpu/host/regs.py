@@ -77,13 +77,19 @@ CAPS2_SINCE, R_CAPS2 = 5, 0x5C
 # on a GATHER, and the host refuses to load a program with one (Board.load_program). Every
 # bitstream before version 5 has GATHER.
 CAP2_GATHER = 1
+# CAPS2 [3:1]: PORTB, the D-byte chunks a cycle port B and the MXU's stream take, 2 or 4 (MM
+# PAIR / QUAD for every weight format, QACT DUP4; docs/wide_port.md); 0: one (a PORTB 1 build,
+# and every bitstream before the field).
+CAP2_PORTB_SHIFT, CAP2_PORTB_MASK = 1, 7
 
 
 def caps2(v: int | None) -> dict:
-    """CAPS2's value -> its capabilities; None (a register map before 5): all present."""
+    """CAPS2's value -> its capabilities; None (a register map before 5): all present (and a
+    one-chunk port B)."""
     if v is None:
-        return {"gather": True}
-    return {"gather": bool(v & CAP2_GATHER)}
+        return {"gather": True, "portb": 1}
+    return {"gather": bool(v & CAP2_GATHER),
+            "portb": (v >> CAP2_PORTB_SHIFT & CAP2_PORTB_MASK) or 1}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)

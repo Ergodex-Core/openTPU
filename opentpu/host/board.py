@@ -1358,11 +1358,13 @@ class ConfigMismatch(RuntimeError):
 
 def device_config(info: dict, **kw):
     """The Config of the bitstream that `info` (Board.info()) describes: MCOLS and LANES come
-    from its VERSION register, PAIR from CAPS bit5, DSTEP from bit6 and STREAM from bit26, and
+    from its VERSION register, PAIR from CAPS bit5, DSTEP from bit6 and STREAM from bit26, T2
+    from bit28, PORTB (the wide port B's chunks a cycle) from CAPS2 [3:1], and
     with register map 4 the slices, TMEM, IMEM, ACT RAM and DRAM sizes from its CFG_* registers
     and SEQ_WC (the sequencer's wait entries, EXPERIMENTAL) from CFG_UARCH bit24
     (before map 4: the YPCB-00338's, the current target's), so the card needs no OTPU_MCOLS /
-    OTPU_LANES / OTPU_PAIR / OTPU_DSTEP / OTPU_STREAM. When one is set in the environment it must
+    OTPU_LANES / OTPU_PAIR / OTPU_DSTEP / OTPU_STREAM / OTPU_PORTB. When one is set in the
+    environment it must
     name the bitstream's value (ConfigMismatch otherwise). Keyword arguments set other fields
     (DRAM_BYTES). A bitstream without the MX numerics (CAPS bit29) or whose CFG_HASH is not
     this host's hash of what its registers report is refused (check_numerics, check_hash)."""
@@ -1385,9 +1387,15 @@ def device_config(info: dict, **kw):
             raise ConfigMismatch(f"the bitstream {'has' if have else 'lacks'} {what} but "
                                  f"OTPU_{k}={env}: unset OTPU_{k} (the host follows the "
                                  f"bitstream)")
+    portb = (info.get("caps2") or {}).get("portb", 1)
+    env = os.environ.get("OTPU_PORTB")
+    if env is not None and int(env) != portb:
+        raise ConfigMismatch(f"the bitstream's port B takes {portb} chunks a cycle (CAPS2 [3:1]) "
+                             f"but OTPU_PORTB={env}: unset OTPU_PORTB (the host follows the "
+                             f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
-           "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
+           "PORTB": portb, "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
         dev.update(D=info["D"], SEQ_WC=bool(c.get("SEQ_WC")),
@@ -1454,6 +1462,7 @@ def check_hash(info: dict, cfg=None) -> None:
         cfg = board_config(D=info["D"], MCOLS=info["MCOLS"], LANES=info["LANES"],
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
                            T2=bool(caps.get("t2")),
+                           PORTB=(info.get("caps2") or {}).get("portb", 1),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:
