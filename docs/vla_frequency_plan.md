@@ -3,7 +3,11 @@
 Status: plan (2026-10-16). Every number here is an *estimate* from model shapes and the
 openTPU configuration unless marked measured; Phase 0 (the π0.5 port, docs/pi05.md) has
 measured section 3's π0.5 numbers with the ISA tally and RTL timing of cut phases. Work order: π0.5 port first, then
-RhinoVLA (HuixiAI/RhinoVLA-V3), then the variant below. Everything is validated in the ISA
+RhinoVLA (HuixiAI/RhinoVLA-V3), then the variant below. Reviewed 2026-10-16
+(docs/vla_frequency_plan_review.md): its findings are folded in below, chiefly that the DSP
+packing is the one gate on the 1 Hz claim (L1), the ACT RAM is width-bound (L2), port B at
+PORTB 1 takes 25.6-32 GB/s whatever the HBM offers (L7, 6a), QST bounds the vision tower at
+scale (L11), and the numbers are committed at 200 MHz. Everything is validated in the ISA
 simulator and Verilator first; FPGA synthesis only in the nightly build.
 
 ## 1. VLA and LLM need different openTPU variants
@@ -85,71 +89,92 @@ ceil(ACT_ROWS / MCOLS) cycles: compute grows 16x while the weight bandwidth a cy
 
 | # | lever | gain (estimate) | cost on the VU47P (estimate) | validation |
 |---|---|---|---|---|
-| L1 | **MXU columns MCOLS 4 -> 64**, DSP48E2 int8 packing (one weight x two activation rows a DSP: the column structure shares the weight), the weight chunk systolically across the columns | 16x MAC/cycle: 8192 MAC/cycle | 64 x 128 MACs at 2 a DSP = 4096 DSP; LUT est. ~250-320K (S1 decode, accumulators, per-column epilogue i2f / fmul) | Verilator vs ISA bit-exact at MCOLS 8, 16, 64; mxu_bench |
-| L2 | **ACT_ROWS 16 -> 256** (a bank a column, URAM: 256 rows x 128 blocks x 128 B = 4 MB) | weight passes over a prefix /16 (π0.5: ~4 passes instead of ~56) | ~114 URAM | ISA tally, RTL timing of a cut model |
-| L3 | **a fused activation unit in the MXU drain / quantizer**: GELU-tanh / SiLU (table + polynomial, as SGMV's sgmv_act), gate x up, then quantize for the next MM (SGMV's MLP_FUSE); gate and up rows interleaved in the image so a drain yields pairs; one unit per drain lane | removes the prefix MLPs' VPU work (~1.3 s of π0.5 today; ~0.1 s even at 64 lanes) | est. ~4K LUT, ~10 DSP, 3 BRAM a lane, 8-16 lanes | bit-exact against an ISA definition of the fused op |
+| L1 | **MXU columns MCOLS 4 -> 32, then 64 with DSP48E2 int8 packing** (one weight x two activation rows a DSP, the pre-adder forming a1 + (a2 << 19)). The repo's study found two products a DSP48E1 inexact on the cascade (docs/mxu_systolic.md: the low field overflows after 3 accumulations), so every column is 138 DSP today. On the DSP48E2 the 27-bit A port gives a 19-bit low lane, and a CL = 16 chain's sum of products in [-127, 127] (quant.py's int8 never holds -128) is at most 16 x 16129 = 258,064 < 2^18: exact, with a one-bit sign fix-up of the high lane. The pre-adder is taken by PAIR's stream select (INMODE via `hi0`), so the packed column forms the pair in fabric or redesigns that select | MCOLS 32 unpacked: 8x, 4096 MAC/cycle; MCOLS 64 packed: 16x, 8192 | MCOLS 32 unpacked: 4.4K DSP (the safe point); MCOLS 64 packed: est. ~4.6K DSP; MCOLS 64 unpacked would be 8.8K, the whole part. LUT est. ~250-320K (S1 decode, accumulators, per-column epilogue i2f / fmul) | **the gate of the 1 Hz claim, phase 1**: a packed 16-chain in Verilator, bit-exact against the ISA over the int8 corners (+-127, mixed signs, the fix-up), and one packed column synthesized out of context (DSP count, fmax); then MCOLS 8 -> 16 -> 32 (-> 64) bit-exact, mxu_bench |
+| L2 | **ACT_ROWS 16 -> 255**: an MM's row count is an 8-bit field (isa.mm: 0 < M < 256), and 255 rows reach 256's pass count over the prefix, ceil(558 / 255) = ceil(558 / 256) = 3 and ceil(968 / 255) = 4, so **no ISA change**; a 16-bit M (QST's rows already are) stays an option for M >= 256 | weight passes over the prefix: 3 at Np 558 instead of 70 today (TMEM caps the row group at 8; section 3) | **width-bound, not capacity-bound**: otpu_actram reads one D-byte block a column every cycle (`r_data` is MCOLS x D x 8 bits), 16 RAMB36 a column today (4 pieces x 4) beside its DSP column; MCOLS 32: 512 RAMB36, MCOLS 64: 1,024 of the part's 2,016 (or 960 URAM at 72 bits a port: every URAM on the part); rows are free up to the RAM's depth (512). Pumping the ACT RAM at 2x as TMEM_PMP does halves it, another clock-domain item | **ISA tally (done)**: the prefix's 255-row group needs TMEM 1.5M words (at 1M: "TMEM exhausted", the group stays 128 and nothing changes); with it port B falls 0.65 -> 0.51 s a chunk at MCOLS 64 (the prefix 0.40 -> 0.26 s), 0.69 -> 0.55 s at MCOLS 32, the MXU bound unchanged. RTL timing with ROWS 255 in phase 3 |
+| L3 | **a fused activation unit in the MXU drain / quantizer**: GELU-tanh / SiLU (table + polynomial, as SGMV's sgmv_act), gate x up, then quantize for the next MM (SGMV's MLP_FUSE); gate and up rows interleaved in the image so a drain yields pairs; one unit per drain lane | removes the prefix MLPs' VPU work: GELU 0.78 s of π0.5 today, 0.14 s at LANES 64 (tally): ~6% of the serial sum at the f2-vla point. Still cheap; built after L4-L6 and sized on the measured remainder | est. ~4K LUT, ~10 DSP, 3 BRAM a lane, 8-16 lanes | bit-exact against an ISA definition of the fused op |
 | L4 | **VPU lanes 8 -> 64** (LANES; TMEM banks with them) for softmax over long rows, norms, RoPE, residual adds | 8x element throughput: π0.5's ~92 M softmax elements and norms in ~0.05 s | LUT est. ~150-200K (fp32 lanes), DSP ~300-500 | the VPU tests at LANES 16, 32, 64 |
 | L5 | **TMEM 64K -> 1M words** (4 MB in URAM), banked by LANES; the drain's MCOLS outputs and QACT's row reads at 64 words a cycle | prefix tiles of 256 rows x 2048 fp32 (2 MB) in one pass; fewer DRAM round trips | ~114 URAM; a 64-way bank crossbar est. ~80-100K LUT | tiled prefill tests; RTL bank-conflict counters |
 | L6 | **QACT / QST at LANES elements a cycle** (they feed 256-row stationary operands) | activations into ACT RAM as fast as the MXU drains them | with L4's lanes | the quantizer tests at LANES 64 |
-| L7 | **memory: 8 HBM ports on the one slice** (NCH 8, ~115 GB/s raw, ~100 GB/s usable): port B and a DMA lane for activation tiles / KV; then double port B (PORTB 2, the wide-port lanes from ternary-bonsai) where the small-M phases (expert: 50 rows, vision views) show port-B stalls (section 6) | keeps the MXU fed at small M; activation traffic off the weight port | the HBM shell exists (f2-hbm: S=1 x 8); lanes est. +~10K LUT | RTL timing on the 8-port memory model |
-| L8 | **clock 200 -> 250 MHz** (SGMV closed 250 on the same part) | 1.25x | timing work, nightly | synthesis / route (nightly only) |
-| L9 | **W8A16 where accuracy needs it** (RhinoVLA's paper: W8A8 hurt success) | accuracy; int8 x int16 is one MAC a DSP (no packing): W8A16 layers at half L1's rate | DSP or a second weight path | action error vs fp32 (docs/pi05.md harness) |
+| L7 | **memory: 8 HBM ports on the one slice** (NCH 8): they buy the 4 GiB and the lanes' headroom, **not bandwidth**: a slice at PORTB 1 takes one D-byte chunk a cycle, 25.6 GB/s at 200 MHz, 32 at 250, whatever the ports offer (docs/f2_hbm.md; docs/wide_port.md: "more HBM ports only help once a slice takes more than one chunk a cycle"), and the board delivers 78-89% of that (burst200). **PORTB 2** (the wide-port lanes built on ternary-bonsai: a named dependency of f2-vla with a merge point, built once there) is on π0.5's critical path: the expert step is port-bound in the tally (0.016 s port B against 0.014 s MXU at M 50 under 64 columns). A DMA lane for activation tiles / KV goes through otpu_native_dram's grant chain unless it gets its own channel path (the LD before an MM is not overlapped with that MM) | keeps the MXU fed at small M; activation traffic off the weight port | the HBM shell exists (f2-hbm: S=1 x 8); lanes est. +~10K LUT | RTL timing on the 8-port memory model; the lanes' tests from ternary-bonsai |
+| L8 | **clock 200 -> 250 MHz** (SGMV closed 250 on the same part at 20K LUT; today's full f2 build is 145K LUT at 200) | 1.25x, treated as upside: every number below is at 200 MHz | timing work, nightly | synthesis / route (nightly only) |
+| L9 | **W8A16 where accuracy needs it** (docs/pi05.md 4: W8A8 moves π0.5's actions by 6.8% of their range, the 2B at W8A16 1.7%; RhinoVLA's paper: W8A8 hurt success) | accuracy; int8 x int16 is one MAC a DSP: half L1's rate if L1 packs, the same rate unpacked (decided by phase 1) | DSP or a second weight path | action error vs fp32 (docs/pi05.md harness) |
 | L10 | **model-side**: the 3 views as MXU rows of one pass, the prefix KV once a chunk, the expert's time conditioning precomputed (docs/pi05.md), fewer visual tokens (RhinoVLA: 64 a view) | π0.5 -> RhinoVLA halves the MACs | none | ISA |
+| L11 | **QST stores as D-byte chunks** through the DMA / port B write path, or SigLIP's per-view outputs kept in TMEM and quantized straight into ACT RAM (with L10). Today QST writes a byte a cycle on port A: ceil(n / LANES) + n cycles (opentpu/profile.py), which does not shrink with LANES | the vision tower's bound at scale: QST 0.288 s against 0.137 s of MXU at the f2-vla point, 0.34 s of the chunk's 2.36 s serial sum (more than the whole VPU after L4) | a chunk FIFO on the quantizer's store side | first confirm on the RTL that the byte-a-cycle model is what the hardware does (if the profile is pessimistic, the tally's vision line moves in the plan's favour); then the quantizer tests, RTL timing of the tower |
 
 ## 6. The VLA variant `f2-vla` (one slice; target, estimate)
 
-S = 1, D = 128, MCOLS = 64 (packed int8 DSPs), ACT_ROWS = 256, ACT_BLOCKS = 128,
-TMEM_WORDS = 1M, LANES = 64, the fused activation unit, NCH = 8 HBM ports (~100 GB/s), PORTB 1
-(2 if section 6a's stalls ask), a DMA lane for activation tiles, core 250 MHz. Peak 64 x 128 =
-8192 MAC/cycle x 250 MHz = 2.05 TMAC/s (20x today). Budget: DSP ~4.6K of 9024, URAM ~230 of
-960, LUT ~0.6-0.8M of 1.3M (estimates for the nightly synthesis to check).
+S = 1, D = 128, MCOLS = 32 unpacked (64 packed if phase 1's packing holds), ACT_ROWS = 255,
+ACT_BLOCKS = 128, TMEM_WORDS = 1.5M (the prefix's 255-row group needs it; L2), LANES = 64,
+QST chunked (L11), the fused activation unit,
+NCH = 8 HBM ports, PORTB 2, core 200 MHz (250 as upside). Peak: MCOLS 32, 4096 MAC/cycle x
+200 MHz = 0.82 TMAC/s (8x today); MCOLS 64 packed, 1.64 TMAC/s at 200 MHz, 2.05 at 250 (20x).
+Budget (estimates for the nightly synthesis to check): DSP 4.4K unpacked / ~4.6K packed of
+9,024; **BRAM 512 / 1,024 RAMB36 of 2,016 for the ACT RAM** (L2), the rest for the weight
+FIFOs, TMEM pieces and the trace; URAM ~345 of 960 (TMEM 1.5M words, 6 MB); LUT ~0.6-0.8M of
+1.3M. The
+placement scheme of one DSP column and one BRAM column per array column does not extend to 64
+columns across three SLRs: phase 2 sketches the floorplan (columns per SLR, where the result
+FIFO and the drain sit).
 
-| | today (MCOLS 4, 200 MHz) | f2-vla at 75% MXU efficiency |
-|---|---|---|
-| π0.5 a chunk | ~15-22 s (measured tally, section 3) | ~1.4 s MXU + ~0.1-0.2 s VPU / other: **~0.65 Hz** (at the measured 1.47 T MAC: ~1.0 s, ~1 Hz; the tally at MCOLS 64 / ACT_ROWS 128 / LANES 64: 0.76 s MXU at 250 MHz) |
-| RhinoVLA a chunk | ~12-15 s | ~0.65 s + ~0.1 s: **~1.3 Hz** |
+| | today (MCOLS 4; measured tally) | f2-vla, MCOLS 32 unpacked, 200 MHz | f2-vla, MCOLS 64 packed, 200 MHz |
+|---|---|---|---|
+| π0.5 a chunk | ~15-22 s (section 3) | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 1.90 s, port B 0.55, VPU 0.26, QST 0.34; bound 1.9 s, serial 3.2 s: **0.3-0.5 Hz** | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 0.95 s, port B 0.51, VPU 0.26, QST 0.34; bound 0.95 s, serial 2.21 s: **0.45-1.05 Hz** (the RTL's overlap, 1.23-1.54x the slowest unit on cut phases, puts it at ~0.7-0.85 Hz) |
+| RhinoVLA a chunk | ~12-15 s (estimate) | ~0.9-1.0 s: **~1 Hz, no margin** (estimate: no tally yet) | ~0.5 s: **~1.3-2 Hz** (estimate) |
 
-RhinoVLA reaches ≥ 1 Hz on this variant. π0.5 at 1 Hz needs ~2.8 TMAC/s effective: MCOLS 96
-(12,288 MAC/cycle, DSP ~6.2K + VPU: ~0.95-1 Hz) is the stretch point within one slice; MCOLS
-128 would need ~8.2K DSPs, past the part with the VPU's. An action chunk is 50 actions: 1 Hz
-inference still drives 10-50 Hz control, open loop within a chunk.
+So the ≥ 1 Hz deliverable (RhinoVLA) rests on phase 1's packing result: with MCOLS 64 packed
+it has margin, at MCOLS 32 unpacked it is at the line and needs the RTL's overlap measured on
+the real prefix shape. 250 MHz adds 1.25x on top. π0.5 at 1 Hz needs ~2.8 TMAC/s effective:
+the MCOLS 96 stretch (packed; 12,288 MAC/cycle, DSP ~6.2K + VPU) is the point within one slice;
+MCOLS 128 would need ~8.2K DSPs, past the part with the VPU's. The plan is sized for Np 558
+(the LIBERO prompt shape; at 968 rows, lerobot's padded length, every prefix number is 1.7x).
+An action chunk is 50 actions: 1 Hz inference still drives 10-50 Hz control, open loop within
+a chunk.
 
 ### 6a. Memory bandwidth with 8 ports (π0.5, a chunk)
 
-| traffic | bytes | at ~100 GB/s |
-|---|---|---|
-| weights, prefix: ceil(~900 / 256) = 4 passes x ~2.5 GB | ~10 GB | 0.10 s (overlapped: the MXU needs a chunk every 4 cycles) |
-| weights, vision: 768 rows, 3 passes x 0.8 GB | ~2.4 GB | 0.02 s |
-| weights, expert: 10 steps x ~0.3 GB, 50 rows (< MCOLS: a chunk a cycle, port-B-bound) | ~3 GB | 0.03 s at 32 GB/s port B: 0.09 s |
-| activation tiles, KV, the drain's outputs (~40 MB a layer) | ~0.8 GB | 0.01 s |
-| total | ~16 GB | ~0.16 s of port time against ~1.4 s of MACs |
+A slice at PORTB 1 takes one chunk a cycle, 25.6 GB/s at 200 MHz (L7); the HBM's ~115 GB/s
+behind 8 ports is not the rate. The tally at MCOLS 64 / ACT_ROWS 128 / LANES 64 / TMEM 1M:
 
-So 8 ports are enough for one f2-vla slice. The one phase that is port-B-bound is the expert
-(50 rows under 64 columns: a chunk a cycle, 0.09 s at PORTB 1); PORTB 2 halves it, and is the
-first doubling if the RTL timing shows it matters; 16 ports only with the MCOLS 96 stretch.
+| traffic | port B (tally, PORTB 1, 200 MHz) | at PORTB 2 |
+|---|---|---|
+| weights, prefix: 5 passes over 558 rows at ACT_ROWS 128; 3 at ACT_ROWS 255 with TMEM 1.5M words (tally: 0.26 s) | 0.40 s against 0.68 s of MXU | 0.20 s |
+| weights, expert: 10 steps, 50 rows under 64 columns (a chunk a cycle: port-bound, 0.016 s a step against 0.014 s of MXU) | 0.16 s | 0.08 s |
+| weights, vision (both cameras) and the activations' LD / ST | ~0.09 s | ~0.05 s |
+| chunk | **0.65 s against 0.95 s of MXU** (0.51 s at ACT_ROWS 255 with TMEM 1.5M: the tally) | ~0.33 s |
+
+So 8 ports are enough for one f2-vla slice, but the margin comes from ACT_ROWS 255 (L2) and
+PORTB 2 (L7), not from the HBM: the expert is port-bound already, so PORTB 2 is in the variant,
+not a contingency; 16 ports only with the MCOLS 96 stretch.
 
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
 |---|---|---|
-| 0 | π0.5 port (agent, in progress): ISA-exact numerics, the cost tally (vision / prefix / expert; MXU / VPU by op / QACT / port B) at today's config and at ACT_ROWS 128 / LANES 32 | seconds a chunk, per-unit breakdown, int8 action error |
-| 1 | software: tile sizing for ACT_ROWS 256, views batched, prefix KV once, conditioning precomputed (L10) | ISA tally at the new sizes |
-| 2 | L3 fused activation unit: ISA op + RTL + tests | bit-exact; VPU share < 10% of a chunk |
-| 3 | L1 MXU columns: MCOLS 8 -> 16 -> 64 with DSP packing (the RTL parameter exists: MCOLS 4 / 8 builds today), L2 ACT_ROWS 256 | bit-exact at each MCOLS; RTL timing of a cut prefix: MAC/cycle ~MCOLS x 128 at >= 75% |
-| 4 | L4 / L5 / L6: LANES 64, TMEM 1M words, QACT at LANES a cycle | VPU / QACT tests; bank-conflict counters in the RTL timing |
-| 5 | L7 memory: f2-hbm's S=1 x 8 ports + a DMA lane; PORTB 2 if the expert's port-B stalls matter | RTL timing on the 8-port model: port-B stalls < 5% outside the expert |
-| 6 | RhinoVLA port (Qwen3-VL ViT new; Qwen3 LM kernels exist; expert / flow loop shared with π0.5) | action error vs its reference |
-| 7 | f2-vla target; nightly synthesis at 250 MHz; AFI; board run | ≥ 1 Hz RhinoVLA on the F2 (measured) |
-| 8 | L9 W8A16 where phases 0 / 6 show int8 activations hurt | success-rate parity on LIBERO |
-| 9 | the MCOLS 96 stretch for π0.5 at 1 Hz | RTL timing, then the nightly |
+| 0 | π0.5 port: **done** (docs/pi05.md: ISA-exact numerics, the tally, int8 error). Left: a shape-only tally of RhinoVLA (Qwen3-VL ViT, 2.1B LM, 0.4B expert; no port needed), and QST's DRAM rate confirmed on the RTL (L11) | the budget per phase; RhinoVLA's seconds a chunk at each point |
+| 1 | **the packing's feasibility** (L1): a packed CL 16 chain in Verilator, bit-exact against the ISA over the int8 corners; one packed column synthesized out of context (DSP, fmax). ACT_ROWS 255 in the tally (done: needs TMEM 1.5M words, L2) and the RTL. QST chunked stores (L11) | **MCOLS 64 packed or MCOLS 32 unpacked**: the DSP count and fmax a column; the tally at ACT_ROWS 255; QST off the vision tower's critical path |
+| 2 | the ACT RAM at the chosen MCOLS: BRAM / pumped / URAM from the width math; a floorplan sketch per SLR (columns, the result FIFO, the drain) | the BRAM budget; the SLR plan |
+| 3 | L1 MXU columns: MCOLS 8 -> 16 -> 32 (-> 64) (the RTL parameter exists: MCOLS 4 / 8 builds today) with ACT_ROWS 255 | bit-exact at each MCOLS; RTL timing on the **real prefix shape** (558-968 rows, the 16384-wide MLPs, the 2048-wide projections; a cut model hides the drain's and result FIFO's losses): MAC/cycle ~MCOLS x 128 at >= 75% |
+| 4 | L4 / L5 / L6: LANES 64, TMEM 1M words, QACT / QST at LANES a cycle | VPU / QACT tests; bank-conflict counters in the RTL timing; VPU + QACT + QST < 15% of the serial sum |
+| 5 | L3 fused activation unit, sized on phase 4's remainder: ISA op + RTL + tests | bit-exact; the GELU's share gone |
+| 6 | L7 memory: f2-hbm's S=1 x 8 ports, PORTB 2 merged from ternary-bonsai, the DMA path for activations | RTL timing on the 8-port model: the expert step no longer port-bound; port-B stalls < 5% outside it |
+| 7 | RhinoVLA port (Qwen3-VL ViT new; Qwen3 LM kernels exist; expert / flow loop shared with π0.5) | action error vs its reference |
+| 8 | f2-vla target; nightly synthesis at 200 MHz, then 250; AFI; board run | ≥ 1 Hz RhinoVLA on the F2 (measured) |
+| 9 | L9 W8A16 where phases 0 / 7 show int8 activations hurt; the MCOLS 96 stretch for π0.5 at 1 Hz | success-rate parity on LIBERO; RTL timing, then the nightly |
 
 ## 8. Risks and the fallback
 
-* A 64-column MXU, 64 VPU lanes and a 64-way TMEM crossbar in one slice: wiring across SLRs at
-  250 MHz is the main risk (pblocks for the MXU's column chain, pipelined weight and
-  ACT-RAM paths); fall back to 200 MHz (-20%) or MCOLS 32 x 2 slices (the multi-slice route,
-  f2-hbm:s2: collectives and VLA sharding come back with it).
-* DSP int8 packing needs the shared weight across two activation rows: true for the column
-  structure, but its exactness has to be shown bit for bit.
+* The DSP packing (L1) is the gate: unpacked, MCOLS 64 is the whole part's DSPs, and the
+  fallback is **MCOLS 32 x 1 slice unpacked** (4.4K DSP), which keeps every argument of section
+  4 and lands RhinoVLA near 1 Hz with no margin. MCOLS 32 x 2 slices is not the fallback: it
+  brings back the collectives and the sharding of π0.5's single KV head that section 4 avoids.
+* A 32-64-column MXU, 64 VPU lanes and a 64-way TMEM crossbar in one slice: wiring across SLRs
+  is the main risk (pblocks for the MXU's column chain, pipelined weight and ACT-RAM paths), and
+  the ACT RAM's 512-1,024 RAMB36 have to sit beside their DSP columns. Hence 200 MHz committed
+  and 250 as upside (a 0.6-0.8M LUT design across three SLRs closing 250 MHz on its first
+  nightly is unlikely).
+* The Hz numbers carry the units' overlap: the tally's bound assumes every unit overlapped, the
+  serial sum none; the RTL on cut phases sits at 1.23-1.54x the bound. Phase 3 measures it on
+  the real prefix shape.
 * The VPU estimate rests on VOP counts; the fused unit's numerics must match an ISA definition.
-* W8A8 accuracy for actions is unproven (the paper's warning); W8A16 halves the packed rate.
+* W8A8 accuracy for actions is unproven for a rollout (6.8% of the range on π0.5; the paper's
+  warning); W8A16 halves the packed rate, and costs nothing unpacked.
