@@ -189,24 +189,6 @@ the host (`embed_host`: a slot of rows, not a 248320-row table), `cap` 2048 toke
 * **The 9B's head** is its own tensor (`output.weight`, untied, Hadamard-folded like the
   projections: prism.hadamard.version 1); in t2 277 MiB, in int4 517 MiB (the image 2511 MiB).
 
-### 7.1 The 9B's greedy check on the ISA simulator
-
-`tools/fpga_inference_check.py --backend isa --target f2-hbm --wformat t2 --golden numpy
---chat --steps 16 --cap 2048` (the 2B / 4B baselines' probe, section 5: the chat template,
-thinking off, "Write one sentence about the Moon.", 19 prompt tokens; the device's argmax
-against the fp32 reference's logits over the same history):
-
-| 9B image | head | image bytes | tokens | argmax vs fp32 reference | cosine of the logits |
-|---|---|---|---|---|---|
-| t2 weights, rotation on the device | t2 (latent ternary) | 2,381,125,248 (2271 MiB) | "The Moon is Earth's only natural satellite, a rocky celestial body that orbits our" | **16 / 16** | 0.9998-1.0000 |
-| t2 weights, rotation on the device | int4 (latent ternary) | INT4_HEAD_BYTES | INT4_HEAD_TEXT | INT4_HEAD_MATCHES | INT4_HEAD_COS |
-
-The t2 head is exact on the ternary codes (section 3) and 240 MiB smaller than int4's; a 9B
-decode step on the ISA simulator takes 130-210 s on this host, the image 1040 s to build
-under load. `bonsai2.Weights.unfold` had multiplied a [N, K / B, B] stack by H, which numpy
-runs as one GEMV a row: with the 9B's B = 4096 (K / B = 1) the 248320-row embedding table
-took 248320 GEMVs each re-reading the 64 MB H, longer than the image's quantization; it is
-one [N K / B, B] GEMM now (bit-identical: tests/test_bonsai2.py).
 * **The 9B's rotation block is 4096** (the 2B's and 4B's 512, the 27B's 1024): the hadamard
   kernel's H_512 MM followed by three butterfly stages of VOP adds and subtracts over each
   block's 8 rows of 512 (kernels/hadamard.py), the same 64 KB H matrix.
@@ -227,6 +209,25 @@ one [N K / B, B] GEMM now (bit-identical: tests/test_bonsai2.py).
   through ACT a chunk at a time (swiglu_down's chunks of whole rotation blocks: 1024 here), so
   the check now takes the widest chunk the layouts can make (`Spec._down_chunk`), not the
   width; the check of the other dimensions (hidden, the attention heads' width) is as before.
+
+### 7.1 The 9B's greedy check on the ISA simulator
+
+`tools/fpga_inference_check.py --backend isa --target f2-hbm --wformat t2 --golden numpy
+--chat --steps 16 --cap 2048` (the 2B / 4B baselines' probe, section 5: the chat template,
+thinking off, "Write one sentence about the Moon.", 19 prompt tokens; the device's argmax
+against the fp32 reference's logits over the same history):
+
+| 9B image | head | image bytes | tokens | argmax vs fp32 reference | cosine of the logits |
+|---|---|---|---|---|---|
+| t2 weights, rotation on the device | t2 (latent ternary) | 2,381,125,248 (2271 MiB) | "The Moon is Earth's only natural satellite, a rocky celestial body that orbits our" | **16 / 16** | 0.9998-1.0000 |
+| t2 weights, rotation on the device | int4 (latent ternary) | 2,633,418,368 (2511 MiB) | the same 16 tokens | **16 / 16** | 0.9998-1.0000 (the same logits to the printed digits: both heads hold the ternary codes exactly) |
+
+The t2 head is exact on the ternary codes (section 3), as the int4 head is, and 240 MiB
+smaller: the same tokens and logits. A 9B decode step on the ISA simulator takes 130-210 s on
+this host, the image 1040 s to build under load. `bonsai2.Weights.unfold` had multiplied a [N, K / B, B] stack by H, which numpy
+runs as one GEMV a row: with the 9B's B = 4096 (K / B = 1) the 248320-row embedding table
+took 248320 GEMVs each re-reading the 64 MB H, longer than the image's quantization; it is
+one [N K / B, B] GEMM now (bit-identical: tests/test_bonsai2.py).
 
 ## 8. Decode cost a token: t2 QUAD with the rotation, PORTB 1 / 2 / 4 (ISA), and the RTL
 
@@ -295,10 +296,15 @@ Ternary-Bonsai-2-4B-MTP, chat template, thinking off, greedy:
 | prompt | tokens | equal to plain greedy | drafts accepted | a plain step | a verify run (2 rows) | a draft run | speedup in unit cycles | tok/s at 200 MHz, port-bound: plain / MTP |
 |---|---|---|---|---|---|---|---|---|
 | short (19 tokens: "Write one sentence about the Moon.") | 30 (to EOS) | 30 / 30 | 11 / 18 = 0.61 | 12.16 M | 23.86 M = 1.963 steps | 1.35 M = 0.111 steps | **0.78x** (29 tokens: 352 M plain, 452 M MTP) | 16.5 / 12.8 |
-| long (LONG_PROMPT_TOKENS tokens: the FPGA passage, "summarize in two sentences") | LONG_TOKENS | LONG_EQUAL | LONG_ACC | 12.16 M | LONG_VERIFY | LONG_DRAFT | LONG_SPEEDUP | LONG_TOKS |
+| long (274 tokens: tools/f2_bench.py's FPGA passage, "summarize in two sentences") | 16 (--steps 16) | (the host loop's; plain decode was not run on this prompt, its step cost is the short prompt's) | 7 / 8 = 0.88 | 12.16 M (the short prompt's) | 23.95 M = 1.971 steps | 1.36 M = 0.112 steps | **0.91x** (15 tokens: 182 M plain, 201 M MTP) | 16.5 / 14.9 |
 
 The loop on the device (generate_card, one chained run: the serving path's) gives the same
-tokens as the host loop (CARD_RESULT).
+30 tokens as the host loop on the short prompt, 18 iterations, 11 accepted; its loop costs
+429 M unit cycles against the host loop's 452 M (its E / D1 kinds at a bucket's end), still
+0.82x of plain's 353 M; its host compile was 3.2 s (bucket 1's six programs and the prefill's
+per-position programs). A verify run's cycles are the same at every position of the reply
+(23.85-23.86 M: the KV reads grow by a few thousand a token); its MMs are "MM t2 pair", 8.30 M
+chunks in 16.61 M cycles, two a chunk.
 
 **Why t2 QUAD and MTP do not add up at MCOLS 4.** A verify is two rows. t2 QUAD needs 4 M <=
 MCOLS, so it is M = 1 only: a two-row MM in t2 can PAIR at most (2 M = 4 columns, two blocks
@@ -330,7 +336,10 @@ in the background process at server start, and otpu-serve / otpu-chat --mtp star
 (tests/test_mtp.py test_mtp_loop_programs_warmed_ahead: a decoder then compiles none of them,
 its tokens plain decode's). Whether that is the whole 10.9 -> 6.2 gap is for the board to
 say (the rest of the loop is position-independent: the KV and state handling of rejected rows
-costs nothing per position, the verify at p = LONG_P_VERIFY against p = 20: LONG_VS_SHORT).
+costs nothing per position; a verify at p = 275-290 costs 23.95 M unit cycles against 23.86 M
+at p = 20-50, the KV reads of 8 attention layers and the MTP layer's). The long prompt's
+acceptance on the ISA simulator, 0.88, is higher than the short one's 0.61 (a summary's
+tokens against a one-liner's), so acceptance is not what made the board's long case slower.
 
 ## 10. What the board needs
 
