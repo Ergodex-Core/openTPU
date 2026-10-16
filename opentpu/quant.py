@@ -342,6 +342,90 @@ def mxu_wf(fmt: str) -> int:
     return WFORMATS[fmt]
 
 
+# ---- row lanes (docs/row_lanes.md; MM RL): a matrix stored in groups of L rows. A group's
+# element rows are interleaved by chunk (chunk q of row g L + l at g rs + (q L + l) D: an
+# advance's L chunks are one aligned run), and its scale rows by block: the L rows' Sw, then
+# per block the L rows' block data (int8 a byte, int4 / fp4 / t2 a word, nvfp4 eight bytes),
+# so an advance's scale data is one aligned read of A = L x blocks-a-chunk x bytes-a-block.
+def rl_block_bytes(fmt: str) -> int:
+    """A block's scale bytes in a row's scale row: int8 1, int4 / fp4 / t2 4, nvfp4 8."""
+    return 1 if fmt == "int8" else 8 if fmt == "nvfp4" else 4
+
+
+def rl_adv_bytes(fmt: str, L: int) -> int:
+    """The scale bytes an RL advance reads (a chunk's blocks of the L rows)."""
+    return L * per_chunk(fmt) * rl_block_bytes(fmt)
+
+
+def rl_header(fmt: str, L: int) -> int:
+    """A scale group's header: the L rows' Sw (4 L bytes), padded to the advance's read."""
+    return max(4 * L, rl_adv_bytes(fmt, L))
+
+
+def rl_lanes(fmt: str, portb: int, mcols: int) -> int:
+    """The widest row-lane count L (2, 4, 8; 0: none) of a format on a configuration: L <=
+    PORTB chunks a cycle, L x blocks-a-chunk columns (M = 1), and the advance's scale data
+    within one 32-byte port-A line."""
+    best = 0
+    for L in (2, 4, 8):
+        if L <= portb and L * per_chunk(fmt) <= mcols and rl_adv_bytes(fmt, L) <= 32:
+            best = L
+    return best
+
+
+def rl_scale_bytes(K: int, fmt: str, L: int, D: int = 128) -> int:
+    """Bytes of one scale group (the MM's srs): the header, then a chunk's blocks of the L rows
+    per advance, rounded to 32-byte lines (the groups and their Sw line-aligned)."""
+    if K % D:
+        raise ValueError(f"inner dimension {K} is not a multiple of D={D}")
+    KBc = -(-(K // D) // per_chunk(fmt))
+    return -(-(rl_header(fmt, L) + KBc * rl_adv_bytes(fmt, L)) // 32) * 32
+
+
+def rl_row_stride(K: int, fmt: str, L: int, D: int = 128) -> int:
+    """Bytes of one element group (the MM's rs): the L rows' chunks."""
+    return L * row_bytes(K, fmt, D)
+
+
+def rl_groups(N: int, L: int) -> int:
+    return -(-N // L)
+
+
+def rl_rows(rows: np.ndarray, L: int, D: int = 128) -> np.ndarray:
+    """Element rows [N, rb] (quantize_mxu's) in row-lane groups: [ceil(N / L), L rb], group g
+    holding chunk q of row g L + l at (q L + l) D (rows past N zero)."""
+    rows = np.asarray(rows, np.uint8)
+    N, rb = rows.shape
+    if rb % D:
+        raise ValueError(f"rows of {rb} bytes are not whole chunks of {D}")
+    G = rl_groups(N, L)
+    pad = np.zeros((G * L, rb), np.uint8)
+    pad[:N] = rows
+    return np.ascontiguousarray(pad.reshape(G, L, rb // D, D).transpose(0, 2, 1, 3)
+                                ).reshape(G, L * rb)
+
+
+def rl_scales(srows: np.ndarray, fmt: str, K: int, L: int, D: int = 128) -> np.ndarray:
+    """Scale rows [N, srs] (quantize_mxu's) in row-lane groups: [ceil(N / L), rl_scale_bytes],
+    group g = the L rows' Sw, then block k's data of row g L + l at header + k L bs + l bs (rows
+    past N: Sw 0, data 0)."""
+    srows = np.asarray(srows, np.uint8)
+    N = srows.shape[0]
+    KB = K // D
+    bs, H = rl_block_bytes(fmt), rl_header(fmt, L)
+    G = rl_groups(N, L)
+    hdr = {"int8": 4, "int4": 8, "fp4": 8, "t2": 16, "nvfp4": 16}[fmt]
+    out = np.zeros((G, rl_scale_bytes(K, fmt, L, D)), np.uint8)
+    sw = np.zeros((G * L, 4), np.uint8)
+    sw[:N] = srows[:, :4]
+    out[:, :4 * L] = sw.reshape(G, 4 * L)
+    data = np.zeros((G * L, KB, bs), np.uint8)
+    data[:N] = srows[:, hdr:hdr + KB * bs].reshape(N, KB, bs)
+    out[:, H:H + KB * L * bs] = data.reshape(G, L, KB, bs).transpose(0, 2, 1, 3).reshape(
+        G, KB * L * bs)
+    return out
+
+
 def _int8x(W: np.ndarray, D: int):
     """int8: the hardware quantizer's rows (fp32.quantize_mx in groups of D, as QST writes an
     int8 scale row; docs/isa.md "Quantization"): Sw = amax * f32(1/127) and each block's offset
