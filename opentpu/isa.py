@@ -38,6 +38,9 @@ F_ROW, F_CSCALE, F_RSCALE = 0x1, 0x2, 0x4   # QACT (QST: F_ROW)
 F_DUP = 0x8                     # QACT: also write the rows to ACT rows rows..2*rows-1 (PAIR)
 F_DUP4 = 0x10                   # QACT: also to rows..4*rows-1, three copies (MM QUAD)
 F_HALF = 0x2                    # QST, ROW mode: write only the first half of each row
+F_T = 0x4                       # QST: transposed rows (drs 1, es a multiple of 4): four rows'
+                                #   bytes of a column written as one word (docs/isa.md QST)
+QST_T_MAX = 256                 # QST T: a row's most elements (the quantizer's transposer)
 F_RAW = 0x1                     # RLD: the word's bits (no fp32 -> int conversion)
 F_MUL = 0x2                     # RLD: times R[rb] + w2 (mod 2^32)
 F_BOUND = 0x4                   # RLD: w3 <= the value <= w4 (the waits pass's; the hardware ignores it)
@@ -471,11 +474,16 @@ def qact(src, rows, ab, kb, srs, row=False, cscale=None, rscale=None, dup=False,
                  comment=comment)
 
 
-def qst(src, dst, sdst, rows, kb, srs, drs, es, row=False, half=False, ra=0, rb=0, rc=0,
-        comment=""):
+def qst(src, dst, sdst, rows, kb, srs, drs, es, row=False, half=False, t=False, ra=0, rb=0,
+        rc=0, comment=""):
+    """t: the transposed store (F_T): rows at consecutive bytes (drs 1) and columns es (a
+    multiple of 4) apart, written a word of four rows at a time; a row at most QST_T_MAX
+    elements."""
     _check(0 < rows < 65536 and 0 < kb < 65536, f"QST: rows {rows}, kb {kb}")
     _check(row or not half, "QST: HALF needs ROW mode")
-    return Instr(QST, ra=ra, rb=rb, rc=rc, flags=(F_ROW if row else 0) | (F_HALF if half else 0),
+    _check(not t or (drs == 1 and es % 4 == 0 and es != 0), f"QST T: drs {drs}, es {es}")
+    return Instr(QST, ra=ra, rb=rb, rc=rc,
+                 flags=(F_ROW if row else 0) | (F_HALF if half else 0) | (F_T if t else 0),
                  w=_w(src, dst, sdst, rows | (kb << 16), srs, drs, es), comment=comment)
 
 

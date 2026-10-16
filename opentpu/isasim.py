@@ -608,6 +608,11 @@ class Slice:
         half = bool(ins.flags & I.F_HALF)
         if half and not row_mode:
             raise SimError("QST: HALF needs ROW mode")
+        if ins.flags & I.F_T:                      # the transposed store: the same bytes, from
+            if drs != 1 or es % 4 or not es:       # the quantizer's four-row transposer
+                raise SimError(f"QST T: drs {drs}, es {es} (drs 1, es a multiple of 4)")
+            if KB * cfg.D > I.QST_T_MAX:
+                raise SimError(f"QST T: {KB * cfg.D} elements a row, at most {I.QST_T_MAX}")
         q, s, d = self._quant_rows(src, rows, KB, srs, cfg.D, row_mode)
         ne = KB * cfg.D // 2 if half else KB * cfg.D   # HALF: the row's first half only
         baddr = dst + np.arange(rows)[:, None] * drs + np.arange(ne)[None, :] * es

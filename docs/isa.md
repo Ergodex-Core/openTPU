@@ -295,6 +295,15 @@ the other bytes of those beats while it runs. Flag bit1 `HALF` (`ROW` mode only)
 still the whole row's, but only elements `c < KB*D/2` are written (a V^T append of a head half
 as wide as its padded row, LFM2's 64 of 128, then writes its 64 real rows instead of 128
 byte-strided ones; a quantizer without `HALF` writes the zero padding too, which nothing reads).
+Flag bit2 `T` (transposed rows: `drs = 1`, `es` a non-zero multiple of 4, `KB*D <= 256`
+elements a row): the bytes are the same, but the quantizer writes them a word at a time, the
+four consecutive rows that share the word `dst + r*drs + c*es` lies in (rows `r` with the same
+`(dst + r) / 4`; the first and last groups of an instruction may hold fewer, written with byte
+enables) for each column `c`, through a four-row transposer, instead of a byte a cycle (the
+V^T appends of the KV cache: `compiler.store_quantized` sets it whenever the strides allow;
+`T` with `HALF` writes the columns `c < KB*D/2`). Without `T`, a QST whose elements are
+contiguous (`es = 1`) and whose rows are word aligned writes a word of four elements a cycle
+(the K appends), any other a byte a cycle.
 
 ### VOP
 

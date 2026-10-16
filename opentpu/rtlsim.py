@@ -425,7 +425,9 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         args += ldc_plusargs(ldc, MEMORY["LDC_MHZ"])
     if boot:
         args += ["+boot", f"+boot_addr={at}", f"+boot_n={max(nins)}"]
-    r = run_sim(args, timeout=3600)
+    # the simulation's time limit: an hour, or OTPU_SIM_TIMEOUT seconds (the cut pi0.5 phases
+    # at the f2-vla sizes run for hours: tools/pi05_rtl.py)
+    r = run_sim(args, timeout=float(os.environ.get("OTPU_SIM_TIMEOUT", 3600)))
     out = r.stdout + r.stderr
     import re
     if os.environ.get("OTPU_TMEMSTAT_LOG"):   # the TMEM's read demand (docs/tmem_pump.md)

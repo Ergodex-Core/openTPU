@@ -362,6 +362,8 @@ class QTensor:
 VT_TILE = 256          # V^T cache tile (tokens): the attention block (qwen3.ATTN_BLOCK)
 QACT_KB_MAX = 255      # QACT's blocks (the RTL's field)
 QST_KB_MAX = 1024      # QST's blocks without ROW (the RTL's limit)
+QST_T = True           # transposed stores through the quantizer's transposer (QST T) where the
+                       # strides allow (store_quantized); False: a byte a cycle, for measurements
 
 
 def vt_tile(cap: int) -> int:
@@ -1971,8 +1973,12 @@ class Builder:
         rs = x.rs if len(x.shape) == 2 else x.cols
         if not row_scale and x.cols // D > QST_KB_MAX:
             raise CompileError(f"QST of {x.cols // D} blocks without ROW: at most {QST_KB_MAX}")
+        # transposed rows (the V^T appends: consecutive rows at consecutive bytes, the columns
+        # a word-aligned stride apart) go through the quantizer's transposer, a word of four
+        # rows a cycle instead of a byte (docs/isa.md QST T; the bytes are the same)
+        t = QST_T and drs == 1 and es % 4 == 0 and es != 0 and x.cols <= I.QST_T_MAX
         self.emit(I.qst(x.base, dimm, simm, x.rows, x.cols // D, rs, drs, es, row=row_scale,
-                        half=half, rb=rb, rc=rc, comment="quantized store"))
+                        half=half, t=t, rb=rb, rc=rc, comment="quantized store"))
 
     def all_gather(self, x: Tile, S: int) -> Tile:
         x = self.materialize(x)

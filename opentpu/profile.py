@@ -151,8 +151,16 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         nw = n // 2 if ins.flags & I.F_HALF else n     # HALF: the rows' first halves written
         # the store pass: a word (four contiguous bytes) a cycle when the elements are
         # contiguous and the rows word-aligned (otpu_quant's `wide`: es 1 and the row's byte
-        # address a multiple of 4; dst's register part assumed aligned), else a byte a cycle
-        # (the transposed V stores: es the column stride)
+        # address a multiple of 4; dst's register part assumed aligned); T (the transposed V
+        # stores: es the column stride) reads the rows at LANES a cycle into the transposer and
+        # writes a word of four rows' bytes a column (otpu_quant's `is_t`: the groups of four
+        # rows are the words dst + r fall in, dst's register part assumed aligned); else a byte
+        # a cycle. The scale rows: a word (ROW) or 1 + ceil(KB / 4) words a row
+        if ins.flags & I.F_T:
+            sw = 1 if ins.flags & I.F_ROW else 1 + -(-KB // 4)
+            st = -(-(w[1] % 4 + rows) // 4) * (nw // rows)
+            return ("QST", f"{rows}x{KB * D} -> DRAM int8 T", 2 * -(-n // L) + st, 0,
+                    st + rows * sw)
         wide = w[6] == 1 and w[5] % 4 == 0 and w[1] % 4 == 0
         st = -(-nw // 4) if wide else nw
         return "QST", f"{rows}x{KB * D} -> DRAM int8", -(-n // L) + st, 0, st + rows * KB
