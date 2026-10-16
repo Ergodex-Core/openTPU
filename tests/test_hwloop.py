@@ -316,10 +316,53 @@ def test_lpn_run_refuses_stale_export_and_lists_files(tmp_path, monkeypatch):
     st = vslib.check_stale(man, export)
     assert st["stale"] is True and st["changed"] == ["rtl/mxu/otpu_mxu.sv"]
     assert vslib.check_stale(man, pin)["stale"] is False
-    # PORTB 2 is not in the model: refused before anything runs
+    # the wide model: a configuration without a graded point is refused before anything runs
     a2 = ap.parse_args(["--tree", str(pin), "--out", str(tmp_path / "run2"), "--pin", str(pin), "--lpn", str(lpn),
-                        "--lpn-build", str(tmp_path / "build"), "--python", sys.executable, "--portb", "2"])
-    assert lpn_run.run(a2)["status"] == "REFUSED_NOT_MODELLED"
+                        "--lpn-build", str(tmp_path / "build"), "--python", sys.executable, "--portb", "8"])
+    r2 = lpn_run.run(a2)
+    assert r2["status"] == "REFUSED_NOT_MODELLED" and r2["model"] == "wide" and "--grade" in r2["note"]
+    # a graded configuration (PORTB 2, the shipped registry) on another export: refused, the files listed
+    a3 = ap.parse_args(["--tree", str(export), "--out", str(tmp_path / "run3"), "--pin", str(pin), "--lpn", str(lpn),
+                        "--lpn-build", str(tmp_path / "build"), "--python", sys.executable, "--portb", "2", "--layers", "2"])
+    r3 = lpn_run.run(a3)
+    assert r3["status"] == "REFUSED_STALE_MODEL" and "graded on" in r3["note"]
+    man3 = json.loads((tmp_path / "run3" / "lpn" / "manifest.json").read_text())
+    assert man3["validated_rtl_pin"].startswith("96a90c2f") and man3["graded"]["key"]["portb"] == 2
+    assert "rtl/mxu/otpu_mxu.sv" in r3["staleness"]["changed"] and len(r3["staleness"]["removed"]) > 70
+    # check-stale on that run's lpn/ reads the graded export's fingerprint
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "hwloop" / "cli.py"), "check-stale", str(tmp_path / "run3"), "--tree", str(export)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2 and json.loads(out.stdout)["validated_rtl_pin"].startswith("96a90c2f")
+
+
+def test_lpn_graded_registry_and_wide_compare(tmp_path):
+    reg = lpn_run.load_registry()
+    keys = {(e["key"]["portb"], e["key"]["rowlanes"], e["key"]["wformat"], e["key"]["layers"]) for e in reg["configurations"]}
+    assert {(2, False, "int8", "2"), (4, False, "int8", "2"), (4, True, "int8", "4"), (4, True, "int4", "4")} <= keys
+    for e in reg["configurations"]:
+        assert e["export"] in reg["exports"] and reg["exports"][e["export"]]["rtl_fingerprint"]["files"] == 81
+        assert e["receipt"]["cycles"] > 0 and abs(e["rel_error"]) <= e["gate"] or not e["within_gate"]
+    import argparse
+    ap = argparse.ArgumentParser()
+    lpn_run.add_arguments(ap)
+    a = ap.parse_args(["--tree", "x", "--out", "y", "--portb", "4", "--rowlanes", "--mcols", "8", "--wformat", "int4",
+                       "--head-format", "int4", "--layers", "4"])
+    e = lpn_run.find_graded(reg, lpn_run.config_key(a))
+    assert e and e["receipt"]["cycles"] == 579306 and e["timing"]["port_chunks"] == 4 and e["timing"]["nch"] == 8
+    assert lpn_run.find_graded(reg, dict(lpn_run.config_key(a), lat=8)) is None
+    # the target's FIFO entries from its toml
+    t = tmp_path / "tree"
+    (t / "targets").mkdir(parents=True)
+    (t / "targets" / "f2-hbm.toml").write_text("[uarch]\nMXU_E = 4\nFIFO_DEPTH = 1024\n")
+    assert lpn_run.target_fifo_entries(t, "f2-hbm:p4rl8") == 1024 and lpn_run.target_fifo_entries(t, "ypcb-00338") == 128
+    # compare: a wide-model record against the PORTB 2 receipt is graded, against PORTB 4 not comparable
+    tr = {"lpn": {"model": "WideCompactOpenTPU", "timing": {"port_chunks": 2, "nch": 8, "dram_latency": 60},
+                  "memory": {"mm_rl": 0}}, "derived": {"cycles": 1663796, "dram_bytes": 1}, "summary": {"portb_chunks": 2779176, "lat": "60"},
+          "staleness": {"stale": False}}
+    c = lpn_run.compare(tr, ROOT / "tools" / "hwloop" / "receipts" / "2026-10-17" / "opentpu96_portb2")
+    assert c["within_gate"] is True and c["verdict"].startswith("graded configuration") and c["configuration_deltas"] == []
+    c4 = lpn_run.compare(tr, ROOT / "tools" / "hwloop" / "receipts" / "2026-10-17" / "opentpu96_portb4")
+    assert c4["verdict"].startswith("not comparable") and "PORTB 4" in c4["verdict"]
 
 
 def test_cli_check_stale_reads_lpn_directory(tmp_path):

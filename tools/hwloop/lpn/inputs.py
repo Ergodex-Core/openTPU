@@ -12,9 +12,11 @@ Runs under the venv python with the export tree on sys.path (the tree's own comp
 simulator; not this worktree's):
 
     python tools/hwloop/lpn/inputs.py --tree EXPORT --out DIR --revision PIN_SHA \
-        [--model gemma3 --layers 2 --pos 9 --wformat int8 --head-format int8 --portb 1 --mcols N]
+        [--model gemma3 --layers 2 --pos 9 --wformat int8 --head-format int8 --portb 1 --mcols N --rowlanes]
 
-The environment (OTPU_TARGET, OTPU_NCH, ...) is the run's, as run-rtl's.
+The environment (OTPU_TARGET, OTPU_NCH, ...) is the run's, as run-rtl's. input.json carries the
+pin's Config fields (upstream's frontend) and `config_export`, the export's full Config (PORTB,
+ROWLANES, MCOLS, T2, ...) for the export frontend of the wide-port extensions (lpn/wide.py).
 """
 from __future__ import annotations
 
@@ -48,6 +50,7 @@ def main(argv=None):
     ap.add_argument("--head-format", default="int8")
     ap.add_argument("--portb", type=int, default=None)
     ap.add_argument("--mcols", type=int, default=None)
+    ap.add_argument("--rowlanes", action="store_true", help="Config.ROWLANES: the row-lane image and MM RL (docs/row_lanes.md)")
     ap.add_argument("--no-isa", action="store_true", help="skip the ISA simulator run (no reference hashes, no tally)")
     a = ap.parse_args(argv)
 
@@ -84,6 +87,8 @@ def main(argv=None):
     mk = {"MCOLS": a.mcols} if a.mcols else {}
     if a.portb:
         mk.update(PORTB=a.portb, PAIR=True)          # perf_qwen --portb: column reuse on, as the f2 bitstreams
+    if a.rowlanes:
+        mk.update(ROWLANES=True)                     # perf_qwen --rowlanes
     need = spec.image(board_config(DRAM_BYTES=1 << 40, **mk), cap, **wkw).nbytes
     cfg = board_config(DRAM_BYTES=1 << max(20, (need - 1).bit_length()), **mk)
     img = spec.image(cfg, cap, **wkw)
@@ -130,7 +135,9 @@ def main(argv=None):
         im.view("<u4").astype(">u4").tofile(out / f"dram_{s}.bin")
         for f in (f"prog_{s}.hex", f"dram_{s}.bin"):
             hashes[f] = hashlib.sha256((out / f).read_bytes()).hexdigest()
-    manifest = {"revision": a.revision, "config": pin_cfg, "args": [], "instruction_counts": [len(p) for p in progs]}
+    export_cfg = dict(full, SEQ_WC=False)            # the export frontend: every field, SEQ_WC off as above
+    manifest = {"revision": a.revision, "config": pin_cfg, "config_export": export_cfg, "args": [],
+                "instruction_counts": [len(p) for p in progs]}
     (out / "input.json").write_text(json.dumps(manifest, indent=2) + "\n")
 
     # --- the program's static tally and the ISA features upstream rejects
@@ -144,7 +151,7 @@ def main(argv=None):
             key = "HALT CHAIN" if nm == "HALT" else nm
             rejected[key] = rejected.get(key, 0) + 1
     work = {"tree": str(tree), "model": a.model, "checkpoint": str(path), "layers": a.layers, "pos": a.pos,
-            "wformat": a.wformat, "head_format": a.head_format, "portb": a.portb, "mcols": a.mcols,
+            "wformat": a.wformat, "head_format": a.head_format, "portb": a.portb, "mcols": a.mcols, "rowlanes": a.rowlanes,
             "config_full": full, "config_pin_fields": pin_cfg, "config_dropped_fields": dropped, "config_forced": forced,
             "instructions_static": len(progs[0]), "opcodes_static": ops, "rejected_features_static": rejected,
             "image_bytes": int(len(dram)), "dram_bytes_config": cfg.DRAM_BYTES, "hashes": hashes,
@@ -177,7 +184,12 @@ def main(argv=None):
             if ins.op == I.MM:
                 w = [v[0] for v in W.resolve(ins, regs)]
                 n, kb = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF
-                chunks += n * kb
+                wf = (ins.flags >> I.WF_SHIFT) & 3
+                bpc = 1 if wf == I.W8 else 4 if (wf == I.W4I and w[4] & getattr(I, "RS_T2", 0)) else 2
+                L = I.mm_lanes(ins) if hasattr(I, "mm_lanes") else 0
+                # the D-byte chunks the port streams: a row's ceil(kb / blocks a chunk); row lanes
+                # stream whole groups of L rows (the last group padded)
+                chunks += (-(-n // L) * L if L else n) * -(-kb // bpc)
             original()
 
         from types import MethodType

@@ -1,0 +1,2 @@
+#!/bin/sh
+cd /Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f && OMP_NUM_THREADS=8 OTPU_NCH=8 OTPU_TARGET=f2-hbm /Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 2 --wformat int8 --head-format int8 --lat 60 --mhz 200.0 --json /Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/perf.jsonl --plus +nat_trace=/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/nat_trace.txt --portb 4

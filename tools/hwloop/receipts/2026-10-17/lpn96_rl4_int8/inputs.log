@@ -1,0 +1,50 @@
+{
+  "instructions_static": 276,
+  "opcodes_static": {
+    "LI": 1,
+    "LD": 10,
+    "VOP": 147,
+    "LOOP": 1,
+    "QACT": 15,
+    "MM": 65,
+    "QST": 2,
+    "ADDI": 2,
+    "ST": 32,
+    "HALT": 1
+  },
+  "rejected_features_static": {},
+  "image_bytes": 734461952,
+  "config_pin_fields": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 4,
+    "ACT_BLOCKS": 128,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 1073741824,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": false,
+    "STREAM": false,
+    "ACT_ROWS": 16,
+    "SEQ_WC": false
+  },
+  "config_dropped_fields": {
+    "PORTB": 4,
+    "T2": false,
+    "ROWLANES": true
+  },
+  "config_forced": {},
+  "build_s": 21.103590332997555,
+  "isa": {
+    "wall_s": 10.543598958000075,
+    "dynamic_commands": 873,
+    "dram_read_bytes_footprint": 1663965268,
+    "dram_write_bytes_footprint": 1311728,
+    "mm_weight_chunks": 3199056,
+    "mm_weight_bytes": 409479168,
+    "dram_sha256": "541cf1432897618717c79646515609a7e164b1865f06f776da6d38e577828e69",
+    "tmem_sha256": "43c4f8681786f6b1e642b60439edf374bd5bdeb6c9b5e83730ffd04ec7b14eb9",
+    "note": "the export's ISA simulator (opentpu.isasim.Machine): the numerical reference; footprint bytes are the instructions' DRAM ranges (weights, scales, KV, I/O), not beats"
+  }
+}
