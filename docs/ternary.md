@@ -188,7 +188,25 @@ the host (`embed_host`: a slot of rows, not a 248320-row table), `cap` 2048 toke
   longer context: 16.4 MiB per 1024 tokens, so cap 65536 (1 GiB of KV) still fits.
 * **The 9B's head** is its own tensor (`output.weight`, untied, Hadamard-folded like the
   projections: prism.hadamard.version 1); in t2 277 MiB, in int4 517 MiB (the image 2511 MiB).
-  Section 7.1 measures both.
+
+### 7.1 The 9B's greedy check on the ISA simulator
+
+`tools/fpga_inference_check.py --backend isa --target f2-hbm --wformat t2 --golden numpy
+--chat --steps 16 --cap 2048` (the 2B / 4B baselines' probe, section 5: the chat template,
+thinking off, "Write one sentence about the Moon.", 19 prompt tokens; the device's argmax
+against the fp32 reference's logits over the same history):
+
+| 9B image | head | image bytes | tokens | argmax vs fp32 reference | cosine of the logits |
+|---|---|---|---|---|---|
+| t2 weights, rotation on the device | t2 (latent ternary) | 2,381,125,248 (2271 MiB) | "The Moon is Earth's only natural satellite, a rocky celestial body that orbits our" | **16 / 16** | 0.9998-1.0000 |
+| t2 weights, rotation on the device | int4 (latent ternary) | INT4_HEAD_BYTES | INT4_HEAD_TEXT | INT4_HEAD_MATCHES | INT4_HEAD_COS |
+
+The t2 head is exact on the ternary codes (section 3) and 240 MiB smaller than int4's; a 9B
+decode step on the ISA simulator takes 130-210 s on this host, the image 1040 s to build
+under load. `bonsai2.Weights.unfold` had multiplied a [N, K / B, B] stack by H, which numpy
+runs as one GEMV a row: with the 9B's B = 4096 (K / B = 1) the 248320-row embedding table
+took 248320 GEMVs each re-reading the 64 MB H, longer than the image's quantization; it is
+one [N K / B, B] GEMM now (bit-identical: tests/test_bonsai2.py).
 * **The 9B's rotation block is 4096** (the 2B's and 4B's 512, the 27B's 1024): the hadamard
   kernel's H_512 MM followed by three butterfly stages of VOP adds and subtracts over each
   block's 8 rows of 512 (kernels/hadamard.py), the same 64 KB H matrix.
@@ -252,3 +270,78 @@ a wider port does pay for rotated int4 (the 2B's latent codes in int4, int4 head
 tally): 7.92 M chunks a token, 9.10 M unit cycles at PORTB 1 (port B busy 87%), 5.43 M at
 PORTB 2 and at 4 (73% and 36% busy): at PORTB 2 int4 reaches t2's cycles at twice the bytes,
 and t2 at PORTB 1 already has them.
+
+## 9. MTP speculative decode on the t2 images (ISA)
+
+How the serving path does it (opentpu/llm/mtp.py, docs/mtp.md 9-10; otpu-serve --mtp): the
+image holds the -MTP GGUF's nextn layer (mtp.*: its fc, one attention layer with its own KV
+cache, its norms) and an fp4 draft head over the 32768 lowest ids, and two slots of every
+DeltaNet state and convolution window. An iteration at position p with the token t and the
+draft d runs one **verify** (the rows kernel over the two rows (t, d) at p, p + 1, forked: row
+0's state goes to the committed slot, row 1's to the other; the final norm's rows kept) and one
+**draft** (the MTP layer over (hid, a0) and (hid, a1), two rows; the next draft is the accepted
+row's); the draft is accepted when it equals row 0's argmax; a rejected row leaves nothing
+behind (its KV rows are positional and overwritten, its state sits in the uncommitted slot).
+On the card the loop chains the buckets' programs (V, E per parity, D, D1: six a bucket,
+compiled on the host at a bucket's first use). Greedy, the tokens are plain decode's bit for
+bit (every emitted token is the argmax of a row the decode step would compute).
+
+`tools/b2_mtp.py` runs it on the ISA simulator against plain greedy decode of the same image
+layout (t2 weights and head, the rotation on the device; the MTP layer and its fc int8: the
+nextn layer is Q8_0, not ternary, `Spec.formats` attn@L=int8,mlp@L=int8), the prompt through
+the chunked prefill (8 rows a run), and tallies each run kind's unit cycles as section 8 does.
+Ternary-Bonsai-2-4B-MTP, chat template, thinking off, greedy:
+
+| prompt | tokens | equal to plain greedy | drafts accepted | a plain step | a verify run (2 rows) | a draft run | speedup in unit cycles | tok/s at 200 MHz, port-bound: plain / MTP |
+|---|---|---|---|---|---|---|---|---|
+| short (19 tokens: "Write one sentence about the Moon.") | 30 (to EOS) | 30 / 30 | 11 / 18 = 0.61 | 12.16 M | 23.86 M = 1.963 steps | 1.35 M = 0.111 steps | **0.78x** (29 tokens: 352 M plain, 452 M MTP) | 16.5 / 12.8 |
+| long (LONG_PROMPT_TOKENS tokens: the FPGA passage, "summarize in two sentences") | LONG_TOKENS | LONG_EQUAL | LONG_ACC | 12.16 M | LONG_VERIFY | LONG_DRAFT | LONG_SPEEDUP | LONG_TOKS |
+
+The loop on the device (generate_card, one chained run: the serving path's) gives the same
+tokens as the host loop (CARD_RESULT).
+
+**Why t2 QUAD and MTP do not add up at MCOLS 4.** A verify is two rows. t2 QUAD needs 4 M <=
+MCOLS, so it is M = 1 only: a two-row MM in t2 can PAIR at most (2 M = 4 columns, two blocks
+of the chunk a cycle per row), half a chunk a cycle, and the verify streams a step's bytes in
+twice the MXU cycles: c_2 = 1.96 against the 1.05-1.06 of the int8 and fp4 images in
+docs/mtp.md 9.1, where the MXU had three idle columns at M = 1 for the second row to use. With
+an acceptance of 0.61 an iteration emits 1.61 tokens for 2.07 steps' cycles: 0.78x. The same
+four columns give either t2's 2x over int4 at M = 1 or MTP's second row, not both; MTP pays on
+the int4 / int8 images (the board's today, section 5: 4B int4 + MTP 10.9 against 8.0 tok/s),
+and would pay on t2 with eight MXU columns (M = 2 QUAD: 4 M = 8 <= MCOLS 8, a chunk a cycle
+for both rows, c_2 back near 1.05), the same change a wider port B needs (section 8).
+The draft run is 0.11 of a t2 step (0.05 of an int8 one in docs/mtp.md: the step shrank, the
+int8 MTP layer and the fp4 head did not).
+
+**The long case on the board** (section 5: 4B int4 + MTP 10.9 tok/s after the short prompt,
+6.2 after the 274-token one, where plain decode gives 8.0 / 8.0). What differs between the
+two on the model side is the attention bucket: the short prompt's reply runs in bucket 1,
+whose six loop programs the warm-up request had compiled; the long prompt's reply starts in
+bucket 2 (positions 256-511), whose programs the reply's first loop compiled on the host
+before running (MTPDecoder._gen_programs: the `what` keys of the program cache), while plain
+decode's bucket programs were compiled ahead at server start (opentpu/host/gen_warm.py), which
+otpu-serve left off for --mtp. On this host the six programs of a bucket (V 3024-3200
+instructions, E 2500-2588, D 627-803, D1 444-532 for the 4B t2 image) compile in 1.1-1.5 s
+(tools/b2_mtp.py --compile-only); the card host is slower and adds each program's wait
+entries (gen_warm's note: 3.6 s a bucket for the 35B MoE there) and the chain area's writes.
+`gen_warm.warm_mtp` now compiles the MTP loop's programs of every bucket (greedy and the
+default sampler's V / E, the split form where a V or E is over IMEM) into the program cache
+in the background process at server start, and otpu-serve / otpu-chat --mtp start it
+(tests/test_mtp.py test_mtp_loop_programs_warmed_ahead: a decoder then compiles none of them,
+its tokens plain decode's). Whether that is the whole 10.9 -> 6.2 gap is for the board to
+say (the rest of the loop is position-independent: the KV and state handling of rejected rows
+costs nothing per position, the verify at p = LONG_P_VERIFY against p = 20: LONG_VS_SHORT).
+
+## 10. What the board needs
+
+* **A T2 build** (otpu_top T2 = 1, CAPS bit 28; section 6) at **PORTB 1** in the nightly: the
+  t2 QUAD decode is port-bound at one chunk a cycle, 89-90% of the port on the RTL (2B 42, 4B
+  19, 9B ~9 tok/s at 200 MHz against the rotated int4 baseline's 19.3 / 8.6 / none). PORTB 2
+  adds nothing to t2 at MCOLS 4 (section 8); it is the int4 images' gain (their QUAD streams
+  two chunks a cycle) and, with MCOLS 8, t2's at M = 2 (a verify's two rows, or two
+  sequences).
+* **The 9B** fits the slice's 4 GiB with 1.8 GiB to spare (section 7); its image builds in
+  the image cache as the others (the GGUF's 4096-block rotation: the butterflies are 6% of
+  the token). The 27B needs f2-hbm:s2 (3.98 GiB a slice at cap 2048).
+* **MTP** stays off for t2 images at MCOLS 4 (0.78x); keep it for int4 / int8 images, with
+  gen_warm's bucket programs ahead.

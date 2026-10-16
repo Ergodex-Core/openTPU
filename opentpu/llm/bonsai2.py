@@ -195,15 +195,18 @@ class Weights(Mapping):
         return self._signs[K]
 
     def rotate(self, x: np.ndarray) -> np.ndarray:
-        """The activation-side transform R x = H (s * x) over the last axis (blocks of 512)."""
+        """The activation-side transform R x = H (s * x) over the last axis (blocks of B)."""
         K = x.shape[-1]
-        y = (x * self.signs(K)).reshape(*x.shape[:-1], K // self.block, self.block)
+        y = (x * self.signs(K)).reshape(-1, self.block)
         return (y @ self.H).reshape(x.shape)
 
     def unfold(self, Wf: np.ndarray) -> np.ndarray:
-        """A folded weight [N, K] in the model's basis: W_f H diag(s) (H symmetric)."""
+        """A folded weight [N, K] in the model's basis: W_f H diag(s) (H symmetric). The rows'
+        blocks of B as one [N K / B, B] matrix times H: one GEMM (a [N, K / B, B] stack times H
+        ran a GEMV per row: with the 9B's B = 4096, K = B, 248320 of them each reading the 64
+        MB H again, the embedding table's unfold took longer than the image's quantization)."""
         N, K = Wf.shape
-        y = (Wf.reshape(N, K // self.block, self.block) @ self.H).reshape(N, K)
+        y = (Wf.reshape(N * (K // self.block), self.block) @ self.H).reshape(N, K)
         return y * self.signs(K)
 
     # ------------------------------------------------------------------ row orders
