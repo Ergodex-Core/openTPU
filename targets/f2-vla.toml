@@ -39,6 +39,7 @@ STREAM = false
 SEQ_WC = true
 T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cycle)
 PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
+PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit1). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
 
 [uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS / 2 (16: a
                                 # 32-column row drains in two cycles; the card's 4 would take 8)

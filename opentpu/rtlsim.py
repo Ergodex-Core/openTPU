@@ -267,6 +267,8 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     if getattr(cfg, "T2", False):       # t2 weights, MM QUAD, QACT DUP4 (otpu_slice T2; only
         p["T2"] = 1                     # when on: the other builds' cache keys stay)
+    if getattr(cfg, "PACK", False):     # the MXU's int8 weight packing (otpu_mxu PACK)
+        p["PACK"] = 1
     p.update(UARCH)
     p.update(uarch or {})
     if axi == 1 and os.environ.get("OTPU_NCH"):

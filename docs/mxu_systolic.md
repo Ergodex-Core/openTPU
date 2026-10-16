@@ -295,6 +295,62 @@ without it (r2m4ng):
 | slices / LUT | 57,519 (77.05%) / 172,736 | 54,176 (72.57%) / 169,571 |
 | the router's worst congestion | South level 5, 110% | North and East level 5, 105% / 104% |
 
+## Packed int8 weights (`PACK`, docs/mxu_packing.md)
+
+`otpu_mxu PACK` (default 0: the array above, bit for bit) packs two int8 weight rows into each
+DSP48E2 (`otpu_pe_pk` in rtl/tech/generic and rtl/tech/xilinxus; no DSP48E1 version: its 25-bit
+pre-adder leaves a 17-bit lane). What changes in the array, and what does not:
+
+- **The streams.** The hop still carries `{high, low}` 8 bits each a position; under a packed
+  int8 command they are weight rows 2p and 2p+1 of the same block (the low stream row 2p's, the
+  high row 2p+1's), under every other command what they are today (a 4-bit chunk's two blocks,
+  t2's). The PE's A takes the low stream sign-extended, its D the high stream at bit 19; the
+  pre-adder's `AD = w_lo + w_hi 2^19` (27 bits) meets the activation in the 27 x 18 multiplier and
+  the chain's 48-bit cascade sums `L + H 2^19`, `L` and `H` the two rows' 16-product dot products
+  (`|L|, |H| <= 16 x 127^2 < 2^18`).
+- **PAIR's select is a third INMODE value.** `otpu_pe`'s stream select (INMODE `A` or `D`) becomes
+  the lane select `sel = {b, a}` in the same INMODE register: 2'b11 both lanes (packed), 2'b01
+  lane a alone (`AD = A`: an unpacked column's product in the low lane, the high lane exactly 0),
+  2'b10 lane b alone (`AD = D`: PAIR's and QUAD's high columns, their product in the high lane,
+  the low lane 0). So the 4-bit formats and t2 run unpacked with no fabric mux per position, and
+  a column's integer is `acc_a + acc_b`, one of them 0.
+- **Two column ends a column.** Each chain end `P` is split in the wires: lane a's `otpu_mxce`
+  (CPG 1) takes `L = sext19(P[18:0])` on A; lane b's (CPG 2) takes `P[42:19]` on A and the borrow
+  `P[18]` on D, so `H = P[47:19] + P[18]` forms in its pre-adder (no fabric, no cycle). Each lane
+  has its own `B = m << sh` shifter (`bm2`, `bm2b`: row 2p's and row 2p+1's `dw`, the same `Sa`
+  offsets) and its own accumulator, deskewed alike (`acc_al`, `acc_bl`); first / last travel once.
+  146 DSPs a physical column (128 + 2 x 9), 73 a logical one.
+- **The FIFOs are two banks of DEPTH slots.** The issuer streams the rows one after the other as
+  without PACK (row 2p's KB chunks and scale lines, then row 2p+1's); each chunk request carries
+  its slot and bank through a queue (port B's responses come back in order; `wq_hd`, a register,
+  is the block RAMs' write address) and each scale line its slot and bank in its tag, so row 2p's
+  block k lands in bank 0 of the pair's slot k and row 2p+1's in bank 1 (the scale entries alike:
+  `{Sw, dw}` of row 2p+1 in a 40-bit bank-1 RAM). A slot counts (`f_count`, `s_count`) once its
+  bank-1 chunk / line arrives; a pair's second row reserves no slot (`occ`). The consumer then
+  pops one slot an advance and the pop, replay (`M > MCOLS`: `KB <= DEPTH` slots) and free logic
+  is today's, in slot units; the unpacked formats use bank 0 alone. The block RAM doubles (64
+  RAMB36 at the F2's FIFO_DEPTH 1024, D 128). The alternative, interleaving the two rows' chunks
+  in one FIFO, would have put the issuer's per-row Sw tracking (`srow_addr`, `i_swh`, `i_swn`,
+  `i_sws`, `r_sw`) on two rows at once and the consumer on two read addresses a cycle; this
+  keeps both single.
+- **Two result-FIFO rows a pass, in today's row format.** At S0 + LROW the pass pushes row 2p
+  (the a lanes, `Sw[2p]`, the columns' `Sa'`) and a cycle later row 2p+1 (the b lanes, `Sw[2p+1]`;
+  `rvb`, registered copies). A KB 1 pass would push two rows a cycle, so a packed command's last
+  advance never pops in the cycle after another's (`lp`: KB 1 passes every other cycle, the same
+  rows per cycle as unpacked). A pass counts two in `rows_live` (the result FIFO's room). An odd
+  N's last row is a pair alone: its b row is pushed with a skip bit (the row's 1 extra bit) and
+  the drain takes its step with no lane: no TMEM write, no ACC read, no RMAX candidate.
+- **The drain** sees rows (2p, g), (2p+1, g), (2p, g+1), ...: a packed command's `GD = 2G` drain
+  rows a pair, its addresses stepping +1 (to row 2p+1), `gs - 1` (to the next group's row 2p),
+  and `drow + 2` to the next pair; the last two drain rows of a pair have the last group's `Ml`
+  columns (`d_lastg` beside `d_last`). The lanes, the TMEM addressing per row, the epilogue, ACC
+  / ASCALE / RMAX are unchanged. The two heads' overlap (`pn`) adds "the same `pk`" to its
+  condition (the lane selects and the row pairing are per-command state read after S0).
+
+Bit-exact with the ISA simulator at MCOLS 4 and 8 physical, ACT_ROWS to 64, in every mode and
+mixed with the 4-bit formats and t2 (tests/test_mxu_pack_rtl.py); the -128 contract and the cycle
+counts: docs/mxu_packing.md 7.
+
 ## Plan and status
 
 1. Done: `IMPL=2` dot product with the unchanged epilogue, bit-exact on the MM / 4-bit / PAIR RTL

@@ -254,7 +254,7 @@ def arch_hash(cfg) -> int:
     build without it stays, and a host that writes no entries refuses a build with it (its
     hash leaves it out: opentpu/host/board.py check_hash)."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
-    for k in ("SEQ_WC", "T2"):            # (in the hash only when on: older builds keep theirs)
+    for k in ("SEQ_WC", "T2", "PACK"):    # (in the hash only when on: older builds keep theirs)
         if not d.get(k):
             d.pop(k, None)
     if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
@@ -283,6 +283,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d["SEQ_WC"] = 1
     if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
         d["T2"] = 1
+    if t.arch.get("PACK"):
+        d["PACK"] = 1
     return d
 
 
@@ -303,6 +305,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
         "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
+        "PACK": int(a.get("PACK", False)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
@@ -332,8 +335,8 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2; the CFG_HASH it reports): ACT_ROWS equal to
-    MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PACK; the CFG_HASH it reports): ACT_ROWS
+    equal to MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
     for k in ("MCOLS", "LANES", "ACT_ROWS", "TMEM_WORDS"):
@@ -347,6 +350,8 @@ def build_config(t: Target | str | None = None, **knobs):
         a["SEQ_WC"] = bool(int(knobs["SEQ_WC"]))
     if knobs.get("T2") is not None:
         a["T2"] = bool(int(knobs["T2"]))
+    if knobs.get("PACK") is not None:
+        a["PACK"] = bool(int(knobs["PACK"]))
     return config(t, **a)
 
 

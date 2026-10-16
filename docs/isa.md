@@ -266,6 +266,27 @@ together: `k0` is even and `ssa` and `srs` are multiples of 8 (WF 3: 16); with K
 chunk's second block word is read and ignored. ACC, RMAX and ASCALE are unchanged and write M
 rows.
 
+#### Packed int8 (PACK builds)
+
+A build with `PACK` (Config.PACK; CAPS2 bit1; docs/mxu_packing.md) computes int8 MMs (`WF = 0`)
+two weight rows at a time: the MXU's DSPs form `w[2p] + w[2p+1] * 2^19` in their pre-adders and
+each physical column yields output columns `n = 2p` and `2p+1` of a pass, so MCOLS physical
+columns are 2 MCOLS logical ones and an int8 MM takes `ceil(N/2) * KB * ceil(M / MCOLS)`
+advances instead of `N * KB * ceil(M / MCOLS)`, two chunks an advance (at `PORTB = 1` the stream
+feeds one chunk a cycle: an MM with `M <= MCOLS` runs at the port's rate, half the array's; from
+`M > MCOLS` on, the replayed passes hide it). Nothing in the encoding or in the loop above
+changes: every output is the same exact integer and the same fp32 epilogue (the lanes are
+split at the chain ends, before the block scales `B` apply; the ISA simulator ignores `PACK`),
+RMAX, ACC and ASCALE write the same words in the same order (rows `n`, `n+1` of each pass), an
+odd `N`'s last row runs alone, `M > MCOLS` needs the same `KB <= FIFO depth` (a replayed pair
+takes `KB` slots of a two-bank FIFO). The 4-bit formats, PAIR / QUAD and t2 run unpacked, one
+product a DSP, as on a build without `PACK`, at the physical MCOLS's rate. One contract: the
+packing is exact for weights in `[-127, 127]`, quant.py's int8 range; a weight byte of `-128` in
+row `2p+1` beside a negative weight at the same position of row `2p` wraps the DSP's 27-bit
+pre-adder and row `2p+1`'s product reads as `+128 * act` (docs/mxu_packing.md 3.4; the ISA
+simulator does not model it: a host writing int8 rows outside quant.py keeps `-128` out of them,
+or out of the odd rows). `-128` in row `2p`, or in row `2p+1` beside a weight `>= 0`, is exact.
+
 ### QACT
 
 `src = R[ra]+w1` (TMEM words), `rows = w2[7:0]` (at most ACT_ROWS), `ab = w2[15:8]`,
