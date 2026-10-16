@@ -73,7 +73,8 @@ RhinoVLA's are still estimates.
   the VPU's (TMEM_WARB 2), the drain at MCOLS lanes a step (MXU_E 32), the VPU at 64 lanes
   (its sums on a 16-lane sub-datapath), PACK: v_out at MCOLS 32 overlaps **1.77x** the
   slowest unit (the MXU, 627,586 cycles against its 354,816 packed), the packed MXU at
-  **56.5%** (36% unpacked at 16 lanes under the old order); at 16 lanes the arbitration alone
+  **56.5%** (36% unpacked at 16 lanes under the old order); e_step 466,936 cycles (-47%
+  against the same build at 16 lanes), 2.34x port B's 199,264 (the step is port-bound: L7); at 16 lanes the arbitration alone
   took p_out at MCOLS 16 from 5.86 to 4.85 M cycles (the MXU 68%) and the VPU-bound phases
   stayed put (every phase but p_qkv / p_out is VPU-bound at 16 lanes with PACK). The overlap
   range the plan carries is now 1.5-1.8x on the measured phases at the target; the rest of
