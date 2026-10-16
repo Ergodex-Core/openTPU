@@ -21,6 +21,10 @@ compiled in the engine as before (both write the same entry). The process is a d
 ends with the engine's process; a write cut short leaves nothing (the caches write to a
 temporary name, then rename). Compiles are host work, not model math: the card runs the
 programs.
+
+An MTP engine (Spec.mtp: otpu-serve --mtp, otpu-chat --mtp) decodes with the MTP loop's
+programs instead (opentpu/llm/mtp.py: six a bucket, MTPDecoder._gen_programs), so its process
+compiles those (warm_mtp) under the `what` the decoder asks for.
 """
 from __future__ import annotations
 
@@ -76,9 +80,55 @@ def _main(spec, cfg, cap, batch, rows, image_kw: dict, stream_fill: bool, layout
     os.nice(19)
     image = spec.image(cfg, cap, batch, rows, **image_kw)
     image.stream_fill = stream_fill
-    for b in range(1, G.buckets(cap, block) + 1):
+    mtp = bool(getattr(spec, "mtp", False))     # an MTP engine decodes with the MTP loop's
+    for b in range(1, G.buckets(cap, block) + 1):   # programs (MTPDecoder), not the plain loop's
         for samp in samps:
-            warm(image, layout, block, conv_lo, b, chain, samp, debug, split, waitc)
+            if mtp:
+                warm_mtp(image, layout, block, b, samp, waitc)
+            else:
+                warm(image, layout, block, conv_lo, b, chain, samp, debug, split, waitc)
+
+
+def warm_mtp(image, layout, block: int, blocks: int, samp=None, waitc: bool = False) -> bool:
+    """A bucket's programs of the MTP loop (opentpu/llm/mtp.py KINDS: the verify and the
+    bucket's last position per parity, greedy or sampled as `samp`, and the drafter's over two
+    rows and one) into the program cache's disk under the `what` MTPDecoder._gen_programs
+    asks for, a V or E over IMEM in its split form at the first cut whose parts fit, as it
+    would; with waitc their wait entries. True when it compiled any. Without it the first
+    reply reaching a bucket compiled its six programs on the host before its loop ran (the
+    4B's 274-token prompt's reply on the F2: bucket 2's, docs/ternary.md 8)."""
+    from opentpu import isa as I
+    from opentpu import progcache as PC
+    from opentpu import waits as WC
+    from opentpu.llm import generate as G
+    from opentpu.llm import mtp as M
+    compiled = False
+
+    def get(what, compile):
+        nonlocal compiled
+        had = PC.has(layout, what)
+        progs = PC.get(layout, what, lambda: (compile(), None))[0]
+        compiled = compiled or not had
+        if waitc and progs is not None:
+            for p in progs:
+                WC.entries(I.assemble(p), image.cfg.D, image.cfg.S, prog=p)
+        return progs
+    for k in range(M.NK):
+        ve = M.KINDS[k][0] in "VE"
+        if samp is not None and not ve:         # (D, D1: either mode's, under the greedy pass)
+            continue
+        sk = samp if ve else None
+        what = ("mtpgen", blocks, k, block, False, None if sk is None else sk.key)
+        progs = get(what, lambda: M.compile_gen(image, blocks, k, block, False, sk))
+        if progs is None or G.fits(image, progs) or not ve:
+            continue
+        for cut in M.plan_cuts(image):          # over IMEM: the split form, as _gen_programs
+            parts = [get(what + ("part", j, cut),
+                         lambda j=j: M.compile_gen(image, blocks, k, block, False, sk, j, cut))
+                     for j in (0, 1)]
+            if parts[0] is None or all(G.fits(image, p) for p in parts):
+                break
+    return compiled
 
 
 def warm(image, layout, block: int, conv_lo: int, blocks: int, chain: bool = True, samp=None,
