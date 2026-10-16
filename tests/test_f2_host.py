@@ -258,3 +258,54 @@ def test_native_helper_copies_bytes_and_reads_back():
     lib.otpu_read(ctypes.addressof(result), p + 3, 128)
     assert result.raw == bytes(range(128))
     assert dst.raw[:3] == bytes(3) and dst.raw[131:] == bytes(125)
+
+
+@pytest.mark.parametrize("slices,nch", [(1, 8), (2, 8), (1, 16), (4, 8)])
+def test_hbm_geometry_maps_every_slice_channel_and_beat(pci, slices, nch):
+    """The HBM build's geometry (docs/f2_hbm.md): S slices x NCH pseudo-channels at BAR4 offset
+    (NCH s + c) x channel bytes; Board.write / read interleave a slice's logical bytes over its
+    NCH channels by the adapter's map (beat_at: the pair rotation and its CHASH fold), edges and
+    whole groups alike, and read them back. A miniature 4 KiB per channel stands in for 512 MiB."""
+    root, _ = pci
+    regs = bytearray((root / "resource0").read_bytes())
+    struct.pack_into("<I", regs, R.R_CFG_SLICES, slices)
+    struct.pack_into("<I", regs, R.R_CFG_DRAM, (12 + (nch.bit_length() - 1)) | nch << 8 | 12 << 16)
+    struct.pack_into("<I", regs, R.R_CAPS, R.CAP_CHASH)
+    (root / "resource0").write_bytes(regs)
+    size = slices * nch * 4096
+    os.unlink(root / "resource4_wc")
+    (root / "resource4").write_bytes(bytes(size))
+    os.link(root / "resource4", root / "resource4_wc")
+    t = f2.F2Transport("f2:" + BDF)
+    b = board.Board(t, calibrate=False)
+    try:
+        assert t.bases == tuple(j * 4096 for j in range(slices * nch))
+        assert b.nch == nch and b.slices == slices and b.chash
+        rng = np.random.default_rng(nch * 10 + slices)
+        for s in range(slices):
+            n = nch * 4096 - 3 * 64 - 5
+            data = rng.integers(0, 256, n, dtype=np.uint8)
+            b.write(70, data, s)                       # unaligned edges, whole groups between
+            assert np.array_equal(b.read(70, n, s), data)
+            raw = np.frombuffer((root / "resource4").read_bytes(), np.uint8)
+            for x in range(70, 70 + n, 61):           # each byte where the adapter puts it
+                c, off = board.beat_at(x, True, nch)
+                assert raw[(nch * s + c) * 4096 + off] == data[x - 70]
+    finally:
+        b.close()
+        t.close()
+
+
+def test_hbm_host_map_is_the_adapters():
+    """beat_at is the inverse of rtl/mem/otpu_native_dram.sv's chan_of / cb_of as its testbench
+    states it (sim/verilator/tb_native_nch.sv lbeat): chunk m = u x NCH / 2 + (pair ^ fold(u))."""
+    for nch in (2, 4, 8, 16):
+        pb = (nch // 2).bit_length() - 1
+        for c in range(nch):
+            for u in (0, 1, 2, 3, 7, 255, 4096 + 5, (1 << 23) + 77):
+                f = 0
+                for k in range(0, 27, pb or 27):
+                    f ^= (u >> k) & ((1 << pb) - 1)
+                m = u * (nch // 2) + ((c // 2 ^ f) & (nch // 2 - 1))
+                b = 2 * m + (c % 2 ^ (m.bit_count() & 1))
+                assert board.beat_at(b * 64 + 9, True, nch) == (c, u * 64 + 9)

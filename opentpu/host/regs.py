@@ -103,8 +103,12 @@ R_ICOUNT_S = 0xC0
 def cfg(vals: list[int]) -> dict:
     """The CFG_* registers' values (in CFG_REGS order) -> the configuration they report."""
     s, tmem, imem, act, dram, ua, plat, h = vals
-    return {"S": s, "TMEM_WORDS": tmem, "IMEM_WORDS": imem, "ACT_BLOCKS": act,
-            "DRAM_BYTES": 1 << (dram & 0xFF), "channels": (dram >> 8) & 0xFF,
+    # DRAM_BYTES: what a slice's programs address (32-bit DRAM byte addresses: at most 4 GiB);
+    # slice_bytes, where they differ: what its channels hold (f2-hbm16's 16 x 512 MiB: 8 GiB)
+    more = {"slice_bytes": 1 << (dram & 0xFF)} if dram & 0xFF > 32 else {}
+    return more | {"S": s, "TMEM_WORDS": tmem, "IMEM_WORDS": imem, "ACT_BLOCKS": act,
+            "DRAM_BYTES": 1 << min(dram & 0xFF, 32),
+            "channels": (dram >> 8) & 0xFF,
             "channel_bytes": 1 << ((dram >> 16) & 0xFF),
             "MXU_IMPL": ua & 0xF, "TMEM_IMPL": (ua >> 4) & 0xF, "VPU_CL": (ua >> 8) & 0xFF,
             "ULANES": (ua >> 16) & 0xFF, "SEQ_WC": (ua >> 24) & 1, "platform": plat, "hash": h}
@@ -113,7 +117,7 @@ def cfg(vals: list[int]) -> dict:
 def cfg_words(c: dict) -> list[int]:
     """cfg()'s inverse: the register values for a configuration (the fake card's)."""
     return [c["S"], c["TMEM_WORDS"], c["IMEM_WORDS"], c["ACT_BLOCKS"],
-            (c["DRAM_BYTES"] - 1).bit_length() | c["channels"] << 8
+            (c.get("slice_bytes", c["DRAM_BYTES"]) - 1).bit_length() | c["channels"] << 8
             | (c["channel_bytes"] - 1).bit_length() << 16,
             c["MXU_IMPL"] | c["TMEM_IMPL"] << 4 | c["VPU_CL"] << 8 | c["ULANES"] << 16
             | c.get("SEQ_WC", 0) << 24,

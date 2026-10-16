@@ -155,14 +155,23 @@ class F2Transport:
                 raise RuntimeError(f"{self.dev}: image is not the F2 openTPU platform")
             dram = self.reg_read(R.R_CFG_DRAM)
             channel_shift, channels, total_shift = (dram >> 16) & 255, (dram >> 8) & 255, dram & 255
-            if (self.reg_read(R.R_CFG_SLICES) != 1 or channels != 2 or not 6 <= channel_shift <= 31
-                    or total_shift != channel_shift + 1):
-                raise RuntimeError(f"{self.dev}: unsupported F2 memory geometry {dram:#x}")
+            # the DDR build: one slice, two 2 GiB windows of the DIMM; the HBM build
+            # (docs/f2_hbm.md): S slices of NCH 512 MiB pseudo-channels, S x NCH <= 32, slice s's
+            # channel c at BAR4 offset (NCH s + c) x 512 MiB (= its HBM address)
+            slices = self.reg_read(R.R_CFG_SLICES)
+            nch_log2 = channels.bit_length() - 1
+            if (not 1 <= slices <= 32 or channels < 2 or channels & (channels - 1)
+                    or slices * channels > 32 or not 6 <= channel_shift <= 31
+                    or total_shift > channel_shift + nch_log2
+                    or (channels == 2 and (slices != 1 or total_shift != channel_shift + 1))
+                    or (channels > 2 and channel_shift > 29)):
+                raise RuntimeError(f"{self.dev}: unsupported F2 memory geometry {dram:#x} "
+                                   f"({slices} slices)")
             self.channel_bytes = 1 << channel_shift
-            self.bases = (0, self.channel_bytes)
+            self.bases = tuple(j * self.channel_bytes for j in range(slices * channels))
             if dma:
                 self._lib = _mmio()
-                size = channels * self.channel_bytes
+                size = slices * channels * self.channel_bytes
                 self._uc = _map(root / "resource4", size)
                 self._wc = _map(root / "resource4_wc", size)
                 self._uc_addr, self._wc_addr = _address(self._uc), _address(self._wc)

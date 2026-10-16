@@ -1,5 +1,10 @@
 #!/usr/bin/env python3
-"""Freeze the F2 CL and run the pinned AWS HDK synthesis/implementation flow."""
+"""Freeze the F2 CL and run the pinned AWS HDK synthesis/implementation flow.
+
+--target f2 (the default) builds the DDR4 CL (one slice on the slot's DIMM, sh_ddr); a target
+whose platform mem is "hbm" (targets/f2-hbm*.toml) builds the HBM CL: S slices of NCH channels,
+each channel on its own HBM pseudo-channel (cl_opentpu_hbm.sv as cl_opentpu, otpu_f2_hbm_sys, the
+HDK's cl_mem_hbm_wrapper and cl_hbm IP; docs/f2_hbm.md)."""
 from __future__ import annotations
 
 import argparse
@@ -36,6 +41,33 @@ def check_vivado_version(output: str, expected: str) -> None:
         raise RuntimeError(f'This target requires Vivado {expected}')
 
 
+HBM_WRAPPER = 'hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv'
+
+
+def is_hbm(t: target.Target) -> bool:
+    return t.platform.get('mem') == 'hbm'
+
+
+def check_hbm_ip(hdk: Path) -> None:
+    """The HDK's cl_hbm IP as the HBM CL assumes it: both stacks, 450 MHz AXI ports, the
+    switch on (every port reaches all 16 GiB; the CL keeps each channel on its own port's
+    pseudo-channel, and the host on the port that owns its address), generated."""
+    ip = hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_hbm/cl_hbm.xci'
+    if not ip.is_file():
+        raise RuntimeError(f'Missing HBM IP: {ip}; source hdk_setup.sh')
+    p = json.loads(ip.read_text())['ip_inst']['parameters']['component_parameters']
+    want = {'USER_HBM_STACK': '2', 'USER_AXI_CLK_FREQ': '450', 'USER_HBM_DENSITY': '16GB',
+            'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE'}
+    for k, v in want.items():
+        if p.get(k, [{}])[0].get('value') != v:
+            raise RuntimeError(f'{ip}: {k} is not {v}')
+    gen = hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_hbm/synth/cl_hbm.v'
+    if not gen.is_file():
+        raise RuntimeError(f'Missing HBM generated product: {gen}')
+    if not (hdk / HBM_WRAPPER).is_file():
+        raise RuntimeError(f'Missing HDK HBM wrapper: {hdk / HBM_WRAPPER}')
+
+
 def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
     for path, wanted in [(hdk, t.platform['hdk_commit']),
                          (hdk / 'hdk/common/ip', t.platform['ip_commit'])]:
@@ -68,6 +100,8 @@ def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
             raise RuntimeError(f'{path}: Git LFS pointer; run git lfs pull in hdk/common/ip')
         if path.suffix == '.elf' and not header.startswith(b'\x7fELF'):
             raise RuntimeError(f'{path}: not an ELF calibration image')
+    if is_hbm(t):
+        check_hbm_ip(hdk)
     if shell:
         dcp = sh / 'build/checkpoints/from_aws/cl_bb_routed.small_shell.dcp'
         expected = '04a5331321e86cffc7ef740fb6132b29f179e68e2d58ccae5031c989403ecca6'
@@ -76,30 +110,68 @@ def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
     return sh
 
 
-def prepare(out: Path, sh: Path, t: target.Target, build_id: str) -> Path:
+def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
+            wrapper: Path | None = None) -> Path:
+    """The CL directory of `t`'s build. An HBM target takes the HDK's cl_mem_hbm_wrapper
+    (`wrapper`; default the HDK's beside `sh`)."""
     if out.exists():
         raise RuntimeError(f'{out} already exists; choose a new run directory')
-    if t.core_khz != 100000 or t.arch['S'] != 1 or t.platform['channel_bytes'] != 2**31:
+    hbm = is_hbm(t)
+    p = t.platform
+    if hbm:
+        nport = t.arch['S'] * p['channels_per_slice']
+        if (t.core_khz != 200000 or p['channel_bytes'] != 2**29 or nport > 32 or
+                p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
+            raise RuntimeError('F2 HBM CL requires 200 MHz (TMEM 400), 512 MiB channels, '
+                               'a power-of-two NCH and S x NCH <= 32 ports')
+    elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')
     cl = out / 'cl_opentpu'
     shutil.copytree(ROOT / 'boards/f2/design', cl / 'design')
     shutil.copytree(ROOT / 'boards/f2/build', cl / 'build')
+    scripts, cons = cl / 'build/scripts', cl / 'build/constraints'
+    if hbm:
+        # the HBM CL's top, synthesis script and CDC constraints in the DDR ones' places
+        (cl / 'design/cl_opentpu.sv').unlink()
+        (scripts / 'synth_cl_opentpu_hbm.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
+        (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
+        # the linked-reset exception covers the HBM clock's synchronizer too
+        pnr = cons / 'small_shell_cl_pnr_user.xdc'
+        old = 'foreach stem {main_reset_n bridge_reset_n core_reset_n}'
+        if old not in pnr.read_text():
+            raise RuntimeError(f'{pnr}: the reset synchronizer list moved')
+        pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}'))
+        w = wrapper or sh.parents[2] / HBM_WRAPPER
+        if not w.is_file():
+            raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
+        shutil.copy2(w, cl / 'design/cl_mem_hbm_wrapper.sv')
+        (cl / 'design/opentpu_geometry.vh').write_text(
+            f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n")
+    else:
+        (cl / 'design/cl_opentpu_hbm.sv').unlink()
+        (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
+        (cons / 'cl_timing_user_hbm.tcl').unlink()
     files = target.sources(t)
     for name in files:
         dest = cl / 'design/rtl' / name
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(ROOT / 'rtl' / name, dest)
     params = target.rtl_params(t)
-    for name in ('S', 'NCH', 'CH_LOG2', 'DRAM_LOG2'):
-        params.pop(name)
-    params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16),
-                  CH_BYTES=t.platform['channel_bytes'])
+    if hbm:                             # otpu_f2_hbm_sys takes the geometry; no DIMM
+        params.pop('DDR_MTS')
+        params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16))
+        sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_hbm_sys.sv'
+    else:
+        for name in ('S', 'NCH', 'CH_LOG2', 'DRAM_LOG2'):
+            params.pop(name)
+        params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16),
+                      CH_BYTES=t.platform['channel_bytes'])
+        sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_sys.sv'
     actual_params = set(re.findall(r'parameter\s+(?:int|bit|logic(?:\s*\[[^\]]+\])?)\s+(\w+)',
-                                  (ROOT / 'rtl/boards/f2/otpu_f2_sys.sv').read_text()))
+                                  sys_rtl.read_text()))
     if set(params) - actual_params:
         raise RuntimeError(f'Unknown RTL parameters: {set(params) - actual_params}')
-    bit_params = set(re.findall(r'parameter\s+bit\s+(\w+)',
-                        (ROOT / 'rtl/boards/f2/otpu_f2_sys.sv').read_text()))
+    bit_params = set(re.findall(r'parameter\s+bit\s+(\w+)', sys_rtl.read_text()))
     (cl / 'design/opentpu_params.vh').write_text(',\n'.join(
         f".{k}({1 if k in bit_params else 64 if k == 'CH_BYTES' else 32}'h{v:x})"
         for k, v in params.items()) + '\n')
@@ -131,7 +203,9 @@ def load_synthesis(run: Path, expected_sha: str) -> tuple[dict, Path, str]:
             r'^OTPU_STAGE_SYNTHESIS_PASSED$', log, re.M):
         raise RuntimeError('Parent synthesis did not complete successfully')
     sentinel = re.search(r"^OTPU_DDR_CALIBRATION_INIT_2C=256'h([0-9a-fA-F]{64})$", log, re.M)
-    if not sentinel or not int(sentinel[1], 16):
+    if info.get('platform', {}).get('mem') == 'hbm':
+        pass                            # no DIMM: no calibration firmware to verify
+    elif not sentinel or not int(sentinel[1], 16):
         raise RuntimeError('Parent synthesis has no verified DDR calibration sentinel')
     dcp = run / f'cl_opentpu/build/checkpoints/cl_opentpu.{build_id}.post_synth.dcp'
     if sha(dcp) != expected_sha.lower():
@@ -274,6 +348,8 @@ def package_afi(cl: Path, sh: Path, hdk: Path, build_id: str, env: dict) -> Path
 def main() -> None:
     p = argparse.ArgumentParser(description=__doc__)
     p.add_argument('--hdk', type=Path, required=True)
+    p.add_argument('--target', default='f2',
+                   help='f2 (DDR4), or an HBM target: f2-hbm[:s2|:s4], f2-hbm16 (docs/f2_hbm.md)')
     p.add_argument('--out', type=Path, required=True, help='fresh run directory; existing run for --package-only')
     p.add_argument('--flow', choices=['SynthCL', 'ImplCL', 'BuildAll'], default='SynthCL')
     p.add_argument('--from-synth', type=Path, help='successful SynthCL run directory for ImplCL')
@@ -284,7 +360,9 @@ def main() -> None:
     p.add_argument('--prepare-only', action='store_true')
     p.add_argument('--build-id', default=None, help='eight hexadecimal digits; defaults to HEAD')
     a = p.parse_args()
-    t = target.load('f2')
+    t = target.load(a.target)
+    if t.platform.get('board') != 'f2':
+        p.error(f'{a.target} is not an F2 target')
     hdk, out = a.hdk.resolve(), a.out.resolve()
     if a.package_only:
         if (not a.route_sha256 or a.package or a.prepare_only or a.from_synth or
@@ -314,7 +392,7 @@ def main() -> None:
         p.error('--build-id must match the inherited synthesis build ID')
     if not re.fullmatch(r'[0-9a-fA-F]{8}', build_id):
         p.error('--build-id must contain exactly eight hexadecimal digits')
-    cl = prepare(out, sh, t, build_id)
+    cl = prepare(out, sh, t, build_id, hdk / HBM_WRAPPER if is_hbm(t) else None)
     if parent:
         inherit_synthesis(out, cl, a.from_synth.resolve(), *parent)
     env = dict(os.environ, CL_DIR=str(cl), CL='cl_opentpu', SHELL_MODE='small_shell',

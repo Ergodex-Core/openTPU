@@ -1,0 +1,81 @@
+# AWS EC2 F2 with the HBM (docs/f2_hbm.md): the slot's xcvu47p, small shell 0x10212415, HDK 2.3.0;
+# S slices of NCH = 8 channels, each channel one HBM AXI port and its own 512 MiB pseudo-channel
+# (cl_mem_hbm_wrapper, the cl_hbm IP, 450 MHz AXI): a slice holds 8 x 512 MiB = 4 GiB without
+# crossing the HBM's switch, at 8 x 14.4 GB/s of ports for the 25.6 GB/s a slice streams at 200
+# MHz. The host reaches every pseudo-channel through PCIS (AppPF BAR4 offset = HBM address).
+# Core 200 MHz, TMEM pumped at 400 (TMEM_PMP 1), as Alex's f2-hbm200 image. The arch is the f2
+# target's (the YPCB card's m4: the same programs and CFG_HASH). Variants: s2 (S = 2: 16 ports,
+# 8 GiB), s4 (S = 4: all 32 ports, 16 GiB; the 27B at a quarter per slice). f2-hbm16 is S = 1 on
+# 16 channels (8 GiB in one slice).
+
+[target]
+name = "f2-hbm"
+kind = "fpga"
+platform_id = 5
+description = "AWS F2: xcvu47p (small shell), S slices x 8 HBM pseudo-channels (cl_hbm, 450 MHz AXI), 200 MHz core, OCL + PCIS"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: what its 32-bit DRAM byte addresses reach
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+
+[uarch]                         # the f2 target's (the YPCB card's m4)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 200.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 6 (TMEM: / 3)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0             # the AXI ports' clock (an MMCM from clk_hbm_ref: 900 MHz / 2)
+hostcal = false
+channels_per_slice = 8
+channel_bytes = 536870912       # a pseudo-channel: slice s's channel c at HBM byte (NCH s + c) x 512 MiB
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"
+
+[variants.s2]                   # two slices: HBM ports 0-15, 2 x 4 GiB
+S = 2
+
+[variants.s4]                   # four slices: all 32 HBM ports, 4 x 4 GiB
+S = 4

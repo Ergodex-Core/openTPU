@@ -1,4 +1,5 @@
 """The F2 CL snapshot must implement exactly the selected target and retain provenance."""
+import dataclasses
 import importlib.util
 import json
 import os
@@ -467,3 +468,53 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
     (generated / 'cl_ddr4.xml').write_text('version https://git-lfs.github.com/spec/v1\n')
     with pytest.raises(RuntimeError, match='Git LFS pointer'):
         flow.check_hdk(tmp_path, t, shell=False)
+
+
+@pytest.mark.parametrize('name,S,nch,dram_log2', [('f2-hbm', 1, 8, 32), ('f2-hbm:s2', 2, 8, 32),
+                                                  ('f2-hbm:s4', 4, 8, 32), ('f2-hbm16', 1, 16, 33)])
+def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2):
+    """An HBM target (docs/f2_hbm.md): the HBM top in cl_opentpu's place, its synthesis script
+    and CDC constraints in the DDR ones' places, the HDK's wrapper copied in, the geometry the
+    target's (S x NCH ports of 512 MiB), the programs' architecture the f2 target's with T2."""
+    shell = tmp_path / 'shell'
+    scripts = shell / 'build/scripts'
+    scripts.mkdir(parents=True)
+    (scripts / 'build_all.tcl').write_text('# test HDK script\n')
+    wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
+    wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
+    t = T.load(name)
+    assert flow.is_hbm(t) and t.core_khz == 200000 and t.uarch['TMEM_PMP'] == 1
+    if S == 1:                          # f2's programs and T2 (docs/ternary.md)
+        assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True)
+        assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
+    out = tmp_path / 'run'
+    cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
+    d = cl / 'design'
+    assert not (d / 'cl_opentpu.sv').exists() and (d / 'cl_opentpu_hbm.sv').is_file()
+    assert (d / 'cl_mem_hbm_wrapper.sv').read_text() == wrapper.read_text()
+    assert (d / 'opentpu_geometry.vh').read_text() == (
+        f'localparam int S = {S};\nlocalparam int NCH = {nch};\n')
+    assert (cl / 'build/scripts/synth_cl_opentpu.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm.tcl').read_bytes()
+    assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm.tcl').read_bytes()
+    assert 'hbm_reset_n}' in (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
+    assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
+        (S, nch, 29, dram_log2)
+    assert params['CORE_KHZ'] == 200000 and 'CH_BYTES' not in params and 'DDR_MTS' not in params
+    vh = (d / 'opentpu_params.vh').read_text()
+    assert f".NCH(32'h{nch:x})" in vh and ".TMEM_PMP(32'h1)" in vh
+    srcs = (d / 'sources.tcl').read_text()
+    assert 'rtl/boards/f2/otpu_f2_hbm_sys.sv' in srcs and 'otpu_f2_sys.sv' not in srcs
+    for f in T.sources(t):
+        assert (d / 'rtl' / f).read_bytes() == (ROOT / 'rtl' / f).read_bytes()
+
+
+def test_ddr_snapshot_leaves_the_hbm_files_out(tmp_path):
+    shell = tmp_path / 'shell'
+    (shell / 'build/scripts').mkdir(parents=True)
+    (shell / 'build/scripts/build_all.tcl').write_text('#\n')
+    cl = flow.prepare(tmp_path / 'run', shell, T.load('f2'), '01234567')
+    assert (cl / 'design/cl_opentpu.sv').is_file()
+    assert not list(cl.rglob('*hbm*'))
