@@ -403,9 +403,14 @@ def _vops_program(rng, cfg, n_ops=45):
 
 
 @pytest.mark.parametrize("lanes,uarch,seed", [(8, {}, 0), (8, {}, 1), (8, "board4", 2),
-                                              (16, {}, 3), (4, {}, 4)])
+                                              (16, {}, 3), (4, {}, 4), (32, {}, 5),
+                                              (64, {}, 6), (64, "board4", 7)])
 def test_vops_rtl_bit_exact(have_verilator, lanes, uarch, seed):
-    cfg = Config(S=1, LANES=lanes, MCOLS=min(8, lanes))
+    """Every VOP (the reductions RSUM / RSSQ / RDOT / RMAX / ARGMAX among them, OUTER, the
+    composites) on random shapes, RTL against the ISA simulator bit for bit, at 4 to 64 lanes:
+    past 16 the sums run through the 16-lane sub-datapath (otpu_vpu KS), the same bits. (64
+    lanes need D = 128, the f2-vla target's: the ACT RAM's lanes divide D.)"""
+    cfg = Config(S=1, LANES=lanes, MCOLS=min(8, lanes), D=128 if lanes > 32 else 32)
     if uarch == "board4":                     # the board's TMEM/window, 4 composite lanes
         uarch = dict(rtlsim.BOARD_UARCH, VPU_CL=4)
     r = np.random.default_rng(500 + seed)
@@ -470,10 +475,11 @@ def _direct_program(rng, n_ops=48):
 
 
 @pytest.mark.parametrize("lanes,uarch,seed", [(8, {}, 0), (8, "board", 1), (8, "board4", 2),
-                                              (16, {}, 3), (4, {}, 4)])
+                                              (16, {}, 3), (4, {}, 4), (32, {}, 5),
+                                              (64, "board", 6)])
 def test_direct_vops_rtl_bit_exact(have_verilator, lanes, uarch, seed):
     """EXP2SUB, MIN, RSUB, ABS, FILL and COPY, RTL against the ISA simulator bit for bit."""
-    cfg = Config(S=1, LANES=lanes, MCOLS=min(8, lanes))
+    cfg = Config(S=1, LANES=lanes, MCOLS=min(8, lanes), D=128 if lanes > 32 else 32)
     if uarch == "board":
         uarch = dict(rtlsim.BOARD_UARCH)
     elif uarch == "board4":

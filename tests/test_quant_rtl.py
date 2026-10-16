@@ -169,7 +169,8 @@ def _qrows(rng, R, n, g):
 
 
 @pytest.mark.parametrize("D,lanes,xd", [(32, 8, None), (32, 16, None), (128, 8, None),
-                                         (128, 16, None), (32, 8, 0), (32, 8, 32), (128, 8, 128)])
+                                         (128, 16, None), (32, 8, 0), (32, 8, 32), (128, 8, 128),
+                                         (128, 64, None)])
 def test_quantizer_modes_rtl(have_verilator, D, lanes, xd):
     """QACT (ROW or not, CSCALE, RSCALE, DUP) read back by identity MMs, UNIT (y = q * Sa *
     2^-da; groups past the window drop) and int8x; QST (ROW or not, HALF, element strides 1 to
@@ -307,7 +308,7 @@ def test_quantizer_ties_qact_rtl(have_verilator, row):
     assert np.array_equal(got.view(np.uint32), want.transpose(1, 0, 2).view(np.uint32))
 
 
-@pytest.mark.parametrize("D,lanes", [(32, 8), (32, 16), (128, 8), (128, 16)])
+@pytest.mark.parametrize("D,lanes", [(32, 8), (32, 16), (128, 8), (128, 16), (128, 64)])
 def test_quantizer_qst_t_rtl(have_verilator, D, lanes):
     """QST T (docs/isa.md: the transposed rows of the KV cache's V^T appends, drs 1 and es a
     multiple of 4, written a word of four rows a column through the quantizer's transposer):

@@ -461,14 +461,20 @@ def test_act_reads_follow_the_mm_rows(have_verilator, mcols, rows, M, wf, pair):
         assert a["rd"] < a["cyc"] * mcols
 
 
-@pytest.mark.parametrize("lanes", [4, 16])
+@pytest.mark.parametrize("lanes", [4, 16, 32, 64])
 def test_lane_count_does_not_change_results(have_verilator, lanes):
-    """LANES only changes timing: the same kernels give the same bits at any lane count."""
-    args, want = attn_args(np.random.default_rng(3), Hq=8, Hkv=2, T=70)
-    ri, rr = both(attention_decode, Config(S=2, LANES=lanes, MCOLS=min(8, lanes)), **args)
+    """LANES only changes timing: the same kernels give the same bits at any lane count (past
+    16 the VPU's sums go through its 16-lane sub-datapath, otpu_vpu KS; 64 lanes need D = 128,
+    the f2-vla target's: the ACT RAM's and the quantizer's lanes divide D, so the attention runs
+    at d = 128 and the MLP at H = 256)."""
+    D = 128 if lanes > 32 else 32
+    args, want = (attn_args(np.random.default_rng(3), Hq=6, Hkv=2, d=128, T=70, cap=128, block=128)
+                  if D == 128 else attn_args(np.random.default_rng(3), Hq=8, Hkv=2, T=70))
+    cfg = Config(S=2, LANES=lanes, MCOLS=min(8, lanes), D=D, ACT_BLOCKS=16 if D == 128 else 64)
+    ri, rr = both(attention_decode, cfg, **args)
     assert rel(rr.outputs["out"], want) < 0.03
-    args, want = mlp_args(np.random.default_rng(4), M=3)
-    ri, rr = both(mlp, Config(S=2, LANES=lanes, MCOLS=min(8, lanes)), **args)
+    args, want = mlp_args(np.random.default_rng(4), M=3, H=256 if D == 128 else 128)
+    ri, rr = both(mlp, cfg, **args)
     assert rel(rr.outputs["out"], want) < 0.02
 
 

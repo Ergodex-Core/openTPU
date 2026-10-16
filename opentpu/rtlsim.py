@@ -297,6 +297,12 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
         # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
         p["NCH"] = int(os.environ["OTPU_NCH"])
+    if p.get("TMEM_RPL") and p.get("RPB", 0) < _target.NRP * cfg.LANES:
+        # the board uarch's RPB is "every read lane" of the target's LANES (sim_uarch: NRP x
+        # max(16, LANES)); a simulation with more lanes than the target (OTPU_LANES, a test's
+        # Config at 64 on the card's target) keeps the replaying arbiter it implies (ARB_MASK:
+        # otpu_slice's TMEM_IMPL 3 check), so RPB follows the simulated lanes
+        p["RPB"] = _target.NRP * cfg.LANES
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
