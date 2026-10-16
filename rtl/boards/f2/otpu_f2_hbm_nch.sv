@@ -178,6 +178,11 @@ module otpu_f2_hbm_nch #(
   // ---- the crossing's head, registered (its LUT RAM read stays off the burst compare)
   logic        k_v, k_we;
   logic [24:0] k_a;
+  // whether the held command is the open burst's next beat, and not at a BMAX boundary, decided
+  // as it loads (the 6fac2d06 synthesis: the 25-bit compare against o_nx ran into the pop's 600
+  // enables at -0.19 ns, 450 MHz). While it is held, o_nx does not move (a burst opens or grows
+  // only by popping it), so the flag stays true; as it loads, o_nx is this cycle's next value
+  logic        k_nx, k_bnd;
   logic [575:0] k_d;
   logic        k_pop;                  // the held command joins or opens a burst
   assign x_pop = x_v && (!k_v || k_pop);
@@ -185,7 +190,12 @@ module otpu_f2_hbm_nch #(
     if (hrst) k_v <= 1'b0;
     else if (!k_v || k_pop) begin
       k_v <= x_v;
-      if (x_v) begin k_we <= x_we; k_a <= x_a; k_d <= x_d; end
+      if (x_v) begin
+        k_we <= x_we; k_a <= x_a; k_d <= x_d;
+        // (the three candidates compared in parallel, the late select last)
+        k_nx <= k_open ? x_a == k_a + 1'b1 : k_join ? x_a == o_nx + 1'b1 : x_a == o_nx;
+        k_bnd <= BW == 0 ? 1'b1 : (x_a % BMAX) == 0;
+      end
     end
   end
 
@@ -204,8 +214,7 @@ module otpu_f2_hbm_nch #(
   logic [WDW:0] wf_n;
   logic [WDW-1:0] wf_h;
   // the head continues the open burst: same direction, the next beat, room, no BMAX boundary
-  wire cont = o_v && k_we == o_we && k_a == o_nx && o_len != (BW + 1)'(BMAX) &&
-              (BW == 0 ? 1'b0 : (k_a % BMAX) != 0);
+  wire cont = o_v && k_we == o_we && k_nx && o_len != (BW + 1)'(BMAX) && !k_bnd;
   // close the open burst: full, the head does not continue it, or it waited GATHER cycles
   wire q_room = o_we ? awq_n != 2'd2 : arq_n != 2'd2;
   wire close = o_v && q_room && (o_len == (BW + 1)'(BMAX) || (k_v && !cont) ||
@@ -248,7 +257,9 @@ module otpu_f2_hbm_nch #(
   logic [15:0] btarget, bcnt, bgray;
   logic        aerr;
   always_ff @(posedge hclk) begin
-    if (k_pop && k_we) wf[WDW'(wf_h + wf_n)] <= k_d;
+    // the W FIFO's tail (not live unless the FIFO is full) takes the held beat every cycle; a
+    // push only moves the count, so its write enables are not the pop's
+    if (!wf_n[WDW]) wf[WDW'(wf_h + wf_n)] <= k_d;
     if (aw_tk) begin wb_len[wb_t] <= awq[awq_h].len; bb_len[2'(bb_h + bb_n)] <= awq[awq_h].len; end
     if (hrst) begin
       o_v <= 1'b0; o_age <= '0; arq_n <= '0; awq_n <= '0; arq_h <= 1'b0; awq_h <= 1'b0;
