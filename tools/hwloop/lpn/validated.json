@@ -344,7 +344,7 @@
         ]
       },
       "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f",
-      "frozen_utc": "2026-10-16T20:29:21Z"
+      "frozen_utc": "2026-10-16T20:38:30Z"
     }
   },
   "configurations": [
@@ -583,6 +583,65 @@
         "channel_rate": 0.8648648648648649
       },
       "run": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/w96/lpn_rl4_int4_mcols8/lpn"
+    },
+    {
+      "key": {
+        "model": "gemma3",
+        "layers": "2",
+        "pos": 9,
+        "wformat": "int8",
+        "head_format": "int8",
+        "portb": 1,
+        "rowlanes": false,
+        "mcols": 4,
+        "target": "f2-hbm",
+        "nch": 8,
+        "lat": 60
+      },
+      "export": "96a90c2f5fb6d64cff16de8dad1460601017523a",
+      "model": "WideCompactOpenTPU",
+      "wide_model_sha256": "f800f208761b6492e904ac27dc5f34f6da82cfee7915290b119d063f8d971351",
+      "timing": {
+        "dram_latency": 60,
+        "dram_bytes_per_cycle": 128,
+        "window": 32,
+        "fifo_chunks": 1024,
+        "chain_length": 16,
+        "epilogue_lanes": 2,
+        "quant_buffer_chunks": 1024,
+        "batch_rows": 8,
+        "matrix_engines": 1,
+        "port_chunks": 1,
+        "nch": 8,
+        "chash": true,
+        "beat_bytes": 64,
+        "channel_depth": 64,
+        "adapter_latency": 14
+      },
+      "lpn_cycles": 2821563,
+      "receipt": {
+        "dir": "/Users/rachittibrewal/ergodex-03/openTPU-hwloop/tools/hwloop/receipts/2026-10-17/opentpu96_portb1",
+        "cycles": 2798478,
+        "label": "measured"
+      },
+      "rel_error": 0.008249126846807453,
+      "within_gate": true,
+      "gate": 0.05,
+      "graded_utc": "2026-10-16T20:38:30Z",
+      "cause": "",
+      "memory": {
+        "wide_reads": 0,
+        "two_part": 0,
+        "two_part_share": null,
+        "roofline": {
+          "port_b": 2779176,
+          "mxu": 2779176,
+          "port_a": 2778664,
+          "channel": 814569
+        },
+        "channel_rate": 0.8648648648648649
+      },
+      "run": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/w96/lpn_portb1_channels/lpn"
     }
   ]
 }
