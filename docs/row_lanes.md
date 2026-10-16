@@ -232,7 +232,7 @@ Per lane beyond QUAD's four streams (the eight-stream build, `RL = 8`, at D = 12
 | | cost |
 |---|---|
 | the hops' streams (32 -> 64 bits a position, columns 1 .. MCOLS - 2) | +6 x 128 x 32 = 24.6 K FF |
-| S1's four more streams (the 4-bit half select, t2 decode) and their skew lines | ~2 K LUT (SRL), ~1 K FF |
+| S1's four more streams, and the block-major remap (per stream and position: the lane's chunk by L, the block's half or t2 code, the 4-bit decode: ~20 LUT) and their skew lines | ~15-20 K LUT (as built: `wrl`, a per-command select over three L values), ~1 K FF; the four-stream build's remap is a 2:1 on two streams |
 | the PE input select 2:1 -> 4:1 (one LUT6 level, 8 x 128 x 16 bits) | ~+8 K LUT |
 | four more scale decoders and the per-column 8:1 of (s, m, v) | ~0.7 K + 2.2 K LUT |
 | the scale entry's fourth and fifth RAMs (128 + 224 bits x DEPTH 1024) | 11 RAMB36 |
@@ -249,10 +249,80 @@ wd register), the scale slot select (one more level before the dw subtract: 8:1 
 4:1) and the drain's +L adder (4 bits of carry on a 32-bit incrementer): nothing on the
 sequencer's or the grant's paths. The nightly's synthesis reads them off against this table.
 
-## ISA, simulator, compiler (landed with the design)
+## ISA, simulator, compiler (landed)
 
-See docs/isa.md "Row lanes" and tests/test_row_lanes.py; tools/tally_decode.py --rowlanes.
+* **ISA** (docs/isa.md "Row lanes", opentpu/isa.py): `isa.mm(rl=L)`, rs bits 3:2 (`RS_RL`;
+  `RS_MASK` 0xF, rs a multiple of 16), `mm_lanes(ins)`, `chunks_per_cycle(rl=)`; QACT
+  `F_DUP8` (one of DUP, DUP4, DUP8). The layout: opentpu/quant.py `rl_lanes` (the widest L of
+  a format on a PORTB / MCOLS), `rl_rows`, `rl_scales`, `rl_row_stride`, `rl_scale_bytes`,
+  `rl_header`, `rl_adv_bytes`.
+* **Simulator** (opentpu/isasim.py): `Config.ROWLANES` (OTPU_ROWLANES; in the arch hash only
+  when on: every existing hash stays), the MM's RL branch reads the groups back as rows (an
+  as_strided view of [G, KBc, L, D]) and the scale groups (`_mx_scales_rl`), then computes the
+  plain MM; the legality (ROWLANES, L <= PORTB, L bpc <= MCOLS, the 32-byte line, k0, M = 1, no
+  PAIR, L D alignment, 32-byte / 4 L (RSC) scale alignment); QACT DUP8.
+* **Profiler** (opentpu/profile.py): an RL MM is ceil(N / L) ceil(KB / bpc) cycles, its chunks
+  the padded groups', its port A the lines (an advance's, and the group's Sw line where it is
+  not the first advance's); `roofline()` takes them as cycles.
+* **Compiler** (opentpu/compiler.py): `QTensor.rl` (`weight(rl=)`; row slices at multiples of L,
+  column slices by L D chunks), `Stationary.copies` (DUP8 where eight copies fit), `dot()`
+  emits MM RL for an RL matrix at M = 1 and refuses anything else (a CompileError: an RL matrix
+  has no other reader). opentpu/runtime.py `Weight(rl=True)` for kernels.
+* **Images** (opentpu/llm/qwen3.py `rl_lanes_of` / `rl_alloc`, gemma4.py for Gemma 3): with
+  `Config.ROWLANES` the projections, the down parts, the PLE projection and the LM head are
+  stored in groups of the format's widest L (L D / 32-byte aligned) and their descriptors
+  carry `rl`; the head keeps its standard rows beside them for the embedding gather. The
+  decode kernels do not change: the descriptors are the switch.
+* **Targets**: `f2-hbm:p4rl` (PORTB 4, ROWLANES; CFG_HASH d6ed551d), `f2-hbm:p4rl8` (and MCOLS
+  8; 172e5c73), `f2-hbm:p2rl` (e476f0b7); `target.rl_streams` (4 at MCOLS 4, 8 at MCOLS 8) is
+  the RTL's `RL`; `rtl_params["RL"]`, `build_config(ROWLANES=)`; the host reads CAPS2 bit4
+  (`regs.caps2["rowlanes"]`, `device_config`, OTPU_ROWLANES must agree, FakeTransport).
+* **Tests** (tests/test_row_lanes.py, 38): the RL MM bit for bit the plain MM's over every
+  format, L 2 / 4 / 8, UNIT + RMAX, ACC + RMAX, ASCALE, RSC, N not a multiple of L; the
+  refusals; the compiler's dot at PORTB 2 / 4, MCOLS 4 / 8; a tiny Gemma 3 and Qwen3 decode
+  step with and without the mode, the same logits (int8 and int4); Gemma-3-1B's real decode
+  token (26 layers and the head) bit-identical in int8 (PORTB 4) and int4 (PORTB 4, MCOLS 8);
+  `tools/tally_decode.py --rowlanes` tallies the compiled mode: the table above, exactly.
 
-## RTL, measurements
+## RTL (landed)
 
-See docs/wide_port.md "Row lanes" once measured.
+`RL` (0, 4, 8: the MXU's streams, `target.rl_streams`: the columns, at least QUAD's four) through
+tb_top / otpu_top, otpu_board, otpu_f2_sys / otpu_f2_hbm_sys, tb_board and otpu_slice
+(`rtlsim.top_params` only when on: every other build's cache key stays); otpu_ctrl CAPS2 bit4;
+otpu_quant / otpu_actram `DUP8` (flag bit 5: rows r + c off, c = 1 .. 7). In otpu_mxu
+(rtl/mxu/otpu_mxu.sv), as the design above: `cmd_rl` / `cmd_L` from rs bits 3:2 with the
+pipeline's M' = L (`cmd_M`: the hi / hq columns, the row sum's partner distance, Ml), the
+structure flags pair' / qd' from the format's blocks a chunk, the chunk count L an advance
+(`cmd_nb`, no shorter last advance), the total ceil(N / L) x KBa, the drain's lanes (jo[l] =
+l, run = drain_run(1), dinc = L, the last row's Mz with a row countdown d_rem / d_lz), the
+issuer's offsets (so = H + k0 L bs, step A, the stride rs & ~0xF), the tag's rl / lg and the
+A-byte window into slots (the entry's third RAM plus a fourth for slots 4 .. 7 at RL 8 and a
+fifth for the other lanes' Sw), S1's block-major streams (`wrl`: stream s = block s / L of
+lane s mod L's chunk), the per-column stream select (s_hi / s_hq = J's bits in RL) beside the
+ACT RAM's block select, the eight decoders and the `dec1[{s_hq, s_hi}]` pick with the block's
+validity by `{hq, hi}`, Sw per column into the result FIFO (MCOLS words a row) and the lanes,
+RMAX reduced over the lanes' column maxima (`mkr`), ASCALE's alpha[0], the pop-head overlap
+condition on rl and L. Without RL every term is a constant or a generate branch not taken
+(the per-column Sw is one value), and the PORTB 1 / 2 regression suites are unchanged.
+
+**What MCOLS the mode needs for L = 4:** int8 L 4 takes four columns: MCOLS 4 (the f2-hbm
+build as it is); int4 L 4 is eight columns (each lane's chunk two blocks): MCOLS 8 (`RL` 8, the
+eight-stream datapath). Measured identical for int8 at MCOLS 4 and 8 (949,485 and 949,474
+cycles).
+
+**Tests** (Verilator 5.048, D = 128, bit for bit the ISA simulator's DRAM and TMEM;
+tests/test_wide_port_rtl.py "row lanes"): 16 cases x the behavioural DRAM and the native path
+(the adapter on 4 / 8 channels with 20% random stalls): int8 L 2 (PORTB 2 / 4), L 4 (PORTB 4,
+MCOLS 4 and 8), int4 / fp4 L 2 and L 4 (MCOLS 8), nvfp4 L 2, t2 L 2 (MCOLS 8), KB 1 to 9, k0
+offsets, N not a multiple of L, each with scales, UNIT + RMAX, ACC + RMAX, UNIT + ACC + ASCALE
+and (int8 / int4 / fp4) RSC; the native runs check that no wide read went in two parts; one
+program at PORTB 4 / MCOLS 8 / T2 of int8 RL 4, int4 RL 4, int8 QUAD, int4 RL 2, t2 RL 2, plain
+int8, int8 PAIR, nvfp4 RL 2, int8 RL 4 with ACC, fp4 QUAD, int8 RL 2 and RL 4 with RSC back to
+back (DRAM, NCH 8, NCH 16); the compiler's one-row dot over `Weight(rl=True)` at PORTB 2 / 4
+and MCOLS 4 / 8; the throughput: int8 over 9-block rows, QUAD's 3 advances a row against RL
+4's 2.25, and 0 two-part reads where QUAD's split.
+
+## Measurements
+
+docs/wide_port.md "Row lanes": the table (4 layers + head, every point; the whole model), the
+comparison with the tally, the Bonsai-2 line, what the nightly needs.
