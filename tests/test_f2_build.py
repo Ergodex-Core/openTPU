@@ -470,12 +470,16 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
         flow.check_hdk(tmp_path, t, shell=False)
 
 
-@pytest.mark.parametrize('name,S,nch,dram_log2', [('f2-hbm', 1, 8, 32), ('f2-hbm:s2', 2, 8, 32),
-                                                  ('f2-hbm:s4', 4, 8, 32), ('f2-hbm16', 1, 16, 33)])
-def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2):
+@pytest.mark.parametrize('name,S,nch,dram_log2,portb',
+                         [('f2-hbm', 1, 8, 32, 1), ('f2-hbm:s2', 2, 8, 32, 1),
+                          ('f2-hbm:s4', 4, 8, 32, 1), ('f2-hbm16', 1, 16, 33, 1),
+                          ('f2-hbm:p2', 1, 8, 32, 2), ('f2-hbm16:p4', 1, 16, 33, 4)])
+def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2,
+                                                              portb):
     """An HBM target (docs/f2_hbm.md): the HBM top in cl_opentpu's place, its synthesis script
     and CDC constraints in the DDR ones' places, the HDK's wrapper copied in, the geometry the
-    target's (S x NCH ports of 512 MiB), the programs' architecture the f2 target's with T2."""
+    target's (S x NCH ports of 512 MiB), the programs' architecture the f2 target's with T2 (the
+    p2 / p4 variants: with a wide port B, PORTB in the parameters and the hash)."""
     shell = tmp_path / 'shell'
     scripts = shell / 'build/scripts'
     scripts.mkdir(parents=True)
@@ -485,8 +489,10 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     t = T.load(name)
     assert flow.is_hbm(t) and t.core_khz == 200000 and t.uarch['TMEM_PMP'] == 1
     if S == 1:                          # f2's programs and T2 (docs/ternary.md)
-        assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True)
+        assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True, PORTB=portb)
         assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
+        if portb > 1:                   # in the hash only when wide (docs/wide_port.md)
+            assert T.arch_hash(T.config(t)) != T.arch_hash(T.config(name.split(':')[0]))
     out = tmp_path / 'run'
     cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
     d = cl / 'design'
@@ -505,6 +511,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     assert params['CORE_KHZ'] == 200000 and 'CH_BYTES' not in params and 'DDR_MTS' not in params
     vh = (d / 'opentpu_params.vh').read_text()
     assert f".NCH(32'h{nch:x})" in vh and ".TMEM_PMP(32'h1)" in vh
+    assert params['PORTB'] == portb and f".PORTB(32'h{portb:x})" in vh
     srcs = (d / 'sources.tcl').read_text()
     assert 'rtl/boards/f2/otpu_f2_hbm_sys.sv' in srcs and 'otpu_f2_sys.sv' not in srcs
     for f in T.sources(t):

@@ -13,6 +13,8 @@ and runs S slices (S x NCH <= 32) at 200 MHz with the TMEM pumped at 400 MHz.
 | `f2-hbm:s2` | 2 | 8 | 0-15 | 4 GiB | 4 GiB |
 | `f2-hbm:s4` | 4 | 8 | 0-31 | 4 GiB | 4 GiB |
 | `f2-hbm16` | 1 | 16 | 0-15 | 8 GiB (CFG_DRAM 33) | 4 GiB (see "Past 4 GiB a slice") |
+| `f2-hbm:p2` | 1 | 8 | 0-7 | 4 GiB | 4 GiB; port B two chunks a cycle (PORTB 2, docs/wide_port.md) |
+| `f2-hbm16:p4` | 1 | 16 | 0-15 | 8 GiB | 4 GiB; port B four chunks a cycle (PORTB 4) |
 
 Every one has the f2 target's arch (the YPCB card's m4: CFG_HASH 4ffd1e17 at S = 1, the same
 programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.

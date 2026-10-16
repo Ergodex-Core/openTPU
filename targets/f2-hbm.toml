@@ -80,3 +80,7 @@ S = 2
 
 [variants.s4]                   # four slices: all 32 HBM ports, 4 x 4 GiB
 S = 4
+
+[variants.p2]                   # a wide port B: two chunks a cycle over the 8 channels (4 pairs: a
+PORTB = 2                       # request's two chunks on two pairs; docs/wide_port.md). The
+                                # nightly's PORTB 2 build: build.py --target f2-hbm:p2

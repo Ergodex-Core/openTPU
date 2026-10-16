@@ -72,3 +72,7 @@ shell_version = "0x10212415"
 hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
 ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
 vivado = "2025.2"
+
+[variants.p4]                   # a wide port B of four chunks a cycle over the 16 channels (8 pairs:
+PORTB = 4                       # a request's four chunks on four pairs; docs/wide_port.md "Resources
+                                # and timing": PORTB 4 wants NCH 16). build.py --target f2-hbm16:p4
