@@ -1,7 +1,7 @@
 """Baseline / candidate comparison reports: JSON, CSV and Markdown, every number labelled.
 
-A run directory holds trace.json (Verilator, `measured` as an RTL simulation receipt) and,
-optionally, vs/<profile>/<stamp>/receipt.json with the VisualSim counters (`unvalidated
+A run directory holds trace.json (Verilator, `measured` as an RTL simulation receipt; or an LPN
+run's record, `lpn-estimate`: a model's cycles, never a measurement) and, optionally, vs/<profile>/<stamp>/receipt.json with the VisualSim counters (`unvalidated
 scenario` until a run exists and has been compared with receipts), and the profile's board
 numbers (`measured`). Missing evidence stays visible as `waiting`.
 """
@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 
 from . import vslib
+
+LPN_ESTIMATE = "lpn-estimate"               # tools/hwloop/lpn: a model's cycles graded against a receipt
 
 METRIC_NOTES = {
     "model_load_s": "model loading and initialization (weights upload, program compile): serving receipts only",
@@ -38,8 +40,11 @@ def rtl_row(run_dir: Path, name: str) -> dict:
     s = t.get("summary", {})
     mt = t.get("memory_trace", {})
     src = t.get("source", {})
+    label = t.get("label", vslib.MEASURED)
+    evidence = ("LPN model (" + str(run_dir) + "; " + str(t.get("calibration")) + ")" if label == LPN_ESTIMATE
+                else "Verilator RTL simulation (" + str(run_dir) + ")")
     return {
-        "name": name, "label": vslib.MEASURED, "evidence": "Verilator RTL simulation (" + str(run_dir) + ")",
+        "name": name, "label": label, "evidence": evidence, "calibration": t.get("calibration"),
         "source_rev": _get(src, "tree"), "command": _get(src, "shell"),
         "cycles": d.get("cycles"), "core_mhz": d.get("core_mhz"),
         "device_ms_per_token": d.get("device_ms_per_token"), "device_tok_s": d.get("device_tok_s"),
@@ -100,7 +105,10 @@ def compare(baseline: Path, candidate: Path | None, profile: dict | None, worklo
     if c and b.get("cycles") and c.get("cycles"):
         delta = {"cycles_ratio": c["cycles"] / b["cycles"], "speedup": b["cycles"] / c["cycles"],
                  "dram_bytes_ratio": (c.get("dram_bytes") or 0) / (b.get("dram_bytes") or 1),
-                 "label": vslib.MEASURED, "note": "RTL cycles, same workload, same memory model: the candidate change's own effect in simulation"}
+                 "label": vslib.MEASURED if b["label"] == c["label"] == vslib.MEASURED else LPN_ESTIMATE,
+                 "note": ("RTL cycles, same workload, same memory model: the candidate change's own effect in simulation"
+                          if b["label"] == c["label"] == vslib.MEASURED else
+                          "at least one side is an LPN estimate: a model's delta, graded only where a receipt exists")}
     calibration = None
     if board and b.get("device_tok_s"):
         meas = board.get("decode_tok_s_short") or board.get("decode_tok_s_device")
@@ -143,8 +151,9 @@ def _f(v, fmt="{:.4g}"):
 def markdown(rep: dict) -> str:
     L = [f"# {rep['title']}", "", f"Generated {rep['generated_utc']}; workload `{rep['workload']}`.", "",
          "Labels: **measured** = a receipt (board, or an RTL simulation as stated); **calibrated estimate** = fitted to receipts, error stated; "
-         "**unvalidated scenario** = no receipt checks it; **waiting** = evidence does not exist yet.", "",
-         "## RTL (Verilator) receipts", "",
+         "**unvalidated scenario** = no receipt checks it; **lpn-estimate** = the LPN model's cycles (its error against a Verilator receipt "
+         "is in its run's lpn/compare.json; outside its validated configuration it is a projection); **waiting** = evidence does not exist yet.", "",
+         "## RTL (Verilator) receipts and LPN estimates", "",
          "| run | label | layers | cycles | core MHz | ms/token (device) | tok/s (device, cut-down model) | DRAM bytes | GB/s achieved | port B util | roofline eff | MXU starved cyc | MXU blocked % | max outstanding reads (est) | sim wall s |",
          "|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|"]
     for r in rep["rows"]:
@@ -156,6 +165,8 @@ def markdown(rep: dict) -> str:
             L += ["", f"`{r['name']}`: `{r['command']}`"]
         if r.get("isa_check"):
             L.append(f"  ISA-simulator check: {r['isa_check']}")
+        if r.get("label") == LPN_ESTIMATE:
+            L.append(f"  LPN estimate: {r.get('calibration')}; evidence {r.get('evidence')}")
         if r.get("phases"):
             L += ["", f"Phases ({r['name']}): " + "; ".join(f"{k} {v['cycles']} cyc, {v['bytes']} B, VPU {v['vpu_busy']}" for k, v in r["phases"].items())]
     if rep.get("delta"):

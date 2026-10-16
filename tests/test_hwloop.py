@@ -228,3 +228,114 @@ def test_cli_inventory_runs():
     assert out.returncode == 0
     j = json.loads(out.stdout)
     assert j["installed"] is False and "f2-hbm-burst200" in j["profiles"]
+
+
+# ----------------------------------------------------------------------------- the LPN tier
+
+from tools.hwloop import lpn_run  # noqa: E402
+from tools.hwloop.lpn import LPN_LABEL, LPN_RTL_PIN  # noqa: E402
+
+NATIVE_LOG = """Simulation finished at t=2823232
+Wall window elapsed: 1.153199084 seconds
+Statistics: guard checks: 1234567, body executions: 91923, rollbacks: 0
+  place program_completed: 1 token(s)
+"""
+
+
+def _lpn_bundle(tmp_path: Path) -> Path:
+    inp = tmp_path / "run" / "lpn" / "input"
+    inp.mkdir(parents=True)
+    (inp / "workload.json").write_text(json.dumps({
+        "instructions_static": 276, "opcodes_static": {"MM": 65, "VOP": 147}, "rejected_features_static": {},
+        "config_pin_fields": {"D": 128, "MCOLS": 4, "LANES": 8},
+        "isa": {"dynamic_commands": 475, "dram_read_bytes_footprint": 360883290, "dram_write_bytes_footprint": 1180152,
+                "mm_weight_chunks": 2779176, "dram_sha256": "aa", "tmem_sha256": "bb"}}))
+    return inp
+
+
+def test_lpn_parse_native_log():
+    n = lpn_run.parse_native(NATIVE_LOG)
+    assert n["cycles"] == 2823232 and n["rollbacks"] == 0 and n["completed_tokens"] == 1 and n["complete"] is True
+    assert abs(n["wall_s"] - 1.153199084) < 1e-12 and n["firings"] == 91923
+    assert lpn_run.parse_native("Simulation finished at t=5\nrollbacks: 3\nplace program_completed: 1 token(s)")["complete"] is False
+
+
+def test_lpn_record_shape_and_compare_against_receipt(tmp_path):
+    inp = _lpn_bundle(tmp_path)
+    work = json.loads((inp / "workload.json").read_text())
+    emit = {"timing": {"dram_latency": 8, "dram_bytes_per_cycle": 128}, "compact": True, "matrix_batch_rows": [7, 4],
+            "net_statistics": {"transitions": 14}, "frontend": {"dram_sha256": ["aa"], "tmem_sha256": ["bb"]},
+            "model_build_s": 0.5, "compile_s": 0.4}
+    native = lpn_run.parse_native(NATIVE_LOG)
+    man = {"lpn_commit": "b06f42d", "lpn_branch": "qwen-validation", "lpn_compiler_sha256": "cc", "patches": {},
+           "validated_rtl_pin": LPN_RTL_PIN, "pin_head": LPN_RTL_PIN}
+    stale = {"stale": True, "changed": ["rtl/mxu/otpu_mxu.sv"], "added": [], "removed": [], "entries": []}
+    args = {"tree": "/export", "layers": "2", "pos": 9, "portb": 1, "env": {"OTPU_NCH": "8", "OTPU_TARGET": "f2-hbm"}, "command": [], "shell": ""}
+    t = lpn_run.record(tmp_path / "run", args, work, emit, native, man, stale, "outside validated configuration: RTL moved", 200.0)
+    assert t["label"] == LPN_LABEL and t["kind"] == "lpn_decode_token"
+    d = t["derived"]
+    assert d["cycles"] == 2823232 and d["dram_bytes"] == 360883290 + 1180152 and abs(d["device_tok_s"] - 200e6 / 2823232) < 1e-9
+    assert abs(d["portb_utilization"] - 2779176 / 2823232) < 1e-12 and t["summary"]["portb_chunks"] == 2779176
+    assert t["lpn"]["numerical_check"]["match"] is True and "entries" not in t["staleness"]
+    # against the Verilator receipt shipped in the repository
+    receipt = ROOT / "tools" / "hwloop" / "receipts" / "2026-10-16" / "opentpu_portb1"
+    c = lpn_run.compare(t, receipt)
+    assert c["rtl_cycles"] == 2798478 and abs(c["rel_error"] - (2823232 / 2798478 - 1)) < 1e-12 and c["within_gate"] is True
+    assert c["same_mxu_chunks"] is True and len(c["configuration_deltas"]) == 3 and c["verdict"].startswith("outside the validated configuration")
+    assert any("NCH 8" in x and "--lat 60" in x for x in c["configuration_deltas"])
+    # PORTB 2 receipt: not modelled, said so
+    c2 = lpn_run.compare(t, ROOT / "tools" / "hwloop" / "receipts" / "2026-10-16" / "opentpu_portb2")
+    assert c2["verdict"].startswith("not comparable: PORTB 2") and c2["within_gate"] is False
+    # the record is a run directory's trace.json for the report, labelled lpn-estimate
+    run = tmp_path / "run"
+    (run / "trace.json").write_text(json.dumps(t))
+    rep = report.compare(run, None, None, "gemma3-1b-int8", tmp_path / "rep")
+    assert rep["rows"][0]["label"] == LPN_LABEL and "LPN model" in rep["rows"][0]["evidence"]
+    md = (tmp_path / "rep" / "report.md").read_text()
+    assert "lpn-estimate" in md and "outside validated configuration" in md
+
+
+def test_lpn_run_refuses_stale_export_and_lists_files(tmp_path, monkeypatch):
+    pin = _tree(tmp_path / "pin")                     # the tree the model is "validated" on
+    export = _tree(tmp_path / "export")
+    (export / "rtl" / "mxu" / "otpu_mxu.sv").write_text("module otpu_mxu; // PORTB 2\nendmodule\n")
+    (export / "rtl" / "mxu" / "otpu_wide.sv").write_text("module w; endmodule\n")
+    lpn = tmp_path / "lpn"
+    (lpn / "examples" / "opentpu").mkdir(parents=True)
+    import argparse
+    ap = argparse.ArgumentParser()
+    lpn_run.add_arguments(ap)
+    a = ap.parse_args(["--tree", str(export), "--out", str(tmp_path / "run"), "--pin", str(pin), "--lpn", str(lpn),
+                       "--lpn-build", str(tmp_path / "build"), "--python", sys.executable])
+    r = lpn_run.run(a)
+    assert r["status"] == "REFUSED_STALE_MODEL"
+    assert r["staleness"]["changed"] == ["rtl/mxu/otpu_mxu.sv"] and r["staleness"]["added"] == ["rtl/mxu/otpu_wide.sv"]
+    man = json.loads((tmp_path / "run" / "lpn" / "manifest.json").read_text())
+    assert man["label"] == LPN_LABEL and man["validated_rtl_pin"] == LPN_RTL_PIN and man["rtl_fingerprint"]["files"] == 5
+    # check-stale reads the LPN manifest the way it reads a VisualSim one
+    st = vslib.check_stale(man, export)
+    assert st["stale"] is True and st["changed"] == ["rtl/mxu/otpu_mxu.sv"]
+    assert vslib.check_stale(man, pin)["stale"] is False
+    # PORTB 2 is not in the model: refused before anything runs
+    a2 = ap.parse_args(["--tree", str(pin), "--out", str(tmp_path / "run2"), "--pin", str(pin), "--lpn", str(lpn),
+                        "--lpn-build", str(tmp_path / "build"), "--python", sys.executable, "--portb", "2"])
+    assert lpn_run.run(a2)["status"] == "REFUSED_NOT_MODELLED"
+
+
+def test_cli_check_stale_reads_lpn_directory(tmp_path):
+    pin = _tree(tmp_path / "pin")
+    export = _tree(tmp_path / "export")
+    (export / "opentpu" / "rtlsim.py").write_text("# moved\n")
+    (tmp_path / "run" / "lpn").mkdir(parents=True)
+    (tmp_path / "run" / "lpn" / "manifest.json").write_text(json.dumps(
+        {"generator": "opentpu-hwloop-lpn/0.1", "validated_rtl_pin": LPN_RTL_PIN,
+         "rtl_fingerprint": vslib.fingerprint_tree(pin, trace.RTL_GLOBS)}))
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "hwloop" / "cli.py"), "check-stale", str(tmp_path / "run"), "--tree", str(export)],
+                         capture_output=True, text=True)
+    assert out.returncode == 2
+    j = json.loads(out.stdout)
+    assert j["stale"] is True and j["changed"] == ["opentpu/rtlsim.py"] and j["validated_rtl_pin"] == LPN_RTL_PIN
+    out = subprocess.run([sys.executable, str(ROOT / "tools" / "hwloop" / "cli.py"), "check-stale", str(tmp_path / "run"), "--tree", str(pin)],
+                         capture_output=True, text=True)
+    assert out.returncode == 0
+

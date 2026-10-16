@@ -6,7 +6,8 @@
     python tools/hwloop/cli.py run-rtl --tree DIR --out RUN [perf_qwen options]   # the Verilator timing run + trace
     python tools/hwloop/cli.py extract RUN                      # trace.json / mem_windows.csv from the run
     python tools/hwloop/cli.py build-vs RUN --profile NAME      # the VisualSim model for that run and memory profile
-    python tools/hwloop/cli.py check-stale MODEL_DIR --tree DIR # refuse a model whose RTL fingerprint is stale
+    python tools/hwloop/cli.py lpn-run --tree DIR --out RUN [--compare RECEIPT] [--uncalibrated]   # the LPN tier (lpn_run.py)
+    python tools/hwloop/cli.py check-stale MODEL_DIR --tree DIR # refuse a model (VisualSim or LPN) whose RTL fingerprint is stale
     python tools/hwloop/cli.py vs-run MODEL_DIR [--execute]     # prepare (default) or run the batch simulation
     python tools/hwloop/cli.py report --baseline RUN [--candidate RUN] --profile NAME --out DIR
     python tools/hwloop/cli.py nightly add|plan ...             # queue a candidate; print the (unactivated) plan
@@ -26,7 +27,7 @@ from pathlib import Path
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE.parents[1]))
 
-from tools.hwloop import nightly, report, trace, vslib, vsmodel  # noqa: E402
+from tools.hwloop import lpn_run, nightly, report, trace, vslib, vsmodel  # noqa: E402
 
 ROOT = HERE.parents[1]
 DEFAULT_PY = os.environ.get("OTPU_PYTHON", sys.executable)
@@ -94,10 +95,26 @@ def cmd_build_vs(a):
 
 
 def cmd_check_stale(a):
-    m = json.loads((Path(a.model_dir) / "manifest.json").read_text())
+    """A VisualSim model directory (manifest.json from build-vs) or an LPN run's lpn/ directory
+    (manifest.json from lpn-run: the fingerprint of the pinned tree the model is validated
+    against): stale when the tree's fingerprinted files moved; the changed files are listed."""
+    md = Path(a.model_dir)
+    mp = md / "manifest.json" if (md / "manifest.json").is_file() else md / "lpn" / "manifest.json"
+    m = json.loads(mp.read_text())
     st = vslib.check_stale(m, Path(a.tree))
+    st["manifest"] = str(mp)
+    st["model"] = m.get("generator")
+    if m.get("validated_rtl_pin"):
+        st["validated_rtl_pin"] = m["validated_rtl_pin"]
     _j(st)
     sys.exit(2 if st["stale"] else 0)
+
+
+def cmd_lpn_run(a):
+    r = lpn_run.run(a)
+    _j(r)
+    if r["status"] not in ("OK", "MANIFEST_ONLY"):
+        sys.exit(2 if r["status"].startswith("REFUSED") else 3)
 
 
 def cmd_vs_run(a):
@@ -206,6 +223,10 @@ def main(argv=None):
     p.add_argument("--variant", default="baseline")
     p.add_argument("--fraction", type=float, default=1.0, help="replay this fraction of the token's bytes")
     p.set_defaults(fn=cmd_build_vs)
+
+    p = sub.add_parser("lpn-run", help="the LPN tier: the export's decode token through LPNDialect's model, graded against a Verilator receipt")
+    lpn_run.add_arguments(p)
+    p.set_defaults(fn=cmd_lpn_run)
 
     p = sub.add_parser("check-stale")
     p.add_argument("model_dir")

@@ -1,0 +1,140 @@
+{
+  "status": "OK",
+  "started_utc": "2026-10-16T15:00:12Z",
+  "label": "lpn-estimate",
+  "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
+  "out": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60",
+  "args": {
+    "cmd": "lpn-run",
+    "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
+    "out": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60",
+    "python": "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+    "lpn": "/Users/rachittibrewal/ergodex-03/lpn-scratch/LPNDialect",
+    "lpn_build": "/Users/rachittibrewal/ergodex-03/lpn-scratch/lpn-build",
+    "pin": "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+    "llvm_bin": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-bin",
+    "model": "gemma3",
+    "layers": "2",
+    "pos": 9,
+    "wformat": "int8",
+    "head_format": "int8",
+    "target": "f2-hbm",
+    "nch": 8,
+    "lat": 60,
+    "mhz": 200.0,
+    "batch_rows": 8,
+    "dram_latency": 60,
+    "jobs": 8,
+    "portb": 1,
+    "mcols": null,
+    "expanded": false,
+    "compare": [
+      "tools/hwloop/receipts/2026-10-16/opentpu_portb1"
+    ],
+    "rtl_pin": false,
+    "uncalibrated": true,
+    "manifest_only": false,
+    "reuse_inputs": true,
+    "as_run_trace": false
+  },
+  "manifest": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60/lpn/manifest.json",
+  "staleness": {
+    "stale": true,
+    "expected": "7f29801eb62de67c9a14aa45d94471dda8f2326ea8d9842b67a26e3068d08e5e",
+    "actual": "10bb1657d6ec5e3f58582c382b15761a5fc64426ddc43ee0f7e64206eb003a86",
+    "changed": [
+      "opentpu/profile.py",
+      "opentpu/rtlsim.py",
+      "rtl/asic/otpu_asic_top.sv",
+      "rtl/mem/otpu_actram.sv",
+      "rtl/mem/otpu_dram.sv",
+      "rtl/mem/otpu_native_dram.sv",
+      "rtl/mxu/otpu_mxu.sv",
+      "rtl/shell/otpu_board.sv",
+      "rtl/shell/otpu_ctrl.sv",
+      "rtl/top/otpu_pkg.sv",
+      "rtl/top/otpu_slice.sv",
+      "rtl/top/otpu_top.sv",
+      "rtl/vpu/otpu_quant.sv",
+      "sim/verilator/otpu_native_mem.sv",
+      "sim/verilator/tb_top.sv",
+      "tools/perf_qwen.py"
+    ],
+    "added": [
+      "rtl/boards/f2/otpu_axil_cdc.sv",
+      "rtl/boards/f2/otpu_f2_hbm_host.sv",
+      "rtl/boards/f2/otpu_f2_hbm_mem.sv",
+      "rtl/boards/f2/otpu_f2_hbm_nch.sv",
+      "rtl/boards/f2/otpu_f2_hbm_port.sv",
+      "rtl/boards/f2/otpu_f2_hbm_sys.sv",
+      "rtl/boards/f2/otpu_f2_mem.sv",
+      "rtl/boards/f2/otpu_f2_nch.sv",
+      "rtl/boards/f2/otpu_f2_sys.sv",
+      "sim/verilator/tb_f2axil.sv",
+      "sim/verilator/tb_f2hbm.sv",
+      "sim/verilator/tb_f2mem.sv",
+      "sim/verilator/tb_f2nch_protocol.sv",
+      "sim/verilator/tb_native_nch.sv"
+    ],
+    "removed": []
+  },
+  "numerical_check_match": true,
+  "compare": [
+    {
+      "receipt": "tools/hwloop/receipts/2026-10-16/opentpu_portb1",
+      "rtl_cycles": 2798478,
+      "lpn_cycles": 2874213,
+      "rel_error": 0.027062924918473508,
+      "within_gate": true,
+      "verdict": "outside the validated configuration (3 deltas): the error is recorded, not a calibration"
+    }
+  ],
+  "steps": {
+    "inputs": {
+      "reused": true
+    },
+    "emit": {
+      "command": [
+        "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+        "/Users/rachittibrewal/ergodex-03/openTPU-hwloop/tools/hwloop/lpn/emit.py",
+        "--opentpu-root",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+        "--input",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60/lpn/input",
+        "--out",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60/lpn",
+        "--lpn-compiler",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/lpn-build/tools/lpn-compile/lpn-compile",
+        "--batch-rows",
+        "8",
+        "--dram-latency",
+        "60",
+        "--compact"
+      ],
+      "exit": 0,
+      "wall_s": 6.621064834000208,
+      "PYTHONPATH": "/Users/rachittibrewal/ergodex-03/lpn-scratch/LPNDialect",
+      "PATH_prefix": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-bin"
+    },
+    "native": {
+      "cycles": 2874213.0,
+      "wall_s": 0.234845167,
+      "rollbacks": 0,
+      "completed_tokens": 1,
+      "firings": 91923,
+      "complete": true,
+      "exit": 0,
+      "process_wall_s": 0.5933634579996578,
+      "command": [
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1_lat60/lpn/opentpu",
+        "--stats",
+        "--wall-start=begin",
+        "--wall-end=complete",
+        "--max-time=1000000000000"
+      ]
+    }
+  },
+  "cycles": 2874213,
+  "calibration": "outside validated configuration: RTL moved (16 changed, 14 added, 0 removed fingerprinted files); Timing.dram_latency 60 (validated 8)",
+  "ended_utc": "2026-10-16T15:00:20Z"
+}
