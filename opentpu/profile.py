@@ -129,8 +129,11 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf, pair, quad = I.mm_format(ins)
-        if wf == I.W8:
-            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", N * KB, N * KB, scales
+        if wf == I.W8:                  # (PAIR / QUAD: two / four chunks a cycle, PORTB)
+            per = 4 if quad else 2 if pair else 1
+            return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T"
+                          f"{' quad' if quad else ' pair' if pair else ''}{acc}",
+                    N * -(-KB // per), N * KB, scales)
         # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle.
         # t2 (docs/ternary.md): four blocks a chunk, one a cycle, PAIR two, QUAD four
         per = 4 if quad else 2 if pair else 1           # blocks an advance

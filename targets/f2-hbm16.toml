@@ -26,6 +26,7 @@ DSTEP = true
 STREAM = true
 SEQ_WC = true
 T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
 
 [uarch]                         # the f2 target's (the YPCB card's m4)
 MXU_IMPL = 2

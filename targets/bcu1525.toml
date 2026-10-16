@@ -25,6 +25,7 @@ DSTEP = true
 STREAM = true
 SEQ_WC = false                  # the sequencer's wait entries (WAITC, EXPERIMENTAL: docs/seq_vpu.md):
 T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
 #                                 the host loads them with every program; needs WIN <= 16
 
 [uarch]

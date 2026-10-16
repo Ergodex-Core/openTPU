@@ -30,6 +30,9 @@ class Config:
     STREAM: bool = False     # the stream engine runs STREAM's hardware subset (docs/stream.md)
     ACT_ROWS: int = 0        # ACT RAM rows == max stationary rows of one MM (0: MCOLS); more
     #                          than MCOLS: the MXU replays each streamed chunk (docs/isa.md, MM)
+    PORTB: int = 1           # D-byte chunks a cycle port B and the MXU stream take (1, 2, 4):
+    #                          MM column reuse beyond one chunk a cycle (int8 PAIR / QUAD, 4-bit
+    #                          QUAD), QACT DUP4 (docs/wide_port.md)
     T2: bool = False         # t2 weights (MM WF 1 + rs bit 0), MM QUAD and QACT DUP4
     #                          (docs/ternary.md; CAPS bit28)
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries
@@ -76,7 +79,8 @@ def board_config(**kw) -> Config:
                 DSTEP=bool(int(env.get("OTPU_DSTEP", 0))),
                 STREAM=bool(int(env.get("OTPU_STREAM", 0))),
                 SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
-                T2=bool(int(env.get("OTPU_T2", 0))))
+                T2=bool(int(env.get("OTPU_T2", 0))),
+                PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))))
     base.update(kw)
     return Config(**base)
 
@@ -478,8 +482,8 @@ class Slice:
         N, KB, k0 = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[3] >> 24) & 0xFF
         wf, pair, quad = I.mm_format(ins)
         rs = w[4] & ~I.RS_MASK
-        if w[4] & I.RS_QUAD and not (wf == I.WT2 and pair):
-            raise SimError("MM: rs bit 1 (QUAD) needs t2 (WF 1, rs bit 0) and PAIR")
+        if w[4] & I.RS_QUAD and not pair:
+            raise SimError("MM: rs bit 1 (QUAD) needs PAIR")
         ors, M, ab = w[5] & 0xFFFF, (w[5] >> 16) & 0xFF, w[5] >> 24
         srs = w[6]
         unit, accf = bool(ins.flags & I.F_UNIT), bool(ins.flags & I.F_ACC)
@@ -499,8 +503,10 @@ class Slice:
             raise SimError("MM: t2 weights on a configuration without T2")
         if rsc and wf == I.WT2:
             raise SimError("MM: RSC does not take t2")
-        if pair and wf == I.W8:
-            raise SimError("MM: PAIR needs 4-bit weights")
+        if I.chunks_per_cycle(wf, pair, quad) > cfg.PORTB:
+            raise SimError(f"MM: column reuse x{I.reuse(pair, quad)} of this format streams "
+                           f"{I.chunks_per_cycle(wf, pair, quad):g} chunks a cycle, PORTB "
+                           f"{cfg.PORTB}")
         if pair and k0 % 2:
             raise SimError("MM: PAIR needs an even k0")
         if rsc and wf == I.WNV:
@@ -577,8 +583,8 @@ class Slice:
         copies = 4 if dup4 else 2 if dup else 1
         if dup and dup4:
             raise SimError("QACT: DUP and DUP4")
-        if dup4 and not cfg.T2:
-            raise SimError("QACT: DUP4 on a configuration without T2")
+        if dup4 and not (cfg.T2 or cfg.PORTB > 1):
+            raise SimError("QACT: DUP4 on a configuration without T2 or a wide port B")
         if (copies * rows > cfg.MCOLS if copies > 1 else rows > cfg.act_rows) \
                 or ab + KB > cfg.ACT_BLOCKS:
             raise SimError("QACT out of ACT RAM bounds")

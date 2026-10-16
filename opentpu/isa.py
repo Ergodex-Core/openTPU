@@ -29,10 +29,10 @@ W8, W4I, W4F, WNV = 0, 1, 2, 3
 WT2 = 4
 WFORMATS = {"int8": W8, "int4": W4I, "fp4": W4F, "nvfp4": WNV, "t2": WT2}
 MX_W = {W8: 16, W4I: 11, W4F: 11, WNV: 13, WT2: 11}   # the shift window W of each format
-RS_T2, RS_QUAD = 0x1, 0x2       # MM rs bits: t2 elements; QUAD (t2 with PAIR): column reuse x4
+RS_T2, RS_QUAD = 0x1, 0x2       # MM rs bits: t2 elements; QUAD (with PAIR): column reuse x4
 RS_MASK = 0x3                   # the rs bits that are flags (rs is a multiple of D >= 4; the
                                 # stride is rs & ~RS_MASK)
-F_PAIR = 0x40                   # MM, 4-bit only: column reuse, two K-blocks per cycle and row
+F_PAIR = 0x40                   # MM: column reuse, two K-blocks per cycle and row (int8: PORTB 2)
 F_RSC = 0x80                    # MM: row scales only (each scale row is Sw[n]; dw 0, m 1)
 F_ROW, F_CSCALE, F_RSCALE = 0x1, 0x2, 0x4   # QACT (QST: F_ROW)
 F_DUP = 0x8                     # QACT: also write the rows to ACT rows rows..2*rows-1 (PAIR)
@@ -411,14 +411,14 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
            and 0 <= ors < 65536 and 0 <= k0 < 256,
            f"MM: n {n}, kb {kb}, m {m}, ab {ab}, ors {ors}, k0 {k0}")
     _check(wf in (W8, W4I, W4F, WNV, WT2), f"MM: weight format {wf}")
-    _check(not pair or wf != W8, "MM: PAIR needs 4-bit or t2 weights")
     _check(not pair or k0 % 2 == 0, "MM: PAIR needs an even k0")
-    _check(not quad or (wf == WT2 and pair and k0 % 4 == 0),
-           "MM: QUAD needs t2 weights, PAIR and k0 a multiple of 4")
+    _check(not quad or (pair and k0 % 4 == 0), "MM: QUAD needs PAIR and k0 a multiple of 4")
     _check(not rsc or wf != WT2, "MM: RSC does not take t2")
     _check(rs & RS_MASK == 0, f"MM: rs {rs} is not a multiple of 4")
     if wf == WT2:
-        rs, wf = rs | RS_T2 | (RS_QUAD if quad else 0), W4I
+        rs, wf = rs | RS_T2, W4I
+    if quad:
+        rs |= RS_QUAD
     _check(not rsc or wf != WNV, "MM: RSC does not take NVFP4")
     if ascale is not None:
         _check(unit and acc, "MM: ASCALE needs UNIT and ACC")
@@ -437,11 +437,23 @@ def mm_format(ins) -> tuple[int, bool, bool]:
     wf = (ins.flags >> WF_SHIFT) & 3
     rs = ins.w[4]
     t2 = wf == W4I and bool(rs & RS_T2)
-    return (WT2 if t2 else wf), bool(ins.flags & F_PAIR), t2 and bool(rs & RS_QUAD)
+    pair = bool(ins.flags & F_PAIR)
+    return (WT2 if t2 else wf), pair, pair and bool(rs & RS_QUAD)
 
 
 def blocks_per_chunk(wf: int) -> int:
     return 1 if wf == W8 else 4 if wf == WT2 else 2
+
+
+def reuse(pair: bool, quad: bool) -> int:
+    """K-blocks an MM takes a cycle per output row: column reuse x1, x2 (PAIR), x4 (QUAD)."""
+    return 4 if quad else 2 if pair else 1
+
+
+def chunks_per_cycle(wf: int, pair: bool, quad: bool) -> float:
+    """The D-byte chunks an MM streams a cycle (at most Config.PORTB): int8 PAIR 2, QUAD 4;
+    4-bit PAIR 1, QUAD 2; t2 QUAD 1."""
+    return reuse(pair, quad) / blocks_per_chunk(wf)
 
 
 def qact(src, rows, ab, kb, srs, row=False, cscale=None, rscale=None, dup=False, dup4=False,

@@ -1568,7 +1568,8 @@ class Builder:
         pair = self.cfg.PAIR and 2 * x.rows <= self.cfg.MCOLS
         # t2 (Config.T2): a tile of at most MCOLS/4 rows four times (QACT DUP4), so t2 MMs take
         # a whole chunk of four blocks a cycle (MM QUAD; the copies also serve PAIR)
-        quad = getattr(self.cfg, "T2", False) and pair and 4 * x.rows <= self.cfg.MCOLS
+        quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
+            and 4 * x.rows <= self.cfg.MCOLS
         st = Stationary(x, chunks, KB, owners, pair, quad=quad)
         for m0 in builtins.range(0, x.rows, self.cfg.act_rows):
             mc = min(self.cfg.act_rows, x.rows - m0)
@@ -1601,7 +1602,8 @@ class Builder:
             raise CompileError(f"a stationary of {rows} rows: ACT RAM holds {self.cfg.act_rows}")
         KB = cols // D
         pair = self.cfg.PAIR and 2 * rows <= self.cfg.MCOLS
-        quad = getattr(self.cfg, "T2", False) and pair and 4 * rows <= self.cfg.MCOLS
+        quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
+            and 4 * rows <= self.cfg.MCOLS
         st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[], quad=quad)
         ab, owner = self.act_alloc(KB)
         for k in builtins.range(ab, ab + KB):
@@ -1914,13 +1916,15 @@ class Builder:
         unit = w.scale is None
         # PAIR reads a chunk's two blocks' scales at once: 8-byte (nvfp4: 16-byte) aligned rows
         # and an even first block
-        al = 16 if w.wf in (I.WNV, I.WT2) else 8
-        pair = st.pair and w.wf != I.W8 and (unit or w.rsc or (
+        al = 16 if w.wf in (I.WNV, I.WT2) else 4 if w.wf == I.W8 else 8
+        portb = getattr(self.cfg, "PORTB", 1)
+        pair = st.pair and I.chunks_per_cycle(w.wf, True, False) <= portb and (unit or w.rsc or (
             w.k0 % 2 == 0 and w.srs % al == 0 and Affine.of(w.scale).const % al == 0
             and all(c * getattr(v, "align", 1) % al == 0
                     for v, c in Affine.of(w.scale).terms.items())))
         # QUAD (t2): a chunk's four blocks a cycle from ACT rows j + c M (QACT DUP4)
-        quad = pair and w.wf == I.WT2 and getattr(st, "quad", False)
+        quad = pair and getattr(st, "quad", False) and \
+            I.chunks_per_cycle(w.wf, True, True) <= portb
         # one MM per QACT range of the operand (an MM's rows read one Sa: docs/isa.md "MM"),
         # added up in the output: the first as asked (overwrite, ACC or ASCALE), the rest ACC;
         # RMAX on the last, whose written values are the sums

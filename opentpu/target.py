@@ -256,6 +256,8 @@ def arch_hash(cfg) -> int:
     for k in ("SEQ_WC", "T2"):            # (in the hash only when on: older builds keep theirs)
         if not d.get(k):
             d.pop(k, None)
+    if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
+        d.pop("PORTB", None)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")

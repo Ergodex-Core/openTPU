@@ -18,6 +18,7 @@ DSTEP = true
 STREAM = true
 SEQ_WC = true
 T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
 [uarch]
 MXU_IMPL = 2
 MXU_CL = 16

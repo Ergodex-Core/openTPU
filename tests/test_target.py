@@ -75,6 +75,7 @@ def _hash_without_numerics(cfg) -> int:
     d = dataclasses.asdict(cfg)
     d.pop("SEQ_WC")                     # (fields that host's Config does not have)
     d.pop("T2")
+    d.pop("PORTB")
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
