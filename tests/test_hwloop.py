@@ -75,6 +75,14 @@ def test_parse_perf_log_numbers():
     assert s["mxu_gaps"]["gaps"] == 18370
 
 
+def test_parse_perf_log_wide_port_line():
+    s = trace.parse_perf_log("layers=2 pos=9 bw=100% lat=60: 1643595 cycles (1782s sim), core-port roofline 1536296 cycles "
+                             "(port B 2787778 chunks / 2 a cycle, port A 1390384, MXU 1536296), efficiency 93.5%\n"
+                             "wide port B reads: 1242880 of 2485760 chunks, 87619 in two parts (a pair twice)\n")
+    assert s["cycles"] == 1643595 and s["roofline_cycles"] == 1536296 and s["portb_chunks"] == 2787778 and s["mxu_cycles"] == 1536296
+    assert s["wide_reads_line"].startswith("wide port B reads: 1242880")
+
+
 def test_extract_writes_trace_and_windows(tmp_path):
     d = _run_dir(tmp_path)
     t = trace.extract(d, window=256, nch=8, lat=60)

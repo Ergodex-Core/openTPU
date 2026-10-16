@@ -1,0 +1,319 @@
+{
+  "title": "openTPU Gemma-3-1B int8 decode token, 2 layers + head, f2-hbm NCH 8: PORTB 1 baseline vs PORTB 2 candidate",
+  "generated_utc": "2026-10-16T14:30:20.137419+00:00",
+  "workload": "gemma3-1b-int8",
+  "rows": [
+    {
+      "name": "baseline",
+      "label": "measured",
+      "evidence": "Verilator RTL simulation (/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb1)",
+      "source_rev": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
+      "command": "cd ~/ergodex-03/hwloop-scratch/opentpu-a9acb2b0 && OTPU_TARGET=f2-hbm OTPU_NCH=8 OMP_NUM_THREADS=8 ~/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 2 --wformat int8 --head-format int8 --lat 60 --mhz 200 --portb 1 --json $out/perf.jsonl --plus +nat_trace=$out/nat_trace.txt",
+      "cycles": 2798478,
+      "core_mhz": 200.0,
+      "device_ms_per_token": 13.992389999999999,
+      "device_tok_s": 71.46741907565469,
+      "layers": "2",
+      "pos": 9,
+      "dram_bytes": 362179072,
+      "dram_read_bytes": 361096960,
+      "dram_write_bytes": 1082112,
+      "bytes_per_cycle": 129.42001759527858,
+      "achieved_GBps": 25.884003519055717,
+      "portb_utilization": 0.9961764930794524,
+      "roofline_efficiency": 0.996,
+      "mxu_mac_pct": 99.3,
+      "mxu_starved_cycles": 17,
+      "mxu_blocked_pct": 0.3,
+      "unit_busy_pct": {
+        "DMA": 1,
+        "MXU": 100,
+        "QUANT": 0,
+        "VPU": 1
+      },
+      "channels": [
+        {
+          "reads": 705394,
+          "writes": 2178,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705105,
+          "writes": 2049,
+          "porta_reads": 318,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705138,
+          "writes": 2049,
+          "porta_reads": 319,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705395,
+          "writes": 2178,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705112,
+          "writes": 2049,
+          "porta_reads": 318,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705432,
+          "writes": 2177,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705427,
+          "writes": 2179,
+          "porta_reads": 454,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705137,
+          "writes": 2049,
+          "porta_reads": 319,
+          "row_opens": 0,
+          "rmw": 0
+        }
+      ],
+      "max_outstanding_reads_est": 203,
+      "idle_gaps_over_64": 18,
+      "beats_per_cycle_active": 2.0220454322134582,
+      "sim_wall_s": 2190,
+      "isa_check": null,
+      "phases": {
+        "other": {
+          "cycles": 2368741,
+          "share_pct": 84.6,
+          "bytes": 312486912,
+          "roofline_cycles": 2441304,
+          "vpu_busy": 552,
+          "mxu_busy": 2368975
+        },
+        "MLP": {
+          "cycles": 376542,
+          "share_pct": 13.5,
+          "bytes": 49287168,
+          "roofline_cycles": 385056,
+          "vpu_busy": 26469,
+          "mxu_busy": 378664
+        },
+        "attention": {
+          "cycles": 53193,
+          "share_pct": 1.9,
+          "bytes": 6177016,
+          "roofline_cycles": 48258,
+          "vpu_busy": 6774,
+          "mxu_busy": 53756
+        }
+      }
+    },
+    {
+      "name": "candidate",
+      "label": "measured",
+      "evidence": "Verilator RTL simulation (/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb2)",
+      "source_rev": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
+      "command": "cd ~/ergodex-03/hwloop-scratch/opentpu-a9acb2b0 && OTPU_TARGET=f2-hbm OTPU_NCH=8 OMP_NUM_THREADS=8 ~/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 2 --wformat int8 --head-format int8 --lat 60 --mhz 200 --portb 2 --json $out/perf.jsonl --plus +nat_trace=$out/nat_trace.txt",
+      "cycles": 1643595,
+      "core_mhz": 200.0,
+      "device_ms_per_token": 8.217975000000001,
+      "device_tok_s": 121.6844782321679,
+      "layers": "2",
+      "pos": 9,
+      "dram_bytes": 362179072,
+      "dram_read_bytes": 361096960,
+      "dram_write_bytes": 1082112,
+      "bytes_per_cycle": 220.35785701465386,
+      "achieved_GBps": 44.07157140293077,
+      "portb_utilization": 1.696146556785583,
+      "roofline_efficiency": 0.935,
+      "mxu_mac_pct": 93.5,
+      "mxu_starved_cycles": 1324,
+      "mxu_blocked_pct": 5.7,
+      "unit_busy_pct": {
+        "DMA": 2,
+        "MXU": 100,
+        "QUANT": 1,
+        "VPU": 2
+      },
+      "channels": [
+        {
+          "reads": 705394,
+          "writes": 2178,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705105,
+          "writes": 2049,
+          "porta_reads": 318,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705138,
+          "writes": 2049,
+          "porta_reads": 319,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705395,
+          "writes": 2178,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705112,
+          "writes": 2049,
+          "porta_reads": 318,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705432,
+          "writes": 2177,
+          "porta_reads": 452,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705427,
+          "writes": 2179,
+          "porta_reads": 454,
+          "row_opens": 0,
+          "rmw": 0
+        },
+        {
+          "reads": 705137,
+          "writes": 2049,
+          "porta_reads": 319,
+          "row_opens": 0,
+          "rmw": 0
+        }
+      ],
+      "max_outstanding_reads_est": 307,
+      "idle_gaps_over_64": 17,
+      "beats_per_cycle_active": 3.4426809734327537,
+      "sim_wall_s": 1782,
+      "isa_check": null,
+      "phases": {
+        "other": {
+          "cycles": 1392851,
+          "share_pct": 84.7,
+          "bytes": 312486912,
+          "roofline_cycles": 2441304,
+          "vpu_busy": 552,
+          "mxu_busy": 1392290
+        },
+        "MLP": {
+          "cycles": 218258,
+          "share_pct": 13.3,
+          "bytes": 49287168,
+          "roofline_cycles": 385056,
+          "vpu_busy": 26584,
+          "mxu_busy": 219334
+        },
+        "attention": {
+          "cycles": 32484,
+          "share_pct": 2.0,
+          "bytes": 6177016,
+          "roofline_cycles": 48258,
+          "vpu_busy": 6768,
+          "mxu_busy": 32251
+        }
+      }
+    }
+  ],
+  "delta": {
+    "cycles_ratio": 0.5873174632782534,
+    "speedup": 1.7026566763710038,
+    "dram_bytes_ratio": 1.0,
+    "label": "measured",
+    "note": "RTL cycles, same workload, same memory model: the candidate change's own effect in simulation"
+  },
+  "visualsim": {
+    "baseline": [
+      {
+        "name": "visualsim:f2-hbm-nch8-rtl",
+        "profile": "f2-hbm-nch8-rtl",
+        "status": "PREPARED_NOT_EXECUTED",
+        "label": "waiting",
+        "run": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb1/vs/f2-hbm-nch8-rtl/20261016T135622Z",
+        "wall_s": null,
+        "license_freed": null,
+        "note": "not executed: pass --execute when no Architect GUI or batch run holds the seat"
+      }
+    ],
+    "candidate": [
+      {
+        "name": "visualsim:f2-hbm-nch8-rtl",
+        "profile": "f2-hbm-nch8-rtl",
+        "status": "PREPARED_NOT_EXECUTED",
+        "label": "waiting",
+        "run": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb2/vs/f2-hbm-nch8-rtl/20261016T142715Z",
+        "wall_s": null,
+        "license_freed": null,
+        "note": "not executed: --execute not given"
+      }
+    ]
+  },
+  "board": {
+    "name": "board:f2-hbm-burst200",
+    "label": "measured",
+    "profile": "f2-hbm-burst200",
+    "pin": {
+      "agfi": "agfi-0d06cb48544a02106",
+      "afi": "afi-03339c4cef05e79d8",
+      "s3": "s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu-alex/opentpu_burst200_20261015",
+      "rtl_source": "not in the repository (Alex's DCP: aws-fpga cl_mem_hbm_wrapper + 2x otpu_native_axi + f2_mem BD)",
+      "software_rev": "ternary-bonsai c52ba1113888432a3ed30a6a69e7f54ffcf4e63c (docs/ternary.md 5, docs/wide_port.md 'Baseline on the board')"
+    },
+    "date": "2026-10-16",
+    "tool": "tools/f2_bench.py via otpu-serve (card sampler, greedy, 128 tokens max); raw JSON receipt not in this repository (lives on the F2 host)",
+    "decode_tok_s_short": 22.3,
+    "decode_tok_s_long": 21.7,
+    "prefill_serving_tok_s": [
+      3.7,
+      4.5
+    ],
+    "ttft_s_16tok": 4.3,
+    "ttft_s_268tok": 59.6,
+    "weights_bytes_per_token_approx": 1000000000,
+    "metric_notes": "decode = tokens after the first / their interval (client side); prefill = prompt tokens / client TTFT: a serving metric, not device prefill throughput; TTFT = request to first streamed token"
+  },
+  "calibration": {
+    "rtl_device_tok_s": 71.46741907565469,
+    "board_decode_tok_s": 22.3,
+    "note": "the RTL run covers layers=2 of the model: its tok/s is for the cut-down model and is not the board's whole-model number; compare bytes/token and port utilization, or run --layers 0",
+    "whole_model_comparable": false
+  },
+  "metric_notes": {
+    "model_load_s": "model loading and initialization (weights upload, program compile): serving receipts only",
+    "host_overhead": "host / runtime overhead: the difference between wall and device decode rates",
+    "ttft_s": "client TTFT: request to first streamed token (prefill on the device + the first decode step + host)",
+    "prefill_serving_tok_s": "prompt tokens / client TTFT: a serving metric, not device prefill throughput",
+    "device_tok_s": "decode tokens/s from device cycles only (one token's cycles at the core clock; RTL: no host)",
+    "decode_tok_s": "tokens after the first / their decode interval (client side)"
+  },
+  "waiting": [
+    "VisualSim baseline run (seat / execution)",
+    "VisualSim candidate run",
+    "nightly FPGA build + matched board bench of the candidate (needs approval)"
+  ]
+}

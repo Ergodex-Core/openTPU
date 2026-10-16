@@ -164,10 +164,23 @@ f2-hbm, OTPU_NCH 8, `--lat 60`, 200 MHz, Verilator 5.048, `~/ergodex-03/bonsai2-
   (417 MB), 1.007 read beats/cycle/channel, MXU starved 18 cycles, 16.14 ms at 200 MHz for
   4 layers + head (**measured, Verilator**). `extract` + `build-vs` on it give STATIC_PASS
   models for all six profiles.
-- Fresh baseline (PORTB 1) and candidate (PORTB 2) runs with `+nat_trace`: see
-  `VS_AR/ergodex_npu/hwloop/opentpu/` (`workload/trace.json`, `reports/report.md`) and the
-  PR's description for the numbers when the runs finish; the documented values are 2,798,478
-  and 1,643,595 cycles (1.70x, `docs/wide_port.md`).
+- Fresh baseline, PORTB 1, with `+nat_trace` (`tools/hwloop/receipts/2026-10-16/opentpu_portb1/`;
+  37 min wall with the trace): **2,798,478 cycles**, the documented number to the cycle;
+  99.6% of the 2,787,778-cycle port-B roofline; 5,659,048 native beats = 362 MB (361 MB
+  read, 1.08 MB written; 25.9 GB/s at 200 MHz, 2.02 beats/cycle over 8 channels); MXU starved
+  17 cycles, blocked 0.3%; at most 203 reads outstanding by the trace's issue times and the
+  60-cycle latency (the adapter's queues over 8 channels), 18 idle gaps over 64 cycles
+  (9,473 cycles); phases: head ("other") 2,368,741 cycles / 312 MB, MLP 376,542 / 49 MB,
+  attention 53,193 / 6.2 MB (**measured, Verilator**). 71.5 tok/s device for 2 layers + head:
+  not a whole-model number.
+- Fresh candidate, PORTB 2 (the same tree, `--portb 2`; `receipts/2026-10-16/opentpu_portb2/`,
+  30 min wall): **1,643,595 cycles**, the documented number to the cycle, **1.703x** the
+  baseline on the same bytes (362 MB: the change moves no more data, it takes two chunks a
+  cycle); 93.5% of its 1,536,296-cycle roofline (the MXU's: PAIR takes 5 advances a 9-chunk
+  row); 44.1 GB/s at 200 MHz, 3.44 beats/cycle; MXU starved 1,324 cycles, blocked 5.7%;
+  1,242,880 wide reads of which 87,619 (7.0%) in two parts; at most 307 reads outstanding by
+  the trace (**measured, Verilator**). The comparison: `receipts/2026-10-16/report_portb1_vs_portb2/`.
+  No board number: PORTB 2 is not synthesized; it is the queued nightly candidate.
 - VisualSim: every model prepared (snapshot, exact batch command, static validation), none
   executed: the GUI holds the seat. Status in every receipt: `PREPARED_NOT_EXECUTED`,
   label `waiting`.

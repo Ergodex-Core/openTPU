@@ -96,7 +96,7 @@ def parse_perf_log(text: str) -> dict:
     """The numbers perf_qwen prints (the run's summary lines)."""
     d: dict = {}
     m = re.search(r"layers=(\S+) pos=(\d+) bw=(\d+)% lat=(\S+): (\d+) cycles \((\d+)s sim\), core-port roofline (\d+) cycles "
-                  r"\(port B (\d+) chunks, port A (\d+), MXU (\d+)\), efficiency ([\d.]+)%", text)
+                  r"\(port B (\d+) chunks(?: / \d+ a cycle)?, port A (\d+), MXU (\d+)\), efficiency ([\d.]+)%", text)
     if m:
         d.update(layers=m.group(1), pos=int(m.group(2)), bw_pct=int(m.group(3)), lat=m.group(4),
                  cycles=int(m.group(5)), sim_wall_s=int(m.group(6)), roofline_cycles=int(m.group(7)),
@@ -137,7 +137,7 @@ def parse_perf_log(text: str) -> dict:
     m = re.search(r"MXU prologue (\d+) epilogue (\d+) gaps (\d+)", text)
     if m:
         d["mxu_gaps"] = {"prologue": int(m.group(1)), "epilogue": int(m.group(2)), "gaps": int(m.group(3))}
-    m = re.search(r"wide reads[^\n]*", text)
+    m = re.search(r"wide (?:port B )?reads[^\n]*", text)
     if m:
         d["wide_reads_line"] = m.group(0)
     m = re.search(r"ISA simulator.*?(match|mismatch|identical|differ)[^\n]*", text, re.I)
