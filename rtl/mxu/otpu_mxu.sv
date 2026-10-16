@@ -30,6 +30,19 @@
 // word; NVFP4: eight bytes). A 4-bit / NVFP4 QUAD advance whose 16 / 32 scale bytes cross a
 // port-A line first asks for the first line alone (staged, sp), then the second with the chunks.
 // PORTB 1 builds none of it.
+// Row lanes (RL builds; docs/row_lanes.md): MM RL (rs bits 3:2 = log2 L, L = 2, 4, 8; M = 1) streams
+// L rows at once from groups of L rows (chunk q of row g L + l at sa + g rs + (q L + l) D: an
+// advance's L chunks one aligned request, an entry) with the scale rows in groups (ssa + g srs:
+// the L Sw words, then from H = max(4 L, A) block k's data of the L rows, A = L bpc bs bytes an
+// advance in one line). The streams are numbered block-major, s = p L + l (block p of lane l's
+// chunk), and column J takes stream J: the lane structure is PAIR / QUAD's with M' = L (columns
+// J >= L take block 1, J >= 2 L blocks 2 and 3, the row sum adds columns j + L, j + 2 L, j + 3 L
+// into j < L), the per-column stream select (s_hi / s_hq) apart from the ACT RAM's block select
+// (hi / hq: block p = J / L). A pipeline row's L results are output rows n0 .. n0 + L - 1 (the
+// drain at out + n0 + l, stepping L; the last row's N - (G - 1) L), each with its lane's Sw
+// (the entry's L Sw words, per column into the result FIFO), RMAX the max over the lanes'
+// columns, ASCALE's one factor. RL is the streams the build has: 4 (QUAD's) or 8 (MCOLS 8: the
+// hops 64 bits a position, the PE select 4:1, four more scale decoders and entry slots).
 //
 // The array is the systolic one (docs/mxu_systolic.md): chains of CLS = min(CL, D/8) products
 // (DSP48 cascades), so that every chain end is one group. A column end (otpu_mxce, rtl/tech) takes
@@ -73,6 +86,7 @@ module otpu_mxu
   parameter int E     = 0,       // epilogue lanes (0: MCOLS / 2, at least 1; more than MCOLS: MCOLS)
   parameter bit T2    = 1'b0,    // t2 weights and MM QUAD (docs/ternary.md; CAPS bit28)
   parameter int PORTB = 1,       // chunks a cycle on port B (1, 2, 4; docs/wide_port.md)
+  parameter int RL    = 0,       // row lanes: the weight streams, 0 (none), 4 or 8 (docs/row_lanes.md)
   parameter int SID   = 0
 ) (
   input  logic                  clk,
@@ -152,10 +166,18 @@ module otpu_mxu
   initial if (EL > LANES) $fatal(1, "otpu_mxu: E %0d > LANES", EL);
   initial if (ROWS < MCOLS || ROWS > 255) $fatal(1, "otpu_mxu: MCOLS <= ROWS < 256");
   initial if (PORTB != 1 && PORTB != 2 && PORTB != 4) $fatal(1, "otpu_mxu: PORTB 1, 2 or 4");
+  initial if (RL != 0 && RL != 4 && RL != 8) $fatal(1, "otpu_mxu: RL 0, 4 or 8");
+  initial if (RL != 0 && PORTB == 1) $fatal(1, "otpu_mxu: row lanes need a wide port B");
   // QUAD's datapath (four streams, four scale decoders, the four-column row sum): t2, or any
   // format on a wide port
   localparam bit QD = T2 || PORTB > 1;
   localparam bit WP = PORTB > 1;
+  // row lanes: RLB builds the mode, NS the weight streams (8: the eight-stream build), NSW the
+  // stream select's bits, NSX the chunks the S1 stream decode sees (zero past PORTB)
+  localparam bit RLB = RL != 0;
+  localparam int NS = (RL >= 8) ? 8 : QD ? 4 : 2;
+  localparam int NSW = (NS >= 8) ? 2 : 1;
+  localparam int NSX = (NS >= 8) ? 8 : 4;
 
   // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL
   function automatic logic [MW-1:0] drain_run(input logic [15:0] ors);
@@ -168,17 +190,27 @@ module otpu_mxu
   localparam logic [1:0] WF_W8 = 2'd0, WF_NV = 2'd3;
   // t2: WF 1 (int4) with rs bit 0; QUAD: and rs bit 1 with PAIR (constant 0 without T2)
   wire cmd_t2 = T2 && cmd.flags[5:4] == 2'd1 && cmd.w5[0];
-  // PAIR: 4-bit (a wide port: every format)
-  wire cmd_pair = cmd.flags[6] && (cmd.flags[5:4] != WF_W8 || WP);
+  // row lanes: rs bits 3:2 = log2 L (constant 0 without RL); the blocks a chunk of the format
+  wire       cmd_rl = RLB && cmd.w5[3:2] != 2'd0;
+  wire [1:0] cmd_lg = cmd_rl ? cmd.w5[3:2] : 2'd0;
+  wire [3:0] cmd_L  = cmd_rl ? 4'd1 << cmd_lg : 4'd1;
+  wire [2:0] cmd_bpc = cmd_t2 ? 3'd4 : (cmd.flags[5:4] != WF_W8) ? 3'd2 : 3'd1;
+  // PAIR: 4-bit (a wide port: every format); RL: a lane's chunk whole (bpc blocks: PAIR's
+  // structure for 4-bit, QUAD's for t2)
+  wire cmd_pair = cmd_rl ? (cmd_bpc != 3'd1) : cmd.flags[6] && (cmd.flags[5:4] != WF_W8 || WP);
   // (a wide port: PAIR and QUAD for every format)
-  wire cmd_qd = (cmd_t2 || WP) && cmd.flags[6] && cmd.w5[1];
-  // PORTB > 1: the chunks an advance streams (int8: PAIR 2, QUAD 4; 4-bit QUAD 2; else 1), and
-  // a row's last advance's (fewer when KB is not a multiple of the reuse); chunks - 1
-  wire [1:0] cmd_nb = !WP || cmd_t2 ? 2'd0 :
+  wire cmd_qd = cmd_rl ? cmd_t2 : (cmd_t2 || WP) && cmd.flags[6] && cmd.w5[1];
+  // the pipeline's M: the command's, or (RL) its lanes
+  wire [7:0] cmd_M = cmd_rl ? 8'(cmd_L) : cmd.w6[23:16];
+  // PORTB > 1: the chunks an advance streams (int8: PAIR 2, QUAD 4; 4-bit QUAD 2; RL: L; else
+  // 1), and a row's last advance's (fewer when KB is not a multiple of the reuse; RL: L too);
+  // chunks - 1
+  wire [1:0] cmd_nb = cmd_rl ? 2'(cmd_L - 4'd1) : !WP || cmd_t2 ? 2'd0 :
                       (cmd.flags[5:4] == WF_W8) ? (cmd_qd ? 2'd3 : cmd.flags[6] ? 2'd1 : 2'd0) :
                       cmd_qd ? 2'd1 : 2'd0;
   wire [1:0] cmd_km = 2'(cmd.w4[23:16] - 8'd1);           // (KB - 1) mod 4
-  wire [1:0] cmd_nl = (cmd.flags[5:4] == WF_W8) ? cmd_nb & cmd_km : cmd_nb & {1'b0, cmd_km[1]};
+  wire [1:0] cmd_nl = cmd_rl ? cmd_nb :
+                      (cmd.flags[5:4] == WF_W8) ? cmd_nb & cmd_km : cmd_nb & {1'b0, cmd_km[1]};
 `ifndef SYNTHESIS
   // a replayed row (M > MCOLS) must fit the FIFO: its chunks (4-bit: two blocks each, t2 four)
   always @(posedge clk) if (!rst && start) begin
@@ -187,17 +219,24 @@ module otpu_mxu
         (cmd.flags[5:4] != WF_W8) ? (int'(cmd.w4[23:16]) + 1) / 2 : int'(cmd.w4[23:16])) > DEPTH)
       $fatal(1, "otpu_mxu: a replayed row (M > MCOLS) must fit the FIFO: KB %0d, DEPTH %0d",
              cmd.w4[23:16], DEPTH);
-    if (cmd_pair && 2 * int'(cmd.w6[23:16]) > MCOLS)
+    if (cmd_pair && 2 * int'(cmd_M) > MCOLS)
       $fatal(1, "otpu_mxu: PAIR needs 2*M <= MCOLS");
+    if (cmd.w5[3:2] != 2'd0 && !cmd_rl)
+      $fatal(1, "otpu_mxu: row lanes (rs bits 3:2) on a build without RL");
+    if (cmd_rl && (int'(cmd_L) > PORTB || int'(cmd_L) * int'(cmd_bpc) > MCOLS ||
+                   int'(cmd_L) * int'(cmd_bpc) > NS || cmd.w6[23:16] != 8'd1 || cmd.flags[6] ||
+                   cmd.w5[1] || (cmd.w4[31:24] % 8'(cmd_bpc)) != 8'd0))
+      $fatal(1, "otpu_mxu: RL %0d lanes of %0d blocks a chunk: PORTB %0d, MCOLS %0d, streams %0d, M %0d, flags %h, k0 %0d",
+             cmd_L, cmd_bpc, PORTB, MCOLS, NS, cmd.w6[23:16], cmd.flags, cmd.w4[31:24]);
     if (!T2 && cmd.flags[5:4] == 2'd1 && cmd.w5[0])
       $fatal(1, "otpu_mxu: t2 weights (rs bits %0d) on a build without T2", cmd.w5[1:0]);
     if (cmd.w5[1] && !cmd_qd)
       $fatal(1, "otpu_mxu: QUAD (rs bit 1) needs PAIR and t2 or a wide port (PORTB > 1)");
     if (int'(cmd_nb) + 1 > PORTB)
       $fatal(1, "otpu_mxu: an MM of %0d chunks a cycle on a port of %0d", int'(cmd_nb) + 1, PORTB);
-    if (cmd_qd && (4 * int'(cmd.w6[23:16]) > MCOLS || cmd.w4[25:24] != 2'd0))
+    if (cmd_qd && (4 * int'(cmd_M) > MCOLS || cmd.w4[25:24] != 2'd0))
       $fatal(1, "otpu_mxu: QUAD needs 4*M <= MCOLS and k0 a multiple of 4 (M %0d, k0 %0d)",
-             cmd.w6[23:16], cmd.w4[31:24]);
+             cmd_M, cmd.w4[31:24]);
     if (cmd_t2 && cmd.flags[7] && !cmd.flags[0]) $fatal(1, "otpu_mxu: RSC does not take t2");
   end
 `endif
@@ -207,6 +246,9 @@ module otpu_mxu
   logic        i_t2r, i_qdr;                // t2 weights; QUAD (registers; i_t2, i_qd: constant 0
   wire         i_t2 = T2 && i_t2r;         // without T2)
   wire         i_qd = QD && i_qdr;
+  logic        i_rlr;                       // row lanes (constant 0 without RL), log2 L
+  logic [1:0]  i_lg;
+  wire         i_rl = RLB && i_rlr;
   logic        i_ini;                       // the command's first cycle: its addresses load
   logic [1:0]  i_wf;
   logic [7:0]  i_k0;
@@ -236,7 +278,11 @@ module otpu_mxu
   wire [7:0]  cmd_KB8 = cmd.w4[23:16];
   wire [15:0] cmd_KBa = cmd_qd ? (16'(cmd_KB8) + 16'd3) >> 2 :
                         cmd_pair ? (16'(cmd_KB8) + 16'd1) >> 1 : 16'(cmd_KB8);
-  wire [31:0] cmd_total = 32'(cmd.w4[15:0]) * 32'(cmd_KBa);   // advances (chunk requests)
+  // RL: the pipeline rows are the groups, ceil(N / L); the last one's results
+  wire [15:0] cmd_nrow = cmd_rl ? 16'((32'(cmd.w4[15:0]) + 32'(cmd_L) - 1) >> cmd_lg)
+                                : cmd.w4[15:0];
+  wire [3:0]  cmd_Mz = cmd_rl ? 4'(32'(cmd.w4[15:0]) - 32'(cmd_nrow - 16'd1) * 32'(cmd_L)) : 4'd1;
+  wire [31:0] cmd_total = 32'(cmd_nrow) * 32'(cmd_KBa);   // advances (chunk requests)
   // cmd_total == 0 without the multiply (a product of two factors is zero iff one is)
   wire        cmd_tz = (cmd.w4[15:0] == 16'd0) || (cmd_KB8 == 8'd0);
 `ifndef SYNTHESIS
@@ -257,7 +303,13 @@ module otpu_mxu
     logic [MCOLS-1:0] hq;              // QUAD: the columns of blocks 4c+2, 4c+3 (j >= 2M); hi
                                        // then holds those of the odd blocks (M <= j < 2M, j >= 3M)
     logic [31:0]      mxo;             // RMAX output base: out + M * ors (no multiply later)
-    logic [7:0]       M, ab;
+    logic [7:0]       M, ab;           // (RL: M is the lanes L, the pipeline's M)
+    logic             rl;              // row lanes (docs/row_lanes.md)
+    logic [15:0]      nrow;            // RL: the pipeline rows (the groups, ceil(N / L))
+    logic [MW-1:0]    Mz;              // RL: the last row's results (N - (nrow - 1) L); else Ml
+    logic [MW-1:0]    dnlz;            // ... its first drain step's lanes and whether it drains it
+    logic             dflz;
+    logic [3:0]       dinc;            // the drain's step to the next row's addresses (RL: L)
     logic [MW-1:0]    run;             // drain lanes per cycle without a bank conflict
     logic             unit, acc, rmax, asc, go, rsc;
     logic [1:0]       wf;
@@ -287,14 +339,17 @@ module otpu_mxu
     cmd_e.t2    = cmd_t2;
     cmd_e.qd    = cmd_qd;
     for (int j = 0; j < MCOLS; j++) begin
-      cmd_e.hi[j] = cmd_pair && 32'(j) >= 32'(cmd.w6[23:16]) &&
-                    !(cmd_qd && 32'(j) >= 32'd2 * 32'(cmd.w6[23:16]) &&
-                      32'(j) < 32'd3 * 32'(cmd.w6[23:16]));
-      cmd_e.hq[j] = cmd_qd && 32'(j) >= 32'd2 * 32'(cmd.w6[23:16]);
+      cmd_e.hi[j] = cmd_pair && 32'(j) >= 32'(cmd_M) &&
+                    !(cmd_qd && 32'(j) >= 32'd2 * 32'(cmd_M) && 32'(j) < 32'd3 * 32'(cmd_M));
+      cmd_e.hq[j] = cmd_qd && 32'(j) >= 32'd2 * 32'(cmd_M);
     end
     cmd_e.mxo   = cmd.w3 + 32'(cmd.w6[23:16]) * 32'(cmd.w6[15:0]);
-    cmd_e.M     = cmd.w6[23:16];
-    cmd_e.run   = drain_run(cmd.w6[15:0]);
+    cmd_e.M     = cmd_M;
+    cmd_e.rl    = cmd_rl;
+    cmd_e.nrow  = cmd_nrow;
+    cmd_e.dinc  = cmd_rl ? cmd_L : 4'd1;
+    // RL: a row's L results at out + n0 + l, consecutive words (a stride of one)
+    cmd_e.run   = drain_run(cmd_rl ? 16'd1 : cmd.w6[15:0]);
     cmd_e.ab    = cmd.w6[31:24];
     cmd_e.unit  = cmd.flags[0];
     cmd_e.rsc   = cmd.flags[7] && !cmd.flags[0];
@@ -304,20 +359,24 @@ module otpu_mxu
     cmd_e.asc   = cmd.flags[3];
     cmd_e.go    = 1'b0;
     cmd_e.asa   = cmd.w2;
-    for (int j = 0; j < MCOLS; j++) cmd_e.jo[j] = 32'(j) * 32'(cmd.w6[15:0]);
-    g = (int'(cmd.w6[23:16]) + MCOLS - 1) / MCOLS;
+    for (int j = 0; j < MCOLS; j++)
+      cmd_e.jo[j] = cmd_rl ? (32'(j) < 32'(cmd_L) ? 32'(j) : 32'd0) : 32'(j) * 32'(cmd.w6[15:0]);
+    g = (int'(cmd_M) + MCOLS - 1) / MCOLS;
     if (g < 1) g = 1;
     cmd_e.G     = 8'(g);
-    cmd_e.Ml    = MW'(int'(cmd.w6[23:16]) - (g - 1) * MCOLS);
+    cmd_e.Ml    = MW'(int'(cmd_M) - (g - 1) * MCOLS);
     cmd_e.gs    = 32'(MCOLS) * 32'(cmd.w6[15:0]);
     cmd_e.g1    = (g == 1);
     cmd_e.dnl   = (cmd_e.run < cmd_e.Ml) ? cmd_e.run : cmd_e.Ml;
     cmd_e.dfl   = (cmd_e.Ml <= cmd_e.run);
+    cmd_e.Mz    = cmd_rl ? MW'(cmd_Mz) : cmd_e.Ml;
+    cmd_e.dnlz  = (cmd_e.run < cmd_e.Mz) ? cmd_e.run : cmd_e.Mz;
+    cmd_e.dflz  = (cmd_e.Mz <= cmd_e.run);
     // the ACT RAM columns its advances read: every column with replay (G > 1), else rows j < M
-    // (PAIR: and the high rows j < 2M; QUAD j < 4M); the others are no output's
+    // (PAIR: and the high rows j < 2M; QUAD j < 4M; RL: L bpc); the others are no output's
     for (int j = 0; j < MCOLS; j++)
       cmd_e.cm[j] = (g > 1) ||
-                    32'(j) < (cmd_qd ? 32'd4 : cmd_pair ? 32'd2 : 32'd1) * 32'(cmd.w6[23:16]);
+                    32'(j) < (cmd_qd ? 32'd4 : cmd_pair ? 32'd2 : 32'd1) * 32'(cmd_M);
   end
 
   // Two heads (docs/mxu_systolic.md): the drain's head is h, the oldest command: its results are
@@ -339,6 +398,8 @@ module otpu_mxu
   wire        c_t2 = T2 && pop_e.t2, c_qd = QD && pop_e.qd;
   wire [MCOLS-1:0] c_hq = QD ? pop_e.hq : '0;
   wire [7:0]  c_M = h.M, c_ab = pop_e.ab;
+  wire        c_rl = RLB && h.rl;           // (the drain head's; constant 0 without RL)
+  wire [7:0]  c_Mr = c_rl ? 8'd1 : h.M;     // the RMAX words and ASCALE factors: the MM's rows
   wire [7:0]  p_M = pop_e.M, p_G = pop_e.G;
   wire        p_act = (q_n != 0) && pop_e.go;
   wire [MW-1:0] c_run = h.run;
@@ -443,7 +504,7 @@ module otpu_mxu
   // PORTB > 1: a 4-bit / NVFP4 QUAD advance's 16 / 32 scale bytes cross the line (its data's
   // offset 24 / 16; the ISA aligns them to 8 / 16 bytes): the first line alone first (i_spx, a
   // cycle without a chunk, as i_sws), then the advance with the second line (i_sp2)
-  wire i_qw     = WP && i_qd && !i_t2 && i_w4 && !i_unit && !i_rsc;
+  wire i_qw     = WP && i_qd && !i_t2 && i_w4 && !i_unit && !i_rsc && !i_rl;
   wire i_spx    = i_qw && !i_sws && !i_sp2 && (i_wf == WF_NV ? scale_addr[4] : &scale_addr[4:3]);
   wire need_b   = !i_sws && !i_spx && adv_b;
   wire need_a   = !i_unit && (i_sws || !i_rsc || adv_b);
@@ -469,6 +530,10 @@ module otpu_mxu
     // PORTB > 1, a QUAD advance's scale data across two lines: the first line is staged (spl,
     // r_stl; with swe its Sw loads r_sw), the second completes the entry from both (sp2)
     logic       spl, sp2;
+    // row lanes: the advance's A = L bpc bs bytes at doff are the entry's slots (lane l's
+    // block p at slot p L + l), the group's L Sw words at swo (swe) / sro (swr)
+    logic       rl;
+    logic [1:0] lg;
   } atag_t;
   atag_t a_tag;
   wire   i_s2 = WP && i_sp2;
@@ -476,6 +541,7 @@ module otpu_mxu
     a_tag = '0;
     a_tag.wf = i_wf; a_tag.pair = i_pair; a_tag.rsc = i_rsc;
     a_tag.t2 = i_t2; a_tag.qd = i_qd;
+    a_tag.rl = i_rl; a_tag.lg = i_lg;
     a_tag.doff = scale_addr[4:0];
     a_tag.swo = srow_addr[4:2];
     a_tag.sro = i_sws ? srow_addr[4:2] : srow_next[4:2];
@@ -483,7 +549,7 @@ module otpu_mxu
       a_tag.swr = 1'b1;
     end else if (i_rsc) begin
       a_tag.ent = 1'b1; a_tag.cpl = 1'b1; a_tag.swe = 1'b1;
-    end else if (i_t2) begin
+    end else if (i_t2 && !i_rl) begin
       a_tag.stg = !i_qd && !i_pair && !i_k[0] && !i_klast;
       a_tag.ent = !a_tag.stg;
       a_tag.pk = !i_qd && !i_pair && i_k[0];
@@ -496,8 +562,10 @@ module otpu_mxu
       a_tag.swe = (i_k == 0) && !i_swd && i_swh;
     end else begin
       a_tag.ent = 1'b1;
-      a_tag.hv = (i_pair || !i_w4) ? (i_pair ? 2'b11 : 2'b01) : (i_k[0] ? 2'b10 : 2'b01);
-      a_tag.cpl = !i_w4 || i_pair || i_k[0] || i_klast;
+      // (RL: every slot of the advance's L bpc, in one line: both halves, complete)
+      a_tag.hv = i_rl ? 2'b11 : (i_pair || !i_w4) ? (i_pair ? 2'b11 : 2'b01)
+                                                  : (i_k[0] ? 2'b10 : 2'b01);
+      a_tag.cpl = i_rl || !i_w4 || i_pair || i_k[0] || i_klast;
       // (a second line: the row's Sw came with the first; the next row's is left to its own
       // request, or its first advance's line)
       a_tag.sp2 = i_s2;
@@ -619,6 +687,8 @@ module otpu_mxu
   logic [95:0] r_wd0;
   logic [63:0] r_wd1;
   logic [127:0] r_wd2;                      // PORTB > 1, QUAD: blocks 2 and 3's data
+  logic [127:0] r_wd3;                      // RL 8: slots 4 .. 7 (32 bits each)
+  logic [7:1][31:0] r_swh;                  // RL: the group's other lanes' Sw words (0: r_sw)
   logic        r_we0, r_we1, r_we2;
   logic [255:0] r_stl;                      // PORTB > 1: the staged first line (spl)
   always_comb begin
@@ -627,11 +697,13 @@ module otpu_mxu
     logic [63:0]  x8;
     logic [127:0] x16;
     logic [511:0] x2;
-    logic [255:0] x32;
+    logic [255:0] x32, xa;
     logic [63:0]  h0, h1;
-    logic [127:0] h2;
+    logic [127:0] h2, h3;
+    logic [15:0]  x2b;
     xb  = ln1[8 * tg1.doff +: 8];
     xb2 = ln1[8 * {tg1.doff[4:1], 1'b1} +: 8];          // int8 PAIR: the odd block's byte
+    x2b = ln1[16 * tg1.doff[4:1] +: 16];
     xw  = ln1[32 * tg1.doff[4:2] +: 32];
     x8  = ln1[64 * tg1.doff[4:3] +: 64];
     x16 = ln1[128 * tg1.doff[4] +: 128];
@@ -639,9 +711,31 @@ module otpu_mxu
     // the staged line and this one (sp2)
     x2  = (WP && tg1.sp2) ? {ln1, r_stl} : {ln1, ln1};
     x32 = x2[64 * tg1.doff[4:3] +: 256];
-    h2  = '0;
+    // RL: the advance's A-byte window (A-aligned: 2, 4, 8, 16 or 32 bytes by the format and
+    // L), slot s = its bytes s bs .. (lane s mod L, block s / L)
+    case ((tg1.wf == WF_W8) ? 32'(1) << tg1.lg : (tg1.wf == WF_NV) ? 32'(16) << tg1.lg :
+          (T2 && tg1.t2) ? 32'(16) << tg1.lg : 32'(8) << tg1.lg)
+      2: xa = 256'(x2b);
+      4: xa = 256'(xw);
+      8: xa = 256'(x8);
+      16: xa = 256'(x16);
+      default: xa = ln1;
+    endcase
+    h2  = '0; h3 = '0;
     if (tg1.rsc) begin
       h0 = '0; h1 = '0;
+    end else if (RLB && tg1.rl) begin
+      if (tg1.wf == WF_W8) begin                      // a byte a slot
+        h0 = {56'd0, xa[7:0]}; h1 = {56'd0, xa[15:8]};
+        h2 = {56'd0, xa[31:24], 56'd0, xa[23:16]};
+        h3 = {24'd0, xa[63:56], 24'd0, xa[55:48], 24'd0, xa[47:40], 24'd0, xa[39:32]};
+      end else if (tg1.wf == WF_NV) begin             // eight bytes a slot (L 2: four slots)
+        h0 = xa[63:0]; h1 = xa[127:64]; h2 = xa[255:128];
+      end else begin                                  // a word a slot
+        h0 = {32'd0, xa[31:0]}; h1 = {32'd0, xa[63:32]};
+        h2 = {32'd0, xa[127:96], 32'd0, xa[95:64]};
+        h3 = xa[255:128];
+      end
     end else if (T2 && tg1.t2) begin
       h0 = tg1.qd ? x16[63:0] : tg1.pair ? x8 : tg1.pk ? {xw, r_pw} : {32'd0, xw};
       h1 = tg1.qd ? x16[127:64] : tg1.pair ? x8 : tg1.pk ? {xw, r_pw} : {32'd0, xw};
@@ -664,15 +758,27 @@ module otpu_mxu
     r_wd0 = {tg1.swe ? r_swe : r_sw, h0};
     r_wd1 = h1;
     r_wd2 = h2;
+    r_wd3 = h3;
     r_we0 = rv1 && tg1.ent && tg1.hv != 2'b10;
     r_we1 = rv1 && tg1.ent && tg1.hv[1];
-    r_we2 = WP && rv1 && tg1.ent && tg1.qd && !tg1.t2;
+    r_we2 = WP && rv1 && tg1.ent && ((tg1.qd && !tg1.t2) || (RLB && tg1.rl));
   end
   wire r_cpl = rv1 && tg1.ent && tg1.cpl;
+  // RL: the group's L Sw words from the line's words swo .. (swe: this entry's; swr: the next
+  // group's), r_swl[0] being r_sw itself
+  wire [7:0][31:0] r_swle, r_swlr;
+  for (genvar c = 0; c < 8; c++) begin : g_swl
+    assign r_swle[c] = ln1[32 * 3'(tg1.swo + 3'(c)) +: 32];
+    assign r_swlr[c] = ln1[32 * 3'(tg1.sro + 3'(c)) +: 32];
+  end
   always_ff @(posedge clk)
     if (rv1) begin
       if (tg1.swr) r_sw <= r_swr;
       else if (tg1.swe) r_sw <= r_swe;
+      if (RLB) begin
+        if (tg1.swr) r_swh <= r_swlr[7:1];
+        else if (tg1.swe) r_swh <= r_swle[7:1];
+      end
       if (T2 && tg1.stg) r_pw <= ln1[32 * tg1.doff[4:2] +: 32];
       if (WP && tg1.spl) r_stl <= ln1;
     end
@@ -688,6 +794,28 @@ module otpu_mxu
       .clk, .we(r_we2), .wa(s_tail), .wd(r_wd2), .re(1'b1), .ra(s_rd), .rd(sr2));
   end else begin : g_nfs2
     assign sr2 = '0;
+  end
+  // row lanes: slots 4 .. 7 (the eight-stream build) and the other lanes' Sw (L - 1 words)
+  logic [127:0] sr3;
+  logic [7:1][31:0] sr4;
+  if (RLB && NS >= 8) begin : g_fs3
+    otpu_ram_1r1w #(.W(128), .N(DEPTH), .STYLE("block")) u_fs3 (
+      .clk, .we(r_we2), .wa(s_tail), .wd(r_wd3), .re(1'b1), .ra(s_rd), .rd(sr3));
+  end else begin : g_nfs3
+    assign sr3 = '0;
+  end
+  if (RLB) begin : g_fs4
+    localparam int SWN = (NS >= 8) ? 7 : 3;
+    logic [SWN*32-1:0] q;
+    otpu_ram_1r1w #(.W(SWN * 32), .N(DEPTH), .STYLE("block")) u_fs4 (
+      .clk, .we(r_we0), .wa(s_tail), .wd(tg1.swe ? r_swle[SWN:1] : r_swh[SWN:1]), .re(1'b1),
+      .ra(s_rd), .rd(q));
+    always_comb begin
+      sr4 = '0;
+      sr4[SWN:1] = q;
+    end
+  end else begin : g_nfs4
+    assign sr4 = '0;
   end
 
   // ================================================================== compute pipeline
@@ -712,7 +840,19 @@ module otpu_mxu
   logic t20, qd0;                           // t2; QUAD
   logic [MCOLS-1:0] hq0;                    // QUAD: the columns of blocks 4c+2, 4c+3
   logic [7:0] M0;                           // the command's M (constant while its blocks flow)
+  logic rl0;                                // row lanes (constant 0 without RL), log2 L
+  logic [1:0] lg0;
   wire  w40 = (wf0 != WF_W8);
+  // the per-column stream select (the PE's pair, s_hq, and its INMODE, s_hi): RL column J
+  // takes stream J, else the block's hq / hi
+  logic [MCOLS-1:0] s_hi, s_hi0;
+  logic [MCOLS-1:0][NSW-1:0] s_hq, s_hq0;
+  wire c_rlp = RLB && pop_e.rl;             // the pop head's
+  always_comb
+    for (int j = 0; j < MCOLS; j++) begin
+      s_hi[j] = c_rlp ? 1'(j) : c_hi[j];
+      s_hq[j] = c_rlp ? NSW'(j >> 1) : NSW'(c_hq[j]);
+    end
   // 4-bit elements: nibble i of the chunk half; int4 two's complement, E2M1 as twice its value
   // ({0, 1, 2, 3, 4, 6, 8, 12}, sign in bit 3); NVFP4 elements are E2M1's
   function automatic logic [7:0] dec4(input logic [3:0] c, input logic fp);
@@ -792,6 +932,10 @@ module otpu_mxu
     qd0 <= c_qd;
     hq0 <= c_hq;
     M0 <= p_M;
+    rl0 <= c_rlp;
+    lg0 <= !RLB ? 2'd0 : pop_e.M[3] ? 2'd3 : pop_e.M[2] ? 2'd2 : 2'd1;   // (log2 L: M' = L)
+    s_hi0 <= s_hi;
+    s_hq0 <= s_hq;
   end
 
   // ---- the shifts: per block its eight groups' W - dw and m (S1), per column and group
@@ -825,12 +969,16 @@ module otpu_mxu
   // entry's words w0..w3 ({Sw, w1, w0}, {w3, w2}); the low stream's is word q, the high's q | 1,
   // QUAD's third and fourth streams w2 and w3
   wire [3:0][31:0] tw0 = {sr1[63:32], sr1[31:0], sr0[63:32], sr0[31:0]};
-  wire [63:0] blo0 = (T2 && t20) ? {32'd0, tw0[m0.q]} : (w40 && !pr0 && m0.h) ? sr1 : sr0[63:0];
-  wire [63:0] bhi0 = (T2 && t20) ? {32'd0, tw0[{m0.q[1], 1'b1}]} : sr1;
+  // (t2's packed words: not RL's, whose t2 entry holds a word a slot as the others')
+  wire t2p0 = T2 && t20 && !rl0;
+  wire [63:0] blo0 = t2p0 ? {32'd0, tw0[m0.q]} : (w40 && !pr0 && m0.h) ? sr1 : sr0[63:0];
+  wire [63:0] bhi0 = t2p0 ? {32'd0, tw0[{m0.q[1], 1'b1}]} : sr1;
   bdec_t dlo1, dhi1, dq21, dq31;
   logic  vlo1, vhi1, vq21, vq31;
   logic [MCOLS-1:0][3:0][7:0] da1;
   logic [MCOLS-1:0] hi1, hq1;
+  logic [MCOLS-1:0] s_hi1;
+  logic [MCOLS-1:0][NSW-1:0] s_hq1;
   always_ff @(posedge clk) begin
     dlo1 <= bdec(blo0, wf0, cu0 || rs0);
     dhi1 <= bdec(bhi0, wf0, cu0 || rs0);
@@ -839,13 +987,15 @@ module otpu_mxu
     for (int j = 0; j < MCOLS; j++) begin
       da1[j] <= act_scale[j*64 + 32 +: 32];
       hi1[j] <= hi0[j];
+      s_hi1[j] <= s_hi0[j];
+      s_hq1[j] <= s_hq0[j];
     end
   end
   // (QUAD's third and fourth streams: t2's words 2 and 3, or a wide port's entry RAM)
   if (QD) begin : g_q1
     always_ff @(posedge clk) begin
-      dq21 <= bdec((T2 && t20) || !WP ? {32'd0, tw0[2]} : sr2[63:0], wf0, cu0 || rs0);
-      dq31 <= bdec((T2 && t20) || !WP ? {32'd0, tw0[3]} : sr2[127:64], wf0, cu0 || rs0);
+      dq21 <= bdec(t2p0 || !WP ? {32'd0, tw0[2]} : sr2[63:0], wf0, cu0 || rs0);
+      dq31 <= bdec(t2p0 || !WP ? {32'd0, tw0[3]} : sr2[127:64], wf0, cu0 || rs0);
       vq21 <= m0.v && m0.o2;
       vq31 <= m0.v && m0.o3;
       hq1 <= hq0;
@@ -855,6 +1005,21 @@ module otpu_mxu
     assign vq21 = 1'b0, vq31 = 1'b0;
     assign hq1 = '0;
   end
+  // RL 8: slots 4 .. 7's decoders (streams 4 .. 7)
+  bdec_t dq41, dq51, dq61, dq71;
+  if (RLB && NS >= 8) begin : g_q4
+    always_ff @(posedge clk) begin
+      dq41 <= bdec({32'd0, sr3[31:0]}, wf0, cu0 || rs0);
+      dq51 <= bdec({32'd0, sr3[63:32]}, wf0, cu0 || rs0);
+      dq61 <= bdec({32'd0, sr3[95:64]}, wf0, cu0 || rs0);
+      dq71 <= bdec({32'd0, sr3[127:96]}, wf0, cu0 || rs0);
+    end
+  end else begin : g_nq4
+    assign dq41 = '0, dq51 = '0, dq61 = '0, dq71 = '0;
+  end
+  // the streams' decoded scales (block-major: stream s = slot s) and the blocks' validity
+  wire bdec_t [7:0] dec1 = {dq71, dq61, dq51, dq41, dq31, dq21, dhi1, dlo1};
+  wire [3:0] vblk1 = {vq31, vq21, vhi1, vlo1};
   logic [MCOLS-1:0][7:0][16:0] bm2;
   always_ff @(posedge clk)
     for (int j = 0; j < MCOLS; j++)
@@ -863,22 +1028,27 @@ module otpu_mxu
         logic [10:0] s;
         logic [5:0]  m;
         logic        v;
-        // (QUAD: one of four, by the column's hq and hi)
-        if (QD && hq1[j]) begin
-          s = hi1[j] ? dq31.s[g] : dq21.s[g];
-          m = hi1[j] ? dq31.m[g] : dq21.m[g];
-          v = hi1[j] ? vq31 : vq21;
-        end else begin
-          s = hi1[j] ? dhi1.s[g] : dlo1.s[g];
-          m = hi1[j] ? dhi1.m[g] : dlo1.m[g];
-          v = hi1[j] ? vhi1 : vlo1;
-        end
+        logic [2:0]  si;
+        logic [1:0]  vi;
+        // the column's stream (QUAD: one of four, by the column's hq and hi; RL: stream J)
+        // and its block's validity (by the block, hq and hi)
+        si = 3'({s_hq1[j], s_hi1[j]});
+        vi = {QD && hq1[j], hi1[j]};
+        s = dec1[si].s[g];
+        m = dec1[si].m[g];
+        v = vblk1[vi];
         sh = s - 11'(da1[j][g / 2]);
         bm2[j][g] <= (v && !sh[10]) ? 17'(17'(m) << sh[4:0]) : 17'd0;
       end
   // the row's Sw (UNIT: 1) and each column's Sa * 2^-W, with every advance (the row's last
   // carries them to the result FIFO): fp_mul's flush and rounding at the bottom of the range
   wire [31:0] sw0 = cu0 ? F_ONE : sr0[95:64];
+  // RL: column J's lane is J mod L, its Sw the entry's word J mod L (0: sw0)
+  wire [7:0][31:0] swl0 = {sr4[7], sr4[6], sr4[5], sr4[4], sr4[3], sr4[2], sr4[1], sr0[95:64]};
+  logic [MCOLS-1:0][31:0] swc0;
+  always_comb
+    for (int j = 0; j < MCOLS; j++)
+      swc0[j] = (RLB && rl0 && !cu0) ? swl0[3'(j & ((1 << lg0) - 1))] : sw0;
   wire [31:0] wpow = (wf0 == WF_W8) ? 32'h3780_0000 : (wf0 == WF_NV) ? 32'h3900_0000
                                                                      : 32'h3A00_0000;
   // x * 2^-k as fp_mul computes it (flushed operands and result, the canonical NaN), without a
@@ -894,11 +1064,13 @@ module otpu_mxu
     return {x[31], 31'd0};
   endfunction
   wire [4:0] wk = (wf0 == WF_W8) ? 5'd16 : (wf0 == WF_NV) ? 5'd13 : 5'd11;
-  logic [31:0] sw1;
+  logic [MCOLS-1:0][31:0] sw1;              // (per column: RL's lanes; else one value)
   logic [MCOLS-1:0][31:0] sap1;
   always_ff @(posedge clk) begin
-    sw1 <= sw0;
-    for (int j = 0; j < MCOLS; j++) sap1[j] <= fp_pow2m(act_scale[j*64 +: 32], wk);
+    for (int j = 0; j < MCOLS; j++) begin
+      sw1[j] <= swc0[j];
+      sap1[j] <= fp_pow2m(act_scale[j*64 +: 32], wk);
+    end
   end
 `ifndef SYNTHESIS
   always @(posedge clk)
@@ -921,12 +1093,26 @@ module otpu_mxu
   // column's DSP still sees two streams and its INMODE select (hi) as before.
   // A wide port (PORTB > 1) makes the four streams the entry's blocks: int8 chunks 0 .. 3, 4-bit
   // chunk 0's halves and chunk 1's (PAIR: the first two), so QUAD's columns take them as t2's.
-  localparam int WS = QD ? 32 : 16;                   // the streams' bits
+  localparam int WS = 8 * NS;                         // the streams' bits
   logic [D-1:0][WS-1:0] wd;                           // S1: {[4c+3, 4c+2,] high block, low block / half}
-  wire  [4*FW1-1:0] w0x = (4 * FW1)'(w0);             // (the entry, chunks past PORTB zero)
+  wire  [NSX*FW1-1:0] w0x = (NSX * FW1)'(w0);         // (the entry, chunks past PORTB zero)
+  // row lanes: stream s = block p = s / L of lane l = s mod L's chunk (int8 the chunk, 4-bit
+  // its half p, t2 its block p), block-major
+  function automatic logic [7:0] wrl(input logic [NSX*FW1-1:0] e, input int i, input int s,
+                                     input logic [1:0] lg, input logic [1:0] wf, input logic t2);
+    logic [FW1-1:0] c;
+    logic [2:0] l, p;
+    l = 3'(s & ((1 << lg) - 1));
+    p = 3'(s >> lg);
+    c = e[FW1 * l +: FW1];
+    if (T2 && t2) return wt2(c, i, p[1:0]);
+    if (wf == WF_W8) return c[8 * i +: 8];
+    return dec4(c[(p[0] ? D * 4 : 0) + 4 * i +: 4], wf != 2'd1);
+  endfunction
   always_ff @(posedge clk)
     for (int i = 0; i < D; i++) begin
       logic [7:0] lo, hi, q2, q3;
+      logic [NS-1:0][7:0] st;
       lo = (T2 && t20) ? wt2(w0, i, m0.q) : wsel(w0, i, m0.h, wf0);
       hi = (T2 && t20) ? wt2(w0, i, {m0.q[1], 1'b1}) : wsel(w0, i, 1'b1, wf0);
       q2 = wt2(w0, i, 2'd2);
@@ -941,7 +1127,10 @@ module otpu_mxu
           q3 = wsel(w0x[FW1 +: FW1], i, 1'b1, wf0);
         end
       end
-      wd[i] <= WS'({q3, q2, hi, lo});
+      st = WS'({q3, q2, hi, lo});
+      if (RLB && rl0)
+        for (int k = 0; k < NS; k++) st[k] = wrl(w0x, i, k, lg0, wf0, t20);
+      wd[i] <= st;
     end
   logic [D-1:0][WS-1:0] wc [MCOLS];                  // the streams at column j
   for (genvar i = 0; i < D; i++) begin : g_wsk
@@ -965,20 +1154,21 @@ module otpu_mxu
       // columns past the first register their weights in the DSP (WREG), from the previous
       // column's hop: a copy of wc[j]
       localparam int JW = (j == 0) ? 0 : j - 1;
-      // (T2: column 0 is never QUAD's hq: c_hq[0] is 0, so its unregistered weights see no select)
-      wire [15:0] wp = (QD && j != 0 && c_hq[j]) ? 16'(wc[JW][i] >> 16) : wc[JW][i][15:0];
+      // (T2: column 0 is never QUAD's hq: c_hq[0] is 0, so its unregistered weights see no
+      // select; RL: column J takes stream J, the pair J / 2 by s_hq, within it by s_hi)
+      wire [15:0] wp = (QD && j != 0) ? wc[JW][i][16 * s_hq[j] +: 16] : wc[JW][i][15:0];
       otpu_pe #(.FIRST(i % CLS == 0), .LAST(i % CLS == CLS - 1), .WREG(j != 0)) u_pe (
         .clk, .en(1'b1), .act(as_k[j][i]), .wlo(wp[7:0]), .whi(wp[15:8]),
-        .sel(c_hi[j]),
+        .sel(s_hi[j]),
         .pcin((i % CLS == 0) ? 48'd0 : pc[j][(i % CLS == 0) ? i : i - 1]), .pcout(pc[j][i]),
         .p(preg[j][i]));
 `ifndef SYNTHESIS
       // the DSP's select register is hi0[j] (both are c_hi[j], loaded every cycle)
       always @(posedge clk) begin
-        if (hi_v && u_pe.selr != hi0[j])
-          $fatal(1, "otpu_mxu: PE %0d.%0d's select %0d is not hi0 %0d", j, i, u_pe.selr, hi0[j]);
+        if (hi_v && u_pe.selr != s_hi0[j])
+          $fatal(1, "otpu_mxu: PE %0d.%0d's select %0d is not s_hi0 %0d", j, i, u_pe.selr, s_hi0[j]);
         if (hi_v && j != 0 && {u_pe.whr, u_pe.wlr} !=
-            ((QD && hq0[j]) ? 16'(wc[j][i] >> 16) : wc[j][i][15:0]))
+            (QD ? wc[j][i][16 * s_hq0[j] +: 16] : wc[j][i][15:0]))
           $fatal(1, "otpu_mxu: PE %0d.%0d's weights are not wc", j, i);
       end
 `endif
@@ -1008,7 +1198,7 @@ module otpu_mxu
   // the row's last block, PAIR and M at S0 + LROW; Sw and the Sa' from S1
   logic             tl_v, tl_pr, tl_qd;
   logic [7:0]       tl_M;
-  logic [31:0]      tl_sw;
+  logic [MCOLS-1:0][31:0] tl_sw;            // (per column: RL's lanes' Sw)
   logic [MCOLS-1:0][31:0] tl_sa;
   otpu_delay #(.W(1 + 1 + 8), .N(LROW)) u_tl (.clk, .en(1'b1), .d({m0.v && m0.last, pr0, M0}),
                                              .q({tl_v, tl_pr, tl_M}));
@@ -1017,15 +1207,15 @@ module otpu_mxu
   end else begin : g_ntlq
     assign tl_qd = 1'b0;
   end
-  otpu_skew #(.W(32 + MCOLS * 32), .N(LROW - 1)) u_ts (.clk, .en(1'b1), .d({sw1, sap1}),
-                                                      .q({tl_sw, tl_sa}));
+  otpu_skew #(.W(2 * MCOLS * 32), .N(LROW - 1)) u_ts (.clk, .en(1'b1), .d({sw1, sap1}),
+                                                     .q({tl_sw, tl_sa}));
   // PAIR: row j (j < M <= MCOLS/2) adds its partner column j + M's integer; QUAD (T2): row j
   // (j < M <= MCOLS/4) adds columns j + M, j + 2M and j + 3M's, two adders deep. Registered for
   // the result FIFO (rv: push)
   logic             rv;
   logic [MCOLS-1:0][47:0] rowi;
   logic [MCOLS-1:0][31:0] rsa;
-  logic [31:0]      rsw;
+  logic [MCOLS-1:0][31:0] rsw;
   always_ff @(posedge clk) begin
     rv <= !rst && tl_v;
     for (int j = 0; j < MCOLS; j++) begin
@@ -1051,8 +1241,8 @@ module otpu_mxu
   // and rf_q + 2 (a row written this cycle bypassed) with no grant on the address; each cycle the
   // head row and the row after it are registered (rh0, rh1) and the last pop picks the head
   // (rfh). One RAM copy per read address: a single read port each infers as LUT RAM.
-  // A row: MCOLS integers, MCOLS Sa', Sw
-  localparam int RW_ = MCOLS * 48 + MCOLS * 32 + 32;
+  // A row: MCOLS integers, MCOLS Sa', MCOLS Sw (one value a row unless RL: its lanes')
+  localparam int RW_ = MCOLS * 48 + MCOLS * 32 + MCOLS * 32;
   logic [RFW-1:0] rf_q, rf_t;
   logic [RFW:0]   rf_n;
   logic           rf_hs;                     // the last cycle popped a row
@@ -1090,7 +1280,7 @@ module otpu_mxu
   assign rfh = rf_hs ? rh1 : rh0;
   wire [MCOLS-1:0][47:0] rfh_i  = rfh[0 +: MCOLS * 48];
   wire [MCOLS-1:0][31:0] rfh_sa = rfh[MCOLS * 48 +: MCOLS * 32];
-  wire [31:0]            rfh_sw = rfh[MCOLS * 80 +: 32];
+  wire [MCOLS-1:0][31:0] rfh_sw = rfh[MCOLS * 80 +: MCOLS * 32];
 
   // ================================================================== drain
   // lanes this cycle: results dj .. dj+ncnt-1 of the head row, stopping at a bank conflict
@@ -1108,7 +1298,12 @@ module otpu_mxu
   // (rf_nz: rf_n != 0, rl_nz: rows_live != 0) for the same reason.
   logic          d_last, d_fin, rf_nz, rl_nz;
   logic [NL-1:0] dln;
-  wire  [MW-1:0] c_Mn = d_last ? h.Ml : MW'(MCOLS);   // its results
+  // the head's rows left to drain (RL: the last one has Mz results, not Ml): d_lz the row being
+  // drained is the last, d_lz2 the next one is
+  logic [15:0]   d_rem;
+  logic          d_lz, d_lz2;
+  wire  [MW-1:0] c_Ml = d_lz ? h.Mz : h.Ml;
+  wire  [MW-1:0] c_Mn = d_last ? c_Ml : MW'(MCOLS);   // its results
   // The drain lanes' addresses, dad[dj + k], are registered (dal): set wherever dj or dad move
   logic [NL-1:0][31:0] dal;
   function automatic logic [NL-1:0][31:0] dlane_a(input logic [31:0] a [MCOLS],
@@ -1116,7 +1311,7 @@ module otpu_mxu
     for (int k = 0; k < NL; k++) dlane_a[k] = (32'(j) + 32'(k) < MCOLS) ? a[MW'(j) + MW'(k)] : '0;
   endfunction
   logic [NL-1:0][47:0] dx_l;
-  logic [NL-1:0][31:0] dsa_l;
+  logic [NL-1:0][31:0] dsa_l, dsw_l;
   logic [NL-1:0][7:0]  dcol_l;
   // (the result FIFO's head row is the head command's while it has rows not yet drained)
   wire  drain_go = rf_nz && rl_nz && (!c_asc || al_st == 2'd2);
@@ -1137,7 +1332,7 @@ module otpu_mxu
   // the registered step is its definition from the head's entry, dg1, dj and the counts
   always @(posedge clk) if (!rst && q_n != 0) begin
     logic [MW-1:0] mn, lf;
-    mn = (dg1 == c_G) ? h.Ml : MW'(MCOLS);
+    mn = (dg1 == c_G) ? c_Ml : MW'(MCOLS);
     lf = mn - dj;
     if (d_last != (dg1 == c_G) || ncnt != ((c_run < lf) ? c_run : lf) || dln != dlanes(ncnt) ||
         d_fin != (MW'(dj + ncnt) == mn))
@@ -1150,23 +1345,31 @@ module otpu_mxu
     $fatal(1, "otpu_mxu: rf_nz %0d (rf_n %0d), rl_nz %0d (rows_live %0d)", rf_nz, rf_n, rl_nz, rows_live);
 `endif
   always_comb begin
-    dx_l = '0; dsa_l = '0; dcol_l = '0;
+    dx_l = '0; dsa_l = '0; dsw_l = '0; dcol_l = '0;
     for (int k = 0; k < NL; k++)
       if (32'(dj) + 32'(k) < MCOLS) begin
         dx_l[k] = rfh_i[MW'(dj) + MW'(k)];
         dsa_l[k] = rfh_sa[MW'(dj) + MW'(k)];
+        dsw_l[k] = rfh_sw[MW'(dj) + MW'(k)];
         dcol_l[k] = 8'(dj) + 8'(k);
       end
   end
 `ifndef SYNTHESIS
   // PAIR reads a block's data and its partner's in one line (int8: a byte pair)
   always @(posedge clk)
-    if (a_req && i_pair && !i_sws && !i_rsc && (i_w4 ? scale_addr[2] : scale_addr[0]))
+    if (a_req && i_pair && !i_rl && !i_sws && !i_rsc && (i_w4 ? scale_addr[2] : scale_addr[0]))
       $fatal(1, "otpu_mxu: PAIR scales must be 8-byte (int8: 2-byte) aligned");
+  // RL: an advance's A bytes A-aligned in a line, the group's Sw words 4 L aligned
+  always @(posedge clk)
+    if (a_req && i_rl && !i_sws && !i_rsc && (scale_addr & (32'(i_sstep) - 1)) != 0)
+      $fatal(1, "otpu_mxu: RL scales misaligned (%h, %0d bytes an advance)", scale_addr, i_sstep);
+  always @(posedge clk)
+    if (a_req && i_rl && (i_sws || i_rsc) && (srow_addr[4:0] & 5'((32'd4 << i_lg) - 1)) != 0)
+      $fatal(1, "otpu_mxu: RL Sw words misaligned (%h)", srow_addr);
   // t2's QUAD reads a chunk's four words in one 16-byte group; int8's QUAD four bytes in a
   // word (4-bit and NVFP4: 8 / 16-byte aligned, across a line in two requests)
   always @(posedge clk)
-    if (a_req && i_qd && !i_sws && !i_rsc && (i_t2 ? scale_addr[3:2] != 2'd0 :
+    if (a_req && i_qd && !i_rl && !i_sws && !i_rsc && (i_t2 ? scale_addr[3:2] != 2'd0 :
                                               !i_w4 ? scale_addr[1:0] != 2'd0 :
                                               i_wf == WF_NV ? scale_addr[3:0] != 4'd0 :
                                               scale_addr[2:0] != 3'd0))
@@ -1190,7 +1393,8 @@ module otpu_mxu
   wire [MW-1:0]    d_rest = c_Mn - dj - ncnt;
   wire             d_nl = d_last ? h.g1 : (dg1 + 8'd1 == c_G);
   wire [MW:0]      st_mid = dstep(d_rest, c_run);
-  wire [MW:0]      st_grp = d_nl ? {h.dfl, h.dnl} : dstep(MW'(MCOLS), c_run);
+  wire [MW:0]      st_grp = d_nl ? (d_lz2 ? {h.dflz, h.dnlz} : {h.dfl, h.dnl})
+                                 : dstep(MW'(MCOLS), c_run);
   wire [NL-1:0]    ln_mid = dlanes(st_mid[MW-1:0]), ln_grp = dlanes(st_grp[MW-1:0]);
   wire             d_pop = t_gnt && drain_row_done;   // a row leaves the result FIFO
 `ifndef SYNTHESIS
@@ -1211,8 +1415,7 @@ module otpu_mxu
   logic [NL-1:0][31:0] lo_ad;
   logic [NL-1:0][7:0]  lo_col;
   logic [NL-1:0][47:0] p1_x;
-  logic [NL-1:0][31:0] p1_sa;
-  logic [31:0]         p1_sw;
+  logic [NL-1:0][31:0] p1_sa, p1_sw;
   f32_t                lo_y [NL];
   always_ff @(posedge clk)
     if (rst) p1 <= '0;
@@ -1224,10 +1427,10 @@ module otpu_mxu
     end
   always_ff @(posedge clk)
     if (t_gnt) begin
-      p1_x <= dx_l; p1_sa <= dsa_l; p1_sw <= rfh_sw;
+      p1_x <= dx_l; p1_sa <= dsa_l; p1_sw <= dsw_l;
     end
   for (genvar k = 0; k < NL; k++) begin : g_lane
-    otpu_mx_lane #(.LM(LM)) u_l (.clk, .en(t_gnt), .x(p1_x[k]), .sw(p1_sw), .sa(p1_sa[k]),
+    otpu_mx_lane #(.LM(LM)) u_l (.clk, .en(t_gnt), .x(p1_x[k]), .sw(p1_sw[k]), .sa(p1_sa[k]),
                                  .y(lo_y[k]));
   end
   // the picks' addresses and columns in a delay line; their valid and lane bits in reset
@@ -1278,7 +1481,7 @@ module otpu_mxu
       r1 <= r0;
       for (int k = 0; k < NL; k++) begin
         xo[k]  <= t_rdata[k];
-        alr[k] <= c_asc ? alpha[r0.col[k][MW-2:0]] : F_ONE;
+        alr[k] <= c_asc ? alpha[c_rl ? '0 : r0.col[k][MW-2:0]] : F_ONE;
       end
     end
   for (genvar k = 0; k < NL; k++) begin : g_rmw
@@ -1368,11 +1571,24 @@ module otpu_mxu
   // runs: mx_go is never set in a head's first cycle), so no adder precedes the write request
   logic [LANES-1:0] mxm, mxm_nx;
   logic [LANES-1:0][31:0] mxl;
-  always_comb for (int k = 0; k < LANES; k++) mxm_nx[k] = 32'(mx_i) + LANES + 32'(k) < 32'(c_M);
+  always_comb for (int k = 0; k < LANES; k++) mxm_nx[k] = 32'(mx_i) + LANES + 32'(k) < 32'(c_Mr);
+  // RL: the one RMAX word is the max over the lanes' columns' running maxima (the key max of
+  // those that saw a value), registered (the maxima settle before the head drains)
+  logic [31:0] mkr;
+  always_ff @(posedge clk) begin
+    logic [31:0] m;
+    logic        have;
+    m = '0; have = 1'b0;
+    for (int j = 0; j < MCOLS; j++)
+      if (mx_have[j] && (!have || mk[j] > m)) begin
+        m = mk[j]; have = 1'b1;
+      end
+    mkr <= m;
+  end
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst && q_n != 0)
     for (int k = 0; k < LANES; k++)
-      if (mxm[k] != (32'(mx_i) + 32'(k) < 32'(c_M)))
+      if (mxm[k] != (32'(mx_i) + 32'(k) < 32'(c_Mr)))
         $fatal(1, "otpu_mxu: RMAX lane %0d: mxm %0d, mx_i %0d, M %0d", k, mxm[k], mx_i, c_M);
   always @(posedge clk) if (!rst && mx_go)
     for (int k = 0; k < LANES; k++)
@@ -1416,7 +1632,7 @@ module otpu_mxu
     // banks)
     if (al_go) begin
       for (int k = 0; k < LANES; k++) begin
-        if (32'(al_i) + 32'(k) < 32'(c_M)) begin
+        if (32'(al_i) + 32'(k) < 32'(c_Mr)) begin
           t_ren_c[k] = 1'b1;
           t_raddr_c[k] = c_asa + 32'(al_i) + 32'(k);
         end
@@ -1427,7 +1643,7 @@ module otpu_mxu
         if (mxm[k]) begin
           t_wen[k] = 1'b1;
           t_waddr[k] = mxl[k];
-          t_wdata[k] = unkey(mk[MW'(32'(mx_i) + 32'(k))]);
+          t_wdata[k] = unkey(c_rl ? mkr : mk[MW'(32'(mx_i) + 32'(k))]);
         end
       end
     end
@@ -1461,6 +1677,7 @@ module otpu_mxu
       rf_q <= '0; rf_hs <= 1'b0; rf_t <= '0; rf_n <= '0; rf_nz <= 1'b0; rl_nz <= 1'b0;
       dj <= '0; mx_done <= 1'b0; mx_have <= '0;
       d_last <= 1'b0; d_fin <= 1'b0; ncnt <= '0; dln <= '0; mxm <= '0;
+      d_rem <= '0; d_lz <= 1'b0; d_lz2 <= 1'b0;
       al_st <= 2'd0; al_i <= '0; mx_i <= '0;
       r0 <= '0; rA <= '0; rx <= '0; rmw_n <= '0; ln_n <= '0;
       st_starve <= '0; st_bp <= '0; st_frz <= '0; st_deny <= '0;
@@ -1497,7 +1714,7 @@ module otpu_mxu
           i_ini  <= 1'b1;
           i_left <= cmd_total;
           i_KB   <= cmd_KBa;
-          i_rs   <= cmd.w5 & ~32'd3;              // (rs bits 1:0 are t2's flags)
+          i_rs   <= cmd.w5 & ~32'd15;             // (rs bits 3:0 are t2's, QUAD's and RL's flags)
           i_srs  <= cmd.w7;
           i_unit <= cmd.flags[0];
           i_rsc  <= cmd.flags[7] && !cmd.flags[0];
@@ -1506,6 +1723,8 @@ module otpu_mxu
           i_pair <= cmd_pair;
           i_t2r  <= cmd_t2;
           i_qdr  <= cmd_qd;
+          i_rlr  <= cmd_rl;
+          i_lg   <= cmd_lg;
           i_nb   <= cmd_nb;
           i_nl   <= cmd_nl;
           i_k0   <= cmd.w4[31:24];
@@ -1529,6 +1748,14 @@ module otpu_mxu
         if (i_t2) begin                           // t2: a 16-byte header, a word a block
           so = 32'd16 + {22'd0, i_k0, 2'd0};
           ss = i_qd ? 6'd16 : i_pair ? 6'd8 : 6'd4;
+        end
+        if (i_rl) begin                           // row lanes: a block's data of the L rows,
+          logic [5:0] bs, A, H;                   // the advance's A bytes, the header H
+          bs = (i_wf == WF_W8) ? 6'd1 : (i_wf == WF_NV) ? 6'd8 : 6'd4;
+          A = 6'((32'(bs) * (i_t2 ? 32'd4 : i_w4 ? 32'd2 : 32'd1)) << i_lg);
+          H = (6'(6'd4 << i_lg) > A) ? 6'(6'd4 << i_lg) : A;
+          so = 32'(H) + ((32'(i_k0) * 32'(bs)) << i_lg);
+          ss = A;
         end
         sa = srow_addr + so;
         sn = srow_addr + i_srs;
@@ -1665,15 +1892,18 @@ module otpu_mxu
         if (drain_go) begin
           if (drain_row_done) begin
             dj <= '0;
-            if (d_last) begin                       // the next weight row, group 0
-              dg <= '0; dg1 <= 8'd1;
+            if (d_last) begin                       // the next weight row, group 0 (RL: the
+              dg <= '0; dg1 <= 8'd1;                //   next group of L rows)
               for (int j = 0; j < MCOLS; j++) begin
                 logic [31:0] a;
-                a = drow[j] + 32'd1;
+                a = drow[j] + 32'(h.dinc);
                 dad[j] <= a;
                 drow[j] <= a;
                 if (j < NL) dal[j] <= a;
               end
+              d_rem <= d_rem - 16'd1;
+              d_lz <= d_lz2;
+              d_lz2 <= (d_rem == 16'd3);
             end else begin                          // the next group of this row
               dg <= dg + 8'd1; dg1 <= dg1 + 8'd1;
               for (int j = 0; j < MCOLS; j++) begin
@@ -1698,7 +1928,7 @@ module otpu_mxu
         rmw_n <= rmw_n + ((lo.v && c_acc) ? 4'd1 : 4'd0) - (rw.v ? 4'd1 : 4'd0);
         ln_n <= ln_n + (drain_go ? 4'd1 : 4'd0) - (lo.v ? 4'd1 : 4'd0);
         if (mx_go) begin
-          if (32'(mx_i) + LANES >= 32'(c_M)) mx_done <= 1'b1;
+          if (32'(mx_i) + LANES >= 32'(c_Mr)) mx_done <= 1'b1;
           else mx_i <= mx_i + 8'(LANES);
         end
         if (al_go) al_st <= 2'd1;
@@ -1709,7 +1939,7 @@ module otpu_mxu
           for (int j = 0; j < MCOLS; j++)
             if (32'(j) >= 32'(al_i) && 32'(j) < 32'(al_i) + LANES)
               alpha[j] <= t_rdata[$clog2(LANES)'(32'(j) - 32'(al_i))];
-          if (32'(al_i) + LANES >= 32'(c_M)) al_st <= 2'd2;
+          if (32'(al_i) + LANES >= 32'(c_Mr)) al_st <= 2'd2;
           else begin
             al_i <= al_i + 8'(LANES);
             al_st <= 2'd0;
@@ -1722,7 +1952,7 @@ module otpu_mxu
       // RMAX lane addresses: they advance with mx_i while the writes run, else h.mxo + k
       for (int k = 0; k < LANES; k++)
         if (!mx_go) mxl[k] <= h.mxo + 32'(k);
-        else if (t_gnt && 32'(mx_i) + LANES < 32'(c_M)) mxl[k] <= mxl[k] + 32'(LANES);
+        else if (t_gnt && 32'(mx_i) + LANES < 32'(c_Mr)) mxl[k] <= mxl[k] + 32'(LANES);
       rows_live <= rl;
       rows_p <= rp;
       // rn != 0, rl != 0 from the counts' own zero / one tests: the grant enters last
@@ -1731,7 +1961,8 @@ module otpu_mxu
       // the pop head moves to the next command once the head's chunks have all popped, if the
       // pipeline treats both alike (PAIR, and M under PAIR: pr0, hi0 and M0 are read late)
       if (!pn && !cl_ld && c_left == 0 && q_n == 2'd2 && n.go && !c_done &&
-          n.pair == h.pair && (!h.pair || n.M == h.M) && (!QD || n.qd == h.qd)) begin
+          n.pair == h.pair && (!h.pair || n.M == h.M) && (!QD || n.qd == h.qd) &&
+          (!RLB || (n.rl == h.rl && (!h.rl || n.M == h.M)))) begin
         pnx = 1'b1;
         c_left <= n.total;
       end
@@ -1743,7 +1974,7 @@ module otpu_mxu
       // mx_q's next value and mx_done's (set by the last RMAX lanes' grant; a completing head
       // clears it, and then mx_q's next is low: it completes only with mx_done or c_tz)
       mx_gq <= c_drained && c_rmax && !mx_done && !c_tz &&
-               !(t_gnt && mx_go && 32'(mx_i) + LANES >= 32'(c_M));
+               !(t_gnt && mx_go && 32'(mx_i) + LANES >= 32'(c_Mr));
       st_starve <= st_starve + 32'(st_g[0]);
       st_bp <= st_bp + 32'(st_g[1]);
       st_frz <= st_frz + 32'(st_g[2]);
@@ -1768,7 +1999,7 @@ module otpu_mxu
         dj <= '0;
         for (int j = 0; j < MCOLS; j++) begin
           logic [31:0] a;
-          a = (start && q_n == 2'd1) ? cmd.w3 + 32'(j) * 32'(cmd.w6[15:0]) : n.out + n.jo[j];
+          a = (start && q_n == 2'd1) ? cmd.w3 + cmd_e.jo[j] : n.out + n.jo[j];
           dad[j] <= a;
           drow[j] <= a;
           if (j < NL) dal[j] <= a;
@@ -1784,7 +2015,7 @@ module otpu_mxu
       if (start && q_n == 0) begin
         for (int j = 0; j < MCOLS; j++) begin
           logic [31:0] a;
-          a = cmd.w3 + 32'(j) * 32'(cmd.w6[15:0]);
+          a = cmd.w3 + cmd_e.jo[j];
           dad[j] <= a;
           drow[j] <= a;
           if (j < NL) dal[j] <= a;
@@ -1804,11 +2035,15 @@ module otpu_mxu
         // row is one group); a drain step moves on in the group, or to the next group / row
         if (c_done || (start && q_n == 0)) begin
           logic [MW:0] st;
-          st = hx.g1 ? {hx.dfl, hx.dnl} : dstep(MW'(MCOLS), hx.run);
+          st = hx.g1 ? (hx.nrow == 16'd1 ? {hx.dflz, hx.dnlz} : {hx.dfl, hx.dnl})
+                     : dstep(MW'(MCOLS), hx.run);
           d_last <= hx.g1;
           {d_fin, ncnt} <= st;
           dln <= dlanes(st[MW-1:0]);
-          for (int k = 0; k < LANES; k++) mxm[k] <= 32'(k) < 32'(hx.M);
+          d_rem <= hx.nrow;
+          d_lz <= (hx.nrow == 16'd1);
+          d_lz2 <= (hx.nrow == 16'd2);
+          for (int k = 0; k < LANES; k++) mxm[k] <= 32'(k) < 32'((RLB && hx.rl) ? 8'd1 : hx.M);
         end else begin
           if (t_gnt && drain_go) begin
             if (!d_fin) begin
@@ -1820,7 +2055,7 @@ module otpu_mxu
               dln <= ln_grp;
             end
           end
-          if (t_gnt && mx_go && 32'(mx_i) + LANES < 32'(c_M)) mxm <= mxm_nx;
+          if (t_gnt && mx_go && 32'(mx_i) + LANES < 32'(c_Mr)) mxm <= mxm_nx;
         end
         // the pop head's entry, from the entries, not from the command being accepted: a
         // command that becomes the head as it is accepted gets its entry a cycle later (cl_ld;

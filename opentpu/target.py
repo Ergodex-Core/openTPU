@@ -355,11 +355,11 @@ def build_config(t: Target | str | None = None, **knobs):
 
 def rl_streams(cfg) -> int:
     """The MXU's weight streams of a build with row lanes (otpu_mxu RL: 0 without the mode;
-    4 or 8: the lanes x blocks a chunk the configuration's widest RL MM takes, min(MCOLS, 2
-    PORTB), at least QUAD's four): docs/row_lanes.md."""
+    4 or 8: the columns, since column J takes stream J -- at least QUAD's four, 8 at MCOLS 8,
+    where int4 L 4 and t2 L 2 take eight): docs/row_lanes.md."""
     if not getattr(cfg, "ROWLANES", False):
         return 0
-    return max(4, min(cfg.MCOLS, 2 * cfg.PORTB))
+    return max(4, min(cfg.MCOLS, 8))
 
 
 def _fmt(v) -> str:

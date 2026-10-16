@@ -20,6 +20,7 @@ module tb_board;
   parameter int NCH        = 2;           // memory channels a slice (otpu_board; CFG_DRAM's channels, each
                                           //   2^32 / NCH bytes of the slice's 4 GiB; > 2: MEM_NATIVE 1)
   parameter int PORTB      = 1;           // chunks a cycle on port B (otpu_board; NCH >= 2 PORTB; CAPS2 [3:1])
+  parameter int RL         = 0;           // row lanes (otpu_board; CAPS2 bit4; docs/row_lanes.md)
   parameter int WORDS      = 1 << 20;     // logical memory words (a slice's NCH channels)
   parameter int D          = 128;
   parameter int MCOLS      = 4;
@@ -114,7 +115,7 @@ module tb_board;
                .TMEM_SDM(TMEM_SDM),
                // the channels: NCH a slice of 2^32 / NCH bytes each (the DDR boards' two of 2 GiB), the
                // adapter's wide port B (otpu_native_dram PORTB)
-               .NCH(NCH), .CH_LOG2(32 - $clog2(NCH)), .PORTB(PORTB)) dut (
+               .NCH(NCH), .CH_LOG2(32 - $clog2(NCH)), .PORTB(PORTB), .RL(RL)) dut (
     .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),

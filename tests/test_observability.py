@@ -110,7 +110,8 @@ def test_cfg_registers(have_verilator):
     # build, rtlsim.BOARD_UARCH COLL_GATHER 0)
     # CAPS2 [3:1]: the port B the configuration asks for (OTPU_PORTB; 0 there: one chunk)
     assert info["regmap"] == 5 and info["caps2"] == {"gather": rtlsim.gathers(1),
-                                                     "portb": CFG.PORTB}
+                                                     "portb": CFG.PORTB,
+                                                     "rowlanes": CFG.ROWLANES}
     assert t.gather == rtlsim.gathers(1)
     assert (c["S"], c["TMEM_WORDS"], c["IMEM_WORDS"], c["ACT_BLOCKS"]) == (1, 1 << 16, 1 << 15, 128)
     # the channels the model was built with (two; a wide port B's 2 PORTB), 4 GiB over them

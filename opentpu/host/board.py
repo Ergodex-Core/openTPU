@@ -617,6 +617,9 @@ class SimTransport:
             p["NCH"] = self.nch
         if cfg.PORTB > 1:                           # a wide port B (CAPS2 [3:1]; in CFG_HASH)
             p["PORTB"] = cfg.PORTB
+        if getattr(cfg, "ROWLANES", False):         # row lanes (CAPS2 bit4; in CFG_HASH)
+            from opentpu.target import rl_streams
+            p["RL"] = rl_streams(cfg)
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -639,7 +642,7 @@ class SimTransport:
         p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(build_config(
             t, MCOLS=p["MCOLS"], LANES=p["LANES"], ACT_ROWS=p["ACT_ROWS"],
             TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0),
-            PORTB=p.get("PORTB", 1))))
+            PORTB=p.get("PORTB", 1), ROWLANES=int(bool(p.get("RL", 0))))))
         exe = rtlsim.build("tb_board", srcs, p)
         with simtmp.tempdir("otpu_board_") as d:
             for c in range(len(self.ch)):
@@ -1411,9 +1414,16 @@ def device_config(info: dict, **kw):
         raise ConfigMismatch(f"the bitstream's port B takes {portb} chunks a cycle (CAPS2 [3:1]) "
                              f"but OTPU_PORTB={env}: unset OTPU_PORTB (the host follows the "
                              f"bitstream)")
+    rowlanes = bool((info.get("caps2") or {}).get("rowlanes", False))
+    env = os.environ.get("OTPU_ROWLANES")
+    if env is not None and bool(int(env)) != rowlanes:
+        raise ConfigMismatch(f"the bitstream {'has' if rowlanes else 'lacks'} row lanes (CAPS2 "
+                             f"bit4) but OTPU_ROWLANES={env}: unset OTPU_ROWLANES (the host "
+                             f"follows the bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
-           "PORTB": portb, "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
+           "PORTB": portb, "ROWLANES": rowlanes, "STREAM": stream,
+           "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
         dev.update(D=info["D"], SEQ_WC=bool(c.get("SEQ_WC")),
@@ -1481,6 +1491,7 @@ def check_hash(info: dict, cfg=None) -> None:
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
                            T2=bool(caps.get("t2")),
                            PORTB=(info.get("caps2") or {}).get("portb", 1),
+                           ROWLANES=bool((info.get("caps2") or {}).get("rowlanes", False)),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:

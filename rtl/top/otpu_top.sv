@@ -43,6 +43,7 @@ module otpu_top
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (otpu_slice)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (otpu_slice)
+  parameter int RL         = 0,       // row lanes (MM RL, QACT DUP8; otpu_mxu's streams: 0, 4, 8)
   parameter int PORTB      = 1,       // chunks a cycle on port B (otpu_slice; the memory path
                                       // delivers them: otpu_dram, otpu_native_dram NCH >= 2 PORTB)
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
@@ -149,7 +150,7 @@ module otpu_top
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                  .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                  .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC),
-                 .T2(T2), .PORTB(PORTB))
+                 .T2(T2), .PORTB(PORTB), .RL(RL))
     u_slice (
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,

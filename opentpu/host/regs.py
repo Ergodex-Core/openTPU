@@ -81,15 +81,18 @@ CAP2_GATHER = 1
 # PAIR / QUAD for every weight format, QACT DUP4; docs/wide_port.md); 0: one (a PORTB 1 build,
 # and every bitstream before the field).
 CAP2_PORTB_SHIFT, CAP2_PORTB_MASK = 1, 7
+# CAPS2 bit4: row lanes (MM RL, QACT DUP8; Config.ROWLANES; docs/row_lanes.md)
+CAP2_ROWLANES = 1 << 4
 
 
 def caps2(v: int | None) -> dict:
     """CAPS2's value -> its capabilities; None (a register map before 5): all present (and a
-    one-chunk port B)."""
+    one-chunk port B, no row lanes)."""
     if v is None:
-        return {"gather": True, "portb": 1}
+        return {"gather": True, "portb": 1, "rowlanes": False}
     return {"gather": bool(v & CAP2_GATHER),
-            "portb": (v >> CAP2_PORTB_SHIFT & CAP2_PORTB_MASK) or 1}
+            "portb": (v >> CAP2_PORTB_SHIFT & CAP2_PORTB_MASK) or 1,
+            "rowlanes": bool(v & CAP2_ROWLANES)}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)

@@ -28,7 +28,8 @@ module otpu_actram #(
   parameter int ROWS   = MCOLS,     // a multiple of MCOLS, MCOLS a power of two if more
   parameter int BLOCKS = 64,
   parameter int LANES  = 8,
-  parameter bit T2     = 1'b0       // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
+  parameter bit T2     = 1'b0,      // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
+  parameter bit DUP8   = 1'b0       // QACT DUP8: eight copies (docs/row_lanes.md)
 ) (
   input  logic                   clk,
   input  logic [LANES-1:0]       we,          // lane l writes byte w_idx + l
@@ -37,6 +38,7 @@ module otpu_actram #(
   input  logic [LANES-1:0][7:0]  w_data,
   input  logic                   w_dup,
   input  logic                   w_dup4,      // T2: also rows w_row + 2 w_off, + 3 w_off
+  input  logic                   w_dup8,      // DUP8: also rows w_row + 4 .. 7 w_off
   input  logic [7:0]             w_off,
   input  logic                   swe,
   input  logic [7:0]             s_row,
@@ -75,9 +77,14 @@ module otpu_actram #(
   // a write to row r (with dup, also to row r + off; dup4, T2: and r + 2 off, r + 3 off, all
   // below MCOLS, so in group 0 as row r + off) selects column j, in the group returned
   function automatic logic sel(input int j, input logic [7:0] r, input logic dup,
-                               input logic dup4, input logic [7:0] off);
-    return (col(r) == j) || ((dup || (T2 && dup4)) && col(8'(r + off)) == j) ||
-           (T2 && dup4 && (col(8'(r + 2 * off)) == j || col(8'(r + 3 * off)) == j));
+                               input logic dup4, input logic dup8, input logic [7:0] off);
+    logic d4, d8;
+    d8 = DUP8 && dup8;
+    d4 = (T2 && dup4) || d8;
+    return (col(r) == j) || ((dup || d4) && col(8'(r + off)) == j) ||
+           (d4 && (col(8'(r + 2 * off)) == j || col(8'(r + 3 * off)) == j)) ||
+           (d8 && (col(8'(r + 4 * off)) == j || col(8'(r + 5 * off)) == j ||
+                   col(8'(r + 6 * off)) == j || col(8'(r + 7 * off)) == j));
   endfunction
   function automatic logic [GW-1:0] sgrp(input int j, input logic [7:0] r, input logic [7:0] off);
     return (col(r) == j) ? grp(r) : grp(8'(r + off));
@@ -93,6 +100,7 @@ module otpu_actram #(
   (* shreg_extract = "no" *) logic [LANES-1:0][7:0] w_data_i, w_data_h;
   (* shreg_extract = "no" *) logic                  w_dup_i, swe_i, w_dup_h, swe_h;
   (* shreg_extract = "no" *) logic                  w_dup4_i, w_dup4_h;
+  (* shreg_extract = "no" *) logic                  w_dup8_i, w_dup8_h;
   (* shreg_extract = "no" *) logic [BW-1:0]         s_blk_i, s_blk_h;
   (* shreg_extract = "no" *) logic [63:0]           s_data_i, s_data_h;
   always_ff @(posedge clk) begin
@@ -102,6 +110,7 @@ module otpu_actram #(
     w_data_i <= w_data;
     w_dup_i <= w_dup;
     w_dup4_i <= T2 && w_dup4;
+    w_dup8_i <= DUP8 && w_dup8;
     w_off_i <= w_off;
     swe_i <= swe;
     s_row_i <= s_row;
@@ -113,6 +122,7 @@ module otpu_actram #(
     w_data_h <= w_data_i;
     w_dup_h <= w_dup_i;
     w_dup4_h <= w_dup4_i;
+    w_dup8_h <= w_dup8_i;
     w_off_h <= w_off_i;
     swe_h <= swe_i;
     s_row_h <= s_row_i;
@@ -134,8 +144,8 @@ module otpu_actram #(
   logic [GW-1:0]    wg_n [MCOLS], sg_n [MCOLS];
   always_comb
     for (int j = 0; j < MCOLS; j++) begin
-      wsel_n[j] = sel(j, w_row_h, w_dup_h, w_dup4_h, w_off_h) && (|we_h);
-      ssel_n[j] = swe_h && sel(j, s_row_h, w_dup_h, w_dup4_h, w_off_h);
+      wsel_n[j] = sel(j, w_row_h, w_dup_h, w_dup4_h, w_dup8_h, w_off_h) && (|we_h);
+      ssel_n[j] = swe_h && sel(j, s_row_h, w_dup_h, w_dup4_h, w_dup8_h, w_off_h);
       wg_n[j] = sgrp(j, w_row_h, w_off_h);
       sg_n[j] = sgrp(j, s_row_h, w_off_h);
     end
@@ -192,8 +202,8 @@ module otpu_actram #(
     // a consumed read of a block (or its scale) with a write in any register: it would return
     // the old bytes
     wire [GW+BW-1:0] wa = g_pc[0].wa;
-    wire             wsel_1 = sel(j, w_row_i, w_dup_i, w_dup4_i, w_off_i) && (|we_i);
-    wire             ssel_1 = swe_i && sel(j, s_row_i, w_dup_i, w_dup4_i, w_off_i);
+    wire             wsel_1 = sel(j, w_row_i, w_dup_i, w_dup4_i, w_dup8_i, w_off_i) && (|we_i);
+    wire             ssel_1 = swe_i && sel(j, s_row_i, w_dup_i, w_dup4_i, w_dup8_i, w_off_i);
     wire [GW+BW-1:0] wa_1 = (GROUPS > 1) ? {sgrp(j, w_row_i, w_off_i), w_idx_i[DW +: BW]}
                                          : (GW+BW)'(w_idx_i[DW +: BW]);
     wire [GW+BW-1:0] sa_1 = (GROUPS > 1) ? {sgrp(j, s_row_i, w_off_i), s_blk_i} : (GW+BW)'(s_blk_i);

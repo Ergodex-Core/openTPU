@@ -249,3 +249,185 @@ def test_wide_port_throughput_rtl(have_verilator, monkeypatch, mem):
         assert got == {1: 256 * KB, 2: 256 * KB // 2, 4: 256 * KB // 4}, got
     else:
         assert got[2] < 0.6 * got[1] and got[4] < 0.4 * got[1], got
+
+
+# =============================================================================== row lanes
+# MM RL (docs/row_lanes.md; otpu_mxu RL): L lanes streaming L rows from row-lane groups, the
+# scale groups, QACT DUP / DUP4 / DUP8, against the ISA simulator; the two-part reads gone.
+SB2 = 0xA0000                           # the RSC groups (the rows' Sw words alone)
+
+
+def _rl_matrix(rng, fmt, N, K):
+    """A random matrix quantized (quant.quantize_mx) with its block offsets spread."""
+    W = rng.standard_normal((N, K)).astype(np.float32)
+    W *= 2.0 ** rng.integers(-6, 3, (N, K // (D // 4))).repeat(D // 4, axis=1)
+    return Q.quantize_mx(W, fmt, D)
+
+
+def _rl_prog(cfg, fmt, L, N, KB, k0, x, rows, srows, rsc_mm=True):
+    """QACT with L x blocks-a-chunk copies, then MM RL over the groups: with scales, UNIT with
+    RMAX, ACC with RMAX onto the first, UNIT with ACC and ASCALE, and (rsc_mm) RSC over the
+    groups' Sw words alone; the weight groups at WB, the scale groups at SB, the RSC words at
+    SB2. Returns (prog, dram)."""
+    wf = Q.mxu_wf(fmt)
+    bpc = I.blocks_per_chunk(wf)
+    copies = L * bpc
+    K = (k0 + KB) * D
+    dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
+    _put(dram, X, x)
+    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D)
+    _put(dram, WB, Q.rl_rows(rows, L, D))
+    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D))
+    _put(dram, SB2, np.ascontiguousarray(srows[:, :4]))
+    alpha = np.array([1.25], np.float32)
+    _put(dram, AL, alpha)
+    sa = WB + (k0 // bpc) * L * D
+    mm = dict(sa=sa, n=N, kb=KB, rs=rsg, ors=N + 1, m=1, ab=0, k0=k0, wf=wf, rl=L)
+    prog = [I.ld(X, 0, x.size), I.ld(AL, 0x7000, 1),
+            I.qact(0, 1, 0, KB, KB * D, dup=copies == 2, dup4=copies == 4, dup8=copies == 8),
+            I.mm(ssa=SB, srs=srsg, out=OUT, **mm),
+            I.mm(ssa=SB, srs=srsg, out=OUT + 4096, **mm, unit=True, rmax=True),
+            I.mm(ssa=SB, srs=srsg, out=OUT, **mm, acc=True, rmax=True),
+            I.mm(ssa=0, srs=0, out=OUT + 4096, **mm, unit=True, acc=True, ascale=0x7000)]
+    if rsc_mm:
+        prog.append(I.mm(ssa=SB2, srs=4 * L, out=OUT + 8192, **{**mm, "k0": 0}, rsc=True))
+    prog.append(I.halt())
+    return prog, dram
+
+
+WB, SB = 0x60000, 0x90000
+# fmt, L, PORTB, KB, k0, N, MCOLS
+RL_CASES = [
+    ("int8", 2, 2, 5, 0, 7, 4), ("int8", 2, 2, 9, 2, 12, 4), ("int8", 2, 4, 3, 0, 5, 4),
+    ("int8", 4, 4, 9, 0, 13, 4), ("int8", 4, 4, 2, 2, 8, 4), ("int8", 4, 4, 9, 0, 11, 8),
+    ("int4", 2, 2, 5, 2, 7, 4), ("fp4", 2, 2, 9, 0, 6, 4), ("int4", 2, 2, 1, 0, 3, 4),
+    ("int4", 4, 4, 9, 0, 13, 8), ("int4", 4, 4, 3, 2, 5, 8), ("fp4", 4, 4, 6, 4, 9, 8),
+    ("nvfp4", 2, 2, 5, 2, 5, 4), ("nvfp4", 2, 4, 4, 0, 8, 8),
+    ("t2", 2, 2, 9, 0, 7, 8), ("t2", 2, 2, 5, 4, 3, 8),
+]
+
+
+@pytest.mark.parametrize("mem", MEMS)
+@pytest.mark.parametrize("fmt,L,portb,KB,k0,N,mcols", RL_CASES)
+def test_row_lanes_mm_rtl(have_verilator, monkeypatch, mem, fmt, L, portb, KB, k0, N, mcols):
+    """MM RL over row-lane groups, every format and L the configuration allows, N not a
+    multiple of L, k0 offsets, odd KB (a lane's second block past the row), with scales, UNIT +
+    RMAX, ACC + RMAX, UNIT + ACC + ASCALE and RSC: bit for bit the ISA simulator's, on the
+    behavioural DRAM and on the native path (where no wide read goes in two parts)."""
+    cfg = Config(S=1, D=D, MCOLS=mcols, PAIR=True, T2=fmt == "t2", PORTB=portb, ROWLANES=True,
+                 DRAM_BYTES=1 << 20)
+    rng = np.random.default_rng(1000 * KB + 100 * k0 + 10 * N + mcols + L + portb + len(fmt))
+    rows, srows = _rl_matrix(rng, fmt, N, (k0 + KB) * D)
+    x = _xrows(rng, 1, KB * D, D // 4)
+    prog, dram = _rl_prog(cfg, fmt, L, N, KB, k0, x, rows, srows,
+                          rsc_mm=fmt not in ("nvfp4", "t2"))    # (RSC takes neither)
+    st = _run_both(cfg, prog, dram, mem, monkeypatch)
+    if mem == "nch":
+        assert st["native_b"][0]["wide"] > 0 and st["native_b"][0]["split"] == 0, st["native_b"]
+
+
+@pytest.mark.parametrize("mem,nch", [("dram", None), ("nch", 8), ("nch", 16)])
+def test_row_lanes_mixed_rtl(have_verilator, monkeypatch, mem, nch):
+    """One program at PORTB 4, MCOLS 8, T2, RL 8: QACT DUP8, then int8 RL 4, int4 RL 4 (eight
+    streams), int8 QUAD, int4 RL 2, t2 RL 2, plain int8, int8 PAIR, nvfp4 RL 2, int8 RL 4 with
+    ACC, fp4 QUAD, int8 RL 2 and int8 RL 4 with RSC, back to back: RL and non-RL commands
+    through the MXU's two heads."""
+    KB, N = 6, 13
+    cfg = Config(S=1, D=D, MCOLS=8, PAIR=True, T2=True, PORTB=4, ROWLANES=True,
+                 DRAM_BYTES=1 << 21)
+    rng = np.random.default_rng(41)
+    dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
+    x = _xrows(rng, 1, KB * D, D // 4, 3.0)
+    _put(dram, X, x)
+    K = KB * D
+    prog = [I.ld(X, 0, x.size), I.qact(0, 1, 0, KB, K, dup8=True)]
+    base = 0x40000
+    out = OUT
+    plan = [("int8", 4, False), ("int4", 4, False), ("int8", 0, "quad"), ("int4", 2, False),
+            ("t2", 2, False), ("int8", 0, "plain"), ("int8", 0, "pair"), ("nvfp4", 2, False),
+            ("int8", 4, "acc"), ("fp4", 0, "quad"), ("int8", 2, False), ("int8", 4, "rsc")]
+    for fmt, L, mode in plan:
+        wf = Q.mxu_wf(fmt)
+        rows, srows = _rl_matrix(rng, fmt, N, K)
+        wa, sa = base, base + 0x8000
+        base += 0x10000
+        if L:
+            _put(dram, wa, Q.rl_rows(rows, L, D))
+            if mode == "rsc":
+                _put(dram, sa, np.ascontiguousarray(srows[:, :4]))
+                ins = I.mm(wa, sa, out, N, KB, Q.rl_row_stride(K, fmt, L, D), N, 1, 0, 4 * L,
+                           wf=wf, rl=L, rsc=True)
+            else:
+                _put(dram, sa, Q.rl_scales(srows, fmt, K, L, D))
+                ins = I.mm(wa, sa, out, N, KB, Q.rl_row_stride(K, fmt, L, D), N, 1, 0,
+                           Q.rl_scale_bytes(K, fmt, L, D), wf=wf, rl=L, acc=mode == "acc")
+        else:
+            _put(dram, wa, rows)
+            _put(dram, sa, srows)
+            ins = I.mm(wa, sa, out, N, KB, Q.row_bytes(K, fmt, D), N, 1, 0,
+                       Q.scale_bytes(K, fmt, D), wf=wf, pair=mode in ("pair", "quad"),
+                       quad=mode == "quad")
+        prog.append(ins)
+        out += 64 if mode != "acc" else 0
+    prog.append(I.halt())
+    _run_both(cfg, prog, dram, mem, monkeypatch, nch)
+
+
+@pytest.mark.parametrize("fmt,portb,mcols,mem", [("int8", 4, 4, "dram"), ("int8", 4, 4, "nch"),
+                                                 ("int8", 2, 4, "nch"), ("int4", 4, 8, "dram"),
+                                                 ("int4", 4, 8, "nch"), ("int4", 2, 4, "dram")])
+def test_row_lanes_compiled_kernel_rtl(have_verilator, monkeypatch, fmt, portb, mcols, mem):
+    """A compiled one-row dot over a Weight(rl=True) (the compiler's QACT copies and MM RL of
+    the widest L: tests/test_row_lanes.py) on the RTL, bit for bit the ISA's."""
+    from opentpu.runtime import Input, Output, Weight, compile_kernel
+    from test_wide_port import k_dot
+    N, K = 24, 9 * D
+    rng = np.random.default_rng(7 + portb + mcols)
+    x = rng.standard_normal((1, K)).astype(np.float32)
+    W = (rng.standard_normal((N, K)) * 0.1).astype(np.float32)
+    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_BLOCKS=16, PAIR=True, PORTB=portb, ROWLANES=True,
+                 DRAM_BYTES=1 << 20)
+    compiled, images = compile_kernel(k_dot, cfg, x=Input(x), w=Weight(W, fmt=fmt, rl=True),
+                                      out=Output((1, N)))
+    mms = [i for i in compiled.programs[0] if i.op == I.MM]
+    assert mms and all(I.mm_lanes(i) == Q.rl_lanes(fmt, portb, mcols) for i in mms)
+    _run_both(cfg, list(compiled.programs[0]), np.asarray(images[0], np.uint8), mem, monkeypatch)
+
+
+@pytest.mark.parametrize("mem", ["dram", "nch"])
+def test_row_lanes_throughput_rtl(have_verilator, monkeypatch, mem):
+    """One-row int8 decode over 9-block rows (Gemma's K = 1152): QUAD at PORTB 4 takes 3
+    advances a row (4, 4, 1), RL 4 takes 9 advances a group of 4 rows -- 2.25 a row, the port's
+    rate -- measured as the cycles 256 more rows add; on the native path (8 channels, the
+    model's 20% stalls) with no two-part read (an advance's four chunks one aligned run)."""
+    KB = 9
+    got, split = {}, {}
+    for mode in ("quad", "rl"):
+        cfg = Config(S=1, D=D, MCOLS=4, PAIR=True, PORTB=4, ROWLANES=mode == "rl",
+                     DRAM_BYTES=1 << 22)
+        rng = np.random.default_rng(9)
+        dram = rng.integers(0, 256, cfg.DRAM_BYTES, dtype=np.uint8)
+        x = rng.standard_normal((1, KB * D)).astype(np.float32)
+        _put(dram, X, x)
+        cyc, sp = [], []
+        for N in (256, 512):
+            if mode == "rl":
+                K = KB * D
+                mm = I.mm(0x40000, 0x300000, OUT, N, KB, Q.rl_row_stride(K, "int8", 4, D), 1, 1,
+                          0, Q.rl_scale_bytes(K, "int8", 4, D), rl=4)
+            else:
+                mm = I.mm(0x40000, 0x300000, OUT, N, KB, KB * D, 1, 1, 0, 16, pair=True,
+                          quad=True)
+            prog = [I.ld(X, 0, x.size), I.qact(0, 1, 0, KB, KB * D, dup4=True), mm, I.halt()]
+            if mem == "nch":
+                monkeypatch.setenv("OTPU_NCH", "8")
+            _, _, st = rtlsim.run(cfg, [prog], [dram.copy()], axi=mem == "nch")
+            cyc.append(st["cycles"])
+            sp.append(st["native_b"][0]["split"] if mem == "nch" else 0)
+        got[mode] = cyc[1] - cyc[0]
+        split[mode] = sp[1] - sp[0]
+    print(f"throughput ({mem}): cycles for 256 rows x {KB} blocks: {got}, two-part reads {split}")
+    if mem == "dram":
+        assert got == {"quad": 256 * 3, "rl": 256 * 9 // 4}, got
+    else:
+        assert got["rl"] < 0.85 * got["quad"] and split["rl"] == 0 and split["quad"] > 0, (got, split)

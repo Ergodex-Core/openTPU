@@ -82,6 +82,7 @@ module otpu_slice
                                       //   port A; -1: TM_SIDED, below)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter int RL         = 0,       // row lanes: MM RL (otpu_mxu's streams, 4 or 8), QACT DUP8
   parameter int PORTB      = 1        // chunks a cycle on port B: the MXU's wide requests, MM
                                       // PAIR / QUAD for every format, QACT DUP4 (docs/wide_port.md)
 ) (
@@ -158,6 +159,8 @@ module otpu_slice
   logic [PORTB-1:0] b_rcm_i;
   // ACT RAM and quantizer: QACT DUP4 and MM QUAD's four blocks a cycle (t2, or a wide port)
   localparam bit QD = T2 || PORTB > 1;
+  // row lanes (docs/row_lanes.md): MM RL in the MXU (RL streams), QACT DUP8 (eight copies)
+  localparam bit RLB = RL != 0;
   // port A's ready as the MXU sees it: through its output register (see "port A's register")
   logic a_rdy_i;
   // the stream engine (docs/stream.md): the DMA moves a stream (DSTEP, STREAM) through SE in
@@ -428,7 +431,7 @@ module otpu_slice
   logic [ULANES-1:0][7:0] act_data;
   logic                   asc_we;
   logic [7:0]             act_row, asc_row, act_off;
-  logic                   act_dup, act_dup4;
+  logic                   act_dup, act_dup4, act_dup8;
   logic [31:0]            act_idx;
   logic [63:0]            asc_data;     // {da3, da2, da1, da0, Sa}
   logic [15:0]            asc_blk, act_rblk, act_rblk2, act_rblk3, act_rblk4;
@@ -439,9 +442,9 @@ module otpu_slice
   logic [MCOLS*D*8-1:0]   act_rdata;
   logic [MCOLS*64-1:0]    act_rscale;
   otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES),
-                .T2(QD)) u_act (
+                .T2(QD), .DUP8(RLB)) u_act (
     .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
-    .w_dup4(act_dup4), .w_off(act_off), .swe(asc_we),
+    .w_dup4(act_dup4), .w_dup8(act_dup8), .w_off(act_off), .swe(asc_we),
     .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren), .r_use(mxu_pop), .r_blk(act_rblk),
     .r_blk2(act_rblk2), .r_hi(act_rhi), .r_blk3(act_rblk3), .r_blk4(act_rblk4), .r_hq(act_rhq),
     .r_grp(act_rgrp),
@@ -508,7 +511,7 @@ module otpu_slice
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PORTB(PORTB), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PORTB(PORTB), .RL(RL), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
@@ -526,12 +529,12 @@ module otpu_slice
   // every QACT and QST the ISA's bounds allow fits (the card: 512)
   localparam int QG = (4 * ACT_BLOCKS > TMEM_WORDS / D) ? 4 * ACT_BLOCKS : TMEM_WORDS / D;
   localparam int Q_GR = (QG <= 8) ? 8 : (1 << $clog2(QG));
-  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .T2(QD), .SID(SID)) u_quant (
+  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .T2(QD), .DUP8(RLB), .SID(SID)) u_quant (
     .clk, .rst(rst_q), .start(ustart[U_Q]), .cmd(ucmd[U_Q]), .rdy(r_q), .done(d_q), .gnt(gnt[G_Q]),
     .t_ren(q_ren), .t_raddr(q_raddr), .t_rdata(r_data[P_Q][ULANES-1:0]),
     .t_ren2(q_ren2), .t_raddr2(q_raddr2), .t_rdata2(r_data[P_Q2][ULANES-1:0]),
     .t_ren3(q3_en), .t_raddr3(q3_addr), .t_rdata3(r_data[P_Q3][0]),
-    .act_we, .act_row, .act_idx, .act_data, .act_dup, .act_dup4, .act_off, .asc_we, .asc_row, .asc_blk, .asc_data,
+    .act_we, .act_row, .act_idx, .act_data, .act_dup, .act_dup4, .act_dup8, .act_off, .asc_we, .asc_row, .asc_blk, .asc_data,
     .a_want(q_awant), .wr_idle(wr_idle_i),
     .a_req(q_areq), .a_we(q_awe), .a_addr(q_aaddr), .a_wdata(q_awdata), .a_be(q_abe),
     .pf_u(q_u), .pf_frz(q_frz));
