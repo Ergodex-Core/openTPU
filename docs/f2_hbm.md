@@ -231,9 +231,42 @@ runs the HDK's build_all.tcl with the clock recipes A1 B2 C0 H2 (H2: the HBM rec
 manifest records, as Alex's image). `--package` produces the Developer_CL tar for
 `aws ec2 create-fpga-image`.
 
-### Synthesis (S = 1, NCH = 16: f2-hbm16)
+### Synthesis (f2-hbm16: S = 1, NCH = 16; f2-hbm: S = 1, NCH = 8)
 
-SYNTH_RESULT
+`build.py --target f2-hbm16 --flow SynthCL` (and `--target f2-hbm`) on the build instance (Vivado
+2025.2, HDK 2.3.0, synth_design out of context, 6 threads, nice 10; runs in
+`/home/ubuntu/opt/f2hbm-build/runs/`): elaboration and synthesis with 0 errors and 0 critical
+warnings, the openTPU CDC constraints applied without a warning (f2-hbm16: 35 crossing FIFOs and
+17 write counters bus-skewed; the pumped TMEM's 16 RAMs' multicycles), the HDK footer passed
+(`OTPU_STAGE_SYNTHESIS_PASSED`), post_synth.dcp written. 18-50 minutes a run (two at once).
+
+| at 4bef3758 | f2-hbm16 (1 x 16) | f2-hbm (1 x 8) | of xcvu47p |
+|---|---|---|---|
+| CLB LUTs | 241,392 (18.5%) | 174,919 (13.4%) | 1,303,680 |
+| of them LUT RAM | 78,644 | 48,051 | 600,960 |
+| registers | 182,318 (7.0%) | 137,674 (5.3%) | 2,607,360 |
+| RAMB36 | 261.5 (13.0%) | 261.5 | 2,016 |
+| DSP48E2 | 727 (8.1%) | 727 | 9,024 |
+| HBM AXI ports | 32 (16 used) | 32 (8 used) | 32 |
+| MMCM | 2 | 2 | 12 |
+| setup WNS, post-synthesis estimate | +0.126 ns (all clocks) | +0.154 ns (all clocks) | |
+
+By block (f2-hbm16): the slice 99K LUTs (as in Alex's image), its adapter 79K (35K LUT RAM: 16
+channels' B / A / SW FIFOs and queues; 39K at NCH = 8), a bridge 3.3K (16: 53K), the host path
+2K, a port arbiter 43, the HBM wrapper 2.1K. Alex's S = 1, 2-channel CL was 131K LUTs. S = 4 x 8
+would be ~4 x 145K + the wrapper, ~45% of the device, before floorplanning.
+
+Timing, post-synthesis (no placement, so an estimate): the core 200 MHz +1.10 ns, clk_main
++2.49, the 450 MHz domain +0.126 ns, every crossing within its bound; the pumped TMEM pair's
+hold (-0.26 ns) and hclk's (-0.095) are pre-placement artefacts (the DDR build shows the first).
+Three runs got there: the first (f278ff5f) had the 450 MHz domain at -0.913 ns, 21,973 endpoints,
+every path in the host path (the crossings' gray compare and LUT RAM read through the port decode
+into the ports' arbitration and back, 10 levels); with its head write, head read and R beat in
+registers (89bbb6bc) -0.509; with the host's AR valid and B count from registers, the arbiter's W
+readies from its own state and the bridges' R registered (6fac2d06) -0.189, 20,418 endpoints, all
+in the bridges' burst builder (the head's 25-bit compare with the open burst's next beat into the
+held beat's 600 enables and the W FIFO's); with that compare made as the head loads and the W
+FIFO's tail written every cycle (4bef3758) every clock meets setup.
 
 ## Remaining steps to a full build
 
