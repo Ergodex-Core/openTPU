@@ -133,7 +133,11 @@ module otpu_mxu
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
   output logic [LANES-1:0][31:0]  t_wdata,
-  input  logic                    t_gnt
+  input  logic                    t_gnt,
+  output logic                    t_urg        // the result FIFO is half full (rows popped, not
+                                               // drained, >= RF / 2; registered): the slice's
+                                               // arbiter may rank the drain's writes first
+                                               // (otpu_slice TMEM_WARB 3)
 );
   localparam int BW = $clog2(LANES);
   localparam int PW = $clog2(DEPTH);
@@ -1647,6 +1651,7 @@ module otpu_mxu
       s_head <= '0; s_tail <= '0; s_count <= '0; s_rd <= '0;
       ck <= '0; cg <= '0; dg <= '0; dg1 <= GW'(1); c_left <= '0; cl_ld <= 1'b0; rows_live <= '0;
       rf_q <= '0; rf_hs <= 1'b0; rf_t <= '0; rf_n <= '0; rf_nz <= 1'b0; rl_nz <= 1'b0;
+      t_urg <= 1'b0;
       dj <= '0; mx_done <= 1'b0; mx_have <= '0;
       d_last <= 1'b0; d_lastg <= 1'b0; d_fin <= 1'b0; ncnt <= '0; dln <= '0; mxm <= '0;
       i_pk <= 1'b0; i_odd <= 1'b0; i_lrow <= 1'b0; i_nodd <= 1'b0; i_slot <= '0; i_sb <= '0;
@@ -1923,6 +1928,7 @@ module otpu_mxu
       // rn != 0, rl != 0 from the counts' own zero / one tests: the grant enters last
       rf_nz <= rf_push || (rf_nz && !(rf_n == 1 && d_pop));
       rl_nz <= (pop && ck == 0 && !pn) || (rl_nz && !(rows_live == 1 && d_pop));
+      t_urg <= (rl >= (RFW+1)'(RF / 2));
       // the pop head moves to the next command once the head's chunks have all popped, if the
       // pipeline treats both alike (PAIR, and M under PAIR: pr0, hi0 and M0 are read late)
       if (!pn && !cl_ld && c_left == 0 && q_n == 2'd2 && n.go && !c_done &&

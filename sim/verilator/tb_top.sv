@@ -42,6 +42,7 @@ module tb_top;
   parameter int TMEM_PMP   = 0;       // TMEM_TDP: 2 the pumped RAMs' model
   parameter int TMEM_PRK   = 0;       // TMEM_IMPL 3: the read ports' ranks (otpu_slice)
   parameter int TMEM_SDM   = -1;      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
+  parameter int TMEM_WARB  = 0;       // the VPU / MXU-drain write arbitration (otpu_slice)
   parameter bit COLL_GATHER = 1'b1;   // 0: the BAR-only collective unit (otpu_coll_bar) at S = 1,
                                       // as the card builds it (rtlsim.BOARD_UARCH); S > 1 has GATHER
   parameter int NCH        = 2;       // AXI = 1: memory channels per slice (OTPU_NCH; F2 HBM: 8)
@@ -60,7 +61,7 @@ module tb_top;
              .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
-             .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
+             .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .SEQ_WC(SEQ_WC), .NCH(NCH),
              .T2(T2), .PACK(PACK), .COLL_GATHER(COLL_GATHER || S > 1)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);

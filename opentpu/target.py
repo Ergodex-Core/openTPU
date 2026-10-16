@@ -55,6 +55,9 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 # docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
+# TMEM_WARB (any TMEM_IMPL; optional, the RTL's default 0): the write-bank arbitration between
+# the VPU and the MXU drain (otpu_slice TMEM_WARB; docs/vla_frequency_plan.md L5)
+ARB_KEYS = ("TMEM_WARB",)
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
@@ -179,7 +182,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -279,6 +282,9 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
+    for k in ARB_KEYS:
+        if u.get(k):
+            d[k] = int(u[k])
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
@@ -296,6 +302,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
     a, u, p = t.arch, t.uarch, t.platform
     cfg = config(t)
     tm3 = {k: int(u[k]) for k in TMEM3_KEYS if k in u} if u["TMEM_IMPL"] == 3 else {}
+    tm3 |= {k: int(u[k]) for k in ARB_KEYS if k in u}
     return tm3 | {
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],

@@ -355,6 +355,36 @@ def test_one_copy_tmem_of_128k_words(have_verilator, mcols, rows, seed):
     assert np.array_equal(tmems[0], m.slices[0].tmem)
 
 
+@pytest.mark.parametrize("warb", [1, 2, 3])
+def test_write_arbitration_policies_bit_exact(have_verilator, warb, tmp_path, monkeypatch):
+    """The VPU / MXU-drain write arbitration (otpu_slice TMEM_WARB, docs/vla_frequency_plan.md
+    L5): round-robin (1), the drain first (2) and the drain first while its result FIFO is half
+    full (3), on the board's arbiter with release r2's TMEM (R2_TMEM), run a hazard program
+    (VOPs, MMs, QSTs, loads and stores on a shared pool of addresses) to the ISA's results:
+    the policy moves grants between the two writers, never a word. The drain-first policy
+    leaves the drain no loss to the VPU (TMEMSTAT wcm 0); the VPU loses cycles under it."""
+    log = tmp_path / "tmemstat.log"
+    monkeypatch.setenv("OTPU_TMEMSTAT_LOG", str(log))
+    rng = np.random.default_rng(8001)             # (one program: its MMs and VOPs contend)
+    cfg = Config(S=1, MCOLS=4, ACT_ROWS=8)
+    prog = _hazard_program(rng, cfg, n_ops=60, gather=False)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB,
+                                        "TMEM_WARB": warb},
+                                 max_cycles=1_000_000)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    st = re.search(r"TMEMSTAT .* warb=(\d+) wv=(\d+) wm=(\d+) wc=(\d+) wcm=(\d+) wcv=(\d+)",
+                   log.read_text())
+    assert st and int(st.group(1)) == warb, st
+    wc, wcm, wcv = (int(st.group(k)) for k in (4, 5, 6))
+    assert wc > 0 and wcm + wcv <= wc, (wc, wcm, wcv)        # (the pair conflicted)
+    if warb == 2:
+        assert wcm == 0 and wcv > 0, (wc, wcm, wcv)
+
+
 def held_collective_program(out: int = SCRATCH) -> list:
     """Every slice: an ST of 4,096 TMEM words (the DMA asking TMEM for its words nearly every
     cycle) and, with no dependency on it, two GATHERs of other words back to back, then the

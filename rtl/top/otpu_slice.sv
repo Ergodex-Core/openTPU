@@ -80,6 +80,11 @@ module otpu_slice
                                       //   at bit 3p; 0: PRANK3, below)
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (bit p: port p on
                                       //   port A; -1: TM_SIDED, below)
+  parameter int TMEM_WARB  = 0,       // the write-bank arbitration between the VPU and the MXU
+                                      //   drain (the board arbiters: ARB_MASK, TMEM_IMPL 3): 0 the
+                                      //   VPU first (the drain holds), 1 round-robin on a conflict,
+                                      //   2 the drain first, 3 the drain first while its result
+                                      //   FIFO is half full, else the VPU (see the arbiter)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
   parameter bit PACK       = 1'b0     // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit1)
@@ -202,6 +207,17 @@ module otpu_slice
   // write in any one bank cost it the whole cycle, and decode's softmax (EXP2SUB, which the next
   // PV MM waits for) ran at about half its rate; the drain holds a cycle instead
   // (docs/litedram.md section 11, "The core's own gaps": Qwen3 4-bit -3.0% cycles per token).
+  // That is TMEM_WARB 0, decode's. Matrix-matrix work (the VLA's, docs/vla_frequency_plan.md
+  // L5) turns it around: the drain asks for a fraction of the cycles (E lanes a step, a row of
+  // MCOLS results every KB advances) while the VPU writes every cycle of a long elementwise
+  // VOP, so under TMEM_WARB 0 the drain was denied for as long as the VPU ran, the result FIFO
+  // filled and the MXU stopped popping (docs/pi05.md 5.3: v_out at MCOLS 16, the drain denied
+  // 756 K of 2.37 M cycles). TMEM_WARB 1 alternates the pair on a conflict (each loses at most
+  // every other contested cycle: the drain keeps up below half the cycles, decode's VPU keeps
+  // half its rate), 2 puts the drain first (the VPU loses exactly the drain's write cycles),
+  // 3 puts it first only while its result FIFO is half full (mxu_urg: the FIFO absorbs the
+  // drain's bursts and they land in the VPU's own gaps when there are any). In simulation
+  // +tm_warb=N overrides the parameter (one build measures every policy).
   localparam int G_DMA = 0, G_COLL = 1, G_VPU = 2, G_MXU = 3, G_Q = 4, NG = 5;
   // TMEM_IMPL 3: every read port its own rank (the groups' order, DMA COLL VPU MXU QUANT; within
   // a group in port order) and its group
@@ -454,7 +470,7 @@ module otpu_slice
   logic [31:0] dma_baddr, mxu_baddr;
   localparam int FW = $clog2(FIFO_DEPTH) + 1;
   logic [FW-1:0] mxu_level;
-  logic mxu_starve, mxu_block, mxu_u, q_u, v_u;
+  logic mxu_starve, mxu_block, mxu_u, q_u, v_u, mxu_urg;
   logic [3:0][31:0] mxu_uv;
   logic [31:0] q_frz, v_frz;
 
@@ -509,7 +525,8 @@ module otpu_slice
     .b_req(mxu_breq), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt), .b_rvalid(b_rvalid_i && !b_rtag_i),
     .b_rdata(b_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
-    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
+    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]),
+    .t_urg(mxu_urg));
 
   // the quantizer's group maxes of a row (MX offsets; not ROW mode): a QACT's 4 KB (KB <=
   // ACT_BLOCKS: the ACT RAM's bound) and a QST's KB (its row in TMEM: KB <= TMEM_WORDS / D), so
@@ -665,12 +682,42 @@ module otpu_slice
       rpl_frz[g] = TMEM_RPL && g != G_VPU && g != G_COLL && (tm_frz & grp_rports(g)) != '0;
       rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && |rq_en[P_COLL]);
     end
+  // TMEM_WARB (the header): the VPU / MXU-drain pair is ordered by the policy, not by the group
+  // index. The priority chain skips the pair (wpair) and the pair is resolved after it from
+  // the two groups' admissions against the groups before them (the quantizer, after both,
+  // writes no bank: acf[G_Q] is 0, so the chain past the pair reads nothing of it). mxu_first:
+  // the drain is before the VPU this cycle; warb_rr: round-robin's token (the VPU's turn when
+  // low), flipped on every cycle the pair conflicts
+  logic mxu_first, warb_rr;
+  int   warb;
+`ifndef SYNTHESIS
+  initial begin
+    warb = TMEM_WARB;
+    void'($value$plusargs("tm_warb=%d", warb));
+  end
+`else
+  assign warb = TMEM_WARB;
+`endif
+  always_comb
+    mxu_first = (warb == 1) ? warb_rr : (warb == 2) ? 1'b1 : (warb == 3) ? mxu_urg : 1'b0;
+  always_ff @(posedge clk)
+    if (srst) warb_rr <= 1'b0;
+    else if (acf[G_MXU][G_VPU]) warb_rr <= !warb_rr;
+  function automatic logic wpair(input int g, input int h);
+    return (g == G_MXU && h == G_VPU) || (g == G_VPU && h == G_MXU);
+  endfunction
+  logic [NG-1:0] apre;                      // admitted but for the pair (the counters read it)
   always_comb begin
     for (int g = 0; g < NG; g++) begin
-      aok[g] = !rpl_hold[g];
-      for (int h = 0; h < g; h++) if (aok[h] && acf[g][h]) aok[g] = 1'b0;
-      if (g == G_Q && q_awant && !sw_rdy_i) aok[g] = 1'b0;   // QST write the DRAM cannot take
-      if ((g == G_Q && q3_blk) || (g == G_COLL && coll_blk)) aok[g] = 1'b0;
+      apre[g] = !rpl_hold[g];
+      for (int h = 0; h < g; h++) if (apre[h] && acf[g][h] && !wpair(g, h)) apre[g] = 1'b0;
+      if (g == G_Q && q_awant && !sw_rdy_i) apre[g] = 1'b0;  // QST write the DRAM cannot take
+      if ((g == G_Q && q3_blk) || (g == G_COLL && coll_blk)) apre[g] = 1'b0;
+    end
+    aok = apre;
+    if (acf[G_MXU][G_VPU]) begin
+      if (mxu_first) aok[G_VPU] = apre[G_VPU] && !apre[G_MXU];
+      else           aok[G_MXU] = apre[G_MXU] && !apre[G_VPU];
     end
     gnt_m = aok;
     gnt_m[G_COLL] = coll_gnt;
@@ -743,9 +790,13 @@ module otpu_slice
       rd_ok = (tm_bx & rp & ask) == '0;
       self = (tm_bs & rp & ask) != '0;
       gs[g] = rd_ok && !self;
-      for (int h = 0; h < g; h++) if (gs[h] && acf[g][h]) gs[g] = 1'b0;
+      for (int h = 0; h < g; h++) if (gs[h] && acf[g][h] && !wpair(g, h)) gs[g] = 1'b0;
       if (g == G_Q && q_awant && !sw_rdy_i) gs[g] = 1'b0;    // QST write the DRAM cannot take
       if (rd_ok && self) tm_pre = tm_pre | (rp & ask & ~tm_bs);
+    end
+    if (acf[G_MXU][G_VPU]) begin                              // the pair by TMEM_WARB (gnt_m)
+      if (mxu_first) gs[G_VPU] = gs[G_VPU] && !gs[G_MXU];
+      else           gs[G_MXU] = gs[G_MXU] && !gs[G_VPU];
     end
     gs3 = gs;
     cgl_s = gs[G_COLL];
@@ -1039,8 +1090,13 @@ module otpu_slice
   // VPU and the collective lost to the arbitration, and each read port's reads (rd: cycles it
   // reads) and lost reads (rpl: TMEM_RPL's replays, tm_lost)
   longint ts_cyc, ts_lose [4], ts_n [7], ts_d [NRP + 1], ts_dw [NRP + 2], ts_rd [NRP], ts_rpl [NRP];
+  // the VPU / MXU-drain write pair (TMEM_WARB): cycles the VPU asks to write (wv), the drain
+  // asks to write (wm), both and their banks conflict (wc), and of those the cycles the drain
+  // lost to the VPU (wcm: admitted but for it) and the VPU to the drain (wcv)
+  longint ts_wv, ts_wm, ts_wc, ts_wcm, ts_wcv;
   initial begin
     ts_cyc = 0;
+    ts_wv = 0; ts_wm = 0; ts_wc = 0; ts_wcm = 0; ts_wcv = 0;
     for (int i = 0; i < NRP; i++) begin ts_rd[i] = 0; ts_rpl[i] = 0; end
     for (int i = 0; i < 4; i++) ts_lose[i] = 0;
     for (int i = 0; i < 7; i++) ts_n[i] = 0;
@@ -1078,6 +1134,13 @@ module otpu_slice
       if (lose_q)   ts_lose[1]++;
       if (lose_vpu) ts_lose[2]++;
       if (lose_col) ts_lose[3]++;
+      if (|wq_en[W_VPU]) ts_wv++;
+      if (|wq_en[W_MXU]) ts_wm++;
+      if (acf[G_MXU][G_VPU]) begin
+        ts_wc++;
+        if (ARB_MASK && apre[G_MXU] && !aok[G_MXU]) ts_wcm++;
+        if (ARB_MASK && apre[G_VPU] && !aok[G_VPU]) ts_wcv++;
+      end
     end
   final begin
     string s;
@@ -1092,6 +1155,8 @@ module otpu_slice
     for (int i = 0; i < NRP; i++) s = {s, $sformatf("%s%0d", (i > 0) ? "," : "", ts_rd[i])};
     s = {s, " rpl="};
     for (int i = 0; i < NRP; i++) s = {s, $sformatf("%s%0d", (i > 0) ? "," : "", ts_rpl[i])};
+    s = {s, $sformatf(" warb=%0d wv=%0d wm=%0d wc=%0d wcm=%0d wcv=%0d", warb, ts_wv, ts_wm, ts_wc,
+                      ts_wcm, ts_wcv)};
     $display("%s", s);
   end
 

@@ -50,6 +50,7 @@ module otpu_fpga_top_ld #(
   parameter int TMEM_PMP = 1,
   parameter int TMEM_PRK = 0,
   parameter int TMEM_SDM = -1,
+  parameter int TMEM_WARB = 0,       // the VPU / MXU-drain write arbitration (otpu_slice)
   parameter int TMEM_WORDS = 1 << 16,       // TMEM words (the target's [arch] TMEM_WORDS, the CFG_TMEM
                                             //   register; m4 64K, 64 RAMB36 at TMEM_IMPL 3; m8 128K)
   parameter int LANES = 8,                  // VPU lanes / TMEM banks (8 or 16)
@@ -286,7 +287,7 @@ module otpu_fpga_top_ld #(
                     .MXU_E(MXU_E), .LANES(LANES),
                     .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                     .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-                    .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM),
+                    .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB),
                     .TMEM_WORDS(TMEM_WORDS),
                     .ULANES(ULANES), .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                     .DSTEP(DSTEP), .HOSTCAL(1'b1), .XREG(PCIE_GEN == 2),

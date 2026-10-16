@@ -60,6 +60,7 @@ module tb_board;
   parameter int TMEM_PMP   = 0;
   parameter int TMEM_PRK   = 0;
   parameter int TMEM_SDM   = -1;
+  parameter int TMEM_WARB  = 0;       // the VPU / MXU-drain write arbitration (otpu_slice)
 
   logic clk = 1'b0, clk_f = 1'b0, rst = 1'b1, dump = 1'b0;
   // TMEM_PMP 1: clk_f (2 x clk) rises with each edge of clk, in clk's own process (as tb_top);
@@ -107,7 +108,7 @@ module tb_board;
                .ARCH_HASH(ARCH_HASH), .COLL_GATHER(COLL_GATHER || S > 1), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL),
                .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK),
-               .TMEM_SDM(TMEM_SDM)) dut (
+               .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB)) dut (
     .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),

@@ -41,6 +41,7 @@ module otpu_top
   parameter int TMEM_PMP   = 0,       // TMEM_TDP: 2 the pumped RAMs' model (otpu_slice)
   parameter int TMEM_PRK   = 0,       // TMEM_IMPL 3: the read ports' ranks (otpu_slice)
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
+  parameter int TMEM_WARB  = 0,       // the VPU / MXU-drain write arbitration (otpu_slice)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (otpu_slice)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (otpu_slice)
   parameter bit PACK       = 1'b0,    // the MXU packs two int8 weight rows a DSP (otpu_slice)
@@ -142,7 +143,7 @@ module otpu_top
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                  .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
-                 .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC),
+                 .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .SEQ_WC(SEQ_WC),
                  .T2(T2), .PACK(PACK))
     u_slice (
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),

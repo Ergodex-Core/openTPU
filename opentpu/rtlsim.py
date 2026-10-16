@@ -176,12 +176,13 @@ if os.environ.get("OTPU_UARCH") == "board":
     UARCH = dict(BOARD_UARCH)
 # The MXU: the MX column's 2D systolic array, as the board builds it (weights hop column to
 # column; docs/mxu_systolic.md, docs/mx_mxu.md), the only dot product (OTPU_MXU=systolic, the
-# only value). OTPU_MXU_E: its epilogue lanes (otpu_mxu E; timing only, 0: MCOLS / 2).
+# only value). OTPU_MXU_E: its epilogue lanes (otpu_mxu E; timing only, 0: MCOLS / 2), over
+# the target's in the board uarch too (f2-vla's 32: a packed pass's two rows in two steps).
 if os.environ.get("OTPU_MXU", "systolic") != "systolic":
     raise ValueError("OTPU_MXU: the systolic MXU is the only one")
 UARCH["MXU_IMPL"] = 2
 if os.environ.get("OTPU_MXU_E"):
-    UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
+    UARCH["MXU_E"] = BOARD_UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
 # OTPU_QUANT_XD: the quantizer's row buffer in chunks (otpu_quant XD; timing only, 0: QACT reads
 # its rows from TMEM twice)
 if os.environ.get("OTPU_QUANT_XD"):
@@ -219,6 +220,10 @@ if os.environ.get("OTPU_TMEM_IMPL"):
 for _k in ("NSB", "SBP", "SBH", "RPL", "TDP", "GST", "PMP", "PRK", "SDM"):
     if os.environ.get("OTPU_TMEM_" + _k):
         UARCH["TMEM_" + _k] = int(os.environ["OTPU_TMEM_" + _k], 0)
+# OTPU_TMEM_WARB=0..3: the VPU / MXU-drain write arbitration (otpu_slice TMEM_WARB; timing only;
+# the target's in BOARD_UARCH, f2-vla's 3); in simulation +tm_warb=N overrides a build's
+if os.environ.get("OTPU_TMEM_WARB"):
+    UARCH["TMEM_WARB"] = BOARD_UARCH["TMEM_WARB"] = int(os.environ["OTPU_TMEM_WARB"])
 # TMEM lanes of the MXU and the quantizer when fewer than LANES (timing only): OTPU_ULANES=8
 if os.environ.get("OTPU_ULANES"):
     UARCH["ULANES"] = int(os.environ["OTPU_ULANES"])
