@@ -69,3 +69,30 @@ layers and the whole 262K-row head: 3,228,204 cycles against a port-B roofline o
 token, 39.8 ms at 200 MHz, ~25 tok/s, the port's rate: decode is port-bound on the RTL, so
 PORTB 2 and 4 should come near 2x and 4x (the board's ~78% port efficiency on Alex's image is
 the memory path's, which more HBM channels a slice address).
+
+## Future improvements
+
+### Port B as independent lanes (from the SGMV streaming GEMV engine)
+
+Ergodex-Core/coral-gemma-f2's SGMV engine (rtl/engine) streams int8 weights from HBM in L = 4
+lanes, each its own AXI master on its own rows: 64 B a cycle per lane at 250 MHz (64 GB/s
+peak), bursts of at most 8 beats that never cross 512 B, a 128-256-beat read FIFO as credits
+with 16-32 bursts outstanding (rready always 1), ~0.97 beat/cycle per lane at 150-cycle HBM
+latency; ~36 GB/s measured on F2 (Gemma 3 1B: ~1 GB a token in 27.7 ms), ~20K LUT and 284 DSP
+for 4 lanes. Its 15.8 tok/s is bound by its 25 MHz Coral NPU, not by the engine.
+
+What is worth taking, and what is not:
+
+* **Take: the lane structure for PORTB > 1.** Build the wide port as PORTB independent
+  one-chunk lanes, each on its own HBM channel pair with SGMV-style credits and bursts, each
+  feeding one MXU column group of a reuse (column c of QUAD / PAIR), instead of one 2048-4096-
+  bit port B through the slice and otpu_native_dram. Same ISA and numerics (an MM's blocks k
+  with k mod r = c are lane c's stream, contiguous per row), timing stays local to a lane at
+  200-250 MHz, and it scales with MCOLS (8 lanes at MCOLS 8) and with HBM ports.
+* **Take: 250 MHz** if the lanes close it there (SGMV routed at 250 on the same part): +25%.
+* **Not now: a separate GEMV engine beside the MXU.** At M = 1 the MXU already is a streaming
+  GEMV at 99.4% of its port on the RTL (above), with three idle columns that reuse feeds; the
+  VPU is ~2% of a decode token, so SGMV's fused MLP / ARGMAX post-passes save little; and a
+  second datapath would have to reimplement openTPU's MX numerics (scale rows, the shift window,
+  int4, t2) to stay bit-exact with the ISA. Revisit if decode needs more than MCOLS x D weights
+  a cycle, or GEMVs must run beside prefill / batched MMs on the MXU.
