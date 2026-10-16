@@ -566,10 +566,11 @@ class Image:
     PCHUNK = 256        # the 2B's GeGLU chunk
     ECHUNK = 256        # the expert's
 
-    def __init__(self, spec: Spec, cfg, np_max: int = 640, fmt: str = "int8"):
+    def __init__(self, spec: Spec, cfg, np_max: int = 640, fmt: str = "int8",
+                 io32: bool = True):
         from ..compiler import k_scale_bytes
         from .qwen3 import _Bump
-        self.spec, self.cfg, self.fmt = spec, cfg, fmt
+        self.spec, self.cfg, self.fmt, self.io32 = spec, cfg, fmt, io32
         D = self.D = cfg.D
         s = spec
         C, F = s.v_hidden, _up(s.v_ffn, self.VCHUNK)
@@ -629,6 +630,11 @@ class Image:
         xb.vec("bout", s.action_dim)
         xb.mat("win", E, self.AP, fmt)
         xb.mat("wout", s.action_dim, E, fmt)
+        # io32 (the default): both projections fp32 on the VPU instead, W_in^T and W_out by
+        # rows, the output bias repeated over the chunk's rows (one LD a dim)
+        xb.vec("winT", s.action_dim * E)
+        xb.vec("woutf", s.action_dim * E)
+        xb.vec("boutT", s.action_dim * s.chunk)
         b.next = xb.place(_up(b.next, 4096), 1)
         self.xb = xb
         mb = _Block(D)                  # the adaRMS table: a block per (step, layer)
@@ -653,7 +659,8 @@ class Image:
                          PO=b.alloc(4 * cap * s.n_q * d), cos=b.alloc(4 * cap * d // 2),
                          sin=b.alloc(4 * cap * d // 2), EX=b.alloc(4 * T * E),
                          EQ=b.alloc(4 * T * s.n_q * d), EO=b.alloc(4 * T * s.n_q * d),
-                         XT=b.alloc(4 * T * self.AP), V=b.alloc(4 * T * s.action_dim))
+                         XT=b.alloc(4 * T * self.AP), V=b.alloc(4 * T * s.action_dim),
+                         XTt=b.alloc(4 * s.action_dim * T), Vt=b.alloc(4 * s.action_dim * T))
         nv = _up(n, D)
         self.vkv = {h: {"k": b.alloc(nv * self.vdp), "ks": b.alloc(4 * nv),
                         "vt": b.alloc(self.vdp * nv + D), "vs": b.alloc(4 * nv)}
@@ -712,6 +719,7 @@ class Image:
 
     def expert_desc(self):
         from types import SimpleNamespace
+        from ..compiler import Tensor
         s = self.spec
         x = self.xb.at(0)
         e = SimpleNamespace(
@@ -719,6 +727,10 @@ class Image:
             O=self._t("EO", (s.chunk, s.n_q * s.head_dim)),
             XT=self._t("XT", (s.chunk, self.AP)), V=self._t("V", (s.chunk, s.action_dim)),
             win=x.win, bin=x.bin, wout=x.wout, bout=x.bout, layer=self.eb.at, kv=self.kv,
+            XTt=self._t("XTt", (s.action_dim, s.chunk)), Vt=self._t("Vt", (s.action_dim, s.chunk)),
+            winT=Tensor(x.winT.base, (s.action_dim, s.e_hidden), (s.e_hidden, 1)),
+            woutf=Tensor(x.woutf.base, (s.action_dim, s.e_hidden), (s.e_hidden, 1)),
+            boutT=Tensor(x.boutT.base, (s.action_dim, s.chunk), (s.chunk, 1)),
             mods=lambda step, li: self.mb.at(step * s.e_layers + li), final=self.fb.at)
         e.g = self.gemma_desc("E", s.chunk, 0)
         return e
@@ -784,6 +796,9 @@ class Image:
         xb.put_vec(put, 0, "bin", W[TOP + "action_in_proj.bias"])
         xb.put_mat(put, 0, "wout", W[TOP + "action_out_proj.weight"])
         xb.put_vec(put, 0, "bout", W[TOP + "action_out_proj.bias"])
+        xb.put_vec(put, 0, "winT", W[TOP + "action_in_proj.weight"].T.reshape(-1))
+        xb.put_vec(put, 0, "woutf", W[TOP + "action_out_proj.weight"].reshape(-1))
+        xb.put_vec(put, 0, "boutT", np.repeat(W[TOP + "action_out_proj.bias"], s.chunk))
         cos, sin = rope_table(s, self.cap)
         put(self.work["cos"], cos)
         put(self.work["sin"], sin)
@@ -850,7 +865,7 @@ class Image:
         P["e_step"] = tr(K.expert_step, e=self.expert_desc(),
                          step=RunVar("step", bound=s.steps), layers=s.e_layers, Np=Np, R=RE,
                          eps=s.eps, scale=gsc, block=block, chunk=self.echunk,
-                         dt=-1.0 / s.steps)
+                         dt=-1.0 / s.steps, io32=self.io32)
         return P
 
     def runs(self, cams: int) -> list:
@@ -904,9 +919,12 @@ def run_chunk(image: Image, backend, programs: dict, images: list, prompt: np.nd
         if name == "write_noise":
             if stop == "prefix":
                 return None
-            x = np.zeros((s.chunk, image.AP), np.float32)
-            x[:, :s.action_dim] = noise
-            backend.write(0, w["XT"], x)
+            if image.io32:                  # x_t^T [action_dim, chunk]
+                backend.write(0, w["XTt"], np.ascontiguousarray(np.asarray(noise, np.float32).T))
+            else:
+                x = np.zeros((s.chunk, image.AP), np.float32)
+                x[:, :s.action_dim] = noise
+                backend.write(0, w["XT"], x)
             continue
         prog, ra = programs[name]
         if log:
@@ -914,5 +932,17 @@ def run_chunk(image: Image, backend, programs: dict, images: list, prompt: np.nd
         backend.run([prog], args=arg_words(ra, item[1]))
         if after:
             after(name, item[1])
+    return read_xt(image, backend)
+
+
+def read_xt(image: Image, backend, which: str = "x") -> np.ndarray:
+    """x_t (which "x") or the last step's v_t ("v") [chunk, action_dim] from the card."""
+    s, w = image.spec, image.work
+    if image.io32:
+        a = backend.read(0, w["XTt" if which == "x" else "Vt"], 4 * s.chunk * s.action_dim)
+        return a.view(np.float32).reshape(s.action_dim, s.chunk).T.copy()
+    if which == "v":
+        return backend.read(0, w["V"], 4 * s.chunk * s.action_dim).view(np.float32).reshape(
+            s.chunk, s.action_dim).copy()
     return backend.read(0, w["XT"], 4 * s.chunk * image.AP).view(np.float32).reshape(
         s.chunk, image.AP)[:, :s.action_dim].copy()

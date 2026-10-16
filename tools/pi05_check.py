@@ -114,8 +114,7 @@ def run_isa(spec, W, r, cut: dict, log=print) -> dict:
         if name != "e_step":
             return
         s = args["step"]
-        v = be.read(0, image.work["V"], 4 * cs.chunk * cs.action_dim).view(np.float32).reshape(
-            cs.chunk, cs.action_dim)
+        v = P.read_xt(image, be, "v")
         steps[s] = {"v_rel": rel(v, cap[f"v{s}"]), "v_abs": float(np.abs(v - cap[f"v{s}"]).max()),
                     "t": time.time() - t3}
         log(f"step {s}: {steps[s]}")

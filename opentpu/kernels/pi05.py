@@ -142,19 +142,30 @@ def _ada(x, eps, gain, shift):
 
 @ol.jit
 def expert_step(e, step, layers: int, Np: int, R: int, eps: float, scale: float,
-                block: int, chunk: int, dt: float):
+                block: int, chunk: int, dt: float, io32: bool = True):
     """One Euler step of the action chunk (e: llm/pi05.Image.expert_desc): the step's index a
-    run argument (its adaRMS rows' table), x_t [T, A] in DRAM updated in place."""
+    run argument (its adaRMS rows' table), x_t in DRAM updated in place. io32: x_t is
+    transposed ([A, T]: a dim's rows one LD) and both action projections are fp32 on the VPU
+    (in: A OUTERs x += x_t[:, k] W_in^T[k]; out: A RDOTs v[:, j] = y . W_out[j]), no
+    quantization of x_t, v_t or the final norm's rows; else they are int8 MMs on x_t [T, AP]
+    (its A columns zero-padded to D)."""
     T, C = e.X.shape
+    A = e.wout.shape[0]
     g = e.g
-
     bi = ol.load(e.bin)
 
     def in_body(r0, n):
-        xs = ol.quantize(ol.load(e.XT[r0:r0 + n, :]), free=True)
         x = ol.empty([n, C])
         x.set(bi[None, :])
-        ol.dot(xs, e.win, acc=x)
+        if io32:
+            for k in range(A):          # (OUTER takes up to 256 columns: in parts)
+                xk = ol.load(e.XTt[k, r0:r0 + n])
+                for c0 in range(0, C, 256):
+                    c1 = min(C, c0 + 256)
+                    ol.outer(xk, ol.load(e.winT[k, c0:c1]), acc=x[:, c0:c1])
+        else:
+            xs = ol.quantize(ol.load(e.XT[r0:r0 + n, :]), free=True)
+            ol.dot(xs, e.win, acc=x)
         ol.store(e.X[r0:r0 + n, :], x)
     row_groups(T, R, in_body)
     del bi
@@ -196,8 +207,23 @@ def expert_step(e, step, layers: int, Np: int, R: int, eps: float, scale: float,
             layer(li)
 
     f = e.final(step)
-    gf, sf, bo = ol.load(f.g), ol.load(f.s), ol.load(e.bout)
-    A = e.wout.shape[0]
+    gf, sf = ol.load(f.g), ol.load(f.s)
+
+    def out32(r0, n):
+        x = ol.load(e.X[r0:r0 + n, :])
+        y = (x * rms_r(x, eps)[:, None]) * gf[None, :] + sf[None, :]
+        del x
+        for j in range(A):
+            v = ol.sum(y * ol.load(e.woutf[j])[None, :], axis=1)     # one RDOT
+            v.set(v + ol.load(e.boutT[j, r0:r0 + n]))
+            ol.store(e.Vt[j, r0:r0 + n], v)
+            xt = ol.load(e.XTt[j, r0:r0 + n])
+            xt.set(xt + v * dt)
+            ol.store(e.XTt[j, r0:r0 + n], xt)
+    if io32:
+        row_groups(T, R, out32)
+        return
+    bo = ol.load(e.bout)
 
     def out_body(r0, n):
         x = ol.load(e.X[r0:r0 + n, :])
