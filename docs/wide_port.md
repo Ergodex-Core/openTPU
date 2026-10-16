@@ -59,3 +59,13 @@ LD / ST stay one chunk a cycle.
 The per-token fixed work (VPU, attention, norms, launches) does not shrink, so the gain is
 below 2x / 4x by its share; the RTL timing runs (tools/perf_qwen.py on the f2-hbm memory model)
 measure it.
+
+## Baseline on the RTL (PORTB 1)
+
+tools/perf_qwen.py, Gemma-3-1B int8 (int8 head), OTPU_TARGET=f2-hbm OTPU_NCH=8, --lat 60, 4
+layers and the whole 262K-row head: 3,228,204 cycles against a port-B roofline of 3,207,980
+(99.4%); MXU busy 100%, VPU 2%, MXU starved 18 cycles. By phase: the head 2.37 M cycles, the
+4 layers' MLP 0.75 M, attention 0.11 M. The whole model (26 layers): about 7.96 M cycles a
+token, 39.8 ms at 200 MHz, ~25 tok/s, the port's rate: decode is port-bound on the RTL, so
+PORTB 2 and 4 should come near 2x and 4x (the board's ~78% port efficiency on Alex's image is
+the memory path's, which more HBM channels a slice address).
