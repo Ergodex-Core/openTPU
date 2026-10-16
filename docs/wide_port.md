@@ -70,6 +70,14 @@ token, 39.8 ms at 200 MHz, ~25 tok/s, the port's rate: decode is port-bound on t
 PORTB 2 and 4 should come near 2x and 4x (the board's ~78% port efficiency on Alex's image is
 the memory path's, which more HBM channels a slice address).
 
+## Baseline on the board (PORTB 1)
+
+Gemma-3-1B int8 (int8 head) served by otpu-serve on Alex's burst200 image
+(agfi-0d06cb48544a02106: 200 MHz, HBM over 2 channels), tools/f2_bench.py, 2026-10-16: decode
+**22.3 tok/s** (short prompt) / 21.7 (long), ~89% of the RTL's port-bound ~25 tok/s; prefill
+3.7-4.5 tok/s (TTFT 4.3 s for 16 tokens, 59.6 s for 268). For reference, coral-gemma-f2's SGMV
+engine build runs the same model at 15.8 tok/s (its 25 MHz Coral NPU bound).
+
 ## Future improvements
 
 ### Port B as independent lanes (from the SGMV streaming GEMV engine)
