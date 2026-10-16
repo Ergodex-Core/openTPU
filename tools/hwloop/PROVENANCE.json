@@ -1,0 +1,11 @@
+{
+  "vslib_sha256": "1bde19e19d882efe4dcd795c02dd78b634c1cba9031059130551d1c5266acf47",
+  "vslib_note": "tools/hwloop/vslib.py is shared verbatim between Ergodex-Core/openTPU and Ergodex-Core/coral-gemma-f2; change it in both and update this hash (tests check it)",
+  "visualsim": {"install": "/Users/rachittibrewal/VisualSim/VS_AR (discovered; VS_AR env overrides)", "version": "VisualSim Architect 2641 13 September 2026",
+                "reused_examples": ["Training_Material/Architecture/Mem_Controller/Functional_HBM_Demo.xml", "VisualSim/actor/arch/Memory/HBM_Module.xml",
+                                    "VisualSim/actor/arch/Memory/Memory_Controller.xml", "VisualSim/actor/arch/Memory/HW_DRAM.xml",
+                                    "demo/SoC/Flow_Control_HW/Using_Mem_Controller_and_HWDRAM.xml", "demo/SoC/Processor/TPU/TPU_6.xml (Smart_Timed_Resource pattern)",
+                                    "doc/pre-built_models/html/Library_Model.html"],
+                "not_committed": "no vendor library, license file, credential or model weight is in the repository"},
+  "canonical_workspace": "/Users/rachittibrewal/VisualSim/VS_AR/ergodex_npu/hwloop"
+}

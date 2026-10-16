@@ -1,0 +1,37 @@
+{
+  "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f",
+  "command": [
+    "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+    "tools/perf_qwen.py",
+    "--model",
+    "gemma3",
+    "--layers",
+    "4",
+    "--wformat",
+    "int4",
+    "--head-format",
+    "int4",
+    "--lat",
+    "60",
+    "--mhz",
+    "200.0",
+    "--json",
+    "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/rl4_int4_mcols8/perf.jsonl",
+    "--plus",
+    "+nat_trace=/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/rl4_int4_mcols8/nat_trace.txt",
+    "--portb",
+    "4",
+    "--rowlanes",
+    "--mcols",
+    "8"
+  ],
+  "env": {
+    "OMP_NUM_THREADS": "8",
+    "OTPU_NCH": "8",
+    "OTPU_TARGET": "f2-hbm"
+  },
+  "shell": "cd /Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f && OMP_NUM_THREADS=8 OTPU_NCH=8 OTPU_TARGET=f2-hbm /Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 4 --wformat int4 --head-format int4 --lat 60 --mhz 200.0 --json /Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/rl4_int4_mcols8/perf.jsonl --plus +nat_trace=/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/rl4_int4_mcols8/nat_trace.txt --portb 4 --rowlanes --mcols 8",
+  "exit_code": 0,
+  "wall_s": 383.0905600840015,
+  "status": "OK"
+}

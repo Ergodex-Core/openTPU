@@ -1,0 +1,38 @@
+{
+  "port_chunks": 4,
+  "nch": 8,
+  "chash": true,
+  "mm": 890,
+  "mm_rl": 838,
+  "chunks": 4243208,
+  "requests": 1065924,
+  "steps": 1065924,
+  "lines": 1299524,
+  "issue_extra": 240256,
+  "wide_reads": 1059268,
+  "two_part": 0,
+  "chan_beats": [
+    1142066,
+    1141999,
+    1142005,
+    1142072,
+    1142007,
+    1142070,
+    1142076,
+    1142013
+  ],
+  "by_lanes": {
+    "L4": 838,
+    "PAIR": 52
+  },
+  "port_b_cycles": 1306180,
+  "two_part_share": 0.0,
+  "channel_rate": 0.8648648648648649,
+  "round_trip": 74,
+  "roofline": {
+    "port_b": 1306180,
+    "mxu": 1065924,
+    "port_a": 1299524,
+    "channel": 1320526
+  }
+}

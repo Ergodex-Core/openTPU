@@ -1,0 +1,24 @@
+{
+  "name": "ypcb-ddr3-1066",
+  "design": "opentpu",
+  "kind": "actual_fpga",
+  "label": "measured",
+  "description": "The production card (Inspur YPCB-00338, Kintex-7 xc7k480t): one slice at 133.33 MHz, two DDR3-1066 channels through LiteDRAM (17.1 GB/s peak), the stream engine. Measured with tools/qual/perf.py (README Results). The existing DDR configuration the design supports in the tree; the Verilator LDC co-simulation (OTPU_LDC=1066) runs the card's own controller.",
+  "pin": {"image": "deploy_fused133c_79c5707a (build B, production since 2026-10-01)", "software_rev": "main 7e42a626f714edd07867702c38c954082d51f587 (README table)"},
+  "clocks": {"core_mhz": 133.33, "tmem_mhz": 133.33, "memory_axi_mhz": null, "controller_mhz": 133.33, "host_pcie_mhz": null},
+  "memory": {
+    "type": "DDR3", "channels_per_slice": 2, "channel_bytes": 2147483648, "beat_bytes": 64, "chunk_bytes": 128,
+    "port_data_bits": 128, "port_peak_GBps": 8.53, "slice_portb_peak_GBps": 17.07,
+    "data_rate_MTps": 1066, "device_width_bits": 64,
+    "outstanding_reads_per_channel": null, "burst_beats_max": null,
+    "latency_ns_loaded": 300,
+    "refresh": {"tREFI_us": 7.8, "tRFC_ns": 160, "note": "opentpu.profile.ddr3_plusargs carries the calibrated bank model (ROW_BANK_COLUMN, 300 ns)"},
+    "uncertain": []
+  },
+  "slice": {"D": 128, "MCOLS": 4, "LANES": 8, "PORTB": 1, "S": 1},
+  "measured": {
+    "date": "2026-09-29..2026-10-01", "tool": "tools/qual/perf.py (64 greedy tokens after a 512-token prompt; device = accelerator cycles only)",
+    "qwen3-0.6b-int8": {"decode_tok_s_device": 21.6, "decode_tok_s_wall": 21.3, "prefill_tok_s_device": 92.1, "dram_GBps": 14.4},
+    "lfm25-230m-int8": {"decode_tok_s_device": 59.0, "decode_tok_s_wall": 52.3, "prefill_tok_s_device": 295.6, "dram_GBps": 14.5}
+  }
+}

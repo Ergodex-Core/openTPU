@@ -1,0 +1,38 @@
+{
+  "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
+  "command": [
+    "tools/perf_qwen.py",
+    "--model",
+    "gemma3",
+    "--layers",
+    "2",
+    "--wformat",
+    "int8",
+    "--head-format",
+    "int8",
+    "--lat",
+    "60",
+    "--mhz",
+    "200",
+    "--portb",
+    "2",
+    "--json",
+    "perf.jsonl",
+    "--plus",
+    "+nat_trace=nat_trace.txt"
+  ],
+  "env": {
+    "OTPU_TARGET": "f2-hbm",
+    "OTPU_NCH": "8",
+    "OMP_NUM_THREADS": "8"
+  },
+  "shell": "cd ~/ergodex-03/hwloop-scratch/opentpu-a9acb2b0 && OTPU_TARGET=f2-hbm OTPU_NCH=8 OMP_NUM_THREADS=8 ~/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 2 --wformat int8 --head-format int8 --lat 60 --mhz 200 --portb 2 --json $out/perf.jsonl --plus +nat_trace=$out/nat_trace.txt",
+  "exit_code": 0,
+  "wall_s": 1801,
+  "status": "OK",
+  "started_utc": "2026-10-16T13:55:23Z",
+  "ended_utc": "2026-10-16T14:25:24Z",
+  "verilator": "5.048",
+  "candidate_change": "PORTB=2 (Config.PORTB / OTPU_PORTB: port B and the MXU stream take two 128-byte chunks a cycle; int8 MMs PAIR; docs/wide_port.md) on the same tree a9acb2b0",
+  "note": "run by hwloop-scratch/run_opentpu.sh (the same invocation cli.py run-rtl makes)"
+}

@@ -1,0 +1,6 @@
+name,label,cycles,core_mhz,device_ms_per_token,device_tok_s,dram_bytes,achieved_GBps,portb_utilization,roofline_efficiency,mxu_starved_cycles,mxu_blocked_pct,max_outstanding_reads_est,sim_wall_s
+baseline,measured,2798478,200.0,13.992389999999999,71.46741907565469,362179072,25.884003519055717,0.9961764930794524,0.996,17,0.3,203,2190
+candidate,measured,1643595,200.0,8.217975000000001,121.6844782321679,362179072,44.07157140293077,1.696146556785583,0.935,1324,5.7,307,1782
+visualsim:f2-hbm-nch8-rtl (baseline),waiting,,,,,,,,,,,,
+visualsim:f2-hbm-nch8-rtl (candidate),waiting,,,,,,,,,,,,
+board:f2-hbm-burst200,measured,,,,22.3,,,,,,,,

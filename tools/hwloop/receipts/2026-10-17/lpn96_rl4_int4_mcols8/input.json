@@ -1,0 +1,40 @@
+{
+  "revision": "f237dab2f196855a59a083b1454786df8f01291f",
+  "config": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 8,
+    "ACT_BLOCKS": 128,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 536870912,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": false,
+    "STREAM": false,
+    "ACT_ROWS": 16,
+    "SEQ_WC": false
+  },
+  "config_export": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 8,
+    "ACT_BLOCKS": 128,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 536870912,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": false,
+    "STREAM": false,
+    "ACT_ROWS": 16,
+    "PORTB": 4,
+    "T2": false,
+    "ROWLANES": true,
+    "SEQ_WC": false
+  },
+  "args": [],
+  "instruction_counts": [
+    276
+  ]
+}

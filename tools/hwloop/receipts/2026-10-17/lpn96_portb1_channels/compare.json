@@ -1,0 +1,32 @@
+[
+  {
+    "receipt": "tools/hwloop/receipts/2026-10-17/opentpu96_portb1",
+    "receipt_label": "measured",
+    "receipt_kind": "verilator_rtl_decode_token",
+    "rtl_cycles": 2798478,
+    "lpn_cycles": 2821563,
+    "gate": 0.05,
+    "rel_error": 0.008249126846807453,
+    "within_gate": true,
+    "rtl_portb_chunks": 2779176,
+    "lpn_portb_chunks": 2779176,
+    "same_mxu_chunks": true,
+    "rtl_dram_bytes_beats": 362179072,
+    "lpn_dram_bytes_footprint": 362063442,
+    "bytes_rel": -0.00031926195890197295,
+    "rtl_portb_utilization": 0.9961764930794524,
+    "lpn_portb_utilization": 0.9849774752504197,
+    "receipt_configuration": {
+      "portb": 1,
+      "rowlanes": false,
+      "mcols": 4,
+      "target": "f2-hbm",
+      "nch": "8",
+      "lat": "60",
+      "layers": "2"
+    },
+    "configuration_deltas": [],
+    "overlap": "the same program and DRAM image (the export's compiler), the same MM weight chunks",
+    "verdict": "graded configuration (the wide model): inside the 5% gate"
+  }
+]

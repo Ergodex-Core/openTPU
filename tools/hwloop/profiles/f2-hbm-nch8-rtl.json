@@ -1,0 +1,19 @@
+{
+  "name": "f2-hbm-nch8-rtl",
+  "design": "opentpu",
+  "kind": "rtl_evaluation",
+  "label": "measured",
+  "description": "The repository's own F2 HBM build (targets f2-hbm: S=1, NCH=8 channels on 8 HBM pseudo-channels, 200 MHz core, 400 MHz TMEM, 450 MHz HBM AXI; docs/f2_hbm.md) as the Verilator perf runs evaluate it: otpu_native_dram(NCH=8) in front of sim/verilator/otpu_native_mem.sv with --lat core cycles of read latency. Synthesized (SynthCL) but not placed, routed or run on a board: an RTL configuration, not an image.",
+  "pin": {"rtl_rev": "wide-port a9acb2b05da2b0ddcdbb97254b2776ca2cee2c87", "synth_receipt": "docs/f2_hbm.md 'Synthesis' at 4bef3758 (f2-hbm 174,919 LUTs, WNS +0.154 ns post-synthesis estimate)"},
+  "clocks": {"core_mhz": 200.0, "tmem_mhz": 400.0, "memory_axi_mhz": 450.0, "controller_mhz": null, "host_pcie_mhz": 250.0},
+  "memory": {
+    "type": "HBM2", "channels_per_slice": 8, "channel_bytes": 536870912, "beat_bytes": 64, "chunk_bytes": 128,
+    "port_data_bits": 256, "port_peak_GBps": 14.4, "slice_portb_peak_GBps": 25.6,
+    "outstanding_reads_per_channel": 64, "burst_beats_max": 8, "gather_cycles_hclk": 4,
+    "bridge_cmd_fifo": 4, "bridge_wdata_fifo": 4, "bridge_afifo_entries": 16, "bridge_return_fifo": 64, "bridge_wfifo": 32,
+    "latency_core_cycles_sim": 60, "latency_ns_loaded_est": [300, 400],
+    "refresh": {"tREFI_us": 3.9, "tRFC_ns": null, "note": "otpu_native_mem has no refresh; the HBM IP's is not modelled in Verilator"},
+    "uncertain": ["loaded HBM latency (300-400 ns is the design note, not a measurement)", "refresh", "bank conflicts (the sim model has no banks unless +axi_dram=1)"]
+  },
+  "slice": {"D": 128, "MCOLS": 4, "LANES": 8, "ACT_ROWS": 16, "TMEM_WORDS": 65536, "PORTB": 1, "S": 1}
+}

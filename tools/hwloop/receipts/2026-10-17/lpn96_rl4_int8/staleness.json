@@ -1,0 +1,9 @@
+{
+  "stale": false,
+  "expected": "d531eb0163232057e9042f89c7142b2e64ef7cb258a29b109eb07439d355337a",
+  "actual": "d531eb0163232057e9042f89c7142b2e64ef7cb258a29b109eb07439d355337a",
+  "changed": [],
+  "added": [],
+  "removed": [],
+  "note": "no graded point: the tree's own fingerprint (this run grades it)"
+}

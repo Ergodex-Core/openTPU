@@ -1,0 +1,85 @@
+{
+  "date_utc": "2026-10-16",
+  "host": "Darwin 24.6.0 arm64",
+  "macos": "15.7.3",
+  "cpu": "Apple M2 Max",
+  "cores": 12,
+  "ram_gb": 32,
+  "homebrew": {
+    "prefix": "/usr/local (x86_64 under Rosetta)",
+    "llvm_installed": [
+      "llvm",
+      "llvm@21"
+    ],
+    "llvm@20": "NOT installed: Homebrew ships no Intel bottles any more (log: 'Homebrew no longer builds bottles for this configuration'); `brew install llvm@20` started a from-source build of LLVM under Rosetta and was stopped after ~2 min (hours of all cores)"
+  },
+  "llvm20": {
+    "source": "conda-forge (osx-arm64) via the existing ~/miniconda3 (conda 23.5.0)",
+    "prefix": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-env",
+    "packages": {
+      "clang": "20.1.8=default_cfg_h71e02b6_17",
+      "clang-20": "20.1.8=default_h675fcf3_17",
+      "clangdev": "20.1.8=default_h675fcf3_17",
+      "clangxx": "20.1.8=default_cfg_h0aaf879_17",
+      "cmake": "4.4.4=hf91ab31_0",
+      "libclang-cpp20.1": "20.1.8=default_h675fcf3_17",
+      "libcxx": "23.1.3=h55c6f16_0",
+      "libllvm20": "20.1.8=h8e0c9ce_1",
+      "lld": "20.1.8=ha4b1419_1",
+      "llvm-tools": "20.1.8=h855ad52_1",
+      "llvmdev": "20.1.8=h91fd4e7_1",
+      "mlir": "20.1.8=h15cb7b7_0",
+      "ninja": "1.13.2=h3feff0a_1",
+      "zstd": "1.5.7=hf451053_7"
+    },
+    "command": "conda create -y -p lpn-scratch/llvm20-env -c conda-forge --override-channels llvmdev=20.1.8 mlir=20.1.8 clangdev=20.1.8 clang=20.1.8 clangxx=20.1.8 llvm-tools=20.1.8 lld=20.1.8 cmake ninja",
+    "size": "1.6G",
+    "llvm_config": "20.1.8",
+    "clang": "clang version 20.1.8",
+    "arch": "Mach-O 64-bit executable arm64"
+  },
+  "tool_names": {
+    "dir": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-bin",
+    "note": "lpn-compile hardcodes opt-20 / llc-20 / clang++-20 (findProgramByName); conda names them opt / llc / clang++: symlinks and two sh wrappers that export SDKROOT=$(xcrun --show-sdk-path) for the Apple SDK",
+    "files": {
+      "llc-20": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-env/bin/llc",
+      "opt-20": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-env/bin/opt",
+      "clang++-20": "#!/bin/sh\n# clang++ 20.1.8 (conda-forge, arm64) with the macOS SDK: the linker lpn-compile looks for by this name\n[ -n \"$SDKROOT\" ] || export SDKROOT=\"$(/usr/bin/xcrun --show-sdk-path)\"\nexec /Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-env/bin/clang++ \"$@\"\n",
+      "clang-20": "#!/bin/sh\n# clang 20.1.8 (conda-forge, arm64) with the macOS SDK (LPNDialect's CoralNPU ELF test cross-compiles with it)\n[ -n \"$SDKROOT\" ] || export SDKROOT=\"$(/usr/bin/xcrun --show-sdk-path)\"\nexec /Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-env/bin/clang \"$@\"\n"
+    }
+  },
+  "lpndialect": {
+    "repo": "https://github.com/MJChku/LPNDialect",
+    "clone": "/Users/rachittibrewal/ergodex-03/lpn-scratch/LPNDialect",
+    "branch": "qwen-validation",
+    "commit": "b06f42d9df9d521e6ded6a6d070b257337a9b076",
+    "commit_date": "2026-10-16 10:19:11 +0200",
+    "build_dir": "/Users/rachittibrewal/ergodex-03/lpn-scratch/lpn-build",
+    "configure": "cmake -S LPNDialect -B lpn-build -G Ninja -DLLVM_DIR=$E/lib/cmake/llvm -DMLIR_DIR=$E/lib/cmake/mlir -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=$E/bin/clang -DCMAKE_CXX_COMPILER=$E/bin/clang++ -DCMAKE_OSX_SYSROOT=$(xcrun --show-sdk-path)",
+    "build": "cmake --build lpn-build -j 8 (66 s wall; one linker warning: /usr/local/lib/libzstd.dylib is x86_64 and was ignored, the conda zstd linked)",
+    "lpn_compile_sha256": "794f8ac85c885b1de3360c7d758075ba75c6c88867a8209d5a4bb08bdf6ff18a",
+    "ctest": "13/13 passed (lpn-elf-workload needs clang-20 on PATH too: added the wrapper; 12/13 before it)",
+    "test_opentpu": "13 tests OK in 203 s (test_opentpu.log)"
+  },
+  "verilator": {
+    "path": "/usr/local/bin/verilator",
+    "version": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+    "pinned_rtl_elaborates": "yes: tb_top of the benchmark config (S1 D128 MCOLS4 ACT_ROWS16 LANES8) built in 2:51 wall, -O3 (verilator-5048-elaborate.log); upstream records 5.052 and says 5.020 fails; 5.052 was not needed"
+  },
+  "python": {
+    "venv": "/Users/rachittibrewal/ergodex-03/bonsai2-venv (3.14.5 arm64, numpy 2.5.4)"
+  },
+  "pin_worktree": {
+    "path": "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+    "created": "git -C ~/ergodex-03/openTPU worktree add lpn-scratch/openTPU-lpn-pin f237dab2 --detach (the commit was local: origin has it)",
+    "head": "f237dab2f196855a59a083b1454786df8f01291f",
+    "patch": "examples/opentpu/verilator-observer.patch applied with git apply (opentpu/rtlsim.py, sim/verilator/tb_top.sv, + sim/verilator/lpn_wall.cpp)",
+    "status": [
+      "M opentpu/rtlsim.py",
+      " M sim/verilator/tb_top.sv",
+      "?? models",
+      "?? sim/verilator/lpn_wall.cpp"
+    ],
+    "models": "models -> ~/ergodex-03/openTPU/models (symlink; gitignored)"
+  }
+}
