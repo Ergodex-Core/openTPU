@@ -99,3 +99,12 @@ MCOLS = 8
 [variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
 PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl
 ROWLANES = true
+
+[variants.p2rl8]                # the PORTB 2 build with row lanes on MCOLS 8: Bonsai-2's t2
+PORTB = 2                       # decode as MM RL 2 (two rows' chunks a cycle into eight
+ROWLANES = true                 # columns: docs/ternary.md 8, the t2 doubling at M = 1).
+MCOLS = 8                       # build.py --target f2-hbm:p2rl8
+
+[variants.p2m8]                 # PORTB 2 on MCOLS 8 without row lanes: t2 QUAD at M = 2 (a
+PORTB = 2                       # verify's two rows or two sequences a chunk a cycle: MTP on
+MCOLS = 8                       # the t2 images, docs/ternary.md 9). build.py --target f2-hbm:p2m8

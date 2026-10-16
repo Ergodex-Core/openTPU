@@ -520,3 +520,20 @@ def test_config_summary_names_the_target(no_env):
     new = config_summary(Board(FakeTransport(regmap=4, **kw)).info())
     assert "register map 4, ypcb-00338 (S=1, 2 channels x 2048 MiB)" in new and "DDR3-1066" in new
     assert T.by_platform(2).name == "bcu1525" and T.by_platform(999) is None
+
+
+def test_f2_hbm_bonsai_variants():
+    """targets/f2-hbm.toml's variants for the Bonsai-2 t2 decode on the wide port
+    (docs/ternary.md 8 and 10): p2rl8 (PORTB 2, row lanes, MCOLS 8: t2 RL 2, the doubling at
+    M = 1) and p2m8 (PORTB 2, MCOLS 8: t2 QUAD at M = 2, MTP's verify), the f2-hbm arch
+    otherwise (T2, PAIR, NCH 8), each its own CFG_HASH (pinned: the nightly's images)."""
+    base = T.config("f2-hbm")
+    for name, mcols, rl, h in (("f2-hbm:p2rl8", 8, True, 0x4317000C),
+                               ("f2-hbm:p2m8", 8, False, 0x8A2B063D),
+                               ("f2-hbm:p2", 4, False, 0xA9D1D2B0)):
+        t = T.load(name)
+        cfg = T.config(t)
+        assert cfg == dataclasses.replace(base, PORTB=2, MCOLS=mcols, ROWLANES=rl), name
+        assert cfg.T2 and cfg.PAIR and t.platform["channels_per_slice"] == 8
+        assert T.arch_hash(cfg) == h != T.arch_hash(base), (name, hex(T.arch_hash(cfg)))
+        assert T.rtl_params(t)["PORTB"] == 2 and T.rtl_params(t)["ARCH_HASH"] == h

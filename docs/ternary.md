@@ -272,6 +272,81 @@ tally): 7.92 M chunks a token, 9.10 M unit cycles at PORTB 1 (port B busy 87%), 
 PORTB 2 and at 4 (73% and 36% busy): at PORTB 2 int4 reaches t2's cycles at twice the bytes,
 and t2 at PORTB 1 already has them.
 
+### 8.1 MCOLS 8 with the wide port: t2 RL 2 (2026-10-17, on the merged wide-port tree)
+
+The RTL with the wide port (docs/wide_port.md) and the row-lane MM mode (docs/row_lanes.md),
+the same method as above: `tools/b2_step_costs.py --portb N [--mcols 8] [--rowlanes]` on the
+ISA simulator, `tools/perf_bonsai2.py MODEL f2-hbm --layers 1 --wformat t2 --rotate --portb N
+[--mcols 8] [--rowlanes] --lat 60 --mhz 200` on the T2 build with the board uarch and the
+HBM memory model (OTPU_NCH=8, no stalls), then the whole model (`--layers 24` / `32`, every
+layer and the head, where it fits rtlsim's 3600 s). Three points: **MCOLS 4 / PORTB 1** (the
+baseline above), **MCOLS 8 / PORTB 2** (t2 QUAD: the compiler's reuse is unchanged, a chunk's
+four blocks into four of the eight columns, since QUAD is `4 M <= MCOLS` and takes one chunk
+a cycle whatever MCOLS is: the point for M = 2, section 9), and **MCOLS 8 / PORTB 2 / RL 2**
+(the row-lane mode: t2's L is 2, two rows' chunks a cycle into eight columns, the one-row MMs
+of the step as MM RL 2 over a Qwen3.5 image stored in row-lane groups; the rotation's H MMs,
+M = K / 512 rows, stay QUAD at 0.18 / 0.25 M of the token).
+
+The 2B's RL step on the ISA simulator gives the plain image's logits bit for bit (the same
+argmax and the same 248320 values at every one of the three points; a tiny Qwen3.5 in both
+DeltaNet layouts: tests/test_qwen35.py). The RL image is larger by the head's lane copy
+beside its gather rows (2B 572 -> 713 MiB, 4B 1266 -> 1441 MiB, 9B 2271 -> 2549 MiB: the 9B
+still within the slice's 4 GiB).
+
+| Model | point | ISA unit cycles a token (MMs) | port B busy | ISA tok/s (port-bound) | RTL, 1 layer + head: cycles (speedup) | RTL bound, efficiency to it | port B utilization | wide reads (two-part) | RTL, whole model: cycles (speedup), tok/s at 200 MHz |
+|---|---|---|---|---|---|---|---|---|---|
+| 2B | MCOLS 4 / PORTB 1 | 5.44 M (3.99 M) | 78% | 36.8 | 1,171,020 (1.00x) | port B 1,144,993, 97.8% | 97.8% | - | **4,766,291** (1.00x), **42.0** (measured, 670 s: section 8's figure) |
+| 2B | MCOLS 8 / PORTB 2 (QUAD) | 5.37 M (3.92 M) | 40% | 37.2 | 1,170,384 (1.00x) | MXU 1,119,488, 95.7% | 48.9% | 256 (0) | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) |
+| 2B | MCOLS 8 / PORTB 2 / RL 2 | 3.53 M (2.09 M: t2 RL 2 1.84 M cycles for 3.67 M chunks) | 60% | 56.6 | 786,339 (1.49x) | port A 705,024 lines, 89.7% (MXU 565,504, port B 572,497) | 72.8% | 554,240 (0) | **3,698,534** (1.29x), **54.1** (measured, 856 s; 69.8% of the port-A roofline 2,582,440; MXU 2,084,472; 1,840,760 wide reads, 0 split) |
+| 4B | MCOLS 4 / PORTB 1 | 12.16 M (8.96 M) | 78% | 16.5 | 1,554,988 (1.00x) | port B 1,517,376, 97.6% | 97.6% | - | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) |
+| 4B | MCOLS 8 / PORTB 2 (QUAD) | 11.83 M (8.63 M) | 40% | 16.9 | 1,549,005 (1.00x) | MXU 1,477,248, 95.4% | 49.0% | 640 (0) | (not run: the 1-layer point is the baseline's) |
+| 4B | MCOLS 8 / PORTB 2 / RL 2 | 7.72 M (4.53 M: t2 RL 2 4.10 M cycles for 8.21 M chunks) | 61% | 25.9 | 1,005,571 (1.55x) | port A 892,800 lines, 88.8% (MXU 746,368, port B 758,688) | 75.4% | 731,520 (0) | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) |
+| 9B | MCOLS 4 / PORTB 1 | 20.47 M (16.36 M) | 81% | 9.8 | (not run: ~1 h a point on the loaded machine) | | | | (ISA: ~8.8 at the 2B's and 4B's 89% of the port) |
+| 9B | MCOLS 8 / PORTB 2 (QUAD) | 20.04 M (15.92 M) | 41% | 10.0 | | | | | (the baseline's) |
+| 9B | MCOLS 8 / PORTB 2 / RL 2 | 12.29 M (8.18 M: t2 RL 2 for 15.6 M chunks) | 67% | 16.3 | | | | | (ISA: 16.3 port-bound; ~15.5 at the 2B's whole-model RTL / ISA ratio of 1.05, ~1.6-1.8x its PORTB 1 token: a 9B layer's MMs are larger against its VPU work than a 2B's) |
+
+**MCOLS 8 alone does nothing for t2 at M = 1** (the QUAD rows: 1,170,384 against 1,171,020,
+1,549,005 against 1,554,988), as section 8 said of PORTB 2 at MCOLS 4 and for the same
+reason: t2 QUAD streams one chunk a cycle into four columns, and at M = 1 nothing fills the
+other four; port B idles half the time (48.9%) and the only PAIR / QUAD gain is the DeltaNet's
+int8 a / b MMs (5.44 -> 5.37 M unit cycles). The eight columns pay at M = 2 (a verify's two
+rows, section 9; two sequences) or through the row lanes.
+
+**t2 RL 2 is the doubling's path, and it lands at 1.5-1.6x, bound by port A.** An RL 2
+advance of t2 is two chunks (two rows' four blocks each, eight columns) and reads one 32-byte
+port-A line of scale data (L bpc bs = 2 x 4 x 4 B); the group's Sw (4 L = 8 B) does not fit
+that line, so it goes alone, one more line a group (docs/row_lanes.md "The scale rows in
+groups"): a K = 2048 row is 4 advances and 5 lines for 8 chunks, 0.625 lines a chunk, where
+port B at PORTB 2 spends 0.5 cycles a chunk. Port A's one line a cycle is then the bound: the
+RTL's roofline moves from port B (PORTB 1) to port A (705,024 lines for the 2B's layer + head,
+892,800 for the 4B's), the MXU's 565,504 / 746,368 cycles under it, and the token lands at
+89-90% of it: 1.49x / 1.55x at 1 layer + head (the head's K = 2048 / 2560 rows at the worst
+ratio; the MLP's down rows, K = 6144 / 9216, at 0.54 lines a chunk). The wide reads are every
+advance's two chunks, none in two parts (an RL 2 advance is one 256-byte aligned run: 554,240
+/ 731,520 wide reads, 0 split). On the ISA simulator's tally, which counts the MXU's cycles
+only, the RL step is 3.53 / 7.72 M unit cycles (56.6 / 25.9 tok/s): what the token would be
+with port A out of the way. To get there: the t2 scale group's Sw inside the advance's line
+(a 40-byte entry does not fit 32: a 64-byte port-A line, or two lines a cycle, in the MXU's
+scale path), or the int4-style 16-byte scale groups of QUAD for RL too. Until then the RL 2
+token is port-A bound at ~0.6 of PORTB 1's cycles.
+
+**The whole model gains less than the layer + head point: 1.29x on the 2B** (3,698,534
+against 4,766,291 cycles; 54.1 against 42.0 tok/s), at 70% of the port-A roofline where the
+1-layer run was at 90%. Splitting the two runs (whole = head + 24 layers, 1 layer + head =
+head + layer): the head goes 1,014,704 -> 659,722 cycles (1.54x, port-A bound as above); a
+layer 156,316 -> 126,617 (1.23x). A 2B layer streams ~135 K t2 chunks, 67 K port-B cycles at
+PORTB 2 and ~84 K port-A lines in RL 2, but the layer also carries ~60 K unit cycles of the
+VPU's and the DMA's (the DeltaNet's DSTEP state updates 0.59 M a token, the VOPs 0.46 M, QACT
+0.17 M, LD / ST 0.22 M: section 8's breakdown, unchanged by the lanes), which hid behind
+156 K cycles of MM streaming at PORTB 1 and no longer hide behind 84 K: the RTL token (3.70
+M) is now above the ISA's serial sum (3.53 M), where at PORTB 1 it was below it (4.77 against
+5.44 M). So on the whole model the row lanes are bound by the layers' VPU work first and by
+port A second: the next steps are those two, in that order (the DSTEP and VOP phases
+overlapped with the next MM's streaming, then the scale entry in one line).
+
+MTP on t2 at MCOLS 8 (section 9's question): the 4B-MTP's loop at PORTB 2 / MCOLS 8 on the
+ISA simulator is in section 9.1.
+
 ## 9. MTP speculative decode on the t2 images (ISA)
 
 How the serving path does it (opentpu/llm/mtp.py, docs/mtp.md 9-10; otpu-serve --mtp): the
@@ -345,16 +420,56 @@ its host compile 25 s: bucket 2's six programs and the 274-token prefill's per-p
 ones), and one fp32 pass of the GGUF reference over the history agrees with all 16 (the MTP's
 drafts with 11 of the reference's 15 next tokens).
 
+### 9.1 MTP on t2 at MCOLS 8 (2026-10-17: PORTB 2 / MCOLS 8, the ISA simulator)
+
+`tools/b2_mtp.py MODEL-MTP --portb 2 --mcols 8` (the same tool, Config(PORTB=2, MCOLS=8); no
+row lanes: a verify's two rows cannot stream an RL matrix), the short prompt, 32 steps:
+
+| point | tokens (equal to plain greedy) | drafts accepted | a plain step | a verify run (2 rows) | a draft run | speedup in unit cycles, 29 tokens | tok/s at 200 MHz, port-bound: plain / MTP |
+|---|---|---|---|---|---|---|---|
+| MCOLS 4 / PORTB 1 (section 9) | 30 / 30 | 11 / 18 = 0.61 | 12.16 M | 23.86 M = 1.963 steps | 1.35 M | **0.78x** (352 M plain, 452 M MTP) | 16.5 / 12.8 |
+| MCOLS 8 / PORTB 2 (QUAD at M = 2) | 30 / 30 (the same 30) | 11 / 18 = 0.61 | 11.83 M | 15.07 M = 1.274 steps | 0.72 M = 0.061 steps | **1.21x** (343 M plain, 283 M MTP: 18 verifies + 17 drafts) | 16.9 / 20.5 |
+| MCOLS 8 / PORTB 2 against the RL 2 plain step (section 8.1) | | | 7.72 M | 15.07 M = 1.95 RL steps | | **0.79x** (224 M plain RL, 283 M MTP) | 25.9 / 20.5 |
+
+With eight columns the verify's two rows QUAD (4 M = 8 <= MCOLS 8: a chunk a cycle for both
+rows), so c_2 drops from 1.96 to 1.27 steps and MTP pays on t2 as section 9 said it would:
+1.21x over plain decode of the same build, every token plain greedy's. But the same eight
+columns give the one-row decode its row lanes (RL 2: a step of 7.72 M unit cycles, 1.53x),
+which the two-row verify cannot use (MM RL is M = 1), so against the RL 2 decode MTP is 0.79x
+again: the verify costs 1.95 RL steps for 1.61 tokens an iteration. The choice at MCOLS 8 is
+the lanes (f2-hbm:p2rl8) for one sequence, or MTP on f2-hbm:p2m8 where the lanes are not
+built; MTP would pay on top of the lanes only with a verify that streams the RL layout at
+M = 2 (docs/row_lanes.md "What stays out": M <= MCOLS / (L bpc) = 1 for t2 L 2 at MCOLS 8;
+MCOLS 16 would take it).
+
 ## 10. What the board needs
 
-* **A T2 build** (otpu_top T2 = 1, CAPS bit 28; section 6) at **PORTB 1** in the nightly: the
-  t2 QUAD decode is port-bound at one chunk a cycle, 89-90% of the port on the RTL (2B 42, 4B
-  19, 9B ~9 tok/s at 200 MHz against the rotated int4 baseline's 19.3 / 8.6 / none). PORTB 2
-  adds nothing to t2 at MCOLS 4 (section 8); it is the int4 images' gain (their QUAD streams
-  two chunks a cycle) and, with MCOLS 8, t2's at M = 2 (a verify's two rows, or two
-  sequences).
-* **The 9B** fits the slice's 4 GiB with 1.8 GiB to spare (section 7); its image builds in
-  the image cache as the others (the GGUF's 4096-block rotation: the butterflies are 6% of
-  the token). The 27B needs f2-hbm:s2 (3.98 GiB a slice at cap 2048).
-* **MTP** stays off for t2 images at MCOLS 4 (0.78x); keep it for int4 / int8 images, with
-  gen_warm's bucket programs ahead.
+* **A T2 build at PORTB 1** (otpu_top T2 = 1, CAPS bit 28; section 6) stays the first image
+  to run: the t2 QUAD decode is port-bound at one chunk a cycle, 89-90% of the port on the RTL
+  (2B 42, 4B 19, 9B ~9 tok/s at 200 MHz against the rotated int4 baseline's 19.3 / 8.6 / none).
+* **The wide port alone does not move t2** (section 8: PORTB 2 at MCOLS 4) **and neither does
+  MCOLS 8 alone** (section 8.1: PORTB 2 at MCOLS 8, the QUAD rows): t2 QUAD is one chunk a
+  cycle into four columns at M = 1. PORTB 2 is the int4 images' gain (their QUAD streams two
+  chunks a cycle: docs/wide_port.md's Bonsai int4 row, 1.92x); MCOLS 8 is t2's gain at M = 2
+  (a verify's two rows: section 9.1; two sequences).
+* **t2 at M = 1 doubles through the row lanes: `f2-hbm:p2rl8`** (targets/f2-hbm.toml: PORTB
+  2, ROWLANES, MCOLS 8; CFG_HASH 4317000c; `python boards/f2/build.py --target f2-hbm:p2rl8`,
+  the nightly's f2-hbm variant for Bonsai), with the images built for `Config(PORTB=2,
+  MCOLS=8, ROWLANES=True)` (otpu-serve takes PORTB and ROWLANES from CAPS2: docs/wide_port.md,
+  docs/row_lanes.md; the image cache keys the layout). On the RTL it is 1.49x / 1.55x at 1
+  layer + head and 1.29x on the whole 2B (54.1 tok/s, section 8.1: the layers' VPU work no longer hides behind the halved MMs), bound by port A's
+  one scale line a cycle (an RL 2 advance of t2 needs 1.25 lines for its two chunks), not by
+  port B or the MXU: the next step on the RTL side is the t2 scale entry in one line (a
+  64-byte port-A line or two lines a cycle), which would take the token to the ISA's 3.53 /
+  7.72 M (56.6 / 25.9 tok/s). The RL image is a decode image: its prefill rows (rows > 1) are
+  refused at compile time (docs/row_lanes.md "What stays out"), so a server on p2rl8 prefills
+  on a PORTB 1 / plain image or waits for the group-layout issuer. `f2-hbm:p2m8` (PORTB 2,
+  MCOLS 8, no lanes; 8a2b063d) is the M = 2 build for MTP on t2.
+* **The 9B** fits the slice's 4 GiB with 1.8 GiB to spare (section 7), 2549 MiB with the
+  head's lane copy on p2rl8; its image builds in the image cache as the others (the GGUF's
+  4096-block rotation: the butterflies are 6% of the token). The 27B needs f2-hbm:s2 (3.98 GiB
+  a slice at cap 2048).
+* **MTP** stays off for t2 images at MCOLS 4 (0.78x); At MCOLS 8 it pays 1.21x over plain t2 decode of the
+  same build (section 9.1: the verify QUADs) but 0.79x against the RL 2 decode, so on p2rl8
+  the lanes serve one sequence and MTP stays off; on p2m8 (no lanes) MTP is the gain. Keep it
+  for int4 / int8 images, with gen_warm's bucket programs ahead.

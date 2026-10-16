@@ -267,14 +267,24 @@ sequencer's or the grant's paths. The nightly's synthesis reads them off against
 * **Compiler** (opentpu/compiler.py): `QTensor.rl` (`weight(rl=)`; row slices at multiples of L,
   column slices by L D chunks), `Stationary.copies` (DUP8 where eight copies fit), `dot()`
   emits MM RL for an RL matrix at M = 1 and refuses anything else (a CompileError: an RL matrix
-  has no other reader). opentpu/runtime.py `Weight(rl=True)` for kernels.
+  has no other reader). A row slice of an RL matrix may start at a loop-dependent row when
+  every term is a multiple of L (the group index is the exact quotient: the Qwen3.5 DeltaNet's
+  pair loop slices its wh so). opentpu/runtime.py `Weight(rl=True)` for kernels.
 * **Images** (opentpu/llm/qwen3.py `rl_lanes_of` / `rl_alloc`, gemma4.py for Gemma 3): with
   `Config.ROWLANES` the projections, the down parts, the PLE projection and the LM head are
   stored in groups of the format's widest L (L D / 32-byte aligned) and their descriptors
   carry `rl`; the head keeps its standard rows beside them for the embedding gather. The
-  decode kernels do not change: the descriptors are the switch.
+  decode kernels do not change: the descriptors are the switch. The Qwen3.5 image
+  (opentpu/llm/qwen35.py, Ternary-Bonsai 2's: docs/ternary.md 8.1) has the same layout: the
+  attention projections, the MLP's gate / up and the down parts, the DeltaNet's wh / wab /
+  wout in both of its layouts (the array's, and the group-major one's pair and group blocks
+  rounded to L D) and the head's copy; with ROWLANES the layer blocks start 4096-aligned so
+  every group is L D aligned. The rotation's H matrix (M = K / 512 rows) and the MTP layer's
+  fc and draft head (a verify's two rows) stay in the standard layout. t2 is L 2 (four blocks
+  a chunk: eight columns at PORTB 2 / MCOLS 8), and its advance's scale line is the bound.
 * **Targets**: `f2-hbm:p4rl` (PORTB 4, ROWLANES; CFG_HASH d6ed551d), `f2-hbm:p4rl8` (and MCOLS
-  8; 172e5c73), `f2-hbm:p2rl` (e476f0b7); `target.rl_streams` (4 at MCOLS 4, 8 at MCOLS 8) is
+  8; 172e5c73), `f2-hbm:p2rl` (e476f0b7), `f2-hbm:p2rl8` (PORTB 2, ROWLANES, MCOLS 8: Bonsai-2's
+  t2 RL 2; 4317000c); `target.rl_streams` (4 at MCOLS 4, 8 at MCOLS 8) is
   the RTL's `RL`; `rtl_params["RL"]`, `build_config(ROWLANES=)`; the host reads CAPS2 bit4
   (`regs.caps2["rowlanes"]`, `device_config`, OTPU_ROWLANES must agree, FakeTransport).
 * **Tests** (tests/test_row_lanes.py, 38): the RL MM bit for bit the plain MM's over every
@@ -283,6 +293,10 @@ sequencer's or the grant's paths. The nightly's synthesis reads them off against
   step with and without the mode, the same logits (int8 and int4); Gemma-3-1B's real decode
   token (26 layers and the head) bit-identical in int8 (PORTB 4) and int4 (PORTB 4, MCOLS 8);
   `tools/tally_decode.py --rowlanes` tallies the compiled mode: the table above, exactly.
+  tests/test_qwen35.py test_tiny_decode_is_bit_identical_with_row_lanes: a tiny Qwen3.5's
+  resident decode in both DeltaNet layouts, int8 / int4 at PORTB 2 / MCOLS 8 and PORTB 4 /
+  MCOLS 4, the same logits; the real Ternary-Bonsai-2-2B's t2 step at PORTB 2 / MCOLS 8 / RL 2
+  gave the plain image's logits bit for bit on the ISA simulator (docs/ternary.md 8.1).
 
 ## RTL (landed)
 

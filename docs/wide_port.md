@@ -303,6 +303,27 @@ int4 --head-format int8`):
 | int4, int8 head: roofline and efficiency | 4,229,089 (port B), 99.9% | 2,114,544 (port B / 2), 96.0% | |
 | int4, int8 head: port B's utilization; wide reads (two-part) | 99.9% | 96.0%; 2,091,136 (1,092: 0.05%) | |
 
+**Bonsai-2 at MCOLS 8 (2026-10-17, the merged tree with the row lanes; docs/ternary.md 8.1)**,
+the same tool with `--mcols 8 [--rowlanes]`, 1 layer + head, then the whole model:
+
+| Bonsai-2, t2 QUAD with the rotation | MCOLS 4 / PORTB 1 | MCOLS 8 / PORTB 2 (QUAD) | MCOLS 8 / PORTB 2 / RL 2 |
+|---|---|---|---|
+| 2B, 1 layer + head: cycles (speedup) | 1,171,020 | 1,170,384 (1.00x) | 786,339 (1.49x) |
+| 2B: roofline and efficiency | 1,144,993 (port B), 97.8% | 1,119,488 (MXU), 95.7% | 705,024 (port A lines), 89.7% |
+| 2B: port B's utilization; wide reads (two-part) | 97.8% | 48.9%; 256 (0) | 72.8%; 554,240 (0) |
+| 2B, whole model (24 layers): cycles, tok/s at 200 MHz | 4,766,291, 42.0 (measured) | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) | 3,698,534 (1.29x), 54.1 (measured; the head 1.54x, a layer 1.23x: its VPU work no longer hides behind the MMs) |
+| 4B, 1 layer + head: cycles (speedup) | 1,554,988 | 1,549,005 (1.00x) | 1,005,571 (1.55x) |
+| 4B: roofline and efficiency | 1,517,376 (port B), 97.6% | 1,477,248 (MXU), 95.4% | 892,800 (port A lines), 88.8% |
+| 4B: port B's utilization; wide reads (two-part) | 97.6% | 49.0%; 640 (0) | 75.4%; 731,520 (0) |
+| 4B, whole model (32 layers): cycles, tok/s | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) | (the baseline's) | (still running at hand-back: /tmp/wp-merge/rtl_chain3.log, rtl_chain4.log, rtl_whole.jsonl) |
+| ISA unit cycles a token, 2B / 4B / 9B | 5.44 / 12.16 / 20.47 M | 5.37 / 11.83 / 20.04 M | 3.53 / 7.72 / 12.29 M |
+
+MCOLS 8 alone leaves t2 where it was (a one-row QUAD fills four of the eight columns from its
+one chunk a cycle); the row lanes (t2 L 2: two rows' chunks a cycle into eight columns) give
+1.5-1.6x, bound by port A's scale lines (an RL 2 t2 advance reads 1.25 lines for two chunks),
+not by port B: the target for it is `f2-hbm:p2rl8` (CFG_HASH 4317000c), `f2-hbm:p2m8`
+(8a2b063d) the M = 2 build for MTP on t2. Section 8.1 of docs/ternary.md has the analysis.
+
 t2 QUAD is the same at every PORTB, as its compile says: the step is 98 t2 QUAD MMs
 (1,105,408 chunks; a t2 chunk is four blocks, QUAD takes them in one cycle, so a wider port has
 nothing more to stream for it) and one int8 MM of 512 chunks that becomes PAIR (the 256 wide
@@ -452,7 +473,9 @@ timing come from the nightly's synthesis. What it needs:
   at the merge (b_rvalid a cycle later: latency only, the MXU's FIFO absorbs it) is the fix.
 * **The row-lane builds:** `f2-hbm:p4rl` (PORTB 4, ROWLANES, MCOLS 4: int8 L 4; CFG_HASH
   d6ed551d), `f2-hbm:p4rl8` (MCOLS 8: int4 L 4, the > 100 tok/s point; 172e5c73), `f2-hbm:p2rl`
-  (e476f0b7). `rtl_params` carries `RL` (4 or 8, `target.rl_streams`) into otpu_f2_hbm_sys ->
+  (e476f0b7), `f2-hbm:p2rl8` (PORTB 2, MCOLS 8: Bonsai-2's t2 L 2, docs/ternary.md 8.1 and 10;
+  4317000c) and, without lanes, `f2-hbm:p2m8` (PORTB 2, MCOLS 8: t2 QUAD at M = 2 for MTP on
+  t2; 8a2b063d). `rtl_params` carries `RL` (4 or 8, `target.rl_streams`) into otpu_f2_hbm_sys ->
   otpu_board -> the slice (the MXU's streams, the quantizer's and ACT RAM's DUP8) and otpu_ctrl
   (CAPS2 bit4); the host takes ROWLANES from CAPS2 bit4 (device_config) and OTPU_ROWLANES must
   agree. Programs and images are compiled for `Config(PORTB=4, ROWLANES=True[, MCOLS=8])`. To
