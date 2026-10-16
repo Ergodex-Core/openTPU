@@ -209,3 +209,46 @@ the host (`embed_host`: a slot of rows, not a 248320-row table), `cap` 2048 toke
   through ACT a chunk at a time (swiglu_down's chunks of whole rotation blocks: 1024 here), so
   the check now takes the widest chunk the layouts can make (`Spec._down_chunk`), not the
   width; the check of the other dimensions (hidden, the attention heads' width) is as before.
+
+## 8. Decode cost a token: t2 QUAD with the rotation, PORTB 1 / 2 / 4 (ISA), and the RTL
+
+`tools/b2_step_costs.py` (b2-scripts/step_costs.py's method): one resident decode step on
+the ISA simulator after four warm-up steps, every executed instruction at opentpu.profile's
+nominal unit cycles and port-B D-byte chunks (the MMs at their advance counts: t2 QUAD one
+advance a chunk), cap 2048. "tok/s" is the port-bound figure at 200 MHz: unit cycles a token
+at the core clock. The RTL column is the whole token (every layer and the LM head) on the
+T2 build in Verilator with the board's memory path (b2-scripts/perf_b2.py: otpu_native_dram
+on 8 channels, --lat 60), as section 6 measured the format.
+
+| Model | weights | port-B chunks a token (MMs) | ISA unit cycles: PORTB 1 / 2 / 4 | port B busy at 1 / 2 / 4 | tok/s at 200 MHz (ISA, port-bound) | RTL cycles a token (PORTB 1) | RTL: of the port's rate | RTL tok/s at 200 MHz |
+|---|---|---|---|---|---|---|---|---|
+| 2B | t2, t2 head | 4.26 M (3.91 M) | 5.44 / 5.43 / 5.43 M | 78 / 39 / 20% | 36.8 | 4,766,291 | 89.1% (4,247,164 chunks) | 42.0 |
+| 4B | t2, t2 head | 9.43 M (8.55 M) | 12.16 / 12.14 / 12.13 M | 78 / 39 / 19% | 16.5 | 10,443,310 | 90.1% (9,407,794 chunks) | 19.2 |
+| 9B | t2, t2 head | 16.57 M (15.67 M) | 20.47 M (PORTB 1) | 81% | 9.8 | (not run: ~2x the 4B's hour) | | |
+
+Where a token's unit cycles go (2B / 4B / 9B, PORTB 1): the t2 QUAD MMs 3.86 / 8.30 / 15.49 M
+(one cycle a chunk), the rotations' H MMs 0.11 / 0.30 / 0.79 M (plain t2 MMs of M = K/512
+rows: all four columns busy; the 9B's 4096-blocks add their butterflies' VOPs, 0.45 M of
+copies and subtracts: its rotation is 6% of the token, the 2B's and 4B's 2%), DSTEP (the
+DeltaNet state updates) 0.59 / 1.57 / 1.57 M, the other VOPs 0.46 / 0.88 / 1.19 M, QACT 0.17 /
+0.33 / 0.44 M, LD / ST 0.22 / 0.38 / 0.44 M. The MMs are 71-80% of the unit cycles; the rest
+is the VPU's and the DMA's, which the RTL overlaps with the MXU's streaming: the 2B's RTL
+token (4.77 M cycles) is below the ISA's serial sum (5.44 M) and 11% above its port-B
+roofline; the 4B's (10.44 M) 14% below its serial sum and 10% above its roofline (90.1% of
+the port; 1579 s of Verilator for the token). The 9B's port-bound figure is 9.8 tok/s at 200
+MHz (16.57 M chunks: 2.1 GB a token); at the 2B's and 4B's RTL efficiency (89-90% of the port)
+about 8.8 tok/s. Against the board's rotated int4 baseline (section 5: 2B 19.3, 4B 8.6 tok/s
+served at ~78% of the port) the RTL's t2 tokens are 2.2x the 2B's and 2.2x the 4B's.
+
+**A wider port B does not help t2 at MCOLS 4.** t2 QUAD takes a whole chunk a cycle, 512
+weights into the MXU's four columns: the MXU's rate and the port's are the same 128 B a
+cycle. At PORTB 2 and 4 the compiler finds no wider reuse for t2 (r = 4 is MCOLS), so the
+token's cycles do not move (5.44 -> 5.43 M: only the DeltaNet's int8 a / b MMs pair) and port B
+idles 61% and 80% of the time. What a wider port needs with t2 is more columns to reuse into:
+MCOLS 8 (an 8-way reuse of two chunks a cycle; the MXU's cost, not the port's) or, for the
+same effect at MCOLS 4, batching (two sequences' rows share each chunk: docs/offload.md's
+batched decode). The 4-bit formats are different: int4 QUAD streams two chunks a cycle, so
+a wider port does pay for rotated int4 (the 2B's latent codes in int4, int4 head, the same
+tally): 7.92 M chunks a token, 9.10 M unit cycles at PORTB 1 (port B busy 87%), 5.43 M at
+PORTB 2 and at 4 (73% and 36% busy): at PORTB 2 int4 reaches t2's cycles at twice the bytes,
+and t2 at PORTB 1 already has them.
