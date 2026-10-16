@@ -1190,9 +1190,10 @@ def main(argv=None):
         print("otpu-chat: --mtp: these sampling settings stay on the host; plain decode",
               flush=True)
     chat.max_slices = a.max_slices
-    if not chat.use_mtp:                # the decode loop's bucket programs ahead, in the
-        from opentpu.host import gen_warm as GW     # background (opentpu/host/gen_warm.py)
+    if not chat.use_mtp or getattr(eng.spec, "mtp", False):    # the decode loop's bucket
+        from opentpu.host import gen_warm as GW     # programs ahead, in the background
         eng.gen_warm = GW.start(eng, None if getattr(pick, "greedy", False) else pick.params)
+        #                                   (opentpu/host/gen_warm.py; --mtp: the MTP loop's)
     try:
         for src in a.image:
             chat.attach(src)

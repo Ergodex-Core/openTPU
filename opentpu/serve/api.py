@@ -964,8 +964,8 @@ def main(argv=None):
 def _main(a):
     eng, tok, spec, path, defaults, weights = load(a)
     from ..host import gen_warm as GW       # the decode loop's bucket programs ahead, in the
-    eng.gen_warm = None if a.mtp else GW.start(eng, defaults)   # background (gen_warm.py; the
-    #                                         MTP loop's: compiled at their first use)
+    eng.gen_warm = GW.start(eng, defaults)  # background (gen_warm.py; an MTP engine's: the
+    #                                         MTP loop's six a bucket, gen_warm.warm_mtp)
     mk = ST.model_key(str(Path(path).resolve()), type(eng.image).__module__, eng.image.wformat,
                       eng.image.head_format, getattr(eng.image, "formats", None), eng.cap,
                       eng.block, eng.cfg.S, eng.cfg.D, eng.cfg.MCOLS, eng.cfg.PAIR,
