@@ -157,3 +157,9 @@ fp4, NVFP4 and PAIR keep their paths); the one change for every build is the str
   cycles for 1,024 chunks, int4 PAIR 2,048 for 2,048; D = 128, KB 48: QUAD 3,072 for 3,072,
   int4 PAIR 6,144 for 6,144 (1.000 cycles a chunk both: QUAD half PAIR's cycles for the same
   weights). tests/test_t2_rtl.py test_quad_takes_a_chunk_a_cycle_rtl checks it.
+
+### Multi-slice (f2-hbm:s2, :s4)
+
+The rotated t2 decode compiles for two slices (2B: 0.28 GiB a slice, 4B: 0.62) and four (4B:
+0.33 GiB; the 2B's two KV heads stop at two slices). On the ISA simulator the 2B on two
+slices (f2-hbm:s2, t2 weights and head) gives 4 / 4 greedy tokens the fp32 reference's.
