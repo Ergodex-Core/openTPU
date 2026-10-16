@@ -1,8 +1,8 @@
 # Plan: VLA inference at >= 1 Hz on openTPU (F2 FPGA)
 
 Status: plan (2026-10-16). Every number here is an *estimate* from model shapes and the
-openTPU configuration unless marked measured; Phase 0 replaces them with the ISA tally and RTL
-timing of the π0.5 port (docs/pi05.md, in progress). Work order: π0.5 port first, then
+openTPU configuration unless marked measured; Phase 0 (the π0.5 port, docs/pi05.md) has
+measured section 3's π0.5 numbers with the ISA tally and RTL timing of cut phases. Work order: π0.5 port first, then
 RhinoVLA (HuixiAI/RhinoVLA-V3), then the variant below. Everything is validated in the ISA
 simulator and Verilator first; FPGA synthesis only in the nightly build.
 
@@ -35,17 +35,35 @@ elementwise work (RMSNorm, GELU-tanh at ~9 VOPs an element in kernels/lib.py, so
 References: π0.5 on a Jetson AGX Orin (FP16) 858 ms; RhinoVLA on Huixi R1 (7 nm, 500 TOPS
 int8) 85.5 ms, 11.7 Hz (the paper's measurements).
 
-## 3. Where openTPU on the F2 stands (estimate, S = 1, MCOLS 4, 200 MHz, LANES 8)
+## 3. Where openTPU on the F2 stands (S = 1, MCOLS 4, ACT_ROWS 16, LANES 8, 200 MHz)
 
-* MXU: 4 columns x 128 int8 MACs = 512 MAC/cycle, 102 GMAC/s. π0.5: ~21 s; RhinoVLA: ~10 s.
-* VPU: 8 lanes. π0.5's prefix GELU alone ~2.1 G ops / 8 = ~0.27 G cycles = **~1.3 s**, softmax
-  ~0.3 s: the VPU is the second bottleneck, and the first once the MXU is scaled.
-* Weight traffic in prefill: a prefix of R rows streams every weight ceil(R / ACT_ROWS) times
-  (the MXU replays a chunk for ACT_ROWS rows): at ACT_ROWS 16, ~50 passes x 2.9 GB = ~150 GB
-  for π0.5, ~6 s at 25.6 GB/s. Port B becomes a limit unless ACT_ROWS grows.
-* TMEM 64K words (256 KB): a prefix tile of 128 rows x 2048 fp32 is 1 MB; tiled prefill
-  (llm/tiled.py) works in TMEM-sized tiles, at the cost of more passes.
-* Total today: **~25-30 s per π0.5 chunk, ~12-15 s per RhinoVLA chunk** (Phase 0 measures it).
+π0.5's numbers are **measured** by Phase 0 (docs/pi05.md 5: tools/pi05_cost.py's ISA tally of
+a whole chunk at Np = 558 valid prefix rows, calibrated by Verilator runs of cut phases);
+RhinoVLA's are still estimates.
+
+* MACs (measured): **1.47 T a π0.5 chunk**, not ~2.1 T: two real cameras (the third is masked
+  and dropped), and 558 valid prefix rows (lerobot pads to 968; the pads are dropped exactly).
+  Vision 0.22 T, prefix 1.07 T, expert 0.18 T.
+* MXU (measured tally): 512 MAC/cycle, 102 GMAC/s: **14.5 s** a π0.5 chunk (vision 2.2,
+  prefix 10.5, 10 expert steps 1.8). RhinoVLA (estimate): ~10 s.
+* VPU (measured tally): 2.0 s a chunk. **The prefix's GELU is 0.78 s, not ~1.3 s**: one cycle
+  an element at 8 lanes as estimated, but over 558 x 16384 x 17 = 155 M elements (the last
+  layer's MLP is dead), not 800 x 16384 x 18; the chunk's GELU in all (tower, expert too)
+  1.26 s; softmax 0.28 s, norms 0.13 s. QACT 0.77 s, QST 0.37 s.
+* Weight traffic (measured tally): port B 1.43 G chunks, **183 GB a chunk** (7.1 s at a chunk a
+  cycle), of it the prefix 138 GB: TMEM (64K words) caps the prefix's row group at 8 rows, so
+  the 2B's ~1.9 GB stream 70 times (558 / 8), not 35 (ACT_ROWS 16). ACT_ROWS 128 alone does
+  nothing; with a 256K-word TMEM (row groups 64 / 32 / 32) port B falls to 2.3 s.
+* RTL overlap (measured, Verilator, cut phases): cycles 1.23x (tower layer) to 1.54x (expert
+  step) the slowest unit's.
+* Total today: **~15-22 s a π0.5 chunk** (measured tally bound 14.5 s, serial 25.1 s, the RTL
+  ratios between); RhinoVLA ~12-15 s (estimate).
+* int8 (measured, docs/pi05.md 4): W8A8 as the card runs it moves π0.5's actions by 6.8% of
+  their range, the 2B's activations nearly all of it; the 2B at W8A16 with the expert W8A8:
+  1.7%. L9 (W8A16) is needed for π0.5's prefix unless a rollout shows 7% harmless.
+* Scaled (measured ISA tally, no RTL): MCOLS 64, ACT_ROWS 128, LANES 64, TMEM 1M words: MXU
+  0.95 s, port B 0.65 s, VPU 0.26 s, QST 0.34 s (port A's byte a cycle: does not scale with
+  LANES) at 200 MHz; ACT_ROWS 256 needs an MM row-count field past 8 bits.
 
 ## 4. Scale one openTPU up, not out
 
@@ -88,7 +106,7 @@ TMEM_WORDS = 1M, LANES = 64, the fused activation unit, NCH = 8 HBM ports (~100 
 
 | | today (MCOLS 4, 200 MHz) | f2-vla at 75% MXU efficiency |
 |---|---|---|
-| π0.5 a chunk | ~25-30 s | ~1.4 s MXU + ~0.1-0.2 s VPU / other: **~0.65 Hz** |
+| π0.5 a chunk | ~15-22 s (measured tally, section 3) | ~1.4 s MXU + ~0.1-0.2 s VPU / other: **~0.65 Hz** (at the measured 1.47 T MAC: ~1.0 s, ~1 Hz; the tally at MCOLS 64 / ACT_ROWS 128 / LANES 64: 0.76 s MXU at 250 MHz) |
 | RhinoVLA a chunk | ~12-15 s | ~0.65 s + ~0.1 s: **~1.3 Hz** |
 
 RhinoVLA reaches ≥ 1 Hz on this variant. π0.5 at 1 Hz needs ~2.8 TMAC/s effective: MCOLS 96
