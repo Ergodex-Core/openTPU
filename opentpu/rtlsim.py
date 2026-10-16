@@ -273,6 +273,8 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
         # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
         p["NCH"] = int(os.environ["OTPU_NCH"])
+    if getattr(cfg, "PORTB", 1) > 1:    # a wide port B (otpu_slice PORTB; only when on: the
+        p["PORTB"] = cfg.PORTB          # other builds' cache keys stay); the Config's, always
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
@@ -471,6 +473,10 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
                re.findall(r"NATIVE ch\d+ (.*)", out)]
         nat = [{k: int(v) for k, v in d.items()} for d in nat]
         stats["native"] = nat
+        # PORTB > 1: the adapter's B reads of more than one chunk, their chunks, and those that
+        # went in two parts (a pair twice: otpu_native_dram)
+        stats["native_b"] = [dict(zip(("wide", "chunks", "split"), map(int, m))) for m in
+                             re.findall(r"NATIVEB wide=(\d+) chunks=(\d+) split=(\d+)", out)]
         stats["axi_reads"] = [(m["rd"], m["rd"]) for m in mem]
         stats["axi_writes"] = [(m["wr"], m["wr"]) for m in mem]
         stats["axi_detail"] = [{"ar_a": n["a_runs"] + n["sw_rd"], "row_miss": m["row_miss"],

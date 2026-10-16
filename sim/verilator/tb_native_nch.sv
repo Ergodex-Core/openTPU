@@ -78,7 +78,7 @@ module tb_native_nch;
     .clk, .rst, .a_flush, .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr),
     .a_wdata_x(a_wdata), .a_be_x(a_be), .a_rvalid, .a_rdata, .sw_rdy, .sw_req, .sw_addr,
     .sw_wdata, .sw_be, .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par,
-    .b_rvalid, .b_rtag, .b_rdata, .wr_idle, .rd_idle,
+    .b_n(2'd0), .b_rvalid, .b_rtag, .b_rdata, .b_rcm(), .b_rlast(), .wr_idle, .rd_idle,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone);
 

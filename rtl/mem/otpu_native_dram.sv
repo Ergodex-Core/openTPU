@@ -118,6 +118,17 @@
 //   (the 35B's back-to-back embed runs: token 0's block scales for tokens 1 and 2).
 // Requests are taken when req && rdy; rdy depends on registered state only. Reads return in
 // order per port (the B tag with its data).
+//
+// A wide port B (PORTB 2, 4; docs/wide_port.md; NCH >= 2 PORTB): a B read of b_n + 1 consecutive
+// chunks (the MXU's, at most PORTB) goes to their pairs in the cycle after it is taken (BREG), and
+// its beats come back as one response (b_rdata: chunk c at [1024 c +: 1024], b_rcm its chunks,
+// b_rlast). Consecutive chunks of one aligned group of NCH / 2 are on different pairs (the
+// rotation is a bijection there); a request that crosses a group may need a pair twice (the
+// fold of the next group's quotient), and then goes out in two cycles: the chunks whose pair is
+// free (the first of each pair), then the rest. Each part is a tag entry and a response (the
+// first with b_rlast low), so no pair's queue takes two beats in a cycle and the merge reads
+// one beat of a channel a cycle; b_rdy is low in the first part's cycle, and the queues and the
+// tag FIFO keep room for the second (QD - 2, OD - 2). Writes (the DMA's) stay one chunk.
 module otpu_native_dram #(
   parameter int D = 128,
   parameter int QD = 16,                             // request queue depth per channel and port
@@ -130,7 +141,8 @@ module otpu_native_dram #(
   // 0.9-1.3% fewer cycles per token, 64 no better): fewer runs, so fewer row and bank changes
   // between the scale stream and the others
   parameter int APF = 32,
-  parameter int NCH = 2                              // channels (a power of two; see the top)
+  parameter int NCH = 2,                             // channels (a power of two; see the top)
+  parameter int PORTB = 1                            // B chunks a request and response (see the top)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -157,9 +169,12 @@ module otpu_native_dram #(
   input  logic [D*8-1:0]    b_wdata,
   input  logic [31:0]       b_addr,     // word address (chunk aligned)
   input  logic              b_par,      // ^b_addr[31:5] (the channel hash; see b_sw)
+  input  logic [1:0]        b_n,        // PORTB > 1: a read's chunks - 1 (consecutive chunks)
   output logic              b_rvalid,
   output logic              b_rtag,
-  output logic [D*8-1:0]    b_rdata,
+  output logic [PORTB*D*8-1:0] b_rdata, // chunk c of the request at [c*D*8 +: D*8]
+  output logic [PORTB-1:0]  b_rcm,      // PORTB > 1: the request's chunks in this response
+  output logic              b_rlast,    // PORTB > 1: ... its last
   output logic              wr_idle,
   output logic              rd_idle,    // no A or B read in flight (taken, its data not yet out)
   // native memory masters, one per channel ([1:0] = channel)
@@ -184,6 +199,10 @@ module otpu_native_dram #(
   localparam bit BREG = NCH > 2;                      // port B's request registered (see the top)
   initial if (NCH < 2 || NCH > 32 || NCH != (1 << CW))
     $fatal(1, "otpu_native_dram: NCH must be a power of two, 2 to 32");
+  localparam bit WP = PORTB > 1;
+  initial if ((PORTB != 1 && PORTB != 2 && PORTB != 4) || NCH < 2 * PORTB)
+    $fatal(1, "otpu_native_dram: PORTB 1, 2 or 4, and NCH >= 2 PORTB");
+  localparam int RM = WP ? 2 : 1;                     // the room a B request keeps (see the top)
   localparam int QW = $clog2(QD);
   localparam int WW = $clog2(WQD);
   localparam int NH = 64;                            // SW hazard buckets (see w_blk)
@@ -304,7 +323,10 @@ module otpu_native_dram #(
   (* keep = "true" *) logic [31:0] gw_wdata [NCH];
 
   // order of B reads (tags) and of A reads (channel, word, reuse)
-  typedef struct packed { logic [PBW-1:0] p; logic sw; logic tag; } bt_t;  // pair, halves swapped
+  typedef struct packed { logic [PBW-1:0] p; logic sw; } bs_t;   // a chunk's pair, halves swapped
+  // a B read (PORTB > 1: a part of one): its chunks (v), their pairs and halves, the response's
+  // last part, the source
+  typedef struct packed { logic [PORTB-1:0] v; logic last; bs_t [PORTB-1:0] s; logic tag; } bt_t;
   bt_t          bt_q [OD];                     // LUT RAM: tag, halves swapped (CHASH), pair
   logic [OW:0]  bt_n;
   logic [OW-1:0] bt_h;
@@ -327,12 +349,13 @@ module otpu_native_dram #(
   always_comb begin
     qb_room = 1'b1; qa_room = 1'b1; qw_room = 1'b1;
     for (int c = 0; c < NCH; c++) begin
-      qb_room &= qb_n[c] < (QW + 1)'(BREG ? QD - 1 : QD);
+      qb_room &= qb_n[c] < (QW + 1)'(BREG ? QD - RM : QD);
       qa_room &= qa_n[c] < (QW + 1)'(QD);
       qw_room &= qw_n[c] < (WW + 1)'(WQD);
     end
   end
-  assign b_rdy = qb_room && (bt_n < (OW + 1)'(BREG ? OD - 1 : OD));
+  logic b_hold;                                // PORTB > 1: a request's first part of two goes
+  assign b_rdy = qb_room && (bt_n < (OW + 1)'(BREG ? OD - RM : OD)) && !b_hold;
   // Port A's requests come from the slice's port A register (otpu_slice; this adapter's own, on
   // the way in, until it moved there): the slice's grant chain (DMA busy -> port arbitration ->
   // the MXU's issue -> the scale address) does not run on into the channel hash, the run compare
@@ -356,22 +379,85 @@ module otpu_native_dram #(
   // then ran into every queue write (b_par: the slice muxes its sources' parities instead)
   wire b_sw = CHASH && b_par;
   // port B's request as the queues take it (bq_*): the slice's at NCH = 2, else a register's
-  // (BREG: taken by b_rdy's room, pushed the next cycle, with its pair and channel beat)
-  logic           bq_take, bq_we, bq_tag, bq_sw;
+  // (BREG: taken by b_rdy's room, pushed the next cycle, with its pair and channel beat). PORTB >
+  // 1: per chunk of the request (bq_m, bq_s), the chunks this cycle pushes (bq_pv: a part, see
+  // the top) and whether it is the request's last part
+  logic           bq_take, bq_we, bq_tag;
+  logic           bq_go;                       // a part goes (the request's first: bq_take)
+  logic [PORTB-1:0] bq_pv;
+  logic           bq_last;
   logic [D/4-1:0] bq_wmask;
   logic [D*8-1:0] bq_wdata;
-  logic [24:0]    bq_m;
-  logic [PBW-1:0] bq_p;
-  if (BREG) begin : g_breg
+  logic [PORTB-1:0][24:0] bq_m;
+  bs_t  [PORTB-1:0] bq_s;
+`ifndef SYNTHESIS
+  // PORTB > 1, the statistics (otpu_top prints them): B reads of more than one chunk, their
+  // chunks, and those that went in two parts
+  longint st_bwide = 0, st_bwch = 0, st_bsplit = 0;
+`endif
+  if (WP) begin : g_bwide
+    // chunk i of the request taken now: its word address, pair and halves, whether it is one
+    // (a read of b_n + 1 chunks), and whether an earlier chunk of it has its pair (its second
+    // part). b_addr is the slice's register, so the adders and folds start at a flip-flop
+    logic [PORTB-1:0][31:0] ai;
+    logic [PORTB-1:0] act, sec;
+    bs_t  [PORTB-1:0] si;
+    always_comb begin
+      for (int i = 0; i < PORTB; i++) begin
+        ai[i] = b_addr + 32'(32 * i);
+        act[i] = (i == 0) || (!b_we && 2'(i) <= b_n);
+        si[i].p = pair_of(ai[i]);
+        si[i].sw = (i == 0) ? b_sw : CHASH && ^ai[i][31:5];
+      end
+      for (int i = 0; i < PORTB; i++) begin
+        sec[i] = 1'b0;
+        for (int j = 0; j < i; j++) if (act[i] && act[j] && si[j].p == si[i].p) sec[i] = 1'b1;
+      end
+    end
+    logic bq_coll, bq_ph2;
+    logic [PORTB-1:0] bq_a, bq_sec;
+    // the first part of a two-part request holds the registers (b_rdy is low: nothing is taken)
+    assign b_hold = bq_take && bq_coll;
     always_ff @(posedge clk) begin
       bq_take <= !rst && b_take;
-      bq_we <= b_we; bq_tag <= b_tag; bq_sw <= b_sw; bq_wmask <= b_wmask; bq_wdata <= b_wdata;
-      bq_m <= cb_of(b_addr); bq_p <= pair_of(b_addr);
+      bq_ph2 <= !rst && b_hold;
+      if (!b_hold) begin
+        bq_we <= b_we; bq_tag <= b_tag; bq_wmask <= b_wmask; bq_wdata <= b_wdata;
+        for (int i = 0; i < PORTB; i++) bq_m[i] <= cb_of(ai[i]);
+        bq_s <= si; bq_a <= act; bq_sec <= sec; bq_coll <= |sec;
+      end
     end
+    assign bq_go = bq_take || bq_ph2;
+    assign bq_pv = bq_take ? bq_a & ~bq_sec : bq_sec;
+    assign bq_last = !b_hold;
+`ifndef SYNTHESIS
+    always_ff @(posedge clk)
+      if (!rst && bq_take && !bq_we && bq_a != PORTB'(1)) begin
+        st_bwide <= st_bwide + 1;
+        st_bwch <= st_bwch + longint'($countones(bq_a));
+        if (bq_coll) st_bsplit <= st_bsplit + 1;
+      end
+    // a part pushes at most one chunk to a pair
+    always_ff @(posedge clk)
+      if (!rst && bq_go)
+        for (int i = 0; i < PORTB; i++)
+          for (int j = 0; j < i; j++)
+            if (bq_pv[i] && bq_pv[j] && bq_s[i].p == bq_s[j].p)
+              $fatal(1, "otpu_native_dram: B chunks %0d and %0d on pair %0d in one cycle", j, i,
+                     bq_s[i].p);
+`endif
+  end else if (BREG) begin : g_breg
+    always_ff @(posedge clk) begin
+      bq_take <= !rst && b_take;
+      bq_we <= b_we; bq_tag <= b_tag; bq_s[0].sw <= b_sw; bq_wmask <= b_wmask; bq_wdata <= b_wdata;
+      bq_m[0] <= cb_of(b_addr); bq_s[0].p <= pair_of(b_addr);
+    end
+    assign bq_go = bq_take; assign bq_pv = 1'b1; assign bq_last = 1'b1; assign b_hold = 1'b0;
   end else begin : g_bdir
-    assign bq_take = b_take; assign bq_we = b_we; assign bq_tag = b_tag; assign bq_sw = b_sw;
-    assign bq_wmask = b_wmask; assign bq_wdata = b_wdata; assign bq_m = b_addr[29:5];
-    assign bq_p = '0;
+    assign bq_take = b_take; assign bq_we = b_we; assign bq_tag = b_tag; assign bq_s[0].sw = b_sw;
+    assign bq_wmask = b_wmask; assign bq_wdata = b_wdata; assign bq_m[0] = b_addr[29:5];
+    assign bq_s[0].p = '0;
+    assign bq_go = bq_take; assign bq_pv = 1'b1; assign bq_last = 1'b1; assign b_hold = 1'b0;
   end
   wire [1:0] b_hnz = {bq_wmask[31:16] != 0, bq_wmask[15:0] != 0};   // the halves a B write writes
   // (bits 29:4 at NCH = 2, as the two-channel adapter's 4 GiB; 31:4 on more channels)
@@ -419,13 +505,20 @@ module otpu_native_dram #(
   logic [NCH-1:0]   rtk;                               // a read command taken (tag push)
   always_comb begin
     for (int c = 0; c < NCH; c++) begin
-      // channel c = 2p + h of the chunk's pair p holds the chunk's half h ^ b_sw
-      qb_push[c] = bq_take && (PIB == 0 || PBW'(c >> 1) == bq_p) &&
-                   (!bq_we || b_hnz[c % 2 ^ int'(bq_sw)]);
+      // channel c = 2p + h of the chunk's pair p holds the chunk's half h ^ b_sw (PORTB > 1: the
+      // chunk this part pushes to pair p, at most one; a write is chunk 0)
+      begin
+        logic hit;
+        int   k;
+        hit = 1'b0; k = 0;
+        for (int i = 0; i < PORTB; i++)
+          if (bq_pv[i] && (PIB == 0 || PBW'(c >> 1) == bq_s[i].p)) begin hit = 1'b1; k = i; end
+        qb_push[c] = bq_go && hit && (!bq_we || b_hnz[c % 2 ^ int'(bq_s[0].sw)]);
+        qb_e[c].m = bq_m[k];
+      end
       qb_e[c].we = bq_we;
-      qb_e[c].m = bq_m;
-      qb_e[c].data = bq_wdata[512 * (c % 2 ^ int'(bq_sw)) +: 512];
-      qb_e[c].wmask = bq_we ? bq_wmask[16 * (c % 2 ^ int'(bq_sw)) +: 16] : '0;
+      qb_e[c].data = bq_wdata[512 * (c % 2 ^ int'(bq_s[0].sw)) +: 512];
+      qb_e[c].wmask = bq_we ? bq_wmask[16 * (c % 2 ^ int'(bq_s[0].sw)) +: 16] : '0;
       qa_push[c] = a_take && a_ch == CW'(c) && !a_reuse && !a_hit;
       qa_e[c].we = a_we;
       qa_e[c].m = a_cb;
@@ -589,10 +682,25 @@ module otpu_native_dram #(
 
   // ------------------------------------------------------------------ merge
   // the oldest B read's tag entry: its pair's two channels both hold a beat
+  // (PORTB > 1: each of its chunks' pairs)
   bt_t bth;
   assign bth = bt_q[bt_h];
-  wire [CW-1:0] bc0 = CW'({bth.p, 1'b0}), bc1 = CW'({bth.p, 1'b1});
-  wire b_out = (bt_n != 0) && (rb_n[bc0] != 0) && (rb_n[bc1] != 0);
+  logic b_hv;                                    // every chunk's two channels hold a beat
+  logic [PORTB*D*8-1:0] b_rd;
+  logic [NCH-1:0] b_pop;                         // the channels b_out pops
+  always_comb begin
+    b_hv = 1'b1;
+    b_pop = '0;
+    for (int i = 0; i < PORTB; i++) begin
+      logic [CW-1:0] c0, c1;
+      c0 = CW'({bth.s[i].p, 1'b0}); c1 = CW'({bth.s[i].p, 1'b1});
+      if (bth.v[i] && (rb_n[c0] == 0 || rb_n[c1] == 0)) b_hv = 1'b0;
+      for (int c = 0; c < NCH; c++)
+        if (bth.v[i] && (PIB == 0 || PBW'(c >> 1) == bth.s[i].p)) b_pop[c] = 1'b1;
+      b_rd[1024 * i +: 1024] = bth.s[i].sw ? {rb_head[c0], rb_head[c1]} : {rb_head[c1], rb_head[c0]};
+    end
+  end
+  wire b_out = (bt_n != 0) && b_hv;
   // the oldest A read, registered (the order FIFO's LUT RAM read stays out of the run-beat and
   // word select into a_rdata): after a pop the next entry (written at least a cycle before), or
   // the entry pushed into an empty queue
@@ -613,7 +721,9 @@ module otpu_native_dram #(
       else if (tg_n[c] == 0) tgh[c] <= tg_in[c];
   assign b_rvalid = b_out;
   assign b_rtag = bth.tag;
-  assign b_rdata = bth.sw ? {rb_head[bc0], rb_head[bc1]} : {rb_head[bc1], rb_head[bc0]};
+  assign b_rdata = b_rd;
+  assign b_rcm = bth.v;
+  assign b_rlast = bth.last;
   // the A read data registered on the way out (the head's run-beat and word select ran into the
   // MXU's scale FIFO block RAM in one cycle)
   always_ff @(posedge clk) begin
@@ -624,7 +734,7 @@ module otpu_native_dram #(
   // the tag FIFO writes its tail every cycle too (the slot is not live unless the FIFO is full),
   // so its write enable is a register, not b_take
   always_ff @(posedge clk) begin
-    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= '{p: bq_p, sw: bq_sw, tag: bq_tag};
+    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= '{v: bq_pv, last: bq_last, s: bq_s, tag: bq_tag};
     if (a_take && !a_we)
       ao_q[OW'(ao_h + ao_n)] <= ao_in;
   end
@@ -647,7 +757,7 @@ module otpu_native_dram #(
   // (at BREG the registered B request too: its write, or its read, is in neither count yet)
   assign wr_idle = (wq_n == 0) && (wacc_q == '0) && (gv == '0) && iss_all &&
                    !(BREG && bq_take && bq_we);
-  assign rd_idle = (bt_n == 0) && (ao_n == 0) && !(BREG && bq_take && !bq_we);
+  assign rd_idle = (bt_n == 0) && (ao_n == 0) && !(BREG && bq_go && !bq_we);
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -734,7 +844,7 @@ module otpu_native_dram #(
           ntg = ntg - 1;
         end
         // ---- merge pops
-        if (b_out && (PIB == 0 || PBW'(c >> 1) == bth.p)) begin    // the oldest read's pair
+        if (b_out && b_pop[c]) begin                // the oldest read's pair (PORTB > 1: pairs)
           rb_h[c] <= rb_h[c] + 1;
           rbn = rbn - 1; rbr = rbr - 1;
         end
@@ -762,7 +872,7 @@ module otpu_native_dram #(
           ao_h <= ao_h + 1; aon = aon - 1;
           if (!aoh.reuse) a_last <= ra_head[aoh.c];
         end
-        bt_n <= (OW + 1)'(updn(16'(bt_n), bq_take && !bq_we, b_out));
+        bt_n <= (OW + 1)'(updn(16'(bt_n), bq_go && !bq_we, b_out));
         ao_n <= aon;
       end
       // ---- SW gather: merge into the beat, or start a new one (the old one was pushed)
@@ -883,7 +993,7 @@ module otpu_native_dram #(
   bt_t btr [OD];
   always_ff @(posedge clk) begin
     for (int c = 0; c < NCH; c++) if (qb_push[c]) qbr[c][QW'(qb_h[c] + qb_n[c])] <= qb_e[c];
-    if (bq_take && !bq_we) btr[OW'(bt_h + bt_n)] <= '{p: bq_p, sw: bq_sw, tag: bq_tag};
+    if (bq_go && !bq_we) btr[OW'(bt_h + bt_n)] <= '{v: bq_pv, last: bq_last, s: bq_s, tag: bq_tag};
   end
   always_ff @(posedge clk)
     if (!rst) begin
@@ -992,6 +1102,7 @@ module otpu_native_dram #(
   // their read commands, B reads, SW fill reads; writes by source, and those with a byte mask
   // that is not whole (a read-modify-write in the channel module)
   longint st_arun [NCH], st_ard [NCH], st_brd [NCH], st_srd [NCH];
+
   longint st_bwr [NCH], st_awr [NCH], st_swr [NCH], st_pb [NCH], st_pa [NCH], st_ps [NCH];
   initial
     for (int c = 0; c < NCH; c++) begin

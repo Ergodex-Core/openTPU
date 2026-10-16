@@ -71,6 +71,8 @@ module otpu_board #(
                                        // GATHER (otpu_coll_bar; CAPS2 bit0 = 0, docs/infra_hunt.md 5)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait entries (WAITC, docs/seq_vpu.md; CFG_UARCH bit24)
   parameter bit T2          = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter int PORTB       = 1,       // chunks a cycle on port B (docs/wide_port.md; CAPS2 [3:1];
+                                       //   NCH >= 2 PORTB: otpu_native_dram)
   parameter int PLATFORM    = 0,       // the target's platform id (CFG_PLATFORM; opentpu/target.py)
   parameter logic [31:0] ARCH_HASH = 32'h0  // the target's arch_hash (CFG_HASH)
 ) (
@@ -202,7 +204,11 @@ module otpu_board #(
                                        //   m_rv: a b_rvalid the cycle before
   logic [31:0] sw_addr, sw_wdata;
   logic [D/4-1:0] b_wmask;
-  logic [D*8-1:0] b_wdata, b_rdata;
+  logic [D*8-1:0] b_wdata;
+  logic [PORTB*D*8-1:0] b_rdata;
+  logic [PORTB-1:0] b_rcm;
+  logic [1:0]     b_n;
+  logic           b_rlast;
 
   perf_t pf, pf_c;                   // slice 0's, and as the control block sees it
   logic        tr_en, tr_stop, tr_clear, tr_busy;
@@ -234,7 +240,7 @@ module otpu_board #(
   otpu_ctrl #(.D(D), .MCOLS(MCOLS), .ACT_ROWS(ACT_ROWS), .LANES(LANES), .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID),
               .DDR_MTS(DDR_MTS), .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_TEMP(1'b1),
               .HAS_I2C(HAS_I2C), .CHASH(CHASH), .DSTEP(DSTEP), .HOSTCAL(HOSTCAL),
-              .COLL_GATHER(COLL_GATHER), .T2(T2),
+              .COLL_GATHER(COLL_GATHER), .T2(T2), .PORTB(PORTB),
               .LDP(S > 1 ? 2 + 2 * XR : 2),  // LOAD to a slice's busy and back
               // each slice on its NCH channels' 2^CH_LOG2 bytes each (otpu_native_dram): the
               // DDR boards' two of 2 GiB, the F2 HBM build's eight 512 MiB pseudo-channels
@@ -319,15 +325,16 @@ module otpu_board #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES), .PQ_WIN(PQ_WIN),
                .SEQ_WC(SEQ_WC), .HAS_DSTEP(DSTEP), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2)) u_slice (
+               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2),
+               .PORTB(PORTB)) u_slice (
     .clk, .clk_f, .sys_rst(x_srst[0]), .rst(x_rst[0]), .rinit(x_arg[0]), .ld_start(x_ld_start[0]),
     .ld_addr(x_ld_addr[0]), .ld_n(x_ld_n[0]),
     .ld_busy(q_ld_busy[0]), .a_rdy, .b_rdy, .sw_rdy, .wr_idle(m_wr_idle),
     .rd_idle(m_rd_idle),
     .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
     .sw_req, .sw_addr, .sw_wdata, .sw_be,
-    .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
-    .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
+    .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag, .b_rdata,
+    .b_rcm, .b_rlast, .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
     .coll_ren(sc_ren[0]), .coll_raddr(sc_raddr[0]), .coll_rdata(sc_rdata[0]),
     .coll_wen(sc_wen[0]), .coll_waddr(sc_waddr[0]), .coll_wdata(sc_wdata[0]),
     .coll_gnt_local(sc_gl[0]), .coll_gnt(sc_gnt[0]),
@@ -370,13 +377,13 @@ module otpu_board #(
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
-  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD)) u_mem (
+  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB)) u_mem (
     .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
     .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
     .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-    .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-    .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
+    .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag,
+    .b_rdata, .b_rcm, .b_rlast, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
     .n_cvalid(n_cvalid[NCH-1:0]), .n_cready(n_cready[NCH-1:0]), .n_cwe(n_cwe[NCH-1:0]),
     .n_caddr(n_caddr[NCH-1:0]), .n_wvalid(n_wvalid[NCH-1:0]), .n_wready(n_wready[NCH-1:0]),
     .n_wdata(n_wdata[NCH-1:0]), .n_wmask(n_wmask[NCH-1:0]), .n_rvalid(n_rvalid[NCH-1:0]),
@@ -390,7 +397,11 @@ module otpu_board #(
     logic [255:0]   a_rdata;
     logic [3:0]     a_be, sw_be;
     logic [D/4-1:0] b_wmask;
-    logic [D*8-1:0] b_wdata, b_rdata;
+    logic [D*8-1:0] b_wdata;
+    logic [PORTB*D*8-1:0] b_rdata;
+    logic [PORTB-1:0] b_rcm;
+    logic [1:0]     b_n;
+    logic           b_rlast;
     perf_t          pf;
     assign q_ret[s] = pf.sq.ret;
 
@@ -401,28 +412,29 @@ module otpu_board #(
                  .ULANES(ULANES), .PQ_WIN(PQ_WIN), .SEQ_WC(SEQ_WC), .HAS_DSTEP(DSTEP),
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2)) u_slice (
+                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2),
+               .PORTB(PORTB)) u_slice (
       .clk, .clk_f, .sys_rst(x_srst[s]), .rst(x_rst[s]), .rinit(x_arg[s]), .ld_start(x_ld_start[s]),
       .ld_addr(x_ld_addr[s]), .ld_n(x_ld_n[s]),
       .ld_busy(q_ld_busy[s]), .a_rdy, .b_rdy, .sw_rdy, .wr_idle(m_wr_idle),
       .rd_idle(m_rd_idle),
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
       .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
-      .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
+      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag, .b_rdata,
+      .b_rcm, .b_rlast, .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
       .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
       .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
       .coll_gnt_local(sc_gl[s]), .coll_gnt(sc_gnt[s]),
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
 
-    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD)) u_mem (
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB)) u_mem (
       .clk, .rst(x_srst[s]), .a_flush(x_rst[s] || x_ld_start[s] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
           .a_be_x(a_be), .a_rvalid, .a_rdata,
       .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-      .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
+      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag,
+      .b_rdata, .b_rcm, .b_rlast, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
       .n_cvalid(n_cvalid[NCH*s +: NCH]), .n_cready(n_cready[NCH*s +: NCH]),
       .n_cwe(n_cwe[NCH*s +: NCH]), .n_caddr(n_caddr[NCH*s +: NCH]),
       .n_wvalid(n_wvalid[NCH*s +: NCH]), .n_wready(n_wready[NCH*s +: NCH]),
