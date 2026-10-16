@@ -209,6 +209,9 @@ def main():
     ap.add_argument("--portb", type=int, default=None, choices=[1, 2, 4],
                     help="chunks a cycle on port B (Config.PORTB, docs/wide_port.md; default "
                          "OTPU_PORTB or the target's; sets PAIR): MM PAIR / QUAD for int8 and 4-bit")
+    ap.add_argument("--rowlanes", action="store_true",
+                    help="row lanes (Config.ROWLANES, docs/row_lanes.md): the image in row-lane "
+                         "groups, MM RL of the widest L for --portb / --mcols")
     ap.add_argument("--block", type=int, default=None, help="attention block (tokens)")
     ap.add_argument("--depth", type=int, default=None, help="attention score blocks in flight")
     ap.add_argument("--check", action="store_true", help="compare with the ISA simulator")
@@ -288,6 +291,8 @@ def main():
     mk = {"MCOLS": a.mcols} if a.mcols else {}
     if a.portb:                         # (the reuse is MM PAIR / QUAD: column reuse on, as the
         mk.update(PORTB=a.portb, PAIR=True)     # f2 targets' bitstreams have it)
+    if a.rowlanes:
+        mk.update(ROWLANES=True)
     need = spec.image(board_config(DRAM_BYTES=1 << 40, **mk), a.cap, **wkw).nbytes
     need += (64 << 20) if qwen3_batch else 0           # the batch area (batch.alloc)
     cfg = board_config(DRAM_BYTES=1 << max(20, (need - 1).bit_length()), **mk)

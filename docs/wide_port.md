@@ -6,7 +6,9 @@ its state on 2026-10-16, the decision to finish it as one wide port, the tests, 
 measurements: Gemma-3-1B int8 4,652,571 cycles a token at PORTB 2, 1.71x, 43 tok/s at 200
 MHz); not synthesized: FPGA synthesis only in the nightly build (section "What the nightly
 needs", targets f2-hbm:p2 and f2-hbm16:p4). PORTB 8 and int4 at PORTB 4 need a reuse the ISA
-does not have (section "The whole-model tally"): the lanes of "Future improvements".
+does not have (section "The whole-model tally"): the row lanes of docs/row_lanes.md, built and
+measured in section "Row lanes": int4 with four lanes at PORTB 4 on MCOLS 8 reaches 135.7
+tok/s on the RTL (the whole model measured), int8 83.5.
 
 ## Why
 
@@ -358,6 +360,54 @@ What the table says:
   a PORTB 4 token and 13% of a lanes-int4 one: they start to matter there (docs/vpu_pump.md,
   docs/seq_vpu.md).
 
+### Row lanes (MM RL, docs/row_lanes.md), measured on the RTL (2026-10-16)
+
+The same method and model as the table above (Verilator 5.048, OTPU_TARGET=f2-hbm OTPU_NCH=8,
+--lat 60, 200 MHz, tools/perf_qwen.py `--model gemma3 --layers 4 --portb N --rowlanes
+[--mcols 8]`: 4 layers and the whole 262K-row head; the whole model is 26 layers), with
+`Config.ROWLANES`: the image in row-lane groups and every projection and head MM an MM RL of
+the widest L (int8 L 4 at PORTB 4, L 2 at PORTB 2; int4 L 4 at PORTB 4 on MCOLS 8, L 2 at
+PORTB 2); the attention's K / V MMs stay PAIR / QUAD. The RL builds are `RL` 4 at MCOLS 4 and
+8 at MCOLS 8 (otpu_mxu's streams).
+
+| Gemma-3-1B, 4 layers + head | int8 PORTB 4 QUAD (above) | int8 PORTB 4, RL 4 (MCOLS 4) | int8 PORTB 4, RL 4 (MCOLS 8) | int8 PORTB 2, RL 2 | int4 PORTB 4 QUAD (MCOLS 8) | int4 PORTB 4, RL 4 (MCOLS 8) | int4 PORTB 2, RL 2 |
+|---|---|---|---|---|---|---|---|
+| cycles | 1,514,346 | 949,485 | 949,474 | 1,637,409 | 1,610,911 | 579,306 | 922,723 |
+| roofline (port B / PORTB, port A lines, MXU) | 1,064,016 (MXU) | 801,995 (port B; port A 801,632, MXU 800,592) | 801,995 | 1,603,990 (port B) | 1,063,976 (MXU) | 534,712 (port A; MXU 441,256, port B 442,699) | 885,398 (port B) |
+| efficiency to it | 70.3% | 84.5% | 84.5% | 98.0% | 66.0% | 92.3% | 96.0% |
+| port B's utilization (chunks / (PORTB x cycles)) | 53.0% | 84.5% | 84.5% | 98.0% | 27.5% | 76.4% | 95.9% |
+| MXU: MAC / blocked (chunks, no MAC) / starved | 70% / 27.5% / 0.2% | 84.3% / 12.8% / 0.3% | 84.3% / 12.9% / 0.2% | 97.7% / 0.9% / 0.0% | 66.0% / 31.3% / 1.1% | 76.2% / 16.9% / 2.4% | 95.5% / 1.6% / 0.2% |
+| wide reads, two-part | 739,328, 419,565 (56.8%) | 799,488, **0** | 799,528, 0 | 1,598,976, 0 | 697,896, 47,136 (6.8%) | 440,232, **0** | 880,384, 0 |
+| DRAM read beats a cycle a channel | 2.146 | 3.428 | 3.428 | 1.988 | 1.184 | 3.293 | 2.068 |
+| head / MLP / attention cycles | 1,102,284 / 360,907 / 51,153 | 686,818 / 222,479 / 40,186 | 686,825 / 222,470 / 40,177 | 1,196,334 / 380,182 / 60,891 | 1,188,686 / 374,504 / 47,719 | 416,615 / 132,244 / 30,445 | 670,921 / 210,382 / 41,418 |
+| tok/s at 200 MHz (4 layers + head) | 132.1 | 210.6 | 210.6 | 122.1 | 124.2 | 345.2 | 216.7 |
+| **whole model (26 layers): cycles, tok/s** | 3.78 M, 52.9 (extrapolated) | **2,393,990 measured, 83.5** (the extrapolation 2,394,141; 699 s of simulation; 82.1% of the roofline 1,966,576 (port A lines), MAC 81.9%, blocked 11.6%, 0 of 1,952,640 wide reads two-part) | " | 4,063,309, 49.2 | 3,933,136, 50.9 | **1,474,025 measured, 135.7** (the extrapolation 1,474,094; 288 s; 89.1% of the roofline 1,312,940 (port A lines; the MXU 1,065,924), MAC 72.3%, blocked 14.6%, starved 2.5%, 0 of 1,059,268 wide reads two-part) | 2,307,621, 86.7 |
+
+Against the tally (docs/row_lanes.md): int8 RL 4 at PORTB 4 was 1,959,816 MXU advances, 84.1
+tok/s with the other units serial; the RTL's whole model is 2,393,990 cycles measured, 83.5 tok/s: the
+head runs at 85% of the port (the MXU and port A at one advance and one line a cycle, each
+hiccup of port A's line stream -- 12.8% blocked -- a cycle of the array), the layers at 90%+,
+and the other units overlap. int4 RL 4 on MCOLS 8 was 1,065,924 advances but 1,299,524 port-A
+lines (the group's Sw line is a request of its own: H = A = 32), 116.5 serial / ~150
+overlapped; the RTL gives 1,474,025 cycles measured, 135.7 tok/s, port-A bound as predicted (the roofline
+534,712 of the 4-layer run is port A's, the MXU 441,256). The two-part reads are gone in every
+RL run (0 of 799,488 wide reads at PORTB 4 where QUAD had 56.8%): an advance's L chunks are one
+aligned run of L pairs. int8 RL 4 is the same on MCOLS 4 and 8 (11 cycles apart): int8 L 4
+needs four columns; int4 L 4 needs eight.
+
+**So > 100 tok/s is reached on the RTL in int4 with four lanes at PORTB 4 on MCOLS 8:
+135.7 tok/s (the int4 image, 0.58 GB a token). int8 with four lanes stops at the port's 102
+GB/s: 83.5 tok/s (1.03 GB a token at 85% of the port).** On the card (78% of the port on
+Alex's image, docs/wide_port.md "Baseline on the board") the int4 point would be ~105-120: the
+int4 route halves the bytes, which is what the card's port efficiency needs.
+
+**Bonsai-2 2B**, the unfolded int4 path of docs/ternary.md 5 (9.69 M chunks a token: int4 5.70
+M, the int8 head 3.99 M; K = 2048, KB 16): at PORTB 2 row lanes buy nothing (int4 L 2 = N / 2 x
+8 advances = QUAD's N x 4; the rows align to the pair groups already); at PORTB 4 on MCOLS 8
+int4 L 4 takes the int4 chunks in 1.43 M advances (1.7 M port-A lines) and int8 L 4 the head in
+1.0 M, ~2.7 M MXU cycles a token against 12.36 M measured on the board today (the ISA tally;
+not run on the RTL).
+
 ### What the nightly needs (the f2-hbm target at PORTB 2)
 
 Verilator cannot give LUTs or a clock: the lanes' cost in silicon and the 2048-bit path's
@@ -386,6 +436,18 @@ timing come from the nightly's synthesis. What it needs:
   selects' fanout (1024 LUTs each: replication expected), the S1 stream select and the scale
   window in the MXU (one LUT level each). If the merge path misses 200 MHz, a register per chunk
   at the merge (b_rvalid a cycle later: latency only, the MXU's FIFO absorbs it) is the fix.
+* **The row-lane builds:** `f2-hbm:p4rl` (PORTB 4, ROWLANES, MCOLS 4: int8 L 4; CFG_HASH
+  d6ed551d), `f2-hbm:p4rl8` (MCOLS 8: int4 L 4, the > 100 tok/s point; 172e5c73), `f2-hbm:p2rl`
+  (e476f0b7). `rtl_params` carries `RL` (4 or 8, `target.rl_streams`) into otpu_f2_hbm_sys ->
+  otpu_board -> the slice (the MXU's streams, the quantizer's and ACT RAM's DUP8) and otpu_ctrl
+  (CAPS2 bit4); the host takes ROWLANES from CAPS2 bit4 (device_config) and OTPU_ROWLANES must
+  agree. Programs and images are compiled for `Config(PORTB=4, ROWLANES=True[, MCOLS=8])`. To
+  read off the synthesis report against docs/row_lanes.md's cost table: at RL 8 the hops (64
+  bits a position), the PE select (4:1), the four more scale decoders and the two more entry
+  RAMs (11 RAMB36), the result FIFO's Sw per column; at RL 4 the entry RAMs and the selects
+  only. PORTB 4 on 8 channels runs every channel at a beat a cycle (3.43 read beats a cycle over
+  8 channels in the int8 run): f2-hbm16 (NCH 16) halves that; the bridge's reads in flight
+  (docs/f2_hbm.md) are the card's limit to check first.
 * **On the board:** tools/perf_qwen.py's run with `--portb 2` is the expected cycles a token
   (table above); otpu-serve on the image with Gemma-3-1B int8 gives the tok/s to set against
   the RTL's and against the PORTB 1 board baseline (22.3 tok/s, ~89% of its RTL figure).
