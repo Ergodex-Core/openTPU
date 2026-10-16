@@ -9,7 +9,8 @@
       "gates": {
         "tests/test_wide_port_rtl.py": "53 passed (docs/wide_port.md, Verilator 5.048)",
         "perf_qwen --layers 2 PORTB 1 vs 2": "2,798,478 vs 1,643,595 cycles (docs/wide_port.md); fresh receipts in hwloop-scratch/runs",
-        "visualsim": "prepared, not executed (seat)"
+        "visualsim": "prepared, not executed (seat)",
+        "lpn": "baseline graded (+0.88% / +2.71%); candidate not modelled"
       },
       "workload": {
         "models": "gemma3-1b",
@@ -17,7 +18,14 @@
         "prompts": "tools/f2_bench.py SHORT and LONG"
       },
       "run_dir": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb2",
-      "status": "QUEUED_AWAITING_APPROVAL"
+      "status": "QUEUED_AWAITING_APPROVAL",
+      "lpn": {
+        "baseline": "lpn-estimate 2,823,232 cycles at Timing.dram_latency 8 (+0.88% vs the 2,798,478-cycle PORTB 1 receipt; lat 60: 2,874,213, +2.71%); outside the validated configuration (RTL moved: 16 changed / 14 added fingerprinted files; NCH 8 at 60 cycles; board uarch): recorded, not a calibration",
+        "candidate": "none: PORTB 2 is not in the model (one port-B credit, one chunk a cycle); lpn-run refuses it (REFUSED_NOT_MODELLED)",
+        "receipts": [
+          "lpn-scratch/runs/gemma3_l2_portb1/lpn (receipt copy: tools/hwloop/receipts/2026-10-16/lpn_gemma3_portb1)"
+        ]
+      }
     }
   ],
   "note": "queued only; nothing scheduled or launched"

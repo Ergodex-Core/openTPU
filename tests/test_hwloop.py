@@ -339,3 +339,15 @@ def test_cli_check_stale_reads_lpn_directory(tmp_path):
                          capture_output=True, text=True)
     assert out.returncode == 0
 
+
+
+def test_nightly_plan_carries_lpn_points_and_drift_rule(tmp_path, monkeypatch):
+    monkeypatch.setattr(nightly, "QUEUE", tmp_path / "queue.json")
+    e = nightly.add("portb2", "a9acb2b05da2b0ddcdbb97254b2776ca2cee2c87", "f2-hbm", "f2-hbm-burst200", {}, {"models": "gemma3-1b"}, None,
+                    lpn={"baseline": "lpn-estimate 2,823,232 (+0.88%)", "candidate": "none: PORTB 2 not modelled"})
+    plan = nightly.plan(e)
+    assert "lpn-run" in plan and "5%" in plan and "uncalibrated" in plan
+    assert "lpn-estimate 2,823,232" in plan and "PORTB 2 not modelled" in plan
+    assert plan.index("lpn-run") < plan.index("run-rtl") < plan.index("boards/f2/build.py")
+    q = nightly.load_queue()
+    assert q["candidates"][0]["lpn"]["candidate"].startswith("none")
