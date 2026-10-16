@@ -1,8 +1,9 @@
 # A wide port B: 2x and 4x the weight bandwidth of a slice
 
-Status: ISA, simulator and compiler done (Config.PORTB, tests/test_wide_port.py); RTL done in
-Verilator (section RTL, tests/test_wide_port_rtl.py); not synthesized.
-Validated in Verilator first; FPGA synthesis only in the nightly build.
+Status: ISA, simulator and compiler done (Config.PORTB, tests/test_wide_port.py); RTL built and
+validated in Verilator (section RTL: its state on 2026-10-16, the decision to finish it as one
+wide port, the tests and the measurements); not synthesized: FPGA synthesis only in the nightly
+build (section "What the nightly needs").
 
 ## Why
 
@@ -41,6 +42,40 @@ rows is quantized with DUP4 (MCOLS/2: DUP), and each MM pairs or quads where its
 fits PORTB.
 
 ## RTL
+
+### State on 2026-10-16
+
+What the stopped agent left, as found (commits 585ebe85 "WIP wide port" and c68be81c, its
+uncommitted edits committed as they were):
+
+* **Complete in the RTL, one wide port.** Port B carries a request's chunk count (`b_n`) and
+  a response's chunk mask and last flag (`b_rcm`, `b_rlast`) from otpu_mxu through otpu_slice's
+  port registers to otpu_dram (one response a request) and otpu_native_dram (a chunk a channel
+  pair, a request in one or two parts); the MXU's chunk FIFO entry is PORTB chunks with
+  per-chunk write enables, its issue asks for an advance's chunks in one request, the scale
+  path holds a reuse group's data (a third entry RAM for blocks 2 and 3, the two-line window
+  for 4-bit / NVFP4 QUAD), and S1 feeds the QUAD datapath's four streams from the entry's
+  blocks for every format. `PORTB` goes through otpu_top / tb_top, otpu_board, otpu_f2_sys,
+  otpu_f2_hbm_sys, otpu_asic_top (one chunk), otpu_ctrl (CAPS2 [3:1]), `target.rtl_params`,
+  `build_config`, `rtlsim.top_params` (and the adapter's NATIVEB counters into
+  `stats["native_b"]`), tools/perf_qwen.py `--portb`. 585ebe85 was the RTL and the slice; the
+  uncommitted edits were the host side (regs.caps2 `portb`, device_config / check_hash /
+  FakeTransport / otpu-diag) and CAPS2's encoding (0 = one chunk, so a PORTB 1 bitstream's
+  CAPS2 is as before).
+* **Verified here:** tests/test_wide_port_rtl.py, 53 tests, pass (Verilator 5.048, 65 s on the
+  warm cache): every reuse format on the behavioural DRAM and on the native path (NCH 4 / 8 /
+  16, random stalls), bit for bit the ISA simulator's, and the throughput test (PORTB chunks a
+  cycle).
+* **Left undone.** (1) tests/test_host.py still had two asserts of `caps2` without the `portb`
+  key (the suite was red); FakeTransport's CFG_HASH left PORTB out, so a PORTB 2 fake card
+  would not pass check_hash. (2) The board model the host tests drive (sim/verilator/tb_board.sv,
+  SimTransport) had no PORTB and no NCH parameter: it was two channels a slice, and
+  otpu_native_dram needs NCH >= 2 PORTB, so the board path (CAPS2, CFG_HASH, the host's
+  register protocol) could not be built at PORTB 2 at all. (3) No measurement of a whole
+  model: the Gemma numbers below were two layers and the head; nothing on Bonsai-2. (4) The
+  doc said "RTL done".
+
+### Design
 
 A top-level parameter `PORTB` (1, 2, 4; default 1) through otpu_top / tb_top, otpu_board, the F2
 system tops (otpu_f2_sys, otpu_f2_hbm_sys) and otpu_slice; `opentpu.target.rtl_params` passes the
