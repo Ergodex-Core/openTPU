@@ -163,3 +163,49 @@ fp4, NVFP4 and PAIR keep their paths); the one change for every build is the str
 The rotated t2 decode compiles for two slices (2B: 0.28 GiB a slice, 4B: 0.62) and four (4B:
 0.33 GiB; the 2B's two KV heads stop at two slices). On the ISA simulator the 2B on two
 slices (f2-hbm:s2, t2 weights and head) gives 4 / 4 greedy tokens the fp32 reference's.
+
+## 7. The 9B and the 27B in t2 within a slice's 4 GiB (ISA)
+
+`tools/b2_image_size.py` reads the image's own layout (every allocation's size is the gap to
+the next) and classes it; the classes add up to `Image.nbytes`. The images below are the
+serving path's: t2 weights and head, the rotation on the device, the int8 embedding rows from
+the host (`embed_host`: a slot of rows, not a 248320-row table), `cap` 2048 tokens of KV cache
+(otpu-serve's default), one slice of f2-hbm (4 GiB) unless noted. MiB.
+
+| Model (rotation block) | ternary matrices: t2 data + scale rows | LM head (t2) | DeltaNet states + windows | KV cache (2048) | norms, tables, I/O | total | of 4 GiB |
+|---|---|---|---|---|---|---|---|
+| 2B (512) | 328 + 60 | 121 + 19 | 18 + 3 | 12 | 11 | **572 MiB** (0.56 GiB) | fits, 3524 MiB free |
+| 4B (512) | 854 + 140 | 152 + 23 | 48 + 5 | 33 | 12 | **1266 MiB** (1.24 GiB) | fits, 2830 MiB free |
+| 9B (4096) | 1654 + 242 | 243 + 34 | 48 + 5 | 33 | 12 | **2271 MiB** (2.22 GiB) | fits, 1825 MiB free |
+| 27B (1024), one slice | 6302 + 972 | 303 + 42 | 144 + 24 | 66 | 14 | **7866 MiB** (7.68 GiB) | does not fit (-3770 MiB) |
+| 27B, f2-hbm:s2, a slice | 3271 + 504 | 152 + 21 | 72 + 12 | 33 | 13 | **4078 MiB** (3.98 GiB) | fits, 18 MiB free |
+
+* **The 9B fits with 1.8 GiB to spare.** Its weights are 2.2 GB in the GGUF and 1.9 GiB
+  here (the t2 rows are the PQ2_0 code bytes; a t2 scale row is 16 + 16 ceil(KB/4) bytes, 14%
+  of a 4096-wide row against PQ2_0's fp16 per 128, 1.6%). The KV cache is 4.1 MiB an
+  attention layer at 2048 tokens (8 layers, 4 KV heads of 256, int8 K with its scales, V
+  transposed); the DeltaNet state 2 MiB a layer (32 heads x 128 x 128 fp32). Headroom for a
+  longer context: 16.4 MiB per 1024 tokens, so cap 65536 (1 GiB of KV) still fits.
+* **The 9B's head** is its own tensor (`output.weight`, untied, Hadamard-folded like the
+  projections: prism.hadamard.version 1); in t2 277 MiB, in int4 517 MiB (the image 2511 MiB).
+  Section 7.1 measures both.
+* **The 9B's rotation block is 4096** (the 2B's and 4B's 512, the 27B's 1024): the hadamard
+  kernel's H_512 MM followed by three butterfly stages of VOP adds and subtracts over each
+  block's 8 rows of 512 (kernels/hadamard.py), the same 64 KB H matrix.
+* **The 27B does not fit one slice**: 7.68 GiB in t2 (the header's tensor table; the GGUF
+  itself is not on disk here, only its first 48 MiB). On **f2-hbm:s2** (two slices, 8 GiB: each
+  holds half the heads, half the MLP rows, half the vocabulary, docs/f2_hbm.md) it is 3.98 GiB
+  a slice at cap 2048, 18 MiB under the slice's 4 GiB: it fits, with the context limited to
+  about 4000 tokens (a slice's KV cache grows 8.2 MiB per 1024 tokens). Its MLP width 17408
+  (17 blocks of 1024) stays unpadded on two slices (8704 = 8.5 blocks: padded to 18432, as
+  `bonsai2.spec(slices=2)` does: the table's figure).
+* **f2-hbm:s4 does not map the 27B, nor s2 the 9B**: a slice's DeltaNet heads must make
+  whole rotation blocks before out_proj (Spec.check): 12 heads x 128 = 1536 is not a multiple
+  of 1024 (27B on four slices), 16 x 128 = 2048 not of 4096 (9B on two). Splitting the
+  out_proj input's rotation across slices would need the heads' outputs gathered before the
+  Hadamard (an all-gather of 2048 floats a token), not done.
+* **ACT RAM and the 27B.** Spec.check refused the 27B on any slice count: "an inner
+  dimension exceeds ACT RAM" (its MLP width 17408 > 128 blocks x 128). W_down's input goes
+  through ACT a chunk at a time (swiglu_down's chunks of whole rotation blocks: 1024 here), so
+  the check now takes the widest chunk the layouts can make (`Spec._down_chunk`), not the
+  width; the check of the other dimensions (hidden, the attention heads' width) is as before.

@@ -186,6 +186,14 @@ class Spec:
                     or 4 * c["vocab_size"] * c["hidden_size"] > EMBED_F32_MAX else "f32",
                     mix=FM.mix_for(c))
 
+    def _down_chunk(self, cfg: Config) -> int:
+        """The widest chunk of W_down's input (this slice's MLP width) the image's layouts
+        can take through ACT RAM (_layout's dchunk over the formats' chunk quanta and the
+        rotation block), or the width itself where a quantum does not divide it."""
+        f_loc, D = self.ffn // cfg.S, cfg.D
+        qs = {q for q in (D, 2 * D, 4 * D, max(4 * D, self.rot)) if f_loc % q == 0}
+        return max((_chunk(f_loc, D, q) for q in qs), default=f_loc)
+
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
         need = [(self.head_dim % D == 0, f"head_dim {self.head_dim} % D"),
@@ -202,8 +210,10 @@ class Spec:
                 (self.n_kv % S == 0, f"n_kv {self.n_kv} % S"),
                 (self.n_q % self.n_kv == 0, "n_q % n_kv"),
                 (self.vocab % S == 0, f"vocab {self.vocab} % S"),
-                (max(self.ffn, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
-                 "an inner dimension exceeds ACT RAM")]
+                # (W_down's input goes through ACT a chunk at a time, swiglu_down: the widest
+                # chunk any format or rotation block takes; the 27B's 17408 is wider than ACT)
+                (max(self._down_chunk(cfg), self.n_q * self.head_dim, self.hidden)
+                 <= cfg.ACT_BLOCKS * D, "an inner dimension exceeds ACT RAM")]
         if self.mtp:
             need += [(S == 1, "MTP decoding runs on one slice")]
         if self.rot:
