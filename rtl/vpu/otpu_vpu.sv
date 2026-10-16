@@ -78,7 +78,9 @@ module otpu_vpu
   // the VPU's writes (the board's: every read port has its own TMEM copy). 0: everything
   // advances on the grant itself.
   parameter bit WBUF  = 0,
-  parameter bit HAS_SE = 1'b0                         // the stream engine (LANES = 8)
+  parameter bit HAS_SE = 1'b0,                        // the stream engine (LANES = 8)
+  parameter int AW    = 20                            // TMEM word address bits (otpu_slice:
+                                                      //   log2 TMEM_WORDS, at least 20)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -133,9 +135,8 @@ module otpu_vpu
   localparam int NLL = C8 ? 0 : NCL;         // long lanes (the composites' slot chains)
   localparam int NSX = C8 ? 1 : NSLOT;       // slots along the lane taps
   localparam int CLW = $clog2(NCL);
-  // TMEM word address bits (the TMEM has far fewer words and $fatals past them); the ports
-  // zero-extend to 32 bits
-  localparam int AW = 20;
+  // TMEM word address bits (AW: the slice's TMEM_WORDS, at least 20; the TMEM $fatals past its
+  // words); the ports zero-extend to 32 bits
   // OUTER's column buffers: 256 columns (docs/isa.md) over the lanes
   localparam int CBD = 256 / LANES;
   localparam int CBW = $clog2(CBD);

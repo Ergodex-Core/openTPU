@@ -287,13 +287,16 @@ def test_fuzz_two_slices(have_verilator, seed):
         assert np.array_equal(tmems[s], m.slices[s].tmem), f"slice {s} TMEM"
 
 
+# (16, 255) and (32, 255): the f2-vla target's rows (the ISA's most; the ACT RAM's last group
+# of 15 / 31 rows) at its two column counts, M drawn up to 255 (the input region holds 128 rows
+# of one block), with 16 lanes at 32 columns (the MXU's epilogue lanes, MCOLS / 2, at most LANES)
 @pytest.mark.parametrize("mcols,rows,seed", [(2, 8, 0), (2, 8, 1), (4, 8, 5), (2, 6, 3),
-                                              (4, 16, 4)])
+                                              (4, 16, 4), (16, 255, 6), (32, 255, 8)])
 def test_fuzz_mm_replay(have_verilator, mcols, rows, seed):
     """ACT RAM rows beyond the MXU columns (ACT_ROWS): an MM of M > MCOLS rows replays each
     streamed chunk for every group of MCOLS rows; the results are the ISA's."""
     rng = np.random.default_rng(3000 + seed)
-    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows)
+    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows, LANES=16 if mcols > 16 else 8)
     prog = _random_program(rng, cfg, n_ops=60)
     assert any(i.op == I.MM and (i.w[5] >> 16) & 0xFF > mcols for i in prog)
     imgs = _images(rng, 1)
@@ -392,17 +395,17 @@ def test_collective_reads_held_behind_dma_reads(have_verilator, seed, tmp_path, 
     assert sorted(held) == [0, 1] and held[0] > 0, held
 
 
-@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16)])
+@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16), (16, 255), (32, 255)])
 @pytest.mark.parametrize("M,wf,pair", [(1, I.W8, False), (3, I.W8, False), (1, I.W4F, True),
                                        (2, I.WNV, True), (4, I.W4I, False), (6, I.W4F, False),
-                                       (9, I.W8, False)])
+                                       (9, I.W8, False), (255, I.W8, False), (200, I.W4F, False)])
 def test_act_reads_follow_the_mm_rows(have_verilator, mcols, rows, M, wf, pair):
     """The ACT RAM reads only the columns of an MM's output rows (otpu_mxu act_ren): M of the
     MCOLS columns (PAIR: 2M), every column with replay (M > MCOLS); the results are the ISA's.
     Before the gating every column read every cycle (cyc * MCOLS)."""
     if (pair and 2 * M > mcols) or M > rows:
         pytest.skip("PAIR needs 2M <= MCOLS; M <= ACT_ROWS")
-    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows)
+    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows, LANES=16 if mcols > 16 else 8)
     D, KB, N = cfg.D, 3, 20
     srs = KB * D
     rs = KB * D if wf == I.W8 else -(-KB // 2) * D

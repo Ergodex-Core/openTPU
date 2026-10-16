@@ -525,7 +525,8 @@ module otpu_slice
     .a_req(q_areq), .a_we(q_awe), .a_addr(q_aaddr), .a_wdata(q_awdata), .a_be(q_abe),
     .pf_u(q_u), .pf_frz(q_frz));
 
-  otpu_vpu #(.LANES(LANES), .CL(VPU_CL), .SID(SID), .WBUF(ARB_MASK), .HAS_SE(HAS_SS)) u_vpu (
+  otpu_vpu #(.LANES(LANES), .CL(VPU_CL), .SID(SID), .WBUF(ARB_MASK), .HAS_SE(HAS_SS),
+             .AW(($clog2(TMEM_WORDS) > 20) ? $clog2(TMEM_WORDS) : 20)) u_vpu (
     .clk, .rst(rst_vpu), .start(ustart[U_VPU]), .cmd(ucmd[U_VPU]), .rdy(r_vpu), .done(d_vpu),
     .gnt(gnt[G_VPU]), .ren(v_ren), .rhold(tm_lost[P_VA] || tm_lost[P_VB]),
     .ta_en(va_ren), .ta_addr(va_raddr), .ta_data(r_data[P_VA]),

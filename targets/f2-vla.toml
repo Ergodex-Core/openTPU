@@ -1,0 +1,86 @@
+# The VLA variant of the F2 HBM target (docs/vla_frequency_plan.md 6; the π0.5 and RhinoVLA
+# chunks are matrix-matrix work, docs/pi05.md): one slice with the wide MXU, the ISA's most ACT
+# RAM rows, 64 VPU lanes and a 1.5M-word TMEM, on the f2-hbm memory path (8 HBM pseudo-channels,
+# cl_hbm at 450 MHz AXI, 4 GiB a slice) and its shell. The arch differs from f2-hbm's (MCOLS,
+# ACT_ROWS, LANES, TMEM_WORDS, no streams, no t2), so its programs and CFG_HASH are its own.
+#
+# MCOLS 32 are physical columns (64 logical with the int8 DSP packing of docs/mxu_packing.md,
+# the other branch's: the ISA sees the physical columns either way). ACT_ROWS 255 is the ISA's
+# most (an MM's row count is an 8-bit field): the ACT RAM holds ceil(255 / 32) = 8 groups of 32
+# rows (otpu_actram), the prefix's row group is 255 (3 passes over 558 rows). TMEM 1.5M words
+# (3 << 19: the prefix's 255-row group needs it, plan L2; otpu_tmem takes any multiple of the
+# banks, IMPL 3's RAMs are 24576 words at 64 lanes, 12288 a sub-bank) is 6 MB of URAM. LANES
+# 64: the VPU, QACT and QST at 64 elements a cycle (L4, L6); the RTL's VPU builds LANES <= 16
+# today (its isum_64 partial loop needs 64 / LANES >= 4 chunks: rtl/vpu/otpu_vpu.sv), so the
+# simulations run it at OTPU_LANES=16 until phase 4 (the CFG_HASH differs: LANES is in the arch).
+# No stream engine (DSTEP / STREAM are DeltaNet's, and otpu_dma's streams need LANES <= D / 4),
+# no t2 (QUAD's four ACT RAM blocks a cycle at 32 columns: block RAM the VLA does not use).
+# PORTB 1 for now (PORTB 2 is the plan's L7, merged from ternary-bonsai). Core 200 MHz.
+
+[target]
+name = "f2-vla"
+kind = "fpga"
+platform_id = 7
+description = "AWS F2 VLA: xcvu47p (small shell), one slice x 8 HBM pseudo-channels, MXU 32 columns x 255 rows, 64 lanes, TMEM 1.5M words, 200 MHz core"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 32                      # physical columns (docs/mxu_packing.md: 64 logical, packed)
+ACT_BLOCKS = 128
+ACT_ROWS = 255                  # the ISA's most (MM's 8-bit M); 8 groups of 32 (otpu_actram)
+TMEM_WORDS = 1572864            # 3 << 19: the prefix's 255-row group (plan L2); 6 MB of URAM
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: what its 32-bit DRAM byte addresses reach
+LANES = 64                      # the VPU, QACT, QST at 64 a cycle (plan L4, L6)
+PAIR = true
+DSTEP = false                   # no streams (DeltaNet's; otpu_dma needs LANES <= D / 4)
+STREAM = false
+SEQ_WC = true
+T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cycle)
+PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
+
+[uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS / 2 (16: a
+                                # 32-column row drains in two cycles; the card's 4 would take 8)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 0
+VPU_CL = 16
+ULANES = 64                     # the MXU drain and the quantizer on every TMEM lane
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]                      # f2-hbm's: the HBM CL (cl_opentpu_hbm) and its host path
+board = "f2"
+core_mhz = 200.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 6 (TMEM: / 3)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0             # the AXI ports' clock (an MMCM from clk_hbm_ref: 900 MHz / 2)
+hostcal = false
+channels_per_slice = 8
+channel_bytes = 536870912       # a pseudo-channel: slice s's channel c at HBM byte (NCH s + c) x 512 MiB
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"

@@ -35,6 +35,9 @@ def main() -> None:
     ap.add_argument("--phase", default="e_step")
     ap.add_argument("--np", type=int, default=558)
     ap.add_argument("--args", default="", help="run arguments, name=value,...")
+    ap.add_argument("--rows", default="16,8,8",
+                    help="the row groups R,RP,RE (tower, prefix, expert; tools/pi05_cost.py's "
+                         "pick for the configuration: 16,8,8 at f2-hbm, 128,255,64 at f2-vla)")
     a = ap.parse_args()
     import pi05_cost as PCO
     spec = dataclasses.replace(P.Spec.from_ckpt(a.ckpt), v_layers=1, layers=1, e_layers=1,
@@ -48,7 +51,9 @@ def main() -> None:
         v = np.ascontiguousarray(x).view(np.uint8).reshape(-1)
         img[addr:addr + v.size] = v
     image.build(P.Weights(a.ckpt), put)
-    prog, ra = image.programs(a.np)[a.phase]
+    R, RP, RE = (int(x) for x in a.rows.split(","))
+    print(f"{cfg}; row groups {R}/{RP}/{RE}; uarch {rtlsim.BOARD_UARCH}")
+    prog, ra = image.programs(a.np, R=R, RP=RP, RE=RE)[a.phase]
     vals = {k: int(v) for k, v in (kv.split("=") for kv in a.args.split(",") if kv)}
     vals = {v.name: vals.get(v.name, 0) for v, _ in ra}
     t = PCO.tally(prog, cfg)

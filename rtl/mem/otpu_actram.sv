@@ -25,7 +25,8 @@
 module otpu_actram #(
   parameter int D      = 32,
   parameter int MCOLS  = 8,
-  parameter int ROWS   = MCOLS,     // a multiple of MCOLS, MCOLS a power of two if more
+  parameter int ROWS   = MCOLS,     // MCOLS a power of two if more (the RAM holds ceil(ROWS /
+                                    // MCOLS) groups: ROWS 255, the ISA's most, at MCOLS 32 is 8)
   parameter int BLOCKS = 64,
   parameter int LANES  = 8,
   parameter bit T2     = 1'b0       // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
@@ -56,15 +57,15 @@ module otpu_actram #(
 );
   localparam int BW = $clog2(BLOCKS);
   localparam int DW = $clog2(D);
-  localparam int GROUPS = ROWS / MCOLS;
+  localparam int GROUPS = (ROWS + MCOLS - 1) / MCOLS;
   localparam int GW = (GROUPS > 1) ? $clog2(GROUPS) : 1;
   localparam int PB = (D > 32) ? 32 : D;      // bytes per piece
   localparam int NP = D / PB;
   localparam int RAW = $clog2(GROUPS * BLOCKS);  // the RAMs' address bits
   initial if (D % LANES != 0) $fatal(1, "otpu_actram: LANES must divide D");
   initial if (D % PB != 0) $fatal(1, "otpu_actram: D must be a multiple of 32 above 32");
-  initial if (ROWS % MCOLS != 0 || (GROUPS > 1 && (MCOLS & (MCOLS - 1)) != 0))
-    $fatal(1, "otpu_actram: ROWS must be a multiple of MCOLS, a power of two if larger");
+  initial if (ROWS < MCOLS || (GROUPS > 1 && (MCOLS & (MCOLS - 1)) != 0))
+    $fatal(1, "otpu_actram: ROWS %0d >= MCOLS %0d, MCOLS a power of two if larger", ROWS, MCOLS);
   // a row's column and group
   function automatic int col(input logic [7:0] r);
     return (MCOLS > 1) ? int'(r) % MCOLS : 0;

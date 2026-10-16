@@ -57,9 +57,10 @@ TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_
               "TMEM_PRK", "TMEM_SDM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
-# The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
-# (OTPU_LANES=16): RPB = 0 ("every read lane": TMEM replicated per read port) simulates as
-# NRP x 16, the board build as NRP x LANES; both select the slice's write-mask arbiter.
+# The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
+# target's (OTPU_LANES=16 on the card's 8): RPB = 0 ("every read lane": TMEM replicated per
+# read port) simulates as NRP x max(16, LANES), the board build as NRP x LANES; both select the
+# slice's write-mask arbiter.
 NRP = 8
 SIM_LANES_MAX = 16
 
@@ -265,10 +266,12 @@ def arch_hash(cfg) -> int:
 
 def sim_uarch(t: Target | str | None = None) -> dict:
     """The Verilator builds' micro-architecture for `t` (rtlsim.BOARD_UARCH): the keys the
-    simulation top takes. RPB 0 (every read lane) is NRP x 16, as for any LANES <= 16."""
+    simulation top takes. RPB 0 (every read lane) is NRP x 16 for any LANES <= 16 (the
+    simulation may set more lanes than the target's), NRP x LANES above (f2-vla's 64)."""
     t = t if isinstance(t, Target) else load(t)
     u = t.uarch
-    d = {"WIN": u["WIN"], "RPB": u["RPB"] or NRP * SIM_LANES_MAX, "WPB": u["WPB"],
+    d = {"WIN": u["WIN"], "RPB": u["RPB"] or NRP * max(SIM_LANES_MAX, t.arch["LANES"]),
+         "WPB": u["WPB"],
          "FIFO_DEPTH": u["FIFO_DEPTH"]}
     if u["TMEM_IMPL"]:
         d["TMEM_IMPL"] = u["TMEM_IMPL"]
