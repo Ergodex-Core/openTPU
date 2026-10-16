@@ -508,13 +508,25 @@ class SimTransport:
 
     def __init__(self, ch_bytes: int = 1 << 24, stall: int = 20, seed: int = 1,
                  params: dict | None = None, plusargs: list | None = None,
-                 native: bool | str | None = None, target=None):
+                 native: bool | str | None = None, target=None, nch: int | None = None):
         from opentpu.target import current, load
-        # the target whose build the model is (default the current one): its slices (two
-        # channels each), CFG_PLATFORM and CFG_HASH
+        from opentpu.isasim import board_config
+        # the target whose build the model is (default the current one): its slices, CFG_PLATFORM
+        # and CFG_HASH
         self.target = load(target) if isinstance(target, str) else (target or current())
         self.slices = self.target.arch["S"]
-        self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices)]
+        # the channels a slice (tb_board NCH; CFG_DRAM): two, the DDR boards', unless `nch` says
+        # more (a power of two; the native memory model then), or the configuration's wide port
+        # B needs them (OTPU_PORTB: otpu_native_dram takes PORTB chunks a cycle on 2 PORTB
+        # channels at least, docs/wide_port.md). `ch_bytes` is a channel's bytes on the
+        # two-channel board: the logical memory is 2 ch_bytes a slice, over nch channels
+        self.portb = board_config().PORTB
+        self.nch = nch or max(2, 2 * self.portb)
+        if self.nch < 2 * self.portb or self.nch & (self.nch - 1):
+            raise ValueError(f"SimTransport: {self.nch} channels a slice for a port B of "
+                             f"{self.portb} chunks (a power of two, at least 2 PORTB)")
+        self.ch = [np.zeros(2 * ch_bytes // self.nch, np.uint8)
+                   for _ in range(self.nch * self.slices)]
         self.stall, self.seed = stall, seed
         self.params = params or {}
         self.native = native                    # the channels (rtlsim.MEMORY["NATIVE"]):
@@ -592,14 +604,19 @@ class SimTransport:
         from opentpu.isasim import board_config
         cfg = board_config()                        # OTPU_MCOLS / OTPU_LANES: the "bitstream"
         # VPU_CL and ULANES as the bitstream builds them (make bit: VPU_CL 2, ULANES 8)
-        p = {"S": self.slices, "WORDS": 2 * len(self.ch[0]) // 4, "MCOLS": cfg.MCOLS,
+        p = {"S": self.slices, "WORDS": self.nch * len(self.ch[0]) // 4, "MCOLS": cfg.MCOLS,
              "LANES": cfg.LANES,
              "ACT_ROWS": cfg.act_rows, "TMEM_WORDS": cfg.TMEM_WORDS,      # (release r2: 128K)
              "VPU_CL": rtlsim.UARCH.get("VPU_CL", 2), "ULANES": rtlsim.UARCH.get("ULANES", 8),
              "MXU_IMPL": rtlsim.UARCH.get("MXU_IMPL", 2),
              # the MXU's epilogue lanes as the target builds them (OTPU_MXU_E overrides)
              "MXU_E": rtlsim.UARCH.get("MXU_E", self.target.uarch.get("MXU_E", 0)),
-             "MEM_NATIVE": 2 if native == "ld" else 1}
+             # (the LiteDRAM channels are two a slice: more run on the native model)
+             "MEM_NATIVE": 2 if native == "ld" and self.nch == 2 else 1}
+        if self.nch != 2:                           # the channels a slice (CFG_DRAM reports them)
+            p["NCH"] = self.nch
+        if cfg.PORTB > 1:                           # a wide port B (CAPS2 [3:1]; in CFG_HASH)
+            p["PORTB"] = cfg.PORTB
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -621,7 +638,8 @@ class SimTransport:
         p.setdefault("PLATFORM", t.platform_id)
         p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(build_config(
             t, MCOLS=p["MCOLS"], LANES=p["LANES"], ACT_ROWS=p["ACT_ROWS"],
-            TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0))))
+            TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0),
+            PORTB=p.get("PORTB", 1))))
         exe = rtlsim.build("tb_board", srcs, p)
         with simtmp.tempdir("otpu_board_") as d:
             for c in range(len(self.ch)):
@@ -965,7 +983,7 @@ class Board:
     @property
     def nch(self) -> int:
         """Memory channels per slice (CFG_DRAM; 2 before register map 4, and on the boards'
-        models: SimTransport's two per slice)."""
+        models: SimTransport's, two per slice unless built with more)."""
         if self._info is None and getattr(self.t, "batched", False):
             return getattr(self.t, "nch", 2)
         c = (self._info or self.info())["cfg"]

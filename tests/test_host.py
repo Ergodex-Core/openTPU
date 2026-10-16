@@ -116,14 +116,15 @@ def test_caps2_gather_and_the_load_refusal():
     for t in (FakeTransport(devname=None, regmap=5), FakeTransport(devname=None, regmap=4),
               FakeTransport(devname=None)):
         ok = Board(t)
-        assert ok.gather and ok.info()["caps2"] == {"gather": True}
+        assert ok.gather and ok.info()["caps2"] == {"gather": True, "portb": 1}
         ok.load_program(4096, gather)
         assert t.reg_read(R.R_PROG_N) == 2
     cfg = board_config()
     names = {n for g, n, _ in op_checks(cfg)}
     assert "GATHER" in names
     assert names - {n for g, n, _ in op_checks(cfg, gather=False)} == {"GATHER"}
-    assert R.caps2(None) == {"gather": True} and R.caps2(0) == {"gather": False}
+    assert R.caps2(None) == {"gather": True, "portb": 1}
+    assert R.caps2(0) == {"gather": False, "portb": 1}
 
 
 def test_ddr_rate(monkeypatch, capsys):
@@ -194,7 +195,8 @@ def test_v1_bitstream_fallback():
 # ------------------------------------------------------------------------------ configuration
 @pytest.fixture
 def no_cfg_env(monkeypatch):
-    for k in ("OTPU_MCOLS", "OTPU_LANES", "OTPU_PAIR", "OTPU_DSTEP", "OTPU_ACT_ROWS"):
+    for k in ("OTPU_MCOLS", "OTPU_LANES", "OTPU_PAIR", "OTPU_DSTEP", "OTPU_ACT_ROWS",
+              "OTPU_PORTB"):
         monkeypatch.delenv(k, raising=False)
     return monkeypatch
 
@@ -239,6 +241,38 @@ def test_device_config_takes_dstep_from_caps(no_cfg_env):
         with pytest.raises(ConfigMismatch, match="OTPU_DSTEP"):
             device_config(info)
         no_cfg_env.delenv("OTPU_DSTEP")
+
+
+def test_device_config_takes_the_wide_port_from_caps2(no_cfg_env, tmp_path):
+    """CAPS2 [3:1] (PORTB: the D-byte chunks a cycle port B takes, docs/wide_port.md) sets
+    Config.PORTB; 0 there, and every register map before 5, is one chunk. OTPU_PORTB must
+    agree with it, CFG_HASH takes it (check_hash: a PORTB 1 build hashes as every build
+    before the field), and otpu-diag's CAPS2 check accepts 2 and 4 and nothing else."""
+    from opentpu.host import diag
+    for portb in (1, 2, 4):
+        t = FakeTransport(devname=None, regmap=5, pair=True, portb=portb, chash=True)
+        b = Board(t)
+        info = b.info()
+        assert info["caps2"]["portb"] == portb
+        assert t.reg_read(R.R_CAPS2) >> R.CAP2_PORTB_SHIFT & R.CAP2_PORTB_MASK == \
+            (portb if portb > 1 else 0)
+        cfg = device_config(info)                   # check_hash agrees: no ConfigMismatch
+        assert cfg.PORTB == portb and cfg.PAIR
+        assert cfg == board_config(PAIR=True, PORTB=portb)
+        no_cfg_env.setenv("OTPU_PORTB", str(portb))
+        assert device_config(info).PORTB == portb
+        no_cfg_env.setenv("OTPU_PORTB", "4" if portb == 2 else "2")
+        with pytest.raises(ConfigMismatch, match="OTPU_PORTB"):
+            device_config(info)
+        no_cfg_env.delenv("OTPU_PORTB")
+    assert device_config(Board(FakeTransport(devname=None, regmap=4)).info()).PORTB == 1
+    # the diag's register check: PORTB 2 passes, a reserved encoding (3) is named
+    for portb, ok in ((2, True), (3, False)):
+        t = FakeTransport(devname=None, regmap=5, pair=True, portb=portb, chash=True)
+        out = tmp_path / f"diag{portb}.json"
+        diag.main(["--only", "regs", "--json", str(out)], open_transport=lambda dev: t)
+        rep = json.loads(out.read_text())
+        assert any("CAPS2" in r["msg"] for r in rep["rows"]) == (not ok), rep["rows"]
 
 
 def test_board_backend_rejects_another_configuration(no_cfg_env):

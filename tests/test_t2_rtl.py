@@ -163,13 +163,16 @@ def test_other_formats_on_a_t2_build_rtl(have_verilator, monkeypatch, case):
 
 
 def test_t2_rules():
-    """RSC does not take t2; QUAD needs t2, PAIR, k0 % 4 == 0 and 4 M <= MCOLS; DUP4 needs
-    T2 and 4 rows <= MCOLS (the RTL's simulation checks stop on the same: otpu_mxu)."""
+    """RSC does not take t2; QUAD needs PAIR, k0 % 4 == 0 and 4 M <= MCOLS, and on a one-chunk
+    port B only t2 (an int4 QUAD streams two chunks a cycle: Config.PORTB 2, docs/wide_port.md;
+    the simulator refuses the rate); DUP4 needs T2 (or a wide port) and 4 rows <= MCOLS (the
+    RTL's simulation checks stop on the same: otpu_mxu)."""
     with pytest.raises(ValueError):
         I.mm(WA, SA, OUT, 4, 4, 32, 4, 1, 0, 32, wf=I.WT2, rsc=True)
-    with pytest.raises(ValueError):
-        I.mm(WA, SA, OUT, 4, 4, 32, 4, 1, 0, 32, wf=I.W4I, pair=True, quad=True)
+    with pytest.raises(ValueError):                 # QUAD without PAIR
+        I.mm(WA, SA, OUT, 4, 4, 32, 4, 1, 0, 32, wf=I.W4I, quad=True)
     cfg = Config(S=1, D=32, MCOLS=4, PAIR=True, T2=True, DRAM_BYTES=1 << 20)
+    assert cfg.PORTB == 1
     dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
     dram[SA:SA + 4] = np.array([1.0], np.float32).view(np.uint8)
     x = np.ones((2, 128), np.float32)
@@ -185,6 +188,9 @@ def test_t2_rules():
         Machine(dataclasses.replace(cfg, T2=False),
                 [base + [I.mm(WA, SA, OUT, 1, 4, 32, 1, 1, 0, 32, wf=I.WT2), I.halt()]],
                 [dram.copy()]).run()
+    with pytest.raises(SimError, match="PORTB 1"):  # int4 QUAD: two chunks a cycle
+        Machine(cfg, [base + [I.mm(WA, SA, OUT, 1, 4, 32, 1, 1, 0, 32, wf=I.W4I, pair=True,
+                                   quad=True), I.halt()]], [dram.copy()]).run()
 
 
 @pytest.mark.parametrize("mode", ["quad", "pair4"])

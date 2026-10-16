@@ -48,8 +48,9 @@ RATES = {"RUNNING": 0.80, "MXU_BUSY": 0.60, "MXU_MAC": 0.50, "VPU_BUSY": 0.12,
 
 
 def _target_cfg(D: int, MCOLS: int, LANES: int, pair: bool, dstep: bool, stream: bool,
-                act_rows: int = 0, seq_wc: bool = False) -> dict:
-    """The CFG_* registers of the current target's build with these VERSION / CAPS values."""
+                act_rows: int = 0, seq_wc: bool = False, portb: int = 1) -> dict:
+    """The CFG_* registers of the current target's build with these VERSION / CAPS / CAPS2
+    values (the hash takes the wide port B's PORTB, docs/wide_port.md)."""
     from ..target import arch_hash, current
     t = current()
     a, u, p = t.arch, t.uarch, t.platform
@@ -61,7 +62,7 @@ def _target_cfg(D: int, MCOLS: int, LANES: int, pair: bool, dstep: bool, stream:
     from ..isasim import Config
     full = Config(**{**a, "D": D, "MCOLS": MCOLS, "LANES": LANES,
                      "ACT_ROWS": act_rows if act_rows > MCOLS else 0, "PAIR": pair,
-                     "DSTEP": dstep, "STREAM": stream, "SEQ_WC": seq_wc})
+                     "DSTEP": dstep, "STREAM": stream, "SEQ_WC": seq_wc, "PORTB": portb})
     cfg["hash"] = arch_hash(full)
     return cfg
 
@@ -80,7 +81,7 @@ class FakeTransport:
                  args: bool = False, stream: bool = False, gen: bool = False,
                  chash: bool = False, calib: tuple = (True, True), ecc_ded: bool = False,
                  cfg: dict | None = None, act_rows: int | None = None, mx: bool = True,
-                 gather: bool = True, seq_wc: bool = False, portb: int = 1):
+                 gather: bool = True, seq_wc: bool = False, portb: int | None = None):
         self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2)]
         self.v, self.devname, self.dev = regmap, devname, devname and f"/dev/{devname}"
         self.run_s, self.cycles_per_run = run_s, cycles
@@ -89,17 +90,18 @@ class FakeTransport:
         self.trace, self.trace_extra, self.trace_drop = list(trace or []), trace_extra, trace_drop
         if act_rows is None:            # the target's rows, unless MCOLS is the caller's
             act_rows = MCOLS
-        if None in (D, MCOLS, LANES):
+        if None in (D, MCOLS, LANES, portb):
             from ..isasim import board_config
             c = board_config()
             if act_rows is None:
                 act_rows = c.act_rows
             D, MCOLS, LANES = (c.D if D is None else D, c.MCOLS if MCOLS is None else MCOLS,
                                c.LANES if LANES is None else LANES)
+            portb = c.PORTB if portb is None else portb      # (OTPU_PORTB: the "bitstream's")
         self.version = D << 16 | MCOLS << 8 | LANES
         self.act_rows = act_rows        # > MCOLS: CAPS bit24 and the ACT_ROWS register
         self.cfg_words = R.cfg_words(cfg or _target_cfg(D, MCOLS, LANES, pair, dstep, stream,
-                                                        act_rows, seq_wc))
+                                                        act_rows, seq_wc, portb))
         self.slices = R.cfg(self.cfg_words)["S"] if regmap >= R.CFG_SINCE else 1
         if self.slices > 1:             # two channels per slice (board.channel_map)
             self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices)]
@@ -115,7 +117,7 @@ class FakeTransport:
         self.mx = mx                    # CAPS bit29: the MX numerics (every bitstream of this tree)
         self.t2 = t2                    # CAPS bit28: t2 weights, MM QUAD, QACT DUP4
         self.gather = gather            # CAPS2 bit0 (register map 5): the collective's GATHER
-        self.portb = portb              # CAPS2 [3:1]: chunks a cycle on port B (docs/wide_port.md)
+        self.portb = portb or 1         # CAPS2 [3:1]: chunks a cycle on port B (docs/wide_port.md)
         self.calib = list(calib)        # STATUS CALIB0 / CALIB1
         self.ecc_ded = ecc_ded          # STATUS ECC_DED
         self.regs = {R.R_CTRL: 0, R.R_PROG_ADDR: 0, R.R_PROG_N: 0, R.R_SCRATCH: 0,
