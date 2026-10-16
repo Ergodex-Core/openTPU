@@ -78,7 +78,7 @@ module otpu_mxu_pk_col #(
         logic signed [47:0] pk;
         otpu_skew #(.W(8), .N(k)) u_wb (.clk, .en(1'b1), .d(wbs[I]), .q(wbk));
         otpu_pe_pk #(.FIRST(k == 0), .LAST(k == CLS - 1), .WREG(WREG)) u_pe (
-          .clk, .en(1'b1), .act(ak), .wa(wak), .wb(wbk),
+          .clk, .en(1'b1), .act(ak), .wa(wak), .wb(wbk), .sel(2'b11),
           .pcin((k == 0) ? 48'd0 : pc[(k == 0) ? 0 : k - 1]), .pcout(pc[k]), .p(pk));
         if (k == CLS - 1) begin : g_end
           assign pend[c] = pk;

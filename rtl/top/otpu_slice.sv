@@ -81,7 +81,8 @@ module otpu_slice
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (bit p: port p on
                                       //   port A; -1: TM_SIDED, below)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
-  parameter bit T2         = 1'b0     // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter bit PACK       = 1'b0     // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit1)
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused
@@ -498,7 +499,7 @@ module otpu_slice
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .T2(T2), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PACK(PACK), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
