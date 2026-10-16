@@ -59,17 +59,17 @@ int8) 85.5 ms, 11.7 Hz (the paper's measurements).
 | L6 | **TMEM 64K -> 512K words** (2 MB in URAM) | prefix tiles of 128+ rows in one pass; fewer DRAM round trips | ~57 URAM a slice | tiled prefill tests |
 | L7 | **clock 200 -> 250 MHz** (SGMV closed 250 on the same part) | 1.25x | timing work at the nightly | synthesis / route (nightly only) |
 | L8 | **W8A16 where accuracy needs it** (RhinoVLA's paper: W8A8 hurt success; W8A16 kept it) | accuracy, not speed: int8 x int16 is one MAC a DSP (no packing), so W8A16 layers run at half L2's rate | DSP or a second weight path | action error vs fp32 (docs/pi05.md harness) |
-| L10 | **memory bandwidth: every HBM port, and more of each** (section 5a): all 32 HBM pseudo-channels (S = 4 x NCH 8, ~460 GB/s raw), each slice's port B as PORTB = 2 independent lanes (docs/wide_port.md, ternary-bonsai's work, taken by merge), and the DMA's LD / ST of activation tiles on a lane of its own | the prefix's weight re-streaming and activation tiles off the critical path at ACT_ROWS 64-128; headroom for the π0.5 stretch (more columns / slices) | the lanes' port-B paths (+~10K LUT a slice est.), no DSP | RTL timing (perf_qwen-style, NCH 8, PORTB 2) |
+| L10 | **memory bandwidth in steps** (section 5a): 8 HBM ports to begin with (~100 GB/s: NCH 2 x 4 slices), then 16 (PORTB 2 lanes a slice: docs/wide_port.md, ternary-bonsai's work, taken by merge), then 32 (~460 GB/s); the DMA's LD / ST of activation tiles on a lane of its own | the prefix's weight re-streaming and activation tiles off the critical path at ACT_ROWS 64-128; headroom for the π0.5 stretch (more columns / slices) | the lanes' port-B paths (+~10K LUT a slice est.), no DSP | RTL timing (perf_qwen-style, NCH 8, PORTB 2) |
 | L9 | **model-side**: batch the 3 views as MXU rows (one pass of the tower's weights), the prefix KV once per chunk, the expert's time conditioning precomputed (docs/pi05.md), fewer visual tokens (RhinoVLA: 64 a view) | π0.5 -> RhinoVLA halves the MACs | none | ISA |
 
 ## 5. The VLA variant `f2-vla` (target, estimate)
 
 S = 4, MCOLS = 16 (packed int8 DSPs), ACT_ROWS = 128, ACT_BLOCKS = 128, TMEM_WORDS = 512K,
-LANES = 32, the fused activation unit, NCH = 8 a slice (all 32 HBM ports), port B in two steps:
-PORTB = 2 first (two lanes a slice: 64 GB/s a slice at 250 MHz, 256 GB/s in all, ~55% of the
-HBM's raw ~460 GB/s), then PORTB = 4 (four lanes, one channel pair each of the slice's 8: 128 GB/s
-asked a slice against its 8 ports' ~115 GB/s raw, so ~460 GB/s in all, the HBM's own limit), a
-DMA lane for activation tiles, core 250 MHz.
+LANES = 32, the fused activation unit, **8 HBM ports in all to begin with (NCH = 2 a slice x 4
+slices, ~115 GB/s raw, ~100 GB/s usable)** with PORTB = 1 (a slice asks 32 GB/s at 250 MHz,
+128 GB/s for four: the 8 ports are the limit, ~100 GB/s); then, only where the measurements ask
+for it, double to 16 ports (NCH 4, PORTB 2) and again to 32 (NCH 8, PORTB 2-4: ~460 GB/s, the
+HBM's limit); a DMA lane for activation tiles; core 250 MHz.
 Peak 4 x 16 x 128 = 8192 MAC/cycle x 250 MHz = 2.05 TMAC/s (20x today); DSP ~5K of 9024,
 LUT ~0.75-0.9M of 1.3M, URAM ~460 of 960 (estimates, to be checked by the nightly synthesis).
 
@@ -86,20 +86,21 @@ execution still drives the robot at 10-50 Hz control, open loop within a chunk.
 ## 5a. Memory bandwidth: the traffic of a chunk (estimate, π0.5, f2-vla)
 
 The F2's HBM is two stacks of 16 pseudo-channels: 32 AXI ports of 256 bits at 450 MHz, ~14.4 GB/s
-each, ~460 GB/s in all. f2-vla takes all 32 (4 slices x 8). A slice consumes one D-byte chunk a
-cycle on port B (32 GB/s at 250 MHz) of its 8 ports' ~115 GB/s; PORTB = 2 doubles that (the
-LLM branch's wide port, built as independent lanes: docs/wide_port.md "Future improvements").
+each, ~460 GB/s in all. f2-vla starts with 8 of them (NCH 2 a slice x 4 slices: ~115 GB/s raw, ~100 GB/s usable), which
+the chunk's traffic needs (below); a slice consumes one D-byte chunk a cycle on port B (32 GB/s at
+250 MHz) of its 2 ports' ~29 GB/s. The steps beyond it: 16 ports (NCH 4 with PORTB 2, the LLM
+branch's wide port as independent lanes: docs/wide_port.md "Future improvements"), then 32.
 
-| traffic | per chunk, all slices | PORTB 1 (128 GB/s) | PORTB 2 (256 GB/s) | PORTB 4 (~460 GB/s, HBM-bound) |
+| traffic | per chunk, all slices | 8 ports (~100 GB/s, the start) | 16 ports (~200 GB/s) | 32 ports (~460 GB/s) |
 |---|---|---|---|---|
 | weights, prefix: ceil(R / ACT_ROWS) passes x ~2.5 GB (R ~900) | ACT_ROWS 128: ~18 GB; 64: ~35 GB | 0.14 / 0.27 s | 0.07 / 0.14 s | 0.04 / 0.08 s |
 | weights, vision (768 rows: 6 passes x 0.8 GB at ACT_ROWS 128) | ~5 GB | 0.04 s | 0.02 s | 0.01 s |
 | weights, expert: 10 steps x ~0.3 GB (int8, 50 rows: one pass a step) | ~3 GB | 0.02 s | 0.01 s | 0.01 s |
 | activation tiles and KV (tiled prefill: x, MLP hidden in int8, q / k / v, KV appends), ~40 MB a layer | ~0.8 GB | 0.01 s | — | — |
-| total | ~27-44 GB | ~0.2-0.35 s | ~0.1-0.17 s | ~0.06-0.1 s |
+| total | ~27-44 GB | ~0.27-0.44 s | ~0.13-0.22 s | ~0.06-0.1 s |
 
-Against ~1.4 s of MAC work, PORTB 1 already keeps π0.5 compute-bound at ACT_ROWS 128; PORTB 2
-buys three things: (1) ACT_ROWS 64 (half the ACT RAM's URAM) at the same time; (2) headroom for
+Against ~1.4 s of MAC work, 8 ports (~100 GB/s) keep π0.5 compute-bound at ACT_ROWS 128
+(0.27 s of traffic, overlapped with the MXU's work); 16 ports (PORTB 2) would buy three things: (1) ACT_ROWS 64 (half the ACT RAM's URAM) at the same time; (2) headroom for
 the π0.5 stretch (MCOLS 24 or 6 slices: ~1.5-2x the MAC rate, and with it the bytes a cycle);
 (3) the expert steps and vision, whose few rows a pass make them the most bandwidth-hungry part
 (50 rows / 16 columns: ~4 cycles a chunk, 32 B a cycle a column group). With 6 slices for π0.5,
@@ -115,8 +116,9 @@ which still holds.
 | 2 | L4 fused activation unit: ISA op + RTL + tests | bit-exact; VPU share < 10% |
 | 3 | L2 MCOLS 16 with DSP packing; L5 LANES 32; L6 TMEM 512K | RTL timing of a cut model at MCOLS 16 |
 | 4 | L3 four slices with VLA sharding | ISA S=4 run exact; RTL S=2 timing |
-| 4a | L10 first doubling: merge the wide-port lanes (PORTB 2) from ternary-bonsai, NCH 8 a slice on all 32 ports, the DMA activation lane | RTL timing of a cut prefix at PORTB 1 vs 2: 2x the port-B bytes a cycle, port-B stalls < 5% at MCOLS 16 |
-| 4b | L10 second doubling: PORTB 4 (four lanes a slice, one HBM channel pair each) | RTL timing at PORTB 4 on the HBM memory model: ~1.8x over PORTB 2 (the HBM's 8 ports a slice cap it); kept if the π0.5 stretch (MCOLS 24 / 6 slices) needs it |
+| 4a | L10 start: 8 HBM ports (NCH 2 a slice x 4), PORTB 1, the DMA activation lane | RTL timing of a cut prefix on the 8-port memory model: ~100 GB/s, port-B stalls < 5% at MCOLS 16 / ACT_ROWS 128 |
+| 4b | L10 first doubling, if 4a's stalls ask for it: 16 ports (NCH 4) with PORTB 2 (the wide-port lanes merged from ternary-bonsai) | RTL timing: ~2x the bytes a cycle |
+| 4c | L10 second doubling, for the π0.5 stretch (MCOLS 24 / 6 slices): 32 ports (NCH 8), PORTB 2-4 | RTL timing: up to the HBM's ~460 GB/s |
 | 5 | RhinoVLA port (Qwen3-VL ViT new; Qwen3 LM kernels exist; expert / flow loop shared with π0.5) | action error vs its reference |
 | 6 | f2-vla target; nightly synthesis at 250 MHz; AFI; board run | ≥ 1 Hz RhinoVLA on the F2 (measured) |
 | 7 | L8 W8A16 where Phase 0 / 5 show int8 activations hurt | success-rate parity on LIBERO |
