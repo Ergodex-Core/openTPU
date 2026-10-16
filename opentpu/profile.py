@@ -149,7 +149,13 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         rows, KB = w[3] & 0xFFFF, w[3] >> 16
         n = rows * KB * D
         nw = n // 2 if ins.flags & I.F_HALF else n     # HALF: the rows' first halves written
-        return "QST", f"{rows}x{KB * D} -> DRAM int8", -(-n // L) + nw, 0, nw + rows * KB
+        # the store pass: a word (four contiguous bytes) a cycle when the elements are
+        # contiguous and the rows word-aligned (otpu_quant's `wide`: es 1 and the row's byte
+        # address a multiple of 4; dst's register part assumed aligned), else a byte a cycle
+        # (the transposed V stores: es the column stride)
+        wide = w[6] == 1 and w[5] % 4 == 0 and w[1] % 4 == 0
+        st = -(-nw // 4) if wide else nw
+        return "QST", f"{rows}x{KB * D} -> DRAM int8", -(-n // L) + st, 0, st + rows * KB
     if op == I.VOP:
         rows, cols = w[3] & 0xFFFF, w[3] >> 16
         func = (w[5] >> 16) & 0xFF

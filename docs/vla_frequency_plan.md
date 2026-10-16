@@ -53,7 +53,8 @@ RhinoVLA's are still estimates.
 * VPU (measured tally): 2.0 s a chunk. **The prefix's GELU is 0.78 s, not ~1.3 s**: one cycle
   an element at 8 lanes as estimated, but over 558 x 16384 x 17 = 155 M elements (the last
   layer's MLP is dead), not 800 x 16384 x 18; the chunk's GELU in all (tower, expert too)
-  1.26 s; softmax 0.28 s, norms 0.13 s. QACT 0.77 s, QST 0.37 s.
+  1.26 s; softmax 0.28 s, norms 0.13 s. QACT 0.77 s, QST 0.25 s (the K stores a word a
+  cycle on port A, the transposed V stores a byte: confirmed on the RTL, docs/pi05.md 5).
 * Weight traffic (measured tally): port B 1.43 G chunks, **183 GB a chunk** (7.1 s at a chunk a
   cycle), of it the prefix 138 GB: TMEM (64K words) caps the prefix's row group at 8 rows, so
   the 2B's ~1.9 GB stream 70 times (558 / 8), not 35 (ACT_ROWS 16). ACT_ROWS 128 alone does
@@ -89,8 +90,8 @@ ceil(ACT_ROWS / MCOLS) cycles: compute grows 16x while the weight bandwidth a cy
 
 | # | lever | gain (estimate) | cost on the VU47P (estimate) | validation |
 |---|---|---|---|---|
-| L1 | **MXU columns MCOLS 4 -> 32, then 64 with DSP48E2 int8 packing** (one weight x two activation rows a DSP, the pre-adder forming a1 + (a2 << 19)). The repo's study found two products a DSP48E1 inexact on the cascade (docs/mxu_systolic.md: the low field overflows after 3 accumulations), so every column is 138 DSP today. On the DSP48E2 the 27-bit A port gives a 19-bit low lane, and a CL = 16 chain's sum of products in [-127, 127] (quant.py's int8 never holds -128) is at most 16 x 16129 = 258,064 < 2^18: exact, with a one-bit sign fix-up of the high lane. The pre-adder is taken by PAIR's stream select (INMODE via `hi0`), so the packed column forms the pair in fabric or redesigns that select | MCOLS 32 unpacked: 8x, 4096 MAC/cycle; MCOLS 64 packed: 16x, 8192 | MCOLS 32 unpacked: 4.4K DSP (the safe point); MCOLS 64 packed: est. ~4.6K DSP; MCOLS 64 unpacked would be 8.8K, the whole part. LUT est. ~250-320K (S1 decode, accumulators, per-column epilogue i2f / fmul) | **the gate of the 1 Hz claim, phase 1**: a packed 16-chain in Verilator, bit-exact against the ISA over the int8 corners (+-127, mixed signs, the fix-up), and one packed column synthesized out of context (DSP count, fmax); then MCOLS 8 -> 16 -> 32 (-> 64) bit-exact, mxu_bench |
-| L2 | **ACT_ROWS 16 -> 255**: an MM's row count is an 8-bit field (isa.mm: 0 < M < 256), and 255 rows reach 256's pass count over the prefix, ceil(558 / 255) = ceil(558 / 256) = 3 and ceil(968 / 255) = 4, so **no ISA change**; a 16-bit M (QST's rows already are) stays an option for M >= 256 | weight passes over the prefix: 3 at Np 558 instead of 70 today (TMEM caps the row group at 8; section 3) | **width-bound, not capacity-bound**: otpu_actram reads one D-byte block a column every cycle (`r_data` is MCOLS x D x 8 bits), 16 RAMB36 a column today (4 pieces x 4) beside its DSP column; MCOLS 32: 512 RAMB36, MCOLS 64: 1,024 of the part's 2,016 (or 960 URAM at 72 bits a port: every URAM on the part); rows are free up to the RAM's depth (512). Pumping the ACT RAM at 2x as TMEM_PMP does halves it, another clock-domain item | **ISA tally (done)**: the prefix's 255-row group needs TMEM 1.5M words (at 1M: "TMEM exhausted", the group stays 128 and nothing changes); with it port B falls 0.65 -> 0.51 s a chunk at MCOLS 64 (the prefix 0.40 -> 0.26 s), 0.69 -> 0.55 s at MCOLS 32, the MXU bound unchanged. RTL timing with ROWS 255 in phase 3 |
+| L1 | **MXU columns MCOLS 4 -> 32 physical, 64 logical with DSP48E2 int8 packing**: one activation row x two weight rows a DSP (A = w_a, D = w_b << 19, the pre-adder's AD = w_a + w_b 2^19, B = the activation), a physical column yielding two logical output columns a cycle. A CL = 16 chain's lane sum is at most 16 x 127^2 = 258,064 < 2^18 (quant.py's int8 never holds -128), the lanes split at the chain end (L = sext19(P[18:0]); H = P[47:19] + P[18], the borrow absorbed by the high lane's column end on its pre-adder: no fabric, no cycle), before the column end's accumulation over the row's blocks (where a packed lane overflows at the second chain already). PAIR's A / D select survives as a third INMODE value. The repo's "inexact after 3 accumulations" was the DSP48E1's 25-bit pre-adder (a 17-bit lane); it already had a bit-exact packed DSP48E2 column, rtl/exp/mx_mxu (docs/mx_mxu.md 5) | MCOLS 32 unpacked: 8x, 4096 MAC/cycle; 32 packed (64 logical): 16x, 8192 | 146 DSP a physical column (128 PEs + two column ends), **73 a logical column** against 137 today; MCOLS 64 logical = 4,672 + ~192 epilogue lanes ≈ **4.9K of 9,024**; MCOLS 32 unpacked 4,480; 64 unpacked would be 8.8K, the whole part. LUT est. ~250-320K. W8 only: 4-bit PAIR / QUAD, t2 and W8A16 stay one product a DSP | **Phase 1 done (docs/mxu_packing.md)**: `otpu_pe_pk` (generic and DSP48E2), `otpu_mxu_pk_col`, tests/test_mxu_pk.py in Verilator: 9 passed, 0 mismatches against the ISA's integer over the corners (every sign of +-127 at the lane bound, the borrow, K = 16384, random rows), and the two failing patterns pinned (sixteen (-128)^2 in a lane; w_b = -128 beside a negative w_a wraps the 27-bit pre-adder): both need an operand the quantizer never produces. Left: one packed and one unpacked column out of context on the nightly host (`tools/mxu_pk_ooc.sh`: DSP count, **fmax**, the open question); then MCOLS 8 -> 16 -> 32 physical bit-exact, mxu_bench |
+| L2 | **ACT_ROWS 16 -> 255**: an MM's row count is an 8-bit field (isa.mm: 0 < M < 256), and 255 rows reach 256's pass count over the prefix, ceil(558 / 255) = ceil(558 / 256) = 3 and ceil(968 / 255) = 4, so **no ISA change**; a 16-bit M (QST's rows already are) stays an option for M >= 256 | weight passes over the prefix: 3 at Np 558 instead of 70 today (TMEM caps the row group at 8; section 3) | **width-bound, not capacity-bound**: otpu_actram reads one D-byte block a column every cycle (`r_data` is MCOLS x D x 8 bits), 16 RAMB36 a physical column today (4 pieces x 4) beside its DSP column; 32 physical columns (64 logical, packed): **512 RAMB36** of the part's 2,016; 64 unpacked would be 1,024 (or 960 URAM at 72 bits a port: every URAM on the part), which is why L1 packs weights, not activations; rows are free up to the RAM's depth (512). Pumping the ACT RAM at 2x as TMEM_PMP does halves it, another clock-domain item | **ISA tally (done)**: the prefix's 255-row group needs TMEM 1.5M words (at 1M: "TMEM exhausted", the group stays 128 and nothing changes); with it port B falls 0.65 -> 0.51 s a chunk at MCOLS 64 (the prefix 0.40 -> 0.26 s), 0.69 -> 0.55 s at MCOLS 32, the MXU bound unchanged. RTL timing with ROWS 255 in phase 3 |
 | L3 | **a fused activation unit in the MXU drain / quantizer**: GELU-tanh / SiLU (table + polynomial, as SGMV's sgmv_act), gate x up, then quantize for the next MM (SGMV's MLP_FUSE); gate and up rows interleaved in the image so a drain yields pairs; one unit per drain lane | removes the prefix MLPs' VPU work: GELU 0.78 s of π0.5 today, 0.14 s at LANES 64 (tally): ~6% of the serial sum at the f2-vla point. Still cheap; built after L4-L6 and sized on the measured remainder | est. ~4K LUT, ~10 DSP, 3 BRAM a lane, 8-16 lanes | bit-exact against an ISA definition of the fused op |
 | L4 | **VPU lanes 8 -> 64** (LANES; TMEM banks with them) for softmax over long rows, norms, RoPE, residual adds | 8x element throughput: π0.5's ~92 M softmax elements and norms in ~0.05 s | LUT est. ~150-200K (fp32 lanes), DSP ~300-500 | the VPU tests at LANES 16, 32, 64 |
 | L5 | **TMEM 64K -> 1M words** (4 MB in URAM), banked by LANES; the drain's MCOLS outputs and QACT's row reads at 64 words a cycle | prefix tiles of 256 rows x 2048 fp32 (2 MB) in one pass; fewer DRAM round trips | ~114 URAM; a 64-way bank crossbar est. ~80-100K LUT | tiled prefill tests; RTL bank-conflict counters |
@@ -99,17 +100,19 @@ ceil(ACT_ROWS / MCOLS) cycles: compute grows 16x while the weight bandwidth a cy
 | L8 | **clock 200 -> 250 MHz** (SGMV closed 250 on the same part at 20K LUT; today's full f2 build is 145K LUT at 200) | 1.25x, treated as upside: every number below is at 200 MHz | timing work, nightly | synthesis / route (nightly only) |
 | L9 | **W8A16 where accuracy needs it** (docs/pi05.md 4: W8A8 moves π0.5's actions by 6.8% of their range, the 2B at W8A16 1.7%; RhinoVLA's paper: W8A8 hurt success) | accuracy; int8 x int16 is one MAC a DSP: half L1's rate if L1 packs, the same rate unpacked (decided by phase 1) | DSP or a second weight path | action error vs fp32 (docs/pi05.md harness) |
 | L10 | **model-side**: the 3 views as MXU rows of one pass, the prefix KV once a chunk, the expert's time conditioning precomputed (docs/pi05.md), fewer visual tokens (RhinoVLA: 64 a view) | π0.5 -> RhinoVLA halves the MACs | none | ISA |
-| L11 | **QST stores as D-byte chunks** through the DMA / port B write path, or SigLIP's per-view outputs kept in TMEM and quantized straight into ACT RAM (with L10). Today QST writes a byte a cycle on port A: ceil(n / LANES) + n cycles (opentpu/profile.py), which does not shrink with LANES | the vision tower's bound at scale: QST 0.288 s against 0.137 s of MXU at the f2-vla point, 0.34 s of the chunk's 2.36 s serial sum (more than the whole VPU after L4) | a chunk FIFO on the quantizer's store side | first confirm on the RTL that the byte-a-cycle model is what the hardware does (if the profile is pessimistic, the tally's vision line moves in the plan's favour); then the quantizer tests, RTL timing of the tower |
+| L11 | **QST stores as D-byte chunks** through the DMA / port B write path, or SigLIP's per-view outputs kept in TMEM and quantized straight into ACT RAM (with L10). Today QST writes on port A a word a cycle for contiguous, word-aligned rows (otpu_quant's `wide`: the K stores) and a byte a cycle for the transposed V stores (es the column stride): ceil(n / LANES) + n / 4 or + n cycles (opentpu/profile.py, confirmed on the RTL: the tower's QKV phase 1.10x its MXU cycles with QST tallied so; the byte-only model exceeded the measured total). Neither shrinks with LANES | the vision tower's bound at scale: QST 0.181 s against 0.137 s of MXU at the f2-vla point, 0.21 s of the chunk's 2.08 s serial sum (nearly the whole VPU after L4) | a chunk FIFO on the quantizer's store side, or V kept untransposed (the MXU's K-block layout) | the quantizer tests; RTL timing of the tower |
 
 ## 6. The VLA variant `f2-vla` (one slice; target, estimate)
 
-S = 1, D = 128, MCOLS = 32 unpacked (64 packed if phase 1's packing holds), ACT_ROWS = 255,
+S = 1, D = 128, MCOLS = 32 physical columns, 64 logical with the packing (exact, phase 1; its
+fmax from the nightly's OOC run decides packed 64 against unpacked 32), ACT_ROWS = 255,
 ACT_BLOCKS = 128, TMEM_WORDS = 1.5M (the prefix's 255-row group needs it; L2), LANES = 64,
 QST chunked (L11), the fused activation unit,
 NCH = 8 HBM ports, PORTB 2, core 200 MHz (250 as upside). Peak: MCOLS 32, 4096 MAC/cycle x
 200 MHz = 0.82 TMAC/s (8x today); MCOLS 64 packed, 1.64 TMAC/s at 200 MHz, 2.05 at 250 (20x).
-Budget (estimates for the nightly synthesis to check): DSP 4.4K unpacked / ~4.6K packed of
-9,024; **BRAM 512 / 1,024 RAMB36 of 2,016 for the ACT RAM** (L2), the rest for the weight
+Budget (estimates for the nightly synthesis to check): DSP 4,480 unpacked / ~4.9K packed (4,672
++ the epilogue lanes) of 9,024; **BRAM 512 RAMB36 of 2,016 for the ACT RAM** either way (32
+physical columns; L2), the rest for the weight
 FIFOs, TMEM pieces and the trace; URAM ~345 of 960 (TMEM 1.5M words, 6 MB); LUT ~0.6-0.8M of
 1.3M. The
 placement scheme of one DSP column and one BRAM column per array column does not extend to 64
@@ -118,12 +121,16 @@ FIFO and the drain sit).
 
 | | today (MCOLS 4; measured tally) | f2-vla, MCOLS 32 unpacked, 200 MHz | f2-vla, MCOLS 64 packed, 200 MHz |
 |---|---|---|---|
-| π0.5 a chunk | ~15-22 s (section 3) | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 1.90 s, port B 0.55, VPU 0.26, QST 0.34; bound 1.9 s, serial 3.2 s: **0.3-0.5 Hz** | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 0.95 s, port B 0.51, VPU 0.26, QST 0.34; bound 0.95 s, serial 2.21 s: **0.45-1.05 Hz** (the RTL's overlap, 1.23-1.54x the slowest unit on cut phases, puts it at ~0.7-0.85 Hz) |
-| RhinoVLA a chunk | ~12-15 s (estimate) | ~0.9-1.0 s: **~1 Hz, no margin** (estimate: no tally yet) | ~0.5 s: **~1.3-2 Hz** (estimate) |
+| π0.5 a chunk | ~15-22 s (section 3) | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 1.90 s, port B 0.55, VPU 0.26, QST 0.21; bound 1.9 s, serial 3.1 s: **0.3-0.5 Hz** | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M): MXU 0.95 s, port B 0.51, VPU 0.26, QST 0.21; bound 0.95 s, serial 2.08 s: **0.5-1.05 Hz** (the RTL's overlap, 1.10-1.54x the slowest unit on cut phases, puts it at ~0.7-0.9 Hz) |
+| RhinoVLA a chunk | MXU 6.6 s (shape tally, tools/rhinovla_shape.py: 0.66 T MAC, a 233-row prefix; the real chunk more, the row groups TMEM-capped as π0.5's) | shape tally: MXU 0.90 s, port B 0.25: **~1.1 Hz MXU-bound, no margin** (the VPU / QACT / QST not estimated: ~0.3-0.5 s more serial, by π0.5's) | shape tally: MXU 0.53 s, port B 0.25: **~1.3-1.9 Hz** |
 
 So the ≥ 1 Hz deliverable (RhinoVLA) rests on phase 1's packing result: with MCOLS 64 packed
-it has margin, at MCOLS 32 unpacked it is at the line and needs the RTL's overlap measured on
-the real prefix shape. 250 MHz adds 1.25x on top. π0.5 at 1 Hz needs ~2.8 TMAC/s effective:
+it has margin (MXU 0.53 s), at MCOLS 32 unpacked the MXU alone is 0.90 s, at the line, and the
+other units' overlap has to be measured on the real prefix shape. RhinoVLA's shape (the
+paper's Table 8; its V3 branch may differ): 3 views x 64 tokens + ~40 prompt tokens + 1 state
+token = ~233 prefix rows through Qwen3-VL-2B (28 layers, 2048 wide, MLP 6144) after a 24-layer
+ViT at 256 patches a view; the expert 18 x 1024 on 31 rows: 0.66 T MAC a chunk (vision 0.24,
+prefix 0.32, 10 expert steps 0.09), against π0.5's 1.47 T. 250 MHz adds 1.25x on top. π0.5 at 1 Hz needs ~2.8 TMAC/s effective:
 the MCOLS 96 stretch (packed; 12,288 MAC/cycle, DSP ~6.2K + VPU) is the point within one slice;
 MCOLS 128 would need ~8.2K DSPs, past the part with the VPU's. The plan is sized for Np 558
 (the LIBERO prompt shape; at 968 rows, lerobot's padded length, every prefix number is 1.7x).
@@ -150,8 +157,8 @@ not a contingency; 16 ports only with the MCOLS 96 stretch.
 
 | phase | work | exit criterion |
 |---|---|---|
-| 0 | π0.5 port: **done** (docs/pi05.md: ISA-exact numerics, the tally, int8 error). Left: a shape-only tally of RhinoVLA (Qwen3-VL ViT, 2.1B LM, 0.4B expert; no port needed), and QST's DRAM rate confirmed on the RTL (L11) | the budget per phase; RhinoVLA's seconds a chunk at each point |
-| 1 | **the packing's feasibility** (L1): a packed CL 16 chain in Verilator, bit-exact against the ISA over the int8 corners; one packed column synthesized out of context (DSP, fmax). ACT_ROWS 255 in the tally (done: needs TMEM 1.5M words, L2) and the RTL. QST chunked stores (L11) | **MCOLS 64 packed or MCOLS 32 unpacked**: the DSP count and fmax a column; the tally at ACT_ROWS 255; QST off the vision tower's critical path |
+| 0 | π0.5 port: **done** (docs/pi05.md: ISA-exact numerics, the tally, int8 error). RhinoVLA's shape-only tally: **done** (tools/rhinovla_shape.py, the paper's Table 8: ViT 24 x 1024 at 256 patches a view merged to 64 tokens, 3 views; the 2B 28 x 2048, MLP 6144, 16 / 8 heads of 128; the expert 18 x 1024, MLP 3072, 31 rows; 0.66 T MAC a chunk, 45% of π0.5's; MXU 0.90 s at MCOLS 32, 0.53 s at 64, port B 0.25 s). Left: QST's DRAM rate confirmed on the RTL (L11) | the budget per phase; RhinoVLA's seconds a chunk at each point |
+| 1 | **the packing's feasibility** (L1): **done** in Verilator (bit-exact, docs/mxu_packing.md); left: the packed and unpacked columns out of context on the nightly host (DSP, fmax). ACT_ROWS 255 in the tally (done: needs TMEM 1.5M words, L2) and the RTL. QST: the K stores confirmed a word a cycle on the RTL; the V stores (L11) still a byte | **MCOLS 64 packed or MCOLS 32 unpacked**: the fmax a column; the tally at ACT_ROWS 255; QST off the vision tower's critical path |
 | 2 | the ACT RAM at the chosen MCOLS: BRAM / pumped / URAM from the width math; a floorplan sketch per SLR (columns, the result FIFO, the drain) | the BRAM budget; the SLR plan |
 | 3 | L1 MXU columns: MCOLS 8 -> 16 -> 32 (-> 64) (the RTL parameter exists: MCOLS 4 / 8 builds today) with ACT_ROWS 255 | bit-exact at each MCOLS; RTL timing on the **real prefix shape** (558-968 rows, the 16384-wide MLPs, the 2048-wide projections; a cut model hides the drain's and result FIFO's losses): MAC/cycle ~MCOLS x 128 at >= 75% |
 | 4 | L4 / L5 / L6: LANES 64, TMEM 1M words, QACT / QST at LANES a cycle | VPU / QACT tests; bank-conflict counters in the RTL timing; VPU + QACT + QST < 15% of the serial sum |
@@ -163,9 +170,10 @@ not a contingency; 16 ports only with the MCOLS 96 stretch.
 
 ## 8. Risks and the fallback
 
-* The DSP packing (L1) is the gate: unpacked, MCOLS 64 is the whole part's DSPs, and the
-  fallback is **MCOLS 32 x 1 slice unpacked** (4.4K DSP), which keeps every argument of section
-  4 and lands RhinoVLA near 1 Hz with no margin. MCOLS 32 x 2 slices is not the fallback: it
+* The DSP packing (L1) is exact (phase 1); what is left of the gate is its fmax on the real
+  part (the OOC run on the nightly host). Unpacked, MCOLS 64 is the whole part's DSPs, and the
+  fallback is **MCOLS 32 x 1 slice unpacked** (4,480 DSP), which keeps every argument of
+  section 4 and lands RhinoVLA near 1 Hz with no margin. MCOLS 32 x 2 slices is not the fallback: it
   brings back the collectives and the sharding of π0.5's single KV head that section 4 avoids.
 * A 32-64-column MXU, 64 VPU lanes and a 64-way TMEM crossbar in one slice: wiring across SLRs
   is the main risk (pblocks for the MXU's column chain, pipelined weight and ACT-RAM paths), and
