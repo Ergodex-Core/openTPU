@@ -1,0 +1,24 @@
+{
+  "candidates": [
+    {
+      "name": "portb2-gemma3",
+      "commit": "a9acb2b05da2b0ddcdbb97254b2776ca2cee2c87",
+      "target": "f2-hbm",
+      "baseline_profile": "f2-hbm-burst200",
+      "queued_utc": "2026-10-16T13:46:11.180060+00:00",
+      "gates": {
+        "tests/test_wide_port_rtl.py": "53 passed (docs/wide_port.md, Verilator 5.048)",
+        "perf_qwen --layers 2 PORTB 1 vs 2": "2,798,478 vs 1,643,595 cycles (docs/wide_port.md); fresh receipts in hwloop-scratch/runs",
+        "visualsim": "prepared, not executed (seat)"
+      },
+      "workload": {
+        "models": "gemma3-1b",
+        "max_tokens": 128,
+        "prompts": "tools/f2_bench.py SHORT and LONG"
+      },
+      "run_dir": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb2",
+      "status": "QUEUED_AWAITING_APPROVAL"
+    }
+  ],
+  "note": "queued only; nothing scheduled or launched"
+}

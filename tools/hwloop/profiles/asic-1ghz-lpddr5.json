@@ -1,0 +1,18 @@
+{
+  "name": "asic-1ghz-lpddr5",
+  "design": "opentpu",
+  "kind": "hypothetical_asic",
+  "label": "unvalidated scenario",
+  "description": "A hypothetical 1 GHz openTPU slice on four 16-bit LPDDR5-6400 channels (51.2 GB/s aggregate): the slice's port B (128 B a cycle at 1 GHz = 128 GB/s) is 2.5x the memory, so this configuration is memory-bound by construction and the model's value is the bound, not the core. Core clock, controller clock, data rate and latency are separate parameters. No receipt exists.",
+  "pin": {"rtl_rev": "wide-port a9acb2b05da2b0ddcdbb97254b2776ca2cee2c87", "asic_evidence": "docs/asic.md"},
+  "clocks": {"core_mhz": 1000.0, "tmem_mhz": 2000.0, "memory_axi_mhz": 800.0, "controller_mhz": 800.0, "host_pcie_mhz": null},
+  "memory": {
+    "type": "LPDDR5", "channels_per_slice": 4, "channel_bytes": 1073741824, "beat_bytes": 64, "chunk_bytes": 128,
+    "port_data_bits": 16, "data_rate_MTps": 6400, "port_peak_GBps": 12.8, "slice_portb_peak_GBps": 128.0,
+    "outstanding_reads_per_channel": 32, "burst_beats_max": 4,
+    "latency_ns_loaded": 150,
+    "refresh": {"tREFI_us": 3.9, "tRFC_ns": 280, "note": "LPDDR5 all-bank refresh, JEDEC-typical; assumption"},
+    "uncertain": ["every memory timing", "the controller's scheduling", "the core's 1 GHz"]
+  },
+  "slice": {"D": 128, "MCOLS": 4, "LANES": 8, "ACT_ROWS": 16, "TMEM_WORDS": 65536, "PORTB": 1, "S": 1}
+}

@@ -1,0 +1,25 @@
+{
+  "name": "f2-ddr4-100mhz",
+  "design": "opentpu",
+  "kind": "actual_fpga",
+  "label": "measured",
+  "description": "The F2 DDR image: one slice, D=128, MCOLS=4, LANES=8, core 100 MHz / TMEM 200 MHz, the slot's DDR4 DIMM through one 512-bit sh_ddr port and the 250 MHz bridge, 32 outstanding 64-byte reads per channel, two channels, 4 GiB. The measured serving receipt is bench_ours100.json (copied under VS_AR/ergodex_npu/evidence/measured/).",
+  "pin": {"build_id": "f9e0e5bf", "agfi": "agfi-0014449e89d7fceee", "software_rev": "model-infer-f2 e55992e4621f1930c57c9712dd96d5f1ec7c4e1c", "receipt_sha256": "bdc524f677a3015d6757d2d86d9c715037d8184d2af0316a029b04a3d5223a89"},
+  "clocks": {"core_mhz": 100.0, "tmem_mhz": 200.0, "memory_axi_mhz": 250.0, "controller_mhz": null, "host_pcie_mhz": 250.0},
+  "memory": {
+    "type": "DDR4", "channels_per_slice": 2, "channel_bytes": 2147483648, "beat_bytes": 64, "chunk_bytes": 128,
+    "port_data_bits": 512, "port_peak_GBps": 16.0, "slice_portb_peak_GBps": 12.8,
+    "outstanding_reads_per_channel": 32, "burst_beats_max": null,
+    "data_rate_MTps": 2400, "device_width_bits": 64, "ranks": null,
+    "latency_ns_loaded": null,
+    "refresh": {"tREFI_us": 7.8, "tRFC_ns": 350, "note": "DDR4 JEDEC nominal for an 8 Gb device; the DIMM's part is not recorded"},
+    "uncertain": ["DIMM part / timings", "loaded latency", "the bridge's queueing"]
+  },
+  "slice": {"D": 128, "MCOLS": 4, "LANES": 8, "ACT_ROWS": 16, "TMEM_WORDS": 65536, "PORTB": 1, "S": 1},
+  "measured": {
+    "date": "2026-10-15", "tool": "tools/f2_bench.py (otpu-serve, context 2048, chunk-64 batched prefill, greedy, 128 outputs)",
+    "qwen3-0.6b-int8": {"decode_tok_s_short": 11.4778, "decode_tok_s_long": 11.1409, "ttft_s_short": 0.4799, "ttft_s_long": 5.5107, "prompt_tokens": [19, 274]},
+    "gemma3-1b-int8": {"decode_tok_s_short": 7.0393, "ttft_s_short": 0.5824, "ttft_s_long": 5.1606, "prompt_tokens": [16, 268]},
+    "metric_notes": "client-side; prefill tok/s = prompt tokens / TTFT is a serving metric"
+  }
+}
