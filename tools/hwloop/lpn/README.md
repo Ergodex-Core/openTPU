@@ -1,12 +1,17 @@
 # The LPN tier: MJChku/LPNDialect's model of this slice, in the loop
 
-Status (2026-10-16): built on this Mac, upstream's GEMM / MLP rows reproduced to the cycle on
+Status (2026-10-17): built on this Mac, upstream's GEMM / MLP rows reproduced to the cycle on
 Verilator 5.048, `cli.py lpn-run` writes a receipt for this loop's Gemma-3-1B decode token and
-grades it against the Verilator receipts (+0.885% against the wide-port receipt and +0.902%
-against the pinned RTL on the same bundle at the model's validated DRAM latency, +2.71% at the
-receipt's 60 cycles; all inside upstream's 5% gate; the wide-port comparisons are **outside the
-model's validated configuration**, so recorded, not a calibration). Every number an LPN run produces is labelled
-`lpn-estimate`; `measured` stays for Verilator and the board.
+grades it against the Verilator receipts. Two models: upstream's (PORTB 1 on the pinned tree's
+frontend: +0.885% against the wide-port receipt, +0.902% against the pinned RTL on the same
+bundle, the model's validated configuration) and **the wide model** (`tools/hwloop/lpn/wide.py`,
+section 5: port B as a credit of PORTB chunks a cycle with the two-part reads counted from
+the addresses, the row lanes, the NCH channels), **graded on the wide-port export 96a90c2f
+against fresh Verilator receipts: PORTB 2 +1.23%, PORTB 4 +0.96%, NCH 8 at 60 cycles +0.83%,
+int8 RL 4 +4.11%, int4 RL 4 on MCOLS 8 +4.16%, all inside upstream's 5% gate** and accepted
+only for those configurations on that export (the registry `tools/hwloop/lpn/validated.json`;
+anything else `REFUSED_NOT_MODELLED` / `REFUSED_STALE_MODEL`). Every number an LPN run produces
+is labelled `lpn-estimate`; `measured` stays for Verilator and the board.
 
 The rule of the loop (docs/hwloop.md): models first, Verilator for what the models favour, Vivado
 only in the nightly. Nothing here launches an instance, programs a card or pays for anything.
@@ -123,6 +128,26 @@ Steps and files (all under `RUN/lpn/`):
    lpn-estimate`, `calibration`, the staleness summary; `compare.json` per `--compare` receipt;
    `rtl-pin/` with `--rtl-pin` (below).
 
+The wide model (section 5) takes the same arguments plus `--portb 2 | 4`, `--rowlanes [--mcols
+8] [--wformat int4 --head-format int4]`, or `--channels` (PORTB 1 on the NCH channels at
+`--lat`), and its own rule: `--compare RECEIPT --grade` grades the configuration on the export
+and writes the point into `tools/hwloop/lpn/validated.json`; afterwards `lpn-run` accepts that
+configuration on that export only.
+
+```sh
+python tools/hwloop/cli.py lpn-run --tree ~/ergodex-03/hwloop-scratch/opentpu-96a90c2f --out RUN --layers 2 --portb 2 --nch 8 --lat 60 \
+    --compare tools/hwloop/receipts/2026-10-17/opentpu96_portb2            # graded: +1.229%
+python tools/hwloop/cli.py lpn-run --tree ... --out RUN --layers 4 --portb 4 --rowlanes --mcols 8 --wformat int4 --head-format int4 \
+    --nch 8 --lat 60 --compare tools/hwloop/receipts/2026-10-17/opentpu96_rl4_int4_mcols8      # graded: +4.161%
+python tools/hwloop/cli.py lpn-run --tree ... --out RUN --layers 2 --portb 8                # REFUSED_NOT_MODELLED (no graded point)
+python tools/hwloop/cli.py lpn-run --tree ~/ergodex-03/hwloop-scratch/opentpu-a9acb2b0 --out RUN --layers 2 --portb 2   # REFUSED_STALE_MODEL (graded on 96a90c2f)
+```
+
+The wide run's `lpn/` adds `memory.json` (the static tally: wide and two-part reads, the
+per-channel beats, the port B / MXU / port A / channel rooflines) and the manifest's
+`rtl_fingerprint` is the **graded export's** (`validated_rtl_pin` its sha), so `check-stale`
+refuses any other tree with the files listed.
+
 ### The Gemma-3-1B decode token (2 layers + the 262K-row head, pos 9, int8 / int8 head)
 
 Receipts: `tools/hwloop/receipts/2026-10-16/lpn_gemma3_portb1/` (Timing.dram_latency 8) and
@@ -137,7 +162,48 @@ inputs 20 s (the export's compile + ISA simulator 1.3 s), frontend 6.2 s, model 
 | LPN, Timing.dram_latency 8, 128 B/cycle (the validated memory) | lpn-estimate | **2,823,232** | **+0.885%**, inside the 5% gate | 0.984 (RTL 0.996) | 362,063,442 (footprints; RTL beats x 64 = 362,179,072, -0.03%) | outside validated: RTL moved (16 changed / 14 added fingerprinted files), receipt on NCH 8 at 60 cycles with the board uarch |
 | LPN, Timing.dram_latency 60 (the receipt's latency) | lpn-estimate | **2,874,213** | **+2.706%**, inside the gate | 0.967 | same | the same, plus a Timing value upstream never validated |
 | pinned RTL on the same bundle (`--rtl-pin`: f237dab2 + patch, tb_top default uarch, behavioral DRAM lat 8, Verilator 5.048; 2:19 build + 7:50 run) | **measured** | **2,797,992** | LPN at lat 8 is **+0.902%** of it: the model's own validated configuration on this workload, the honest grade; the pinned RTL and the wide-port receipt are 486 cycles (0.017%) apart on this port-bound token | 0.993 | | validated (`lpn_gemma3_portb1/rtl-pin/rtl_pin.json`: DRAM + TMEM bit-exact vs the pin's ISA simulator, whose hashes equal the export's; 469 command PCs traced = the 475 dynamic commands less the 6 scalar ones) |
-| PORTB 2 (the 1,643,595-cycle receipt) | none | `REFUSED_NOT_MODELLED` | not comparable: the model has one port-B credit, one chunk a cycle | | | outside the model (section 5) |
+| PORTB 2 (the 1,643,595-cycle receipt) | none (this model) | `REFUSED_NOT_MODELLED` | not comparable: one port-B credit, one chunk a cycle; the wide model's row is below | | | the wide model (section 5) |
+
+### The wide model, graded (2026-10-17, the 96a90c2f export, f2-hbm NCH 8 at --lat 60, the board uarch)
+
+Fresh Verilator receipts on the export (`receipts/2026-10-17/opentpu96_*`, Verilator 5.048,
+6-8 minutes each on the shared machine): PORTB 4 **1,308,691** and PORTB 2 **1,643,595** (2
+layers + head, identical to docs/wide_port.md's and to the a9acb2b0 receipt), int8 RL 4 at
+PORTB 4 **949,485** and int4 RL 4 at PORTB 4 / MCOLS 8 **579,306** (4 layers + head, identical to
+docs/wide_port.md's row-lane table), PORTB 1 **2,798,478** (identical to the a9acb2b0 receipt).
+The LPN receipts: `receipts/2026-10-17/lpn96_*` (manifest, staleness, emit, memory, native
+log, trace, compare, the bundle's workload / input manifests).
+
+| configuration (Gemma-3-1B, pos 9) | Verilator (`measured`) | LPN (`lpn-estimate`) | error | what binds (the model's rooflines: port B / MXU / port A / channel) | two-part reads (model = receipt) | per-channel beats (model / receipt ch0) | wall (inputs / model / native) |
+|---|---|---|---|---|---|---|---|
+| int8, 2 layers + head, **PORTB 2** (PAIR) | 1,643,595 | **1,663,796** | **+1.229%** | port B 1,623,915 (1,536,296 requests + 87,619 two-part) / MXU 1,536,296 / port A 1,535,784 / channel 814,569 | 87,619 of 1,242,880 (7.05%) | 704,490 / 705,394 | 18 s / 9 s / 0.54 s |
+| int8, 2 layers + head, **PORTB 4** (QUAD) | 1,308,691 | **1,321,225** | **+0.958%** | port B 1,283,555 (925,224 + 358,331 two-part) / MXU 925,224 / port A 924,712 / channel 814,569 | 358,331 of 631,808 (56.7%) | 704,490 / 705,394 | 41 s / 17 s / 1.3 s |
+| int8, 2 layers + head, **PORTB 1 on the NCH 8 channels at 60 cycles** (`--channels`) | 2,798,478 | **2,821,563** | **+0.825%** (the single-port model at Timing.dram_latency 60: +2.706%; at 8: +0.885%) | port B 2,779,176 / channel 814,569 | - | 704,490 / 705,394 | 20 s / 9 s / 0.5 s |
+| int8, 4 layers + head, **PORTB 4, RL 4** (MCOLS 4) | 949,485 | **988,507** | **+4.110%** | **channel 938,100** (811,329 beats at 0.865 a cycle) / port B 800,592 / MXU 800,592 / port A 799,568 | 0 of 799,488 | 811,329 / 814,004 | 48 s / 26 s / 0.56 s |
+| int4 / int4 head, 4 layers + head, **PORTB 4, RL 4, MCOLS 8** (the > 100 tok/s point) | 579,306 | **603,411** | **+4.161%** | **channel 547,792** (473,766 beats) / port B 533,672 (441,256 advances + 92,416 Sw lines) / port A 532,648 / MXU 441,256 | 0 of 440,232 | 473,766 / 477,228 | 54 s / 20 s / 0.10 s |
+
+What the errors are made of. PORTB 2 / 4 are port-B bound in the RTL and in the model (the
+requests plus the two-part reads, reproduced to the read); the +1% is the same non-MM tail
+the PORTB 1 point carries (+0.9%). The two row-lane points are **channel-bound in the model**
+(RD 64 B-read beats in flight a channel over a 74-cycle round trip: 0.865 beats a cycle a
+channel, against the lanes' need of one a cycle at PORTB 4) and 4.1% high: the RTL's channels
+sustain a little more than the model's rate (the receipt's int8 RL 4 is 84.5% of its issue
+roofline, the model 81%; 0.853 beats a cycle a channel would land on it), i.e. the round trip
+is about two cycles shorter than the 14 cycles of path assumed (`WideTiming.adapter_latency`,
+derived from the adapter's structure, not fitted: each cycle of it is 1.3% of a channel-bound
+point). Inside the gate, so recorded as graded and not tuned; a `--adapter-latency` sweep is
+the sensitivity, and the honest next step is a Verilator receipt at NCH 16 (f2-hbm16), where
+the channels stop binding and the issue roofline should show. The int4 RL 4 point also
+carries the group's Sw line as an issue cycle (92,416 of them), which the RTL's port A
+roofline counts the same way (534,712 against the model's 532,648 + the PAIR MMs).
+
+Whole model (26 layers + head, `--layers 0`; no receipt in this repository, so `--uncalibrated`
+and no registry point; `receipts/2026-10-17/lpn96_whole_rl4_*`): int4 RL 4 at PORTB 4 / MCOLS 8
+**1,502,766 cycles = 133.1 tok/s, +1.95%** of docs/wide_port.md's measured 1,474,025 (135.7
+tok/s; the model's MXU 1,065,924 advances and port A 1,299,524 lines are the tally's numbers
+exactly); int8 RL 4 at PORTB 4 **2,444,351 = 81.8 tok/s, +2.10%** of the measured 2,393,990
+(83.5). Wall: inputs 76 / 34 s (the 26-layer image and the ISA simulator), model 35 / 23 s,
+native 0.6 / 0.8 s against the doc's 288 / 699 s of Verilator simulation (plus its build).
 
 Where the configurations overlap: the program, the image and the MM weight chunks are identical
 (2,779,176 chunks on both sides: the receipt's `portb_mxu_chunks`), the bytes within 0.03%. Where
@@ -175,9 +241,20 @@ Between `f237dab2` + patch and wide-port `a9acb2b0` (`lpn_gemma3_portb1/stalenes
   `tb_f2nch_protocol.sv`, `tb_native_nch.sv`
 - removed: none
 
-So every LPN number for the wide-port tree is `--uncalibrated` by construction until the model is
-re-validated on it (a `--rtl-pin`-style run of the export's own RTL at the pin's configuration,
-or the model's pin moved to the export: upstream's `REVISION`, which `workload.load` enforces).
+So every number of upstream's model for the wide-port tree is `--uncalibrated` by construction
+until the model is re-validated on it (a `--rtl-pin`-style run of the export's own RTL at the
+pin's configuration, or the model's pin moved to the export: upstream's `REVISION`, which
+`workload.load` enforces).
+
+**The wide model's rule** (`tools/hwloop/lpn/validated.json`): a configuration key (model,
+layers, pos, formats, PORTB, row lanes, MCOLS, target, NCH, lat) is accepted only with a graded
+point (an LPN run compared with a Verilator receipt: `--compare RECEIPT --grade` writes the
+point, the export's sha and its RTL fingerprint over the same globs) and only on that export:
+`REFUSED_NOT_MODELLED` without a point (PORTB 8, NCH 16, 4-bit QUAD, `--layers 0`, the VLA
+shape ...), `REFUSED_STALE_MODEL` on another export with the changed / added / removed files
+(the run's `manifest.json` carries the graded export's fingerprint and sha, so `check-stale
+RUN/lpn --tree OTHER` refuses too). A point over the 5% gate stays in the registry labelled
+uncalibrated with its suspected cause; `--uncalibrated` runs any configuration, labelled so.
 
 ## 4. Nightly
 
@@ -185,76 +262,99 @@ or the model's pin moved to the export: upstream's `REVISION`, which `workload.l
 co-sim points, then the build host; the drift rule: an LPN point more than 5% from the Verilator
 receipt it is graded on is uncalibrated, its projection leaves the decision, the model extension
 goes on the list, the Verilator receipt stands; a configuration the model does not have (PORTB
-2 / 4, NCH 8 at 60 cycles, the VLA shape) has no LPN point and the plan says so. The queued
-`portb2-gemma3` entry carries its LPN points (`baseline` +0.88% / +2.71%, `candidate` none).
-Plan only; nothing scheduled, nothing activated.
+8, NCH 16, 4-bit QUAD, the VLA shape) has no LPN point and the plan says so. The queued
+`portb2-gemma3` entry carries its LPN points (`baseline` +0.88% / +0.83% with the channels,
+`candidate` PORTB 2 +1.23%), `portb4-rl4-int4-gemma3` its (`candidate` int4 RL 4 +4.16% at 4
+layers + head, int8 RL 4 +4.11%, and the whole-model estimates). Plan only; nothing scheduled,
+nothing activated.
 
-## 5. Extending the model: PORTB 2 / 4 / 8, NCH 16, the f2-vla shape (not implemented)
+## 5. The wide model: PORTB 2 / 4, the row lanes, the NCH channels (`tools/hwloop/lpn/wide.py`, graded 2026-10-17)
 
 Upstream's rule (`examples/opentpu/ARCHITECTURE.md`): the hypothetical engines share the modelled
 ACT / TMEM and DRAM ports; **extra physical memory ports, banks or a different arbitration need
 corresponding resource changes**, and matching the existing tests establishes nothing for a new
-RTL architecture: validate representative modified-RTL cases. What each of ours needs, against
-`model.py` / `components.py` as they are:
+RTL architecture: validate representative modified-RTL cases. The wide model is those resource
+changes, as a subclass of upstream's `CompactOpenTPU` in this repository (the clone stays at
+`b06f42d9`, unpatched; the command window, the units, the dependency builder and the completion
+banks are upstream's; the matrix engine and its per-command tables are ours), run on the
+**export's own ISA simulator** (`wide.load_export`: upstream's pin f237dab2 refuses int8 PAIR; the
+export knows PORTB, QUAD for every format, MM RL, QACT DUP8, MCOLS 8). The regression that keeps
+it honest: at PORTB 1, fifo 128 entries, NCH 1 and the pin's Timing the net reduces to
+upstream's and gives **2,823,232** on the Gemma bundle, the same cycle count.
 
-**PORTB 2 / 4 / 8 (wide port; receipts 1,643,595 and 1,308,691 cycles for 2 / 4, none for 8).**
-The model's port B is one credit place (`DRAM.b`, one token) whose service per prefetch is
-`ceil(width x chunks x D / dram_bytes_per_cycle)` with `dram_bytes_per_cycle <= cfg.D` asserted;
-the MXU's row service is `max(steps x groups, drain)` with `steps = chunks` for 4-bit PAIR and
-`kb` otherwise. Changes: (a) a `Timing.port_chunks_per_cycle` (PORTB) lifting the assertion, the
-port credit's service in chunks / PORTB, and the 128-chunk FIFO filling PORTB chunks a cycle;
-(b) the MXU's advance for int8 PAIR at PORTB 2 (the RTL takes 5 advances for a 9-chunk row:
-`ceil(kb / 2)` plus the odd chunk, and QUAD at PORTB 4), the roofline moving from the port to the
-MXU (the receipt's: 93.5% of a 1,536,296-cycle MXU roofline); (c) the two-part wide reads (7.0%
-of the PORTB 2 receipt's 1,242,880 wide reads cross a chunk pair: an extra port cycle each, from
-the footprints' addresses); (d) the DMA / QST traffic sharing the wider port (upstream's
-`fpga-dse` branch already shares one widened memory credit across prefetch and DMA / QST). Then
-re-validate: the PORTB 2 and 4 receipts exist; PORTB 8 needs its Verilator run first (the loop's
-`run-rtl --portb 8`, ~30 min) before any LPN number for it means anything.
+**PORTB 2 / 4 as a port-B credit of PORTB chunks a cycle** (`WideTiming.port_chunks`). An MM row
+is `requests` port-B requests (an advance's chunks: int8 PAIR 2, QUAD 4; 4-bit QUAD 2; the last
+advance the chunks left) and `steps` MXU advances (`ceil(kb / reuse)`: 5 a 9-chunk row at PAIR, 3
+at QUAD), so the roofline moves from the port to the MXU where the port is wider than the reuse.
+The port credit is held one cycle a request **plus one cycle for every two-part request**: a
+wide request whose chunks need one channel pair twice, counted exactly from the MM's addresses
+with otpu_native_dram's hash (chunk m on pair `(m mod NP) ^ fold(m / NP)`, the XOR of the
+higher log2(NP)-bit groups; a request's chunks sorted by pair, a repeat = two parts). On the
+2-layer bundle: 1,242,880 wide reads and **87,619 two-part at PORTB 2, 631,808 and 358,331 at
+PORTB 4: the receipts' NATIVEB counters to the read**, and the MXU rooflines 1,536,296 / 925,224
+to the cycle. The fractional two-part share of a row is carried across the batches in the
+request token (not rounded up a cycle a batch: that alone was +1.7%). The chunk FIFO's credit
+is in entries (the target's FIFO_DEPTH: 1024 on f2-hbm, from `targets/<target>.toml`), an entry
+an advance (a narrow MM on a wide build: a chunk). Port A: one line an advance. Not modelled:
+the DMA's and QST's requests sharing the wider port beyond their one-chunk service (unchanged
+from upstream: < 1% of a token's traffic). Error it costs: none visible at this precision (the
+PORTB 2 / 4 points are +1.2% / +1.0%, the PORTB 1 point +0.9%).
 
-**NCH 8 at 60 cycles (the receipts' memory) and NCH 16 (`f2-hbm16`).** The model's DRAM is one
-port with `dram_latency` and `dram_bytes_per_cycle`: no channels, no per-channel outstanding
-reads, no address hash. The 60-cycle run above over-charges the latency (+2.7% against +0.9%)
-because the adapter keeps up to 203 reads in flight (the trace's estimate) and the model's
-prefetch credit does not. Changes: per-channel credit places (NCH x 64 outstanding beats, the
-address -> channel hash `CHASH` from the footprints' addresses, 64-byte beats), a return pipeline
-of `dram_latency`, the DMA's writes on the same credits; the per-channel beat counts and the
-outstanding-reads estimate of `mem_windows.csv` are the validation targets, plus the cycles.
-NCH 16 is then a parameter, but the f2-hbm16 target has no Verilator receipt yet (one `run-rtl`
-with `OTPU_TARGET=f2-hbm16`), and a channel's bandwidth share is the bridge's (450 MHz, 8-beat
-bursts), which neither model has.
+**NCH 8 at 60 cycles: the channels** (`nch`, `channel_depth`, `adapter_latency`, `chash`). NCH
+credit places, one a channel, each held for the beats the batch puts on it at the channel's
+sustained rate: a chunk is two 64-byte beats, one on each channel of its pair (`chan_of`: the
+pair, then the half by address bit 6 XOR the chunk index's parity); port A's lines cost the
+distinct beats they touch (the adapter's APF runs and beat reuse: a sequential scale stream
+fetches each beat once; the receipts' per-channel reads are within 0.3-0.7% of the count:
+704,490 / 705,394 at PORTB 2, 811,329 / 814,004 at int8 RL 4). The rate is one beat a cycle, or
+RD / round trip where the in-flight room is shorter than a read's round trip: RD = 64 B-read
+beats a channel at NCH > 2 (`otpu_board` NRD), the round trip `--lat` + 14 cycles of path (the
+slice's two port registers, BREG, the queue, the command, `otpu_native_mem`'s in-order return
+jitter of 0..7 cycles, the response FIFO, the merge: structural, not fitted), 64 / 74 = 0.865
+beats a cycle a channel. The chunk FIFO (1024 entries) hides the latency itself: the ready
+FIFO's delay is the round trip. With this the PORTB 1 point at the receipt's memory falls from
++2.706% (the single port at Timing.dram_latency 60: the packet credit of a 128-entry FIFO
+exposed the latency) to **+0.825%**. The channel rate is what binds the row-lane points (below).
+Not modelled: the DMA's beats on the channels, the A runs' refills (one miss per 32 beats a
+channel: ~0.2-0.4% of a decode token), the bridge's 450 MHz side and its bursts (the card's,
+not the RTL run's), NCH 16 (a parameter, but no receipt: `f2-hbm16` is refused until one
+exists).
 
-**The f2-vla shape (MCOLS 32 physical / 64 logical packed, LANES 64, ACT_ROWS 255).** In the
-model MCOLS enters `groups = ceil(m / MCOLS)` and the pipeline tail `min(D / 8, chain) + MCOLS +
-14`; LANES enters QACT's `ceil(kb x D / LANES)`, QST's and VOP's row costs (with a `LANES == 8`
-special case for the SE's composites: EXP2 / RECIP / RSQRT / LOG2 as 25-cycle loops on eight
-lanes), the drain width `min(epilogue_lanes, LANES / gcd(stride, LANES))` and the GATHER cost;
-ACT_ROWS enters only through `m` (replay = more groups). Changes: (a) packed columns: two logical
-rows per physical column per advance, so `groups = ceil(m / 64)` on a 32-column array with the
-MXU's advance and epilogue rewritten for the pair (and `epilogue_lanes` = the VLA build's
-MXU_E); (b) LANES 64: the composite table for the wide SE (no 8-lane loop), TMEM banks = 64 and
-the TMEM arbitration the model only approximates, which the vision prefix's VOP-heavy phases
-stress; (c) ACT_ROWS 255: the ACT RAM replay's re-stream per group is validated only to 16 rows
-(upstream's held-out 8-row replay case) and the QACT fill of 255 rows is new; (d) a vision
-prefix is a prompt (rows > 1), so `compile_rows` / tiled prefill inputs, not `compile_step`.
-Validation targets: the `vla` worktree's Verilator utilization numbers for the 558-968-row prefix
-(docs/designs/vla-1hz-packed-slice.md), bit-exact against the ISA simulator as everything else.
-Until then: no LPN number for the VLA shape. Upstream's `fpga-dse` "parallel output-row lanes"
-and narrow arrays are the nearest prior art and, in upstream's words, unvalidated against any
-evolved RTL.
+**Row lanes** (MM RL, `rs` bits 3:2; `--rowlanes`). A group of L rows is one row of the model:
+`ceil(kb / blocks-a-chunk)` advances of L aligned chunks (one request, one entry, one MXU step
+each; **0 two-part by the same count, as the receipts' 0 of 799,488 / 440,232**), one port-A
+line an advance plus the group's Sw line where the header and the advance's scale data do not
+share a 32-byte line (`H + A > 32`: int4 L 4 with H = A = 32; 92,416 of them in the 4-layer
+bundle), each an issue cycle without a chunk (port B's and the MXU's), the drain `ceil(L /
+min(L, E))`, the group's chunks `L x advances` for the bytes (the last group padded, as the
+image). MCOLS 8 and int4 are inside what upstream's model carries (`groups = ceil(m / MCOLS)`
+with m = 1; `chunks = ceil(kb / 2)` for the 4-bit formats): no resource change beyond the
+group-as-row. Not modelled: QACT DUP8's extra copies (the quantizer's cost is upstream's
+`(rows + 1) chunks + 60`). The two points are +4.1% / +4.2%, channel-bound in the model
+(section 2's table says what each cycle of path is worth).
 
-Also still rejected by the timing backend (for the LLM track's later workloads): HALT CHAIN
-(the generate loop between buckets), WAITC (the card's sequencer wait entries), DSTEP / STREAM
-(Qwen3.5), WAITW, multi-slice collectives; `lpn-run` refuses a program that uses one
-(`REFUSED_REJECTED_ISA`) and it stays on Verilator.
+**Still refused** (`REFUSED_NOT_MODELLED`, no graded point): PORTB 8 (the ISA has no 8-chunk
+advance; RL 8 is int8 L 8 on f2-hbm16, which has no Verilator receipt), NCH 16 (`f2-hbm16`), 4-bit
+QUAD on a wide port (the first-line-alone scale request is coded as an issue cycle and a line
+but not graded), the whole model (`--layers 0`: estimates only, see the queue), any other
+model / position / format, and the f2-vla shape (MCOLS 32 physical / 64 logical packed, LANES
+64, ACT_ROWS 255: the packed columns, the wide SE's composites, the TMEM arbitration and the
+255-row replay are resource changes not made; validation targets: the `vla` worktree's
+Verilator utilization numbers for the 558-968-row prefix, docs/designs/vla-1hz-packed-slice.md).
+Still rejected by the timing backend (`REFUSED_REJECTED_ISA`): HALT CHAIN (the generate loop
+between buckets), WAITC, DSTEP / STREAM (Qwen3.5), WAITW, multi-slice collectives.
 
 ## Files
 
 - `tools/hwloop/lpn_run.py`: the tier (`cli.py lpn-run`); `tools/hwloop/lpn/inputs.py` (export
-  context), `lpn/emit.py` (LPNDialect on PYTHONPATH, pin as root), `lpn/rtl_pin.py` (the pinned
-  RTL on a bundle); `lpn/__init__.py`: the pin, the label, the gate, the validated configuration.
+  context), `lpn/emit.py` (LPNDialect on PYTHONPATH, the pin or the export as root), `lpn/wide.py`
+  (the wide model: `WideTiming`, `plan_mm`, `WideCompactOpenTPU`, `memory_report`, `load_export`),
+  `lpn/validated.json` (the graded registry), `lpn/rtl_pin.py` (the pinned RTL on a bundle);
+  `lpn/__init__.py`: the pin, the label, the gate, the validated configuration.
 - Receipts: `tools/hwloop/receipts/2026-10-16/lpn_toolchain/`, `lpn_upstream_gemm/`,
-  `lpn_upstream_mlp/`, `lpn_gemma3_portb1/`, `lpn_gemma3_portb1_lat60/`.
+  `lpn_upstream_mlp/`, `lpn_gemma3_portb1/`, `lpn_gemma3_portb1_lat60/`;
+  `receipts/2026-10-17/opentpu96_*` (the fresh Verilator receipts on 96a90c2f) and `lpn96_*`
+  (the graded LPN runs).
 - Scratch (not in git): `~/ergodex-03/lpn-scratch/{LPNDialect, lpn-build, llvm20-env, llvm20-bin,
   openTPU-lpn-pin, runs, logs}`; the 372 MB DRAM images stay there.
 - Tests: `tests/test_hwloop.py` (the native-log parser, the record and its compare, the staleness

@@ -1,15 +1,20 @@
 # The hardware loop: LPN and VisualSim -> Verilator -> nightly FPGA
 
-Status (2026-10-16): the tools in `tools/hwloop/` run end to end on this Mac up to the
+Status (2026-10-17): the tools in `tools/hwloop/` run end to end on this Mac up to the
 VisualSim execution, which is **waiting for the seat** (the user's Architect GUI holds the
 single license; the runner refuses to start a second instance and never stops the GUI). The
 LPN stage **runs on this Mac** (section "The LPN stage": LPNDialect built with LLVM / MLIR 20
-from conda-forge, upstream's GEMM / MLP rows reproduced to the cycle on Verilator 5.048, and
-`cli.py lpn-run` grades this loop's PORTB 1 token at **+0.9%** of the Verilator receipts, inside
-upstream's 5% gate but outside the model's validated configuration, so labelled `lpn-estimate`
-and not a calibration: `tools/hwloop/lpn/README.md`). The nightly FPGA step is **prepared, not activated**. One
-calibrated workload (Gemma-3-1B int8 decode on the F2 HBM configuration) is the only workload
-covered; broadening comes after the first model runs have been compared with the receipts.
+from conda-forge, upstream's GEMM / MLP rows reproduced to the cycle on Verilator 5.048;
+`cli.py lpn-run` grades this loop's PORTB 1 token at **+0.9%** of the Verilator receipts with
+upstream's model, and **the wide model** (`tools/hwloop/lpn/wide.py`: port B as a credit of
+PORTB chunks a cycle with the two-part reads, the row lanes, the NCH channels) at **PORTB 2
++1.23%, PORTB 4 +0.96%, NCH 8 at 60 cycles +0.83%, int8 RL 4 +4.11%, int4 RL 4 on MCOLS 8
++4.16%** against fresh Verilator receipts on the wide-port export 96a90c2f, all inside the 5%
+gate, each accepted only for its graded configuration on that export: `tools/hwloop/lpn/README.md`).
+Every LPN number is labelled `lpn-estimate`. The nightly FPGA step is **prepared, not activated**.
+One calibrated workload (Gemma-3-1B decode on the F2 HBM configuration, int8 and the int4
+row-lane image) is the only workload covered; broadening comes after the first model runs
+have been compared with the receipts.
 
 Rules of the loop (the user's):
 
@@ -78,11 +83,14 @@ phases' tails. Neither replaces the other, and neither replaces Verilator.
 6. (done 2026-10-16) The LPN build on this Mac and the replay of this loop's PORTB 1 receipt:
    LPN 2,823,232 cycles against 2,798,478 (**+0.885%**) and against the pinned RTL on the same
    bundle, 2,797,992 (**+0.902%**, the model's own validated configuration); at the receipt's
-   60-cycle latency 2,874,213 (+2.706%). What is still missing: a re-validation of the model on
-   the **wide-port tree** itself (its RTL fingerprint differs from the pin in 16 changed and 14
-   added files, so every LPN number for it is `--uncalibrated` by rule), and the model
-   extensions for PORTB 2 / 4, NCH 8 at 60 cycles and the VLA shape (section 5 of
-   `tools/hwloop/lpn/README.md`), each graded against its Verilator receipt before use.
+   60-cycle latency 2,874,213 (+2.706%). (done 2026-10-17) The wide model on the wide-port
+   export 96a90c2f, graded against fresh Verilator receipts there: PORTB 2 +1.229%, PORTB 4
+   +0.958%, PORTB 1 on the NCH 8 channels at 60 cycles +0.825%, int8 RL 4 +4.110%, int4 RL 4
+   on MCOLS 8 +4.161% (section 5 of `tools/hwloop/lpn/README.md`; the registry
+   `tools/hwloop/lpn/validated.json` carries each point with the export's RTL fingerprint).
+   Still missing: a re-validation of upstream's own model on the wide-port tree (its RTL
+   fingerprint differs from the pin in 17 changed and 14 added files, so upstream's numbers
+   for it stay `--uncalibrated` by rule), NCH 16 and PORTB 8 receipts, and the VLA shape.
 
 ## The per-change loop
 
@@ -191,10 +199,16 @@ matrix columns, two epilogue lanes, eight TMEM / VPU lanes, replicated TMEM, a 3
 range-based sequencer window, a 128-chunk prefetch FIFO, PORTB 1. Upstream's own words for
 anything else: extra physical memory ports, banks or a different arbitration need matching
 resource changes in the model, and passing the existing tests establishes nothing for a
-modified RTL. So **PORTB 2 / 4 (wide-port), NCH 8 at 60 cycles, MCOLS 32 / LANES 64 (f2-vla)
-and the ternary formats are uncalibrated in LPN today.** Each is a model extension plus a
-replay against the Verilator receipt that already exists for it (PORTB 1 / 2 / 4: 2,798,478 /
-1,643,595 / 1,308,691 cycles at 2 layers + head).
+modified RTL. **PORTB 2 / 4, NCH 8 at 60 cycles and the row lanes are those resource changes,
+made in `tools/hwloop/lpn/wide.py` and graded on the wide-port export 96a90c2f (2026-10-17):**
+the port-B credit in PORTB chunks a cycle with the two-part reads counted from the addresses
+(the receipts' 87,619 / 358,331 to the read), the FIFO credit in entries (the target's 1024),
+NCH channel credits at the channel's sustained rate (RD 64 beats in flight over the round trip)
+with the pair hash, the row-lane group as the model's row with its Sw line. PORTB 2 +1.23%,
+PORTB 4 +0.96%, NCH 8 at 60 cycles +0.83%, int8 RL 4 +4.11%, int4 RL 4 on MCOLS 8 +4.16%
+against 1,643,595 / 1,308,691 / 2,798,478 / 949,485 / 579,306 Verilator cycles. **MCOLS 32 /
+LANES 64 (f2-vla), PORTB 8, NCH 16, 4-bit QUAD and the ternary formats are uncalibrated in LPN
+today** and `lpn-run` refuses them (`REFUSED_NOT_MODELLED`).
 
 **Accuracy and speed, upstream's measurements (Verilator 5.052; 5.020 does not elaborate the
 pinned revision; this Mac's receipts used 5.048):**
@@ -228,7 +242,12 @@ Verilator receipt it was graded against. `check-stale RUN --tree EXPORT` and `lp
 VisualSim rule: an export whose fingerprinted files moved is refused with the changed / added /
 removed files listed (`REFUSED_STALE_MODEL`); `--uncalibrated` runs anyway and labels the result
 "outside validated configuration: RTL moved (...)". Against wide-port `a9acb2b0` the list is 16
-changed and 14 added files (`receipts/2026-10-16/lpn_gemma3_portb1/staleness.json`).
+changed and 14 added files (`receipts/2026-10-16/lpn_gemma3_portb1/staleness.json`), against
+`96a90c2f` 17 and 14. The wide model's manifest carries instead the **fingerprint of the
+wide-port export its configuration was graded on** (`tools/hwloop/lpn/validated.json`: the
+key, the export's sha and fingerprint, the receipt, the LPN cycles, the error): `lpn-run`
+accepts that export and refuses others, and a configuration without a graded point at all
+(`REFUSED_NOT_MODELLED`; `--compare RECEIPT --grade` grades one).
 
 **This loop's receipts (2026-10-16, Verilator 5.048; `tools/hwloop/lpn/README.md`):** upstream's
 GEMM and MLP rows reproduced to the cycle (119,723 / 119,674, -0.041%; 27,673 / 27,629,
@@ -239,7 +258,22 @@ against the pinned RTL on the same bundle (2,797,992; the pinned behavioral-DRAM
 wide-port NCH 8 / lat 60 RTL are 486 cycles apart on this port-bound token); at Timing.dram_latency
 60: 2,874,213, +2.706%. Inside the gate, outside the validated configuration (the tree, NCH 8 at
 60 cycles, the board uarch): `lpn-estimate`, recorded, not a calibration. 1.15 s of native run
-(13 s end to end with the frontend) against 37 min of Verilator. PORTB 2: `REFUSED_NOT_MODELLED`.
+(13 s end to end with the frontend) against 37 min of Verilator.
+
+**The wide model's receipts (2026-10-17, Verilator 5.048 on the 96a90c2f export, f2-hbm NCH 8
+at --lat 60; `receipts/2026-10-17/opentpu96_*` and `lpn96_*`; `tools/hwloop/lpn/README.md`
+section 2's table):** PORTB 2 **1,663,796 vs 1,643,595 (+1.229%)**, PORTB 4 **1,321,225 vs
+1,308,691 (+0.958%)**, PORTB 1 on the channels at 60 cycles **2,821,563 vs 2,798,478
+(+0.825%**; the single-port model at that latency was +2.706%), int8 RL 4 at PORTB 4 (4 layers
++ head) **988,507 vs 949,485 (+4.110%)**, int4 RL 4 at PORTB 4 / MCOLS 8 **603,411 vs 579,306
+(+4.161%)**: all inside the gate, each graded on its own fresh receipt (6-8 minutes of Verilator
+each; the LPN runs 0.1-1.3 s native, 30-90 s end to end). The two-part reads and the MXU
+rooflines are reproduced exactly; the per-channel beats within 0.7%. The row-lane points are
+channel-bound in the model (RD 64 beats in flight over a 74-cycle round trip: 0.865 beats a
+cycle a channel) and 4% high: the RTL sustains slightly more; not tuned, the sensitivity is 1.3%
+a cycle of path, the next receipt to take is NCH 16. The whole int4 row-lane model (26 layers,
+`--layers 0`, no receipt in this repository) is estimated at 1,502,766 cycles, +1.95% of
+docs/wide_port.md's measured 1,474,025 (133 against 135.7 tok/s), labelled uncalibrated.
 
 **Where it pays.** The LLM track's parameter sweeps (PORTB 2 / 4 / 8, int4 weights with
 PAIR, the lm head's format, NCH 8 / 16) and the VLA track's shape sweeps (MCOLS 32 packed,
@@ -337,8 +371,9 @@ f2-hbm, OTPU_NCH 8, `--lat 60`, 200 MHz, Verilator 5.048, `~/ergodex-03/bonsai2-
   `lpn_upstream_mlp/`, `lpn_toolchain/`): the PORTB 1 token **2,823,232 cycles, +0.885%** against
   the receipt above and +0.902% against the pinned RTL on the same bundle (2,797,992 cycles,
   `measured`, Verilator 5.048, 10 min), +2.706% at the receipt's 60-cycle latency; inside the 5%
-  gate, outside the validated configuration (**lpn-estimate**, not a calibration). PORTB 2: not
-  modelled, refused; it waits for the port-credit extension (`tools/hwloop/lpn/README.md` 5).
+  gate, outside the validated configuration (**lpn-estimate**, not a calibration). The wide
+  model (`receipts/2026-10-17/lpn96_*` against `opentpu96_*`): PORTB 2 +1.229%, PORTB 4 +0.958%,
+  the channels at 60 cycles +0.825%, int8 RL 4 +4.110%, int4 RL 4 / MCOLS 8 +4.161%, graded.
 - Nightly: `tools/hwloop/nightly/queue.json` + `cli.py nightly plan` (not activated).
 
 ## The agentic loop (who runs what, and when a PR opens)
@@ -389,11 +424,13 @@ The cadence:
    the frozen `a9acb2b0` tree's program and DRAM image: +0.885% against 2,798,478 cycles,
    +0.902% against the pinned RTL on the same bundle; the 16 changed / 14 added files between
    `f237dab2` and `a9acb2b0` listed. `cli.py lpn-run` wraps it and writes the receipt.
-4. LPN, extensions in the order the tracks need them, each graded against an existing
-   Verilator receipt before its number is used: PORTB 2 (two chunks a cycle on the port-B
-   credits and drain; the 1,643,595-cycle receipt), NCH 8 at 60 cycles (the 203 / 307
-   outstanding reads of the traces), PORTB 4 (1,308,691), then the VLA shape (MCOLS 32 packed,
-   LANES 64, ACT_ROWS 255: the prefix run, against `vla`'s Verilator utilization numbers).
+4. (done 2026-10-17 for the wide port, the channels and the row lanes) LPN extensions, each
+   graded against a fresh Verilator receipt on the wide-port export before its number is
+   used: PORTB 2 (+1.23% of 1,643,595), NCH 8 at 60 cycles (+0.83% of 2,798,478), PORTB 4
+   (+0.96% of 1,308,691), int8 / int4 row lanes (+4.11% / +4.16% of 949,485 / 579,306). Next:
+   NCH 16 (f2-hbm16: one `run-rtl`, then the channel rate stops binding), PORTB 8 / RL 8, then
+   the VLA shape (MCOLS 32 packed, LANES 64, ACT_ROWS 255: the prefix run, against `vla`'s
+   Verilator utilization numbers).
 5. Validation split: calibrate on Gemma-3-1B short-prompt decode only; hold out Gemma long
    prompt, Bonsai-2 2B / 4B (int4, t2), Qwen3-0.6B, the DDR image's receipts; report per
    workload and per model (LPN, VisualSim) absolute / relative error, mean and worst case.
@@ -411,11 +448,13 @@ The cadence:
 - A model run that completes (LPN or VisualSim) proves the model runs, not that the RTL is
   correct or that any number is a board number. Numerical correctness is `perf_qwen --check`,
   the ISA simulator and the card's token-exact checks, nowhere else.
-- LPN's accuracy on this loop's workload is one point: the Gemma-3-1B PORTB 1 token at
-  +0.9%, on a tree whose RTL is not the model's pin. PORTB 2 / 4, NCH 8 at 60 cycles (the
-  +2.7% at Timing.dram_latency 60 is a sensitivity, not a model of the channels), the VLA shape
-  and the ternary formats are uncalibrated in it until the extensions of step 4 are graded. LPN
-  rejects HALT CHAIN, WAITC, WAITW, DSTEP / STREAM and multi-slice programs.
+- LPN's accuracy on this loop's workload is six points, all Gemma-3-1B decode at one position:
+  PORTB 1 at +0.9% (upstream's model, on a tree whose RTL is not its pin), and the wide model's
+  PORTB 2 / 4, the channels at 60 cycles and the two row-lane points at +0.8% to +4.2%, each
+  only on the export it was graded on. The row-lane points sit 4% high on a channel rate
+  derived from the adapter's structure, not fitted. PORTB 8, NCH 16, 4-bit QUAD, the VLA shape
+  and the ternary formats are uncalibrated in it and refused. LPN rejects HALT CHAIN, WAITC,
+  WAITW, DSTEP / STREAM and multi-slice programs.
 - The VisualSim models are prepared, never parsed by VisualSim's own parser or VM compiler:
   the request / return protocol follows the installed examples and the prior prepared models
   and may need changes at the first run.
