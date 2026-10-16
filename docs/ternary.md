@@ -296,7 +296,7 @@ Ternary-Bonsai-2-4B-MTP, chat template, thinking off, greedy:
 | prompt | tokens | equal to plain greedy | drafts accepted | a plain step | a verify run (2 rows) | a draft run | speedup in unit cycles | tok/s at 200 MHz, port-bound: plain / MTP |
 |---|---|---|---|---|---|---|---|---|
 | short (19 tokens: "Write one sentence about the Moon.") | 30 (to EOS) | 30 / 30 | 11 / 18 = 0.61 | 12.16 M | 23.86 M = 1.963 steps | 1.35 M = 0.111 steps | **0.78x** (29 tokens: 352 M plain, 452 M MTP) | 16.5 / 12.8 |
-| long (274 tokens: tools/f2_bench.py's FPGA passage, "summarize in two sentences") | 16 (--steps 16) | (the host loop's; plain decode was not run on this prompt, its step cost is the short prompt's) | 7 / 8 = 0.88 | 12.16 M (the short prompt's) | 23.95 M = 1.971 steps | 1.36 M = 0.112 steps | **0.91x** (15 tokens: 182 M plain, 201 M MTP) | 16.5 / 14.9 |
+| long (274 tokens: tools/f2_bench.py's FPGA passage, "summarize in two sentences") | 16 (--steps 16) | device loop = host loop (16 / 16; plain decode not rerun on this prompt, its step cost is the short prompt's); 16 / 16 the fp32 reference's argmax, the drafts 11 / 15 of it | 7 / 8 = 0.88 | 12.16 M (the short prompt's) | 23.95 M = 1.971 steps | 1.36 M = 0.112 steps | **0.91x** (15 tokens: 182 M plain, 201 M MTP) | 16.5 / 14.9 |
 
 The loop on the device (generate_card, one chained run: the serving path's) gives the same
 30 tokens as the host loop on the short prompt, 18 iterations, 11 accepted; its loop costs
@@ -340,6 +340,10 @@ costs nothing per position; a verify at p = 275-290 costs 23.95 M unit cycles ag
 at p = 20-50, the KV reads of 8 attention layers and the MTP layer's). The long prompt's
 acceptance on the ISA simulator, 0.88, is higher than the short one's 0.61 (a summary's
 tokens against a one-liner's), so acceptance is not what made the board's long case slower.
+On the long prompt the device loop gives the host loop's 16 tokens (8 iterations, 7 accepted;
+its host compile 25 s: bucket 2's six programs and the 274-token prefill's per-position
+ones), and one fp32 pass of the GGUF reference over the history agrees with all 16 (the MTP's
+drafts with 11 of the reference's 15 next tokens).
 
 ## 10. What the board needs
 
