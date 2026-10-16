@@ -142,7 +142,9 @@ def _w8_image(rng, cfg, M, N, KB, k0=0, extra=1, wa=None):
 
 
 @pytest.mark.parametrize("mcols,M,N,KB,k0", [(4, 4, 11, 3, 1), (4, 1, 2, 1, 0), (4, 3, 1, 5, 2),
-                                             (8, 8, 16, 4, 0), (8, 5, 7, 2, 3), (4, 2, 23, 1, 0)])
+                                             (8, 8, 16, 4, 0), (8, 5, 7, 2, 3), (4, 2, 23, 1, 0),
+                                             (16, 16, 7, 2, 1), (16, 5, 23, 3, 0),
+                                             (32, 32, 9, 2, 1)])
 def test_w8_modes_pack(have_verilator, mcols, M, N, KB, k0):
     """int8 MMs on a PACK build in every mode: MX scales at k0, UNIT with RMAX, ACC with RMAX
     onto the first, UNIT + ACC + ASCALE, RSC; N odd (the last row a pair alone) and even, N 1
@@ -167,7 +169,8 @@ def test_w8_modes_pack(have_verilator, mcols, M, N, KB, k0):
 
 
 @pytest.mark.parametrize("mcols,rows,N,KB", [(4, 8, 9, 4), (4, 16, 6, 3), (8, 64, 5, 2),
-                                             (4, 64, 4, 1)])
+                                             (4, 64, 4, 1), (16, 64, 5, 2), (16, 64, 9, 3),
+                                             (32, 64, 7, 2)])
 def test_w8_replay_pack(have_verilator, mcols, rows, N, KB):
     """M > MCOLS on a PACK build: each pair of int8 rows is streamed once and consumed for
     every group of MCOLS rows (its two chunks a slot of the two-bank FIFO); the drain steps
@@ -208,7 +211,7 @@ def test_kb1_passes_back_to_back_pack(have_verilator):
     _both(cfg, prog, dram)
 
 
-@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16)])
+@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16), (16, 32)])
 @pytest.mark.parametrize("M,N", [(1, 20), (3, 7), (9, 20)])
 def test_act_reads_follow_the_packed_mm_rows(have_verilator, mcols, rows, M, N):
     """A packed int8 MM reads the ACT RAM once a pass (ceil(N / 2) x KB x groups pops, half
