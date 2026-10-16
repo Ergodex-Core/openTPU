@@ -82,7 +82,11 @@ def tally(prog, cfg) -> dict:
         name, _, cyc, pb, pa = PF._describe(ins, cfg)
         if ins.op == I.MM:
             N, KB, M = ins.w[3] & 0xFFFF, (ins.w[3] >> 16) & 0xFF, (ins.w[5] >> 16) & 0xFF
-            t["MXU"] += c * N * KB * -(-M // cfg.MCOLS)
+            # (PACK, docs/mxu_packing.md: an int8 MM's rows go in pairs, ceil(N / 2) passes
+            # of KB advances a row group; port B's N x KB chunks stay)
+            wf, pair, quad = I.mm_format(ins)
+            rows = -(-N // 2) if (cfg.PACK and wf == I.W8 and not pair) else N
+            t["MXU"] += c * rows * KB * -(-M // cfg.MCOLS)
             t["portB"] += c * pb
             t["portB_MM"] += c * pb
             t["MACs"] += c * N * KB * cfg.D * M

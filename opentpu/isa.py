@@ -450,9 +450,14 @@ def reuse(pair: bool, quad: bool) -> int:
     return 4 if quad else 2 if pair else 1
 
 
-def chunks_per_cycle(wf: int, pair: bool, quad: bool) -> float:
-    """The D-byte chunks an MM streams a cycle (at most Config.PORTB): int8 PAIR 2, QUAD 4;
-    4-bit PAIR 1, QUAD 2; t2 QUAD 1."""
+def chunks_per_cycle(wf: int, pair: bool, quad: bool, pack: bool = False) -> float:
+    """The D-byte chunks an MM streams a cycle at the MXU's full rate: int8 PAIR 2, QUAD 4;
+    4-bit PAIR 1, QUAD 2; t2 QUAD 1. Column reuse (PAIR / QUAD) needs the port (at most
+    Config.PORTB). `pack` (Config.PACK, docs/mxu_packing.md): a packed MXU takes two int8 rows
+    an advance, 2 chunks a cycle for a plain int8 MM; a narrower port only halves its rate
+    (profile.py), it refuses nothing."""
+    if pack and wf == W8 and not pair and not quad:
+        return 2.0
     return reuse(pair, quad) / blocks_per_chunk(wf)
 
 

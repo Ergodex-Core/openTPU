@@ -129,18 +129,26 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf, pair, quad = I.mm_format(ins)
+        # the MXU's advances: a row's blocks (4-bit: one a cycle, two a chunk; t2 four a chunk;
+        # PAIR / QUAD two / four a cycle) for every group of MCOLS stationary rows (replay,
+        # ACT_ROWS > MCOLS: ceil(M / MCOLS) passes). PACK (docs/mxu_packing.md): an int8 MM's
+        # rows go in pairs, two chunks an advance (port B's bound stays N x KB chunks: at PORTB
+        # 1 the stream, not the array, sets the pace, the roofline's max)
+        G = -(-M // cfg.MCOLS)
+        pack = bool(getattr(cfg, "PACK", False)) and wf == I.W8 and not pair and not quad
+        rows = -(-N // 2) if pack else N
         if wf == I.W8:                  # (PAIR / QUAD: two / four chunks a cycle, PORTB)
             per = 4 if quad else 2 if pair else 1
             return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T"
                           f"{' quad' if quad else ' pair' if pair else ''}{acc}",
-                    N * -(-KB // per), N * KB, scales)
+                    rows * -(-KB // per) * G, N * KB, scales)
         # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle.
         # t2 (docs/ternary.md): four blocks a chunk, one a cycle, PAIR two, QUAD four
         per = 4 if quad else 2 if pair else 1           # blocks an advance
         name = "int4" if wf == I.W4I else "t2" if wf == I.WT2 else "fp4"
         return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {name}"
                       f"{' quad' if quad else ' pair' if pair else ''}{acc}",
-                N * -(-KB // per), N * -(-KB // I.blocks_per_chunk(wf)), scales)
+                N * -(-KB // per) * G, N * -(-KB // I.blocks_per_chunk(wf)), scales)
     if op == I.QACT:
         rows, KB = w[1] & 0xFF, w[1] >> 16
         n = rows * KB * D

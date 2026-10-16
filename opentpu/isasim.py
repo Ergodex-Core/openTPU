@@ -35,6 +35,10 @@ class Config:
     #                          QUAD), QACT DUP4 (docs/wide_port.md)
     T2: bool = False         # t2 weights (MM WF 1 + rs bit 0), MM QUAD and QACT DUP4
     #                          (docs/ternary.md; CAPS bit28)
+    PACK: bool = False       # the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md;
+    #                          CAPS2 bit1): an int8 MM's rate doubles (2 MCOLS logical columns,
+    #                          two chunks a cycle at full rate: isa.chunks_per_cycle). No
+    #                          program or result changes; the ISA simulator ignores it
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries
     #                          (WAITC, docs/isa.md "Wait counts"): the host writes them after
     #                          every program (opentpu.waits), the chain slots hold them. The
@@ -65,7 +69,8 @@ def board_config(**kw) -> Config:
     The optional features stay off unless the environment turns them on, as before targets (the
     target states the hardware's truth: opentpu.target.config): OTPU_PAIR=1 column reuse (MM
     PAIR / QACT DUP), OTPU_DSTEP=1 the DMA's DSTEP, OTPU_STREAM=1 the stream engine,
-    OTPU_SEQ_WC=1 the sequencer's wait entries (SEQ_WC, EXPERIMENTAL). They configure the
+    OTPU_SEQ_WC=1 the sequencer's wait entries (SEQ_WC, EXPERIMENTAL), OTPU_PACK=1 the MXU's
+    int8 weight packing (PACK: timing only). They configure the
     simulators and the board model; on the card, opentpu.host.board.device_config takes them
     from the bitstream."""
     from .target import current
@@ -80,6 +85,7 @@ def board_config(**kw) -> Config:
                 STREAM=bool(int(env.get("OTPU_STREAM", 0))),
                 SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
                 T2=bool(int(env.get("OTPU_T2", 0))),
+                PACK=bool(int(env.get("OTPU_PACK", 0))),
                 PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))))
     base.update(kw)
     return Config(**base)
