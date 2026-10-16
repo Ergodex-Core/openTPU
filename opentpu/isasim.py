@@ -35,6 +35,9 @@ class Config:
     #                          QUAD), QACT DUP4 (docs/wide_port.md)
     T2: bool = False         # t2 weights (MM WF 1 + rs bit 0), MM QUAD and QACT DUP4
     #                          (docs/ternary.md; CAPS bit28)
+    ROWLANES: bool = False   # MM RL (rs bits 3:2: L = 2, 4, 8 row lanes at M = 1, the weights
+    #                          and scales in groups of L rows) and QACT DUP8 (docs/row_lanes.md;
+    #                          CAPS2 bit4)
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries
     #                          (WAITC, docs/isa.md "Wait counts"): the host writes them after
     #                          every program (opentpu.waits), the chain slots hold them. The
@@ -80,7 +83,8 @@ def board_config(**kw) -> Config:
                 STREAM=bool(int(env.get("OTPU_STREAM", 0))),
                 SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
                 T2=bool(int(env.get("OTPU_T2", 0))),
-                PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))))
+                PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))),
+                ROWLANES=bool(int(env.get("OTPU_ROWLANES", a.get("ROWLANES", 0)))))
     base.update(kw)
     return Config(**base)
 
@@ -471,6 +475,44 @@ class Slice:
         E, Mt = (e4 >> 3) & 15, e4 & 7
         return sw, 15 - np.maximum(E, 1), np.where(E > 0, 8 + Mt, Mt)
 
+    def _mx_scales_rl(self, wf, ssa, srs, N, KB, k0, unit, rsc, L):
+        """The scale groups of MM RL (docs/row_lanes.md): group g = rows g L .. g L + L - 1 at
+        ssa + g srs, the rows' Sw (4 L bytes), then block k's data of row g L + l at H + k L bs
+        + l bs (bs: int8 1, int4 / fp4 / t2 4, nvfp4 8; H = max(4 L, the advance's L bpc bs)).
+        The same (Sw, dw, m) as _mx_scales's over per-row scale rows."""
+        G = 8 if wf == I.WNV else Q.NSUB
+        if unit:
+            return (np.ones(N, np.float32), np.zeros((N, KB, G), np.int64),
+                    np.ones((N, KB, G), np.int64))
+        # (RSC: a group is its L Sw words, the standard RSC rows: 4 L aligned, in one line)
+        if ssa % (4 * L if rsc else 32) or srs % (4 * L if rsc else 32):
+            raise SimError(f"MM: RL scale groups (ssa, srs) must be multiples of "
+                           f"{4 * L if rsc else 32}")
+        fmt = ["int8", "int4", "fp4", "nvfp4", "t2"][wf]
+        n = np.arange(N)
+        grp = ssa + (n // L) * srs
+        sw = self.m32[self._widx(grp + 4 * (n % L))].view(np.float32)
+        if rsc:
+            return sw, np.zeros((N, KB, G), np.int64), np.ones((N, KB, G), np.int64)
+        bs, H = Q.rl_block_bytes(fmt), Q.rl_header(fmt, L)
+        kk = k0 + np.arange(KB)
+        ba = (grp + H + (n % L) * bs)[:, None] + kk[None, :] * (L * bs)     # [N, KB]
+        if ba.max() + bs > self.cfg.DRAM_BYTES:
+            raise SimError("MM: RL scale groups out of range")
+        if wf == I.W8:
+            dw = np.repeat(self.dram[ba].astype(np.int64)[:, :, None], G, axis=2)
+            return sw, dw, np.ones((N, KB, G), np.int64)
+        if wf in (I.W4I, I.W4F, I.WT2):
+            word = self.m32[self._widx(ba)].astype(np.int64)
+            dw = np.repeat((word & 0xFF)[:, :, None], G, axis=2)
+            m = np.stack([(word >> (8 + 6 * b)) & 63 for b in range(G)], -1)
+            return sw, dw, m
+        e4 = self.dram[ba[:, :, None] + np.arange(8)[None, None, :]].astype(np.int64)
+        if np.any(e4 & 0x80):
+            raise SimError("MM: an NVFP4 scale with the sign bit set")
+        E, Mt = (e4 >> 3) & 15, e4 & 7
+        return sw, 15 - np.maximum(E, 1), np.where(E > 0, 8 + Mt, Mt)
+
     MM_CHUNK = 1 << 22                    # (row, output, block, group) terms per numpy pass
 
     def _mm(self, ins: I.Instr) -> None:
@@ -481,6 +523,7 @@ class Slice:
         out = (self.reg(ins.rc) + w[2]) & 0xFFFFFFFF
         N, KB, k0 = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[3] >> 24) & 0xFF
         wf, pair, quad = I.mm_format(ins)
+        L = I.mm_lanes(ins)
         rs = w[4] & ~I.RS_MASK
         if w[4] & I.RS_QUAD and not pair:
             raise SimError("MM: rs bit 1 (QUAD) needs PAIR")
@@ -513,18 +556,47 @@ class Slice:
             raise SimError("MM: RSC does not take NVFP4")
         if ins.flags & I.F_ASCALE and not (unit and accf):
             raise SimError("MM: ASCALE needs UNIT and ACC")
-        bpb = D // I.blocks_per_chunk(wf)                 # streamed bytes per K-block
-        if sa % D or rs % D or sa + (N - 1) * rs + -(-KB * bpb // D) * D > cfg.DRAM_BYTES:
-            raise SimError("MM: streamed rows must be D-byte aligned and in range")
-        wv = np.lib.stride_tricks.as_strided(self.dram[sa:], (N, KB, bpb),
-                                             (rs, bpb, 1))               # [N, KB, bpb], no copy
+        bpc = I.blocks_per_chunk(wf)
+        bpb = D // bpc                                    # streamed bytes per K-block
+        if L:                                             # row lanes (docs/row_lanes.md)
+            if not cfg.ROWLANES:
+                raise SimError("MM: row lanes (RL) on a configuration without ROWLANES")
+            if M != 1 or pair:
+                raise SimError("MM: RL needs M = 1 and no PAIR / QUAD")
+            if L > cfg.PORTB:
+                raise SimError(f"MM: {L} row lanes stream {L} chunks a cycle, PORTB {cfg.PORTB}")
+            if L * bpc > cfg.MCOLS or L * bpc > cfg.act_rows:
+                raise SimError(f"MM: {L} row lanes of this format need {L * bpc} columns, "
+                               f"MCOLS {cfg.MCOLS}")
+            if k0 % bpc:
+                raise SimError("MM: RL needs k0 a multiple of the blocks a chunk")
+            if not unit and not rsc and L * bpc * Q.rl_block_bytes(
+                    ["int8", "int4", "fp4", "nvfp4", "t2"][wf]) > 32:
+                raise SimError("MM: RL's scale data of an advance must fit a 32-byte line")
+            R = L * bpc                                   # the ACT rows read (copies of row 0)
+            G = -(-N // L)
+            KBc = -(-KB // bpc)
+            if sa % (L * D) or rs % (L * D) or sa + (G - 1) * rs + KBc * L * D > cfg.DRAM_BYTES:
+                raise SimError("MM: RL groups must be L D aligned and in range")
+            # group g: chunk q of row g L + l at g rs + (q L + l) D: a [G, KBc, L, D] view, read
+            # back as rows [G L, KBc D] (a copy of the groups' bytes), the rows' blocks
+            gv = np.lib.stride_tricks.as_strided(self.dram[sa:], (G, KBc, L, D),
+                                                 (rs, L * D, D, 1))
+            rows = np.ascontiguousarray(gv.transpose(0, 2, 1, 3)).reshape(G * L, KBc * D)[:N]
+            wv = rows[:, :KB * bpb].reshape(N, KB, bpb)
+        else:
+            if sa % D or rs % D or sa + (N - 1) * rs + -(-KB * bpb // D) * D > cfg.DRAM_BYTES:
+                raise SimError("MM: streamed rows must be D-byte aligned and in range")
+            wv = np.lib.stride_tricks.as_strided(self.dram[sa:], (N, KB, bpb),
+                                                 (rs, bpb, 1))           # [N, KB, bpb], no copy
         if wf == I.W8:
             wel = wv.view(np.int8)
         elif wf == I.WT2:
             wel = Q.DEC["t2"][Q.unpack2(wv)]
         else:
             wel = Q.DEC["int4" if wf == I.W4I else "fp4"][Q.unpack4(wv)]
-        sw, dw, mw = self._mx_scales(wf, ssa, srs, N, KB, k0, unit, rsc)
+        sw, dw, mw = self._mx_scales_rl(wf, ssa, srs, N, KB, k0, unit, rsc, L) if L else \
+            self._mx_scales(wf, ssa, srs, N, KB, k0, unit, rsc)
         G = dw.shape[2]
         # the ACT row of each (output row, block): PAIR takes the odd blocks from row j + M
         kk = np.arange(KB)
@@ -580,11 +652,14 @@ class Slice:
         rows, ab, KB = w[1] & 0xFF, (w[1] >> 8) & 0xFF, w[1] >> 16
         srs = w[2]
         dup, dup4 = bool(ins.flags & I.F_DUP), bool(ins.flags & I.F_DUP4)
-        copies = 4 if dup4 else 2 if dup else 1
-        if dup and dup4:
-            raise SimError("QACT: DUP and DUP4")
+        dup8 = bool(ins.flags & I.F_DUP8)
+        copies = 8 if dup8 else 4 if dup4 else 2 if dup else 1
+        if int(dup) + int(dup4) + int(dup8) > 1:
+            raise SimError("QACT: one of DUP, DUP4 and DUP8")
         if dup4 and not (cfg.T2 or cfg.PORTB > 1):
             raise SimError("QACT: DUP4 on a configuration without T2 or a wide port B")
+        if dup8 and not cfg.ROWLANES:
+            raise SimError("QACT: DUP8 on a configuration without ROWLANES")
         if (copies * rows > cfg.MCOLS if copies > 1 else rows > cfg.act_rows) \
                 or ab + KB > cfg.ACT_BLOCKS:
             raise SimError("QACT out of ACT RAM bounds")

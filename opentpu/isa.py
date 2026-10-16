@@ -30,13 +30,15 @@ WT2 = 4
 WFORMATS = {"int8": W8, "int4": W4I, "fp4": W4F, "nvfp4": WNV, "t2": WT2}
 MX_W = {W8: 16, W4I: 11, W4F: 11, WNV: 13, WT2: 11}   # the shift window W of each format
 RS_T2, RS_QUAD = 0x1, 0x2       # MM rs bits: t2 elements; QUAD (with PAIR): column reuse x4
-RS_MASK = 0x3                   # the rs bits that are flags (rs is a multiple of D >= 4; the
+RS_RL_SHIFT, RS_RL = 2, 0xC     # MM rs bits 3:2: row lanes (docs/row_lanes.md), log2 L (0: none)
+RS_MASK = 0xF                   # the rs bits that are flags (rs is a multiple of D >= 16; the
                                 # stride is rs & ~RS_MASK)
 F_PAIR = 0x40                   # MM: column reuse, two K-blocks per cycle and row (int8: PORTB 2)
 F_RSC = 0x80                    # MM: row scales only (each scale row is Sw[n]; dw 0, m 1)
 F_ROW, F_CSCALE, F_RSCALE = 0x1, 0x2, 0x4   # QACT (QST: F_ROW)
 F_DUP = 0x8                     # QACT: also write the rows to ACT rows rows..2*rows-1 (PAIR)
 F_DUP4 = 0x10                   # QACT: also to rows..4*rows-1, three copies (MM QUAD)
+F_DUP8 = 0x20                   # QACT: also to rows..8*rows-1, seven copies (MM RL of 8 columns)
 F_HALF = 0x2                    # QST, ROW mode: write only the first half of each row
 F_RAW = 0x1                     # RLD: the word's bits (no fp32 -> int conversion)
 F_MUL = 0x2                     # RLD: times R[rb] + w2 (mod 2^32)
@@ -396,7 +398,7 @@ def stream_hw_cfg(d: StreamDesc, flags: int = 0) -> dict | None:
 
 
 def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=False,
-       ascale=None, wf=W8, pair=False, k0=0, rsc=False, quad=False, ra=0, rb=0, rc=0,
+       ascale=None, wf=W8, pair=False, k0=0, rsc=False, quad=False, rl=0, ra=0, rb=0, rc=0,
        comment=""):
     """MM (docs/isa.md). With `ascale` (a TMEM address; needs unit and acc) the old accumulator
     is first multiplied by a per-row factor: y = T[out] * T[ascale + j] + a.w (the
@@ -406,7 +408,11 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
     MM's first block within the scale rows at `ssa` (each row starts with its Sw). `rsc`: the
     scale rows are Sw alone (one word a row: the K cache). `wf` WT2 (t2) is WF 1 with rs bit 0;
     `quad` (t2 with pair): column reuse x4, ACT row j + c M carries the blocks k = c mod 4
-    (4 M <= MCOLS, k0 a multiple of 4), encoded as rs bit 1."""
+    (4 M <= MCOLS, k0 a multiple of 4), encoded as rs bit 1. `rl` (2, 4, 8; docs/row_lanes.md):
+    row lanes, the rows streamed `rl` at a time from groups of `rl` rows (`sa + g rs`, the
+    group's chunks interleaved by chunk) with their scale rows in groups (`ssa + g srs`: the
+    rows' Sw, then a block's data of the rows): lane l's row is output row g rl + l; M = 1,
+    not with pair / quad, k0 a multiple of the blocks a chunk; encoded as rs bits 3:2 = log2 rl."""
     _check(0 < n < 65536 and 0 < kb < 256 and 0 < m < 256 and 0 <= ab < 256
            and 0 <= ors < 65536 and 0 <= k0 < 256,
            f"MM: n {n}, kb {kb}, m {m}, ab {ab}, ors {ors}, k0 {k0}")
@@ -414,11 +420,16 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
     _check(not pair or k0 % 2 == 0, "MM: PAIR needs an even k0")
     _check(not quad or (pair and k0 % 4 == 0), "MM: QUAD needs PAIR and k0 a multiple of 4")
     _check(not rsc or wf != WT2, "MM: RSC does not take t2")
-    _check(rs & RS_MASK == 0, f"MM: rs {rs} is not a multiple of 4")
+    _check(rs & RS_MASK == 0, f"MM: rs {rs} is not a multiple of 16")
+    _check(rl in (0, 2, 4, 8), f"MM: rl {rl} (2, 4 or 8)")
+    _check(not rl or (m == 1 and not pair and not quad), "MM: RL needs M = 1 and no PAIR / QUAD")
+    _check(not rl or k0 % blocks_per_chunk(wf) == 0, "MM: RL needs k0 a multiple of the blocks a chunk")
     if wf == WT2:
         rs, wf = rs | RS_T2, W4I
     if quad:
         rs |= RS_QUAD
+    if rl:
+        rs |= (rl.bit_length() - 1) << RS_RL_SHIFT
     _check(not rsc or wf != WNV, "MM: RSC does not take NVFP4")
     if ascale is not None:
         _check(unit and acc, "MM: ASCALE needs UNIT and ACC")
@@ -441,6 +452,12 @@ def mm_format(ins) -> tuple[int, bool, bool]:
     return (WT2 if t2 else wf), pair, pair and bool(rs & RS_QUAD)
 
 
+def mm_lanes(ins) -> int:
+    """An MM's row lanes L (2, 4, 8; 0: none): rs bits 3:2 = log2 L (docs/row_lanes.md)."""
+    f = (ins.w[4] & RS_RL) >> RS_RL_SHIFT
+    return 1 << f if f else 0
+
+
 def blocks_per_chunk(wf: int) -> int:
     return 1 if wf == W8 else 4 if wf == WT2 else 2
 
@@ -450,22 +467,26 @@ def reuse(pair: bool, quad: bool) -> int:
     return 4 if quad else 2 if pair else 1
 
 
-def chunks_per_cycle(wf: int, pair: bool, quad: bool) -> float:
+def chunks_per_cycle(wf: int, pair: bool, quad: bool, rl: int = 0) -> float:
     """The D-byte chunks an MM streams a cycle (at most Config.PORTB): int8 PAIR 2, QUAD 4;
-    4-bit PAIR 1, QUAD 2; t2 QUAD 1."""
+    4-bit PAIR 1, QUAD 2; t2 QUAD 1; RL: a chunk a lane."""
+    if rl:
+        return rl
     return reuse(pair, quad) / blocks_per_chunk(wf)
 
 
 def qact(src, rows, ab, kb, srs, row=False, cscale=None, rscale=None, dup=False, dup4=False,
-         ra=0, comment=""):
+         dup8=False, ra=0, comment=""):
     """QACT. `cscale`/`rscale`: TMEM addresses of a per-column / per-row factor applied before
     quantization, x' = (x * T[rscale + r]) * T[cscale + c]. `dup`: ACT row r + rows receives
-    a copy of row r in the same cycles (the odd K-blocks' column of an MM PAIR)."""
+    a copy of row r in the same cycles (the odd K-blocks' column of an MM PAIR); `dup4` /
+    `dup8`: three / seven copies (MM QUAD; MM RL of eight columns, docs/row_lanes.md)."""
     _check(0 < rows < 256 and 0 <= ab < 256 and 0 < kb < 65536,
            f"QACT: rows {rows}, ab {ab}, kb {kb}")
     fl = (F_ROW if row else 0) | (F_CSCALE if cscale is not None else 0) | \
-        (F_RSCALE if rscale is not None else 0) | (F_DUP if dup else 0) | (F_DUP4 if dup4 else 0)
-    _check(not (dup and dup4), "QACT: DUP or DUP4, not both")
+        (F_RSCALE if rscale is not None else 0) | (F_DUP if dup else 0) | (F_DUP4 if dup4 else 0) \
+        | (F_DUP8 if dup8 else 0)
+    _check(int(dup) + int(dup4) + int(dup8) <= 1, "QACT: one of DUP, DUP4 and DUP8")
     return Instr(QACT, ra=ra, flags=fl,
                  w=_w(src, rows | (ab << 8) | (kb << 16), srs, cscale or 0, rscale or 0),
                  comment=comment)

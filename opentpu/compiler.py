@@ -279,6 +279,10 @@ class QTensor:
     `tiles`: (tb, tstride): the columns are stored in tiles of tb (each tile rows x tb, row
     stride rs = tb, tiles tstride bytes apart; int8, unscaled: the V^T cache). A column slice
     must stay within one tile.
+    `rl`: the matrix is stored in row-lane groups of rl rows (docs/row_lanes.md; quant.rl_rows
+    / rl_scales): rs the group's stride (rl rows' chunks, interleaved by chunk), srs the scale
+    group's; streamed only by MM RL (dot at M = 1 on a Config with ROWLANES), row slices at
+    multiples of rl.
     """
     data: Affine
     scale: Affine | None
@@ -292,13 +296,18 @@ class QTensor:
     tiles: tuple | None = None
     k0: int = 0
     rsc: bool = False
+    rl: int = 0
 
     @staticmethod
-    def weight(data, scale, n: int, k: int, fmt: str, D: int, **kw) -> "QTensor":
+    def weight(data, scale, n: int, k: int, fmt: str, D: int, rl: int = 0, **kw) -> "QTensor":
         """The descriptor of an [n, k] matrix in MXU format `fmt` ("int8", "int4", "fp4",
         "nvfp4", opentpu/quant.py quantize_mxu's rows): element rows row_bytes apart, scale rows
-        scale_bytes apart."""
+        scale_bytes apart; with `rl`, in row-lane groups of rl rows (quant.rl_row_stride,
+        rl_scale_bytes)."""
         from . import quant as Q
+        if rl:
+            return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.rl_row_stride(k, fmt, rl, D),
+                           Q.rl_scale_bytes(k, fmt, rl, D), D, wf=Q.mxu_wf(fmt), rl=rl, **kw)
         return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.row_bytes(k, fmt, D),
                        Q.scale_bytes(k, fmt, D), D, wf=Q.mxu_wf(fmt), **kw)
 
@@ -339,6 +348,24 @@ class QTensor:
             raise CompileError("QTensor column slices must be multiples of D")
         if self.tiles is not None:
             return self.padded_cols(r0, nr, c0, nc, nc)
+        if self.rl:               # row-lane groups: rows at group strides, chunks L D apart
+            if not r0.is_static or r0.static() % self.rl:
+                raise CompileError(f"a row slice of a matrix in row-lane groups of {self.rl} "
+                                   f"starts at a multiple of {self.rl} ({r0})")
+            bpc = I.blocks_per_chunk(self.wf)
+            data = self.data + (r0.static() // self.rl) * self.rs + \
+                c0.div_exact(bpc * self.D) * (self.rl * self.D)
+            scale = None if self.scale is None else \
+                self.scale + (r0.static() // self.rl) * self.srs
+            k0 = self.k0
+            if scale is not None and not self.rsc:
+                if not c0.is_static:
+                    raise CompileError(f"a column slice of a scaled matrix at a run-time or "
+                                       f"loop-dependent column ({c0}): its first block is MM's "
+                                       f"k0, an immediate; store the matrix in column parts")
+                k0 += c0.div_exact(self.D).static()
+            return QTensor(data, scale, (nr, nc), self.rs, self.srs, self.D, wf=self.wf, k0=k0,
+                           rsc=self.rsc, rl=self.rl)
         if self.wf == I.W8:
             data = self.data + r0 * self.rs + c0
         else:                     # 4-bit (t2) rows stream whole D-byte chunks of 2 (4) D-blocks
@@ -686,10 +713,13 @@ class Stationary:
     "MM"), so dot() runs an MM per range and adds them up (MM ACC)."""
 
     def __init__(self, src: Tile, chunks: list, KB: int, owners: list, pair: bool = False,
-                 qranges: list | None = None, quad: bool = False):
+                 qranges: list | None = None, quad: bool = False, copies: int = 0):
         self.src, self.chunks, self.KB, self.owners = src, chunks, KB, owners
-        self.pair = pair or quad
-        self.quad = quad            # also rows 2M..4M-1 (QACT DUP4): t2 MMs take QUAD
+        self.pair = pair or quad or copies >= 2
+        self.quad = quad or copies >= 4    # also rows 2M..4M-1 (QACT DUP4): t2 MMs take QUAD
+        # the copies of its rows in ACT RAM (1, 2 DUP, 4 DUP4, 8 DUP8): an MM RL of L lanes
+        # reads L x blocks-a-chunk of them (docs/row_lanes.md)
+        self.copies = copies or (4 if self.quad else 2 if self.pair else 1)
         self.qranges = qranges
 
     def add_qrange(self, k0: int, k1: int) -> None:
@@ -1570,7 +1600,10 @@ class Builder:
         # a whole chunk of four blocks a cycle (MM QUAD; the copies also serve PAIR)
         quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
             and 4 * x.rows <= self.cfg.MCOLS
-        st = Stationary(x, chunks, KB, owners, pair, quad=quad)
+        # row lanes (Config.ROWLANES): eight copies (QACT DUP8) where they fit, for an RL MM
+        # of eight columns (int4 L 4, int8 L 8); the copies serve PAIR and QUAD too
+        dup8 = getattr(self.cfg, "ROWLANES", False) and quad and 8 * x.rows <= self.cfg.MCOLS
+        st = Stationary(x, chunks, KB, owners, pair, quad=quad, copies=8 if dup8 else 0)
         for m0 in builtins.range(0, x.rows, self.cfg.act_rows):
             mc = min(self.cfg.act_rows, x.rows - m0)
             ab, owner = self.act_alloc(KB)
@@ -1578,10 +1611,10 @@ class Builder:
                 self.act_live[k] = weakref.ref(st)
             self.emit(I.qact(src + m0 * rs, mc, ab, KB, rs, cscale=cs,
                              rscale=None if rsc is None else rsc + m0, dup=pair and not quad,
-                             dup4=quad,
+                             dup4=quad and not dup8, dup8=dup8,
                              comment="quantize -> ACT" + (" x col scale" if cs is not None else "")
                              + (" x row scale" if rsc is not None else "")
-                             + (" dup4" if quad else " dup" if pair else "")))
+                             + (" dup8" if dup8 else " dup4" if quad else " dup" if pair else "")))
             chunks.append((ab, mc))
             owners.append(owner)
         st.loop = self.loops[-1].loop if self.loops else None     # created in this loop body
@@ -1604,7 +1637,9 @@ class Builder:
         pair = self.cfg.PAIR and 2 * rows <= self.cfg.MCOLS
         quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
             and 4 * rows <= self.cfg.MCOLS
-        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[], quad=quad)
+        dup8 = getattr(self.cfg, "ROWLANES", False) and quad and 8 * rows <= self.cfg.MCOLS
+        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[], quad=quad,
+                        copies=8 if dup8 else 0)
         ab, owner = self.act_alloc(KB)
         for k in builtins.range(ab, ab + KB):
             self.act_live[k] = weakref.ref(st)
@@ -1636,7 +1671,7 @@ class Builder:
         rs = x.rs if len(x.shape) == 2 else x.cols
         ra, src = (0, x.base) if at is None else self.addr(Affine(x.base) + Affine.of(at))
         self.emit(I.qact(src, mc, ab + col // D, x.cols // D, rs, dup=st.pair and not st.quad,
-                         dup4=st.quad, ra=ra,
+                         dup4=st.quad and st.copies < 8, dup8=st.copies >= 8, ra=ra,
                          cscale=None if cscale is None else cscale.base,
                          comment="quantize -> ACT (part)" + (" dup" if st.pair else "")
                          + (" x col scale" if cscale is not None else "")))
@@ -1925,6 +1960,20 @@ class Builder:
         # QUAD (t2): a chunk's four blocks a cycle from ACT rows j + c M (QACT DUP4)
         quad = pair and getattr(st, "quad", False) and \
             I.chunks_per_cycle(w.wf, True, True) <= portb
+        # row lanes (docs/row_lanes.md): a matrix in row-lane groups is streamed by MM RL only
+        # (M = 1, its L lanes' columns holding the row: the operand's copies)
+        rl = getattr(w, "rl", 0)
+        if rl:
+            bpc = I.blocks_per_chunk(w.wf)
+            if not getattr(self.cfg, "ROWLANES", False) or rl > portb or \
+                    rl * bpc > self.cfg.MCOLS:
+                raise CompileError(f"dot: a matrix in row-lane groups of {rl} on a Config "
+                                   f"without ROWLANES, PORTB {portb} or MCOLS {self.cfg.MCOLS}")
+            if M != 1 or len(st.chunks) != 1 or getattr(st, "copies", 1) < rl * bpc:
+                raise CompileError(f"dot: a matrix in row-lane groups of {rl} needs a one-row "
+                                   f"operand in {rl * bpc} ACT RAM copies (QACT DUP / DUP4 / "
+                                   f"DUP8), not {M} rows x {getattr(st, 'copies', 1)}")
+            pair = quad = False
         # one MM per QACT range of the operand (an MM's rows read one Sa: docs/isa.md "MM"),
         # added up in the output: the first as asked (overwrite, ACC or ASCALE), the rest ACC;
         # RMAX on the last, whose written values are the sums
@@ -1940,16 +1989,18 @@ class Builder:
             ppair = pair and kp % 2 == 0
             pquad = quad and kp % 4 == 0
             m0 = 0
+            # (RL: the range's first chunk of the groups: k0 L D in)
+            sak = sa + k0 * bpb * (rl if rl else 1)
             for ab, mc in st.chunks:
-                ins = I.mm(sa + k0 * bpb, ssa, out.base + m0 * ors, N, k1 - k0, w.rs, ors, mc,
+                ins = I.mm(sak, ssa, out.base + m0 * ors, N, k1 - k0, w.rs, ors, mc,
                            ab + k0, w.srs, unit=unit, acc=acc is not None or not first,
                            rmax=rowmax and last, wf=w.wf, pair=ppair, k0=kp, rsc=w.rsc,
-                           quad=pquad,
+                           quad=pquad, rl=rl,
                            ascale=acc_scale.base if acc_scale is not None and first else None,
                            ra=ra, rb=rb,
                            comment=f"mm {M}x{K} . {N}x{K}^T"
                            + (f" part {k0}:{k1}" if len(parts) > 1 else "")
-                           + (" quad" if pquad else " pair" if ppair else "")
+                           + (f" rl{rl}" if rl else " quad" if pquad else " pair" if ppair else "")
                            + (" +rowmax" if rowmax and last else "")
                            + (" acc*=scale" if acc_scale is not None and first else ""))
                 self.emit(ins)
@@ -2116,8 +2167,10 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
         if ins.op != I.MM:
             continue
         ors, M, KB = ins.w[5] & 0xFFFF, (ins.w[5] >> 16) & 0xFF, (ins.w[3] >> 16) & 0xFF
-        _, pair, quad = I.mm_format(ins)        # advances a group: QUAD four t2 blocks, PAIR two
+        wf, pair, quad = I.mm_format(ins)       # advances a group: QUAD four t2 blocks, PAIR two
         adv = -(-KB // 4) if quad else -(-KB // 2) if pair else KB
+        if I.mm_lanes(ins):                     # (RL: a row of L results an advance group)
+            adv = -(-KB // I.blocks_per_chunk(wf))
         steps, j, rows = 0, 0, min(M, cfg.MCOLS)
         while j < rows:
             banks = set()

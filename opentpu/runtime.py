@@ -40,7 +40,7 @@ class Weight:
     power-of-two block offsets under it; opentpu/quant.py, docs/isa.md "Weight formats"). A
     slice's part (sharded by rows or columns) is quantized on its own."""
 
-    def __init__(self, array, shard: int | None = None, fmt: str = "int8"):
+    def __init__(self, array, shard: int | None = None, fmt: str = "int8", rl: bool = False):
         a = np.asarray(array, dtype=np.float32)
         if a.ndim != 2:
             raise ValueError("Weight must be 2-D [N, K]")
@@ -49,6 +49,9 @@ class Weight:
         if fmt not in Q.WEIGHT_FORMATS:
             raise ValueError(f"Weight fmt must be one of {Q.WEIGHT_FORMATS}")
         self.array, self.shard, self.fmt = a, shard, fmt
+        # rl: stored in row-lane groups of the Config's widest L for the format (quant.rl_lanes;
+        # docs/row_lanes.md), streamed by one-row dots as MM RL (a Config with ROWLANES)
+        self.rl = bool(rl)
 
 
 class KVCache:
@@ -134,15 +137,26 @@ def place(cfg: Config, args: dict) -> tuple[_Dram, Layout, list]:
                 parts = [a.array[:, s * K:(s + 1) * K] for s in range(S)]
             else:
                 n_loc, parts = N, [a.array] * S
-            rs, srs = Q.row_bytes(K, a.fmt, D), Q.scale_bytes(K, a.fmt, D)
-            daddr = dram.alloc(n_loc * rs)
-            saddr = dram.alloc(n_loc * srs)
+            L = Q.rl_lanes(a.fmt, cfg.PORTB, cfg.MCOLS) if a.rl and getattr(
+                cfg, "ROWLANES", False) else 0
+            if L:                       # row-lane groups (L D aligned, docs/row_lanes.md)
+                G = Q.rl_groups(n_loc, L)
+                rs, srs = Q.rl_row_stride(K, a.fmt, L, D), Q.rl_scale_bytes(K, a.fmt, L, D)
+                dram.alloc(-dram.next % (L * D)) if dram.next % (L * D) else None
+                daddr = dram.alloc(G * rs)
+                saddr = dram.alloc(G * srs)
+            else:
+                rs, srs = Q.row_bytes(K, a.fmt, D), Q.scale_bytes(K, a.fmt, D)
+                daddr = dram.alloc(n_loc * rs)
+                saddr = dram.alloc(n_loc * srs)
             for s, p in enumerate(parts):
                 q, sc = Q.quantize_mxu(p, a.fmt, D)
+                if L:
+                    q, sc = Q.rl_rows(q, L, D), Q.rl_scales(sc, a.fmt, K, L, D)
                 dram.put(s, daddr, q)
                 dram.put(s, saddr, sc)
             layout.params[name] = (a, (daddr, saddr))
-            desc = QTensor.weight(daddr, saddr, n_loc, K, a.fmt, D)
+            desc = QTensor.weight(daddr, saddr, n_loc, K, a.fmt, D, rl=L)
             for s in range(S):
                 bound[s][name] = desc
         elif isinstance(a, KVCache):

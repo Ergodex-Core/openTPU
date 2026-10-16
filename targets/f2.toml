@@ -28,6 +28,7 @@ STREAM = true
 SEQ_WC = true
 T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
 PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
+ROWLANES = false                # MM RL row lanes and QACT DUP8 (docs/row_lanes.md; CAPS2 bit4)
 
 [uarch]                         # the YPCB card's m4 (targets/ypcb-00338.toml)
 MXU_IMPL = 2

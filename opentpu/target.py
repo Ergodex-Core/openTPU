@@ -253,7 +253,7 @@ def arch_hash(cfg) -> int:
     build without it stays, and a host that writes no entries refuses a build with it (its
     hash leaves it out: opentpu/host/board.py check_hash)."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
-    for k in ("SEQ_WC", "T2"):            # (in the hash only when on: older builds keep theirs)
+    for k in ("SEQ_WC", "T2", "ROWLANES"):   # (in the hash only when on: older builds keep theirs)
         if not d.get(k):
             d.pop(k, None)
     if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
@@ -301,6 +301,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
         "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
         "PORTB": int(a.get("PORTB", 1)),
+        "RL": rl_streams(cfg),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
@@ -330,7 +331,7 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PORTB; the CFG_HASH it reports): ACT_ROWS equal to
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PORTB, ROWLANES; the CFG_HASH it reports): ACT_ROWS equal to
     MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
@@ -347,7 +348,18 @@ def build_config(t: Target | str | None = None, **knobs):
         a["T2"] = bool(int(knobs["T2"]))
     if knobs.get("PORTB") is not None:
         a["PORTB"] = int(knobs["PORTB"])
+    if knobs.get("ROWLANES") is not None:
+        a["ROWLANES"] = bool(int(knobs["ROWLANES"]))
     return config(t, **a)
+
+
+def rl_streams(cfg) -> int:
+    """The MXU's weight streams of a build with row lanes (otpu_mxu RL: 0 without the mode;
+    4 or 8: the lanes x blocks a chunk the configuration's widest RL MM takes, min(MCOLS, 2
+    PORTB), at least QUAD's four): docs/row_lanes.md."""
+    if not getattr(cfg, "ROWLANES", False):
+        return 0
+    return max(4, min(cfg.MCOLS, 2 * cfg.PORTB))
 
 
 def _fmt(v) -> str:

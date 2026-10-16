@@ -30,6 +30,7 @@ STREAM = true
 SEQ_WC = true
 T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
 PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
+ROWLANES = false                # MM RL row lanes and QACT DUP8 (docs/row_lanes.md; CAPS2 bit4)
 
 [uarch]                         # the f2 target's (the YPCB card's m4)
 MXU_IMPL = 2
@@ -84,3 +85,17 @@ S = 4
 [variants.p2]                   # a wide port B: two chunks a cycle over the 8 channels (4 pairs: a
 PORTB = 2                       # request's two chunks on two pairs; docs/wide_port.md). The
                                 # nightly's PORTB 2 build: build.py --target f2-hbm:p2
+
+[variants.p4rl]                 # the wide port at four chunks a cycle with row lanes (MM RL,
+PORTB = 4                       # docs/row_lanes.md): int8 decode with four lanes on MCOLS 4
+ROWLANES = true                 # (the 102 GB/s ceiling of the port); 8 channels at a beat a
+                                # cycle each. build.py --target f2-hbm:p4rl
+
+[variants.p4rl8]                # ... on MCOLS 8: int4 decode with four lanes of two columns
+PORTB = 4                       # (eight streams, otpu_mxu RL 8), the > 100 tok/s point of the
+ROWLANES = true                 # tally. build.py --target f2-hbm:p4rl8
+MCOLS = 8
+
+[variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
+PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl
+ROWLANES = true

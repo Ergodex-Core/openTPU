@@ -129,6 +129,17 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf, pair, quad = I.mm_format(ins)
+        L = I.mm_lanes(ins)
+        if L:                           # row lanes (docs/row_lanes.md): ceil(N / L) groups of
+            # ceil(KB / bpc) advances, L chunks each; port A a line an advance, and the group's
+            # Sw line where it is not the first advance's (porta: lines, not words)
+            from . import quant as Q
+            fmt = ["int8", "int4", "fp4", "nvfp4", "t2"][wf]
+            G, KBc = -(-N // L), -(-KB // I.blocks_per_chunk(wf))
+            sw_alone = Q.rl_header(fmt, L) + Q.rl_adv_bytes(fmt, L) > 32
+            lines = 0 if ins.flags & I.F_UNIT else G * (KBc + (1 if sw_alone else 0))
+            return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T{' ' + fmt if fmt != 'int8' else ''}"
+                          f" rl{L}{acc}", G * KBc, G * L * KBc, lines)
         if wf == I.W8:                  # (PAIR / QUAD: two / four chunks a cycle, PORTB)
             per = 4 if quad else 2 if pair else 1
             return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T"
@@ -191,7 +202,7 @@ class Profile:
             # (QUAD's four words)
             ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else
                      r.porta // 4 if r.detail.endswith((" quad", " quad +acc")) else r.porta
-                     for r in rs)
+                     for r in rs)         # (an RL MM's porta is its lines already)
             m = sum(r.work for r in rs if r.op == I.MM)
             per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m,
                         "bound": max(ac, b, m)})

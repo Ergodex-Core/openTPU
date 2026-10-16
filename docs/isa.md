@@ -182,7 +182,9 @@ Fields: `sa = R[ra]+w1` (streamed rows, bytes), `ssa = R[rb]+w2` (the weights' s
 bytes), `out = R[rc]+w3` (TMEM words), `N = w4[15:0]`, `KB = w4[23:16]`, `k0 = w4[31:24]` (the
 first block of the MM within the scale rows), `rs = w5` (row stride, bytes), `ors = w6[15:0]`
 (output row stride, words), `M = w6[23:16]`, `ab = w6[31:24]` (first ACT RAM block),
-`srs = w7` (scale row stride, bytes). Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
+`srs = w7` (scale row stride, bytes). `rs` is a multiple of D (>= 16): its bits 1:0 are t2
+and QUAD ("Column reuse", docs/ternary.md), bits 3:2 the row lanes ("Row lanes"); the stride
+is `rs & ~0xF`. Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
 `dw = 0` and `m = 1`; nothing is read at `ssa`), bit1 `ACC` (accumulate into `out`), bit2 `RMAX`
 (also write each output row's maximum: `T[out + M*ors + j] = fold(max, y[j][0..N-1])`, folded
 from `n = 0` like the `RMAX` VOP; the softmax row max comes for free from the MXU epilogue), bit3
@@ -266,6 +268,29 @@ together: `k0` is even and `ssa` and `srs` are multiples of 8 (WF 3: 16); with K
 chunk's second block word is read and ignored. ACC, RMAX and ASCALE are unchanged and write M
 rows.
 
+#### Row lanes
+
+`rs` bits 3:2 = log2 L, L in {2, 4, 8} (`isa.mm(rl=L)`; `Config.ROWLANES`, CAPS2 bit4;
+docs/row_lanes.md): the MM streams its rows L at a time, each lane its own row, the L lanes'
+chunks in one cycle. `M = 1`; not with PAIR (a lane's reuse is its whole chunk: `bpc` = 1 (int8),
+2 (4-bit) or 4 (t2) blocks); `L <= Config.PORTB`; `L bpc <= MCOLS`; `k0` a multiple of bpc; and
+unless UNIT or RSC, `L bpc bs <= 32` where bs is a block's scale bytes (int8 1, int4 / fp4 / t2
+4, nvfp4 8): int8 L 2, 4, 8; int4 / fp4 L 2, 4; nvfp4 and t2 L 2.
+
+The rows are stored in groups of L (`quant.rl_rows`): group g (rows gL .. gL + L - 1) at `sa +
+g rs`, chunk q of row gL + l at `sa + g rs + (q L + l) D`; `sa` and `rs` are multiples of L D.
+The scale rows likewise (`quant.rl_scales`): group g at `ssa + g srs`, the L rows' `Sw` words
+first (`Sw[gL + l]` at `+ 4 l`), then from `H = max(4 L, L bpc bs)` block k's data of the L rows,
+row gL + l's at `H + k L bs + l bs` (the byte / word / eight bytes of the table above); `ssa` and
+`srs` are multiples of 32. RSC: a group is its L `Sw` words (`ssa`, `srs` multiples of 4 L: the
+standard RSC rows as they are). UNIT: nothing is read. Rows gL + l >= N of the last group are
+streamed and dropped (their bytes must be readable).
+
+The lanes' columns are `l + p L` (block p of lane l's chunk), so an RL MM reads ACT rows `0 ..
+L bpc - 1`, which must hold the same row (QACT DUP, DUP4 or DUP8). The results are a plain MM's:
+`T[out + n]` for n < N, RMAX into `out + ors`, ACC and ASCALE as before. The mode changes
+cycles, not values: tests/test_row_lanes.py.
+
 ### QACT
 
 `src = R[ra]+w1` (TMEM words), `rows = w2[7:0]` (at most ACT_ROWS), `ab = w2[15:8]`,
@@ -278,7 +303,9 @@ per-row factor `T[w5 + r]`. With both, `x = (T[src + r*srs + c] * T[w5 + r]) * T
 `Sa[r][ab+k] = S`, `da[r][ab+k][b] = d` of sub-block `b` of block `k`. Flag bit0 `ROW`: every
 `d = 0` (the row's one scale). Flag bit3 `DUP` (`2*rows <= MCOLS`): row `r + rows` receives the
 same bytes and scale records as row `r` in the same cycles, the operand layout of `MM PAIR`
-("Column reuse").
+("Column reuse"); bit4 `DUP4` (`4*rows <= MCOLS`): rows `r + c rows`, c = 1..3 (`MM QUAD`); bit5
+`DUP8` (`8*rows <= MCOLS`; `Config.ROWLANES`): c = 1..7 (an `MM RL` of eight columns, "Row
+lanes"). One of the three.
 
 ### QST
 

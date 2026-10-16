@@ -94,6 +94,7 @@ from . import moe as MO
 from .lfm2 import plan
 from ..host.offload import LINE, BackendDram, ExpertServer, Layout, RowLayout, RowServer
 from .qwen3 import (ATTN_BLOCK, ATTN_DEPTH, RunPos, _Bump, _lm_head, _lm_head_rows, _qdesc,
+                    rl_alloc, rl_lanes_of,
                     _tdesc, amask_bytes, amask_table, fill_logits, finite,
                     step_descriptors)
 
@@ -886,7 +887,9 @@ class Image:
             if spec.experts:
                 self.io["moe_scratch"] = b.alloc(4 * H * (LINE // 4 + 1))
         sb = lambda k, f: Q.scale_bytes(k, f, D)                        # noqa: E731
-        self.wproj = (b.alloc(L * P * rb(H, self.pformat)), b.alloc(L * P * sb(H, self.pformat))) \
+        self.wproj_rl = rl_lanes_of(cfg, self.pformat) if P else 0
+        self.wproj = (rl_alloc(b, L * P, H, self.pformat, D, self.wproj_rl) if self.wproj_rl else
+                      (b.alloc(L * P * rb(H, self.pformat)), b.alloc(L * P * sb(H, self.pformat)))) \
             if P else None
         # layer blocks: one layout per key
         self.dchunk = {(f, fd): _mlp_chunk(_ffn_pad(f, fd, D), D, D if fd == "int8" else 2 * D,
@@ -916,10 +919,15 @@ class Image:
                 mats.update(wk=(nkv * d, H, fa))
                 if not spec.kv_same(i):
                     mats.update(wv=(nkv * d, H, fa))
+            # row lanes (docs/row_lanes.md): the projections in groups (qwen3.rl_alloc)
+            o["rl"] = {n: rl_lanes_of(cfg, f) for n, (_, _, f) in mats.items()}
+            o["rl"]["wd"] = rl_lanes_of(cfg, fd)
             for n, (r, c, f) in mats.items():
-                o[n] = (lb.alloc(r * rb(c, f)), lb.alloc(r * sb(c, f)))
+                o[n] = rl_alloc(lb, r, c, f, D, o["rl"][n]) if o["rl"][n] else \
+                    (lb.alloc(r * rb(c, f)), lb.alloc(r * sb(c, f)))
             C = self.dchunk[ff, fd]
-            o["wd"] = [(lb.alloc(H * rb(C, fd)), lb.alloc(H * sb(C, fd)))
+            o["wd"] = [rl_alloc(lb, H, C, fd, D, o["rl"]["wd"]) if o["rl"]["wd"] else
+                       (lb.alloc(H * rb(C, fd)), lb.alloc(H * sb(C, fd)))
                        for _ in range(fp_ // C)]
             if own:
                 ck = self.ring if kind == SLIDE else cap
@@ -954,6 +962,11 @@ class Image:
                      b.alloc(spec.vocab * sb(H, self.head_format)))
         # the head's gather scales (kernels.gather.table: the embedding rows' gathers)
         self.head_gs = b.alloc(spec.vocab * Q.gather_scale_bytes(H, self.head_format, D))
+        # row lanes: the head the LM-head MMs stream, in groups (the rows above stay for the
+        # gather: a group's row is not affine in its index, docs/row_lanes.md)
+        self.head_rl = rl_lanes_of(cfg, self.head_format)
+        self.head_rlq = rl_alloc(b, spec.vocab, H, self.head_format, D, self.head_rl) \
+            if self.head_rl else None
         self.ple = b.alloc((rows if self.ple_host else spec.vocab) * self.ple_rec)
         self.ple_store = None           # ple_host: [vocab, ple_rec] uint8, filled by build
         self.lookup = {}
@@ -1030,7 +1043,7 @@ class Image:
             rows = [r for i in range(L)
                     for r in range(spec.src(i) * P, (spec.src(i) + 1) * P)]
             tasks.append((self.wproj, ("mat", "model.per_layer_model_projection.weight",
-                                       ("rows", tuple(rows)), H ** -0.5, self.pformat, D)))
+                                       ("rows", tuple(rows)), H ** -0.5, self.pformat, D), None))
         norms = _norms(P, spec.experts > 0)
         for i in range(L):
             p = f"model.layers.{spec.src(i)}."
@@ -1052,31 +1065,48 @@ class Image:
                    "wpp": p + "per_layer_projection", "wk": a + "k_proj", "wv": a + "v_proj"}
             if k[1]:
                 put(base + o["kn"], f32(_gain(spec, W[a + "k_norm.weight"])))
-            for n, (r, _, f) in o["mats"].items():     # gate / up: rows padded with zeros
+            for n, (r, c, f) in o["mats"].items():     # gate / up: rows padded with zeros
                 sel = ("pad", r) if n in ("wg", "wu") and r != spec.ffn[i] else None
                 tasks.append((tuple(base + x for x in o[n]),
-                              ("mat", src[n] + ".weight", sel, 1.0, f, D)))
+                              ("mat", src[n] + ".weight", sel, 1.0, f, D), (o["rl"][n], c)))
             fd = self.lf[i][2]
             C = self.dchunk[k[2], fd]               # whole rows, stored in column parts
             tasks.append((tuple(base + x for pair in o["wd"] for x in pair),
                           ("parts", p + "mlp.down_proj.weight",
-                           ("cols", 0, C * len(o["wd"])), 1.0, fd, D, C)))
+                           ("cols", 0, C * len(o["wd"])), 1.0, fd, D, C), (o["rl"]["wd"], C)))
         head = "model.embed_tokens.weight" if spec.tied else "lm_head.weight"
         hf = self.head_format
         rb, sb, gb = (Q.row_bytes(H, hf, D), Q.scale_bytes(H, hf, D),
                       Q.gather_scale_bytes(H, hf, D))
         for r in range(0, spec.vocab, HEAD_CHUNK):
             e = min(spec.vocab, r + HEAD_CHUNK)
-            tasks.append(((self.head[0] + r * rb, self.head[1] + r * sb, self.head_gs + r * gb),
-                          ("gather", head, ("rowrange", r, e), 1.0, hf, D)))
+            addrs = (self.head[0] + r * rb, self.head[1] + r * sb, self.head_gs + r * gb)
+            if self.head_rl:                # (the groups' copy: chunks at whole groups)
+                L = self.head_rl
+                addrs += (self.head_rlq[0] + (r // L) * Q.rl_row_stride(H, hf, L, D),
+                          self.head_rlq[1] + (r // L) * Q.rl_scale_bytes(H, hf, L, D))
+            tasks.append((addrs, ("gather", head, ("rowrange", r, e), 1.0, hf, D),
+                          (self.head_rl, H, "head")))
         if self.ple_host:                               # the host's store: record t at t rec
             self.ple_store = np.zeros((spec.vocab, self.ple_rec), np.uint8)
         for r in range(0, spec.vocab if P else 0, PLE_CHUNK):
             e = min(spec.vocab, r + PLE_CHUNK)
             tasks.append(((-1 - r if self.ple_host else self.ple + r * self.ple_rec,),
                           ("ple", Weights.PLE, ("rowrange", r, e), tuple(self._cols()),
-                           self.ple_format, D, self.ple_S, (P / 2) ** 0.5)))
-        for (addrs, _), arrays in zip(tasks, _run_tasks(W, [t for _, t in tasks], jobs)):
+                           self.ple_format, D, self.ple_S, (P / 2) ** 0.5), None))
+        if P:                                           # (the PLE projection's groups)
+            tasks[0] = tasks[0][:2] + ((self.wproj_rl, H),)
+        for (addrs, job, rl), arrays in zip(tasks, _run_tasks(W, [t[1] for t in tasks], jobs)):
+            if rl and rl[0]:                            # row-lane groups (docs/row_lanes.md)
+                L, K = rl[0], rl[1]
+                fmt = job[4]
+                if len(rl) > 2:                         # the head: its rows, scales, gather
+                    q, sc, gs = arrays                  # scales, then the groups' copy
+                    arrays = (q, sc, gs, Q.rl_rows(q, L, D), Q.rl_scales(sc, fmt, K, L, D))
+                else:                                   # a matrix, or column parts (pairs)
+                    arrays = tuple(x for i in range(0, len(arrays), 2)
+                                   for x in (Q.rl_rows(arrays[i], L, D),
+                                             Q.rl_scales(arrays[i + 1], fmt, K, L, D)))
             for addr, arr in zip(addrs, arrays):
                 if addr < 0:                            # PLE records from row -1 - addr
                     v = np.ascontiguousarray(arr).view(np.uint8).reshape(-1, self.ple_rec)
@@ -1375,9 +1405,10 @@ class Image:
             ns.qn = Tensor(off + o["qn"], (d,), (1,))
             for n, (r, c, f) in o["mats"].items():
                 da, sa = o[n]
-                setattr(ns, n, QTensor.weight(off + da, off + sa, r, c, f, D))
+                setattr(ns, n, QTensor.weight(off + da, off + sa, r, c, f, D, rl=o["rl"][n]))
             C = self.dchunk[ff, fd]
-            parts = tuple(QTensor.weight(off + da, off + sa, H, C, fd, D) for da, sa in o["wd"])
+            parts = tuple(QTensor.weight(off + da, off + sa, H, C, fd, D, rl=o["rl"]["wd"])
+                          for da, sa in o["wd"])
             ns.wd = QTensor(parts[0].data, parts[0].scale, (H, C * len(parts)), parts[0].rs,
                             parts[0].srs, D, parts=parts, pw=C, wf=parts[0].wf)
             if own:
@@ -1417,8 +1448,11 @@ class Image:
             pli=_tdesc(self.io["pli"], (R, L, P)),
             mask=_tdesc(self.io["mask"], (2, self.block)), z2=self.io["z2"],
             xbuf=_tdesc(self.io["xbuf"], (self.prefill_rows, H)) if self.prefill_rows else None,
-            wproj=_qdesc(*self.wproj, L * P, H, D, self.pformat) if P else None,
-            head=_qdesc(*self.head, spec.vocab, H, D, self.head_format), v_loc=spec.vocab,
+            wproj=QTensor.weight(*self.wproj, L * P, H, self.pformat, D, rl=self.wproj_rl)
+            if P else None,
+            head=QTensor.weight(*self.head_rlq, spec.vocab, H, self.head_format, D,
+                                rl=self.head_rl) if self.head_rl
+            else _qdesc(*self.head, spec.vocab, H, D, self.head_format), v_loc=spec.vocab,
             head_tab=GA.table(self.head[0], self.head_gs, spec.vocab, H, self.head_format, D),
             ple=GA.record_table(self.ple, R if self.ple_host else spec.vocab, self.ple_S,
                                 self.ple_format, D) if P else None)
