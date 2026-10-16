@@ -187,8 +187,8 @@ the host (`embed_host`: a slot of rows, not a 248320-row table), `cap` 2048 toke
   transposed); the DeltaNet state 2 MiB a layer (32 heads x 128 x 128 fp32). Headroom for a
   longer context: 16.4 MiB per 1024 tokens, so cap 65536 (1 GiB of KV) still fits.
 * **The 9B's head** is its own tensor (`output.weight`, untied, Hadamard-folded like the
-  projections: prism.hadamard.version 1); in t2 277 MiB, in int4 517 MiB (the image 2511 MiB).
-
+  projections: prism.hadamard.version 1); in t2 277 MiB, in int4 517 MiB (the image 2511 MiB):
+  7.1 checks both.
 * **The 9B's rotation block is 4096** (the 2B's and 4B's 512, the 27B's 1024): the hadamard
   kernel's H_512 MM followed by three butterfly stages of VOP adds and subtracts over each
   block's 8 rows of 512 (kernels/hadamard.py), the same 64 KB H matrix.
