@@ -349,14 +349,15 @@ class QTensor:
         if self.tiles is not None:
             return self.padded_cols(r0, nr, c0, nc, nc)
         if self.rl:               # row-lane groups: rows at group strides, chunks L D apart
-            if not r0.is_static or r0.static() % self.rl:
+            # (a loop-dependent start too, every term a multiple of L: the group index is
+            # the exact quotient, as the Qwen3.5 DeltaNet's pair loop slices its wh)
+            if r0.const % self.rl or any(c % self.rl for c in r0.terms.values()):
                 raise CompileError(f"a row slice of a matrix in row-lane groups of {self.rl} "
                                    f"starts at a multiple of {self.rl} ({r0})")
+            g0 = r0.div_exact(self.rl)
             bpc = I.blocks_per_chunk(self.wf)
-            data = self.data + (r0.static() // self.rl) * self.rs + \
-                c0.div_exact(bpc * self.D) * (self.rl * self.D)
-            scale = None if self.scale is None else \
-                self.scale + (r0.static() // self.rl) * self.srs
+            data = self.data + g0 * self.rs + c0.div_exact(bpc * self.D) * (self.rl * self.D)
+            scale = None if self.scale is None else self.scale + g0 * self.srs
             k0 = self.k0
             if scale is not None and not self.rsc:
                 if not c0.is_static:

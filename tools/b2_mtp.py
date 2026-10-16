@@ -6,7 +6,8 @@ per unit cycle against plain decode.
 
     python tools/b2_mtp.py MODEL_DIR [--target f2-hbm] [--wformat t2] [--head-format t2]
                            [--cap 2048] [--prompt short|long|TEXT] [--steps 32] [--rows 8]
-                           [--card] [--reference] [--json OUT.jsonl]
+                           [--portb 2] [--mcols 8] [--rowlanes] [--card] [--reference]
+                           [--json OUT.jsonl]
 
 The main model's projections stay the latent ternary weights (t2, the rotation on the device);
 the -MTP GGUF's nextn layer (mtp.*: Q8_0, not ternary, not rotated) is int8 (the formats rule
@@ -62,10 +63,14 @@ class Tally:
             name, _, cyc, pb, pa = P._describe(ins, slf.cfg)
             if ins.op == I.MM:
                 wfm, pair, quad = I.mm_format(ins)
-                N, KB, M = ins.w[3] & 0xFFFF, (ins.w[3] >> 16) & 0xFF, (ins.w[5] >> 16) & 0xFF
-                pb = N * -(-KB // I.blocks_per_chunk(wfm))
-                cyc = N * -(-KB // I.reuse(pair, quad)) * -(-M // slf.cfg.MCOLS)
-                name = f"MM {FMT[wfm]}{' quad' if quad else ' pair' if pair else ''}"
+                Lr = I.mm_lanes(ins)
+                if Lr:          # MM RL (docs/row_lanes.md): the profile's groups x advances
+                    name = f"MM {FMT[wfm]} rl{Lr}"
+                else:
+                    N, KB, M = ins.w[3] & 0xFFFF, (ins.w[3] >> 16) & 0xFF, (ins.w[5] >> 16) & 0xFF
+                    pb = N * -(-KB // I.blocks_per_chunk(wfm))
+                    cyc = N * -(-KB // I.reuse(pair, quad)) * -(-M // slf.cfg.MCOLS)
+                    name = f"MM {FMT[wfm]}{' quad' if quad else ' pair' if pair else ''}"
             b = tally.t[tally.bucket][name]
             b[0] += 1
             b[1] += cyc
@@ -117,6 +122,14 @@ def main():
     ap.add_argument("--target", default="f2-hbm")
     ap.add_argument("--wformat", default="t2")
     ap.add_argument("--head-format", default=None)
+    ap.add_argument("--portb", type=int, default=None,
+                    help="chunks a cycle on port B (Config.PORTB, with PAIR; docs/wide_port.md)")
+    ap.add_argument("--mcols", type=int, default=None,
+                    help="MXU columns (Config.MCOLS; default the target's): 8 lets a verify's "
+                         "two rows QUAD (docs/ternary.md 9)")
+    ap.add_argument("--rowlanes", action="store_true",
+                    help="row lanes (Config.ROWLANES, docs/row_lanes.md): the one-row MMs as "
+                         "MM RL of the widest L for --portb / --mcols")
     ap.add_argument("--cap", type=int, default=2048)
     ap.add_argument("--prompt", default="short")
     ap.add_argument("--steps", type=int, default=32)
@@ -139,15 +152,23 @@ def main():
     prompt = chat_tokens(mdir, text)
     hf = a.head_format or a.wformat
     cfg0 = target.config(target.load(a.target))
+    if a.portb:
+        cfg0 = replace(cfg0, PORTB=a.portb, PAIR=True)
+    if a.mcols:
+        cfg0 = replace(cfg0, MCOLS=a.mcols)
+    if a.rowlanes:
+        cfg0 = replace(cfg0, ROWLANES=True)
     spec = bonsai2.spec(mdir, ternary=True, slices=cfg0.S)
     L = spec.layers
     spec = replace(spec, formats=f"attn@{L}={'int8'},mlp@{L}={'int8'}")   # (the MTP layer)
     W = bonsai2.Weights(mdir, mtp=True, latent=True, ffn=spec.ffn)
-    out = {"model": mdir.name, "target": a.target, "wformat": a.wformat, "head_format": hf,
+    out = {"model": mdir.name, "target": a.target, "portb": cfg0.PORTB, "mcols": cfg0.MCOLS,
+           "rowlanes": bool(cfg0.ROWLANES), "wformat": a.wformat, "head_format": hf,
            "cap": a.cap, "prompt": a.prompt, "prompt_tokens": len(prompt), "steps": a.steps,
            "rows": a.rows}
     print(f"{mdir.name}: prompt {a.prompt!r} = {len(prompt)} tokens, {a.steps} steps, "
-          f"{a.wformat}/{hf}, cap {a.cap}", flush=True)
+          f"{a.wformat}/{hf}, cap {a.cap}, PORTB {cfg0.PORTB} MCOLS {cfg0.MCOLS}"
+          f"{' RL' if cfg0.ROWLANES else ''}", flush=True)
     kw = dict(backend="isa", wformat=a.wformat, head_format=hf, rows=a.rows, embed_host=True,
               prompt_runs=False)
 

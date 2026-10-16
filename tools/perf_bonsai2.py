@@ -4,13 +4,15 @@ native memory model), on every slice of the target. Prints the cycles, each slic
 chunks, the roofline and its efficiency, and a wide port's reads (docs/wide_port.md).
 
     OTPU_NCH=8 python tools/perf_bonsai2.py MODEL_DIR f2-hbm [--layers 4] [--wformat t2]
-        [--rotate] [--portb 2]
+        [--rotate] [--portb 2] [--mcols 8] [--rowlanes]
 
 MODEL_DIR holds the GGUF beside the Qwen3.5 config and tokenizer (docs/ternary.md 4). --wformat
 t2 --rotate is the t2 decode with the rotation on the device (MM QUAD); --wformat int4 the
 unfolded int4 weights (QUAD at --portb 2). --portb N (Config.PORTB, with PAIR) builds the RTL
 with a port B of N chunks a cycle and compiles the step with the reuse it allows; the target's
-channels must be at least 2 N (f2-hbm's 8). (b2-scripts/perf_b2.py, with the port.)
+channels must be at least 2 N (f2-hbm's 8). --mcols 8 --rowlanes is the row-lane mode
+(docs/row_lanes.md): t2 RL 2 at PORTB 2 / MCOLS 8, two rows' chunks a cycle into eight
+columns. (b2-scripts/perf_b2.py, with the port.)
 """
 import argparse
 import dataclasses
@@ -36,6 +38,12 @@ def main():
     ap.add_argument("--rotate", action="store_true")
     ap.add_argument("--portb", type=int, default=None, choices=[1, 2, 4],
                     help="chunks a cycle on port B (Config.PORTB; sets PAIR); default the target's")
+    ap.add_argument("--mcols", type=int, default=None,
+                    help="MXU columns (Config.MCOLS; default the target's)")
+    ap.add_argument("--rowlanes", action="store_true",
+                    help="row lanes (Config.ROWLANES, docs/row_lanes.md): the image in row-lane "
+                         "groups, MM RL of the widest L for --portb / --mcols (t2 L 2 at PORTB 2 "
+                         "/ MCOLS 8)")
     ap.add_argument("--lat", type=int, default=60, help="read latency, core cycles")
     ap.add_argument("--bw", type=int, default=100)
     ap.add_argument("--mhz", type=float, default=200.0, help="core clock (tokens/s)")
@@ -50,6 +58,10 @@ def main():
     cfg0 = target.config(t)
     if a.portb:
         cfg0 = dataclasses.replace(cfg0, PORTB=a.portb, PAIR=True)
+    if a.mcols:
+        cfg0 = dataclasses.replace(cfg0, MCOLS=a.mcols)
+    if a.rowlanes:
+        cfg0 = dataclasses.replace(cfg0, ROWLANES=True)
     S = cfg0.S
     spec = bonsai2.spec(a.model, ternary=a.rotate, slices=S)
     spec = dataclasses.replace(spec, kinds=spec.kinds[:a.layers])
@@ -78,7 +90,9 @@ def main():
     portb = cfg.PORTB
     out = {"model": os.path.basename(a.model), "target": a.target, "S": S,
            "nch": os.environ.get("OTPU_NCH"), "layers": a.layers, "wformat": a.wformat,
-           "rotate": a.rotate, "portb": portb, "cycles": p.cycles, "sim_s": round(wall),
+           "rotate": a.rotate, "portb": portb, "mcols": cfg.MCOLS,
+           "rowlanes": bool(getattr(cfg, "ROWLANES", False)), "cycles": p.cycles,
+           "sim_s": round(wall),
            "slices": [{"portb": ps["portb"], "porta": ps["porta_cycles"], "mxu": ps["mxu"]}
                       for ps in rl["per_slice"]]}
     # port B streams its chunks at PORTB a cycle; port A and the MXU at their own rates
