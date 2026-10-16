@@ -2,7 +2,8 @@
 
 Status: plan (2026-10-16). Every number here is an *estimate* from model shapes and the
 openTPU configuration unless marked measured; Phase 0 (the π0.5 port, docs/pi05.md) has
-measured section 3's π0.5 numbers with the ISA tally and RTL timing of cut phases. Work order: π0.5 port first, then
+measured section 3's π0.5 numbers with the ISA tally and RTL timing of cut phases, and Phase 7's
+model side (the RhinoVLA port, docs/rhinovla.md) RhinoVLA's with the ISA tally. Work order: π0.5 port first, then
 RhinoVLA (HuixiAI/RhinoVLA-V3), then the variant below. Reviewed 2026-10-16
 (docs/vla_frequency_plan_review.md): its findings are folded in below, chiefly that the DSP
 packing is the one gate on the 1 Hz claim (L1), the ACT RAM is width-bound (L2), port B at
@@ -27,14 +28,14 @@ that differ are parameters or optional blocks, as T2, PORTB and NCH already are.
 Per action chunk (one inference). MACs from the layer shapes; VPU element ops from the
 elementwise work (RMSNorm, GELU-tanh at ~9 VOPs an element in kernels/lib.py, softmax ~5).
 
-| | π0.5 (lerobot/pi05_libero_finetuned_v044) | RhinoVLA (paper: arXiv 2606.07383) |
+| | π0.5 (lerobot/pi05_libero_finetuned_v044) | RhinoVLA V3 (HuixiAI/RhinoVLA, docs/rhinovla.md; the paper arXiv 2606.07383 is V1) |
 |---|---|---|
-| vision | SigLIP so400m, 3 views x 256 tokens: ~0.3 T MAC | Qwen3-VL ViT, 3 views, merged to 64 tokens each: ~0.25 T MAC |
-| backbone prefix | Gemma 2B (18 layers, 2048 wide, GeGLU 16384), ~800-970 tokens: ~1.6-1.9 T MAC | Qwen3-VL LM 2.1B, ~300 tokens: ~0.6 T MAC |
-| action expert | Gemma 300M, 50 rows x 10 steps: ~0.15 T MAC | 0.40B, 31 rows x steps: ~0.1 T MAC |
-| total | **~2.1 T MAC** | **~1.0 T MAC** |
-| GELU elements in the prefix MLPs | 800 x 16384 x 18 = 236 M (~2.1 G VPU ops) | ~300 x 6144 x 28 = 52 M (SwiGLU) |
-| softmax elements (prefix attention) | 18 x 8 x 800^2 = 92 M | ~28 x 16 x 300^2 = 40 M |
+| vision | SigLIP so400m, 3 views x 256 tokens: ~0.3 T MAC | Qwen3-VL ViT, 3 views of 256 patches merged to 64 tokens each, with the mergers: 0.27 T MAC (measured tally) |
+| backbone prefix | Gemma 2B (18 layers, 2048 wide, GeGLU 16384), ~800-970 tokens: ~1.6-1.9 T MAC | Qwen3-VL LM 2B (28 causal layers, 2048 wide, SwiGLU 6144), 233 tokens: 0.32 T MAC (measured tally) |
+| action expert | Gemma 300M, 50 rows x 10 steps: ~0.15 T MAC | 18 x 1024 (SwiGLU 3072), 1 state + 30 action rows x 10 steps: 0.095 T MAC (measured tally) |
+| total | **~2.1 T MAC** (measured 1.47 T) | **0.69 T MAC** (measured tally) |
+| GELU elements in the prefix MLPs | 800 x 16384 x 18 = 236 M (~2.1 G VPU ops) | 233 x 6144 x 27 = 39 M (SwiGLU) |
+| softmax elements (prefix attention) | 18 x 8 x 800^2 = 92 M | 27 x 16 x 233^2 = 23 M |
 
 References: π0.5 on a Jetson AGX Orin (FP16) 858 ms; RhinoVLA on Huixi R1 (7 nm, 500 TOPS
 int8) 85.5 ms, 11.7 Hz (the paper's measurements).
@@ -43,13 +44,15 @@ int8) 85.5 ms, 11.7 Hz (the paper's measurements).
 
 π0.5's numbers are **measured** by Phase 0 (docs/pi05.md 5: tools/pi05_cost.py's ISA tally of
 a whole chunk at Np = 558 valid prefix rows, calibrated by Verilator runs of cut phases);
-RhinoVLA's are still estimates.
+RhinoVLA's by Phase 7 (docs/rhinovla.md 5: tools/rhinovla_cost.py's ISA tally at 233 prefix
+rows; no RTL run of its phases yet).
 
 * MACs (measured): **1.47 T a π0.5 chunk**, not ~2.1 T: two real cameras (the third is masked
   and dropped), and 558 valid prefix rows (lerobot pads to 968; the pads are dropped exactly).
   Vision 0.22 T, prefix 1.07 T, expert 0.18 T.
 * MXU (measured tally): 512 MAC/cycle, 102 GMAC/s: **14.5 s** a π0.5 chunk (vision 2.2,
-  prefix 10.5, 10 expert steps 1.8). RhinoVLA (estimate): ~10 s.
+  prefix 10.5, 10 expert steps 1.8). RhinoVLA (measured tally): **6.8 s** (vision 2.6, prefix
+  3.2, 10 expert steps 1.0; 0.69 T MAC).
 * VPU (measured tally): 2.0 s a chunk. **The prefix's GELU is 0.78 s, not ~1.3 s**: one cycle
   an element at 8 lanes as estimated, but over 558 x 16384 x 17 = 155 M elements (the last
   layer's MLP is dead), not 800 x 16384 x 18; the chunk's GELU in all (tower, expert too)
@@ -74,7 +77,8 @@ RhinoVLA's are still estimates.
   at MCOLS 16 (-42%), 1.265 -> 0.710 M at MCOLS 32 (-44%); the chunk's QST 0.21 -> 0.09 s at
   every configuration (tally).
 * Total today: **~15-22 s a π0.5 chunk** (measured tally bound 14.5 s, serial 25.1 s, the RTL
-  ratios between); RhinoVLA ~12-15 s (estimate).
+  ratios between); RhinoVLA 6.8 s bound, 12.4 s serial (measured tally: port B 3.1 s, VPU
+  1.4, QACT 0.6, QST 0.2).
 * int8 (measured, docs/pi05.md 4): W8A8 as the card runs it moves π0.5's actions by 6.8% of
   their range, the 2B's activations nearly all of it; the 2B at W8A16 with the expert W8A8:
   1.7%. L9 (W8A16) is needed for π0.5's prefix unless a rollout shows 7% harmless.
@@ -139,15 +143,19 @@ FIFO and the drain sit).
 |---|---|---|---|
 | π0.5 a chunk | ~15-22 s (section 3) | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M, QST T): MXU 1.90 s, port B 0.55, VPU 0.26, QST 0.09; bound 1.9 s, serial 2.96 s: **0.3-0.5 Hz** | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M, QST T): MXU 0.95 s, port B 0.51, VPU 0.26, QST 0.09; bound 0.95 s, serial 1.96 s: **0.5-1.05 Hz** (the RTL's overlap on cut phases, 1.10-1.54x the slowest unit at MCOLS 4, puts it at ~0.7-0.9 Hz) |
 | π0.5, measured RTL overlap at the f2-vla sizes (docs/pi05.md 5.3; 16 lanes) | 1.10-1.54x, MXU 65-91% (p_out 68%) | MCOLS 16: **p_out 1.23x, MXU 81%**; the others 1.51-2.13x, MXU 42-66% (v_out 60%, p_qkv 66%, v_qkv 66% with T, e_step 52%) | MCOLS 32 unpacked: p_out 1.67x, MXU 60%; the others 1.97-2.88x, MXU 23-50% (p_qkv 50%, v_out 36%, v_qkv 35%, e_step 32%); the VPU at 16 lanes the longest unit of three phases, the MXU drain's TMEM arbitration the loss on every one |
-| RhinoVLA a chunk | MXU 6.6 s (shape tally, tools/rhinovla_shape.py: 0.66 T MAC, a 233-row prefix; the real chunk more, the row groups TMEM-capped as π0.5's) | shape tally: MXU 0.90 s, port B 0.25: **~1.1 Hz MXU-bound, no margin** (the VPU / QACT / QST not estimated: ~0.3-0.5 s more serial, by π0.5's) | shape tally: MXU 0.53 s, port B 0.25: **~1.3-1.9 Hz** |
+| RhinoVLA a chunk (**measured ISA tally**, docs/rhinovla.md 5: 233 prefix rows, 0.686 T MAC: vision 0.27 with the mergers, prefix 0.32, 10 expert steps 0.10) | MXU 6.77 s, port B 3.15, VPU 1.42, QACT 0.57, QST 0.22; bound 6.8 s, serial 12.4 s: 0.08-0.15 Hz | tally (ACT_ROWS 255, LANES 64, TMEM 1.5M, QST T, PORTB 1): MXU 0.88 s, port B 0.34, VPU 0.19, QST 0.14, QACT 0.07; bound 0.88 s, serial 1.68 s: **0.6-1.1 Hz** | tally (MCOLS 32 PACK = 64 logical, the same sizes): MXU 0.44 s, port B 0.34 (0.17 at PORTB 2), VPU 0.19, QST 0.14, QACT 0.07, DMA 0.06; bound 0.44 s, serial 1.24 s (1.07 at PORTB 2): **0.8-2.3 Hz** (0.9-2.3 at PORTB 2); at the MCOLS 16 phases' measured overlap ~1.5-2.0 Hz, at the MCOLS 32 / 16-lane phases' ~1 Hz; with the backbone at W8A16 MXU 0.66 s, serial 1.46 s: 0.7-1.5 Hz |
 
-So the ≥ 1 Hz deliverable (RhinoVLA) rests on phase 1's packing result: with MCOLS 64 packed
-it has margin (MXU 0.53 s), at MCOLS 32 unpacked the MXU alone is 0.90 s, at the line, and the
-other units' overlap has to be measured on the real prefix shape. RhinoVLA's shape (the
-paper's Table 8; its V3 branch may differ): 3 views x 64 tokens + ~40 prompt tokens + 1 state
-token = ~233 prefix rows through Qwen3-VL-2B (28 layers, 2048 wide, MLP 6144) after a 24-layer
-ViT at 256 patches a view; the expert 18 x 1024 on 31 rows: 0.66 T MAC a chunk (vision 0.24,
-prefix 0.32, 10 expert steps 0.09), against π0.5's 1.47 T. 250 MHz adds 1.25x on top. π0.5 at 1 Hz needs ~2.8 TMAC/s effective:
+So the ≥ 1 Hz deliverable (RhinoVLA) rests on phase 1's packing result: with 64 logical
+columns packed the MXU is 0.44 s (measured tally) and the margin is the other units' overlap
+(the serial sum, 1.24 s, is 2.8x the bound: port B 0.34, VPU 0.19, QST 0.14, QACT 0.07, DMA
+0.06, each small and together 0.8 s; 0.63 s at PORTB 2); at MCOLS 32 unpacked the MXU alone is
+0.88 s, at the line. RhinoVLA's shape as V3's code has it (docs/rhinovla.md 1; the paper's
+Table 8 is V1): 3 views x 64 tokens + 41 prompt tokens = 233 prefix rows (the state is a
+suffix token, not a prefix one) through Qwen3-VL-2B (28 causal layers, 2048 wide, SwiGLU
+6144, deepstack from the ViT's blocks 5 / 11 / 17 into layers 0-2) after the 24-block ViT at
+256 patches a view with 2D RoPE and the 2 x 2 mergers; the expert 18 x 1024 on 1 state + 30
+action rows reading backbone layers 10-27: 0.686 T MAC a chunk (vision 0.27, prefix 0.32, 10
+expert steps 0.10), against π0.5's 1.47 T. 250 MHz adds 1.25x on top. π0.5 at 1 Hz needs ~2.8 TMAC/s effective:
 the MCOLS 96 stretch (packed; 12,288 MAC/cycle, DSP ~6.2K + VPU) is the point within one slice;
 MCOLS 128 would need ~8.2K DSPs, past the part with the VPU's. The plan is sized for Np 558
 (the LIBERO prompt shape; at 968 rows, lerobot's padded length, every prefix number is 1.7x).
@@ -181,7 +189,7 @@ not a contingency; 16 ports only with the MCOLS 96 stretch.
 | 4 | L4 / L5 / L6: LANES 64 (the VPU's partial loop past 16 lanes), TMEM 1.5M words (**builds and runs**), QACT / QST at LANES a cycle; **and the MXU drain's TMEM arbitration** (measured as the first loss at MCOLS 16 / 32: the drain denied 756 K of v_out's 2.37 M cycles) | VPU / QACT tests; bank-conflict counters in the RTL timing (TMEMSTAT, now read by tools/pi05_rtl.py --profile); VPU + QACT + QST < 15% of the serial sum; the MXU >= 75% of the cycles on v_out / p_qkv / p_out at MCOLS 32 |
 | 5 | L3 fused activation unit, sized on phase 4's remainder: ISA op + RTL + tests | bit-exact; the GELU's share gone |
 | 6 | L7 memory: f2-hbm's S=1 x 8 ports, PORTB 2 merged from ternary-bonsai, the DMA path for activations | RTL timing on the 8-port model: the expert step no longer port-bound; port-B stalls < 5% outside it |
-| 7 | RhinoVLA port (Qwen3-VL ViT new; Qwen3 LM kernels exist; expert / flow loop shared with π0.5) | action error vs its reference |
+| 7 | RhinoVLA port, **the model side done** (docs/rhinovla.md): the Spec and numpy fp32 reference from V3's code, matched to the repo's own PyTorch predict_action on a tiny random model (every stage <= 2.8e-6 relative, the actions 1.4e-7); the image and programs (kernels/qwen3vl_vit.py: the ViT's 2D RoPE, the erf GELU, the deepstack adds; kernels/rhinovla.py: the causal prefix with q / k norms and GQA on an Additive mask table, the expert step on π0.5's flow loop); the tiny chunk on the ISA simulator within 0.06% of the action range of the repo's; the measured tally (section 6's row, replacing the shape tally); tools/rhinovla_sensitivity.py's sweep and precision-map procedure (run on the tiny model only). **Left**: the real checkpoint (6.07 GB, not fetched for disk): its reference, ISA run and precision map (the commands in docs/rhinovla.md 2 / 4); the RTL timing of a cut phase at the f2-vla sizes (tools/pi05_rtl.py's method), not run | action error vs its reference: **0.063% of the range on the tiny model** (ISA, W8A8); the real model's at the map's precision under 2% (needs the weights) |
 | 8 | f2-vla target; nightly synthesis at 200 MHz, then 250; AFI; board run | ≥ 1 Hz RhinoVLA on the F2 (measured) |
 | 9 | L9 W8A16 where phases 0 / 7 show int8 activations hurt; the MCOLS 96 stretch for π0.5 at 1 Hz | success-rate parity on LIBERO; RTL timing, then the nightly |
 
