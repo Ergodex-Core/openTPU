@@ -127,8 +127,11 @@ compares order raw sign-magnitude bits (a NaN with the sign set is below `-inf`)
   `p[q] = +0 + x[q] + x[q+P] + x[q+2P] + ...` (left to right, each `+` an fp32 add), then a
   folding tree over the partials: `n = P/2, P/4, ..., 1: p[i] = p[i] + p[i+n]` for `i < n`.
   RSUM, RSSQ and RDOT use P = 64 over the columns and pad a row with +0 terms to a multiple
-  of 64 columns (each added: a -0 partial, from a sum that flushed, becomes +0). MM sums
-  exactly: an integer ("MM").
+  of 64 columns (each added: a -0 partial, from a sum that flushed, becomes +0). The order is
+  the definition's whatever the implementation's width: the RTL's VPU evaluates it on 16
+  lanes at any LANES (its 64 / LANES partial loop; past 16 lanes a chunk goes through in
+  sub-steps, the same bits, 16 elements a cycle: rtl/vpu/otpu_vpu.sv). MM sums exactly: an
+  integer ("MM").
 - `q8(x)`: round half to even to an integer, saturate to `[-127, 127]`; NaN gives 0 (a zero
   times an infinite `inv`, below).
 
