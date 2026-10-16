@@ -1,9 +1,12 @@
 # A wide port B: 2x and 4x the weight bandwidth of a slice
 
 Status: ISA, simulator and compiler done (Config.PORTB, tests/test_wide_port.py); RTL built and
-validated in Verilator (section RTL: its state on 2026-10-16, the decision to finish it as one
-wide port, the tests and the measurements); not synthesized: FPGA synthesis only in the nightly
-build (section "What the nightly needs").
+validated in Verilator at PORTB 2 and 4, the board model and the host at PORTB 2 (section RTL:
+its state on 2026-10-16, the decision to finish it as one wide port, the tests, the
+measurements: Gemma-3-1B int8 4,652,571 cycles a token at PORTB 2, 1.71x, 43 tok/s at 200
+MHz); not synthesized: FPGA synthesis only in the nightly build (section "What the nightly
+needs", targets f2-hbm:p2 and f2-hbm16:p4). PORTB 8 and int4 at PORTB 4 need a reuse the ISA
+does not have (section "The whole-model tally"): the lanes of "Future improvements".
 
 ## Why
 
@@ -74,6 +77,49 @@ uncommitted edits committed as they were):
   register protocol) could not be built at PORTB 2 at all. (3) No measurement of a whole
   model: the Gemma numbers below were two layers and the head; nothing on Bonsai-2. (4) The
   doc said "RTL done".
+
+### Decision: finish the one wide port (PORTB 2); the lanes stay the PORTB 4 / MCOLS 8 path
+
+The alternative ("Future improvements" below: PORTB independent one-chunk lanes, each on its own
+HBM channel pair with credits and bursts, each feeding one column group of a reuse) was weighed
+against what the code holds:
+
+* **What a lane rebuild would and would not change.** The MXU side is the same under both:
+  a chunk FIFO entry of PORTB chunks (one a lane), an issue that asks for an advance's chunks
+  at once, the reuse group's scale data in the entry, S1's four streams from the entry's
+  blocks. Only otpu_slice's port B (PORTB request / response channels instead of one wide one)
+  and otpu_native_dram's front (a queue set a lane) would differ. The part the WIP had to get
+  right for bit-exactness, and did (53 tests), is the part a rebuild would keep.
+* **The adapter already spreads a wide request over PORTB channel pairs.** Chunk m is on pair
+  `(m mod NP) ^ fold(m / NP)` (docs/f2_hbm.md), a bijection within an aligned group of NP
+  chunks, so a request's chunks go to PORTB distinct pairs in one cycle and come back as a
+  PORTB-pair join: at the HBM each chunk of a cycle is on its own pseudo-channel pair, as a
+  lane would be, and each channel's bridge (otpu_f2_hbm_nch) already does the lane engine's
+  job -- its own bursts and credits at 450 MHz, timing local to the channel. What the slice
+  does not have is a lane's fixed pair: lane c's chunk of group u sits on pair `c ^ fold(u)`,
+  which changes with the group. A lane on a fixed pair means dropping the fold, which exists to
+  spread power-of-two strides (port A's columns, a transposed V) over the pairs, and which the
+  host's address map (opentpu/host/board.py `split`, `beat_at`), every image on the F2's HBM
+  and docs/f2_hbm.md encode. Not a change to make for PORTB 2.
+* **What the shared structure costs, measured.** The two-part requests (a request across a
+  group boundary that needs a pair twice): 7% of the wide reads at PORTB 2 on Gemma's 9-chunk
+  rows (87K of 1.64M cycles), 57% at PORTB 4 (358K of 1.31M: the main loss there). Lanes with
+  rows aligned to PORTB chunks would never split -- but the same is had inside the adapter by
+  letting a split request's second part go with the next request's first part (their pairs
+  differ), or in the compiler by padding weight rows to whole groups; both are PORTB 4 work.
+  The merge is NP:1 a chunk instead of one (+1.5K LUT estimated at NCH 8, PORTB 2) and the
+  2048-bit path from the B FIFO heads to the slice's input register is one LUT level more than
+  today's 1024: synthesizable only in the nightly, and if it misses 200 MHz the fix is a
+  register per chunk at the merge (latency only), not a restructure.
+* **Risk and time.** Finishing: the board model, the host's hash, the regression suites at
+  PORTB 2 and the measurements (this page). Rebuilding: a new slice port, a new adapter front,
+  a new address map and the 53 tests over again, for a structure whose gain shows at PORTB 4
+  (the F2's NCH 8 feeds PORTB 2 at 22% of a port's limit each; PORTB 4 is the one that wants
+  f2-hbm16 or lanes, see "Resources and timing").
+
+So: the WIP's one wide port is finished for PORTB 2 (below). The lane structure stays the
+recorded direction for PORTB 4 and for MCOLS 8 (8 lanes), where the fixed-pair address map
+and the split-free rows are worth their change.
 
 ### Design
 
@@ -171,6 +217,20 @@ RSC back to back (DRAM, NCH 8, NCH 16); the compiler's one-row int8 dot at PORTB
 native runs check that wide requests happened (the adapter's NATIVEB counters: wide reads,
 their chunks, the two-part ones; rtlsim stats["native_b"]).
 
+**The regression suites at PORTB 1 and 2** (2026-10-16, Verilator 5.048; PORTB 2 under
+`OTPU_PORTB=2 OTPU_PAIR=1`, the native path on `OTPU_NCH=4`; the machine shared with other
+sessions' builds, load 100-185):
+| suite | PORTB 1 | PORTB 2 |
+|---|---|---|
+| tests/test_wide_port_rtl.py | 53 passed (its own matrix: PORTB 2 and 4 builds) | " |
+| tests/test_rtl.py (the board path: otpu_native_dram + the memory model) | 176 passed, 1 skipped (test_board_memory_path_stress[0-0] on a rerun: in the full run clang crashed compiling its Verilator build under the load, and the later tests' identical build then succeeded) | 176 passed, 1 skipped (the same) |
+| tests/test_t2_rtl.py | 24 passed (test_t2_rules updated: a9d539a6 made 4-bit QUAD legal) | 24 passed |
+| tests/test_observability.py (tb_board, SimTransport) | 18 passed | 18 passed (NCH 4, CAPS2 [3:1] = 2, CFG_HASH of Config(PORTB=2); the starve test's bounds for the two-part requests) |
+| tests/test_host.py | 84 passed, 1 skipped; 4 wall-clock timing tests and one needing `transformers` fail on the loaded machine (5 of 9 pass on a rerun) | 77 passed, 1 skipped; the same environmental ones, 5 load-flaky ones that pass on a rerun, and 4 selftest cases on register-map 2 / 3 fakes, which cannot report PORTB and so mismatch OTPU_PORTB=2 by design (the host follows the bitstream) |
+| tests/test_target.py, test_wide_port.py, test_pair.py, test_f2_build.py (snapshots) | 100 + 7 passed | - |
+Cycles at PORTB 1 are unchanged: every PORTB term is a constant or a generate branch not taken,
+and the PORTB 1 builds' cache keys do not change (top_params adds PORTB only when wide).
+
 **Throughput** (test_wide_port_rtl.py::test_wide_port_throughput_rtl, one-row int8 MM, KB 16,
 the cycles 256 more weight rows add):
 | PORTB (reuse) | behavioural DRAM | native path, NCH 8, 20% stalls |
@@ -196,6 +256,140 @@ twice, each a cycle on port B (925K + 358K = 1.28M of the 1.31M; MXU blocked 27.
 split; the next step is to let a request's second part go with the next request's first when
 their pairs differ (or to pad weight rows to whole groups), not measured here.
 
+### Measured on the RTL (2026-10-16)
+
+Verilator 5.048, the board uarch and the HBM memory model (OTPU_TARGET=f2-hbm, OTPU_NCH=8:
+otpu_native_dram on 8 channels, otpu_native_mem, --lat 60, no stalls), as "Baseline on the
+RTL" below. tools/perf_qwen.py `--model gemma3 --layers 4 --wformat int8 --head-format int8
+--lat 60 --mhz 200 --portb N` (4 layers and the whole 262K-row head; the whole model is
+26 layers: the layers' phases scale by 26/4, the head is whole -- checked by the 26-layer run at
+PORTB 2, `--layers 0`, 16 minutes of simulation, which landed on the extrapolation):
+
+| Gemma-3-1B int8, 4 layers + head | PORTB 1 | PORTB 2 | PORTB 4 |
+|---|---|---|---|
+| cycles | 3,228,204 | 1,894,313 | 1,514,346 |
+| speedup | 1.00x | 1.70x | 2.13x |
+| roofline (port B / PORTB, port A, MXU) | 3,207,980 (port B) | 1,761,872 (MXU) | 1,064,016 (MXU) |
+| efficiency to it | 99.4% | 93.0% | 70.3% |
+| port B's utilization (chunks / (PORTB x cycles)) | 99.4% | 84.7% | 53.0% |
+| MXU blocked (chunks but no MAC) | 0.2% | 5.7% | 27.5% |
+| wide reads, two-part | - | 1,437,184, 105,337 (7.3%) | 739,328, 419,565 (56.8%) |
+| DRAM read beats a cycle a channel | 1.007 | 1.716 | 2.146 |
+| head / MLP / attention cycles | 2,368,742 / 753,084 / 106,376 | 1,392,823 / 436,534 / 64,954 | 1,102,284 / 360,907 / 51,153 |
+| **whole model (26 layers)** | **7.96 M, 25.1 tok/s** (extrapolated; the 26-layer run hit rtlsim's 3600 s simulator timeout on the loaded machine) | **4,652,571 measured, 43.0 tok/s** (the extrapolation said 4.65 M; 91.2% of the MXU roofline 4,243,208, port B at 84.1%, 300,202 of 3,574,528 wide reads two-part) | **3.78 M, 52.9 tok/s** (extrapolated) |
+
+PORTB 2 lands on the projection (38 tok/s at the board's 78% port efficiency, 50 at the
+ceiling: the RTL's 43 is at 85% of its port). PORTB 4 does not reach 70: Gemma's rows are 9
+chunks (K = 1152), so a QUAD row is 3 advances of 4, 4, 1 chunks (the MXU's roofline is 75% of
+the port's), and 57% of the wide reads cross a group of 4 pairs and go in two parts (each a
+port-B cycle): 1.06 M roofline + 0.42 M two-part cycles = 1.48 M of the 1.51 M. The one-row
+int8 MM with KB 16 (test_wide_port_rtl.py's throughput test) streams 4 chunks a cycle on the
+behavioural DRAM, 3.1 on the native path with the model's 20% stalls.
+
+**Bonsai-2 2B (docs/ternary.md)**, tools/perf_bonsai2.py `MODEL f2-hbm --layers 1 --portb N`
+(1 layer and the head; the same memory model and latency), in t2 QUAD with the rotation on the
+device (`--wformat t2 --rotate`) and in the unfolded int4 of the board baseline (`--wformat
+int4 --head-format int8`):
+
+| Bonsai-2 2B, 1 layer + head | PORTB 1 | PORTB 2 | PORTB 4 |
+|---|---|---|---|
+| t2 QUAD: cycles | 1,171,020 | 1,170,808 | 1,170,715 |
+| t2 QUAD: roofline (port B chunks 1,144,993 / PORTB, port A, MXU) and efficiency | 1,144,993 (port B), 97.8% | 1,122,560 (MXU), 95.9% | 1,122,432 (MXU), 95.9% |
+| t2 QUAD: port B's utilization | 97.8% | 48.9% | 24.4% |
+| t2 QUAD: wide reads (two-part) | - | 256 (0) | 128 (51) |
+| int4, int8 head: cycles (speedup) | 4,234,618 | 2,203,107 (1.92x) | - |
+| int4, int8 head: roofline and efficiency | 4,229,089 (port B), 99.9% | 2,114,544 (port B / 2), 96.0% | |
+| int4, int8 head: port B's utilization; wide reads (two-part) | 99.9% | 96.0%; 2,091,136 (1,092: 0.05%) | |
+
+t2 QUAD is the same at every PORTB, as its compile says: the step is 98 t2 QUAD MMs
+(1,105,408 chunks; a t2 chunk is four blocks, QUAD takes them in one cycle, so a wider port has
+nothing more to stream for it) and one int8 MM of 512 chunks that becomes PAIR (the 256 wide
+reads). The 2B at 5.44 M unit cycles a token in t2 stays 5.44 M: for t2 the port is not the
+bound, the MXU's four columns are (MCOLS 8 would be t2's doubling). The unfolded int4 decode
+(the board baseline's format, 9.69 M chunks a token) is where PORTB 2 pays for Bonsai: 72 of
+its 73 MMs go PAIR -> QUAD (2,193,664 of 2,195,712 chunks at two a cycle), and the RTL gives
+1.92x at 96% of the doubled port: Bonsai's int4 rows (K = 2048: 8 chunks) align to the pair
+groups, so only 0.05% of the wide reads split (Gemma's 9-chunk rows: 7.3%). The whole 2B in
+int4 + int8 head (12.36 M cycles a token measured on the board at 78%) would be ~6.4 M on the
+RTL at PORTB 2, near its t2 QUAD figure (5.44 M) with twice the bytes.
+
+### The whole-model tally on the ISA, and what > 100 tok/s needs (PORTB 8, int4)
+
+tools/tally_decode.py (the step run on the ISA simulator over a zeroed image, every executed
+instruction at opentpu.profile's nominal cost; `bound` = max(port B at PORTB a cycle, the
+MXU's advances) + the other units' cycles, which the RTL mostly overlaps: 8.25 M here against
+7.96 M measured at PORTB 1). Gemma-3-1B, 26 layers, 200 MHz:
+
+| weights | PORTB | bytes a token | chunks | port-B cycles | MXU advances | bound | tok/s |
+|---|---|---|---|---|---|---|---|
+| int8 (890 MMs) | 1 | 1,033,510,176 | 7,830,202 | 7,830,202 | 7,817,736 | 8,247,141 | 24.3 |
+| int8 (838 PAIR) | 2 | " | " | 3,915,101 | 4,243,208 | 4,660,147 | 42.9 |
+| int8 (838 QUAD) | 4 | " | " | 1,957,551 | 2,590,728 | 3,007,667 | 66.5 |
+| int8 | 8 | " | " | 978,776 | 2,590,728 (QUAD: the ISA's widest) | 3,007,667 | 66.5 |
+| int4 (838 PAIR) | 1 | 575,970,592 | 4,255,674 | 4,255,674 | 4,243,208 | 4,672,613 | 42.8 |
+| int4 (838 QUAD) | 2 | " | " | 2,127,837 | 2,590,728 | 3,007,667 | 66.5 |
+| int4 (QUAD) | 4 | " | " | 1,063,919 | 2,590,728 | 3,007,667 | 66.5 |
+
+What the table says:
+
+* **PORTB 8 and int4 at PORTB 4 buy nothing with the ISA's reuse.** Column reuse is x1, x2
+  (PAIR), x4 (QUAD): an MM takes at most 4 blocks a cycle -- 4 int8 chunks, 2 int4 chunks. A
+  port of 8 chunks has no instruction that asks for 8, and int4 QUAD at PORTB 4 is int4 QUAD
+  at PORTB 2 with the port half idle. Both need an 8-way reuse (and MCOLS 8 at M = 1), a new
+  ISA mode: QACT DUP8, the 8-block ACT RAM read, 8 scale decoders, a 4:1 PE input select, the
+  8-column row sum, a FIFO entry of 8 chunks. Not built here; the RTL is parameterized to
+  PORTB 4 (the ISA's widest need), on NCH 8 (f2-hbm) or 16 (f2-hbm16:p4).
+* **Even 8-way block reuse (OCT) stops short of 100.** Gemma's rows are 9 blocks: OCT takes
+  2 advances a row (8 + 1), 1,629,444 advances a token, 97.7 tok/s with the other units
+  serial, ~115 with them overlapped as the RTL does -- at 56% of the port's rate (PORTB 8:
+  all 16 channels of f2-hbm16 at a beat a cycle each, the native port's limit).
+* **Reuse across rows (lanes) removes the rounding.** With PORTB lanes each streaming its own
+  weight row (column group c takes row n + c: the SGMV engine's structure, "Future
+  improvements"), the MXU's cycles are N KB / PORTB with no rounding of KB: int8 at PORTB 4
+  1,954,460 (84 tok/s with the other units serial, ~96 overlapped: the int8 ceiling of a
+  25.6 GB/s x 4 port), int4 at PORTB 4 1,060,828 (135 / ~170 tok/s at 54 GB/s of HBM), int8
+  at PORTB 8 977,256 (143 / ~180, but at the native port's limit on 16 channels, where the
+  bridge's ~10 GB/s of reads in flight a channel caps it near 78%: ~140). **So > 100 tok/s
+  is int4 weights with 4 row lanes (MCOLS 8: each lane's chunk is two blocks on two columns),
+  or int8 with 8 lanes on f2-hbm16**; both are the lane structure, with a new MM mode (the
+  output row from the lane, `n mod L`) rather than a wider block reuse. The int4 route also
+  halves the bytes a token (576 MB), which is what the board's 78% port efficiency needs.
+* The other units' 417K nominal cycles (VPU, quantizer, DMA; ~130K net on the RTL) are 7% of
+  a PORTB 4 token and 13% of a lanes-int4 one: they start to matter there (docs/vpu_pump.md,
+  docs/seq_vpu.md).
+
+### What the nightly needs (the f2-hbm target at PORTB 2)
+
+Verilator cannot give LUTs or a clock: the lanes' cost in silicon and the 2048-bit path's
+timing come from the nightly's synthesis. What it needs:
+
+* **The target:** `f2-hbm:p2` (targets/f2-hbm.toml `[variants.p2]`, PORTB = 2 over the f2-hbm
+  arch; `f2-hbm16:p4` is PORTB 4 on 16 channels). `python boards/f2/build.py --hdk ... --target
+  f2-hbm:p2 --out RUN --flow SynthCL` (then `--flow BuildAll --package` as docs/f2_hbm.md
+  "Build"): `target.rtl_params` carries `PORTB` into otpu_f2_hbm_sys -> otpu_board -> the slice
+  and its adapter (build.py checks every parameter against the top's), the geometry stays
+  S = 1, NCH = 8: a two-chunk request is two pairs' four beats, half a beat a channel a cycle
+  (6.4 GB/s a channel at full rate, under the native port's 12.8 and the bridge's ~10 GB/s of
+  reads in flight). The DDR target (f2, NCH 2) cannot take PORTB 2: otpu_native_dram needs
+  NCH >= 2 PORTB. tests/test_f2_build.py checks the p2 / p4 snapshots (`.PORTB(32'h2)` in
+  opentpu_params.vh, the hash).
+* **The hash:** CFG_HASH a9d1d2b0 for f2-hbm:p2 (f2-hbm's 1f260779 stays: PORTB is in the hash
+  only when wide). Programs are compiled for `Config(PORTB=2)`; the host takes PORTB from
+  CAPS2 [3:1] (device_config), so no OTPU_PORTB is needed on the card, and a PORTB 1 image's
+  CAPS2 reads as before.
+* **To read off the synthesis report** against the estimates table above: the slice's MXU
+  (RAMB36: the chunk FIFO at 2048 x 1024 b, +29; the scale entry's third RAM, +4; the QUAD
+  datapath's ~7K LUT / ~10K FF where T2 did not already build it -- f2-hbm has T2, so that
+  part is already paid), the adapter (the per-chunk address and fold, the NP:1 merge a chunk:
+  ~+1.8K LUT), the slice's 2048-bit port-B input register (+1K FF); and the timing of the
+  merge path (B FIFO heads -> NP:1 a chunk -> the slice's input register) and of the per-chunk
+  selects' fanout (1024 LUTs each: replication expected), the S1 stream select and the scale
+  window in the MXU (one LUT level each). If the merge path misses 200 MHz, a register per chunk
+  at the merge (b_rvalid a cycle later: latency only, the MXU's FIFO absorbs it) is the fix.
+* **On the board:** tools/perf_qwen.py's run with `--portb 2` is the expected cycles a token
+  (table above); otpu-serve on the image with Gemma-3-1B int8 gives the tok/s to set against
+  the RTL's and against the PORTB 1 board baseline (22.3 tok/s, ~89% of its RTL figure).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
@@ -207,3 +401,48 @@ their pairs differ (or to pad weight rows to whole groups), not measured here.
 The per-token fixed work (VPU, attention, norms, launches) does not shrink, so the gain is
 below 2x / 4x by its share; the RTL timing runs (tools/perf_qwen.py on the f2-hbm memory model)
 measure it.
+
+## Baseline on the RTL (PORTB 1)
+
+tools/perf_qwen.py, Gemma-3-1B int8 (int8 head), OTPU_TARGET=f2-hbm OTPU_NCH=8, --lat 60, 4
+layers and the whole 262K-row head: 3,228,204 cycles against a port-B roofline of 3,207,980
+(99.4%); MXU busy 100%, VPU 2%, MXU starved 18 cycles. By phase: the head 2.37 M cycles, the
+4 layers' MLP 0.75 M, attention 0.11 M. The whole model (26 layers): about 7.96 M cycles a
+token, 39.8 ms at 200 MHz, ~25 tok/s, the port's rate: decode is port-bound on the RTL, so
+PORTB 2 and 4 should come near 2x and 4x (the board's ~78% port efficiency on Alex's image is
+the memory path's, which more HBM channels a slice address).
+
+## Baseline on the board (PORTB 1)
+
+Gemma-3-1B int8 (int8 head) served by otpu-serve on Alex's burst200 image
+(agfi-0d06cb48544a02106: 200 MHz, HBM over 2 channels), tools/f2_bench.py, 2026-10-16: decode
+**22.3 tok/s** (short prompt) / 21.7 (long), ~89% of the RTL's port-bound ~25 tok/s; prefill
+3.7-4.5 tok/s (TTFT 4.3 s for 16 tokens, 59.6 s for 268). For reference, coral-gemma-f2's SGMV
+engine build runs the same model at 15.8 tok/s (its 25 MHz Coral NPU bound).
+
+## Future improvements
+
+### Port B as independent lanes (from the SGMV streaming GEMV engine)
+
+Ergodex-Core/coral-gemma-f2's SGMV engine (rtl/engine) streams int8 weights from HBM in L = 4
+lanes, each its own AXI master on its own rows: 64 B a cycle per lane at 250 MHz (64 GB/s
+peak), bursts of at most 8 beats that never cross 512 B, a 128-256-beat read FIFO as credits
+with 16-32 bursts outstanding (rready always 1), ~0.97 beat/cycle per lane at 150-cycle HBM
+latency; ~36 GB/s measured on F2 (Gemma 3 1B: ~1 GB a token in 27.7 ms), ~20K LUT and 284 DSP
+for 4 lanes. Its 15.8 tok/s is bound by its 25 MHz Coral NPU, not by the engine.
+
+What is worth taking, and what is not:
+
+* **Take: the lane structure for PORTB > 1.** Build the wide port as PORTB independent
+  one-chunk lanes, each on its own HBM channel pair with SGMV-style credits and bursts, each
+  feeding one MXU column group of a reuse (column c of QUAD / PAIR), instead of one 2048-4096-
+  bit port B through the slice and otpu_native_dram. Same ISA and numerics (an MM's blocks k
+  with k mod r = c are lane c's stream, contiguous per row), timing stays local to a lane at
+  200-250 MHz, and it scales with MCOLS (8 lanes at MCOLS 8) and with HBM ports.
+* **Take: 250 MHz** if the lanes close it there (SGMV routed at 250 on the same part): +25%.
+* **Not now: a separate GEMV engine beside the MXU.** At M = 1 the MXU already is a streaming
+  GEMV at 99.4% of its port on the RTL (above), with three idle columns that reuse feeds; the
+  VPU is ~2% of a decode token, so SGMV's fused MLP / ARGMAX post-passes save little; and a
+  second datapath would have to reimplement openTPU's MX numerics (scale rows, the shift window,
+  int4, t2) to stay bit-exact with the ISA. Revisit if decode needs more than MCOLS x D weights
+  a cycle, or GEMVs must run beside prefill / batched MMs on the MXU.
