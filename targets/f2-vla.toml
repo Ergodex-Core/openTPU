@@ -10,9 +10,11 @@
 # rows (otpu_actram), the prefix's row group is 255 (3 passes over 558 rows). TMEM 1.5M words
 # (3 << 19: the prefix's 255-row group needs it, plan L2; otpu_tmem takes any multiple of the
 # banks, IMPL 3's RAMs are 24576 words at 64 lanes, 12288 a sub-bank) is 6 MB of URAM. LANES
-# 64: the VPU, QACT and QST at 64 elements a cycle (L4, L6); the RTL's VPU builds LANES <= 16
-# today (its isum_64 partial loop needs 64 / LANES >= 4 chunks: rtl/vpu/otpu_vpu.sv), so the
-# simulations run it at OTPU_LANES=16 until phase 4 (the CFG_HASH differs: LANES is in the arch).
+# 64: the VPU, QACT and QST at 64 elements a cycle (L4, L6): the elementwise VOPs, RMAX /
+# ARGMAX and the quantizer at 64 a cycle, the isum_64 reductions (RSUM / RSSQ / RDOT) on the
+# VPU's 16-lane sub-datapath (otpu_vpu RLN: 16 elements a cycle, the same bits as at 16
+# lanes), the composites at VPU_CL. The RTL builds and simulates at 64 lanes (Verilator needs
+# a 64 MB stack, rtlsim.build; the 64-lane model simulates ~70x slower than the 16-lane one).
 # No stream engine (DSTEP / STREAM are DeltaNet's, and otpu_dma's streams need LANES <= D / 4),
 # no t2 (QUAD's four ACT RAM blocks a cycle at 32 columns: block RAM the VLA does not use).
 # PORTB 1 for now (PORTB 2 is the plan's L7, merged from ternary-bonsai). Core 200 MHz.
@@ -41,11 +43,16 @@ T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cy
 PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
 PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit1). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
 
-[uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS / 2 (16: a
-                                # 32-column row drains in two cycles; the card's 4 would take 8)
+[uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS (plan L5,
+                                # measured on the RTL, docs/pi05.md 5.4): a packed pass yields
+                                # two result rows of MCOLS columns, so E = MCOLS / 2 (16) drains
+                                # one in four steps and the drain's cycles alone are 1.13x the
+                                # MXU's pops on v_out at MCOLS 32, 2.15x on p_attend; E = MCOLS
+                                # (32 lanes a step, a pass in two steps, within the 64 TMEM
+                                # lanes) halves that (0.57x, 1.11x)
 MXU_IMPL = 2
 MXU_CL = 16
-MXU_E = 0
+MXU_E = 32
 VPU_CL = 16
 ULANES = 64                     # the MXU drain and the quantizer on every TMEM lane
 TMEM_IMPL = 3
@@ -54,6 +61,11 @@ TMEM_RPL = true
 TMEM_TDP = true
 TMEM_GST = true
 TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+TMEM_WARB = 2                   # the MXU drain's writes before the VPU's (otpu_slice; plan L5,
+                                # measured: p_out at MCOLS 16 -17% against the VPU-first order
+                                # and -1% under round-robin; the VPU-bound phases at 16 lanes
+                                # lose 1-3% to it, at 64 lanes v_out does not; decode's targets
+                                # keep 0)
 RPB = 0
 WPB = 1
 WIN = 16

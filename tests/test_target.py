@@ -438,10 +438,10 @@ def test_the_slice_reads_dram_writes_through_the_sw_register():
     txt = (ROOT / "rtl/top/otpu_slice.sv").read_text()
     assert _slice_sw_uses(txt) == []
     # the check sees one: the quantizer's grant on the raw ready
-    bad = txt.replace("if (g == G_Q && q_awant && !sw_rdy_i) aok[g] = 1'b0;",
-                      "if (g == G_Q && q_awant && !sw_rdy) aok[g] = 1'b0;")
+    bad = txt.replace("if (g == G_Q && q_awant && !sw_rdy_i) apre[g] = 1'b0;",
+                      "if (g == G_Q && q_awant && !sw_rdy) apre[g] = 1'b0;")
     assert bad != txt and [t for _, t in _slice_sw_uses(bad)] == \
-        ["if (g == G_Q && q_awant && !sw_rdy) aok[g] = 1'b0;"]
+        ["if (g == G_Q && q_awant && !sw_rdy) apre[g] = 1'b0;"]
     # and a unit connected to the raw one implicitly (.wr_idle, as before the register)
     bad = txt.replace(".a_want(q_awant), .wr_idle(wr_idle_i),", ".a_want(q_awant), .wr_idle,")
     assert bad != txt and [t for _, t in _slice_sw_uses(bad)] == [".a_want(q_awant), .wr_idle,"]
