@@ -1,9 +1,11 @@
 # MXU DSP packing: two int8 products a DSP48E2 on the CL 16 cascade (phase 1 of the VLA plan)
 
 Status: feasibility study (2026-10-16), the plan's phase 1 (docs/vla_frequency_plan.md L1, section
-7; docs/vla_frequency_plan_review.md finding 1). Verilator results are measured; the
-out-of-context synthesis is prepared for the nightly host and **not run**. Nothing here is in a
-file list or in otpu_mxu's array: the integration is phase 3 (section 6).
+7; docs/vla_frequency_plan_review.md finding 1), sections 1-5; the out-of-context synthesis is
+prepared for the nightly host and **not run**. Section 6 is the integration plan and section 7
+its result: the packing is in otpu_mxu's array as the build parameter `PACK` (branch `vla-pack`,
+docs/mxu_systolic.md "Packed int8 weights"), bit-exact with the ISA simulator; the standalone
+column (sections 4 and 5) stays for the out-of-context measurement.
 
 **Short answer.** Yes: one DSP48E2 computes two exact int8 products a cycle on this MXU's 16-deep
 cascade, with the lanes split at the chain end and a one-bit fix-up that the column end's
@@ -68,7 +70,7 @@ against losing the QACT / MM overlap), and it changes nothing in the ACT RAM, th
 result FIFO's row format. What it asks for is already on the plan's path: PORTB 2 (L7, a named
 dependency) so that M <= 32 commands run at the full rate, and a chunk FIFO that holds a row
 pair. The plan's L1 line, "one weight x two activation rows a DSP, the pre-adder forming
-a1 + (a2 << 19)", is (b); section 7 says what that changes in the plan.
+a1 + (a2 << 19)", is (b); section 8 says what that changes in the plan.
 
 ## 3. The lane arithmetic
 
@@ -215,7 +217,7 @@ f2-vla point (docs/vla_frequency_plan.md 6); if pk closes 5.0 and not 4.0 while 
 250 MHz is the cost of packing; if pk fails 5.0, the fallback is MCOLS 32 unpacked (section 8 of
 the plan).
 
-## 6. The integration (phase 3, not implemented here)
+## 6. The integration (phase 3: the plan as written before it; section 7 what was built)
 
 In otpu_mxu's array, one physical column j (ACT row j and its replay groups) with 128 DSPs on
 `otpu_pe` whose D port is {w_hi, 19'b0} instead of sext(w_hi):
@@ -254,7 +256,123 @@ In otpu_mxu's array, one physical column j (ACT row j and its replay groups) wit
   simulator does not change: an MM's result is the same integer), `test_fuzz_mm_replay` and
   `test_act_reads_follow_the_mm_rows` with packed W8 commands, mxu_bench on the pi0.5 shapes.
 
-## 7. What this changes in the plan and the review
+## 7. The integration (phase 3): results
+
+Status: built on branch `vla-pack` (otpu_mxu `PACK`, default 0; Config.PACK, CAPS2 bit1, in the
+CFG_HASH when on; docs/mxu_systolic.md "Packed int8 weights" for the array). What section 6
+said, what was built, and what did not survive:
+
+* **Survived as written**: the decode hands each position {w_hi, w_lo} as today (16 bits a hop);
+  the three INMODE values (otpu_pe_pk `sel` {b, a}: 2'b11 packed, 2'b01 lane a, 2'b10 lane b,
+  loaded in the DSP's INMODE register as otpu_pe's select was), with PAIR's and QUAD's high
+  columns reading their integer from lane b (a column's integer is acc_a + acc_b, one of them
+  exactly 0, then the PAIR / QUAD adds as before); two column ends a physical column (CPG 1 and
+  CPG 2 with d = P[18]), two bm shifters, the first / last skews shared; two result-FIFO rows a
+  pass in today's row format, the b row a cycle after the a row; 4-bit, t2 unpacked; the
+  bit-exact gate (the MM tests at MCOLS_phys 4 and 8, ACT_ROWS to 64, replay, act_reads;
+  tests/test_mxu_pack_rtl.py) and `isa.chunks_per_cycle`'s packed int8 case.
+* **"The issuer: a W8 command with PACK streams weight rows in pairs ... two chunks an advance
+  over one row group, 2 KB <= DEPTH"** did not survive. Streaming the pair's chunks interleaved
+  would have put the issuer's per-row Sw tracking (srow_addr / srow_next, i_swd / i_swh / i_swn /
+  i_sws, the response side's r_sw) on two rows at once and the consumer on two FIFO read
+  addresses a cycle. Built instead: the issuer streams the rows one after the other exactly as
+  without PACK (row 2p's KB chunks and lines, then row 2p+1's); the chunk and scale FIFOs are two
+  banks of DEPTH slots, and each request carries its slot and bank (port B's through a small
+  in-order queue whose head is a register, the block RAMs' write address; port A's in its tag), so
+  row 2p's block k lands in bank 0 of the pair's slot k and row 2p+1's in bank 1. The consumer then
+  pops one slot an advance, and the pop / replay / free logic is the unpacked one in slot units:
+  **a replayed pair needs KB <= DEPTH slots** (not 2 KB <= DEPTH), and the FIFO's block RAM doubles
+  (the F2's DEPTH 1024 at D 128: 64 RAMB36 instead of 32, beside the ACT RAM's 512). The row pair
+  is the chunk FIFO's, not the issuer's: "choose what keeps the replay logic simple".
+* **"N even, or a zero row at the end"** did not survive: a zero row's outputs would have to be
+  written to TMEM column N of every row (someone else's words). Built: an odd N's last row runs
+  as a pair alone (the consumer knows it from c_left: the last pair's passes are the only ones
+  left), its b row is pushed with a skip bit (the result FIFO row's one extra bit) and the drain
+  takes its step with no lane (no TMEM write, no ACC read, no RMAX candidate).
+* **"The drain ... unchanged (the drain steps TMEM by one column per row as it does; the rows
+  come in order n, n+1)"** did not survive with replay. With G > 1 groups the result-FIFO rows of
+  a pair arrive (2p, 0), (2p+1, 0), (2p, 1), (2p+1, 1), ..., not n-major, so the drain's group
+  walk is per pair: GD = 2 G drain rows, the TMEM address stepping +1 to row 2p+1, gs - 1 to the
+  next group's row 2p, drow + 2 to the next pair, and the last group's Ml columns on the pair's
+  last two rows (d_lastg beside d_last). The lanes, the epilogue and the TMEM writes are
+  unchanged. Two more things section 6 did not name: a KB 1 pass would push two rows a cycle, so
+  a packed command's last advance never pops in the cycle after another's (KB 1 passes every
+  other cycle: the same output rows a cycle as unpacked), a pass counts two rows in the result
+  FIFO's room; and the two heads' overlap adds "the same pk" to its condition.
+* **The -128 contract** holds as 3.4 said: -128 in row 2p anywhere, or in row 2p+1 beside a
+  first-row weight >= 0, is exact; -128 in row 2p+1 beside a negative first-row weight at the
+  same position reads as +128 x act (pinned in tests/test_mxu_pack_rtl.py: that row's outputs are
+  the ISA's negated exactly, every other word the ISA's). test_quant_rtl's int8 cases plant -128 at
+  the same positions of every row, so they are the inexact pattern on a packed pair and are not
+  rerun on the PACK build (its 4-bit and NVFP4 cases are).
+
+### 7.1 Bit-exact (Verilator 5.048, the generic cells)
+
+tests/test_mxu_pack_rtl.py, every test the same program on the ISA simulator and the RTL, DRAM
+and TMEM identical: **36 passed, 1 skipped, 0 mismatches** (68 min). The PACK 0 regression
+(tests/test_rtl.py -k "replay or act_reads", tests/test_mxu_pk.py, tests/test_quant_rtl.py's MM
+cases): 46 passed, 1 skipped.
+
+| test | configurations | what |
+|---|---|---|
+| test_fuzz_pack | MCOLS 4 / 8 x ACT_ROWS 4, 8, 16, 64 (7 seeds) | test_rtl's random programs: int8 (packed) and int4 / fp4 / NVFP4 with PAIR (unpacked) MMs, UNIT / RSC / ACC / RMAX / ASCALE, M to ACT_ROWS (replayed pairs), N 1..23, KB 1..4, VOPs, QST, loads |
+| test_w8_modes_pack | MCOLS 4 / 8; N 1, 2, 7, 11, 16, 23; KB 1..5; k0 0..3 | MX scales at k0, UNIT + RMAX, ACC + RMAX, UNIT + ACC + ASCALE, RSC + RMAX, back to back |
+| test_w8_replay_pack | ACT_ROWS 8 / 16 / 64 at MCOLS 4 / 8, KB 1..4 | M > MCOLS: a pair streamed once for every group; k0, ACC, UNIT |
+| test_kb1_passes_back_to_back_pack | MCOLS 4, N 40 | KB 1 int8 MMs (a pass an advance), a 4-bit KB 1 MM and an odd-N MM behind them, ACC + RMAX, M 2 |
+| test_other_formats_on_a_pack_build, ..._replay_... | test_quant_rtl's 8 int4 / fp4 / NVFP4 cases (D 32 / 128, MCOLS 4 / 8, PAIR, RSC, k0, E 0..4) and 3 replay cases | unpacked on the PACK build |
+| test_mixed_formats_on_a_pack_build | MCOLS 4, T2 | int4 PAIR, t2 PAIR, QUAD, t2, int8, fp4 PAIR, int8 ACC + RMAX, QUAD ACC, t2 M 4, int8 UNIT M 4 (the two heads) |
+| test_act_reads_follow_the_packed_mm_rows | MCOLS 4 / 8, ACT_ROWS 8 / 16; M 1, 3, 9 | ceil(N / 2) x KB pops a group, the output rows' columns only |
+| test_minus_128_weights_pack | MCOLS 4 | exact: -128 in the pair's first row, -128 in the second beside a first-row weight >= 0; inexact, pinned: -128 in the second beside a negative first-row weight (that row's outputs the ISA's negated, every other word the ISA's) |
+
+### 7.2 Cycles: MCOLS 8 physical packed against MCOLS 16 unpacked (the same logical width)
+
+tools/pi05_rtl.py on the cut pi0.5 (one layer a part), OTPU_TARGET=f2-hbm (the board uarch and
+memory path, 2 channels, PORTB 1), ACT_ROWS 64, TMEM 256K words (the F2 target's 64K does not
+hold the prefix's tiles at MCOLS 16 even at RP 8), Np 64, the tally's MXU and port B cycles
+beside the RTL's:
+
+| phase, row group | MCOLS 16 unpacked: RTL cycles (MXU tally / port B) | MCOLS 8 packed: RTL cycles (MXU tally / port B) | packed / unpacked |
+|---|---|---|---|
+| p_qkv, RP 32 (M = 32 = 2 x 16 = 4 x 8) | 318,172 (163,840 / 90,688) | 319,789 (163,840 / 90,688) | **+0.5%** |
+| e_step, RE 32 (the expert's 50 rows: MMs of 32 and 18) | 1,669,367 (556,160 / 311,856; VPU 844,207 binds) | 1,627,620 (486,640 / 323,568) | **-2.5%** (ceil(18 / 8) x 9 passes for the 18-row MMs against ceil(18 / 16) x 18) |
+| p_qkv, RP 8 (M = 8 < MCOLS 16; = MCOLS_phys packed) | 484,440 (327,680 / 336,448: port-bound) | 473,461 (163,840 / 336,448: port-bound) | **-2.3%** |
+
+So at M >= 2 x MCOLS_phys the packed array and the unpacked one of twice the columns take the
+same cycles (within 1%: the drain's and result FIFO's per-row costs are the same per logical
+row), and where the row count does not divide evenly the packed one loses less to idle
+columns. At M <= MCOLS_phys (RP 8) the packed array could finish in 163,840 MXU cycles but the
+stream delivers 336,448 chunks a chunk a cycle (PORTB 1): it runs at half its rate, as section 2
+predicted, which is still exactly the unpacked MCOLS 16's cycles (its array is as port-bound
+there). PORTB 2 (the plan's L7) is what lifts the small-M case; the prefix at RP >= 2 MCOLS_phys
+does not need it. (The Verilator model of MCOLS 8 packed simulates 2.5-5x faster than MCOLS 16
+unpacked: 192 against 524 s for p_qkv, 123 against 633 s for e_step.)
+
+LUT / FF: not measured here (the Mac has no slang-capable yosys for this SystemVerilog and
+Verilator reports no cell counts); the extra fabric a physical column is the second bm shifter
+with its skew (136 bits x (CL + MCOLS) SRL stages), the second 48-bit deskew and two more 24-bit
+chain-end buses; once a slice the chunk FIFO's second bank (32 RAMB36 more at FIFO_DEPTH 1024, D
+128), the 40-bit scale bank and the 2 x DEPTH write-address queue (~400 LUT of LUT RAM at DEPTH
+1024). The DSP counts (146 a physical column) and the LUT / FF of a packed against an unpacked
+column are the nightly's out-of-context run (section 5).
+
+### 7.3 Open
+
+* The out-of-context fmax of the packed column (section 5, the nightly host): the integration
+  adds nothing to the PE's multiplier path; the new fabric is the chain-end split (wires), the
+  second column end, the lane-select fan-out (the same net as hi0's into 128 INMODE registers:
+  a register per chain, as planned) and the FIFO write address from a LUT-RAM queue head
+  register.
+* MCOLS 16 and 32 physical PACK builds in Verilator (only 4 and 8 run here), ACT_ROWS 255.
+* The write-address queue is 2 x DEPTH entries of LUT RAM because a pair's two rows can both be
+  in flight; a block RAM or a bound on the requests in flight would shrink it.
+* int8 PAIR / QUAD (PORTB 2, docs/wide_port.md) is not in this RTL; a packed advance at PORTB 2
+  subsumes it for W8 (section 2), which the issuer would take as two chunks a cycle into both
+  banks of a slot (the queue carries the bank already).
+* tests/test_quant_rtl.py's int8 cases keep -128 at every row's positions 0, 7, 14, ...: on a
+  PACK build they are the inexact pattern by construction; a PACK target's int8 images must come
+  from quant.py (or keep -128 out of the odd rows), which the host does not check.
+
+## 8. What this changes in the plan and the review
 
 * **docs/vla_frequency_plan.md L1** says "(one weight x two activation rows a DSP, the pre-adder
   forming a1 + (a2 << 19))": that is option (b). Pack the weights instead (section 2): the ACT
