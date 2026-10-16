@@ -309,8 +309,10 @@ class Emulated(Exact):
     (float64 sums, softmax in one pass): a measurement of each point's size."""
 
     def __init__(self, parts=("w", "a", "kv"), io: bool = True, fmt: str = "int8",
-                 D: int = 128):
+                 D: int = 128, a_only=None):
         self.parts, self.io, self.fmt, self.D, self._w = set(parts), io, fmt, D, {}
+        self.a_only = a_only        # activations quantized only into these matrices (names'
+        #                             substrings), the others' exact
 
     def _wq(self, W, name):
         if name not in self._w:
@@ -343,7 +345,8 @@ class Emulated(Exact):
         if kind == "io" and not self.io:
             return x @ W[name].T
         w = self._wq(W, name) if "w" in self.parts else W[name]
-        a = self._aq(x) if "a" in self.parts else x
+        qa = "a" in self.parts and (self.a_only is None or any(o in name for o in self.a_only))
+        a = self._aq(x) if qa else x
         return (a @ np.asarray(w).T).astype(np.float32)
 
     def attn(self, q, k, v, scale) -> np.ndarray:

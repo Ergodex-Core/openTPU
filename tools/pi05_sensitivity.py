@@ -13,6 +13,8 @@ Variants (prefix numerics / expert numerics):
   prefix_only the prefix the card's, the expert exact
   expert_only the expert the card's, the prefix exact
   kv_only     only the attention's operands int8, everywhere
+  prefix_a_*  the prefix's weights int8 and its activations int8 into q / k / v, o, gate /
+              up or down only (the expert exact)
 Each prints the actions' error against the exact reference: max |err| and RMS over the 50
 x 7 real dims (model space: normalized), and the unnormalized max per dim.
 """
@@ -38,6 +40,12 @@ VARIANTS = {
     "prefix_only": (("w", "a", "kv"), True, ()),
     "expert_only": ((), True, ("w", "a", "kv")),
     "kv_only": (("kv",), True, ("kv",)),
+    # the prefix's int8 weights with its activations int8 into some matrices only (the
+    # expert exact): which of the 2B's operands cost the most
+    "prefix_a_qkv": (("w", "a"), True, (), ("q_proj", "k_proj", "v_proj")),
+    "prefix_a_o": (("w", "a"), True, (), ("o_proj",)),
+    "prefix_a_gateup": (("w", "a"), True, (), ("gate_proj", "up_proj")),
+    "prefix_a_down": (("w", "a"), True, (), ("down_proj",)),
 }
 
 
@@ -58,9 +66,10 @@ def main() -> None:
     sd, A = r["action_std"], spec.out_dim
     out = {}
     for name in args.variants.split(","):
-        pp, io, ep = VARIANTS[name]
+        pp, io, ep, *only = VARIANTS[name]
         t = time.time()
-        got = P.reference_actions(spec, W, nq=P.Emulated(pp, io=io),
+        got = P.reference_actions(spec, W, nq=P.Emulated(pp, io=io, a_only=only[0] if only
+                                                         else None),
                                   enq=P.Emulated(ep, io=io), **common)
         e = (got - exact)[:, :A]
         out[name] = {"max_abs": float(np.abs(e).max()), "rms": float(np.sqrt((e ** 2).mean())),
