@@ -38,10 +38,11 @@ def rms_r(x, eps: float):
     return ol.rsqrt(ol.sumsq(x) * (1.0 / x.cols) + eps)
 
 
-def geglu(zs, wgu, wd, chunk: int, acc=None):
-    """(gelu_tanh(z Wg^T) * (z Wu^T)) Wd^T for z quantized in zs, F in chunks: chunk c + 1's
+def geglu(zs, wgu, wd, chunk: int, acc=None, act=gelu_tanh):
+    """(act(z Wg^T) * (z Wu^T)) Wd^T for z quantized in zs, F in chunks: chunk c + 1's
     gate | up rows stream while the VPU works on chunk c, whose product (quantized on its own)
-    multiplies Wd's columns of the chunk, added into `acc` (the residual) or a new tile."""
+    multiplies Wd's columns of the chunk, added into `acc` (the residual) or a new tile. act:
+    gelu_tanh (Gemma's GeGLU) or lib.silu (Qwen's SwiGLU, kernels/rhinovla.py)."""
     F = wd.shape[1]
     if F % chunk or wgu.shape[0] != 2 * F:
         raise CompileError(f"GeGLU width {F} in chunks of {chunk}, gate | up rows {wgu.shape}")
@@ -55,7 +56,7 @@ def geglu(zs, wgu, wd, chunk: int, acc=None):
         h = nxt
         if i + 1 < len(starts):
             nxt = up(starts[i + 1])
-        a = gelu_tanh(h[:, 0:chunk]) * h[:, chunk:2 * chunk]
+        a = act(h[:, 0:chunk]) * h[:, chunk:2 * chunk]
         del h
         if acc is None:
             acc = ol.dot(a, wd[:, c0:c0 + chunk])
