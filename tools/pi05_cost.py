@@ -16,9 +16,9 @@ unit at profile._describe's nominal rates:
 
 Seconds = cycles / MHz per unit; the chunk's time lies between the slowest unit's (every
 unit overlapped) and their sum (none). --alt also tallies hypothetical configurations (ALTS:
-ACT_ROWS 128 and LANES 32; with a 256K-word TMEM; with 16 MXU columns too; each with the
-largest row groups that compile), the ISA's Config only, no RTL. No weights
-are read: the image is laid out, its programs compiled, nothing run.
+ACT_ROWS 128, LANES 32 / 64 alone, then together with a larger TMEM and 16 / 64 MXU columns;
+each with the row groups of the smallest bound that compile), the ISA's Config only, no RTL.
+No weights are read: the image is laid out, its programs compiled, nothing run.
 """
 from __future__ import annotations
 
@@ -121,12 +121,25 @@ def chunk_cost(spec, cfg, Np: int, R: int, RP: int, RE: int) -> dict:
     return {k: dict(v) for k, v in parts.items()}, {k: len(p) for k, (p, _) in progs.items()}
 
 
-# hypothetical configurations (the ISA's Config only; no RTL): the coordinator's ACT_ROWS 128
-# / LANES 32, then with a TMEM that lets the row groups grow, then more MXU columns
-ALTS = (("act128_lanes32", dict(ACT_ROWS=128, LANES=32)),
+# hypothetical configurations (the ISA's Config only; no RTL): one lever at a time from today's
+# (ACT_ROWS, LANES, TMEM, MXU columns), then together, up to docs/vla_frequency_plan.md's
+# f2-vla without its fused activation unit. ACT_ROWS stops at 128 here: an MM's row count is
+# an 8-bit field (isa.mm: m < 256), so ACT_ROWS 256 needs an ISA change; its port-B passes
+# over the 558-row prefix would be 3 instead of 5 (docs/pi05.md 5)
+ALTS = (("act128", dict(ACT_ROWS=128)),
+        ("lanes32", dict(LANES=32)),
+        ("lanes64", dict(LANES=64)),
+        ("act128_lanes32", dict(ACT_ROWS=128, LANES=32)),
         ("act128_lanes32_tmem256k", dict(ACT_ROWS=128, LANES=32, TMEM_WORDS=262144)),
         ("mcols16_act128_lanes32_tmem256k", dict(MCOLS=16, ACT_ROWS=128, LANES=32,
-                                                 TMEM_WORDS=262144)))
+                                                 TMEM_WORDS=262144)),
+        ("mcols64_act128_lanes64_tmem1m", dict(MCOLS=64, ACT_ROWS=128, LANES=64,
+                                               TMEM_WORDS=1 << 20)))
+
+# the row groups tried for each configuration (tower R, prefix RP, expert RE): the one with
+# the smallest bound among those that compile (TMEM holds the row groups' work areas)
+ROW_GROUPS = ((128, 128, 64), (128, 64, 64), (64, 64, 64), (64, 32, 32), (32, 16, 16),
+              (32, 16, 8), (16, 8, 8))
 
 UNITS = ("MXU", "portB", "VPU", "QACT", "QST", "DMA")
 
@@ -187,13 +200,16 @@ def main() -> None:
         for name, kw in ALTS:
             alt = dataclasses.replace(cfg, **kw)
             best = None
-            for R, RP, RE in ((64, 32, 32), (32, 16, 16), (32, 16, 8), (16, 8, 8)):
+            for R in ROW_GROUPS:
                 try:
-                    parts, sizes = chunk_cost(spec, alt, args.np, R, RP, RE)
-                    best = (R, RP, RE)
-                    break
+                    got = chunk_cost(spec, alt, args.np, *R)
                 except CompileError:
-                    pass
+                    continue
+                b = max(sum((spec.steps if k == "expert_step" else 1) * t.get(u, 0)
+                            for k, t in got[0].items()) for u in UNITS)
+                if best is None or b < best[0]:
+                    best = (b, R, got)
+            _, best, (parts, sizes) = best
             res[name] = report(parts, spec.steps, args.mhz,
                                f"{name}: {kw}, R {best}")
             res[name]["R"] = best
