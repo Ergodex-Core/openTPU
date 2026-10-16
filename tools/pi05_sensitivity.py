@@ -15,6 +15,8 @@ Variants (prefix numerics / expert numerics):
   kv_only     only the attention's operands int8, everywhere
   prefix_a_*  the prefix's weights int8 and its activations int8 into q / k / v, o, gate /
               up or down only (the expert exact)
+  mixed       the prefix W8A16 (weights int8, activations and attention exact), the expert
+              the card's W8A8: wider activations only where the 2B's errors come from
 Each prints the actions' error against the exact reference: max |err| and RMS over the 50
 x 7 real dims (model space: normalized), and the unnormalized max per dim.
 """
@@ -46,6 +48,7 @@ VARIANTS = {
     "prefix_a_o": (("w", "a"), True, (), ("o_proj",)),
     "prefix_a_gateup": (("w", "a"), True, (), ("gate_proj", "up_proj")),
     "prefix_a_down": (("w", "a"), True, (), ("down_proj",)),
+    "mixed": (("w",), False, ("w", "a", "kv")),
 }
 
 
