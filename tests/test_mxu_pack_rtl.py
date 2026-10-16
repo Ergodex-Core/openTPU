@@ -150,7 +150,8 @@ def test_w8_modes_pack(have_verilator, mcols, M, N, KB, k0):
     onto the first, UNIT + ACC + ASCALE, RSC; N odd (the last row a pair alone) and even, N 1
     (one row), KB 1 (one advance a pass: two result rows a cycle pair, the pop's bubble)."""
     D = 32
-    cfg = Config(S=1, D=D, MCOLS=mcols, PACK=True, DRAM_BYTES=1 << 20)
+    # (the MXU's epilogue lanes MCOLS / 2 must fit the TMEM lanes: 16 at MCOLS 32, as test_rtl)
+    cfg = Config(S=1, D=D, MCOLS=mcols, PACK=True, DRAM_BYTES=1 << 20, LANES=16 if mcols > 16 else 8)
     rng = np.random.default_rng(100 * N + 10 * KB + M + k0 + mcols)
     dram, rs, srs, x = _w8_image(rng, cfg, M, N, KB, k0)
     alpha = rng.uniform(-1.5, 1.5, M).astype(np.float32)
@@ -176,7 +177,8 @@ def test_w8_replay_pack(have_verilator, mcols, rows, N, KB):
     every group of MCOLS rows (its two chunks a slot of the two-bank FIFO); the drain steps
     +1 to the pair's second row and gs - 1 to the next group; ACT_ROWS up to 64."""
     D = 32
-    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_ROWS=rows, PACK=True, DRAM_BYTES=1 << 20)
+    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_ROWS=rows, PACK=True, DRAM_BYTES=1 << 20,
+                 LANES=16 if mcols > 16 else 8)
     rng = np.random.default_rng(300 + rows + N)
     dram, rs, srs, x = _w8_image(rng, cfg, rows, N, KB, 1, extra=0)
     prog = [I.ld(X, 0, x.size), I.qact(0, rows, 0, KB, KB * D),
