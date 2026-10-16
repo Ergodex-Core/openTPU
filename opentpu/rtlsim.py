@@ -62,11 +62,28 @@ def build_dir(top: str, sources: list[Path], params: dict | None = None) -> Path
     return BUILD / f"{top}_{h.hexdigest()[:12]}"
 
 
+def _big_stack() -> None:
+    """(In the child, before exec) the stack limit raised to the hard limit: Verilator recurses
+    over a design's wide concatenations (the slice's 64-lane TMEM request arrays at f2-vla's
+    LANES 64: 8 ports x 64 lanes x 32 bits) deeper than the default 8 MB stack takes, and dies
+    (a 'Verilator internal fault' or, under Rosetta, 'unexpectedly need to EmulateForward on a
+    synchronous exception'); at 64 MB (macOS's hard limit) the same build passes."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
+    want = (1 << 30) if hard == resource.RLIM_INFINITY else hard
+    if soft != resource.RLIM_INFINITY and soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_STACK, (want, hard))
+        except (ValueError, OSError):
+            pass
+
+
 def build(top: str, sources: list[Path], params: dict | None = None) -> Path:
     """Compile `top` with Verilator (--binary); cached (build_dir). The build runs in a
     temporary directory, renamed into place once linked, under a lock per build: a concurrent
     build of the same waits for it instead of running a half-linked executable, and a build
-    killed or failed leaves no executable for the next to take."""
+    killed or failed leaves no executable for the next to take. Verilator runs with the stack
+    limit raised (_big_stack: the 64-lane builds)."""
     params = params or {}
     out = build_dir(top, sources, params)
     exe = out / f"V{top}"
@@ -85,7 +102,7 @@ def build(top: str, sources: list[Path], params: dict | None = None) -> Path:
             cmd = ["verilator", *VFLAGS, "--top-module", top, "-Mdir", str(tmp)]
             cmd += [f"-G{k}={v}" for k, v in params.items()]
             cmd += [str(s) for s in sources]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, text=True, preexec_fn=_big_stack)
             if r.returncode != 0 and "linker command failed" in r.stdout + r.stderr:
                 # the parallel make occasionally archives a stale object: rebuild the archive once
                 for f in tmp.glob("*__ALL.a"):
