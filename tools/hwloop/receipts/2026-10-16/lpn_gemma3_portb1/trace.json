@@ -378,6 +378,34 @@
         "--wall-end=complete",
         "--max-time=1000000000000"
       ]
+    },
+    "rtl_pin": {
+      "command": [
+        "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+        "/Users/rachittibrewal/ergodex-03/openTPU-hwloop/tools/hwloop/lpn/rtl_pin.py",
+        "--tree",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+        "--input",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1/lpn/input",
+        "--out",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1/lpn/rtl-pin",
+        "--dram-lat",
+        "8",
+        "--jobs",
+        "8"
+      ],
+      "exit": 0,
+      "wall_s": 618.3795961669985
     }
+  },
+  "rtl_pin": {
+    "cycles": 2797992,
+    "lpn_cycles": 2823232,
+    "rel_error": 0.009020754884216942,
+    "within_gate": true,
+    "rtl_matches_pin_isa": true,
+    "pin_isa_matches_export_isa": true,
+    "verilator": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+    "label": "measured (Verilator, the model's validated configuration: behavioral DRAM, lat 8, tb_top default uarch)"
   }
 }

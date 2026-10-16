@@ -2,9 +2,10 @@
 
 Status (2026-10-16): built on this Mac, upstream's GEMM / MLP rows reproduced to the cycle on
 Verilator 5.048, `cli.py lpn-run` writes a receipt for this loop's Gemma-3-1B decode token and
-grades it against the Verilator receipt (+0.88% at the model's validated DRAM latency, +2.71%
-at the receipt's 60 cycles; both inside upstream's 5% gate, both **outside the model's validated
-configuration**, so recorded, not a calibration). Every number an LPN run produces is labelled
+grades it against the Verilator receipts (+0.885% against the wide-port receipt and +0.902%
+against the pinned RTL on the same bundle at the model's validated DRAM latency, +2.71% at the
+receipt's 60 cycles; all inside upstream's 5% gate; the wide-port comparisons are **outside the
+model's validated configuration**, so recorded, not a calibration). Every number an LPN run produces is labelled
 `lpn-estimate`; `measured` stays for Verilator and the board.
 
 The rule of the loop (docs/hwloop.md): models first, Verilator for what the models favour, Vivado
@@ -135,7 +136,7 @@ inputs 20 s (the export's compile + ISA simulator 1.3 s), frontend 6.2 s, model 
 |---|---|---|---|---|---|---|
 | LPN, Timing.dram_latency 8, 128 B/cycle (the validated memory) | lpn-estimate | **2,823,232** | **+0.885%**, inside the 5% gate | 0.984 (RTL 0.996) | 362,063,442 (footprints; RTL beats x 64 = 362,179,072, -0.03%) | outside validated: RTL moved (16 changed / 14 added fingerprinted files), receipt on NCH 8 at 60 cycles with the board uarch |
 | LPN, Timing.dram_latency 60 (the receipt's latency) | lpn-estimate | **2,874,213** | **+2.706%**, inside the gate | 0.967 | same | the same, plus a Timing value upstream never validated |
-| pinned RTL on the same bundle (`--rtl-pin`: f237dab2 + patch, tb_top default uarch, behavioral DRAM lat 8, Verilator 5.048) | measured | see `lpn_gemma3_portb1/rtl-pin/` when the run completes (started 20:35, ~1 h) | the model's own validated configuration on this workload: the honest grade | | | validated |
+| pinned RTL on the same bundle (`--rtl-pin`: f237dab2 + patch, tb_top default uarch, behavioral DRAM lat 8, Verilator 5.048; 2:19 build + 7:50 run) | **measured** | **2,797,992** | LPN at lat 8 is **+0.902%** of it: the model's own validated configuration on this workload, the honest grade; the pinned RTL and the wide-port receipt are 486 cycles (0.017%) apart on this port-bound token | 0.993 | | validated (`lpn_gemma3_portb1/rtl-pin/rtl_pin.json`: DRAM + TMEM bit-exact vs the pin's ISA simulator, whose hashes equal the export's; 469 command PCs traced = the 475 dynamic commands less the 6 scalar ones) |
 | PORTB 2 (the 1,643,595-cycle receipt) | none | `REFUSED_NOT_MODELLED` | not comparable: the model has one port-B credit, one chunk a cycle | | | outside the model (section 5) |
 
 Where the configurations overlap: the program, the image and the MM weight chunks are identical

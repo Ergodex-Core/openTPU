@@ -1,6 +1,6 @@
 {
   "status": "OK",
-  "started_utc": "2026-10-16T14:58:58Z",
+  "started_utc": "2026-10-16T15:00:20Z",
   "label": "lpn-estimate",
   "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0",
   "out": "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1",
@@ -30,7 +30,7 @@
     "compare": [
       "tools/hwloop/receipts/2026-10-16/opentpu_portb1"
     ],
-    "rtl_pin": false,
+    "rtl_pin": true,
     "uncalibrated": true,
     "manifest_only": false,
     "reuse_inputs": true,
@@ -88,6 +88,16 @@
       "verdict": "outside the validated configuration (3 deltas): the error is recorded, not a calibration"
     }
   ],
+  "rtl_pin": {
+    "cycles": 2797992,
+    "lpn_cycles": 2823232,
+    "rel_error": 0.009020754884216942,
+    "within_gate": true,
+    "rtl_matches_pin_isa": true,
+    "pin_isa_matches_export_isa": true,
+    "verilator": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+    "label": "measured (Verilator, the model's validated configuration: behavioral DRAM, lat 8, tb_top default uarch)"
+  },
   "steps": {
     "inputs": {
       "reused": true
@@ -111,19 +121,19 @@
         "--compact"
       ],
       "exit": 0,
-      "wall_s": 10.575277375000951,
+      "wall_s": 5.368056582999998,
       "PYTHONPATH": "/Users/rachittibrewal/ergodex-03/lpn-scratch/LPNDialect",
       "PATH_prefix": "/Users/rachittibrewal/ergodex-03/lpn-scratch/llvm20-bin"
     },
     "native": {
       "cycles": 2823232.0,
-      "wall_s": 1.153199084,
+      "wall_s": 0.334005875,
       "rollbacks": 0,
       "completed_tokens": 1,
       "firings": 91923,
       "complete": true,
       "exit": 0,
-      "process_wall_s": 1.5131122499988123,
+      "process_wall_s": 0.48015612500057614,
       "command": [
         "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1/lpn/opentpu",
         "--stats",
@@ -131,9 +141,27 @@
         "--wall-end=complete",
         "--max-time=1000000000000"
       ]
+    },
+    "rtl_pin": {
+      "command": [
+        "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+        "/Users/rachittibrewal/ergodex-03/openTPU-hwloop/tools/hwloop/lpn/rtl_pin.py",
+        "--tree",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+        "--input",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1/lpn/input",
+        "--out",
+        "/Users/rachittibrewal/ergodex-03/lpn-scratch/runs/gemma3_l2_portb1/lpn/rtl-pin",
+        "--dram-lat",
+        "8",
+        "--jobs",
+        "8"
+      ],
+      "exit": 0,
+      "wall_s": 618.3795961669985
     }
   },
   "cycles": 2823232,
   "calibration": "outside validated configuration: RTL moved (16 changed, 14 added, 0 removed fingerprinted files)",
-  "ended_utc": "2026-10-16T14:59:11Z"
+  "ended_utc": "2026-10-16T15:10:45Z"
 }

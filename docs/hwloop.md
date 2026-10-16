@@ -3,9 +3,11 @@
 Status (2026-10-16): the tools in `tools/hwloop/` run end to end on this Mac up to the
 VisualSim execution, which is **waiting for the seat** (the user's Architect GUI holds the
 single license; the runner refuses to start a second instance and never stops the GUI). The
-LPN stage is **specified, not yet run** (section "The LPN stage": the upstream model exists and
-is validated against this repository's RTL at `f237dab2`; it has not been built on this Mac nor
-replayed on this loop's receipts). The nightly FPGA step is **prepared, not activated**. One
+LPN stage **runs on this Mac** (section "The LPN stage": LPNDialect built with LLVM / MLIR 20
+from conda-forge, upstream's GEMM / MLP rows reproduced to the cycle on Verilator 5.048, and
+`cli.py lpn-run` grades this loop's PORTB 1 token at **+0.9%** of the Verilator receipts, inside
+upstream's 5% gate but outside the model's validated configuration, so labelled `lpn-estimate`
+and not a calibration: `tools/hwloop/lpn/README.md`). The nightly FPGA step is **prepared, not activated**. One
 calibrated workload (Gemma-3-1B int8 decode on the F2 HBM configuration) is the only workload
 covered; broadening comes after the first model runs have been compared with the receipts.
 
@@ -36,7 +38,7 @@ Rules of the loop (the user's):
 | F2 build | `boards/f2/build.py` (`--flow SynthCL/ImplCL/BuildAll --package`) | f2-hbm and later; Vivado on the build host only |
 | Remote synthesis hosts | `tools/tourney/remote.py` (`OTPU_BUILD_HOSTS`) | f2-hbm and later |
 | Serving bench on the card | `tools/f2_bench.py --json` (TTFT, prefill tok/s = prompt/TTFT, decode tok/s) | ternary-bonsai |
-| LPN model of the slice | `MJChku/LPNDialect`, branch `qwen-validation`, `examples/opentpu/` (`benchmark.py`, `run.py`, `e2e.py`, `replay_e2e.py`, `model.py`, `components.py`, `workload.py`, two Verilator patches) | upstream, pinned to this repository's `f237dab2` (origin/main 2026-10-14); not built on this Mac |
+| LPN model of the slice | `MJChku/LPNDialect`, branch `qwen-validation`, `examples/opentpu/` (`benchmark.py`, `run.py`, `e2e.py`, `replay_e2e.py`, `model.py`, `components.py`, `workload.py`, two Verilator patches) | upstream, pinned to this repository's `f237dab2` (origin/main 2026-10-14); **built on this Mac** (`b06f42d9`, `~/ergodex-03/lpn-scratch`; `tools/hwloop/lpn/README.md`), 13 / 13 ctest, GEMM / MLP rows reproduced |
 | Measured: Gemma-3-1B int8 on Alex's burst200 image | `docs/wide_port.md` "Baseline on the board", `docs/ternary.md` 5 (ternary-bonsai) | 22.3 / 21.7 tok/s decode, prefill 3.7-4.5 tok/s (serving), TTFT 4.3 s / 59.6 s; the JSON receipt is on the F2 host, not in git |
 | Measured: RTL at the same model, 4 layers + head | `docs/wide_port.md` "Baseline on the RTL"; `~/ergodex-03/bonsai2-out/perf_gemma3_l4.log` | 3,228,204 cycles, 99.4% of the port-B roofline |
 | Measured: PORTB 1 / 2 / 4, 2 layers + head | `docs/wide_port.md` (wide-port a9acb2b0) | 2,798,478 / 1,643,595 / 1,308,691 cycles |
@@ -73,11 +75,14 @@ phases' tails. Neither replaces the other, and neither replaces Verilator.
    the serving numbers hide.
 5. HBM device parameters (refresh, bank timing under the cl_hbm IP's controller) and the
    DDR4 DIMM's part on the F2.
-6. An LPN build on this Mac (LLVM / MLIR 20 and Clang 20; the upstream recipe is Ubuntu
-   24.04's packages, `./build.sh -j8`) or on the build host, and a replay of this loop's
-   PORTB 1 receipt through it: until that replay's error is recorded, every LPN number here
-   is upstream's, measured on upstream's own GEMM / MLP / SmolLM2 / Qwen3-1.7B cases at
-   MCOLS 4 and PORTB 1, not on this workload.
+6. (done 2026-10-16) The LPN build on this Mac and the replay of this loop's PORTB 1 receipt:
+   LPN 2,823,232 cycles against 2,798,478 (**+0.885%**) and against the pinned RTL on the same
+   bundle, 2,797,992 (**+0.902%**, the model's own validated configuration); at the receipt's
+   60-cycle latency 2,874,213 (+2.706%). What is still missing: a re-validation of the model on
+   the **wide-port tree** itself (its RTL fingerprint differs from the pin in 16 changed and 14
+   added files, so every LPN number for it is `--uncalibrated` by rule), and the model
+   extensions for PORTB 2 / 4, NCH 8 at 60 cycles and the VLA shape (section 5 of
+   `tools/hwloop/lpn/README.md`), each graded against its Verilator receipt before use.
 
 ## The per-change loop
 
@@ -132,9 +137,13 @@ per-channel reads / writes, port-B utilization, MXU starved / blocked, the phase
 outstanding-reads estimate from the issue times and the latency, idle gaps) and
 `mem_windows.csv` (reads and writes per channel per window of 1024 core cycles).
 
-Step 2's wrapper (`cli.py lpn-run`, planned: the freeze's program and DRAM image into LPN's
-input bundle, the LPN commit and patch hashes into the receipt, the error against the matching
-Verilator receipt when one exists) is not written yet; the commands above are upstream's.
+Step 2's wrapper is `cli.py lpn-run` (`tools/hwloop/lpn_run.py`; `tools/hwloop/lpn/README.md`
+section 2): the export's program and DRAM image into LPN's input bundle (`lpn/inputs.py` on the
+export's own compiler and ISA simulator), the model and native binary (`lpn/emit.py`), the
+run, `trace.json` in `run-rtl`'s record shape labelled `lpn-estimate`, `compare.json` against
+`--compare`'s Verilator receipt (error, the 5% gate, the configuration deltas), `--rtl-pin` for
+the pinned RTL on the same bundle; the LPN commit, patch and compiler hashes and the pin's RTL
+fingerprint in `lpn/manifest.json`. The upstream command above is what `emit.py` wraps.
 
 ### Trace content, memory-inclusive
 
@@ -211,10 +220,26 @@ conflicts, no DRAM timing; applied after the observer patch, in an isolated pinn
 with a storage-equivalence check). The loop applies them to the frozen `git archive` tree
 only, never to a worktree.
 
-**Fingerprinting.** An LPN receipt carries the LPN repository commit, the two patches' SHA-256,
-the frozen tree's RTL fingerprint (the same one `manifest.json` holds for VisualSim) and the
-Verilator receipt it was graded against. `check-stale`'s rule applies: an RTL file that moved
-under a model refuses the model's number.
+**Fingerprinting.** An LPN run's `lpn/manifest.json` carries the LPN repository commit and
+branch, the two patches' SHA-256 (and whether the observer patch is on the pin tree), the
+compiler's SHA-256, and the **RTL fingerprint of the pinned tree the model is validated against**
+(`f237dab2` + patch, over the same globs as the VisualSim manifests); `compare.json` names the
+Verilator receipt it was graded against. `check-stale RUN --tree EXPORT` and `lpn-run` apply the
+VisualSim rule: an export whose fingerprinted files moved is refused with the changed / added /
+removed files listed (`REFUSED_STALE_MODEL`); `--uncalibrated` runs anyway and labels the result
+"outside validated configuration: RTL moved (...)". Against wide-port `a9acb2b0` the list is 16
+changed and 14 added files (`receipts/2026-10-16/lpn_gemma3_portb1/staleness.json`).
+
+**This loop's receipts (2026-10-16, Verilator 5.048; `tools/hwloop/lpn/README.md`):** upstream's
+GEMM and MLP rows reproduced to the cycle (119,723 / 119,674, -0.041%; 27,673 / 27,629,
+-0.159%); the Gemma-3-1B PORTB 1 token (the same 2,779,176 MM weight chunks, bytes within
+0.03%, the pin's frontend and the export's ISA simulator bit-identical): **LPN 2,823,232 cycles**
+at the validated Timing, **+0.885%** against the 2,798,478-cycle wide-port receipt and **+0.902%**
+against the pinned RTL on the same bundle (2,797,992; the pinned behavioral-DRAM RTL and the
+wide-port NCH 8 / lat 60 RTL are 486 cycles apart on this port-bound token); at Timing.dram_latency
+60: 2,874,213, +2.706%. Inside the gate, outside the validated configuration (the tree, NCH 8 at
+60 cycles, the board uarch): `lpn-estimate`, recorded, not a calibration. 1.15 s of native run
+(13 s end to end with the frontend) against 37 min of Verilator. PORTB 2: `REFUSED_NOT_MODELLED`.
 
 **Where it pays.** The LLM track's parameter sweeps (PORTB 2 / 4 / 8, int4 weights with
 PAIR, the lm head's format, NCH 8 / 16) and the VLA track's shape sweeps (MCOLS 32 packed,
@@ -308,9 +333,12 @@ f2-hbm, OTPU_NCH 8, `--lat 60`, 200 MHz, Verilator 5.048, `~/ergodex-03/bonsai2-
 - VisualSim: every model prepared (snapshot, exact batch command, static validation), none
   executed: the GUI holds the seat. Status in every receipt: `PREPARED_NOT_EXECUTED`,
   label `waiting`.
-- LPN: no receipt yet (not built on this Mac). The two receipts above are its first replay
-  targets: PORTB 1 at the validated configuration (the gate: within 5%, and ideally within
-  upstream's 1-3% per token), then PORTB 2 after the port-credit extension.
+- LPN (`receipts/2026-10-16/lpn_gemma3_portb1/`, `lpn_gemma3_portb1_lat60/`, `lpn_upstream_gemm/`,
+  `lpn_upstream_mlp/`, `lpn_toolchain/`): the PORTB 1 token **2,823,232 cycles, +0.885%** against
+  the receipt above and +0.902% against the pinned RTL on the same bundle (2,797,992 cycles,
+  `measured`, Verilator 5.048, 10 min), +2.706% at the receipt's 60-cycle latency; inside the 5%
+  gate, outside the validated configuration (**lpn-estimate**, not a calibration). PORTB 2: not
+  modelled, refused; it waits for the port-credit extension (`tools/hwloop/lpn/README.md` 5).
 - Nightly: `tools/hwloop/nightly/queue.json` + `cli.py nightly plan` (not activated).
 
 ## The agentic loop (who runs what, and when a PR opens)
@@ -354,13 +382,13 @@ The cadence:
    model should reproduce its 99.4% port utilization within a stated error); then the
    candidate, then `f2-hbm-burst200` against the board's 22.3 tok/s (89% of the RTL's
    port-bound rate: the gap the memory model has to explain, not fit).
-3. LPN, first replay: build LPNDialect (`qwen-validation`) on this Mac or the build host;
-   apply its observer patch to a `git archive` of upstream's pin `f237dab2` and run its own
-   GEMM / MLP benchmark to reproduce one upstream row (the build is right); then replay this
-   loop's PORTB 1 receipt (Gemma-3-1B int8, 2 layers + head, pos 9) from the frozen
-   `a9acb2b0` tree's program and DRAM image, record the error against 2,798,478 cycles, and
-   list the `rtl/**` files that differ between `f237dab2` and `a9acb2b0`. `cli.py lpn-run`
-   wraps it and writes the receipt.
+3. (done) LPN, first replay: LPNDialect (`qwen-validation` b06f42d9) built on this Mac with
+   LLVM / MLIR / Clang 20.1.8 from conda-forge (Homebrew has no Intel bottle for llvm@20 any
+   more); the observer patch on a detached worktree of the pin `f237dab2`; upstream's GEMM and
+   MLP rows reproduced to the cycle on Verilator 5.048; this loop's PORTB 1 token replayed from
+   the frozen `a9acb2b0` tree's program and DRAM image: +0.885% against 2,798,478 cycles,
+   +0.902% against the pinned RTL on the same bundle; the 16 changed / 14 added files between
+   `f237dab2` and `a9acb2b0` listed. `cli.py lpn-run` wraps it and writes the receipt.
 4. LPN, extensions in the order the tracks need them, each graded against an existing
    Verilator receipt before its number is used: PORTB 2 (two chunks a cycle on the port-B
    credits and drain; the 1,643,595-cycle receipt), NCH 8 at 60 cycles (the 203 / 307
@@ -383,9 +411,10 @@ The cadence:
 - A model run that completes (LPN or VisualSim) proves the model runs, not that the RTL is
   correct or that any number is a board number. Numerical correctness is `perf_qwen --check`,
   the ISA simulator and the card's token-exact checks, nowhere else.
-- LPN's accuracy claims are upstream's, on upstream's cases, at MCOLS 4 / PORTB 1 / behavioral
-  DRAM; every configuration this loop cares about today (PORTB 2 / 4, NCH 8 at 60 cycles, the
-  VLA shape, ternary formats) is uncalibrated in it until the replay of step 4 passes. LPN
+- LPN's accuracy on this loop's workload is one point: the Gemma-3-1B PORTB 1 token at
+  +0.9%, on a tree whose RTL is not the model's pin. PORTB 2 / 4, NCH 8 at 60 cycles (the
+  +2.7% at Timing.dram_latency 60 is a sensitivity, not a model of the channels), the VLA shape
+  and the ternary formats are uncalibrated in it until the extensions of step 4 are graded. LPN
   rejects HALT CHAIN, WAITC, WAITW, DSTEP / STREAM and multi-slice programs.
 - The VisualSim models are prepared, never parsed by VisualSim's own parser or VM compiler:
   the request / return protocol follows the installed examples and the prior prepared models
