@@ -26,6 +26,29 @@
           "lpn-scratch/runs/gemma3_l2_portb1/lpn (receipt copy: tools/hwloop/receipts/2026-10-16/lpn_gemma3_portb1)"
         ]
       }
+    },
+    {
+      "name": "portb4-rl4-int4-gemma3",
+      "commit": "96a90c2f",
+      "target": "f2-hbm:p4rl8",
+      "baseline_profile": "f2-hbm-burst200",
+      "queued_utc": "2026-10-16T19:55:39.894628+00:00",
+      "gates": {
+        "tests/test_wide_port_rtl.py": "53 + 43 row-lane tests bit-exact (docs/wide_port.md Row lanes, Verilator 5.048)",
+        "tests/test_rtl.py": "176 passed, mode off and on",
+        "perf_qwen --rowlanes whole model": "int4 RL 4 PORTB 4 MCOLS 8: 1,474,025 cycles = 135.7 tok/s at 200 MHz (f943c2b0); int8 RL 4: 2,393,990 = 83.5",
+        "lpn": "not modelled (PORTB 4 / RL: extension pending)",
+        "visualsim": "not prepared for this point"
+      },
+      "workload": {
+        "models": "gemma3-1b int4 (row-lane image) and int8",
+        "max_tokens": 128,
+        "prompts": "tools/f2_bench.py SHORT and LONG",
+        "baseline": "burst200 image 22.3 tok/s int8 PORTB 1"
+      },
+      "run_dir": null,
+      "lpn": {},
+      "status": "QUEUED_AWAITING_APPROVAL"
     }
   ],
   "note": "queued only; nothing scheduled or launched"
