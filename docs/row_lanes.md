@@ -1,9 +1,9 @@
 # Row lanes: an MM mode for decode past the ISA's column reuse
 
 Status: landed (ISA, simulator, compiler, images, RTL, measured on the RTL; docs/wide_port.md
-"Row lanes" holds the measured table), with the cycle tally of tools/tally_decode.py. The
-follow-up of 2026-10-17 is the last section: port A at 64 bytes a line (int4 L 4 off the
-port-A bound).
+"Row lanes" holds the measured table), with the cycle tally of tools/tally_decode.py. The two
+follow-ups of 2026-10-17 are the last sections: port A at 64 bytes a line (int4 L 4 off the
+port-A bound) and prefill over the group layout (one image for decode and prefill).
 
 ## Why
 
@@ -102,14 +102,12 @@ is not needed (the gather has its own gather scales).
 
 ### What stays out (and how it would go in)
 
-* **M > 1** (`M <= MCOLS / (L bpc)`: a few prefill rows with lanes): the pipeline's structure is
-  the same (column (p, l, j) = (p L + l) M + j); the drain's addresses become `out + j ors + n
-  + l` and its bank-conflict run depends on ors and L together. M = 1 first.
-* **A plain MM over the group layout** (prefill at M = MCOLS over decode's weights): the
-  issuer would walk a group's rows (Sw 4 apart, block data bs apart, the block step L bs, a
-  wrap at the group's end). Until then an image with ROWLANES is a decode image; its prefill
-  rows (rows > 1) are refused at compile time (an RL matrix streamed at M > 1 is a
-  CompileError), and a second scale copy (+3% int8 / +6% int4) or that issuer path lifts it.
+* **M > 1 with lanes** (`M <= MCOLS / (L bpc)`: a few prefill rows with lanes): the pipeline's
+  structure is the same (column (p, l, j) = (p L + l) M + j); the drain's addresses become
+  `out + j ors + n + l` and its bank-conflict run depends on ors and L together. Not built:
+  prefill over a decode image is the group walk ("Prefill over the group layout"), which
+  serves every M and the int4 L 4 / MCOLS 8 image, where L bpc = MCOLS leaves no column for a
+  second row.
 * **PORTB 8** (int8 L 8 on f2-hbm16, 8 streams at MCOLS 8): the ISA and the simulator take
   it; the RTL's port B, slice and adapter are built to PORTB 4 (`b_n` two bits), so the RTL
   measures L 2 and 4.
@@ -382,4 +380,105 @@ issuer at 5.9 cycles a group once the FIFO's head start is spent) against 5 at 6
 5); tests/test_target.py the variants' hashes; test_host / test_observability CAPS2 bit5.
 
 **Measured** (tools/perf_qwen.py `--rowlanes --aline 64`, the method of docs/wide_port.md "Row
-lanes"): docs/wide_port.md "Port A at 64 bytes" -- the table there.
+lanes"; the table in docs/wide_port.md "Port A at 64 bytes"): int4 RL 4 at PORTB 4 / MCOLS 8,
+4 layers + head 565,739 cycles (579,306 at 32), port A 440,232 lines and 0 Sw alone (528,278
+and 88,046 at 32); the whole model **1,440,727 cycles, 138.8 tok/s** (1,474,025 / 135.7 at
+32). Off the port-A bound, but not at the MXU's ~170: port B at four chunks every cycle is the
+same 1.07 M cycles as the MXU (int4 L 4 streams the port flat out), the native path gives 3.2-
+3.4 beats a cycle a channel of 4, and the other units' ~130 K cycles are 9% of an int4 token:
+74.5% of the coinciding rooflines, where int8 RL 4 (port-B bound since the row-lane commit, the
+same structure) sits at 82-84.5%. int8 RL 4 is unchanged to the cycle (949,474 at 4 layers;
+2,394,111 / 83.5 tok/s whole): its Sw shared the first advance's line at 32 already. What is
+left for int4 is the port (f2-hbm16's 16 channels at half a beat each) and the overlap of the
+other units, not the scale path.
+
+## Prefill over the group layout: the group walk (landed 2026-10-17)
+
+**The choice.** Of the two ways to run M > 1 over a row-lane image -- lanes with M > 1 (M <=
+MCOLS / (L bpc)) or a plain MM whose issuer walks the group layout -- the walk: the lanes'
+M > 1 cannot serve the image that matters (int4 L 4 on MCOLS 8: L bpc = MCOLS, no column left
+for a second row; int8 L 4 on MCOLS 4 likewise), it reaches at most M = 2 elsewhere, and it
+changes the drain (addresses out + j ors + n + l, a bank-conflict run over ors and L). The walk
+changes nothing past the issuer: the pipeline, the scale entries and the drain run a plain MM.
+
+**The ISA** (docs/isa.md "Row lanes", `isa.mm(rl=L, walk=True)`, `isa.mm_walk`): `srs` bit 0
+(`SRS_GW`; every MM's srs is a multiple of 4, so the bit is free, the stride `srs & ~1`) with
+`rs` bits 3:2 = log2 L: a plain MM of any M over the matrix in groups of L, the rows one at a
+time. Row n = gL + l: chunk q at `sa + g rs + (q L + l) D` (the chunk step L D, the row step D
+within a group and `rs - (L - 1) D` at its end), `Sw` at `ssa + g srs + 4 l`, block k's data at
+`ssa + g srs + H + k L bs + l bs` (the block step L bs; the first block's offset from the Sw
+steps `bs - 4` a row and resets at the group's end). No PAIR / QUAD: their reuse reads a row's
+2 / 4 consecutive blocks' scale data as one contiguous window, which the groups interleave by
+block (int4 QUAD's four words would span 4 L bs = 64 bytes); prefill at M = MCOLS has no reuse
+anyway. The flag is in the instruction (not M = 1 against M > 1) because a multi-row
+operand's chunks of ACT_ROWS rows can end in a one-row chunk without the copies the lanes
+need: the compiler walks every chunk of such an operand. The values, the ACT rows and the
+cycles are a plain MM's over standard rows.
+
+**Where it goes.** The simulator (`_mm`: the groups read back as rows for the walk as for the
+lanes, M rows, no PORTB / MCOLS condition); profile.py (a plain MM's cost, " gwL" in the
+detail); the compiler (`dot()` over a `QTensor.rl` matrix at M > 1 or in more than one chunk
+emits the walk; at M = 1 in one chunk the lanes as before); qwen3's layer region at a 4096-byte
+boundary (gemma4's already was: a rows > 1 image's scratch had moved it to a 128-byte one,
+and a run's loop-stepped layer address then missed the groups' L D alignment); otpu_mxu
+(`cmd_gw` from srs bit 0 and rs bits 3:2, the issuer's lane counter `i_wl`, lane 0's scale
+offset and the per-row delta `bs - 4`, the row and Sw steps at the group's end, the chunk
+step `i_cstep` = L D; cmd_rl is 0, so the rest of the MXU is a plain MM's; without RL every
+term is constant 0); otpu_native_dram `APR` (below).
+
+**The adapter's port-A beat reuse (otpu_native_dram APR).** The first measurement of the walk
+on the HBM model (Gemma-3-1B int4, 4 layers, 4 rows) ran 2.7x slower than the standard image
+(4,753,621 cycles against 1,761,842, the MXU blocked 74%), where int8 was 3.7% faster. The
+cause is the port-A access pattern, not the MXU: a 4-bit row's block data in a group is
+`H + k L bs + l bs` = 32 + 16 k + 4 l, so one row's nine blocks span three 64-byte beats of the
+group and the next row starts over at the group's first beat; the adapter kept one beat for
+reuse (the last fetched) and prefetched forward runs of APF = 32 beats, so every row's first
+request missed, dropped the run in flight and started a new 32-beat run on the channel (int8's
+9 bytes at 16 + 4 k + l all sit in the group's first beat: one beat a row, every request a
+reuse). The standard layout never jumps back (a row's scale words follow the previous row's).
+The fix is in the adapter: `APR` beats kept for reuse (the last APR fetched, round robin, each
+forgotten on a write to it; a reuse reads its entry's data at its turn, which the in-order
+responses make safe), 16 on row-lane builds (otpu_top / otpu_board: `RL != 0 ? 16 : 1`), 1
+elsewhere: the netlist of every other build is unchanged. A group of K = 1152 is 3 beats, of
+K = 6912 (the down projection) 14: both within 16, so the walk's rows after the first find
+every beat kept, no run restarts. ~16 x 512 bits of LUT RAM, 16 tag comparators.
+
+**The image.** Nothing: the decode image serves prefill. `Engine(rows=R)` with ROWLANES
+compiles its prompt runs over the groups; the head's standard-layout copy for the embedding
+gather stays (below).
+
+**The gather over the group layout** (the +29% head copy: can it go?). Yes, and without a new
+instruction. gather_row streams row `tok` of the head as nb one-block rows at `data + tok x
+row_bytes` with rs = D (the token's row address from one RLD MUL by row_bytes); over the
+groups it is nb rows at `base + (tok / L) rs_g + (tok mod L) D` with rs = L D -- the same MM
+shape with a stride of L D, which `QTensor(rs=L D)` expresses -- and the address is `base + u D`
+with `u = (tok / L) (L KBr) + tok mod L` (KBr = row_bytes / D: 9), an integer below 2^24 on the
+262K-row head (2.36 M), so exact in fp32: the VPU computes it from the token word in ~7 VOPs on
+one-element rows (floor(tok / L) by the magic-number round: tok x 1/L, + (2^23 - 1/2 + 1/(2L)),
+- 2^23; then r = tok - q L, u = q (L KBr) + r), one RLD MUL by D takes it into the register, and
+the gather scales (per row, their own table, `tok x gather_scale_bytes`) stay as they are. Cost:
+a few hundred cycles a token; the +302 MB (int8) / +151 MB (int4) head copy goes. Not done here
+(the gather kernel and the image's lookup tables are the next step; the image keeps the copy).
+
+**Tests.** tests/test_row_lanes.py: the walk bit for bit the plain MM's (17 cases: every format
+and L, M 2 .. 16 with replay, k0, N not a multiple of L, UNIT / ACC / RMAX / ASCALE / RSC, at
+both lines), the refusals (PAIR, no rl, srs not a multiple of 4, no ROWLANES), the compiler's
+walk at M 3 / 4 / 8 / 16 over Weight(rl=True) (every chunk walked, the standard values), the
+tiny Gemma 3 and Qwen3 prefill of a 13-token prompt in runs of 4 rows with and without the
+mode (the same logits and the decode step after it, bit for bit; the prompt programs walk),
+Gemma-3-1B's 32-token prefill in runs of 8 (int4, PORTB 4, MCOLS 8, ALINE 64) and its next
+token, bit-identical to the standard image's. tests/test_wide_port_rtl.py: 14 walk cases x
+DRAM / native (M 2 .. 16, every format, both lines), the compiled kernel at M 4 / 16, and the
+throughput: prefill's MM at M = 8 over the groups costs the standard layout's cycles (N KB
+advances, int8 and int4), no two-part reads.
+
+**Measured** (prefill on the RTL at PORTB 4 / MCOLS 8, 4 layers + the head, 4 rows, the
+row-lane image at ALINE 64 against the standard one; docs/wide_port.md "Port A at 64 bytes"):
+int4 1,334,346 cycles on the row-lane image against 1,761,842 on the standard one (24% faster:
+0 two-part reads where the standard image's PAIR / QUAD reads split 34,952 times; MAC 87.7%
+against 70.4%), int8 1,614,575 against 1,675,893 (3.7% faster; 0 against 332,527 two-part
+reads). The walk's own test (tests/test_wide_port_rtl.py test_group_walk_throughput_rtl):
+prefill's MM at M = 8 over the groups costs the standard layout's N KB cycles exactly on the
+behavioural DRAM and within 3% on the native path, 0 two-part reads. So one image serves
+decode (the lanes) and prefill (the walk) with no prefill regression; the +29% head copy stays
+only for the embedding gather, whose way onto the group layout is above.
