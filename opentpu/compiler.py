@@ -1870,6 +1870,19 @@ class Builder:
         ins.comment += " +rowmax"
         return Tile(self, x.base + M * ors, (M,), None, x.buf)
 
+    def mm_stride(self, N: int) -> int:
+        """The row stride of a 2-D tile the MXU writes into (dot's fresh outputs, the language's
+        empty / zeros / full): odd, so the M results of one streamed row sit in M distinct TMEM
+        banks and the drain writes them in one cycle (N + 1 for an even N); under MXROT (the
+        MXU's TMEM ports rotators, no lane crossbar: f2-vla) the first value >= N that is 1 mod
+        LANES, the rotation pattern the drain's lanes must land in (N + 1 for every width that
+        is a multiple of LANES; an attention's 558 keys get 577, a 46-key last block 65 instead
+        of 47; any other stride drains one result a step, otpu_mxu drain_run;
+        docs/vla_frequency_plan.md 6c)."""
+        if getattr(self.cfg, "MXROT", False):
+            return N + (1 - N) % self.cfg.LANES
+        return N if N % 2 else N + 1
+
     def dot(self, a, w: QTensor, acc: Tile | None = None, out: Tile | None = None,
             temp: bool = False, rowmax: bool = False, acc_scale: Tile | None = None) -> Tile:
         if not isinstance(w, QTensor):
@@ -1894,17 +1907,10 @@ class Builder:
         M = st.src.rows
         if acc is None and out is None:
             # Layout choice: an odd row stride puts the M results of one streamed row in M
-            # distinct TMEM banks, so the MXU writes them back in a single cycle. The spare row
-            # after the tile receives the row maxima if the kernel asks for them (RMAX). With
-            # MXROT (the MXU's TMEM ports rotators, no lane crossbar: f2-vla) the drain's lane k
-            # must land in bank (a0 + k) mod LANES, so the stride is the first value >= N that
-            # is 1 mod LANES (N + 1 for every width that is a multiple of LANES, as before; an
-            # attention's 558 keys get 577 instead of 559); any other stride drains a lane a
-            # step (otpu_mxu drain_run)
-            if self.cfg.MXROT and not (one_d or M == 1):
-                rs = N + (1 - N) % self.cfg.LANES
-            else:
-                rs = N if (one_d or M == 1 or N % 2) else N + 1
+            # distinct TMEM banks, so the MXU writes them back in a single cycle (mm_stride:
+            # under MXROT the first stride >= N that is 1 mod LANES). The spare row after the
+            # tile receives the row maxima if the kernel asks for them (RMAX).
+            rs = N if (one_d or M == 1) else self.mm_stride(N)
             out = self.alloc((N,) if one_d else (M, N), rs, spare=0 if one_d else M)
         else:
             out = acc if acc is not None else out

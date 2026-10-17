@@ -51,7 +51,8 @@ The model (the lpnlang net; the dialect's places and transitions correspond):
   pq_q + pcap_q --launch--> pq_run --done--> pcap_q, pslot
       The quantizer: QACT 2 ceil(rows KB D / LANES), QST the reads at LANES a cycle (two passes
       with T) and its port A words (the K stores a word a cycle, the V^T stores a word of four
-      rows, QST T) at QST_WC cycles each, + L_Q (the scale unit).
+      rows, QST T) at QST_WC cycles each, + L_Q (the scale unit) + Q_ROW a row (the chunk max's
+      third stage, plan 6c; QACT + Q_ROW once: its rows pipeline through the row buffer).
   pq_vpu + pvpu_issue --launch--> pvpu_issuing --issued--> pvpu_issue, pvpu_fly --done--> pslot
       The VPU: an issue pipeline (one instruction issuing at a time) and a completion
       pipeline (several in flight; a VOP starts while others are in flight only if its
@@ -155,6 +156,9 @@ class Knobs:
     l_wq: int = 120       # ... and behind a QST's words in the adapter's write queue (fitted on
                           # v_qkv, the DMA busy 85% there over 2,048 STs: --lwq)
     l_q: int = 44         # otpu_quant: the scale unit (LAT 30), the prescale (QL 5), the passes
+    q_row: int = 1        # ... and a cycle a row since the chunk max's third stage (plan 6c: the
+                          # row's scale, so its pass 1, a cycle later; QST's rows run one after
+                          # the other, +1 each; QACT's pipeline through the row buffer, +1 once)
     qst_wc: float = 1.85  # cycles a QST port-A word on the HBM model's write path (measured:
                           # v_qkv's quantizer busy 534 K cycles for 270 K words and 33 K read
                           # cycles, docs/pi05.md 5.4)
@@ -276,14 +280,14 @@ def cost(d: Dyn, cfg, kn: Knobs, E: int) -> None:
         d.cyc = rows * -(-cols // wd)
     elif op == I.QACT:
         d.reads = cyc
-        d.cyc = cyc + kn.l_q
+        d.cyc = cyc + kn.l_q + kn.q_row
     elif op == I.QST:
         # the reads at LANES a cycle (two passes with T), the words on port A at qst_wc
         rows, KB = w[3] & 0xFFFF, w[3] >> 16
         n = rows * KB * cfg.D
         reads = (2 if ins.flags & I.F_T else 1) * -(-n // cfg.LANES)
         d.reads = reads
-        d.cyc = reads + int(math.ceil((cyc - reads) * kn.qst_wc)) + kn.l_q
+        d.cyc = reads + int(math.ceil((cyc - reads) * kn.qst_wc)) + kn.l_q + rows * kn.q_row
     elif op == I.LD:
         d.cyc = cyc + kn.l_ld
     elif op == I.ST:
@@ -838,11 +842,11 @@ def dialect_classes(kn: Knobs, E: int):
                 n = rows * KB * cfg.D
                 _, _, cyc, _, _ = PF._describe(ins, cfg)
                 reads = (2 if ins.flags & I.F_T else 1) * ceil(n / cfg.LANES)
-                latency = reads + int(ceil((cyc - reads) * kn.qst_wc)) + kn.l_q
+                latency = reads + int(ceil((cyc - reads) * kn.qst_wc)) + kn.l_q + rows * kn.q_row
                 return latency, memory.sw, latency
             if ins.op == I.QACT:
                 _, _, cyc, _, _ = PF._describe(ins, cfg)
-                return cyc + kn.l_q, None, 0
+                return cyc + kn.l_q + kn.q_row, None, 0
             if ins.op in (I.LD, I.ST):
                 service = max(ceil(w[2] / min(cfg.LANES, cfg.D // 4)), ceil(4 * w[2] / t.dram_bytes_per_cycle))
                 return service + (kn.l_ld if ins.op == I.LD else kn.l_st), memory.b, service
@@ -1192,6 +1196,8 @@ def main() -> None:
     ap.add_argument("--lld", type=int, default=Knobs.l_ld)
     ap.add_argument("--lmm", type=int, default=Knobs.l_mm)
     ap.add_argument("--lq", type=int, default=Knobs.l_q)
+    ap.add_argument("--q-row", type=int, default=Knobs.q_row,
+                    help="the quantizer's cycles a row past the scale unit (0: the two-stage max of 5.4's RTL)")
     ap.add_argument("--qst-wc", type=float, default=Knobs.qst_wc)
     ap.add_argument("--warb", type=int, default=2)
     ap.add_argument("--no-lookahead", action="store_true")
@@ -1208,7 +1214,7 @@ def main() -> None:
         import lpnlang_mlir  # noqa: F401
     from opentpu.isasim import board_config
     from opentpu.llm import pi05 as P
-    kn = Knobs(l_st=a.lst, l_wq=a.lwq, l_ld=a.lld, l_mm=a.lmm, l_q=a.lq, qst_wc=a.qst_wc, warb=a.warb,
+    kn = Knobs(l_st=a.lst, l_wq=a.lwq, l_ld=a.lld, l_mm=a.lmm, l_q=a.lq, q_row=a.q_row, qst_wc=a.qst_wc, warb=a.warb,
                dma_lookahead=not a.no_lookahead)
     cfg = board_config()
     E = target_E(cfg)

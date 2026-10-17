@@ -149,11 +149,15 @@ def all_reduce(x: Tile) -> Tile:
 
 # ---- construction
 def _acc_layout(shape) -> int | None:
-    """Constructed 2-D tiles are typically MXU accumulators: give them an odd row stride so the
-    MXU writes a streamed row's results to distinct TMEM banks in one cycle."""
+    """Constructed 2-D tiles are typically MXU accumulators: give them the row stride the MXU
+    drain writes at full width (compiler.mm_stride: odd, so a streamed row's results go to
+    distinct TMEM banks in one cycle; 1 mod LANES on an MXROT build, where the attention's
+    46-key last block at 47 drained one result a step and cost p_attend 10%,
+    docs/vla_frequency_plan.md 6c)."""
     shape = tuple(shape)
-    if len(shape) == 2 and shape[0] > 1 and shape[1] % 2 == 0:
-        return shape[1] + 1
+    if len(shape) == 2 and shape[0] > 1:
+        rs = current().mm_stride(shape[1])
+        return rs if rs != shape[1] else None
     return None
 
 
