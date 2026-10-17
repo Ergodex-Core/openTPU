@@ -137,12 +137,12 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
         # the linked-reset exception covers the HBM clock's synchronizer too, and the HBM
         # build's floorplan (its pblocks under the HDK's pblock_CL) follows it in the one file
-        # the HDK reads at placement (docs/wide_port.md "Placement")
-        pnr = cons / 'small_shell_cl_pnr_user.xdc'
+        # build_level_1_cl.tcl reads unmanaged at placement (docs/wide_port.md "Placement")
+        pnr = cons / 'cl_pnr_user.tcl'
         old = 'foreach stem {main_reset_n bridge_reset_n core_reset_n}'
         if old not in pnr.read_text():
             raise RuntimeError(f'{pnr}: the reset synchronizer list moved')
-        floorplan = cons / 'small_shell_cl_pnr_user_hbm.xdc'
+        floorplan = cons / 'cl_pnr_user_hbm.tcl'
         pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' +
                        floorplan.read_text())
         floorplan.unlink()
@@ -156,7 +156,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (cl / 'design/cl_opentpu_hbm.sv').unlink()
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
-        (cons / 'small_shell_cl_pnr_user_hbm.xdc').unlink()
+        (cons / 'cl_pnr_user_hbm.tcl').unlink()
     files = target.sources(t)
     for name in files:
         dest = cl / 'design/rtl' / name

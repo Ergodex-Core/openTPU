@@ -1,8 +1,10 @@
 # The HBM build's floorplan (cl_opentpu_hbm, rtl/boards/f2/otpu_f2_hbm_sys.sv; docs/wide_port.md
-# "Placement"). boards/f2/build.py appends this file to small_shell_cl_pnr_user.xdc for an HBM
-# target, so the HDK reads it at placement after its own small_shell_level_1_fp_cl.xdc, whose
-# pblock_CL (the CL's region of the VU47P: all of SLR2, parts of SLR1 and SLR0) is the parent of
-# every pblock here. Ranges by complete clock regions, added as the HDK adds its own; the VU47P's
+# "Placement"). boards/f2/build.py appends this file to cl_pnr_user.tcl for an HBM target, which
+# build_level_1_cl.tcl reads unmanaged (read_xdc -unmanaged: Tcl, not a managed XDC, which drops
+# proc / if / foreach) right before the HDK's opt_design, after the HDK's own
+# small_shell_level_1_fp_cl.xdc, whose pblock_CL (the CL's region of the VU47P: all of SLR2,
+# parts of SLR1 and SLR0) is the parent of every pblock here. Ranges by complete clock regions,
+# added as the HDK adds its own, then cut down to the parent (otpu_contain below); the VU47P's
 # SLRs are rows Y0-Y3 (SLR0, the HBM stacks and their AXI ports below it), Y4-Y7 (SLR1) and
 # Y8-Y11 (SLR2); a clock region holds ~13.6K LUTs, ~27K flip-flops.
 #
@@ -31,6 +33,15 @@
 # ready in g_rs[k]), so each SLR crossing runs from a flip-flop to a flip-flop (TX_REG / RX_REG
 # eligible). CONTAIN_ROUTING is off on every pblock (routes may leave the box). The cell queries
 # fail closed: a renamed hierarchy stops the build rather than placing freely.
+#
+# Containment: opt_design's DRC (HDPR-23) requires a child's ranges within its parent's, and
+# pblock_CL's are not whole clock regions: the HDK's file takes the shell's columns out, and
+# SNAPPING_MODE on a reconfigurable partition's pblock derives site ranges that leave out the
+# static shell's sites and the SLR boundaries' LAGUNA rows (the DRC lists them: SLICE_X8Y660+,
+# SLICE_X182Y480:X182Y539, URAM288_X4Y32:Y127, ...). So after its clock regions, every site of
+# a pblock that its parent does not hold is taken out again (resize_pblock -remove), the
+# children in parent-first order, and SNAPPING_MODE stays off on them (a child is not a
+# reconfigurable partition; snapping would put the sites back).
 
 proc otpu_cells {pattern} {
   set cells [get_cells -quiet $pattern]
@@ -95,11 +106,23 @@ add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
 
 ########################################
-# Parameters
+# Parameters and containment
 ########################################
+proc otpu_contain {pb} {
+  set parent [get_property PARENT [get_pblocks $pb]]
+  set held [dict create]
+  foreach s [get_sites -of_objects [get_pblocks $parent]] { dict set held $s 1 }
+  set extra {}
+  foreach s [get_sites -of_objects [get_pblocks $pb]] {
+    if {![dict exists $held $s]} { lappend extra $s }
+  }
+  if {[llength $extra]} { resize_pblock $pb -remove $extra }
+  puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
+}
 foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_board pb_otpu_tmem} {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
-  set_property SNAPPING_MODE ON [get_pblocks $pb]
+  set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
+  otpu_contain $pb
 }
 puts "OTPU_FLOORPLAN_APPLIED pblocks=4"

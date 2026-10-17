@@ -406,7 +406,7 @@ def test_linked_reset_exception_is_scoped_and_guarded(fault):
     tclsh = shutil.which('tclsh')
     if not tclsh:
         pytest.skip('Tcl is unavailable')
-    script = ROOT / 'boards/f2/build/constraints/small_shell_cl_pnr_user.xdc'
+    script = ROOT / 'boards/f2/build/constraints/cl_pnr_user.tcl'
     harness = r'''
 set warnings 0
 set criticals 0
@@ -504,12 +504,15 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
         (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm.tcl').read_bytes()
     assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
         (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm.tcl').read_bytes()
-    pnr = (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    pnr = (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
     assert 'hbm_reset_n}' in pnr
-    # the floorplan after the reset exception, in the one file the HDK reads at placement
-    floorplan = (ROOT / 'boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc').read_text()
+    # the floorplan after the reset exception, in the one file build_level_1_cl.tcl reads
+    # unmanaged at placement; the managed XDC the HDK reads stays Tcl-free
+    floorplan = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl').read_text()
     assert pnr.endswith('\n' + floorplan) and pnr.index('hbm_reset_n}') < pnr.index('pb_otpu_hbm')
-    assert not (cl / 'build/constraints/small_shell_cl_pnr_user_hbm.xdc').exists()
+    assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
+    managed = (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    assert all(line.startswith('#') for line in managed.splitlines() if line.strip())
     params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
     assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
         (S, nch, 29, dram_log2)
@@ -530,21 +533,43 @@ def test_ddr_snapshot_leaves_the_hbm_files_out(tmp_path):
     cl = flow.prepare(tmp_path / 'run', shell, T.load('f2'), '01234567')
     assert (cl / 'design/cl_opentpu.sv').is_file()
     assert not list(cl.rglob('*hbm*'))
-    assert 'pb_otpu' not in (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    assert 'pb_otpu' not in (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
 
 
-# The HBM floorplan (small_shell_cl_pnr_user_hbm.xdc): four pblocks under the HDK's pblock_CL by
-# whole clock regions, one SLR each (the fabric in SLR0, the crossing chains' middle stage in
-# SLR1, the board in SLR2, the TMEM and VPU inside the board's), routing not contained, and every
-# cell query failing closed (docs/wide_port.md "Placement")
+# The HBM floorplan (cl_pnr_user_hbm.tcl): four pblocks under the HDK's pblock_CL by whole clock
+# regions, one SLR each (the fabric in SLR0, the crossing chains' middle stage in SLR1, the board
+# in SLR2, the TMEM and VPU inside the board's), cut down to the sites their parent holds (the
+# mock's pblock_CL lacks "shell" of SLR2's clock regions, the static shell's site), routing not
+# contained, and every cell query failing closed (docs/wide_port.md "Placement")
 FLOORPLAN_HARNESS = r'''
-set pblocks {}
+set pblocks {pblock_CL}
 set parents {}
 set ranges {}
+set removed {}
 set cells {}
 set props {}
+# the sites of a range; pblock_CL's own ranges are the HDK's site ranges (P0 P1 P2 here)
+set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_X7Y0 {s0b}
+           CLOCKREGION_X0Y4:CLOCKREGION_X3Y7 {s1a} CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
+           CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b} P1 {s1a} P2 {s2a s2b}}
+set ranges {{pblock_CL P0} {pblock_CL P1} {pblock_CL P2}}
 proc create_pblock {name} { lappend ::pblocks $name }
 proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
+proc get_property {prop name} {
+  foreach p $::props { if {[lindex $p 0] eq $name && [lindex $p 1] eq $prop} { return [lindex $p 2] } }
+  error "no $prop on $name"
+}
+proc get_sites {flag name} {
+  if {$flag ne "-of_objects"} { error "get_sites $flag" }
+  set out {}
+  foreach r $::ranges {
+    if {[lindex $r 0] eq $name} { lappend out {*}[dict get $::sites [lindex $r 1]] }
+  }
+  foreach r $::removed {
+    if {[lindex $r 0] eq $name} { foreach s [lindex $r 1] { set out [lsearch -all -inline -not -exact $out $s] } }
+  }
+  return $out
+}
 proc get_cells {args} {
   set pattern [lindex $args end]
   if {$::fault eq "missing" && [string match *u_board* $pattern]} { return {} }
@@ -552,8 +577,10 @@ proc get_cells {args} {
   return [list $pattern]
 }
 proc resize_pblock {name flag range} {
-  if {$flag ne "-add" || $name ni $::pblocks} { error "resize $name $flag" }
-  lappend ::ranges [list $name $range]
+  if {$name ni $::pblocks} { error "resize $name" }
+  if {$flag eq "-add"} { lappend ::ranges [list $name $range]; return }
+  if {$flag ne "-remove" || ![llength $range]} { error "resize $name $flag" }
+  lappend ::removed [list $name $range]
 }
 proc add_cells_to_pblock {name cl} {
   if {$name ni $::pblocks} { error "add to $name" }
@@ -568,10 +595,11 @@ def test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed(fault):
     tclsh = shutil.which('tclsh')
     if not tclsh:
         pytest.skip('Tcl is unavailable')
-    script = ROOT / 'boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc'
+    script = ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl'
     report = r'''
 puts "PBLOCKS $pblocks"
 foreach r $ranges { puts "RANGE [lindex $r 0] [lindex $r 1]" }
+foreach r $removed { puts "REMOVED [lindex $r 0] [lindex $r 1]" }
 foreach c $cells { puts "CELL [lindex $c 0] [lindex $c 1]" }
 foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
 '''
@@ -585,10 +613,10 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert result.returncode == 0, result.stderr
     out = result.stdout
     assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=4' in out
-    assert 'PBLOCKS pb_otpu_hbm pb_otpu_mid pb_otpu_board pb_otpu_tmem' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_board pb_otpu_tmem' in out
     ranges = {}
     for line in out.splitlines():
-        if line.startswith('RANGE '):
+        if line.startswith('RANGE ') and not line.startswith('RANGE pblock_CL'):
             _, pb, rng = line.split(' ', 2)
             ranges.setdefault(pb, []).append(rng)
     # whole clock regions, one SLR per pblock (Y0-3 SLR0, Y4-7 SLR1, Y8-11 SLR2)
@@ -618,4 +646,69 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
     for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_board', 'pb_otpu_tmem'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
+        assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
         assert props[(pb, 'PARENT')] == ('pb_otpu_board' if pb == 'pb_otpu_tmem' else 'pblock_CL')
+    # containment: the one site of SLR2's clock regions that pblock_CL does not hold leaves
+    # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board)
+    removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
+    assert removed == [['pb_otpu_board', 'shell']]
+    assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=5 removed=1' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_tmem parent=pb_otpu_board held=2 removed=0' in out
+
+
+# build_level_1_cl.tcl: the HDK reads the user placement XDC managed (its Tcl dropped), so the
+# wrapper reads cl_pnr_user.tcl unmanaged inside the HDK's opt_design call, once, and fails if
+# the HDK's sequence never reached it
+@pytest.mark.parametrize('fault', ['none', 'no_opt', 'bad_tcl'])
+def test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    hdk_steps = 'read_xdc $::constraints_dir/small_shell_cl_pnr_user.xdc\n'
+    if fault != 'no_opt':
+        hdk_steps += 'opt_design -directive Explore\nplace_design\n'
+    (hdk / 'build_level_1_cl.tcl').write_text(hdk_steps)
+    cons = tmp_path / 'constraints'
+    cons.mkdir()
+    (cons / 'small_shell_cl_pnr_user.xdc').write_text('# managed\n')
+    (cons / 'cl_pnr_user.tcl').write_text('error "bad tcl"\n' if fault == 'bad_tcl' else
+                                          'puts "PNR_TCL_RAN"\n')
+    harness = f'''
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set log {{}}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{
+  lappend ::log "read_xdc $args"
+  if {{[lindex $args 0] eq "-unmanaged"}} {{ source [lindex $args 1] }}
+}}
+proc opt_design {{args}} {{ lappend ::log "opt_design $args" }}
+proc place_design {{args}} {{ lappend ::log "place_design" }}
+proc close_project {{}} {{ error "stop" }}
+if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
+  puts "STOPPED $result"
+}}
+foreach l $log {{ puts "LOG $l" }}
+'''
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
+    if fault == 'none':
+        assert 'PNR_TCL_RAN' in out
+        assert log == [f'read_xdc {cons}/small_shell_cl_pnr_user.xdc',
+                       f'read_xdc -unmanaged {cons}/cl_pnr_user.tcl',
+                       'opt_design -directive Explore', 'place_design']
+        assert 'STOPPED openTPU: implementation produced no routed checkpoint' in out
+    elif fault == 'no_opt':
+        assert 'STOPPED openTPU: the HDK sequence ran no opt_design' in out and 'PNR_TCL_RAN' not in out
+    else:
+        assert 'STOPPED bad tcl' in out and 'opt_design' not in ' '.join(log)

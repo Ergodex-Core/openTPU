@@ -679,14 +679,14 @@ cycles are the same by construction):
   are the rest.
 
 **What the build flow must add** (the proposal as written after round 1; done in the section
-after this one: the pblocks are small_shell_cl_pnr_user_hbm.xdc with the board in SLR2, not
+after this one: the pblocks are cl_pnr_user_hbm.tcl with the board in SLR2, not
 SLR1, and the crossings are register chains, not the bridges' FIFOs): (1) the placement directive: boards/f2/build.py (the `cmd = ['vivado', ...,
 '-tclargs', 'SSI_SpreadLogic_high', 'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2',
 'C0', 'H2']` line) hands the HDK's build_all.tcl `SSI_SpreadLogic_high` as place_design's
 directive, which spreads one slice of 250K LUTs (19% of the device) over the three SLRs on
 purpose; change it to `Default` (or `SSI_BalanceSLLs` once the pblocks below exist), keeping
 the phys_opt / route directives and the clock recipes. (2) Pblocks, in
-boards/f2/build/constraints/small_shell_cl_pnr_user.xdc (the HDK applies it at placement;
+boards/f2/build/constraints/cl_pnr_user.tcl (read unmanaged at placement, see round 3;
 the hierarchy is WRAPPER/CL/u_sys/...): the HBM fabric in the SLR with the HBM's AXI ports
 (the VU47P's stacks are below SLR0) and the slice with its adapter and control block in one
 SLR next to it:
@@ -762,10 +762,12 @@ Module sizes (synthesis, fb42c14e; LUT / FF / RAMB36 / DSP): cl_opentpu 256,609 
 each, the host path, the port registers and arbiters). A VU47P clock region holds ~13.6K LUTs
 and ~27K flip-flops; the SLRs are rows Y0-3, Y4-7, Y8-11; the HBM's ports are below SLR0.
 
-**The floorplan** (boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc, appended by
-build.py to small_shell_cl_pnr_user.xdc for an HBM target; every pblock a child of the HDK's
-`pblock_CL`, whole clock regions, `-add` ranges as the HDK's, `CONTAIN_ROUTING` 0, the cell
-queries failing closed; tests/test_f2_build.py checks it under a Tcl mock):
+**The floorplan** (boards/f2/build/constraints/cl_pnr_user_hbm.tcl, appended by build.py to
+cl_pnr_user.tcl for an HBM target, which build_level_1_cl.tcl reads unmanaged before the HDK's
+opt_design (round 3 below: the HDK's own read of the user XDC is managed and drops Tcl); every
+pblock a child of the HDK's `pblock_CL`, whole clock regions, `-add` ranges as the HDK's, then
+cut down to the sites the parent holds (`otpu_contain`), `CONTAIN_ROUTING` 0, `SNAPPING_MODE`
+off, the cell queries failing closed; tests/test_f2_build.py checks it under a Tcl mock):
 
 | pblock | hierarchy (WRAPPER/CL/u_sys/...) | clock regions | LUT budget | used |
 |---|---|---|---|---|
@@ -841,6 +843,49 @@ tests/test_observability.py 18 passed; tests/test_host.py 90 passed, 1 skipped, 
 tests/test_f2_build.py 84 passed (the HBM snapshot's constraints and the floorplan under the
 Tcl mock); tests/test_target.py and tests/test_tourney.py 95 passed (the source lists with
 rtl/shell/otpu_xr.sv). The perf runs above.
+
+### Placement, round 3: the floorplanned build (2026-10-18)
+
+The first floorplanned build (d9cdda12, `--place-directive Default`, host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-d9cdda12) synthesized and linked, then failed opt_design's
+DRC: `[DRC HDPR-23] Nested Pblock ranges must be a subset of parent Pblock ranges: The child
+Pblock 'pb_otpu_board' is not contained by the parent Pblock 'pblock_CL'`, the child's range
+`CLOCKREGION_X0Y8:CLOCKREGION_X7Y11`, the parent's a list of site ranges with holes in SLR2
+(`SLICE_X8Y660:X8Y719`, `SLICE_X182Y480:X182Y539`, `URAM288_X4Y32:X4Y127`, ...). Two things
+the log showed on the way:
+
+1. **The HDK reads the user placement file as a managed XDC.** Its build_level_1_cl.tcl does
+   `read_xdc ${constraints_dir}/${SHELL_MODE}_cl_pnr_user.xdc` (no `-unmanaged`), and a managed
+   XDC accepts constraints only: every `proc`, `if`, `foreach`, `puts`, `get_msg_config` line
+   is dropped with `CRITICAL WARNING: [Designutils 20-1307] Command '...' is not supported in
+   the xdc constraint file`, and the read goes on. So since round 1 the linked reset exception
+   ran as `set_false_path -through <pin> -to {}` (`[Vivado 12-4739] No valid object(s) found
+   for '-to '`: the synchronizers' CLR recovery / removal paths were timed, never exempted),
+   and in round 3 the four pblocks were created with their ranges and **no cells**
+   (`otpu_cells` unknown, every `add_cells_to_pblock` dropped): the DRC fired on empty pblocks,
+   and had it passed the placer would have been free as in round 2. The rounds' timing numbers
+   stand (nothing the file said was applied), the floorplan had not been tried.
+2. **The parent's ranges are not whole clock regions.** small_shell_level_1_fp_cl.xdc adds
+   clock regions and takes the shell's own slice columns out, and `SNAPPING_MODE ON` on a
+   reconfigurable partition's pblock derives site ranges (DERIVED_RANGES) that leave out the
+   static shell's sites and the SLR boundaries' LAGUNA rows; a child added by clock regions
+   holds those sites and is not a subset.
+
+Fix (this commit): the Tcl moved out of the managed file into
+boards/f2/build/constraints/cl_pnr_user.tcl (the reset exception; build.py appends
+cl_pnr_user_hbm.tcl, the floorplan, for an HBM target as before), small_shell_cl_pnr_user.xdc
+holds comments only, and boards/f2/build/scripts/build_level_1_cl.tcl, our wrapper that sources
+the HDK's sequence, wraps its `opt_design` once: `read_xdc -unmanaged
+${constraints_dir}/cl_pnr_user.tcl`, then the HDK's opt_design (a Tcl error in the file stops
+the build; a sequence that never reaches opt_design stops it too). The floorplan's
+`otpu_contain`: after a pblock's clock regions, every site of it that its parent does not hold
+(`get_sites -of_objects`, the parent's DERIVED_RANGES) is taken out with `resize_pblock
+-remove`, children in parent-first order, `SNAPPING_MODE` off on them (a child is not a
+reconfigurable partition; snapping would put the sites back). tests/test_f2_build.py: the
+floorplan mock's `pblock_CL` lacks one site of SLR2's clock regions and the test expects exactly
+that site removed from `pb_otpu_board` (87 passed); a new test runs the wrapper against a mock
+HDK sequence (the unmanaged read lands after the managed one and before opt_design, once;
+no opt_design or a bad file fails).
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
