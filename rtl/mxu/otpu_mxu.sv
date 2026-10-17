@@ -821,27 +821,28 @@ module otpu_mxu
       if (T2 && tg1.stg) r_pw <= ln1[32 * tg1.doff[LB-1:2] +: 32];
       if (WP && tg1.spl) r_stl <= ln1;
     end
-  logic [95:0] sr0;                          // the S0 scale entry: {Sw, low block}, high block
-  logic [63:0] sr1;
+  // (sr*r: the RAMs' read registers; sr*: a register later, at S0 with the entry w0)
+  logic [95:0] sr0, sr0r;                    // the S0 scale entry: {Sw, low block}, high block
+  logic [63:0] sr1, sr1r;
   otpu_ram_1r1w #(.W(96), .N(DEPTH), .STYLE("block")) u_fs0 (
-    .clk, .we(r_we0), .wa(s_tail), .wd(r_wd0), .re(1'b1), .ra(s_rd), .rd(sr0));
+    .clk, .we(r_we0), .wa(s_tail), .wd(r_wd0), .re(1'b1), .ra(s_rd), .rd(sr0r));
   otpu_ram_1r1w #(.W(64), .N(DEPTH), .STYLE("block")) u_fs1 (
-    .clk, .we(r_we1), .wa(s_tail), .wd(r_wd1), .re(1'b1), .ra(s_rd), .rd(sr1));
-  logic [127:0] sr2;                         // PORTB > 1: QUAD's blocks 2 and 3
+    .clk, .we(r_we1), .wa(s_tail), .wd(r_wd1), .re(1'b1), .ra(s_rd), .rd(sr1r));
+  logic [127:0] sr2, sr2r;                   // PORTB > 1: QUAD's blocks 2 and 3
   if (WP) begin : g_fs2
     otpu_ram_1r1w #(.W(128), .N(DEPTH), .STYLE("block")) u_fs2 (
-      .clk, .we(r_we2), .wa(s_tail), .wd(r_wd2), .re(1'b1), .ra(s_rd), .rd(sr2));
+      .clk, .we(r_we2), .wa(s_tail), .wd(r_wd2), .re(1'b1), .ra(s_rd), .rd(sr2r));
   end else begin : g_nfs2
-    assign sr2 = '0;
+    assign sr2r = '0;
   end
   // row lanes: slots 4 .. 7 (the eight-stream build) and the other lanes' Sw (L - 1 words)
-  logic [127:0] sr3;
-  logic [7:1][31:0] sr4;
+  logic [127:0] sr3, sr3r;
+  logic [7:1][31:0] sr4, sr4r;
   if (RLB && NS >= 8) begin : g_fs3
     otpu_ram_1r1w #(.W(128), .N(DEPTH), .STYLE("block")) u_fs3 (
-      .clk, .we(r_we2), .wa(s_tail), .wd(r_wd3), .re(1'b1), .ra(s_rd), .rd(sr3));
+      .clk, .we(r_we2), .wa(s_tail), .wd(r_wd3), .re(1'b1), .ra(s_rd), .rd(sr3r));
   end else begin : g_nfs3
-    assign sr3 = '0;
+    assign sr3r = '0;
   end
   if (RLB) begin : g_fs4
     localparam int SWN = (NS >= 8) ? 7 : 3;
@@ -850,11 +851,14 @@ module otpu_mxu
       .clk, .we(r_we0), .wa(s_tail), .wd(tg1.swe ? r_swle[SWN:1] : r_swh[SWN:1]), .re(1'b1),
       .ra(s_rd), .rd(q));
     always_comb begin
-      sr4 = '0;
-      sr4[SWN:1] = q;
+      sr4r = '0;
+      sr4r[SWN:1] = q;
     end
   end else begin : g_nfs4
-    assign sr4 = '0;
+    assign sr4r = '0;
+  end
+  always_ff @(posedge clk) begin
+    sr0 <= sr0r; sr1 <= sr1r; sr2 <= sr2r; sr3 <= sr3r; sr4 <= sr4r;
   end
 
   // ================================================================== compute pipeline
@@ -868,24 +872,26 @@ module otpu_mxu
     logic [1:0] q;        // t2: the low stream's block in the chunk (the high stream's: q | 1)
   } cm_t;
 
-  cm_t                 m0;
-  logic [FW-1:0]       w0;                  // the entry (FIFO read register): its chunks
+  cm_t                 m0, m0p;             // (m0p: at the pop; m0 a cycle later, with w0)
+  logic [FW-1:0]       w0, w0r;             // the entry: the FIFO read register (w0r), and
+                                            //   a register later (w0, S0 proper)
   logic [MCOLS*D*8-1:0] a0;
-  // S0's ACT RAM block and scale records are the ACT RAM's registered read
+  // S0's ACT RAM block and scale records are the ACT RAM's read, registered twice there (its
+  // output register: otpu_actram, with the entry's stage above)
   assign a0 = act_data;
-  logic cu0, pr0, rs0;
-  logic [1:0] wf0;
-  logic [MCOLS-1:0] hi0;                    // PAIR: the columns of the high block
-  logic t20, qd0;                           // t2; QUAD
-  logic [MCOLS-1:0] hq0;                    // QUAD: the columns of blocks 4c+2, 4c+3
-  logic [7:0] M0;                           // the command's M (constant while its blocks flow)
-  logic rl0;                                // row lanes (constant 0 without RL), log2 L
-  logic [1:0] lg0;
+  logic cu0, pr0, rs0, cu0p, pr0p, rs0p;
+  logic [1:0] wf0, wf0p;
+  logic [MCOLS-1:0] hi0, hi0p;              // PAIR: the columns of the high block
+  logic t20, qd0, t20p, qd0p;               // t2; QUAD
+  logic [MCOLS-1:0] hq0, hq0p;              // QUAD: the columns of blocks 4c+2, 4c+3
+  logic [7:0] M0, M0p;                      // the command's M (constant while its blocks flow)
+  logic rl0, rl0p;                          // row lanes (constant 0 without RL), log2 L
+  logic [1:0] lg0, lg0p;
   wire  w40 = (wf0 != WF_W8);
   // the per-column stream select (the PE's pair, s_hq, and its INMODE, s_hi): RL column J
   // takes stream J, else the block's hq / hi
-  logic [MCOLS-1:0] s_hi, s_hi0;
-  logic [MCOLS-1:0][NSW-1:0] s_hq, s_hq0;
+  logic [MCOLS-1:0] s_hi, s_hi0, s_hi0p;
+  logic [MCOLS-1:0][NSW-1:0] s_hq, s_hq0, s_hq0p;
   wire c_rlp = RLB && pop_e.rl;             // the pop head's
   always_comb
     for (int j = 0; j < MCOLS; j++) begin
@@ -933,8 +939,15 @@ module otpu_mxu
     (* keep_hierarchy = "yes" *)
     otpu_ram_1r1w #(.W(W), .N(DEPTH), .STYLE("block")) u_fd (
       .clk, .we(b_rvalid && (!WP || b_rcm[g / FGC])), .wa(f_tl[g]), .wd(b_rdata[LO +: W]),
-      .re(1'b1), .ra(f_rdl[g]), .rd(w0[LO +: W]));
+      .re(1'b1), .ra(f_rdl[g]), .rd(w0r[LO +: W]));
   end
+  // The entry one register later (w0 <= w0r; the S0 stage below moves with it): a stage of
+  // flip-flops between the FIFO's block RAMs and the S1 decode (round 3's placement,
+  // docs/wide_port.md "Round 4 RTL": g_bram.mem_reg_bram -> wd_reg, 5 levels, 5.0 of 6.3 ns
+  // route, the 116 RAMB36 spread over the slice). Kept outside the RAM cell (its hierarchy is
+  // kept), so the placer may put each copy between its RAM and its decoders; a pop's chunk
+  // reaches S1 two cycles after the pop instead of one, a cycle on every row's latency
+  always_ff @(posedge clk) w0 <= w0r;
 `ifndef SYNTHESIS
   // the groups' address copies are f_tail and f_rd (all reset together)
   bit fd_rst;                                         // (registers start arbitrary)
@@ -948,33 +961,41 @@ module otpu_mxu
   end
 `endif
 
-  // S0: the popped chunk, its ACT RAM block and records, its scale entry
+  // S0p: the popped chunk's records at the pop (the FIFO read w0r and the ACT RAM's read are
+  // in flight); S0: the same a cycle later, alongside the entry (w0), the ACT block (a0: the
+  // ACT RAM's output register) and the scale entry (sr0 ..), which S1 decodes
   always_ff @(posedge clk) begin
-    m0 <= '0;
+    m0p <= '0;
     if (pop) begin
-      m0.v <= 1'b1;
-      m0.last <= last_k;
-      m0.first <= (ck == 16'd0);
-      m0.h <= c_w4 && !c_pair && ck[0];
-      m0.o <= c_pair && (c_qd ? q_o1 : !(last_k && c_KB[0]));
-      m0.o2 <= c_qd && q_o2;
-      m0.o3 <= c_qd && q_o3;
+      m0p.v <= 1'b1;
+      m0p.last <= last_k;
+      m0p.first <= (ck == 16'd0);
+      m0p.h <= c_w4 && !c_pair && ck[0];
+      m0p.o <= c_pair && (c_qd ? q_o1 : !(last_k && c_KB[0]));
+      m0p.o2 <= c_qd && q_o2;
+      m0p.o3 <= c_qd && q_o3;
       // t2: block ck mod 4 (PAIR: 2 (ck mod 2) and the next; QUAD: all four, 0 on the low)
-      m0.q <= (!c_t2 || c_qd) ? 2'd0 : c_pair ? {ck[0], 1'b0} : ck[1:0];
+      m0p.q <= (!c_t2 || c_qd) ? 2'd0 : c_pair ? {ck[0], 1'b0} : ck[1:0];
     end
-    cu0 <= c_unit;
-    rs0 <= c_rsc;
-    wf0 <= c_wf;
-    pr0 <= c_pair;
-    hi0 <= c_hi;
-    t20 <= c_t2;
-    qd0 <= c_qd;
-    hq0 <= c_hq;
-    M0 <= p_M;
-    rl0 <= c_rlp;
-    lg0 <= !RLB ? 2'd0 : pop_e.M[3] ? 2'd3 : pop_e.M[2] ? 2'd2 : 2'd1;   // (log2 L: M' = L)
-    s_hi0 <= s_hi;
-    s_hq0 <= s_hq;
+    cu0p <= c_unit;
+    rs0p <= c_rsc;
+    wf0p <= c_wf;
+    pr0p <= c_pair;
+    hi0p <= c_hi;
+    t20p <= c_t2;
+    qd0p <= c_qd;
+    hq0p <= c_hq;
+    M0p <= p_M;
+    rl0p <= c_rlp;
+    lg0p <= !RLB ? 2'd0 : pop_e.M[3] ? 2'd3 : pop_e.M[2] ? 2'd2 : 2'd1;   // (log2 L: M' = L)
+    s_hi0p <= s_hi;
+    s_hq0p <= s_hq;
+  end
+  always_ff @(posedge clk) begin
+    m0 <= m0p;
+    cu0 <= cu0p; rs0 <= rs0p; wf0 <= wf0p; pr0 <= pr0p; hi0 <= hi0p; t20 <= t20p;
+    qd0 <= qd0p; hq0 <= hq0p; M0 <= M0p; rl0 <= rl0p; lg0 <= lg0p;
+    s_hi0 <= s_hi0p; s_hq0 <= s_hq0p;
   end
 
   // ---- the shifts: per block its eight groups' W - dw and m (S1), per column and group
@@ -1194,11 +1215,12 @@ module otpu_mxu
       // column's hop: a copy of wc[j]
       localparam int JW = (j == 0) ? 0 : j - 1;
       // (T2: column 0 is never QUAD's hq: c_hq[0] is 0, so its unregistered weights see no
-      // select; RL: column J takes stream J, the pair J / 2 by s_hq, within it by s_hi)
-      wire [15:0] wp = (QD && j != 0) ? wc[JW][i][16 * s_hq[j] +: 16] : wc[JW][i][15:0];
+      // select; RL: column J takes stream J, the pair J / 2 by s_hq, within it by s_hi: the
+      // pop-time registers s_hq0p / s_hi0p, per-command constants, a cycle before S0's)
+      wire [15:0] wp = (QD && j != 0) ? wc[JW][i][16 * s_hq0p[j] +: 16] : wc[JW][i][15:0];
       otpu_pe #(.FIRST(i % CLS == 0), .LAST(i % CLS == CLS - 1), .WREG(j != 0)) u_pe (
         .clk, .en(1'b1), .act(as_k[j][i]), .wlo(wp[7:0]), .whi(wp[15:8]),
-        .sel(s_hi[j]),
+        .sel(s_hi0p[j]),
         .pcin((i % CLS == 0) ? 48'd0 : pc[j][(i % CLS == 0) ? i : i - 1]), .pcout(pc[j][i]),
         .p(preg[j][i]));
 `ifndef SYNTHESIS
@@ -1594,7 +1616,11 @@ module otpu_mxu
   // write request (the RMAX lanes), which the slice's write-bank arbiter turns into the grant;
   // from mx_done through the request, the arbiter, the grant's read enables and the TMEM's
   // replay logic was r2.1's m8 163ab46d's one failing path (-0.003 ns, 14 levels)
-  logic mx_gq;
+  // (max_fanout: a copy per 128 loads. mx_go selects the RMAX write's LANES addresses and
+  // words into the TMEM request and enables it, ~600 LUTs; round 3's placement ran mx_gq_reg
+  // through the request, the slice's arbiter and the grant into the epilogue lanes' enables,
+  // 9 levels with 5.2 of 6.1 ns route, docs/wide_port.md "Round 4 RTL")
+  (* max_fanout = 128 *) logic mx_gq;
   wire mx_go     = mx_gq;
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst && mx_gq != (mx_q && !mx_done))

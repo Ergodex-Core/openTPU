@@ -12,8 +12,10 @@
 //
 // Block RAM: one memory per column j (rows j, j+MCOLS, ...) and piece p (bytes p*PB ..
 // p*PB+PB-1: four 64-bit block RAMs at PB = 32), GROUPS*BLOCKS words of PB bytes with byte
-// write enables, group-major. The read is registered (the MXU's first pipeline register) and
-// advances with the column's `ren` bit (otpu_mxu: the columns of the MM's rows); a read of a block written at the same edge returns the old bytes. Writes
+// write enables, group-major. The read is registered and advances with the column's `ren` bit
+// (otpu_mxu: the columns of the MM's rows), then registered once more (rdq / rsq, the RAM's
+// output register: the MXU's S0, which its entry reaches through a register of its own since
+// round 4, docs/wide_port.md); a read of a block written at the same edge returns the old bytes. Writes
 // land three cycles after they are presented: the quantizer's write is registered as it arrives
 // and again (LANES bytes, their index and row, the scale), so it crosses from the quantizer in
 // that narrow form in two hops and the lane placement (LANES -> D bytes) starts at a flip-flop
@@ -178,26 +180,29 @@ module otpu_actram #(
       (* keep *) logic [BW-1:0] wb;
       (* keep *) logic          wsel;
       (* keep *) logic [GW-1:0] wg;
-      logic [PB*8-1:0] rd;
+      logic [PB*8-1:0] rd, rdq;
       always_ff @(posedge clk) begin
         wb <= w_idx_h[DW +: BW];
         wsel <= wsel_n[j];
         wg <= wg_n[j];
+        rdq <= rd;
       end
       wire [GW+BW-1:0] wa = (GROUPS > 1) ? {wg, wb} : (GW+BW)'(wb);
       // the piece's bytes: a technology RAM with byte enables (rtl/tech)
       otpu_ram_1r1w_be #(.W(PB*8), .N(GROUPS*BLOCKS), .STYLE("auto")) u_act (
         .clk, .we(wsel), .wbe(wbe[p*PB +: PB]), .wa(wa[RAW-1:0]), .wd(wd[p*PB*8 +: PB*8]),
         .re(ren[j]), .ra(ra[RAW-1:0]), .rd);
-      assign r_data[j*D*8 + p*PB*8 +: PB*8] = rd;
+      assign r_data[j*D*8 + p*PB*8 +: PB*8] = rdq;
 `ifndef SYNTHESIS
       initial wsel = 1'b0;
 `endif
     end
     // the column's block scale records
+    logic [63:0] rsq;
     otpu_ram_1r1w #(.W(64), .N(GROUPS*BLOCKS), .STYLE("auto")) u_asc (
       .clk, .we(ssel[j]), .wa(sa[RAW-1:0]), .wd(sd), .re(ren[j]), .ra(ra[RAW-1:0]), .rd(rs));
-    assign r_scale[j*64 +: 64] = rs;
+    always_ff @(posedge clk) rsq <= rs;
+    assign r_scale[j*64 +: 64] = rsq;
 `ifndef SYNTHESIS
     // a consumed read of a block (or its scale) with a write in any register: it would return
     // the old bytes
