@@ -983,6 +983,67 @@ control chain's master next to the shell's OCL interface (its SLR from the path'
 address pipelined one stage, a cycle of TMEM latency), `mx_gq` replicated per MXU row group and
 the weight FIFO's read data registered in the BRAM's output register.
 
+**Round 4 RTL (2026-10-18; Verilator only, the nightly builds it).** The four fixes of that
+list, each bit-exact on the RTL tests and the decode receipt, in four commits:
+
+1. **hclk_raw, the bridge's beat register** (rtl/boards/f2/otpu_f2_hbm_nch.sv): the head's load
+   is one net, `k_ld = !k_v || k_pop`, declared `(* max_fanout = 64 *)`, and the beat `k_d`
+   (576 flip-flops) loads on it alone, not qualified by `x_v` or the reset (what loads while no
+   command is held is never read: `k_v` is 0); the command's 28 bits keep the qualification.
+   Synthesis replicates the net's LUT per 64 enables (ten copies, each beside its loads) instead
+   of one LUT into 604. No protocol change, no cycle change.
+2. **clk_raw -> clk_f_raw, the pumped TMEM RAM** (rtl/mem/otpu_tmem.sv `g_pmp`): a RAM of the
+   one copy (RD = 4,096 x 32 bits: four RAMB36, 64 in the TMEM, not 16 a bank as the table
+   says) is now `NPG` = RD / `PMPG` pieces of PMPG = 1,024 words (one RAMB36 at 1K x 36 TDP), an
+   `otpu_pump_bank` each (`g_pc[g].u_pb`), the row's top bits the piece, each with **its own
+   copy of the registered write stage** (`g_pc[g].pk_v / pk_a / pk_d`, `keep`: the sub-bank
+   decode, the row and the piece compare taken before the register), so a piece's address and
+   data pins (clk_f, half a core period from the register) come from flip-flops with one RAMB36
+   as their load, through the bank's one `ad_a` LUT. A read goes to every piece; the word is
+   selected by a register loaded with the read (`g_sel.gs`, per side: it holds, as the RAM's
+   output does, until the side's next read), one LUT level on the clk_f -> clk path (two fast
+   periods by the contract). otpu_clk2x.tcl is untouched: it collects every `otpu_pump_bank`
+   (4x the cells, the same `ra / rb / rena / renb / qa / qb` pins), the multicycle holds, the
+   write path is timed as before. No cycle of TMEM latency added; no cycle change.
+3. **clk_raw, the MXU** (rtl/mxu/otpu_mxu.sv, rtl/mem/otpu_actram.sv):
+   (a) `mx_gq` is `(* max_fanout = 128 *)` (it selects the RMAX write's LANES addresses and
+   words into the TMEM request and enables it, ~600 LUTs). The 9-level cone to `p1_sw_reg` is
+   the request (`t_wen / t_waddr`, a priority select by `lo.v / rw.v / mx_go / al_go`), the
+   slice's write-bank arbiter and the grant (`gnt`, replicated per 256) into the epilogue
+   lanes' enables: no retime without registering the write request (a cycle on every TMEM
+   write of the MXU, as the read request already is), so left at the replication.
+   (b) the weight FIFO's path: the entry is **a register later**, `w0 <= w0r` (`w0r` the FIFO
+   RAMs' read register; 4,096 flip-flops outside the kept RAM cells, so the placer may put each
+   between its RAMB36 and its decoders: a fabric stage splits the 5.0 ns of route, where the
+   RAMs' own output register would only take the clock-to-out), and the stage the chunk is
+   decoded with moves with it: the pop-time records are `S0p` (`m0p, wf0p, ...`), `S0` proper
+   (`m0, wf0, ...`, what S1 decodes) a cycle later, the scale entry RAMs' read registers
+   `sr*r` -> `sr*`, and the ACT RAM's block and records through its output register
+   (otpu_actram `rdq / rsq`: inferred into the block RAMs' DO registers). The PEs' stream
+   selects take the pop-time registers (`s_hi0p / s_hq0p`, per-command constants). A pop's
+   chunk reaches S1 two cycles after the pop instead of one: **a cycle on every row** from
+   its last pop to its result, hidden under the stream except at a command's tail. Measured
+   (the receipt below): int8 949,497 cycles against 949,474 (+23 cycles, +0.002%), int4 565,678
+   against 565,739 (-61, -0.011%).
+4. **clk_main_a0, the host's PCIS side** (rtl/boards/f2/otpu_f2_hbm_host.sv; not in round 3's
+   list, the one regression): every PCIS output is a flip-flop. AW, W and AR enter two-entry
+   skid buffers (`otpu_f2_hbm_skid`, `u_pcis_aw / _w / _ar`: the ready a register, the second
+   slot free; the beat the logic sees from the first slot's registers), B and R leave through
+   output registers (`otpu_f2_hbm_oreg`, `u_pcis_b / _r`). The order rule (`pcis_wbusy` holds
+   the reads) moved from the AR handshake to the AR's exit from its buffer, and `pcis_wbusy`
+   counts the buffers' beats. The shell's register -> `u_host` LUT -> the shell's register
+   path (two SLR hops, -5.01 ns) becomes shell -> flip-flop and flip-flop -> shell, each a hop;
+   the floorplan can hold `u_host/u_pcis_*` in SLR1 by the shell's PCIS register (round 4's
+   placement, with `u_ocl`). Not on the token: the receipt is the same.
+
+Tests (the m7a box, Verilator 5.048, `-n 16`): tests/test_f2_rtl.py 16 passed, tests/test_rtl.py
+`-k "replay or act_reads or attention or lane_count"` 27 passed, 1 skipped (PAIR at M > MCOLS / 2), tests/test_wide_port_rtl.py
+168 passed, tests/test_observability.py 18 passed. The receipts (`OTPU_TARGET=f2-hbm OTPU_NCH=8`,
+`--lat 60`, 200 MHz, 4 layers + head, PORTB 4 / MCOLS 8 / RL 4 / ALINE 64): fixes 1, 2 and 4
+alone (c4c6e23a, 1f8dccca, 7d3da502) int8 949,474 cycles, the baseline's 949,474 exactly; with fix 3
+int8 949,497 (+23 cycles, +0.002%), int4 565,678 (-61, -0.011%). LPN (tools/wideport_lpn.py, the same
+model, nothing refitted) against the new receipt: int8 988,141 estimated against 949,497 measured (+4.07%; head +5.4%, MLP 224,931 vs 222,512 +1.1%, attention 39,344 vs 40,158 -2.0%; mean |error| 2.8%), int4 599,271 against 565,678 (+5.9%; head 439,818 vs 406,616 +8.2%, MLP 130,408 vs 128,593 +1.4%, attention 29,045 vs 30,467 -4.7%; mean 4.7%): the model is unchanged (nothing in it moves with the MXU's stage), the RTL numbers moved by 0.002% / 0.011%, so the calibration table above stands to its last digit for int8 and gains an int4 per-phase line.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

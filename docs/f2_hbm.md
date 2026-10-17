@@ -102,8 +102,9 @@ MHz instead of at 450. Reads in flight are at most RD = 64 (the return FIFO's de
 never stalled; the HBM's B count steps by one an hclk cycle toward the bursts' beat totals and
 crosses back gray-coded (n_wdone).
 
-HBM side (450 MHz): the crossing's head is held in a register (its LUT RAM read off the compare),
-then **joins the open burst** when it continues it (same direction, next beat, below BMAX = 8
+HBM side (450 MHz): the crossing's head is held in a register (its LUT RAM read off the compare;
+the beat's 576 enables take the load's one net, `k_ld`, replicated by synthesis per 64 of them,
+docs/wide_port.md "Round 4 RTL"), then **joins the open burst** when it continues it (same direction, next beat, below BMAX = 8
 native beats = 16 AXI beats, AXI3's longest, not across a BMAX boundary so never across 4 KiB),
 else the open burst closes into a 2-deep AR or AW queue and the head opens the next. An open
 burst also closes after GATHER = 4 hclk cycles (~9 ns) without a command: the core sends at most
@@ -117,6 +118,17 @@ per channel, three times a stream's share at NCH = 8 (3.2 GB/s) and 1.6 times at
 channel alone at the core's full rate (12.8 GB/s) would need ~80.
 
 ### The host path (otpu_f2_hbm_host)
+
+PCIS side (aclk, 250 MHz): every output to the shell is a flip-flop. AW, W and AR enter
+two-entry skid buffers (`otpu_f2_hbm_skid`: the ready a register, the beat the logic sees from
+the buffer's output register), B and R leave through output registers (`otpu_f2_hbm_oreg`:
+valid and data loaded when the shell took the last beat or none is held), so no path runs from
+a shell register through the block and back in the 4 ns cycle (round 3's placement ran the
+shell's PCIS register in SLR1 into the readies' LUTs in SLR0 and back at -5.01 ns,
+docs/wide_port.md "Round 4 RTL"). An AR leaves its buffer for the read queue only while no
+write is in flight (`pcis_wbusy`, below, counts the buffers' beats): the order rule as before,
+its gate moved from the shell handshake to the buffer's exit. The instances are `u_pcis_*`, so
+a floorplan can hold them beside the shell.
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
 written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
