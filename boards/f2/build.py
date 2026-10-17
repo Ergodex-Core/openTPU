@@ -359,6 +359,9 @@ def main() -> None:
     p.add_argument('--route-sha256', help='expected routed checkpoint digest; required with --package-only')
     p.add_argument('--prepare-only', action='store_true')
     p.add_argument('--build-id', default=None, help='eight hexadecimal digits; defaults to HEAD')
+    p.add_argument('--place-directive', default='SSI_SpreadLogic_high',
+        help="place_design's directive for build_all.tcl's first tclarg (SSI_SpreadLogic_high: the "
+             "flow's since its first run; SSI_SpreadLogic_low keeps the slice together: docs/wide_port.md Placement)")
     a = p.parse_args()
     t = target.load(a.target)
     if t.platform.get('board') != 'f2':
@@ -404,7 +407,7 @@ def main() -> None:
         HDK_BD_GEN_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd'),
         VIVADO_TOOL_VERSION=t.platform['vivado'])
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
-        '-journal', str(out / 'vivado.jou'), '-tclargs', 'SSI_SpreadLogic_high',
+        '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
     (out / 'invocation.json').write_text(json.dumps({'command': cmd,
         'cwd': str(cl / 'build/scripts'),

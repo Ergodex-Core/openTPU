@@ -607,6 +607,88 @@ OTPU_MCOLS=8 16 of 18 (the two that fail, test_mxu_starve_counter's cyc[20] < 0.
 identically on the commit before: their thresholds are PORTB 1 / 2's). The re-synthesis of
 this fix is the nightly's to report.
 
+### Placement (f2-hbm:p4rl8, the first placed build, 2026-10-17)
+
+The first synthesis and placement of `f2-hbm:p4rl8` (PORTB 4 / MCOLS 8 / RL 8 / NCH 8 on the
+VU47P with the F2 HDK shell, Vivado 2025.2; post-synthesis 251,520 LUT, 196,289 FF, 426 BRAM,
+1,275 DSP) placed at WNS -4.888 ns, TNS -123,690 ns, 102,854 failing endpoints of 1,019,569.
+The post-synthesis report had only the MXU's `mkr` family failing (the other work on this
+branch); everything else appeared at placement, 90-97% of each path routing: fan-out, bus
+width and SLR distance, not logic depth. By domain, with what changed for it (every change
+bit-exact with the ISA simulator; nothing in tb_top's sources, so the regression suites'
+cycles are the same by construction):
+
+* **hclk (450 MHz, 2.222 ns): WNS -4.888, 34,489 failing endpoints of 110,006**, the worst 600
+  into `u_port/m_wdata_reg` (327) and `m_wstrb_reg` (115), `u_host/btarget_reg`, `m_awaddr_reg`
+  and the bridges' `u_rq` LUT RAMs, from `hbm_reset_n_reg` (120), `u_host/hw_s_reg` (115),
+  `hw_d_reg` (110), `ws_reg`'s replicas (213) and `rq_d_reg` (18): 2 levels and 6.9 ns of
+  route. The arithmetic: the host path's head beat is one 512-bit register (`hw_d`, two AXI
+  beats) whose half, selected by `ws`, went on a shared 256-bit bus to all 8 ports' arbiters,
+  whose W registers (8 x 256 = 2,048 bits, 8 x 32 of strobe) took it on their own `wsel`: each
+  `hw_d` bit 8 loads across the ports, `ws` 8 x 288 = 2,304 mux selects (hence the replicas),
+  and the 8 ports' R data (8 x 256 bits, from the HBM pins through the arbiters) AND-ORed into
+  `rq_d` in one cycle. None of it is PORTB's: the hclk domain has no PORTB, the host's bus is
+  256 bits at PORTB 1 and 4 alike (the "4096-bit" register is the 8 ports' 256-bit W and R
+  registers seen together), so this is inherited from f2-hbm and will show in its base build
+  too. The change (the smallest of the three options: not a narrower host path, which is
+  already a port's width; not the host into clk through the adapter, which would move the
+  ordering contract): **a register per port for the host's master** (`otpu_f2_hbm_hreg` in
+  otpu_f2_hbm_mem: AW, W, AR taken from the host when empty, the ready a flip-flop; R and B
+  registered back), so every net between the host block and a port starts and ends at a
+  register with the cycle for its route, and no hclk net carries more than one port's 256
+  bits. The host's write rate goes from a beat per ~4 to ~7 hclk cycles (4 GB/s against the
+  PCIe's 2). The reset: `hbm_reset_n[2]` (an ASYNC_REG flip-flop, not replicated) drove ~1,250
+  reset pins along the HBM's 8 ports (a bridge's hclk side ~130 with its two crossings, the
+  arbiters, the host path's ~150); now a register in otpu_f2_hbm_mem (max_fanout 4) and one in
+  every module (nch, port, hreg, host), three flip-flops from the synchronizer to any pin.
+* **clk (200 MHz, 5.0 ns): WNS -4.052, 66,008 failing endpoints of 894,614**: `core_reset_n_reg`
+  (406 of the worst 600: 4 levels, 92% route), `u_nch/cf_h_reg` into the bridges' `u_xq`
+  crossing (160: 9 levels), `u_mxu/mk_reg -> mkr_reg` (32: the other work). The reset:
+  `core_reset_n[2]` drove, with no register of its own, ~4,700 pins: the adapter's ~2,200
+  (per channel the queue, tag and FIFO counters, the 64 hazard-bucket flags, the 8 B-tail
+  copies), the 8 bridges' core sides (~230 each with the crossings' pointers and the 64 read
+  tags), the control block, the trace, the loader and the slice's port registers; the units'
+  ~15k are already behind core_rst's tree (otpu_board, otpu_slice). Now otpu_board registers
+  it (`rst_q`, max_fanout 128: synthesis replicates it as it does core_rst, each replica by its
+  loads) for everything but go_ok / core_rst, and otpu_f2_hbm_mem and each bridge register it
+  again. `cf_h` is not the channel hash (that is the adapter's `pair_of`, registered at BREG
+  since f2-hbm): it is the bridge's command FIFO head pointer, and the 9 levels were the head's
+  LUT RAM read into the order check's 80 compares of 25 bits (16 writes and 64 reads in
+  flight), the issue, and the crossing's 600 write enables. Now the head is a register
+  (`h_*`: the compares and the issue start from flip-flops) and the crossing writes its tail
+  slot every cycle there is room (`otpu_afifo` `WT`, with `RWR`): the issue moves only the
+  pointer. A command issues a core cycle later than before (5 ns on the HBM's ~400); the order
+  check, the request order and the adapter are untouched, so the two-part reads
+  (`NATIVEB split`: 0 with row lanes, 7.3% at PORTB 2 QUAD on Gemma's 9-chunk rows) are the
+  same counters on the same adapter.
+* **clk -> clk_f (the pumped TMEM, 2.5 ns): WNS -2.356, 2,067 endpoints**: `u_vpu/ta_addr_reg`
+  (60) and `rl_pq_reg` (40) into the pumped banks' ADDRARDADDR, 7-10 levels, 90% route. These
+  paths are the ones otpu_clk2x.tcl gives one core period (multicycle 2 -end from clk through
+  `u_pb`'s read pins; the HBM synthesis script errors out if it is not applied, and the
+  post-synthesis report met it): the VPU's `ta_addr` *is* the register at the pump boundary
+  (release r2's input stage), and what follows it, TMEM's rotation, sub-bank hash and rank
+  multiplexer into 128 RAMB36 spread over the slice, is the read's own cycle. A further
+  register would be a cycle of TMEM read latency on every port, which every unit's data
+  pipeline and the replay protocol assume (not a local change; not made). What the report
+  says is that 5 ns did not cover 7-10 levels plus ~6 ns of route: the placement spread the
+  slice (a flow matter, below), and the path requirement to check in the report is 5.000, not
+  2.500.
+* **clk_main_a0 (250 MHz): WNS -0.744, 265 endpoints; clk_main_a0 -> hclk -2.861 (45)**: the host
+  path's aclk side and its crossings into hclk. The PCIS W crossing now writes its tail every
+  cycle (`WT`), so the PCIS W take reaches 604 fewer write enables; the crossing bounds (below)
+  are the rest.
+
+**What the build flow must add** (not RTL): (1) the placement strategy: build.py runs the HDK's
+build_all with `SSI_SpreadLogic_high`, which spreads one slice of 250K LUTs over the three
+SLRs; the slice with its adapter wants one SLR and the HBM fabric (u_sys/u_mem: bridges, host
+registers, arbiters, host path) the bottom of SLR0 by the HBM's AXI ports: pblocks for the
+two, and `Default` or `SSI_SpreadLogic_low`; (2) the crossings' bounds: cl_timing_user_hbm.tcl
+now bounds each direction by the *destination* clock's period (it bounded both by the smaller
+of the pair: the bridges' return FIFOs' data into the core at 2.2 ns across an SLR instead of
+5); (3) with the pblocks, the bridges' core sides (the adapter's 512-bit native buses, 5 ns)
+are the SLR crossing, as docs/f2_hbm.md planned. The base f2-hbm build at the same commit
+shows what of this the shell and the host path already fail at PORTB 1.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

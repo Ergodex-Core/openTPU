@@ -24,11 +24,19 @@
 // beat it takes is lost with those already in the FIFO. The RAM's write address is a copy of the
 // write pointer of its own then, replicated by synthesis (MAX_FANOUT) over the RAM's width (the
 // XDMA side at 250 MHz, PCIe Gen2).
+//
+// WT = 1 (with RWR, not OOO): the tail slot is written every cycle there is room (wready), with
+// whatever wdata shows; wvalid only advances the pointer. The slot at the write pointer is never
+// live while wready is high (the room is against the read pointer as synchronized, which only
+// grows), so the RAM's write enables are the registered wready alone, not the writer's decision:
+// the F2 HBM bridge's command issue (its hazard compares) and the host path's PCIS W take ran
+// into the crossing's 600 write enables (the p4rl8 placement, docs/wide_port.md "Placement").
 module otpu_afifo #(
   parameter int W = 32,
   parameter int DEPTH = 16,
   parameter bit OOO = 1'b0,
-  parameter bit RWR = 1'b0
+  parameter bit RWR = 1'b0,
+  parameter bit WT  = 1'b0
 ) (
   input  logic         wclk,
   input  logic         wrst,
@@ -47,6 +55,7 @@ module otpu_afifo #(
 );
   localparam int AW = $clog2(DEPTH);
   initial if (DEPTH != (1 << AW) || DEPTH < 4) $fatal(1, "otpu_afifo: DEPTH must be a power of two >= 4");
+  initial if (WT && (OOO || !RWR)) $fatal(1, "otpu_afifo: WT needs RWR and not OOO");
 
   (* ram_style = "distributed" *) logic [W-1:0] mem [DEPTH];
   logic [AW:0] wbin, wgray, rbin, rgray;
@@ -64,6 +73,7 @@ module otpu_afifo #(
   logic [AW:0] rbin_w;
   logic        wput, wadv;
   logic [AW-1:0] waddr, wa;
+  logic          wmem;                     // the RAM's write enable (WT: the tail every cycle there is room)
   logic [DEPTH-1:0] wvld;                  // OOO: slots written, not yet passed
   assign rbin_w = g2b(rgray_w2);
   assign wused  = wbin - rbin_w;
@@ -72,14 +82,20 @@ module otpu_afifo #(
     always_ff @(posedge wclk)
       wrdy <= !wrst && ((wbin + (AW + 1)'(wput)) - rbin_w) != (AW + 1)'(DEPTH);
     assign wready = wrdy;
+    // the RAM's write address, and with WT its write enable (wrdy), as copies over its width
     (* max_fanout = 32 *) logic [AW-1:0] wa_q;
+    (* max_fanout = 32 *) logic wput_q = 1'b0;
+    always_ff @(posedge wclk)
+      wput_q <= WT && !wrst && ((wbin + (AW + 1)'(wput)) - rbin_w) != (AW + 1)'(DEPTH);
     always_ff @(posedge wclk)
       if (wrst) wa_q <= '0;
       else if (wadv) wa_q <= wbin[AW-1:0] + 1'b1;
     assign wa = wa_q;
+    assign wmem = WT ? wput_q : wput;
   end else begin : g_cwr
     assign wready = !wrst && (wused != (AW + 1)'(DEPTH));
     assign wa = wbin[AW-1:0];
+    assign wmem = wput;
   end
   assign wput   = OOO ? (wvalid && !wrst) : (wvalid && wready);
   assign waddr  = OOO ? wslot : wa;
@@ -97,7 +113,7 @@ module otpu_afifo #(
       end
     end
   end
-  always_ff @(posedge wclk) if (wput) mem[waddr] <= wdata;
+  always_ff @(posedge wclk) if (wmem) mem[waddr] <= wdata;
   if (OOO) begin : g_ooo
     always_ff @(posedge wclk) begin
       if (wrst) wvld <= '0;
