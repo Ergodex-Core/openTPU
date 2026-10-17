@@ -36,7 +36,7 @@ class Config:
     T2: bool = False         # t2 weights (MM WF 1 + rs bit 0), MM QUAD and QACT DUP4
     #                          (docs/ternary.md; CAPS bit28)
     PACK: bool = False       # the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md;
-    #                          CAPS2 bit1): an int8 MM's rate doubles (2 MCOLS logical columns,
+    #                          CAPS2 bit6): an int8 MM's rate doubles (2 MCOLS logical columns,
     #                          two chunks a cycle at full rate: isa.chunks_per_cycle). No
     #                          program or result changes; the ISA simulator ignores it
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries

@@ -72,7 +72,7 @@ module otpu_board #(
                                        // GATHER (otpu_coll_bar; CAPS2 bit0 = 0, docs/infra_hunt.md 5)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait entries (WAITC, docs/seq_vpu.md; CFG_UARCH bit24)
   parameter bit T2          = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
-  parameter bit PACK        = 1'b0,    // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit1)
+  parameter bit PACK        = 1'b0,    // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
   parameter int PLATFORM    = 0,       // the target's platform id (CFG_PLATFORM; opentpu/target.py)
   parameter logic [31:0] ARCH_HASH = 32'h0  // the target's arch_hash (CFG_HASH)
 ) (

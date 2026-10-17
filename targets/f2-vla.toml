@@ -41,7 +41,7 @@ STREAM = false
 SEQ_WC = true
 T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cycle)
 PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
-PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit1). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
+PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit6). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
 
 [uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS (plan L5,
                                 # measured on the RTL, docs/pi05.md 5.4): a packed pass yields
@@ -57,6 +57,9 @@ VPU_CL = 16
 ULANES = 64                     # the MXU drain and the quantizer on every TMEM lane
 TMEM_IMPL = 3
 TMEM_NSB = 2
+TMEM_SBP = 6                    # the sub-bank field's word-address bit: log2 LANES (otpu_tmem: SBP >= log2
+                                # LANES); the RTL's default 3 is LANES 8's and Vivado's elaboration of
+                                # f2-vla failed on it, while rtlsim derived 6 (the toml states it now)
 TMEM_RPL = true
 TMEM_TDP = true
 TMEM_GST = true

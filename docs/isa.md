@@ -271,7 +271,7 @@ rows.
 
 #### Packed int8 (PACK builds)
 
-A build with `PACK` (Config.PACK; CAPS2 bit1; docs/mxu_packing.md) computes int8 MMs (`WF = 0`)
+A build with `PACK` (Config.PACK; CAPS2 bit6; docs/mxu_packing.md) computes int8 MMs (`WF = 0`)
 two weight rows at a time: the MXU's DSPs form `w[2p] + w[2p+1] * 2^19` in their pre-adders and
 each physical column yields output columns `n = 2p` and `2p+1` of a pass, so MCOLS physical
 columns are 2 MCOLS logical ones and an int8 MM takes `ceil(N/2) * KB * ceil(M / MCOLS)`

@@ -258,7 +258,7 @@ In otpu_mxu's array, one physical column j (ACT row j and its replay groups) wit
 
 ## 7. The integration (phase 3): results
 
-Status: built on branch `vla-pack` (otpu_mxu `PACK`, default 0; Config.PACK, CAPS2 bit1, in the
+Status: built on branch `vla-pack` (otpu_mxu `PACK`, default 0; Config.PACK, CAPS2 bit6, in the
 CFG_HASH when on; docs/mxu_systolic.md "Packed int8 weights" for the array). What section 6
 said, what was built, and what did not survive:
 

@@ -50,7 +50,7 @@
 // (a_gnt/b_gnt). A row's first advance pops only once all of the row's chunks and scales are in
 // the FIFOs, so a row never stalls in its middle and the array needs no clock enable.
 //
-// PACK (docs/mxu_packing.md 6; CAPS2 bit1): every position is a packed DSP (otpu_pe_pk: A = the
+// PACK (docs/mxu_packing.md 6; CAPS2 bit6): every position is a packed DSP (otpu_pe_pk: A = the
 // low stream, D = the high stream << 19 in the pre-adder, two int8 products a cycle), each chain
 // end is split into two lanes (L = sext19(P[18:0]), H = P[47:19] + P[18], the borrow in the
 // high lane's column end's pre-adder: otpu_mxce CPG 2), and a physical column has two column
@@ -86,7 +86,7 @@ module otpu_mxu
   parameter int E     = 0,       // epilogue lanes (0: MCOLS / 2, at least 1; more than MCOLS: MCOLS)
   parameter bit T2    = 1'b0,    // t2 weights and MM QUAD (docs/ternary.md; CAPS bit28)
   parameter bit PACK  = 1'b0,    // two int8 weight rows a DSP: 2 MCOLS logical columns for W8
-                                 // (docs/mxu_packing.md; CAPS2 bit1)
+                                 // (docs/mxu_packing.md; CAPS2 bit6)
   parameter int SID   = 0
 ) (
   input  logic                  clk,

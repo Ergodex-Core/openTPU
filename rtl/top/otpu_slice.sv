@@ -87,7 +87,7 @@ module otpu_slice
                                       //   FIFO is half full, else the VPU (see the arbiter)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
-  parameter bit PACK       = 1'b0     // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit1)
+  parameter bit PACK       = 1'b0     // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused

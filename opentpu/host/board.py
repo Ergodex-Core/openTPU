@@ -1380,7 +1380,7 @@ def device_config(info: dict, **kw):
     pack = bool(caps2.get("pack"))
     for k, have, what in (("PAIR", pair, "column reuse (CAPS bit5)"),
                           ("T2", t2, "t2 weights (CAPS bit28)"),
-                          ("PACK", pack, "the MXU's int8 weight packing (CAPS2 bit1)"),
+                          ("PACK", pack, "the MXU's int8 weight packing (CAPS2 bit6)"),
                           ("DSTEP", dstep, "DSTEP (CAPS bit6)"),
                           ("STREAM", stream, "the stream engine (CAPS bit26)")):
         env = os.environ.get(f"OTPU_{k}")

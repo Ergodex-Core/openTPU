@@ -77,9 +77,12 @@ CAPS2_SINCE, R_CAPS2 = 5, 0x5C
 # on a GATHER, and the host refuses to load a program with one (Board.load_program). Every
 # bitstream before version 5 has GATHER.
 CAP2_GATHER = 1
-# CAPS2 bit1: the MXU packs two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md):
-# an int8 MM's rate doubles; no program or result changes (Config.PACK, in the CFG_HASH when on)
-CAP2_PACK = 2
+# CAPS2 bit6: the MXU packs two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md):
+# an int8 MM's rate doubles; no program or result changes (Config.PACK, in the CFG_HASH when on).
+# Bits [3:1] are the wide-port branch's PORTB field (the chunks a cycle port B takes), bit4 its
+# ROWLANES and bit5 its ALINE (docs/wide_port.md, docs/row_lanes.md there), so PACK sits above
+# them: the branches merge without a clash
+CAP2_PACK = 64
 
 
 def caps2(v: int | None) -> dict:

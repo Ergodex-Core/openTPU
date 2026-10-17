@@ -59,7 +59,7 @@
 //   0x58 ACT_ROWS  RO  ACT RAM rows: the most rows of one MM (build parameter; CAPS bit24)
 //   0x5C CAPS2     RO  (version 5; CAPS is full) bit0 GATHER: the collective unit runs GATHER
 //                      (always at S > 1; at S = 1 unless built without it, otpu_board COLL_GATHER:
-//                      then BAR alone, and a GATHER raises ERROR); bit1 PACK: the MXU packs
+//                      then BAR alone, and a GATHER raises ERROR); [5:1] the wide-port branch's PORTB / ROWLANES / ALINE (0 here); bit6 PACK: the MXU packs
 //                      two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md: an
 //                      int8 MM's rate doubles; no program or result changes)
 //   0x60 + 4k      RW  ARG0..ARG7: the run's arguments, R8..R15 when RUN rises (CAPS bit25;
@@ -111,7 +111,7 @@ module otpu_ctrl #(
   parameter bit HOSTCAL = 1'b0,          // CAPS bit27: the host calibrates the DDR3 controllers
   parameter bit COLL_GATHER = 1'b1,      // CAPS2 bit0 (with S > 1): the collective unit runs GATHER
   parameter bit T2 = 1'b0,               // CAPS bit28: t2 weights, MM QUAD, QACT DUP4
-  parameter bit PACK = 1'b0,             // CAPS2 bit1: the MXU packs two int8 weight rows a DSP
+  parameter bit PACK = 1'b0,             // CAPS2 bit6: the MXU packs two int8 weight rows a DSP
   parameter int LDP = 2,               // cycles after LOAD before the loaders' busy shows (>= 2)
   // the configuration registers (CFG_*, register map 4): the target's values
   parameter int S          = 1,
@@ -198,7 +198,9 @@ module otpu_ctrl #(
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  localparam logic [31:0] CAPS2 = {30'd0, PACK, COLL_GATHER || S > 1};   // bit1 PACK, bit0 GATHER
+  // bit6 PACK; [5:1] reserved for the wide-port branch's PORTB [3:1], ROWLANES (4) and ALINE
+  // (5), 0 here; bit0 GATHER
+  localparam logic [31:0] CAPS2 = {25'd0, PACK, 5'd0, COLL_GATHER || S > 1};
 
   logic [63:0] cycles;
   logic [31:0] n_brd, n_bwr, n_ard, n_awr, n_bst, scratch;
