@@ -344,6 +344,31 @@ Verilator utilization numbers for the 558-968-row prefix, docs/designs/vla-1hz-p
 Still rejected by the timing backend (`REFUSED_REJECTED_ISA`): HALT CHAIN (the generate loop
 between buckets), WAITC, DSTEP / STREAM (Qwen3.5), WAITW, multi-slice collectives.
 
+## 6. The wide-port branch's per-phase calibration (`tools/wideport_lpn.py` on `wide-port-lpn`, 2026-10-18)
+
+The wide-port branch (76a8f878: port A at 64 bytes, the group walk, the ternary-bonsai merge)
+runs this wide model by importing `wide.py` from this worktree (or `git show hwloop:...`) and
+extending it in its own tool, the clone and this branch untouched: **ALINE 64** (the group's Sw
+line a request of its own only where `quant.rl_sw_alone` says so; QUAD's two-line crossings
+at the line's boundaries), **t2 weights** (a chunk of four blocks, QUAD one chunk an advance
+with its scale words in one 16-byte group, RL 2 two chunks an advance), **DSTEP / STREAM** on
+the DMA unit (profile's lanes and chunks, the chunks on port B, a read's round trip first;
+the command trace recorded without upstream's refusal), the board's **MXU_E 4 / WIN 16** in
+place of the pin's 2 / 32 (+0.05% on the int8 point: nothing), and **the phases**: one
+transition walks the runs of same-phase commands and fires when all of a run is complete, so
+`--trace` gives each phase's cycles under `Profile.phases`' running-max rule. Nothing fitted;
+`--adapter-latency` 10 / 12 / 14 / 16 is -1.1 / +1.5 / +4.1 / +6.7% on the int8 point (14
+kept). Against fresh Verilator receipts on that tree (perf_qwen / perf_bonsai2 `--json`, which
+now carries the phases): Gemma-3-1B int8 RL 4 at PORTB 4 / MCOLS 8 / ALINE 64, 4 layers +
+head **988,141 vs 949,474 (+4.1%; head +5.4%, MLP +1.1%, attention -2.1%, mean 2.9%)**, whole
+model 2,441,652 vs 2,394,111 (+2.0%: 81.9 vs 83.5 tok/s); int4 RL 4 whole 1,476,251 vs
+1,440,727 (+2.5%: 135.5 vs 138.8), channel-bound as here; Bonsai-2 t2 RL 2 at PORTB 2 / MCOLS
+8, 1 layer + head: 4B 997,731 vs 1,005,571 (-0.8%; head +0.2%, DeltaNet -4.3%, MLP +2.0%), 2B
+784,079 vs 786,339 (-0.3%; DeltaNet -9.9%), whole 4B 7,367,742 vs 7,490,637 (-1.6%: 27.1 vs
+26.7 tok/s), 2B 3,537,068 vs 3,698,534 (-4.4%: 56.5 vs 54.1), port-A-request-bound; the
+DeltaNet phase is the weak one. docs/wide_port.md "LPN estimate" and docs/ternary.md 8.2 on
+that branch have the tables; not in this registry (another tree, another tool).
+
 ## Files
 
 - `tools/hwloop/lpn_run.py`: the tier (`cli.py lpn-run`); `tools/hwloop/lpn/inputs.py` (export
