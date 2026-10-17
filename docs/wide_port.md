@@ -678,8 +678,9 @@ cycles are the same by construction):
   cycle (`WT`), so the PCIS W take reaches 604 fewer write enables; the crossing bounds (below)
   are the rest.
 
-**What the build flow must add** (not RTL; a proposal for the build host, build.py is not
-changed here): (1) the placement directive: boards/f2/build.py (the `cmd = ['vivado', ...,
+**What the build flow must add** (the proposal as written after round 1; done in the section
+after this one: the pblocks are small_shell_cl_pnr_user_hbm.xdc with the board in SLR2, not
+SLR1, and the crossings are register chains, not the bridges' FIFOs): (1) the placement directive: boards/f2/build.py (the `cmd = ['vivado', ...,
 '-tclargs', 'SSI_SpreadLogic_high', 'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2',
 'C0', 'H2']` line) hands the HDK's build_all.tcl `SSI_SpreadLogic_high` as place_design's
 directive, which spreads one slice of 250K LUTs (19% of the device) over the three SLRs on
@@ -798,10 +799,18 @@ cycles while both sides hold it).
 | the control path (OCL -> the board's registers) | otpu_axil_xr `u_cx` (rtl/boards/f2/otpu_axil_xr.sv): `g_xr.u_m` (SLR0), `g_xr.u_s` (SLR2), `g_xr.g_x[k]` | AW, W, AR as pulses with their words (63 bits) | the takes (the master's readies for a cycle), B and R as pulses (41 bits) | +3 each way per access (an access every microseconds) |
 | the board's reset and the HBM's ready | otpu_f2_hbm_sys `g_rs[k].u_x` | | `rst`, `hbm_ready` (2 bits) | the board enters and leaves reset 3 cycles after the fabric (idle both times) |
 
-Measured on the RTL (tools/perf_qwen.py, Gemma-3-1B int4 / int8, 4 layers + head, PORTB 4 /
-MCOLS 8 / RL 4 / ALINE 64, --lat 60): the stages are in the F2 fabric only, which tb_top does not
-build, so the regression cycles are the base's by construction; the equivalent, 6 more cycles
-of read latency on the native model (--lat 66), is measured below.
+Measured on the RTL (tools/perf_qwen.py `--model gemma3 --layers 4 --portb 4 --mcols 8
+--rowlanes --aline 64 --mhz 200`, OTPU_TARGET=f2-hbm OTPU_NCH=8, int4 and int8 with the head in
+the same format, 4 layers + head): at --lat 60 int4 565,739 cycles and int8 949,474, the
+baselines to the cycle (the stages are in the F2 fabric only, which tb_top does not build, so
+the regression cycles are the base's by construction). The equivalent on the native model,
+6 more cycles of read latency (--lat 66): int4 598,971 (+5.9%: MXU starved 3.0% instead of
+2.2%, blocked 19.0% instead of 15.2%), int8 1,015,899 (+7.0%). So the port is latency-bound
+at this depth (the adapter's 64 reads a channel in flight, the MXU's chunk FIFO): 30 ns on the
+HBM's ~400 would cost of that order on the card, and two stages a direction (a net spanning
+SLR1 flip-flop to flip-flop, if the placed build shows the 5 ns hold it) or more reads in
+flight would take it back. The host's write path and the control path are not on a run's
+cycle count.
 
 **Fan-out** (`(* max_fanout *)` attributes; "before" is the net's loads in the RTL, "after" the
 loads per copy synthesis leaves):
@@ -822,6 +831,16 @@ included (the report's 5.000 ns requirement on those paths confirms it); nothing
 no register added (that would be a cycle of TMEM read latency on every port). With the slice
 in one SLR and the TMEM beside the VPU the 90%-route paths shorten; the attributes above place
 a copy of each address register per 16 loads.
+
+**Status (2026-10-17, Verilator 5.048, bit-exact with the ISA simulator):**
+tests/test_f2_rtl.py 16 passed (the fabric at NXR 3 and 0, the OCL crossing with and without
+otpu_axil_xr); tests/test_wide_port_rtl.py 168 passed (1:09 h, cold cache); tests/test_rtl.py
+-k "replay or act_reads or attention or lane_count" 27 passed, 1 skipped;
+tests/test_observability.py 18 passed; tests/test_host.py 90 passed, 1 skipped, the base's
+3 host-side failures (no RTL: the FakeTransport caps / close, no transformers in the venv);
+tests/test_f2_build.py 84 passed (the HBM snapshot's constraints and the floorplan under the
+Tcl mock); tests/test_target.py and tests/test_tourney.py 95 passed (the source lists with
+rtl/shell/otpu_xr.sv). The perf runs above.
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
