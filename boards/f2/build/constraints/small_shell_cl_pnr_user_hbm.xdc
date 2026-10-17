@@ -1,0 +1,105 @@
+# The HBM build's floorplan (cl_opentpu_hbm, rtl/boards/f2/otpu_f2_hbm_sys.sv; docs/wide_port.md
+# "Placement"). boards/f2/build.py appends this file to small_shell_cl_pnr_user.xdc for an HBM
+# target, so the HDK reads it at placement after its own small_shell_level_1_fp_cl.xdc, whose
+# pblock_CL (the CL's region of the VU47P: all of SLR2, parts of SLR1 and SLR0) is the parent of
+# every pblock here. Ranges by complete clock regions, added as the HDK adds its own; the VU47P's
+# SLRs are rows Y0-Y3 (SLR0, the HBM stacks and their AXI ports below it), Y4-Y7 (SLR1) and
+# Y8-Y11 (SLR2); a clock region holds ~13.6K LUTs, ~27K flip-flops.
+#
+# The second placed f2-hbm:p4rl8 build (fb42c14e, SSI_SpreadLogic_low) put 161,809 LUTs in SLR0,
+# 91,118 in SLR1 and 21 in SLR2, with 7,693 SLR0 <-> SLR1 crossings, 2 of them registered, and
+# failed at -4.6 ns: the host path 6.1 ns of route from the eight ports' registers, the slice's
+# grant and address paths 8 ns across the split. Here:
+#   pb_otpu_hbm   (SLR0, the CL's 20 clock regions there, ~272K LUTs): the HBM fabric u_sys/u_mem
+#                 (8 bridges, host registers and arbiters, the host path: ~30K LUTs, the 450 MHz
+#                 domain) by the HBM's AXI ports, the OCL's crossing and the SLR0 side of every
+#                 crossing register chain.
+#   pb_otpu_mid   (SLR1, X0Y4:X3Y7, 16 clock regions): the middle stage of every chain (~18K
+#                 flip-flops, no logic).
+#   pb_otpu_board (SLR2, all 32 clock regions, ~435K LUTs): u_sys/u_board, the slice with its
+#                 adapter, the control block and the trace (226K LUTs, 52%; 416 of the SLR's 672
+#                 RAMB36, 1,275 of 3,008 DSPs), and the SLR2 side of the chains. One SLR, so the
+#                 adapter's readies into the units, the TMEM's grants into the MXU and the pumped
+#                 banks' addresses never cross an SLR. (SLR1's 23 clock regions, ~313K LUTs,
+#                 would hold it at 72%: too full for 200 MHz routing.)
+#   pb_otpu_tmem  (a child of pb_otpu_board, X2Y9:X5Y10, 8 clock regions, ~109K LUTs): the TMEM
+#                 and the VPU together (48K LUTs, 68 RAMB36): the pumped banks' address paths
+#                 (clk -> clk_f, one core period: otpu_clk2x.tcl) come from the VPU's ta_addr
+#                 and the MXU's t_raddr; the MXU (97K) wraps around the box.
+# Every net between SLR0 and SLR2 is a chain of three otpu_xr stages, one per SLR (the native
+# ports in otpu_f2_hbm_mem g_xr.g_x[k], the control path in otpu_axil_xr u_cx, the reset and HBM
+# ready in g_rs[k]), so each SLR crossing runs from a flip-flop to a flip-flop (TX_REG / RX_REG
+# eligible). CONTAIN_ROUTING is off on every pblock (routes may leave the box). The cell queries
+# fail closed: a renamed hierarchy stops the build rather than placing freely.
+
+proc otpu_cells {pattern} {
+  set cells [get_cells -quiet $pattern]
+  if {![llength $cells]} { error "openTPU floorplan: no cells match $pattern" }
+  return $cells
+}
+set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]]
+puts "OTPU_FLOORPLAN ports=$otpu_nport"
+
+########################################
+# pb_otpu_hbm: the HBM fabric, SLR0
+########################################
+create_pblock pb_otpu_hbm
+set_property PARENT pblock_CL [get_pblocks pb_otpu_hbm]
+resize_pblock pb_otpu_hbm -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3}
+resize_pblock pb_otpu_hbm -add {CLOCKREGION_X4Y0:CLOCKREGION_X7Y0}
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_hreg}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_port}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_ocl}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_dn}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_up}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/g_rs[0].u_x}]
+
+########################################
+# pb_otpu_mid: the chains' middle stage, SLR1
+########################################
+create_pblock pb_otpu_mid
+set_property PARENT pblock_CL [get_pblocks pb_otpu_mid]
+resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_dn}]
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_up}]
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_dn}]
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_up}]
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/g_rs[1].u_x}]
+
+########################################
+# pb_otpu_board: the slice side, SLR2
+########################################
+create_pblock pb_otpu_board
+set_property PARENT pblock_CL [get_pblocks pb_otpu_board]
+resize_pblock pb_otpu_board -add {CLOCKREGION_X0Y8:CLOCKREGION_X7Y11}
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_board}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_dn}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_up}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_s}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
+add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
+
+########################################
+# pb_otpu_tmem: the TMEM beside the VPU, within the slice
+########################################
+create_pblock pb_otpu_tmem
+set_property PARENT pb_otpu_board [get_pblocks pb_otpu_tmem]
+resize_pblock pb_otpu_tmem -add {CLOCKREGION_X2Y9:CLOCKREGION_X5Y10}
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_tmem}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
+
+########################################
+# Parameters
+########################################
+foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_board pb_otpu_tmem} {
+  set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
+  set_property SNAPPING_MODE ON [get_pblocks $pb]
+  set_property IS_SOFT 0 [get_pblocks $pb]
+}
+puts "OTPU_FLOORPLAN_APPLIED pblocks=4"

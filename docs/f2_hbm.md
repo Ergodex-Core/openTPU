@@ -42,10 +42,11 @@ programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
   AW round-robin with W locked to the granted AW to WLAST, AR round-robin, R and B by ID.
 - `rtl/boards/f2/otpu_f2_hbm_host.sv`: PCIS (BAR4 offset = HBM address) onto the port that owns
   the address.
-- `rtl/boards/f2/otpu_f2_hbm_mem.sv` (the fabric), `otpu_f2_hbm_sys.sv` (otpu_board + fabric +
-  OCL), `boards/f2/design/cl_opentpu_hbm.sv` (the CL: clocks, resets, the HDK's
-  `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`, `AXI4_INTERFACE = 0`, the unused-DDR
-  template for the DIMM's pins).
+- `rtl/boards/f2/otpu_f2_hbm_mem.sv` (the fabric; `NXR` register stages each way on the native
+  ports, the SLR crossings below), `otpu_axil_xr.sv` (the control path across the same SLRs),
+  `otpu_f2_hbm_sys.sv` (otpu_board + fabric + OCL, `NXR` = 3), `boards/f2/design/cl_opentpu_hbm.sv`
+  (the CL: clocks, resets, the HDK's `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`,
+  `AXI4_INTERFACE = 0`, the unused-DDR template for the DIMM's pins).
 
 ### Address map
 
@@ -159,8 +160,48 @@ at NCH 8) and in otpu_f2_hbm_mem (`rst_q` / `hrst_q`, max_fanout 4), and every f
 registers its own again (otpu_f2_hbm_nch both sides, _port, _hreg, _host both sides), so no
 reset net is longer than a register's cycle and the logic leaves reset two or three cycles
 after the synchronizer (nothing can ask anything in them: the control registers' first access
-is cycles away, the slices are in core_rst until RUN). otpu_clk2x.tcl (the
-pumped TMEM's multicycles) as on the DDR build. The clocks are not grouped asynchronously.
+is cycles away, the slices are in core_rst until RUN); the board's copy of `core_reset_n`
+comes through the three crossing stages below, so the board enters and leaves reset three
+cycles after the fabric (idle both times). otpu_clk2x.tcl (the pumped TMEM's multicycles) as
+on the DDR build: its multicycle is `-from` the core clock `-through` every `otpu_pump_bank`'s
+read pins (`ra`, `rb`, `rena`, `renb`) `-to` clk_f, so every core register that reaches a pumped
+bank's address (the VPU's `ta_addr`, the MXU's `t_raddr`, the slice's `rl_pq` through the
+collective's port) gets the one core period, whatever the start point. The clocks are not
+grouped asynchronously.
+
+### Floorplan and SLR crossings
+
+The VU47P has three SLRs; the HBM stacks and their AXI ports are below SLR0, the HDK's small
+shell gives the CL all of SLR2, 23 clock regions of SLR1 and 20 of SLR0 (`pblock_CL`,
+hdk/common/shell_stable/build/constraints/small_shell_level_1_fp_cl.xdc). Left to the placer
+(docs/wide_port.md "Placement": two placed p4rl8 builds at -4.9 and -4.6 ns) one slice of 226K
+LUTs was spread over two SLRs with 7,693 unregistered crossings and every wide bus of the
+design (the host path's into the ports, the adapter's readies and the TMEM's grants into the
+units) ran 6-8 ns of route. `boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc`
+(appended by build.py to small_shell_cl_pnr_user.xdc for an HBM target, so the HDK reads it at
+placement after its own) pins the design by whole clock regions, every pblock a child of
+`pblock_CL` with `CONTAIN_ROUTING` off:
+
+| pblock | hierarchy (WRAPPER/CL/u_sys/...) | clock regions | LUT budget | used |
+|---|---|---|---|---|
+| `pb_otpu_hbm` (SLR0) | `u_mem` (8 bridges, host registers, arbiters, the host path), `u_ocl`, the SLR0 stage of every crossing chain | X0Y0:X3Y3 + X4Y0:X7Y0 (20) | ~272K | ~31K |
+| `pb_otpu_mid` (SLR1) | the middle stage of every chain | X0Y4:X3Y7 (16) | ~217K | 0 LUT, ~18K FF |
+| `pb_otpu_board` (SLR2) | `u_board` (the slice, its adapter, the control block, the trace), the SLR2 stages | X0Y8:X7Y11 (32) | ~435K | 226K (52%) |
+| `pb_otpu_tmem` (in `pb_otpu_board`) | `u_board/u_slice/u_tmem`, `u_vpu` | X2Y9:X5Y10 (8) | ~109K | 48K |
+
+Everything between SLR0 and SLR2 is a chain of three `otpu_xr` register stages, one per SLR,
+so each SLR crossing runs from a flip-flop to a flip-flop: the native ports (otpu_f2_hbm_mem
+`NXR` = 3: down, per channel, the adapter's takes with the command and the 512-bit beat; up,
+the bridge's readies, read data, write count and error; 9,088 nets; the bridge's native FIFOs
+grow from 4 to 16 entries and keep 6 beats of room below their ready's threshold, since the
+adapter sees a ready three cycles late and its beat arrives three later: `XL`), the control
+path (`otpu_axil_xr` between the OCL's clock crossing and the board: AXI4-Lite as pulses, which
+otpu_axil_cdc's one-access-at-a-time master allows) and the board's reset and HBM-ready. A port
+B request costs 6 core cycles more from the adapter to the HBM and back (30 ns on the HBM's
+~400; the adapter keeps 64 reads a channel in flight). The three-SLR split was chosen over
+SLR1 for the board (72% of its 23 clock regions: too full for 200 MHz routing) and over the
+adapter in SLR1 with the slice in SLR2 (the adapter's readies into the units and its 4,096-bit
+port B data are a same-cycle handshake that cannot cross an SLR without a redesign).
 
 ## Bandwidth
 
@@ -224,7 +265,9 @@ change, or split over slices (f2-hbm:s2, 3.65 GiB a slice) once its FFN is padde
 | `OTPU_NCH=4 OTPU_AXI=1 OTPU_BOOT=1` | MLP / attention decode / two-slice fuzz / scoreboard stress through the adapter: 14 tests | pass |
 | `OTPU_NCH=16` | the same 58 as at 8 (rtlsim's per-channel statistics now parse two-digit channels) | pass |
 | no `OTPU_NCH` (NCH = 2) | the same 58, on the generalized adapter, top and model | pass |
-| `tests/test_f2_rtl.py::test_f2_hbm_fabric` (`tb_f2hbm`) | 4 / 8 / 16 / 32 ports, three clock ratios: every channel's native contract on an HBM model that reorders across IDs, runs transactions in any per-ID order and interleaves two IDs' read beats; bridges inside their pseudo-channels, bursts formed (~18% of transactions multi-beat under the mixed traffic), INCR within 4 KiB; host writes / reads on every port in PCIS order, B / R IDs, zeros past the last port | pass |
+| `tests/test_f2_rtl.py::test_f2_hbm_fabric` (`tb_f2hbm`) | 4 / 8 / 16 / 32 ports, three clock ratios, the native ports through the build's three crossing stages each way (NXR 3) and wired (0): every channel's native contract on an HBM model that reorders across IDs, runs transactions in any per-ID order and interleaves two IDs' read beats; bridges inside their pseudo-channels, bursts formed (~18% of transactions multi-beat under the mixed traffic), INCR within 4 KiB; host writes / reads on every port in PCIS order, B / R IDs, zeros past the last port | pass |
+| `test_f2_ocl_crossing` (`tb_f2axil`) | the OCL's clock crossing alone (NXR 0) and through `otpu_axil_xr`'s three stages (3): 300 write / read pairs each, backpressure both sides, hold, errors, the other windows | pass |
+| `tests/test_f2_build.py::test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed` | the floorplan file under a Tcl mock: four pblocks under `pblock_CL`, whole clock regions one SLR each, stage k of every chain in SLR k, routing not contained; a missing hierarchy stops it | pass |
 | `test_f2_hbm_fabric_detects_missing_hazards` | HAZ = 0 returns stale data | pass |
 | `tests/test_f2_host.py` | S x NCH geometry (1x8, 2x8, 1x16, 4x8): bases, Board.write / read round trip with unaligned edges, every byte at beat_at's place; beat_at is the testbench's (RTL's) inverse | pass |
 | `tests/test_f2_build.py` | the HBM snapshot (top, scripts, constraints, wrapper, geometry, parameters, sources) for f2-hbm, :s2, :s4, f2-hbm16; the DDR snapshot without HBM files | pass |
@@ -293,11 +336,11 @@ FIFO's tail written every cycle (4bef3758) every clock meets setup.
 
 ## Remaining steps to a full build
 
-1. Place and route (`--flow BuildAll --package` above, hours). Expected timing risks: the 450 MHz
-   side of 16-32 bridges and port arbiters spread from the HBM's ports in SLR0 to slices in SLR1 /
-   SLR2 (the crossing FIFOs are the natural SLR boundary: a pblock per slice with its bridges'
-   core sides, the hclk sides and the port arbiters next to the HBM; AXI register slices before
-   the ports if needed); the core clock at 200 MHz with the adapter's NCH-wide B merge (a 4:1 or
+1. Place and route (`--flow BuildAll --package` above, hours) with the floorplan above (an S = 2
+   build needs a second board pblock: SLR1's 23 clock regions hold a PORTB 1 slice of ~150K LUTs
+   at 50%, with its own crossing chains). Expected timing risks: the 450 MHz
+   side of 16-32 bridges and port arbiters along the HBM's ports in SLR0 (AXI register slices
+   before the ports if needed); the core clock at 200 MHz with the adapter's NCH-wide B merge (a 4:1 or
    8:1 mux after the B FIFO's LUT RAM read) and the order check's 64-entry compare.
 2. On the card: the vLED (bit 0 MMCMs locked, bit 1 HBM ready), CFG_DRAM / CFG_SLICES, a BAR4
    write / read of every port, `otpu-diag --mem`, then the token-exact checks (f2 docs).

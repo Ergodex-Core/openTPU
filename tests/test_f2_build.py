@@ -504,7 +504,12 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
         (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm.tcl').read_bytes()
     assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
         (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm.tcl').read_bytes()
-    assert 'hbm_reset_n}' in (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    pnr = (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+    assert 'hbm_reset_n}' in pnr
+    # the floorplan after the reset exception, in the one file the HDK reads at placement
+    floorplan = (ROOT / 'boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc').read_text()
+    assert pnr.endswith('\n' + floorplan) and pnr.index('hbm_reset_n}') < pnr.index('pb_otpu_hbm')
+    assert not (cl / 'build/constraints/small_shell_cl_pnr_user_hbm.xdc').exists()
     params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
     assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
         (S, nch, 29, dram_log2)
@@ -525,3 +530,92 @@ def test_ddr_snapshot_leaves_the_hbm_files_out(tmp_path):
     cl = flow.prepare(tmp_path / 'run', shell, T.load('f2'), '01234567')
     assert (cl / 'design/cl_opentpu.sv').is_file()
     assert not list(cl.rglob('*hbm*'))
+    assert 'pb_otpu' not in (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
+
+
+# The HBM floorplan (small_shell_cl_pnr_user_hbm.xdc): four pblocks under the HDK's pblock_CL by
+# whole clock regions, one SLR each (the fabric in SLR0, the crossing chains' middle stage in
+# SLR1, the board in SLR2, the TMEM and VPU inside the board's), routing not contained, and every
+# cell query failing closed (docs/wide_port.md "Placement")
+FLOORPLAN_HARNESS = r'''
+set pblocks {}
+set parents {}
+set ranges {}
+set cells {}
+set props {}
+proc create_pblock {name} { lappend ::pblocks $name }
+proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
+proc get_cells {args} {
+  set pattern [lindex $args end]
+  if {$::fault eq "missing" && [string match *u_board* $pattern]} { return {} }
+  if {[string match {*g_port\[\*\]*} $pattern]} { return [list ${pattern}0 ${pattern}1 ${pattern}2 ${pattern}3] }
+  return [list $pattern]
+}
+proc resize_pblock {name flag range} {
+  if {$flag ne "-add" || $name ni $::pblocks} { error "resize $name $flag" }
+  lappend ::ranges [list $name $range]
+}
+proc add_cells_to_pblock {name cl} {
+  if {$name ni $::pblocks} { error "add to $name" }
+  foreach c $cl { lappend ::cells [list $name $c] }
+}
+proc set_property {prop value name} { lappend ::props [list $name $prop $value] }
+'''
+
+
+@pytest.mark.parametrize('fault', ['none', 'missing'])
+def test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed(fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc'
+    report = r'''
+puts "PBLOCKS $pblocks"
+foreach r $ranges { puts "RANGE [lindex $r 0] [lindex $r 1]" }
+foreach c $cells { puts "CELL [lindex $c 0] [lindex $c 1]" }
+foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
+'''
+    harness = (f'set fault {fault}\n' + FLOORPLAN_HARNESS +
+               f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if fault == 'missing':
+        assert result.returncode != 0 and 'no cells match' in result.stderr
+        assert 'OTPU_FLOORPLAN_APPLIED' not in result.stdout
+        return
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=4' in out
+    assert 'PBLOCKS pb_otpu_hbm pb_otpu_mid pb_otpu_board pb_otpu_tmem' in out
+    ranges = {}
+    for line in out.splitlines():
+        if line.startswith('RANGE '):
+            _, pb, rng = line.split(' ', 2)
+            ranges.setdefault(pb, []).append(rng)
+    # whole clock regions, one SLR per pblock (Y0-3 SLR0, Y4-7 SLR1, Y8-11 SLR2)
+    assert ranges == {
+        'pb_otpu_hbm': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y3', 'CLOCKREGION_X4Y0:CLOCKREGION_X7Y0'],
+        'pb_otpu_mid': ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'],
+        'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
+        'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10']}
+    cells = {}
+    for line in out.splitlines():
+        if line.startswith('CELL '):
+            _, pb, cell = line.split(' ', 2)
+            cells.setdefault(pb, []).append(cell)
+    hbm, mid, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_board', 'pb_otpu_tmem'))
+    assert all(c.startswith('WRAPPER/CL/u_sys/') for pb in cells.values() for c in pb)
+    assert len([c for c in hbm if '.u_nch' in c]) == 4 and 'WRAPPER/CL/u_sys/u_mem/u_host' in hbm
+    assert 'WRAPPER/CL/u_sys/u_board' in board and 'WRAPPER/CL/u_sys/u_ocl' in hbm
+    # the crossing chains: stage k in SLR k, the control path's two sides with their SLRs
+    for k, pb in enumerate((hbm, mid, board)):
+        for chain in ('u_mem/g_xr', 'u_cx/g_xr'):
+            for d in ('u_dn', 'u_up'):
+                assert f'WRAPPER/CL/u_sys/{chain}.g_x[{k}].{d}' in pb
+        assert f'WRAPPER/CL/u_sys/g_rs[{k}].u_x' in pb
+    assert 'WRAPPER/CL/u_sys/u_cx/g_xr.u_m' in hbm and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
+    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/u_slice/u_tmem', 'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']
+    assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
+    props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
+    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_board', 'pb_otpu_tmem'):
+        assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
+        assert props[(pb, 'PARENT')] == ('pb_otpu_board' if pb == 'pb_otpu_tmem' else 'pblock_CL')
