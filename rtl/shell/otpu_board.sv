@@ -134,6 +134,19 @@ module otpu_board #(
               DRAM_LOG2 > CH_LOG2 + $clog2(NCH))
     $fatal(1, "otpu_board: NCH a power of two >= 2, DRAM_LOG2 <= 32 (34 at NCH > 2) and <= CH_LOG2 + log2(NCH)");
 
+  // ---- the resets. rst (the board's, from the top's synchronizer: on the F2 an ASYNC_REG
+  // flip-flop synthesis does not replicate) reaches the control block, the trace, every slice's
+  // loader and port registers (sys_rst) and every adapter's counters (~2,200 flip-flops at
+  // NCH 8), ~3,000 in all besides the units' trees (core_rst, below; otpu_slice's). The p4rl8
+  // placement (docs/wide_port.md "Placement") ran the one flip-flop 4 levels and 92% route into
+  // 406 of the 200 MHz domain's worst 600 paths: rst_q is its register here, replicated by
+  // synthesis (max_fanout, as core_rst) with each replica next to its loads; everything below
+  // takes rst_q and leaves reset a cycle after the top (nothing can ask anything that cycle:
+  // the control registers' first access is cycles away). go_ok and core_rst keep rst itself:
+  // the run's reset holds until RUN either way.
+  (* max_fanout = 128 *) logic rst_q;
+  always_ff @(posedge clk) rst_q <= rst;
+
   // ---- calibration and uncorrectable-ECC flags from the memory controllers' clock domains
   // (registers there; levels, each bit on its own)
   (* ASYNC_REG = "TRUE" *) logic [NCH*S-1:0] cal_s1, cal_s2, ded_s1, ded_s2;
@@ -161,7 +174,7 @@ module otpu_board #(
     tmp_s1 <= temp;
     tmp_s2 <= tmp_s1;
     tmp_s3 <= tmp_s2;
-    if (rst) begin
+    if (rst_q) begin
       temp_q <= '0;
       temp_v <= 1'b0;
     end else if (tmp_s2 == tmp_s3 && tmp_s3 != '0) begin
@@ -223,7 +236,7 @@ module otpu_board #(
   logic c_awvalid, c_awready, c_wvalid, c_wready, c_bvalid, c_bready;
   logic c_arvalid, c_arready, c_rvalid, c_rready;
   otpu_axil_iso #(.AW(12)) u_iso (
-    .clk, .m_rst(ctl_mrst), .s_rst(rst),
+    .clk, .m_rst(ctl_mrst), .s_rst(rst_q),
     .m_awaddr(s_ctl_awaddr), .m_awvalid(s_ctl_awvalid), .m_awready(s_ctl_awready),
     .m_wdata(s_ctl_wdata), .m_wstrb(s_ctl_wstrb), .m_wvalid(s_ctl_wvalid),
     .m_wready(s_ctl_wready), .m_bresp(s_ctl_bresp), .m_bvalid(s_ctl_bvalid),
@@ -247,7 +260,7 @@ module otpu_board #(
               .DRAM_LOG2(DRAM_LOG2), .NCH(NCH), .CH_LOG2(CH_LOG2), .MXU_IMPL(MXU_IMPL), .TMEM_IMPL(TMEM_IMPL),
               .VPU_CL(VPU_CL), .ULANES(ULANES), .SEQ_WC(SEQ_WC), .PLATFORM(PLATFORM),
               .ARCH_HASH(ARCH_HASH)) u_ctrl (
-    .clk, .rst,
+    .clk, .rst(rst_q),
     .s_awaddr(c_awaddr), .s_awvalid(c_awvalid), .s_awready(c_awready),
     .s_wdata(c_wdata), .s_wstrb(c_wstrb), .s_wvalid(c_wvalid),
     .s_wready(c_wready), .s_bresp(c_bresp), .s_bvalid(c_bvalid),
@@ -272,7 +285,7 @@ module otpu_board #(
   // ---- hardware trace
   if (TRACE_DEPTH != 0) begin : g_trace
     otpu_trace #(.DEPTH(TRACE_DEPTH), .QD(TRACE_QD), .WIN(WIN)) u_trace (
-      .clk, .rst, .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
+      .clk, .rst(rst_q), .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
       .rdata(tr_rdata), .count(tr_count), .drop(tr_drop), .busy(tr_busy));
   end else begin : g_no_trace
     assign tr_rdata = '0;
@@ -442,7 +455,7 @@ module otpu_board #(
   if (S == 1) begin : g_x1
     // ---- one slice: wired
     assign x_rst[0] = core_rst;
-    assign x_srst[0] = rst;
+    assign x_srst[0] = rst_q;
     assign x_ld_start[0] = ld_start;
     assign x_ld_addr[0] = ld_addr;
     assign x_ld_n[0] = ld_n;
@@ -523,7 +536,7 @@ module otpu_board #(
         assign arg_d[32*k +: 32] = arg[k];
         assign x_arg[s][k] = arg_q[32*k +: 32];
       end
-      assign dn_d = {arg_d, ld_n, ld_addr, ld_start, core_rst, rst, h_wd, h_wa, h_wm, h_ra, h_rm,
+      assign dn_d = {arg_d, ld_n, ld_addr, ld_start, core_rst, rst_q, h_wd, h_wa, h_wm, h_ra, h_rm,
                      h_wv, h_rv[s], h_ack};
       otpu_xr #(.W(DW), .RW(3)) u_dn_tx (.clk, .rst(coll_rst), .d(dn_d), .q(dn_m));
       otpu_xr #(.W(DW), .RW(3)) u_dn_rx (.clk, .rst(rx_crst), .d(dn_m), .q(dn_q));

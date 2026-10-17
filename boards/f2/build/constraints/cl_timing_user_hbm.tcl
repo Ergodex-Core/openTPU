@@ -4,9 +4,14 @@
 # the shell's clk_main_a0 (250 MHz: OCL, PCIS) and the HBM's AXI clock (u_hclk: 450 MHz). Every
 # path between two of them is an otpu_afifo, a held request/response word (otpu_axil_cdc), a gray
 # counter (the bridges' and the host path's write counts) or a synchronized level: bound each
-# direction by the smaller period of the pair, datapath only, and the gray buses' skew by it.
-# The clocks are not grouped asynchronously (that would override these bounds). The HBM
-# wrapper's own crossings (its resets, its ready bits: xpm_cdc) carry the XPM constraints.
+# direction by the destination clock's period, datapath only (a crossing's word is read only
+# after its pointer, request or count has gone through the destination's two synchronizer
+# flip-flops, so a destination period on the data is the conservative bound; the first placed
+# p4rl8 build bounded both directions by the smaller period of the pair, which held the HBM
+# side's data into the core at 2.2 ns instead of 5 across an SLR), and the gray buses' skew by
+# the smallest period. The clocks are not grouped asynchronously (that would override these
+# bounds). The HBM wrapper's own crossings (its resets, its ready bits: xpm_cdc) carry the XPM
+# constraints.
 proc otpu_required {objects description} {
   if {![llength $objects]} { error "openTPU CDC: missing $description" }
   return $objects
@@ -21,9 +26,8 @@ set t_core [get_property PERIOD $c_core]
 set t_main [get_property PERIOD $c_main]
 set t_hbm  [get_property PERIOD $c_hbm]
 foreach {a b} [list $c_main $c_core $c_core $c_hbm $c_main $c_hbm] {
-  set t [expr {min([get_property PERIOD $a], [get_property PERIOD $b])}]
-  set_max_delay -datapath_only -from $a -to $b $t
-  set_max_delay -datapath_only -from $b -to $a $t
+  set_max_delay -datapath_only -from $a -to $b [get_property PERIOD $b]
+  set_max_delay -datapath_only -from $b -to $a [get_property PERIOD $a]
 }
 set t_skew [expr {min($t_core, $t_main, $t_hbm)}]
 # Gray pointers of every crossing FIFO: per channel two (commands in, data back), the host path

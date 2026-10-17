@@ -83,8 +83,10 @@ hundreds of nanoseconds.
 ### The channel bridge (otpu_f2_hbm_nch)
 
 Core side (200 MHz): the native port's commands and write data into two 4-entry FIFOs (readies
-from flip-flops), then in command order through the **order check** into an asynchronous FIFO
-(`otpu_afifo`, 16 x 602 bits: we, beat, mask, data) to hclk:
+from flip-flops), the command FIFO's head into a register (a core cycle on a command's way),
+then in command order through the **order check** into an asynchronous FIFO (`otpu_afifo`, 16 x
+602 bits: we, beat, mask, data; its ready and its RAM's write enables flip-flops, the tail slot
+written every cycle there is room and the issue moving only the pointer: `RWR`, `WT`) to hclk:
 
 - a read waits while a write to its beat is in flight (issued, not yet counted in n_wdone),
 - a write waits while a read of its beat is in flight (issued, data not yet returned),
@@ -113,9 +115,16 @@ channel alone at the core's full rate (12.8 GB/s) would need ~80.
 
 ### The host path (otpu_f2_hbm_host)
 
-PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk) and goes to the
-port of its address (`addr[33:29]`) as one two-beat AXI3 burst, one at a time (~4 hclk cycles a
-beat: 7 GB/s, above BAR4 write combining's ~2 GB/s). The host's B for a burst goes back when the
+PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
+written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
+two-beat AXI3 burst, one at a time (~7 hclk cycles a beat through the ports' registers: 4 GB/s,
+above BAR4 write combining's ~2 GB/s). The head beat's AW, W and AR go to every port on shared
+buses with a valid per port, and **each port registers them** (`otpu_f2_hbm_hreg` in
+otpu_f2_hbm_mem: a one-entry register per channel, its ready its own emptiness, so no arbiter
+or HBM ready reaches the host path in a cycle; the port's R data and B registered back the
+same way), so every net between the host block and a port is a register's cycle long (the
+first placed build, docs/wide_port.md "Placement", ran the head's data and its half select into
+every port's W register over 6.9 ns of route at 450 MHz). The host's B for a burst goes back when the
 host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
 `pcis_wbusy` (an AW / W shown or taken, a B not given back) holds the host's reads and the OCL's
 writes (a RUN after data finds the data in the HBM) as on the DDR build. PCIS reads: a beat at a
@@ -134,9 +143,21 @@ dropped, reads return zeros. The host transport maps BAR4 for S x NCH x 512 MiB.
 | clk_hbm_ref 100 MHz | shell | the HBM's reference and APB clock |
 
 `boards/f2/build/constraints/cl_timing_user_hbm.tcl` (applied after synthesis, in place of the
-DDR build's): max delay, datapath only, between every pair of {core, main, hclk} at the smaller
-period of the pair; bus skew on every otpu_afifo's gray pointers and on every write count's gray
-bus (bridges and host path); the MMCMs' lock false-pathed to reset pins only. otpu_clk2x.tcl (the
+DDR build's): max delay, datapath only, between every pair of {core, main, hclk}, each direction
+at the destination clock's period (a crossing's word is read only after its pointer, request or
+count has passed the destination's two synchronizer flip-flops; the first placed build bounded
+both directions by the smaller period of the pair, 2.2 ns on the HBM side's data into the core
+across an SLR); bus skew on every otpu_afifo's gray pointers and on every write count's gray bus
+(bridges and host path); the MMCMs' lock false-pathed to reset pins only.
+
+Resets: the CL's three synchronizers (`core_reset_n`, `hbm_reset_n`, `bridge_reset_n`: ASYNC_REG
+flip-flops synthesis does not replicate) each drive one register in otpu_board (`rst_q`,
+max_fanout 128: the control block, the loader and port registers, the adapter's ~2,200 counters
+at NCH 8) and in otpu_f2_hbm_mem (`rst_q` / `hrst_q`, max_fanout 4), and every fabric module
+registers its own again (otpu_f2_hbm_nch both sides, _port, _hreg, _host both sides), so no
+reset net is longer than a register's cycle and the logic leaves reset two or three cycles
+after the synchronizer (nothing can ask anything in them: the control registers' first access
+is cycles away, the slices are in core_rst until RUN). otpu_clk2x.tcl (the
 pumped TMEM's multicycles) as on the DDR build. The clocks are not grouped asynchronously.
 
 ## Bandwidth
