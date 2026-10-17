@@ -962,6 +962,27 @@ that site removed from `pb_otpu_board` (87 passed); a new test runs the wrapper 
 HDK sequence (the unmanaged read lands after the managed one and before opt_design, once;
 no opt_design or a bad file fails).
 
+**Round 3 placed (76a8f878, `--place-directive Default`, the floorplan applied, host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-76a8f878): WNS -5.567 ns** after place_design, the
+pblocks as intended (board: 168K LUTs, 50% of SLR2's, 422 of 672 RAMB36; hbm: 30K LUTs, 11% of
+SLR0's). After phys_opt_design, by clock (report_timing on the post_phys_opt checkpoint,
+place_rpt/ in the run dir):
+
+| clock | round 2 (free placement) | round 3 | worst path (route share) |
+|---|---|---|---|
+| clk_raw 200 MHz | -4.05 | **-1.42** | inside the MXU: `mx_gq_reg` -> `p1_sw_reg` 9 levels, 5.2 of 6.1 ns route; the weight FIFO's BRAM -> `wd_reg[63]` 5.0 of 6.3 ns |
+| hclk_raw 450 MHz | -4.89 | **-1.98** | the bridge's `wf_n_reg` -> `k_d_reg[*]/CE` (604 enables from one LUT, 3.6 of 3.8 ns route) |
+| clk_raw -> clk_f_raw 400 MHz | -2.36 | **-1.34** | the pump bank's `pk_a_reg` -> its BRAMs' ADDR, 1.3 of 1.4 ns route (the register far from the bank's 16 RAMB36) |
+| clk_main_a0 250 MHz | -0.74 | **-5.01** | shell cells both ends (names hidden), 8.4 of 8.6 ns route: the shell's AXI-Lite interface to the OCL side of the control path, which the floorplan put in SLR0 (`u_ocl`, `u_cx/g_xr.u_m` in pb_otpu_hbm) |
+
+So the SLR split is gone from the core paths (the three core-side clocks each gained 1-3 ns and
+are now 80-95% route inside one SLR, the fan-out / register-placement kind), and the one
+regression is the control path's placement against the shell. Round 4: `u_ocl` and the
+control chain's master next to the shell's OCL interface (its SLR from the path's sites),
+`wf_n` replicated per 64 `k_d` enables, `pk_a` registers duplicated per 4 RAMB36 (or the bank's
+address pipelined one stage, a cycle of TMEM latency), `mx_gq` replicated per MXU row group and
+the weight FIFO's read data registered in the BRAM's output register.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
