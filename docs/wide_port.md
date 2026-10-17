@@ -634,16 +634,55 @@ cycles are the same by construction):
   cycle (`WT`), so the PCIS W take reaches 604 fewer write enables; the crossing bounds (below)
   are the rest.
 
-**What the build flow must add** (not RTL): (1) the placement strategy: build.py runs the HDK's
-build_all with `SSI_SpreadLogic_high`, which spreads one slice of 250K LUTs over the three
-SLRs; the slice with its adapter wants one SLR and the HBM fabric (u_sys/u_mem: bridges, host
-registers, arbiters, host path) the bottom of SLR0 by the HBM's AXI ports: pblocks for the
-two, and `Default` or `SSI_SpreadLogic_low`; (2) the crossings' bounds: cl_timing_user_hbm.tcl
-now bounds each direction by the *destination* clock's period (it bounded both by the smaller
-of the pair: the bridges' return FIFOs' data into the core at 2.2 ns across an SLR instead of
-5); (3) with the pblocks, the bridges' core sides (the adapter's 512-bit native buses, 5 ns)
-are the SLR crossing, as docs/f2_hbm.md planned. The base f2-hbm build at the same commit
-shows what of this the shell and the host path already fail at PORTB 1.
+**What the build flow must add** (not RTL; a proposal for the build host, build.py is not
+changed here): (1) the placement directive: boards/f2/build.py (the `cmd = ['vivado', ...,
+'-tclargs', 'SSI_SpreadLogic_high', 'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2',
+'C0', 'H2']` line) hands the HDK's build_all.tcl `SSI_SpreadLogic_high` as place_design's
+directive, which spreads one slice of 250K LUTs (19% of the device) over the three SLRs on
+purpose; change it to `Default` (or `SSI_BalanceSLLs` once the pblocks below exist), keeping
+the phys_opt / route directives and the clock recipes. (2) Pblocks, in
+boards/f2/build/constraints/small_shell_cl_pnr_user.xdc (the HDK applies it at placement;
+the hierarchy is WRAPPER/CL/u_sys/...): the HBM fabric in the SLR with the HBM's AXI ports
+(the VU47P's stacks are below SLR0) and the slice with its adapter and control block in one
+SLR next to it:
+
+```
+create_pblock pb_hbm_fabric
+resize_pblock pb_hbm_fabric -add SLR0
+add_cells_to_pblock pb_hbm_fabric [get_cells WRAPPER/CL/u_sys/u_mem]
+create_pblock pb_slice
+resize_pblock pb_slice -add SLR1
+add_cells_to_pblock pb_slice [get_cells WRAPPER/CL/u_sys/u_board]
+```
+
+(u_sys/u_mem: the 8 bridges, the 8 host registers, the 8 arbiters, the host path; u_sys/u_board:
+the slice, otpu_native_dram, otpu_ctrl, the trace. Check against the base build's
+`report_utilization -slr` which SLR the small shell's PCIS and OCL logic occupies and how
+much of SLR0 the shell and the HBM wrapper take; if the shell is in SLR0, the fabric's pblock
+can be SLR0's lower clock regions rather than the whole SLR, and the slice SLR1; S = 2 puts
+the second slice in SLR2.) With them the SLR crossing is the bridges' core sides (the adapter's
+512-bit native buses, registered in the adapter's queue LUT RAMs and the bridges' FIFOs, 5 ns)
+as docs/f2_hbm.md planned, and the host path's aclk side crosses from the shell to the fabric
+through its crossing FIFOs (4 ns into aclk, 2.2 into hclk: an hclk register stage in the host
+path, as the ports now have, if that direction still fails). (3) The crossings' bounds:
+cl_timing_user_hbm.tcl now bounds each direction by the *destination* clock's period (it
+bounded both by the smaller of the pair: the bridges' return FIFOs' data into the core at 2.2
+ns across an SLR instead of 5). The base f2-hbm build at the same commit shows what of this
+the shell and the host path already fail at PORTB 1.
+
+**Status (2026-10-17, Verilator 5.048, bit-exact with the ISA simulator):**
+tests/test_wide_port_rtl.py 168 passed (1:17 h, cold cache); tests/test_rtl.py -k "replay or
+act_reads or attention or lane_count" 27 passed, 1 skipped; tests/test_t2_rtl.py 24 passed;
+tests/test_observability.py 18 passed and tests/test_host.py 90 passed, 1 skipped (tb_board:
+the suites that build otpu_board's rst_q; 3 host-side failures that build no RTL and are the
+base's: a FakeTransport caps dict without the t2 key, FakeTransport without close, no
+transformers in the venv); tests/test_f2_rtl.py 13 passed (tb_f2hbm on the fabric as
+committed); tests/test_f2_build.py 82 passed. tools/perf_qwen.py Gemma-3-1B at PORTB 4 / MCOLS
+8 / RL 4 / ALINE 64, 4 layers + head, --lat 60: int4 565,739 cycles (baseline 565,739, delta 0),
+int8 949,474 (949,474, delta 0): tb_top's sources are untouched by these commits, so the
+regression cycles and the NATIVEB counters are the base's by construction; the cycle costs are
+in the F2 fabric only (a command one core cycle later in the bridge; the host's write beat per
+~7 hclk cycles instead of ~4; the logic out of reset 1-3 cycles later).
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
