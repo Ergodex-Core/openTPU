@@ -402,3 +402,20 @@ column are the nightly's out-of-context run (section 5).
   not depend on MCOLS).
 * The packed advance subsumes int8 PAIR (docs/wide_port.md's column reuse at PORTB 2) for W8:
   the same MAC rate without 2M <= MCOLS.
+
+## 9. The out-of-context result (2026-10-17, the F2 host's Vivado 2025.2, xcvu47p)
+
+`tools/mxu_pk_ooc.sh` on the vla tree at 22ade69b (one physical column, WREG 1; synthesis, opt,
+place, route; OTPU_DSP counts DSP sub-primitives, 9 a DSP48E2):
+
+| step | period | WNS | WHS | DSP48E2 | LUT | FF | worst path |
+|---|---|---|---|---|---|---|---|
+| pk5 (PACK 1) | 5.0 ns | +1.986 | +0.020 | 146 | 2,642 | 6,692 | the column end's DSP cascade (M -> ALU_OUT, 7 levels) |
+| pk4 (PACK 1) | 4.0 ns | +1.010 | +0.019 | 146 | - | 6,692 | the same |
+| un5 (PACK 0) | 5.0 ns | +2.021 | - | 137 | 1,738 | 4,372 | the same |
+| un4 (PACK 0) | 4.0 ns | +0.986 | +0.023 | 137 | - | 4,372 | the same |
+
+The packed column closes at 200 and 250 MHz with the same slack as the unpacked one (its fmax
+is the column end's cascade, ~330 MHz, in both), for +9 DSPs, +904 LUT and +2,320 FF a physical
+column: two logical columns a DSP at no clock cost. The gate of docs/vla_frequency_plan.md phase 1
+is passed; f2-vla keeps PACK 1. Each step took 206-225 s.

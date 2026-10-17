@@ -179,7 +179,7 @@ synthesizes the best point):
 0. π0.5 port: done. RhinoVLA shape tally: done. QST's K stores confirmed a word a cycle on
    the RTL.
 1. Packing feasibility: done in Verilator. Left: the packed and unpacked column out of
-   context on the nightly host (`tools/mxu_pk_ooc.sh`): fmax is the open question.
+   context on the F2 host (`tools/mxu_pk_ooc.sh`): **done 2026-10-17**, the packed column WNS +1.986 ns at 5.0 ns and +1.010 at 4.0 (146 DSP48E2 a column), the unpacked +2.021 / +0.986 (137): PACK stays.
 2. ACT RAM at MCOLS 32 physical; a floorplan sketch per SLR (columns, result FIFO, drain).
    Exit: the ACT RAM bit-exact on the MXU tests at 32 physical columns with the URAM / BRAM
    choice and the per-SLR count recorded.
@@ -201,7 +201,7 @@ synthesizes the best point):
 
 ## Open Questions
 
-* fmax of a packed physical column on the VU47P (DSP48E2 with AMULTSEL "AD", the 19-bit shifted
+* **Answered 2026-10-17: the packed column closes at 200 and 250 MHz out of context (WNS +1.99 / +1.01 ns, the same as the unpacked column's +2.02 / +0.99), so PACK 1 is kept at 200 MHz.** The rule it was decided by: fmax of a packed physical column on the VU47P (DSP48E2 with AMULTSEL "AD", the 19-bit shifted
   D operand): the nightly's OOC run answers it. One rule (Next Step 1): **PACK 1 is kept if
   the packed column closes at >= 180 MHz; the core clock becomes min(200 MHz, its fmax)**
   (at 180 MHz RhinoVLA's MXU is 0.59 s, 1.1-1.5 Hz at the measured overlap, still above A's
@@ -218,7 +218,7 @@ synthesizes the best point):
 ## Success Criteria
 
 * Phase 1 exit: the packed column's OOC fmax on xcvu47p >= 180 MHz (WNS >= 0 at 5.55 ns;
-  200 MHz, 5.0 ns, is the target); DSP 146 / column. Below 180 MHz: Approach A.
+  200 MHz, 5.0 ns, is the target); DSP 146 / column. Below 180 MHz: Approach A. **Met 2026-10-17: WNS +1.986 ns at 5.0 ns, 146 DSP48E2.**
 * Phase 3 exit: PACK 1 bit-exact with the ISA simulator on every existing MXU test; MXU
   utilization >= 75% on the real π0.5 prefix shape in Verilator.
 * Phase 7 exit (RhinoVLA accuracy, before any board run): the fp32 numpy reference is the
