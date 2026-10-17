@@ -218,13 +218,21 @@ module otpu_f2_hbm_nch #(
   logic        k_nx, k_bnd;
   logic [575:0] k_d;
   logic        k_pop;                  // the held command joins or opens a burst
-  assign x_pop = x_v && (!k_v || k_pop);
+  // the head loads (the register is free, or its command goes): the beat's 576 enables take
+  // this net alone, not qualified by x_v or the reset (what loads while no command is there is
+  // never read: k_v is 0), and synthesis replicates its LUT per 64 of them (max_fanout; round
+  // 3's placement, docs/wide_port.md: one LUT into 604 clock enables, 3.6 ns of route at 450
+  // MHz)
+  (* max_fanout = 64 *) logic k_ld;
+  assign k_ld = !k_v || k_pop;
+  assign x_pop = x_v && k_ld;
+  always_ff @(posedge hclk) if (k_ld) k_d <= x_d;
   always_ff @(posedge hclk) begin
     if (hrst_q) k_v <= 1'b0;
-    else if (!k_v || k_pop) begin
+    else if (k_ld) begin
       k_v <= x_v;
       if (x_v) begin
-        k_we <= x_we; k_a <= x_a; k_d <= x_d;
+        k_we <= x_we; k_a <= x_a;
         // (the three candidates compared in parallel, the late select last)
         k_nx <= k_open ? x_a == k_a + 1'b1 : k_join ? x_a == o_nx + 1'b1 : x_a == o_nx;
         k_bnd <= BW == 0 ? 1'b1 : (x_a % BMAX) == 0;

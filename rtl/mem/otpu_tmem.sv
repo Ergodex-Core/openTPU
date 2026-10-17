@@ -76,6 +76,8 @@ module otpu_tmem #(
   parameter bit   GST   = 1'b0,           // IMPL 3: SH_MASK's ports are SH_HOST's guests (see IMPL 3)
   parameter int   PMP   = 0,              // TDP: 1 the RAMs pumped at 2x on clk_f (otpu_pump_bank), 2
                                           //   its model at the core clock (see IMPL 3)
+  parameter int   PMPG  = 1024,           // PMP 1: words per pumped RAM piece (one RAMB36 at 1K x
+                                          //   36), each with its own write-stage copy; 0: one piece
   parameter bit   IQ    = 1'b0            // the input stage: the granted writes registered (below)
 ) (
   input  logic                                clk,
@@ -644,35 +646,80 @@ module otpu_tmem #(
         // front end, an internal fault; the cell is this RAM)
         if (PMP == 1) begin : g_pmp
           // pumped at 2x: port A reads side 1, port B side 0 at the core edge, the write lands at
-          // the fast edge between (P3's bank). The write's inputs are this RAM's own copy of the
-          // registered write stage (pk_*, release r2): its sub-bank's decode and the RAM row are
-          // taken before the register, so the bank's write pins (on clk_f, a half core cycle
-          // from the register) come straight from flip-flops kept next to it, not through the
-          // bank-level pw's decode and fanout (r2m4: pw_* -> the pumped banks, clk -> clk2x)
-          (* keep = "true" *) logic          pk_v;
-          (* keep = "true" *) logic [RW-1:0] pk_a;
-          (* keep = "true" *) logic [31:0]   pk_d;
+          // the fast edge between (P3's bank). The RAM is NPG pieces of PGN words (otpu_pump_bank
+          // each, PMPG words: one RAMB36 at 1K x 36), the row's top bits the piece; each piece
+          // has its own copy of the registered write stage (pk_*, release r2): its sub-bank's
+          // decode, the RAM row and the piece are taken before the register, so the piece's
+          // write pins (on clk_f, a half core cycle from the register) come straight from
+          // flip-flops kept next to its one RAMB36, not through the bank-level pw's decode and
+          // fanout (r2m4: pw_* -> the pumped banks, clk -> clk2x; round 3's placement,
+          // docs/wide_port.md: one pk_a_reg per RAM of four RAMB36, 1.3 ns of route into their
+          // addresses). A read goes to every piece (all PGN-word addresses alike); the word is the
+          // piece of the read's row, selected by a register loaded with the read (gs: it holds,
+          // as the RAM's output does, until the side's next read)
+          localparam int NPG = (PMPG > 0 && RD > PMPG) ? RD / PMPG : 1;
+          localparam int PGN = RD / NPG;
+          localparam int GB  = (NPG > 1) ? $clog2(NPG) : 1;
+          localparam int PRW = RW - ((NPG > 1) ? $clog2(NPG) : 0);
+          initial if (NPG * PGN != RD || NPG != (1 << $clog2(NPG)))
+            $fatal(1, "TMEM%0d: PMPG %0d must split the RAM's %0d words into a power of two", SID, PMPG, RD);
+          wire [RW-1:0] bw_row = ram_row(bw_a[b][0]);
+          logic [NPG-1:0][NS-1:0][31:0] pq;
+`ifndef SYNTHESIS
+          // the bank's write stage at this RAM (the pieces' copies are it, each for its rows)
+          logic          pr_v;
+          logic [RW-1:0] pr_a;
+          logic [31:0]   pr_d;
+          initial pr_v = 1'b0;
           always_ff @(posedge clk) begin
-            pk_v <= bw_v[b][0] && sub_of(bw_a[b][0]) == LW'(k);
-            pk_a <= ram_row(bw_a[b][0]);
-            pk_d <= bw_d[b][0];
+            pr_v <= bw_v[b][0] && sub_of(bw_a[b][0]) == LW'(k);
+            pr_a <= bw_row;
+            pr_d <= bw_d[b][0];
           end
-          logic [31:0] pkd;
-`ifdef SYNTHESIS
-          assign pkd = pk_d;
-`else
-          assign pkd = pk_d ^ fault(0, b, pw_a[b][0]);
-          initial pk_v = 1'b0;
-          // the copy is the bank's write stage at this RAM
           always @(posedge clk)
-            if (pk_v != wh || (wh && (pk_a != ram_row(pw_a[b][0]) || pk_d != pw_d[b][0])))
+            if (pr_v != wh || (wh && (pr_a != ram_row(pw_a[b][0]) || pr_d != pw_d[b][0])))
               $fatal(1, "TMEM%0d: bank %0d RAM %0d's write copy differs from the write stage", SID,
                      b, k);
 `endif
-          otpu_pump_bank #(.N(RD), .STYLE("block"), .FW(1'b1)) u_pb (
-            .clk, .clk_f, .wv(pk_v), .wa(pk_a), .wd(pkd),
-            .rena(s_en[b][k][1]), .ra(s_a[b][k][1]), .renb(s_en[b][k][0]), .rb(s_a[b][k][0]),
-            .qa(s_q[b][k][1]), .qb(s_q[b][k][0]));
+          for (genvar g = 0; g < NPG; g++) begin : g_pc
+            (* keep = "true" *) logic           pk_v;
+            (* keep = "true" *) logic [PRW-1:0] pk_a;
+            (* keep = "true" *) logic [31:0]    pk_d;
+            always_ff @(posedge clk) begin
+              pk_v <= bw_v[b][0] && sub_of(bw_a[b][0]) == LW'(k) &&
+                      (NPG == 1 || 32'(bw_row[RW-1 -: GB]) == g);
+              pk_a <= bw_row[PRW-1:0];
+              pk_d <= bw_d[b][0];
+            end
+            logic [31:0] pkd;
+`ifdef SYNTHESIS
+            assign pkd = pk_d;
+`else
+            assign pkd = pk_d ^ fault(0, b, pw_a[b][0]);
+            initial pk_v = 1'b0;
+            always @(posedge clk)
+              if (pk_v != (pr_v && (NPG == 1 || 32'(pr_a[RW-1 -: GB]) == g)) ||
+                  (pk_v && (pk_a != pr_a[PRW-1:0] || pk_d != pr_d)))
+                $fatal(1, "TMEM%0d: bank %0d RAM %0d piece %0d's write copy differs", SID, b, k, g);
+`endif
+            otpu_pump_bank #(.N(PGN), .STYLE("block"), .FW(1'b1)) u_pb (
+              .clk, .clk_f, .wv(pk_v), .wa(pk_a), .wd(pkd),
+              .rena(s_en[b][k][1]), .ra(s_a[b][k][1][PRW-1:0]),
+              .renb(s_en[b][k][0]), .rb(s_a[b][k][0][PRW-1:0]),
+              .qa(pq[g][1]), .qb(pq[g][0]));
+          end
+          if (NPG > 1) begin : g_sel
+            logic [NS-1:0][GB-1:0] gs;
+            always_ff @(posedge clk)
+              for (int s = 0; s < NS; s++)
+                if (s_en[b][k][s]) gs[s] <= s_a[b][k][s][RW-1 -: GB];
+            always_comb for (int s = 0; s < NS; s++) s_q[b][k][s] = pq[gs[s]][s];
+`ifndef SYNTHESIS
+            initial gs = '0;
+`endif
+          end else begin : g_one
+            assign s_q[b][k] = pq[0];
+          end
 `ifndef SYNTHESIS
           // the dump: a shadow of the RAM's words (the same writes), not a reference into u_pb
           logic [31:0] shd [RD];
@@ -680,7 +727,7 @@ module otpu_tmem #(
           always @(posedge clk) begin
             if (dump)
               for (int r = 0; r < RD; r++) img[row_of(k, r) * LANES + b] = shd[r];
-            if (pk_v) shd[pk_a] <= pkd;
+            if (pr_v) shd[pr_a] <= pr_d ^ fault(0, b, pw_a[b][0]);
           end
 `endif
         end else begin : g_ram
