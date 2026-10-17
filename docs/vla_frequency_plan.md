@@ -184,6 +184,42 @@ So 8 ports are enough for one f2-vla slice, but the margin comes from ACT_ROWS 2
 PORTB 2 (L7), not from the HBM: the expert is port-bound already, so PORTB 2 is in the variant,
 not a contingency; 16 ports only with the MCOLS 96 stretch.
 
+### 6b. First synthesis of f2-vla (measured, 2026-10-17: the design does not fit)
+
+SynthCL on the F2 host (Vivado 2025.2, vla 22ade69b + `TMEM_SBP = 6`, run dir
+/home/ubuntu/opt/hwloop-nightly/vla-22ade69b/synth, 2 h 34 min, `OTPU_STAGE_SYNTHESIS_PASSED`,
+0 errors). Post-synthesis utilization against the budget above:
+
+| resource | used | available | of the part | budget above |
+|---|---|---|---|---|
+| CLB LUTs | 2,253,192 | 1,303,680 | **173%** | 0.6-0.8M |
+| of them logic | 1,035,402 | 1,303,680 | 79% | |
+| LUT as memory (distributed RAM 1,140,236 + SRL 77,554) | 1,217,790 | 600,960 | **203%** | |
+| registers | 555,937 | 2,607,360 | 21% | |
+| RAMB36 | 2,297 (2,819 before the spill) | 2,016 | **114%** | 512 + FIFOs |
+| URAM | **0** | 960 | 0% | ~345 |
+| DSP48E2 | 5,876 | 9,024 | 65% | ~4.9K |
+
+By hierarchy (LUTs / LUTRAM / RAMB36 / DSP): `u_act` (ACT RAM, 255 rows x 128 blocks, 4 MB,
+otpu_ram_1r1w_be STYLE "auto") 1,149,727 / **1,086,464** / 0 / 0: Vivado announced URAM for it,
+then `[Synth 8-5835] BRAM overutilized (5,638 of 4,032)` and implemented it as 131,088
+RAM256X1D; `u_tmem` (1.5M words, 64 lanes) 424,760 / 0 / **2,048** / 0: the pumped banks
+(otpu_pump_bank, STYLE "block", 64 banks x 2 sub-banks x 16 RAMB36) alone exceed the part's
+2,016 RAMB36, and the 425K logic LUTs are the 64-lane x 8-port crossbar (f2-hbm16's TMEM:
+10.3K LUTs, 64 RAMB36); `u_mxu` (32 packed columns) 299,960 / 9,508 / 62 / 4,897; `u_vpu` (64
+lanes) 205,815 / 5,046 / 0 / 576; `u_quant` 60,104 / - / 117 / 400. Timing estimate (no
+placement): clk_raw 200 MHz **-0.298 ns** (31 endpoints: the quantizer's 64-lane max / compare
+tree, `u_quant/ca_reg -> cmax_reg`, 20 levels), clk_f_raw 400 MHz +1.10, hclk_raw 450 MHz
++0.15, clk_main_a0 +2.49.
+
+What it means: the memory mapping in the budget (ACT RAM and TMEM in URAM) is not what the RTL
+asks for (`STYLE "auto"` on the ACT RAM, `"block"` on the pump banks), and even with both RAMs
+in URAM / BRAM the **logic alone is 79% of the part's LUTs** (the TMEM crossbar 425K, the MXU
+300K, the VPU 206K): MCOLS 32 packed x LANES 64 x 8 TMEM ports does not fit one VU47P with
+the HDK shell, before timing. The OOC packed column (docs/mxu_packing.md 9) still holds for the
+column itself. Options are in the status section below; the decision is the user's. The
+f2-hbm16 (MCOLS 4) run for comparison: 241K LUTs, 182K FF, 261 RAMB36, 727 DSP, clk_raw +1.10.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
