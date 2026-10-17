@@ -452,7 +452,12 @@ module otpu_slice
     .r_data(act_rdata), .r_scale(act_rscale));
 
   // ---- units
-  logic [NG-1:0] gnt;
+  // the grants: each unit's enable for its whole TMEM-side pipeline (the MXU's t_gnt: the drain,
+  // the lanes, the epilogue, ~5,000 flip-flops' enables; the second placed p4rl8 build,
+  // docs/wide_port.md "Placement", ran rl_pq through the arbiter into alpha, t_raddr, xo and
+  // the lanes over 8 ns of route). max_fanout: synthesis replicates the arbiter's last level
+  // per 256 loads, each copy beside its loads
+  (* max_fanout = 256 *) logic [NG-1:0] gnt;
   logic        q3_en;
   logic [31:0] q3_addr;
   logic d_dma, d_mxu, d_q, d_vpu, r_dma, r_mxu, r_q, r_vpu;
@@ -564,7 +569,8 @@ module otpu_slice
   // from rl_pend's second cycle (rl_pq): TMEM's input stage puts every unit's read a cycle after
   // it forms, and the writes a cycle after their grant, so RLD's read moves with them
   // (release r2, docs/tmem_nocopy.md 7)
-  logic        rl_pend, rl_pq, rl_got, rl_cv, rl_c1, rl_c2, rl_raw;
+  logic        rl_pend, rl_got, rl_cv, rl_c1, rl_c2, rl_raw;
+  (* max_fanout = 8 *) logic rl_pq;    // into the request arrays and the arbiter: a copy per 8
   logic [31:0] rl_a, rl_w, rl_m, rl_x, rl_pl;
   logic [15:0] rl_ph;
   wire         rl_busy = rl_pend || rl_got || rl_cv || rl_c1 || rl_c2 || rl_v;

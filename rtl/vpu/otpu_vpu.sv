@@ -337,12 +337,19 @@ module otpu_vpu
   // address arithmetic, its lane tests and the issue checks end at the register, not at the
   // TMEM's ranks and pumped banks (r2m4: cols / ic -> the request address -> the pump banks'
   // read pins, clk -> clk2x, 55% of its TNS). The chunk (mi) waits a cycle in mi2 for it.
+  // (max_fanout: an address bit reaches TMEM's lane rotation, its bank compares and the pumped
+  // banks' address multiplexers, ~16-40 loads over the TMEM; synthesis keeps a register copy
+  // per 16, each beside its loads: the second placed p4rl8 build, docs/wide_port.md
+  // "Placement", ran ta_addr into the pumped banks' ADDRARDADDR over 90% route)
   logic [LANES-1:0]       ta_en_c, tb_en_c;
   logic [LANES-1:0][31:0] ta_addr_c, tb_addr_c;
+  (* max_fanout = 16 *) logic [LANES-1:0][31:0] ta_q, tb_q;
+  assign ta_addr = ta_q;
+  assign tb_addr = tb_q;
   always_ff @(posedge clk)
     if (rst) begin ta_en <= '0; tb_en <= '0; end
     else if (en) begin
-      ta_en <= ta_en_c; tb_en <= tb_en_c; ta_addr <= ta_addr_c; tb_addr <= tb_addr_c;
+      ta_en <= ta_en_c; tb_en <= tb_en_c; ta_q <= ta_addr_c; tb_q <= tb_addr_c;
     end
   logic [LANES-1:0] imask;
   logic             irow_last, iall_last;

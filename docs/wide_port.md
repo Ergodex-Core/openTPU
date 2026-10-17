@@ -728,6 +728,101 @@ regression cycles and the NATIVEB counters are the base's by construction; the c
 in the F2 fabric only (a command one core cycle later in the bridge; the host's write beat per
 ~7 hclk cycles instead of ~4; the logic out of reset 1-3 cycles later).
 
+### Placement, round 2, and the floorplan (2026-10-17)
+
+The second placed build (fb42c14e: the round above plus the mkr fix, directive
+SSI_SpreadLogic_low) placed at WNS -4.608 ns. SLR usage: SLR0 161,809 LUTs, SLR1 91,118, SLR2
+21; SLR0 <-> SLR1 7,693 of 23,040 SLLs (5,508 up, 2,185 down), 2 of them registered (TX / RX_REG
+2 of 32). By domain:
+
+* **hclk (450 MHz)**: the worst 300 are still the host write path, now from `u_host/ws_reg`'s
+  replicas (216), `hw_s_reg` (35), `rq_d_reg` (25) and `hw_d_reg` into
+  `g_port[*].u_hreg/m_wdata_reg` (224) and `m_wstrb_reg` (39): one level, 6.338 ns of which
+  6.127 route. The host block and the eight port registers were placed far apart; the half
+  select `ws` fed every port's 288 register loads through the mux.
+* **clk (200 MHz)**: `rl_pq_reg` (216 of the worst 300: otpu_slice's pending RLD read, into the
+  TMEM request arrays and the bank arbiter, whose grant is the MXU's `t_gnt`) into
+  `u_mxu/alpha_reg` (160), `t_raddr_reg` (31), `xo_reg` and the lanes' `m_reg`; and
+  `u_board/u_mem/wh_r_reg` (70, the adapter's SW-queue bucket hash, whose readies reach the
+  units' grants) into `u_quant` and `u_mxu/g_lane.u_l/u_m1/m_reg`: 4 levels, 8.455 ns of which
+  8.147 route: the adapter, the arbiter and the units across the SLR split.
+* **clk -> clk_f** (the pumped TMEM, multicycle 2 = 5.0 ns): -2.995 ns, 2,063 of 2,272
+  endpoints, `u_vpu/ta_addr_reg` and `rl_pq_reg` into the pumped banks' ADDRARDADDR, 7-10
+  levels, 90% route.
+* **clk_main_a0 -> hclk** -1.279 (77: the host path's PCIS crossings).
+* The base f2-hbm (PORTB 1, MCOLS 4, 96a90c2f, SpreadLogic_high) placed at -4.102 with the
+  same host path and the bridge's `cf_h`: the shell fails on its own.
+
+Module sizes (synthesis, fb42c14e; LUT / FF / RAMB36 / DSP): cl_opentpu 256,609 / 194,413 / 420
+/ 1,275; `u_sys/u_board` 225,960 / 153,362 / 416 / 1,275 (`u_slice` 174,618 / 131,573 / 388 /
+1,275: `u_mxu` 97,272 / 70,237 / 128 / 1,122, `u_vpu` 36,165 / 29,560 / 4 / 86, `u_tmem` 11,913 /
+5,129 / 64, `u_quant` 9,383, `u_seq` 9,044, `u_dma` 9,251 / 3,955 / 14; the adapter
+`u_board/u_mem` 46,717 / 14,508); `u_sys/u_mem` 29,514 / 39,848 (8 bridges at ~3,300 / 3,745
+each, the host path, the port registers and arbiters). A VU47P clock region holds ~13.6K LUTs
+and ~27K flip-flops; the SLRs are rows Y0-3, Y4-7, Y8-11; the HBM's ports are below SLR0.
+
+**The floorplan** (boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc, appended by
+build.py to small_shell_cl_pnr_user.xdc for an HBM target; every pblock a child of the HDK's
+`pblock_CL`, whole clock regions, `-add` ranges as the HDK's, `CONTAIN_ROUTING` 0, the cell
+queries failing closed; tests/test_f2_build.py checks it under a Tcl mock):
+
+| pblock | hierarchy (WRAPPER/CL/u_sys/...) | clock regions | LUT budget | used |
+|---|---|---|---|---|
+| `pb_otpu_hbm` (SLR0) | `u_mem/g_port[*].u_nch`, `.u_hreg`, `.u_port`, `u_mem/u_host`, `u_ocl`, `u_cx/g_xr.u_m`, the SLR0 stage of every chain (`u_mem/g_xr.g_x[0]`, `u_cx/g_xr.g_x[0]`, `g_rs[0]`) | X0Y0:X3Y3 + X4Y0:X7Y0 (20, the CL's whole SLR0 area) | ~272K | ~31K (11%) |
+| `pb_otpu_mid` (SLR1) | the middle stage of every chain (`g_x[1]`, `g_rs[1]`) | X0Y4:X3Y7 (16) | ~217K | 0 LUT, ~18K FF |
+| `pb_otpu_board` (SLR2) | `u_board`, the SLR2 stages (`g_x[2]`, `u_cx/g_xr.u_s`, `g_rs[2]`) | X0Y8:X7Y11 (32, all of SLR2) | ~435K | 226K (52%); 416 of 672 RAMB36, 1,275 of 3,008 DSP |
+| `pb_otpu_tmem` (child of `pb_otpu_board`) | `u_board/u_slice/u_tmem`, `u_vpu` | X2Y9:X5Y10 (8) | ~109K | 48K (44%), 68 RAMB36 |
+
+Why this split: SLR1's CL area is 23 clock regions (~313K LUTs), 72% full with the board, too
+full for 200 MHz routing; SLR2 holds it at 52% with the MXU, TMEM and VPU in one SLR, so the
+adapter's readies into the units, the grants into the MXU and the pumped banks' addresses
+never cross an SLR. The alternative, the adapter in SLR1 as the bridge to SLR0 and the slice in
+SLR2, would put port B's 4,096-bit data and the ports' same-cycle readies (`b_rdy`, `sw_rdy`,
+`a_rdy`: a request is taken when req && rdy in the cycle) across an SLR, which needs a
+credit-based port, not a register; the native ports already have the credit form (a FIFO behind
+a registered ready) and cross instead. The TMEM beside the VPU: the pump paths (clk -> clk_f,
+one core period) start at the VPU's `ta_addr` and the MXU's `t_raddr`; the MXU (97K) wraps
+around the box. Round 2's directive (SSI_SpreadLogic_low) is moot with the pblocks; build.py's
+default stays until the parent decides (`--place-directive Default` is the natural choice).
+
+**The SLR crossing registers**: every net between SLR0 and SLR2 is a chain of three `otpu_xr`
+stages (rtl/shell/otpu_xr.sv, otpu_board's S > 1 crossing stage moved to its own file: its
+`r_reg` with max_fanout 256, the cells a floorplan marks USER_SLL_REG), one per SLR, placed by
+the pblocks above, so each SLR crossing runs flip-flop to flip-flop with nothing between
+(TX_REG / RX_REG eligible). No stage resets (a word in flight at a reset flushes in three
+cycles while both sides hold it).
+
+| crossing | module | down (SLR2 -> SLR0) | up (SLR0 -> SLR2) | cycles added |
+|---|---|---|---|---|
+| the native ports (port B's requests and data, port A's, the SW queue's: everything the adapter sends) | otpu_f2_hbm_mem `NXR` = 3, `g_xr.g_x[k].u_dn` / `.u_up` | per channel the adapter's takes (`n_cvalid && n_cready`, `n_wvalid && n_wready`) with the command (we, 25-bit beat) and the beat (512 + 64): 604 bits x 8 | the bridge's readies, `n_rvalid` + 512, `n_wdone` 16, `n_err`: 532 x 8 | +3 each way: a read's data 6 cycles later, a write counted 6 later. The bridge takes what arrives (`XL` = 6: the adapter sends what it saw a ready for, 3 cycles earlier, and the beat lands 3 later) and its native FIFOs go from 4 to 16 entries with the ready's threshold at 16 - 2 - 6 = 8 |
+| the control path (OCL -> the board's registers) | otpu_axil_xr `u_cx` (rtl/boards/f2/otpu_axil_xr.sv): `g_xr.u_m` (SLR0), `g_xr.u_s` (SLR2), `g_xr.g_x[k]` | AW, W, AR as pulses with their words (63 bits) | the takes (the master's readies for a cycle), B and R as pulses (41 bits) | +3 each way per access (an access every microseconds) |
+| the board's reset and the HBM's ready | otpu_f2_hbm_sys `g_rs[k].u_x` | | `rst`, `hbm_ready` (2 bits) | the board enters and leaves reset 3 cycles after the fabric (idle both times) |
+
+Measured on the RTL (tools/perf_qwen.py, Gemma-3-1B int4 / int8, 4 layers + head, PORTB 4 /
+MCOLS 8 / RL 4 / ALINE 64, --lat 60): the stages are in the F2 fabric only, which tb_top does not
+build, so the regression cycles are the base's by construction; the equivalent, 6 more cycles
+of read latency on the native model (--lat 66), is measured below.
+
+**Fan-out** (`(* max_fanout *)` attributes; "before" is the net's loads in the RTL, "after" the
+loads per copy synthesis leaves):
+
+| net | where | before | after |
+|---|---|---|---|
+| `ws` (the host path's W half select) -> the ports' `m_wdata` / `m_wstrb` | otpu_f2_hbm_host | 288 LUT selects (the 256 + 32 mux), each LUT into 8 ports: 2,304 register loads behind `ws` (216 replicas placed) | 0: the W beat shown to the ports is a register (`hw_wd`, `hw_ws`, `hw_wl`: the low half loads with the head, the high half as the low is taken), 8 register loads per bit, no logic; `ws` keeps its 17 valids and the one load select |
+| `gnt` (the slice's grants: `t_gnt` is the MXU's enable) | otpu_slice | ~5,000 register enables in the MXU (the drain, the lanes, the epilogue), the VPU's, QUANT's | max_fanout 256: the arbiter's last level replicated per 256 loads |
+| `rl_pq` (the pending RLD read) | otpu_slice | ~40 (the request array's en and 32 address bits, the rl_* registers) | max_fanout 8 |
+| `ta_addr`, `tb_addr` (the VPU's TMEM addresses) | otpu_vpu | ~16-40 per bit over the TMEM (lane rotation, bank compares, the 16 pumped banks' address AND-OR) | max_fanout 16 on the register (`ta_q`, `tb_q`) |
+| `t_raddr` (the MXU's TMEM read address) | otpu_mxu | the same | max_fanout 16 (`t_rq`) |
+| `wh_r` (the adapter's SW-queue bucket hash, 3 bits x 8 channels) | otpu_native_dram | ~30 per bit, all in the adapter (the bucket compares, the block flag's mux) | unchanged: the 8 ns were the SLR split, not the fan-out (the adapter and the units share SLR2 now) |
+
+**The pumped TMEM address** (clk -> clk_f): otpu_clk2x.tcl's multicycle is `-from` the core
+clock `-through` every otpu_pump_bank's `ra`, `rb`, `rena`, `renb` pins `-to` clk_f, so it covers
+every start point that reaches a bank's address, `rl_pq` through the collective port's request
+included (the report's 5.000 ns requirement on those paths confirms it); nothing to extend, and
+no register added (that would be a cycle of TMEM read latency on every port). With the slice
+in one SLR and the TMEM beside the VPU the 90%-route paths shorten; the attributes above place
+a copy of each address register per 16 loads.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
