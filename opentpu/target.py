@@ -58,6 +58,11 @@ TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_
 # TMEM_WARB (any TMEM_IMPL; optional, the RTL's default 0): the write-bank arbitration between
 # the VPU and the MXU drain (otpu_slice TMEM_WARB; docs/vla_frequency_plan.md L5)
 ARB_KEYS = ("TMEM_WARB",)
+# the memories' technology RAM styles (optional, the RTL's defaults 0: the ACT RAM "auto", TMEM
+# IMPL 3's RAMs "block"): ACT_RAM 1 block / 2 ultra (otpu_actram STYLE), TMEM_RAM 2 ultra (the
+# pumped banks, otpu_tmem RSTYLE); f2-vla's 4 MB ACT RAM in block RAM and its 1.5M-word TMEM in
+# URAM (docs/vla_frequency_plan.md 6c)
+MEM_KEYS = ("ACT_RAM", "TMEM_RAM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
@@ -182,7 +187,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS + MEM_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -257,7 +262,7 @@ def arch_hash(cfg) -> int:
     build without it stays, and a host that writes no entries refuses a build with it (its
     hash leaves it out: opentpu/host/board.py check_hash)."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
-    for k in ("SEQ_WC", "T2", "PACK"):    # (in the hash only when on: older builds keep theirs)
+    for k in ("SEQ_WC", "T2", "PACK", "MXROT"):   # (in the hash only when on: older builds keep theirs)
         if not d.get(k):
             d.pop(k, None)
     if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
@@ -282,7 +287,7 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
-    for k in ARB_KEYS:
+    for k in ARB_KEYS + MEM_KEYS:
         if u.get(k):
             d[k] = int(u[k])
     if t.arch["SEQ_WC"]:
@@ -291,6 +296,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d["T2"] = 1
     if t.arch.get("PACK"):
         d["PACK"] = 1
+    if t.arch.get("MXROT"):
+        d["MXROT"] = 1
     return d
 
 
@@ -302,7 +309,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
     a, u, p = t.arch, t.uarch, t.platform
     cfg = config(t)
     tm3 = {k: int(u[k]) for k in TMEM3_KEYS if k in u} if u["TMEM_IMPL"] == 3 else {}
-    tm3 |= {k: int(u[k]) for k in ARB_KEYS if k in u}
+    tm3 |= {k: int(u[k]) for k in ARB_KEYS + MEM_KEYS if k in u}
     return tm3 | {
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
@@ -313,6 +320,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
         "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
         "PACK": int(a.get("PACK", False)),
+        "MXROT": int(a.get("MXROT", False)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
@@ -342,7 +350,7 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PACK; the CFG_HASH it reports): ACT_ROWS
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PACK, MXROT; the CFG_HASH it reports): ACT_ROWS
     equal to MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
@@ -359,6 +367,8 @@ def build_config(t: Target | str | None = None, **knobs):
         a["T2"] = bool(int(knobs["T2"]))
     if knobs.get("PACK") is not None:
         a["PACK"] = bool(int(knobs["PACK"]))
+    if knobs.get("MXROT") is not None:
+        a["MXROT"] = bool(int(knobs["MXROT"]))
     return config(t, **a)
 
 

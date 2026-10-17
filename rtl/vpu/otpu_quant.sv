@@ -6,7 +6,7 @@
 //
 // Each row is read twice, both passes LANES elements a cycle (QST's pass 1: one byte, or a word
 // of four, a cycle), everything advancing on the cycles the TMEM grant is given:
-//   pass 0: read | prescale: (x*r)*c (2 multipliers) | chunk max (two stages, also per group
+//   pass 0: read | prescale: (x*r)*c (2 multipliers) | chunk max (three stages, also per group
 //           where a chunk holds several QACT groups) | fold: the row's max and the group maxes
 //           (a_g, kept in four RAMs: group g in RAM g%4, word g/4) | the scale unit (recip: 2
 //           Newton steps and the correction on multiply-add slots, then *127 and *1/127)
@@ -373,13 +373,20 @@ module otpu_quant
   endfunction
 
   // ------------------------------------------------------------------ pass 0: maxes
-  // The chunk's max over contiguous lanes in two registered stages: pairs, then the rest; on the
-  // way, the max of each QACT group the chunk holds (QN of PL lanes, where D/4 < LANES)
+  // The chunk's max over contiguous lanes in three registered stages: pairs, then eights (two
+  // more levels), then the rest (log2(LANES / 8) levels: three at 64 lanes, where the 64-lane
+  // tree in one stage, 20 logic levels, missed 200 MHz by 0.3 ns post-synthesis on f2-vla,
+  // docs/vla_frequency_plan.md 6c); on the way, the max of each QACT group the chunk holds (QN
+  // of PL lanes, where D/4 < LANES), taken at the level that completes it and carried. The
+  // row's max is a cycle later than with two stages: a row's pass 1 starts a cycle later.
   localparam int HL = LANES / 2;
+  localparam int H2 = (HL > 4) ? HL / 4 : 1;   // the second stage's maxes (8 lanes each)
   f32_t  ca [HL];
+  f32_t  cb [H2];
+  f32_t  pmb [QN];                             // group maxes complete after the second stage
   f32_t  cmax;
   f32_t  pmx [QN];
-  rm_t   mh, mc;
+  rm_t   mh, mi, mc;
   always_ff @(posedge clk) if (en) begin
     f32_t v [LANES];
     // xp is flushed (otpu_fmul), so clearing the sign is fabs
@@ -392,14 +399,28 @@ module otpu_quant
     f32_t pm [QN];
     for (int l = 0; l < HL; l++) v[l] = ca[l];
     for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 2];          // (PL 2: the pairs)
-    for (int s = 1; s < HL; s = s * 2) begin                      // v[l] covers 4s lanes after
+    for (int s = 1; s < HL && s < 4; s = s * 2) begin             // v[l] covers 4s lanes after
       for (int l = 0; l + s < HL; l = l + 2 * s)
         if (mgt(v[l + s], v[l])) v[l] = v[l + s];
       if (4 * s == PL) for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 2];
     end
+    for (int l = 0; l < H2; l++) cb[l] <= v[4 * l];               // (HL <= 4: v[0] alone)
+    pmb <= pm;
+    mi <= mh;
+  end
+  always_ff @(posedge clk) if (en) begin
+    f32_t v [H2];
+    f32_t pm [QN];
+    for (int l = 0; l < H2; l++) v[l] = cb[l];                    // v[l] covers 8 lanes
+    pm = pmb;
+    for (int s = 1; s < H2; s = s * 2) begin                      // v[l] covers 16s lanes after
+      for (int l = 0; l + s < H2; l = l + 2 * s)
+        if (mgt(v[l + s], v[l])) v[l] = v[l + s];
+      if (16 * s == PL) for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 8];
+    end
     cmax <= v[0];
     pmx <= pm;
-    mc <= mh;
+    mc <= mi;
   end
 
   // the row's running max with this chunk folded in (a row's first chunk restarts it): the

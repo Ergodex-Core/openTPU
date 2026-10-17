@@ -61,7 +61,9 @@
 //                      (always at S > 1; at S = 1 unless built without it, otpu_board COLL_GATHER:
 //                      then BAR alone, and a GATHER raises ERROR); [5:1] the wide-port branch's PORTB / ROWLANES / ALINE (0 here); bit6 PACK: the MXU packs
 //                      two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md: an
-//                      int8 MM's rate doubles; no program or result changes)
+//                      int8 MM's rate doubles; no program or result changes); bit7 MXROT: the MXU's TMEM
+//                      ports are rotators, the drain writes its lanes at output row strides
+//                      = 1 mod LANES only (otpu_slice MXROT: the compiler's layout rule)
 //   0x60 + 4k      RW  ARG0..ARG7: the run's arguments, R8..R15 when RUN rises (CAPS bit25;
 //                      docs/isa.md "Arguments"); reset 0
 //   0x80 CFG_SLICES   RO  slices S (version 4: the configuration the target file built,
@@ -112,6 +114,8 @@ module otpu_ctrl #(
   parameter bit COLL_GATHER = 1'b1,      // CAPS2 bit0 (with S > 1): the collective unit runs GATHER
   parameter bit T2 = 1'b0,               // CAPS bit28: t2 weights, MM QUAD, QACT DUP4
   parameter bit PACK = 1'b0,             // CAPS2 bit6: the MXU packs two int8 weight rows a DSP
+  parameter bit MXROT = 1'b0,            // CAPS2 bit7: the MXU's TMEM ports are rotators (the drain's
+                                         //   lanes at output row strides = 1 mod LANES; otpu_slice)
   parameter int LDP = 2,               // cycles after LOAD before the loaders' busy shows (>= 2)
   // the configuration registers (CFG_*, register map 4): the target's values
   parameter int S          = 1,
@@ -198,9 +202,9 @@ module otpu_ctrl #(
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  // bit6 PACK; [5:1] reserved for the wide-port branch's PORTB [3:1], ROWLANES (4) and ALINE
-  // (5), 0 here; bit0 GATHER
-  localparam logic [31:0] CAPS2 = {25'd0, PACK, 5'd0, COLL_GATHER || S > 1};
+  // bit7 MXROT, bit6 PACK; [5:1] reserved for the wide-port branch's PORTB [3:1], ROWLANES (4)
+  // and ALINE (5), 0 here; bit0 GATHER
+  localparam logic [31:0] CAPS2 = {24'd0, MXROT, PACK, 5'd0, COLL_GATHER || S > 1};
 
   logic [63:0] cycles;
   logic [31:0] n_brd, n_bwr, n_ard, n_awr, n_bst, scratch;

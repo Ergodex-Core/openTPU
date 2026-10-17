@@ -123,10 +123,11 @@ def test_caps2_gather_and_the_load_refusal():
     names = {n for g, n, _ in op_checks(cfg)}
     assert "GATHER" in names
     assert names - {n for g, n, _ in op_checks(cfg, gather=False)} == {"GATHER"}
-    assert R.caps2(None) == {"gather": True, "pack": False}
-    assert R.caps2(0) == {"gather": False, "pack": False}
-    assert R.caps2(65) == {"gather": True, "pack": True}        # CAPS2 bit6: the MXU's PACK
-    assert R.caps2(0x3F) == {"gather": True, "pack": False}     # [5:1]: wide-port's fields, not PACK
+    assert R.caps2(None) == {"gather": True, "pack": False, "mxrot": False}
+    assert R.caps2(0) == {"gather": False, "pack": False, "mxrot": False}
+    assert R.caps2(65) == {"gather": True, "pack": True, "mxrot": False}    # CAPS2 bit6: the MXU's PACK
+    assert R.caps2(0x3F) == {"gather": True, "pack": False, "mxrot": False} # [5:1]: wide-port's fields, not PACK
+    assert R.caps2(0x81) == {"gather": True, "pack": False, "mxrot": True}  # bit7: the MXU's rotator TMEM ports
 
 
 def test_ddr_rate(monkeypatch, capsys):

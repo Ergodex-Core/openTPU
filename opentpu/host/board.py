@@ -1377,10 +1377,11 @@ def device_config(info: dict, **kw):
     caps2 = info.get("caps2") or {}
     pair, dstep = bool(caps.get("pair")), bool(caps.get("dstep"))
     stream, t2 = bool(caps.get("stream")), bool(caps.get("t2"))
-    pack = bool(caps2.get("pack"))
+    pack, mxrot = bool(caps2.get("pack")), bool(caps2.get("mxrot"))
     for k, have, what in (("PAIR", pair, "column reuse (CAPS bit5)"),
                           ("T2", t2, "t2 weights (CAPS bit28)"),
                           ("PACK", pack, "the MXU's int8 weight packing (CAPS2 bit6)"),
+                          ("MXROT", mxrot, "the MXU's rotator TMEM ports (CAPS2 bit7)"),
                           ("DSTEP", dstep, "DSTEP (CAPS bit6)"),
                           ("STREAM", stream, "the stream engine (CAPS bit26)")):
         env = os.environ.get(f"OTPU_{k}")
@@ -1390,7 +1391,8 @@ def device_config(info: dict, **kw):
                                  f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
-           "PACK": pack, "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
+           "PACK": pack, "MXROT": mxrot, "STREAM": stream,
+           "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
         dev.update(D=info["D"], SEQ_WC=bool(c.get("SEQ_WC")),
@@ -1458,6 +1460,7 @@ def check_hash(info: dict, cfg=None) -> None:
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
                            T2=bool(caps.get("t2")),
                            PACK=bool((info.get("caps2") or {}).get("pack")),
+                           MXROT=bool((info.get("caps2") or {}).get("mxrot")),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:

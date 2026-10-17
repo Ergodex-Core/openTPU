@@ -1895,8 +1895,16 @@ class Builder:
         if acc is None and out is None:
             # Layout choice: an odd row stride puts the M results of one streamed row in M
             # distinct TMEM banks, so the MXU writes them back in a single cycle. The spare row
-            # after the tile receives the row maxima if the kernel asks for them (RMAX).
-            rs = N if (one_d or M == 1 or N % 2) else N + 1
+            # after the tile receives the row maxima if the kernel asks for them (RMAX). With
+            # MXROT (the MXU's TMEM ports rotators, no lane crossbar: f2-vla) the drain's lane k
+            # must land in bank (a0 + k) mod LANES, so the stride is the first value >= N that
+            # is 1 mod LANES (N + 1 for every width that is a multiple of LANES, as before; an
+            # attention's 558 keys get 577 instead of 559); any other stride drains a lane a
+            # step (otpu_mxu drain_run)
+            if self.cfg.MXROT and not (one_d or M == 1):
+                rs = N + (1 - N) % self.cfg.LANES
+            else:
+                rs = N if (one_d or M == 1 or N % 2) else N + 1
             out = self.alloc((N,) if one_d else (M, N), rs, spare=0 if one_d else M)
         else:
             out = acc if acc is not None else out
@@ -2115,7 +2123,8 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
     multiple of the banks, that is one a cycle. An MM is slow when its drain takes more steps a
     group than its array takes advances: W_down at KB 2 into a [16, 1152] tile loaded from DRAM
     (MiniCPM-V's tower: 40% of its pops). A fresh output and ol.empty / zeros / full give an odd
-    row stride, which spreads the rows over the banks."""
+    row stride, which spreads the rows over the banks. With MXROT (rotator ports) a row stride
+    that is not 1 mod LANES drains one result a step, whatever its banks."""
     lanes = lanes or cfg.MCOLS
     out = []
     for pc, ins in enumerate(prog):
@@ -2125,9 +2134,10 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
         _, pair, quad = I.mm_format(ins)        # advances a group: QUAD four t2 blocks, PAIR two
         adv = -(-KB // 4) if quad else -(-KB // 2) if pair else KB
         steps, j, rows = 0, 0, min(M, cfg.MCOLS)
+        run = 1 if (getattr(cfg, "MXROT", False) and ors % cfg.LANES != 1) else lanes
         while j < rows:
             banks = set()
-            while j < rows and len(banks) < lanes and (j * ors) % cfg.LANES not in banks:
+            while j < rows and len(banks) < run and (j * ors) % cfg.LANES not in banks:
                 banks.add((j * ors) % cfg.LANES)
                 j += 1
             steps += 1

@@ -87,7 +87,16 @@ module otpu_slice
                                       //   FIFO is half full, else the VPU (see the arbiter)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
-  parameter bit PACK       = 1'b0     // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
+  parameter bit PACK       = 1'b0,    // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
+  parameter bit MXROT      = 1'b0,    // the MXU's TMEM ports as rotators whose lanes carry their
+                                      //   rows (otpu_tmem ROW_R / ROW_W) instead of the lane
+                                      //   crossbar: the drain writes its lanes only at output row
+                                      //   strides = 1 mod LANES (otpu_mxu MXROT; CAPS2 bit7, the
+                                      //   compiler's layout rule; docs/vla_frequency_plan.md 6c)
+  parameter int ACT_RAM    = 0,       // the ACT RAM's technology RAM style (otpu_actram STYLE):
+                                      //   0 "auto" (the card's), 1 "block", 2 "ultra"
+  parameter int TMEM_RAM   = 0        // TMEM_IMPL 3's RAMs (otpu_tmem RSTYLE): 0 / 1 "block", 2
+                                      //   "ultra" (f2-vla's pumped banks: 3 URAM a sub-bank)
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused
@@ -406,7 +415,9 @@ module otpu_slice
   logic [NWP-1:0][LANES-1:0]       wq_en, w_en;
   logic [NWP-1:0][LANES-1:0][31:0] w_addr, w_data;
   logic [NWP-1:0]                  w_gnt;   // each write port's grant (the DMA always writes)
-  // the MXU's ports keep the crossbar (its drain writes scattered rows); the others are rotators.
+  // the MXU's ports keep the crossbar (its drain writes scattered rows), unless MXROT makes
+  // them rotators with the lanes' own rows (the drain then writes its lanes at row strides = 1
+  // mod LANES only, otpu_mxu); the others are rotators.
   // The quantizer's row-factor port (one word) and the collective's read port, rarely busy,
   // share the DMA's copy (ST reads): 6 copies of the memory instead of 8.
   // (TMEM_IMPL 2, simulation: IMPL 0 with a copy per read port, so any grant reads the right
@@ -414,7 +425,9 @@ module otpu_slice
   // docs/tmem_nocopy.md 7): the granted writes registered in TMEM, the units' read requests in
   // the units (each a cycle after it forms), so both move a cycle and the order holds.
   otpu_tmem #(.WORDS(TMEM_WORDS), .LANES(LANES), .NRP(NRP), .NWP(NWP), .WPB(WPB),
-              .GEN_R(NRP'(1) << P_MXU), .GEN_W(NWP'(1) << W_MXU),
+              .GEN_R(MXROT ? '0 : NRP'(1) << P_MXU), .GEN_W(MXROT ? '0 : NWP'(1) << W_MXU),
+              .ROW_R(MXROT ? NRP'(1) << P_MXU : '0), .ROW_W(MXROT ? NWP'(1) << W_MXU : '0),
+              .RSTYLE((TMEM_RAM == 2) ? "ultra" : "block"),
               .SH_HOST(P_DMA),
               .SH_MASK((TMEM_IMPL == 2) ? '0 : (NRP'(1) << P_Q3) | (NRP'(1) << P_COLL)),
               .SID(SID), .IMPL((TMEM_IMPL == 2) ? 0 : TMEM_IMPL), .NCP(NCP), .CPY(CPY), .RQ(TMEM_RQ),
@@ -448,7 +461,7 @@ module otpu_slice
   logic [MCOLS*D*8-1:0]   act_rdata;
   logic [MCOLS*64-1:0]    act_rscale;
   otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES),
-                .T2(T2)) u_act (
+                .T2(T2), .STYLE((ACT_RAM == 1) ? "block" : (ACT_RAM == 2) ? "ultra" : "auto")) u_act (
     .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
     .w_dup4(act_dup4), .w_off(act_off), .swe(asc_we),
     .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren), .r_use(mxu_pop), .r_blk(act_rblk),
@@ -515,7 +528,7 @@ module otpu_slice
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PACK(PACK), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PACK(PACK), .MXROT(MXROT), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),

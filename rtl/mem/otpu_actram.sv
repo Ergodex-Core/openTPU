@@ -12,7 +12,12 @@
 //
 // Block RAM: one memory per column j (rows j, j+MCOLS, ...) and piece p (bytes p*PB ..
 // p*PB+PB-1: four 64-bit block RAMs at PB = 32), GROUPS*BLOCKS words of PB bytes with byte
-// write enables, group-major. The read is registered (the MXU's first pipeline register) and
+// write enables, group-major. STYLE is the pieces' and the scale records' technology RAM style
+// (rtl/tech): "auto" leaves it to the tool (the card's 1K x 256-bit pieces are block RAM
+// either way); f2-vla names "block" (otpu_slice ACT_RAM 1): at 255 rows x 128 blocks x 32
+// columns (4 MB) Vivado's "auto" announced URAM, hit its block RAM limit and spilled the whole
+// RAM into 131 K LUT RAM cells (docs/vla_frequency_plan.md 6b); as block RAM it is 1,024 RAMB36
+// for the pieces (8 of 1K x 36 a piece) and 64 for the scale records. The read is registered (the MXU's first pipeline register) and
 // advances with the column's `ren` bit (otpu_mxu: the columns of the MM's rows); a read of a block written at the same edge returns the old bytes. Writes
 // land three cycles after they are presented: the quantizer's write is registered as it arrives
 // and again (LANES bytes, their index and row, the scale), so it crosses from the quantizer in
@@ -29,7 +34,8 @@ module otpu_actram #(
                                     // MCOLS) groups: ROWS 255, the ISA's most, at MCOLS 32 is 8)
   parameter int BLOCKS = 64,
   parameter int LANES  = 8,
-  parameter bit T2     = 1'b0       // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
+  parameter bit T2     = 1'b0,      // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
+  parameter string STYLE = "auto"   // the RAMs' style (rtl/tech otpu_ram_1r1w_be STYLE; above)
 ) (
   input  logic                   clk,
   input  logic [LANES-1:0]       we,          // lane l writes byte w_idx + l
@@ -177,7 +183,7 @@ module otpu_actram #(
       end
       wire [GW+BW-1:0] wa = (GROUPS > 1) ? {wg, wb} : (GW+BW)'(wb);
       // the piece's bytes: a technology RAM with byte enables (rtl/tech)
-      otpu_ram_1r1w_be #(.W(PB*8), .N(GROUPS*BLOCKS), .STYLE("auto")) u_act (
+      otpu_ram_1r1w_be #(.W(PB*8), .N(GROUPS*BLOCKS), .STYLE(STYLE)) u_act (
         .clk, .we(wsel), .wbe(wbe[p*PB +: PB]), .wa(wa[RAW-1:0]), .wd(wd[p*PB*8 +: PB*8]),
         .re(ren[j]), .ra(ra[RAW-1:0]), .rd);
       assign r_data[j*D*8 + p*PB*8 +: PB*8] = rd;
@@ -186,7 +192,7 @@ module otpu_actram #(
 `endif
     end
     // the column's block scale records
-    otpu_ram_1r1w #(.W(64), .N(GROUPS*BLOCKS), .STYLE("auto")) u_asc (
+    otpu_ram_1r1w #(.W(64), .N(GROUPS*BLOCKS), .STYLE(STYLE)) u_asc (
       .clk, .we(ssel[j]), .wa(sa[RAW-1:0]), .wd(sd), .re(ren[j]), .ra(ra[RAW-1:0]), .rd(rs));
     assign r_scale[j*64 +: 64] = rs;
 `ifndef SYNTHESIS

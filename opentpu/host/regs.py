@@ -83,14 +83,20 @@ CAP2_GATHER = 1
 # ROWLANES and bit5 its ALINE (docs/wide_port.md, docs/row_lanes.md there), so PACK sits above
 # them: the branches merge without a clash
 CAP2_PACK = 64
+# CAPS2 bit7: the MXU's TMEM ports are rotators, not a lane crossbar (otpu_slice MXROT,
+# docs/vla_frequency_plan.md 6c): the drain writes its lanes only at output row strides = 1 mod
+# LANES, which the compiler lays MM outputs out at (Config.MXROT, in the CFG_HASH when on: the
+# programs' layout differs, every result is the same)
+CAP2_MXROT = 128
 
 
 def caps2(v: int | None) -> dict:
     """CAPS2's value -> its capabilities; None (a register map before 5): GATHER present, the
     rest absent."""
     if v is None:
-        return {"gather": True, "pack": False}
-    return {"gather": bool(v & CAP2_GATHER), "pack": bool(v & CAP2_PACK)}
+        return {"gather": True, "pack": False, "mxrot": False}
+    return {"gather": bool(v & CAP2_GATHER), "pack": bool(v & CAP2_PACK),
+            "mxrot": bool(v & CAP2_MXROT)}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)

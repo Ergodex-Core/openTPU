@@ -87,6 +87,11 @@ module otpu_mxu
   parameter bit T2    = 1'b0,    // t2 weights and MM QUAD (docs/ternary.md; CAPS bit28)
   parameter bit PACK  = 1'b0,    // two int8 weight rows a DSP: 2 MCOLS logical columns for W8
                                  // (docs/mxu_packing.md; CAPS2 bit6)
+  parameter bit MXROT = 1'b0,    // the TMEM ports are rotators (otpu_tmem ROW_R / ROW_W, no
+                                 // lane crossbar; CAPS2 bit7): the drain's lane k must write
+                                 // bank (a0 + k) mod LANES, so a run is its NL lanes at a row
+                                 // stride ors = 1 mod LANES (the compiler's layout rule) and
+                                 // one lane a step otherwise (docs/vla_frequency_plan.md 6c)
   parameter int SID   = 0
 ) (
   input  logic                  clk,
@@ -177,9 +182,11 @@ module otpu_mxu
     $fatal(1, "otpu_mxu: PACK needs one chain a group with CLS * 127^2 < 2^18 (CLS %0d, CPG %0d)",
            CLS, CPG);
 
-  // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL
+  // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL (MXROT: NL
+  // at ors = 1 mod LANES, where lane k's bank is (a0 + k) mod LANES, else one lane)
   function automatic logic [MW-1:0] drain_run(input logic [15:0] ors);
     int d;
+    if (MXROT) return MW'((ors[BW-1:0] == BW'(1)) ? NL : 1);
     d = 1;                                   // ors a multiple of LANES: one lane per cycle
     for (int t = BW - 1; t >= 0; t--)        // the lowest set bit t: gcd = 2^t
       if (ors[t]) d = LANES >> t;
@@ -1358,12 +1365,14 @@ module otpu_mxu
     if (a_req && i_qd && !i_sws && scale_addr[3:2] != 2'd0)
       $fatal(1, "otpu_mxu: QUAD scales must be 16-byte aligned");
   // the lane count is what a greedy pick that stops at the first bank conflict would take
+  // (MXROT: or at the first lane off the rotation pattern, bank (a0 + k) mod LANES)
   always @(posedge clk) if (drain_go) begin
     logic [LANES-1:0] used;
     int n;
     used = '0; n = 0;
     for (int k = 0; k < NL && 32'(dj) + 32'(k) < 32'(c_Mn); k++) begin
       if (used[dad[MW'(dj) + MW'(k)][BW-1:0]]) break;
+      if (MXROT && dad[MW'(dj) + MW'(k)][BW-1:0] != BW'(dad[dj][BW-1:0] + BW'(k))) break;
       used[dad[MW'(dj) + MW'(k)][BW-1:0]] = 1'b1;
       n++;
     end

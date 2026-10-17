@@ -43,6 +43,11 @@ class Config:
     #                          (WAITC, docs/isa.md "Wait counts"): the host writes them after
     #                          every program (opentpu.waits), the chain slots hold them. The
     #                          programs do not change; the ISA simulator ignores it
+    MXROT: bool = False      # the MXU's TMEM ports are rotators, not a lane crossbar (CAPS2
+    #                          bit7; docs/vla_frequency_plan.md 6c): the drain writes LANES
+    #                          results a step only at output row strides = 1 mod LANES, so the
+    #                          compiler lays MM outputs out at such strides (compiler.dot:
+    #                          layout only, every result the same; the ISA simulator ignores it)
 
     @property
     def act_rows(self) -> int:
@@ -70,7 +75,8 @@ def board_config(**kw) -> Config:
     target states the hardware's truth: opentpu.target.config): OTPU_PAIR=1 column reuse (MM
     PAIR / QACT DUP), OTPU_DSTEP=1 the DMA's DSTEP, OTPU_STREAM=1 the stream engine,
     OTPU_SEQ_WC=1 the sequencer's wait entries (SEQ_WC, EXPERIMENTAL), OTPU_PACK=1 the MXU's
-    int8 weight packing (PACK: timing only). They configure the
+    int8 weight packing (PACK: timing only), OTPU_MXROT=1 the MXU's rotator TMEM ports (MXROT:
+    the MM outputs' row strides). They configure the
     simulators and the board model; on the card, opentpu.host.board.device_config takes them
     from the bitstream."""
     from .target import current
@@ -86,6 +92,7 @@ def board_config(**kw) -> Config:
                 SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
                 T2=bool(int(env.get("OTPU_T2", 0))),
                 PACK=bool(int(env.get("OTPU_PACK", 0))),
+                MXROT=bool(int(env.get("OTPU_MXROT", a.get("MXROT", False)))),
                 PORTB=int(env.get("OTPU_PORTB", a.get("PORTB", 1))))
     base.update(kw)
     return Config(**base)

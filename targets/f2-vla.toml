@@ -42,6 +42,7 @@ SEQ_WC = true
 T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cycle)
 PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
 PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit6). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
+MXROT = true                    # the MXU's TMEM ports as rotators, no lane crossbar: the drain writes its lanes at output row strides = 1 mod LANES, the compiler's layout rule (otpu_slice MXROT; CAPS2 bit7; docs/vla_frequency_plan.md 6c)
 
 [uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS (plan L5,
                                 # measured on the RTL, docs/pi05.md 5.4): a packed pass yields
@@ -64,6 +65,13 @@ TMEM_RPL = true
 TMEM_TDP = true
 TMEM_GST = true
 TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+ACT_RAM = 1                     # the ACT RAM (4 MB: 255 rows x 128 blocks x 32 columns) in block RAM, 1,024
+                                # RAMB36 for the pieces and 64 for the scale records (otpu_actram STYLE
+                                # "block"; "auto" spilled it into 131 K LUT RAM cells after Vivado's
+                                # URAM announcement hit the block RAM limit, plan 6b / 6c)
+TMEM_RAM = 2                    # the pumped TMEM banks in URAM (otpu_pump_bank STYLE "ultra"): 64 banks
+                                # x 2 sub-banks x 12288 words x 32 bits = 384 URAM288 (3 a sub-bank,
+                                # cascaded), where block RAM took 2,048 RAMB36 of the part's 2,016 (6b)
 TMEM_WARB = 2                   # the MXU drain's writes before the VPU's (otpu_slice; plan L5,
                                 # measured: p_out at MCOLS 16 -17% against the VPU-first order
                                 # and -1% under round-robin; the VPU-bound phases at 16 lanes

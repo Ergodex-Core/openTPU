@@ -291,6 +291,8 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         p["T2"] = 1                     # when on: the other builds' cache keys stay)
     if getattr(cfg, "PACK", False):     # the MXU's int8 weight packing (otpu_mxu PACK)
         p["PACK"] = 1
+    if getattr(cfg, "MXROT", False):    # the MXU's rotator TMEM ports (otpu_slice MXROT)
+        p["MXROT"] = 1
     p.update(UARCH)
     p.update(uarch or {})
     if axi == 1 and os.environ.get("OTPU_NCH"):
