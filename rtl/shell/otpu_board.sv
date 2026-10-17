@@ -379,7 +379,8 @@ module otpu_board #(
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
-  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE)) u_mem (
+  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+                     .APR(RL != 0 ? 16 : 1)) u_mem (
     .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
     .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -430,7 +431,8 @@ module otpu_board #(
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
 
-    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE)) u_mem (
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+                       .APR(RL != 0 ? 16 : 1)) u_mem (
       .clk, .rst(x_srst[s]), .a_flush(x_rst[s] || x_ld_start[s] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
           .a_be_x(a_be), .a_rvalid, .a_rdata,

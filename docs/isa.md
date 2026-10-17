@@ -296,6 +296,17 @@ L bpc - 1`, which must hold the same row (QACT DUP, DUP4 or DUP8). The results a
 `T[out + n]` for n < N, RMAX into `out + ors`, ACC and ASCALE as before. The mode changes
 cycles, not values: tests/test_row_lanes.py.
 
+**The group walk** (`srs` bit 0 with `rs` bits 3:2; `isa.mm(rl=L, walk=True)`, `isa.mm_walk`;
+the stride is `srs & ~1`, which every MM's srs allows: it is a multiple of 4): a plain MM of any
+`M` over a matrix stored in the groups above, the rows streamed one at a time, so that one image
+serves decode (the lanes) and prefill or a verify run (the walk; docs/row_lanes.md "Prefill over
+the group layout"). Row n = gL + l's chunk q is at `sa + g rs + (q L + l) D`, its `Sw` at `ssa +
+g srs + 4 l` and its block k's data at `ssa + g srs + H + k L bs + l bs` (RSC: `Sw` at `ssa + g
+srs + 4 l`); `k0` a multiple of bpc as the lanes'. The values, the ACT rows read (`M`) and the
+cycles are those of the same plain MM over standard rows; no PAIR / QUAD (their reuse wants a
+row's consecutive blocks' scale data contiguous, which the groups interleave by block), no
+`PORTB` / `MCOLS` condition. `Config.ROWLANES`.
+
 ### QACT
 
 `src = R[ra]+w1` (TMEM words), `rows = w2[7:0]` (at most ACT_ROWS), `ab = w2[15:8]`,

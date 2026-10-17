@@ -130,6 +130,8 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf, pair, quad = I.mm_format(ins)
         L = I.mm_lanes(ins)
+        if I.mm_walk(ins):              # the group walk (docs/row_lanes.md): a plain MM's cost,
+            acc += f" gw{I.mm_walk(ins)}"   # the rows one at a time (the layout costs nothing)
         if L:                           # row lanes (docs/row_lanes.md): ceil(N / L) groups of
             # ceil(KB / bpc) advances, L chunks each; port A a line an advance, and the group's
             # Sw line where it is not the first advance's (porta: lines, not words; the line

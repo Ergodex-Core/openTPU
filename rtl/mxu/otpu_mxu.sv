@@ -50,6 +50,13 @@
 // never cross a line of either size, and at 64 the Sw of a group whose header and first advance
 // take 33 .. 64 bytes (int4 L 4: H = A = 32; int8 L 8) shares the first advance's line instead
 // of a request of its own: one line an advance.
+// The group walk (RL builds; srs bit 0 with rs bits 3:2; docs/row_lanes.md "Prefill over the
+// group layout"): a plain MM of any M over a matrix stored in row-lane groups of L, the rows one
+// at a time (prefill and the verify runs over a decode image). Only the issuer's addresses
+// differ from a plain MM's: row g L + l's chunks are L D apart at sa + g rs + l D (the row step
+// D within a group, rs - (L - 1) D at its end), its Sw at the group's 4 l and block k's data at
+// H + k L bs + l bs (the block step L bs, the first block's offset stepping bs - 4 a row). The
+// pipeline, the scale entries and the drain are a plain MM's (cmd_rl is 0: no lanes).
 //
 // The array is the systolic one (docs/mxu_systolic.md): chains of CLS = min(CL, D/8) products
 // (DSP48 cascades), so that every chain end is one group. A column end (otpu_mxce, rtl/tech) takes
@@ -203,9 +210,12 @@ module otpu_mxu
   localparam logic [1:0] WF_W8 = 2'd0, WF_NV = 2'd3;
   // t2: WF 1 (int4) with rs bit 0; QUAD: and rs bit 1 with PAIR (constant 0 without T2)
   wire cmd_t2 = T2 && cmd.flags[5:4] == 2'd1 && cmd.w5[0];
-  // row lanes: rs bits 3:2 = log2 L (constant 0 without RL); the blocks a chunk of the format
-  wire       cmd_rl = RLB && cmd.w5[3:2] != 2'd0;
-  wire [1:0] cmd_lg = cmd_rl ? cmd.w5[3:2] : 2'd0;
+  // the matrix in row-lane groups: rs bits 3:2 = log2 L (constant 0 without RL): the lanes
+  // mode, or with srs bit 0 the group walk (a plain MM over the groups, the rows one at a time)
+  wire       cmd_lay = RLB && cmd.w5[3:2] != 2'd0;
+  wire       cmd_gw  = cmd_lay && cmd.w7[0];
+  wire       cmd_rl  = cmd_lay && !cmd.w7[0];
+  wire [1:0] cmd_lg = cmd_lay ? cmd.w5[3:2] : 2'd0;
   wire [3:0] cmd_L  = cmd_rl ? 4'd1 << cmd_lg : 4'd1;
   wire [2:0] cmd_bpc = cmd_t2 ? 3'd4 : (cmd.flags[5:4] != WF_W8) ? 3'd2 : 3'd1;
   // PAIR: 4-bit (a wide port: every format); RL: a lane's chunk whole (bpc blocks: PAIR's
@@ -234,8 +244,10 @@ module otpu_mxu
              cmd.w4[23:16], DEPTH);
     if (cmd_pair && 2 * int'(cmd_M) > MCOLS)
       $fatal(1, "otpu_mxu: PAIR needs 2*M <= MCOLS");
-    if (cmd.w5[3:2] != 2'd0 && !cmd_rl)
+    if (cmd.w5[3:2] != 2'd0 && !cmd_lay)
       $fatal(1, "otpu_mxu: row lanes (rs bits 3:2) on a build without RL");
+    if (cmd_gw && (cmd.flags[6] || cmd.w5[1]))
+      $fatal(1, "otpu_mxu: the group walk (srs bit 0) takes no PAIR / QUAD");
     if (cmd_rl && (int'(cmd_L) > PORTB || int'(cmd_L) * int'(cmd_bpc) > MCOLS ||
                    int'(cmd_L) * int'(cmd_bpc) > NS || cmd.w6[23:16] != 8'd1 || cmd.flags[6] ||
                    cmd.w5[1] || (cmd.w4[31:24] % 8'(cmd_bpc)) != 8'd0))
@@ -262,6 +274,12 @@ module otpu_mxu
   logic        i_rlr;                       // row lanes (constant 0 without RL), log2 L
   logic [1:0]  i_lg;
   wire         i_rl = RLB && i_rlr;
+  logic        i_gwr;                       // the group walk (constant 0 without RL): the lane
+  wire         i_gw = RLB && i_gwr;         // of the row in hand, lane 0's scale offset, the
+  logic [2:0]  i_wl;                        // per-row offset step (bs - 4), the row and Sw
+  logic [31:0] w_so0, w_ds, w_rd, w_sd;     // steps at a group's end (rs - (L - 1) D, srs -
+  wire  [2:0]  w_last = 3'((4'd1 << i_lg) - 4'd1);   // 4 (L - 1)); the group's last lane
+  logic [31:0] i_cstep;                     // the chunk address step within a row
   logic        i_ini;                       // the command's first cycle: its addresses load
   logic [1:0]  i_wf;
   logic [7:0]  i_k0;
@@ -1729,7 +1747,7 @@ module otpu_mxu
           i_left <= cmd_total;
           i_KB   <= cmd_KBa;
           i_rs   <= cmd.w5 & ~32'd15;             // (rs bits 3:0 are t2's, QUAD's and RL's flags)
-          i_srs  <= cmd.w7;
+          i_srs  <= RLB ? {cmd.w7[31:1], 1'b0} : cmd.w7;   // (bit 0: the group walk)
           i_unit <= cmd.flags[0];
           i_rsc  <= cmd.flags[7] && !cmd.flags[0];
           i_wf   <= cmd.flags[5:4];
@@ -1738,6 +1756,7 @@ module otpu_mxu
           i_t2r  <= cmd_t2;
           i_qdr  <= cmd_qd;
           i_rlr  <= cmd_rl;
+          i_gwr  <= cmd_gw;
           i_lg   <= cmd_lg;
           i_nb   <= cmd_nb;
           i_nl   <= cmd_nl;
@@ -1763,16 +1782,25 @@ module otpu_mxu
           so = 32'd16 + {22'd0, i_k0, 2'd0};
           ss = i_qd ? 6'd16 : i_pair ? 6'd8 : 6'd4;
         end
-        if (i_rl) begin                           // row lanes: a block's data of the L rows,
+        if (i_rl || i_gw) begin                   // row lanes: a block's data of the L rows,
           logic [5:0] bs, A, H;                   // the advance's A bytes, the header H
           bs = (i_wf == WF_W8) ? 6'd1 : (i_wf == WF_NV) ? 6'd8 : 6'd4;
           A = 6'((32'(bs) * (i_t2 ? 32'd4 : i_w4 ? 32'd2 : 32'd1)) << i_lg);
           H = (6'(6'd4 << i_lg) > A) ? 6'(6'd4 << i_lg) : A;
           so = 32'(H) + ((32'(i_k0) * 32'(bs)) << i_lg);
           ss = A;
+          if (i_gw) begin                         // the group walk: lane 0's offset, a block
+            ss = 6'(bs << i_lg);                  // step of L bs; the row's lane and steps
+            w_so0 <= so;
+            w_ds  <= 32'(bs) - 32'd4;
+            w_rd  <= i_rs - (32'(D) << i_lg) + 32'(D);
+            w_sd  <= i_srs - (32'd4 << i_lg) + 32'd4;
+            i_wl  <= '0;
+          end
         end
+        i_cstep <= i_gw ? (32'(D) << i_lg) : WP ? 32'(D) * (32'(i_nb) + 32'd1) : 32'(D);
         sa = srow_addr + so;
-        sn = srow_addr + i_srs;
+        sn = srow_addr + (i_gw ? 32'd4 : i_srs);
         i_ini <= 1'b0;
         i_act <= 1'b1;
         i_k <= '0;
@@ -1811,16 +1839,22 @@ module otpu_mxu
           i_l1 <= (i_left == 32'd2);
           if (i_left == 1) i_act <= 1'b0;
           if (i_klast) begin
-            logic [31:0] sa, sn;
-            sa = srow_next + i_soff;
-            sn = srow_next + i_srs;
+            logic [31:0] sa, sn, rd, so;
+            // (the group walk: the next row is the group's next lane, D and 4 on, its block
+            // data bs - 4 further in; past the group's last lane the next group's lane 0)
+            rd = i_gw ? ((i_wl == w_last) ? w_rd : 32'(D)) : i_rs;
+            so = i_gw ? ((i_wl == w_last) ? w_so0 : i_soff + w_ds) : i_soff;
+            sa = srow_next + so;
+            sn = srow_next + (i_gw ? ((i_wl + 3'd1 == w_last) ? w_sd : 32'd4) : i_srs);
             i_k <= '0;
             i_klast <= (i_KB == 16'd1);
-            row_addr <= row_addr + i_rs;
-            chunk_addr <= row_addr + i_rs;
+            row_addr <= row_addr + rd;
+            chunk_addr <= row_addr + rd;
             srow_addr <= srow_next;
             srow_next <= sn;
             scale_addr <= sa;
+            i_soff <= so;
+            if (i_gw) i_wl <= (i_wl == w_last) ? 3'd0 : i_wl + 3'd1;
             // the next row's Sw came with this line, or is in its first advance's, or needs a
             // request of its own
             i_swd <= a_tag.swr;
@@ -1836,7 +1870,7 @@ module otpu_mxu
             // advances, QUAD one)
             if (i_t2 ? (i_qd || (i_pair ? i_k[0] : i_k[1:0] == 2'd3)) :
                 (!i_w4 || i_pair || i_k[0]))
-              chunk_addr <= chunk_addr + (WP ? 32'(D) * (32'(i_nb) + 32'd1) : 32'(D));
+              chunk_addr <= chunk_addr + i_cstep;
             scale_addr <= sa;
             i_swn <= same_line(sa, srow_next);
           end

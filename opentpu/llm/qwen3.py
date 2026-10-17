@@ -990,7 +990,9 @@ class Image(EmbedHost):
         from .prefill import tile_scratch   # a tiled run's attention outputs, a part at a time
         if tile_scratch(spec, layer_runs=False):    # (tiled.py; a dense image's)
             self.io["o"] = b.alloc(4 * cfg.act_rows * self.nq_loc * d)
-        self.layer0 = b.next
+        # (the layer blocks are 4096-byte units, so a run's loop steps stay L D aligned for
+        # the row-lane groups: the region starts on one too, as gemma4's)
+        self.layer0 = b.next = (b.next + 4095) // 4096 * 4096
         self.mats = {"wq": (self.nq_loc * d, H), "wk": (self.nkv_loc * d, H),
                      "wv": (self.nkv_loc * d, H), "wo": (self.h_loc, spec.n_q * d),
                      "wg": (self.f_loc, H), "wu": (self.f_loc, H)}

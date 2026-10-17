@@ -531,12 +531,13 @@ class Slice:
         out = (self.reg(ins.rc) + w[2]) & 0xFFFFFFFF
         N, KB, k0 = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[3] >> 24) & 0xFF
         wf, pair, quad = I.mm_format(ins)
-        L = I.mm_lanes(ins)
+        L = I.mm_layout(ins)                  # the matrix in groups of L rows (0: standard)
+        walk = bool(I.mm_walk(ins))           # ... read row by row (srs bit 0), else lanes
         rs = w[4] & ~I.RS_MASK
         if w[4] & I.RS_QUAD and not pair:
             raise SimError("MM: rs bit 1 (QUAD) needs PAIR")
         ors, M, ab = w[5] & 0xFFFF, (w[5] >> 16) & 0xFF, w[5] >> 24
-        srs = w[6]
+        srs = w[6] & ~I.SRS_GW if L else w[6]
         unit, accf = bool(ins.flags & I.F_UNIT), bool(ins.flags & I.F_ACC)
         rsc = bool(ins.flags & I.F_RSC)
         R = 4 * M if quad else 2 * M if pair else M       # ACT rows read
@@ -566,23 +567,29 @@ class Slice:
             raise SimError("MM: ASCALE needs UNIT and ACC")
         bpc = I.blocks_per_chunk(wf)
         bpb = D // bpc                                    # streamed bytes per K-block
-        if L:                                             # row lanes (docs/row_lanes.md)
+        if L:                                             # row lanes (docs/row_lanes.md), or
+            # the group walk (srs bit 0: a plain MM of M rows over the same layout, the rows
+            # one at a time: the lanes' PORTB / MCOLS limits do not apply, the layout's do)
             if not cfg.ROWLANES:
                 raise SimError("MM: row lanes (RL) on a configuration without ROWLANES")
-            if M != 1 or pair:
-                raise SimError("MM: RL needs M = 1 and no PAIR / QUAD")
-            if L > cfg.PORTB:
-                raise SimError(f"MM: {L} row lanes stream {L} chunks a cycle, PORTB {cfg.PORTB}")
-            if L * bpc > cfg.MCOLS or L * bpc > cfg.act_rows:
-                raise SimError(f"MM: {L} row lanes of this format need {L * bpc} columns, "
-                               f"MCOLS {cfg.MCOLS}")
+            if pair:
+                raise SimError("MM: RL (and the group walk) takes no PAIR / QUAD")
+            if not walk:
+                if M != 1:
+                    raise SimError("MM: RL needs M = 1 (the group walk, srs bit 0, any M)")
+                if L > cfg.PORTB:
+                    raise SimError(f"MM: {L} row lanes stream {L} chunks a cycle, PORTB "
+                                   f"{cfg.PORTB}")
+                if L * bpc > cfg.MCOLS or L * bpc > cfg.act_rows:
+                    raise SimError(f"MM: {L} row lanes of this format need {L * bpc} columns, "
+                                   f"MCOLS {cfg.MCOLS}")
+                R = L * bpc                               # the ACT rows read (copies of row 0)
             if k0 % bpc:
                 raise SimError("MM: RL needs k0 a multiple of the blocks a chunk")
             if not unit and not rsc and L * bpc * Q.rl_block_bytes(
                     ["int8", "int4", "fp4", "nvfp4", "t2"][wf]) > Q.RL_ADV_MAX:
                 raise SimError(f"MM: RL's scale data of an advance must fit the MXU's "
                                f"{Q.RL_ADV_MAX}-byte scale entry")
-            R = L * bpc                                   # the ACT rows read (copies of row 0)
             G = -(-N // L)
             KBc = -(-KB // bpc)
             if sa % (L * D) or rs % (L * D) or sa + (G - 1) * rs + KBc * L * D > cfg.DRAM_BYTES:

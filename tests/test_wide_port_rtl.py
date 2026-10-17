@@ -538,3 +538,125 @@ def test_aline64_one_line_an_advance_rtl(have_verilator, monkeypatch, mem):
         assert got[64] <= 1.03 * got[32], got     # lines are the evidence; the whole-model
                                                   # run on the HBM model is the measurement)
 
+
+# ============================================= the group walk: prefill over the group layout
+# (docs/row_lanes.md "Prefill over the group layout"; otpu_mxu cmd_gw): a plain MM of M rows
+# over a matrix in row-lane groups, srs bit 0 (isa.mm walk=True), the rows one at a time
+# fmt, L, M, KB, k0, N, MCOLS, ALINE
+WALK_RTL_CASES = [
+    ("int8", 4, 2, 9, 0, 13, 4, 32), ("int8", 4, 4, 5, 2, 8, 4, 64), ("int8", 2, 3, 9, 0, 7, 4, 32),
+    ("int8", 8, 8, 6, 1, 17, 8, 64), ("int8", 4, 16, 9, 0, 13, 8, 64),
+    ("int4", 4, 2, 9, 2, 10, 8, 64), ("int4", 4, 8, 3, 0, 5, 8, 32), ("int4", 2, 4, 5, 0, 7, 4, 32),
+    ("int4", 4, 16, 9, 0, 11, 8, 64), ("fp4", 4, 6, 8, 4, 9, 8, 64),
+    ("nvfp4", 2, 2, 5, 2, 7, 4, 32), ("nvfp4", 2, 8, 4, 0, 8, 8, 64),
+    ("t2", 2, 3, 9, 0, 7, 8, 32), ("t2", 2, 8, 7, 4, 5, 8, 64),
+]
+
+
+def _walk_prog(cfg, fmt, L, M, N, KB, k0, x, rows, srows):
+    """QACT of M rows (no copies), then the walk over the groups at WB / SB: with scales, UNIT
+    with RMAX (M <= MCOLS), ACC with RMAX onto the first, UNIT with ACC and ASCALE, and RSC
+    over the groups' Sw words alone. Returns (prog, dram)."""
+    wf = Q.mxu_wf(fmt)
+    bpc = I.blocks_per_chunk(wf)
+    K = (k0 + KB) * D
+    line = cfg.ALINE
+    dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
+    _put(dram, X, x)
+    rsg, srsg = Q.rl_row_stride(K, fmt, L, D), Q.rl_scale_bytes(K, fmt, L, D, line)
+    _put(dram, WB, Q.rl_rows(rows, L, D))
+    _put(dram, SB, Q.rl_scales(srows, fmt, K, L, D, line))
+    _put(dram, SB2, np.ascontiguousarray(srows[:, :4]))
+    alpha = np.linspace(1.25, -0.75, M).astype(np.float32)
+    _put(dram, AL, alpha)
+    sa = WB + (k0 // bpc) * L * D
+    mm = dict(sa=sa, n=N, kb=KB, rs=rsg, ors=N + 1, m=M, ab=0, k0=k0, wf=wf, rl=L, walk=True)
+    rmax = M <= cfg.MCOLS
+    prog = [I.ld(X, 0, x.size), I.ld(AL, 0x7000, M), I.qact(0, M, 0, KB, KB * D),
+            I.mm(ssa=SB, srs=srsg, out=OUT, **mm),
+            I.mm(ssa=SB, srs=srsg, out=OUT + 4096, **mm, unit=True, rmax=rmax),
+            I.mm(ssa=SB, srs=srsg, out=OUT, **mm, acc=True, rmax=rmax)]
+    if rmax:
+        prog.append(I.mm(ssa=0, srs=0, out=OUT + 4096, **mm, unit=True, acc=True, ascale=0x7000))
+    if fmt not in ("nvfp4", "t2"):
+        prog.append(I.mm(ssa=SB2, srs=4 * L, out=OUT + 8192, **{**mm, "k0": 0}, rsc=True))
+    prog.append(I.halt())
+    return prog, dram
+
+
+@pytest.mark.parametrize("mem", MEMS)
+@pytest.mark.parametrize("fmt,L,M,KB,k0,N,mcols,aline", WALK_RTL_CASES)
+def test_group_walk_mm_rtl(have_verilator, monkeypatch, mem, fmt, L, M, KB, k0, N, mcols, aline):
+    """A plain MM of M rows (2 .. ACT_ROWS 16: replayed rows past MCOLS) over row-lane groups
+    of every format and L, N not a multiple of L, k0 offsets, with scales, UNIT + RMAX, ACC +
+    RMAX, ASCALE and RSC, at either port-A line: bit for bit the ISA simulator's, on the
+    behavioural DRAM and the native path."""
+    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_ROWS=16, PAIR=True, T2=fmt == "t2", PORTB=4,
+                 ROWLANES=True, DRAM_BYTES=1 << 20, ALINE=aline)
+    rng = np.random.default_rng(1000 * KB + 100 * k0 + 10 * N + mcols + L + M + len(fmt))
+    rows, srows = _rl_matrix(rng, fmt, N, (k0 + KB) * D)
+    x = _xrows(rng, M, KB * D, D // 4)
+    prog, dram = _walk_prog(cfg, fmt, L, M, N, KB, k0, x, rows, srows)
+    _run_both(cfg, prog, dram, mem, monkeypatch)
+
+
+@pytest.mark.parametrize("fmt,portb,mcols,M", [("int8", 4, 4, 4), ("int4", 4, 8, 16)])
+def test_group_walk_compiled_kernel_rtl(have_verilator, monkeypatch, fmt, portb, mcols, M):
+    """A compiled dot of M rows over a Weight(rl=True) (the compiler's walk MMs, a chunk of
+    ACT_ROWS 8 rows at a time) on the RTL, bit for bit the ISA's."""
+    from opentpu.runtime import Input, Output, Weight, compile_kernel
+    from test_wide_port import k_dot
+    N, K = 24, 9 * D
+    rng = np.random.default_rng(3 + portb + mcols + M)
+    x = rng.standard_normal((M, K)).astype(np.float32)
+    W = (rng.standard_normal((N, K)) * 0.1).astype(np.float32)
+    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_ROWS=8, ACT_BLOCKS=32, PAIR=True, PORTB=portb,
+                 ROWLANES=True, DRAM_BYTES=1 << 20)
+    compiled, images = compile_kernel(k_dot, cfg, x=Input(x), w=Weight(W, fmt=fmt, rl=True),
+                                      out=Output((M, N)))
+    mms = [i for i in compiled.programs[0] if i.op == I.MM]
+    assert mms and all(I.mm_walk(i) == Q.rl_lanes(fmt, portb, mcols) for i in mms)
+    _run_both(cfg, list(compiled.programs[0]), np.asarray(images[0], np.uint8), "dram",
+              monkeypatch)
+
+
+@pytest.mark.parametrize("mem", ["dram", "nch"])
+@pytest.mark.parametrize("fmt", ["int8", "int4"])
+def test_group_walk_throughput_rtl(have_verilator, monkeypatch, mem, fmt):
+    """Prefill's MM (M = MCOLS 8 rows, no column reuse) over the group layout costs what it
+    costs over standard rows: N x KB advances for int8 (a chunk a cycle), N x KB for int4 (a
+    block a cycle) -- measured as the cycles 256 more rows add; the walk's chunks are L D
+    apart, one aligned chunk a request (no two-part reads on the native path)."""
+    KB, L = 9, 4
+    got, split = {}, {}
+    for mode in ("std", "walk"):
+        cfg = Config(S=1, D=D, MCOLS=8, PAIR=True, PORTB=4, ROWLANES=mode == "walk",
+                     DRAM_BYTES=1 << 22, ALINE=64)
+        rng = np.random.default_rng(9)
+        dram = rng.integers(0, 256, cfg.DRAM_BYTES, dtype=np.uint8)
+        x = rng.standard_normal((8, KB * D)).astype(np.float32)
+        _put(dram, X, x)
+        K, wf = KB * D, Q.mxu_wf(fmt)
+        cyc, sp = [], []
+        for N in (256, 512):
+            if mode == "walk":
+                mm = I.mm(0x40000, 0x300000, OUT, N, KB, Q.rl_row_stride(K, fmt, L, D), N + 1, 8,
+                          0, Q.rl_scale_bytes(K, fmt, L, D, 64), wf=wf, rl=L, walk=True)
+            else:
+                mm = I.mm(0x40000, 0x300000, OUT, N, KB, Q.row_bytes(K, fmt, D), N + 1, 8, 0,
+                          Q.scale_bytes(K, fmt, D), wf=wf)
+            prog = [I.ld(X, 0, x.size), I.qact(0, 8, 0, KB, KB * D), mm, I.halt()]
+            if mem == "nch":
+                monkeypatch.setenv("OTPU_NCH", "8")
+            _, _, st = rtlsim.run(cfg, [prog], [dram.copy()], axi=mem == "nch")
+            cyc.append(st["cycles"])
+            sp.append(st["native_b"][0]["split"] if mem == "nch" else 0)
+        got[mode] = cyc[1] - cyc[0]
+        split[mode] = sp[1] - sp[0]
+    print(f"walk throughput ({mem}, {fmt}): cycles for 256 rows x {KB} blocks at M 8: {got}, "
+          f"two-part reads {split}")
+    if mem == "dram":
+        assert got["walk"] == got["std"] == 256 * KB, got
+    else:
+        assert abs(got["walk"] - got["std"]) <= 0.03 * got["std"] and split["walk"] == 0, \
+            (got, split)

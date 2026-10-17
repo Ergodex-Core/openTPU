@@ -620,6 +620,8 @@ class SimTransport:
         if getattr(cfg, "ROWLANES", False):         # row lanes (CAPS2 bit4; in CFG_HASH)
             from opentpu.target import rl_streams
             p["RL"] = rl_streams(cfg)
+        if getattr(cfg, "ALINE", 32) != 32:         # port A's 64-byte line (CAPS2 bit5; in CFG_HASH)
+            p["ALINE"] = cfg.ALINE
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -642,7 +644,8 @@ class SimTransport:
         p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(build_config(
             t, MCOLS=p["MCOLS"], LANES=p["LANES"], ACT_ROWS=p["ACT_ROWS"],
             TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0),
-            PORTB=p.get("PORTB", 1), ROWLANES=int(bool(p.get("RL", 0))))))
+            PORTB=p.get("PORTB", 1), ROWLANES=int(bool(p.get("RL", 0))),
+            ALINE=p.get("ALINE", 32))))
         exe = rtlsim.build("tb_board", srcs, p)
         with simtmp.tempdir("otpu_board_") as d:
             for c in range(len(self.ch)):
