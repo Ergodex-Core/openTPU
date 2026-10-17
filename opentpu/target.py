@@ -78,7 +78,7 @@ TECH = {"generic": ["tech/generic/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram
         "xilinxus": ["tech/xilinxus/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         # the RAMs on SRAM macros: the leaves (otpu_sram_*) come from tools/asic/flow.py
         "asic": ["tech/generic/otpu_tech_dsp.sv", "tech/asic/otpu_tech_ram.sv"]}
-SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
+SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_xr.sv", "shell/otpu_board.sv",
          "mem/otpu_native_dram.sv", "shell/otpu_afifo.sv", "shell/otpu_mem_ch.sv",
          "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
@@ -90,9 +90,10 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                  "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
           # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
           # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
-          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_hbm_nch.sv",
-                     "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
-                     "boards/f2/otpu_f2_hbm_mem.sv", "boards/f2/otpu_f2_hbm_sys.sv"]}
+          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+                     "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
+                     "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
+                     "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):

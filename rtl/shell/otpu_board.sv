@@ -14,7 +14,7 @@
 // reads their levels back (the host bit-bangs I2C).
 // At S > 1 every slice sits in its own SLR (the BCU1525's), a crossing away from the control
 // block and the collective unit: everything between a slice and them goes through two register
-// stages each way (otpu_xr: one on each side of the crossing; g_xs), the slices' control too (so
+// stages each way (otpu_xr, rtl/shell/otpu_xr.sv: one on each side of the crossing; g_xs), the slices' control too (so
 // they keep starting together), and the collective runs through otpu_coll_hub and a port per
 // slice (otpu_coll_port: each slice grants the collective's TMEM accesses on its own). At S = 1
 // the signals are wired as before (g_x1: the same logic, tools/synth/board_equiv.sh).
@@ -605,22 +605,3 @@ module otpu_board #(
   assign led = {halted && !error, run && !halted, hb[26]};
 endmodule
 
-// One register stage of an SLR crossing (otpu_board at S > 1: a pair per direction and slice, one
-// stage on each side). The low RW bits (valid pulses, request levels) clear with rst; the others
-// are data. max_fanout: a stage's reset bit drives a slice's whole core reset (as core_rst).
-module otpu_xr #(
-  parameter int W  = 1,
-  parameter int RW = 0
-) (
-  input  logic         clk,
-  input  logic         rst,
-  input  logic [W-1:0] d,
-  output logic [W-1:0] q
-);
-  (* max_fanout = 256 *) logic [W-1:0] r;     // r_reg: the floorplan's USER_SLL_REG cells
-  assign q = r;
-  always_ff @(posedge clk) begin
-    r <= d;
-    if (rst) for (int i = 0; i < RW; i++) r[i] <= 1'b0;
-  end
-endmodule

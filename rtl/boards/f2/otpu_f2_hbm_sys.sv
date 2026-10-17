@@ -7,6 +7,14 @@
 // PCIS on aclk (clk_main_a0, 250 MHz), the HBM's AXI ports on hclk (450 MHz). docs/f2_hbm.md.
 //   hbm_ready: cl_mem_hbm_wrapper's o_hbm_ready (aclk): every channel's STATUS CALIB bits.
 // The parameters are the target's (targets/f2-hbm.toml through opentpu.target rtl_params).
+//
+// The floorplan (boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc; docs/wide_port.md
+// "Placement"): u_mem (the bridges, the host path, the ports) in SLR0 by the HBM's ports, the
+// board (the slice, its adapter, the control block) in SLR2, and NXR = 3 register stages, one
+// per SLR, on everything between them: the native ports (otpu_f2_hbm_mem NXR), the control path
+// from the OCL's crossing (otpu_axil_xr u_cx) and, board-bound, the core reset and the HBM's
+// ready (g_rs[k]): the board enters and leaves reset NXR cycles after the fabric, idle both
+// times. A port B request costs 2 NXR core cycles more from the adapter to the HBM and back.
 module otpu_f2_hbm_sys #(
   parameter int D          = 128,
   parameter int MCOLS      = 4,
@@ -52,7 +60,9 @@ module otpu_f2_hbm_sys #(
   parameter int S          = 1,          // slices (S x NCH <= 32 HBM ports)
   parameter int NCH        = 8,          // channels (HBM ports, pseudo-channels) per slice
   parameter int CH_LOG2    = 29,         // a pseudo-channel's 512 MiB
-  parameter int DRAM_LOG2  = 32          // what a slice addresses (otpu_board; CFG_DRAM)
+  parameter int DRAM_LOG2  = 32,         // what a slice addresses (otpu_board; CFG_DRAM)
+  parameter int NXR        = 3           // SLR crossing stages each way (the floorplan's three
+                                         //   SLRs; 0: wired, no floorplan)
 ) (
   input  logic          clk,
   input  logic          clk_f,
@@ -141,9 +151,16 @@ module otpu_f2_hbm_sys #(
   localparam int NPORT = S * NCH;
   initial if (NPORT > 32 || CH_LOG2 != 29)
     $fatal(1, "otpu_f2_hbm_sys: at most 32 HBM ports of 512 MiB (S x NCH <= 32, CH_LOG2 29)");
-  // HBM ready, into the core clock for the calibration bits (otpu_board synchronizes it again)
-  logic hbm_rdy;
-  assign hbm_rdy = hbm_ready;
+  // ---- board-bound across the SLRs: the core reset and the HBM's ready (aclk's level, taken
+  // into clk by the first stage, otpu_board's two flip-flops after it), NXR stages (g_rs[k], k
+  // the SLR). NXR 0: wired
+  logic rst_b, hbm_rdy;
+  logic [NXR:0][1:0] rs;
+  assign rs[0] = {rst, hbm_ready};
+  assign {rst_b, hbm_rdy} = rs[NXR];
+  for (genvar k = 0; k < NXR; k++) begin : g_rs
+    otpu_xr #(.W(2)) u_x (.clk, .rst(1'b0), .d(rs[k]), .q(rs[k + 1]));
+  end
 
   // ---- control registers: the OCL across into clk
   logic [11:0] c_awaddr, c_araddr;
@@ -153,6 +170,13 @@ module otpu_f2_hbm_sys #(
   logic [3:0]  c_wstrb;
   logic [1:0]  c_bresp, c_rresp;
   logic        pcis_wbusy;
+  // the board's side of the control path (u_cx: NXR stages from the OCL's crossing)
+  logic [11:0] x_awaddr, x_araddr;
+  logic        x_awvalid, x_awready, x_wvalid, x_wready, x_bvalid, x_bready;
+  logic        x_arvalid, x_arready, x_rvalid, x_rready;
+  logic [31:0] x_wdata, x_rdata;
+  logic [3:0]  x_wstrb;
+  logic [1:0]  x_bresp, x_rresp;
   otpu_axil_cdc u_ocl (
     .sclk(aclk), .srst(arst), .hold(pcis_wbusy),
     .s_awaddr(ocl_awaddr), .s_awvalid(ocl_awvalid), .s_awready(ocl_awready),
@@ -166,6 +190,18 @@ module otpu_f2_hbm_sys #(
     .m_bresp(c_bresp), .m_bvalid(c_bvalid), .m_bready(c_bready),
     .m_araddr(c_araddr), .m_arvalid(c_arvalid), .m_arready(c_arready),
     .m_rdata(c_rdata), .m_rresp(c_rresp), .m_rvalid(c_rvalid), .m_rready(c_rready));
+  otpu_axil_xr #(.NXR(NXR)) u_cx (
+    .clk, .rst, .srst(rst_b),
+    .s_awaddr(c_awaddr), .s_awvalid(c_awvalid), .s_awready(c_awready),
+    .s_wdata(c_wdata), .s_wstrb(c_wstrb), .s_wvalid(c_wvalid), .s_wready(c_wready),
+    .s_bresp(c_bresp), .s_bvalid(c_bvalid), .s_bready(c_bready),
+    .s_araddr(c_araddr), .s_arvalid(c_arvalid), .s_arready(c_arready),
+    .s_rdata(c_rdata), .s_rresp(c_rresp), .s_rvalid(c_rvalid), .s_rready(c_rready),
+    .m_awaddr(x_awaddr), .m_awvalid(x_awvalid), .m_awready(x_awready),
+    .m_wdata(x_wdata), .m_wstrb(x_wstrb), .m_wvalid(x_wvalid), .m_wready(x_wready),
+    .m_bresp(x_bresp), .m_bvalid(x_bvalid), .m_bready(x_bready),
+    .m_araddr(x_araddr), .m_arvalid(x_arvalid), .m_arready(x_arready),
+    .m_rdata(x_rdata), .m_rresp(x_rresp), .m_rvalid(x_rvalid), .m_rready(x_rready));
 
   // ---- the slices' channels: a bridge each
   logic [NPORT-1:0]        n_cvalid, n_cready, n_cwe, n_wvalid, n_wready, n_rvalid, n_err;
@@ -174,7 +210,7 @@ module otpu_f2_hbm_sys #(
   logic [NPORT-1:0][63:0]  n_wmask;
   logic [NPORT-1:0][15:0]  n_wdone;
   // the slices' channels, the host, the HBM ports
-  otpu_f2_hbm_mem #(.NPORT(NPORT)) u_mem (
+  otpu_f2_hbm_mem #(.NPORT(NPORT), .NXR(NXR)) u_mem (
     .clk, .rst, .aclk, .arst, .hclk, .hrst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
@@ -201,14 +237,14 @@ module otpu_f2_hbm_sys #(
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_board (
-    .clk, .clk_f, .rst, .ctl_mrst(rst),
+    .clk, .clk_f, .rst(rst_b), .ctl_mrst(rst_b),
     .calib({NPORT{hbm_rdy}}), .ded('0), .temp(12'd0), .led, .i2c_lo, .i2c_pin(5'h1f),
-    .s_ctl_awaddr(c_awaddr), .s_ctl_awvalid(c_awvalid), .s_ctl_awready(c_awready),
-    .s_ctl_wdata(c_wdata), .s_ctl_wstrb(c_wstrb), .s_ctl_wvalid(c_wvalid),
-    .s_ctl_wready(c_wready), .s_ctl_bresp(c_bresp), .s_ctl_bvalid(c_bvalid),
-    .s_ctl_bready(c_bready), .s_ctl_araddr(c_araddr), .s_ctl_arvalid(c_arvalid),
-    .s_ctl_arready(c_arready), .s_ctl_rdata(c_rdata), .s_ctl_rresp(c_rresp),
-    .s_ctl_rvalid(c_rvalid), .s_ctl_rready(c_rready),
+    .s_ctl_awaddr(x_awaddr), .s_ctl_awvalid(x_awvalid), .s_ctl_awready(x_awready),
+    .s_ctl_wdata(x_wdata), .s_ctl_wstrb(x_wstrb), .s_ctl_wvalid(x_wvalid),
+    .s_ctl_wready(x_wready), .s_ctl_bresp(x_bresp), .s_ctl_bvalid(x_bvalid),
+    .s_ctl_bready(x_bready), .s_ctl_araddr(x_araddr), .s_ctl_arvalid(x_arvalid),
+    .s_ctl_arready(x_arready), .s_ctl_rdata(x_rdata), .s_ctl_rresp(x_rresp),
+    .s_ctl_rvalid(x_rvalid), .s_ctl_rready(x_rready),
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask,
     .n_rvalid, .n_rdata, .n_wdone, .n_err);
 endmodule

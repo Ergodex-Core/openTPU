@@ -11,6 +11,7 @@ allowed:
 - rtl/top/otpu_top.sv
 - rtl/top/otpu_pkg.sv
 - rtl/shell/otpu_board.sv
+- rtl/shell/otpu_xr.sv
 - rtl/shell/otpu_ctrl.sv
 - rtl/boards/ypcb-00338/otpu_native_sys.sv
 - rtl/shell/otpu_mem_ch.sv

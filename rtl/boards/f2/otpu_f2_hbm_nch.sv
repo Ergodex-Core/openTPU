@@ -7,7 +7,13 @@
 // Core side (clk). Commands and write data are taken into two small FIFOs (their readies are
 // flip-flops: the native port's command select stays off this module's logic) and leave them in
 // command order, one a cycle, through the order check below into an asynchronous FIFO to hclk
-// (otpu_afifo: the command and its beat, 602 bits). The order check is otpu_f2_nch's, moved to
+// (otpu_afifo: the command and its beat, 602 bits). XL (otpu_f2_hbm_mem NXR): the native port
+// reaches this module through XL / 2 register stages each way (the SLR crossings between the
+// slice and the HBM fabric, docs/wide_port.md "Placement"), so the adapter sees n_cready /
+// n_wready XL / 2 cycles late and its beat arrives XL / 2 later again: a beat it sent is one
+// it saw the ready for (the stages carry the take, n_cvalid && n_cready at the adapter), taken
+// here unconditionally, and the FIFOs keep XL beats of room below the ready's threshold (NQ
+// 16 at XL 6, 4 when wired). The order check is otpu_f2_nch's, moved to
 // the core clock where its compares are cheap (at 450 MHz a 64-entry compare would not close):
 //   - a read waits while a write to its beat is in flight (issued, not yet counted in n_wdone),
 //   - a write waits while a read of its beat is in flight (issued, its data not yet returned),
@@ -50,7 +56,9 @@ module otpu_f2_hbm_nch #(
   parameter int WOD    = 16,            // writes in flight
   parameter int BMAX   = 8,             // native beats per burst (AXI3: at most 8 = 16 x 32 B)
   parameter int GATHER = 4,             // hclk cycles an open burst waits for its next beat
-  parameter bit HAZ    = 1'b1           // 0: no same-beat waits (tests only: tb_f2hbm fails)
+  parameter bit HAZ    = 1'b1,          // 0: no same-beat waits (tests only: tb_f2hbm fails)
+  parameter int XL     = 0              // the native port's crossing: register stages there and
+                                        //   back (0: wired to the adapter; otpu_f2_hbm_mem)
 ) (
   // ---- the native port (core clock)
   input  logic          clk,
@@ -93,31 +101,35 @@ module otpu_f2_hbm_nch #(
   input  logic          m_rlast
 );
   localparam int RW = $clog2(RD), WW = $clog2(WOD), BW = $clog2(BMAX);
+  // the native port's FIFOs: 4 deep when wired, 16 with the crossing's XL beats in flight
+  localparam int NQ = (XL == 0) ? 4 : 16, QW = $clog2(NQ);
   initial if (RD < 4 || WOD < 2 || RD != (1 << RW) || WOD != (1 << WW) || BMAX < 1 || BMAX > 8 ||
-              BMAX != (1 << BW) || CQ < 4)
-    $fatal(1, "otpu_f2_hbm_nch: RD, WOD, BMAX powers of two (BMAX <= 8), CQ >= 4");
+              BMAX != (1 << BW) || CQ < 4 || XL < 0 || XL > NQ - 3 || XL % 2 != 0)
+    $fatal(1, "otpu_f2_hbm_nch: RD, WOD, BMAX powers of two (BMAX <= 8), CQ >= 4, XL even, <= 13");
 
   // ================================================================== core side
   logic rst_q, hrst_q;                    // the resets, registered here (see the top)
   always_ff @(posedge clk) rst_q <= rst;
   always_ff @(posedge hclk) hrst_q <= hrst;
-  // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more), the
-  // command FIFO's head into a register (h_*: the hazard compares below and the issue start
+  // ---- the native port into two FIFOs of NQ (readies from flip-flops: room for two more, and
+  // for the crossing's XL beats), the command FIFO's head into a register (h_*: the hazard
+  // compares below and the issue start
   // from flip-flops. On the p4rl8 placement the head read by cf_h ran through the 80 compares
   // into the crossing's 600 write enables, 9 levels, 92% route, -4.0 ns at 200 MHz; the
   // crossing now writes its tail every cycle, otpu_afifo WT, so the issue reaches only its
   // pointer). The register is a core cycle on a command's way (a stream's commands pipeline
   // through it one a cycle: the first issues two cycles after its take, not one), 5 ns on the
   // HBM's hundreds
-  logic [25:0]  cf [4];
-  logic [575:0] df [4];
-  logic [2:0]   cf_n, df_n;
-  logic [1:0]   cf_h, df_h;
+  logic [25:0]  cf [NQ];
+  logic [575:0] df [NQ];
+  logic [QW:0]  cf_n, df_n;
+  logic [QW-1:0] cf_h, df_h;
   logic         h_v, h_we;
   logic [24:0]  h_a;
   logic         c_pop, d_pop;              // the head issues; a write's data with it
-  wire c_take = n_cvalid && n_cready;
-  wire d_take = n_wvalid && n_wready;
+  // (XL > 0: n_cvalid / n_wvalid are the adapter's takes, the ready it saw XL / 2 cycles ago)
+  wire c_take = XL == 0 ? n_cvalid && n_cready : n_cvalid;
+  wire d_take = XL == 0 ? n_wvalid && n_wready : n_wvalid;
   wire h_load = cf_n != 0 && (!h_v || c_pop);   // the FIFO's head into the register
   always_ff @(posedge clk) begin
     if (h_load) {h_we, h_a} <= cf[cf_h];
@@ -125,16 +137,17 @@ module otpu_f2_hbm_nch #(
       cf_n <= '0; df_n <= '0; cf_h <= '0; df_h <= '0; n_cready <= 1'b0; n_wready <= 1'b0;
       h_v <= 1'b0;
     end else begin
-      if (c_take) cf[2'(cf_h + cf_n)] <= {n_cwe, n_caddr};
-      if (d_take) df[2'(df_h + df_n)] <= {n_wmask, n_wdata};
-      cf_n <= cf_n + 3'(c_take) - 3'(h_load);
-      df_n <= df_n + 3'(d_take) - 3'(d_pop);
+      if (c_take) cf[QW'(cf_h + cf_n)] <= {n_cwe, n_caddr};
+      if (d_take) df[QW'(df_h + df_n)] <= {n_wmask, n_wdata};
+      cf_n <= cf_n + (QW + 1)'(c_take) - (QW + 1)'(h_load);
+      df_n <= df_n + (QW + 1)'(d_take) - (QW + 1)'(d_pop);
       if (h_load) cf_h <= cf_h + 1'b1;
       if (!h_v || c_pop) h_v <= cf_n != 0;
       if (d_pop) df_h <= df_h + 1'b1;
-      // room for this cycle's take and the next's: at most 2 after this cycle's changes
-      n_cready <= (cf_n + 3'(c_take) - 3'(h_load)) <= 3'd2;
-      n_wready <= (df_n + 3'(d_take) - 3'(d_pop)) <= 3'd2;
+      // room for this cycle's take and the next's, and for the XL beats the crossing may hold
+      // once this ready is low: at most NQ - 2 - XL after this cycle's changes
+      n_cready <= (cf_n + (QW + 1)'(c_take) - (QW + 1)'(h_load)) <= (QW + 1)'(NQ - 2 - XL);
+      n_wready <= (df_n + (QW + 1)'(d_take) - (QW + 1)'(d_pop)) <= (QW + 1)'(NQ - 2 - XL);
     end
   end
 
@@ -363,7 +376,10 @@ module otpu_f2_hbm_nch #(
     if (b_tk && bb_n == 0) $fatal(1, "otpu_f2_hbm_nch: B with no write in flight");
     if (k_pop && k_we && !w_room) $fatal(1, "otpu_f2_hbm_nch: W FIFO overflow");
   end
-  always_ff @(posedge clk) if (!rst_q && n_rvalid && rn == 0)
-    $fatal(1, "otpu_f2_hbm_nch: read data with no read in flight");
+  always_ff @(posedge clk) if (!rst_q) begin
+    if (n_rvalid && rn == 0) $fatal(1, "otpu_f2_hbm_nch: read data with no read in flight");
+    if (c_take && cf_n == (QW + 1)'(NQ)) $fatal(1, "otpu_f2_hbm_nch: command FIFO overflow");
+    if (d_take && df_n == (QW + 1)'(NQ)) $fatal(1, "otpu_f2_hbm_nch: write data FIFO overflow");
+  end
 `endif
 endmodule

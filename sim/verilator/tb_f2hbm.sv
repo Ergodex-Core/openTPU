@@ -19,6 +19,7 @@
 module tb_f2hbm;
   parameter int NPORT = 8;
   parameter bit HAZ = 1'b1;
+  parameter int NXR = 0;                 // the native ports' crossing stages (the build's 3)
   parameter int CORE_HALF = 5, AXI_HALF = 4, HBM_HALF = 2;   // 100 / 125 / 250: the ratios
 
   logic clk = 1'b0, aclk = 1'b0, hclk = 1'b0;
@@ -76,7 +77,7 @@ module tb_f2hbm;
   logic [NPORT-1:0][255:0] m_wdata, m_rdata;
   logic [NPORT-1:0][31:0]  m_wstrb;
   logic [NPORT-1:0][1:0]   m_bresp, m_rresp;
-  otpu_f2_hbm_mem #(.NPORT(NPORT), .HAZ(HAZ)) u_dut (
+  otpu_f2_hbm_mem #(.NPORT(NPORT), .HAZ(HAZ), .NXR(NXR)) u_dut (
     .clk, .rst, .aclk, .arst, .hclk, .hrst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,

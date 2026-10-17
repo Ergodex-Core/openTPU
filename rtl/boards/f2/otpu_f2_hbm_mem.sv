@@ -3,10 +3,19 @@
 // port p, shared there with the host's PCIS (otpu_f2_hbm_host, one master per port, registered
 // at the port by an otpu_f2_hbm_hreg, below) by an otpu_f2_hbm_port. tb_f2hbm tests it on an
 // HBM model (tests/test_f2_rtl.py).
+//
+// NXR: the native ports cross NXR register stages each way (otpu_xr; g_xr.g_x[k]) between this
+// fabric, floorplanned in SLR0 by the HBM's ports, and the slice's adapter in SLR2 (the sys's
+// pblocks: k = 0 in SLR0, 1 in SLR1, 2 in SLR2; docs/wide_port.md "Placement"). Down, per
+// channel: the adapter's takes (n_cvalid && n_cready, n_wvalid && n_wready: it sees a bridge's
+// ready NXR cycles late) with the command and the beat; up: the bridge's readies, read data,
+// write count and error. The bridges (XL = 2 NXR) take what arrives and keep room for it. No
+// reset reaches a stage: whatever is in one flushes in NXR cycles while both sides hold reset.
 module otpu_f2_hbm_mem #(
   parameter int NPORT = 8,              // HBM ports used: slice s's channel c on port NCH s + c
   parameter bit HAZ   = 1'b1,           // the bridges' same-beat order (0: tests only)
-  parameter int GATHER = 4              // the bridges' burst gather (hclk cycles)
+  parameter int GATHER = 4,             // the bridges' burst gather (hclk cycles)
+  parameter int NXR   = 0               // the native ports' crossing stages each way (0: wired)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -93,6 +102,35 @@ module otpu_f2_hbm_mem #(
   (* max_fanout = 4 *) logic rst_q, hrst_q;
   always_ff @(posedge clk) rst_q <= rst;
   always_ff @(posedge hclk) hrst_q <= hrst;
+  // ---- the native ports' crossing (the bridges' side b_*)
+  logic [NPORT-1:0]        b_cvalid, b_cready, b_cwe, b_wvalid, b_wready, b_rvalid, b_err;
+  logic [NPORT-1:0][24:0]  b_caddr;
+  logic [NPORT-1:0][511:0] b_wdata, b_rdata;
+  logic [NPORT-1:0][63:0]  b_wmask;
+  logic [NPORT-1:0][15:0]  b_wdone;
+  if (NXR == 0) begin : g_wire
+    assign b_cvalid = n_cvalid; assign b_cwe = n_cwe; assign b_caddr = n_caddr;
+    assign b_wvalid = n_wvalid; assign b_wdata = n_wdata; assign b_wmask = n_wmask;
+    assign n_cready = b_cready; assign n_wready = b_wready; assign n_rvalid = b_rvalid;
+    assign n_rdata = b_rdata; assign n_wdone = b_wdone; assign n_err = b_err;
+  end else begin : g_xr
+    localparam int DW = 1 + 1 + 25 + 1 + 512 + 64;   // down: take, we, beat, take, data, mask
+    localparam int UW = 1 + 1 + 1 + 512 + 16 + 1;    // up: readies, rvalid, data, wdone, err
+    logic [NXR:0][NPORT-1:0][DW-1:0] dn;   // dn[NXR] the adapter's, dn[0] the bridges'
+    logic [NXR:0][NPORT-1:0][UW-1:0] up;   // up[0] the bridges', up[NXR] the adapter's
+    for (genvar p = 0; p < NPORT; p++) begin : g_ch
+      assign dn[NXR][p] = {n_cvalid[p] && n_cready[p], n_cwe[p], n_caddr[p],
+                           n_wvalid[p] && n_wready[p], n_wdata[p], n_wmask[p]};
+      assign {b_cvalid[p], b_cwe[p], b_caddr[p], b_wvalid[p], b_wdata[p], b_wmask[p]} = dn[0][p];
+      assign up[0][p] = {b_cready[p], b_wready[p], b_rvalid[p], b_rdata[p], b_wdone[p], b_err[p]};
+      assign {n_cready[p], n_wready[p], n_rvalid[p], n_rdata[p], n_wdone[p], n_err[p]} = up[NXR][p];
+    end
+    for (genvar k = 0; k < NXR; k++) begin : g_x   // k: the stage's SLR (0 the bridges')
+      otpu_xr #(.W(NPORT * DW)) u_dn (.clk, .rst(1'b0), .d(dn[k + 1]), .q(dn[k]));
+      otpu_xr #(.W(NPORT * UW)) u_up (.clk, .rst(1'b0), .d(up[k]), .q(up[k + 1]));
+    end
+  end
+
   // the ports' masters: [p][0] the bridge, [p][1] the host
   logic [NPORT-1:0][1:0]          s_awvalid, s_awready, s_wvalid, s_wready, s_wlast, s_bvalid;
   logic [NPORT-1:0][1:0]          s_bready, s_arvalid, s_arready, s_rvalid, s_rready;
@@ -112,12 +150,12 @@ module otpu_f2_hbm_mem #(
   logic             hp_wlast;
   logic [NPORT-1:0][255:0] hp_rdata;
   for (genvar p = 0; p < NPORT; p++) begin : g_port
-    otpu_f2_hbm_nch #(.BASE(34'(p) << 29), .HAZ(HAZ), .GATHER(GATHER)) u_nch (
+    otpu_f2_hbm_nch #(.BASE(34'(p) << 29), .HAZ(HAZ), .GATHER(GATHER), .XL(2 * NXR)) u_nch (
       .clk, .rst(rst_q),
-      .n_cvalid(n_cvalid[p]), .n_cready(n_cready[p]), .n_cwe(n_cwe[p]), .n_caddr(n_caddr[p]),
-      .n_wvalid(n_wvalid[p]), .n_wready(n_wready[p]), .n_wdata(n_wdata[p]),
-      .n_wmask(n_wmask[p]), .n_rvalid(n_rvalid[p]), .n_rdata(n_rdata[p]),
-      .n_wdone(n_wdone[p]), .n_err(n_err[p]),
+      .n_cvalid(b_cvalid[p]), .n_cready(b_cready[p]), .n_cwe(b_cwe[p]), .n_caddr(b_caddr[p]),
+      .n_wvalid(b_wvalid[p]), .n_wready(b_wready[p]), .n_wdata(b_wdata[p]),
+      .n_wmask(b_wmask[p]), .n_rvalid(b_rvalid[p]), .n_rdata(b_rdata[p]),
+      .n_wdone(b_wdone[p]), .n_err(b_err[p]),
       .hclk, .hrst(hrst_q),
       .m_awvalid(s_awvalid[p][0]), .m_awready(s_awready[p][0]), .m_awaddr(s_awaddr[p][0]),
       .m_awlen(s_awlen[p][0]), .m_wvalid(s_wvalid[p][0]), .m_wready(s_wready[p][0]),
