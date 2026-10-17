@@ -190,19 +190,27 @@ module otpu_f2_hbm_host #(
   // ================================================================== hclk: writes
   // The head beat in registers (hw_*: its port one-hot, or none past the last port), so the
   // ports' valids are flip-flops and the crossing's LUT RAM read and gray compare stay off the
-  // ports' arbitration (the f278ff5f synthesis: -0.9 ns at 450 MHz without them)
+  // ports' arbitration (the f278ff5f synthesis: -0.9 ns at 450 MHz without them). The W beat
+  // shown to the ports (hw_wd, hw_ws, hw_wl) is a register too: the low half loads with the
+  // head, the high half replaces it as the low one is taken (ws 1 -> 2), so the 256 + 32 bits
+  // go from a flip-flop to the ports' registers with no select between (the second placed
+  // p4rl8 build, docs/wide_port.md "Placement": ws's 216 replicas and hw_s into every port's
+  // m_wdata / m_wstrb over 6.1 ns of route; now ws selects only the load of hw_wd, here)
   logic [1:0]  ws;                      // 0: AW, 1: W low, 2: W high (last)
   logic        hw_v, hw_null;
   logic [27:0] hw_a;
-  logic [511:0] hw_d;
-  logic [63:0] hw_s;
+  logic [255:0] hw_dh;                  // the head beat's high half, waiting
+  logic [31:0] hw_sh;
+  logic [255:0] hw_wd;                  // the W beat shown: the low half, then the high
+  logic [31:0] hw_ws;
+  logic        hw_wl;
   logic [NPORT-1:0] hw_sel;
   assign p_awvalid = (hw_v && ws == 2'd0) ? hw_sel : '0;
   assign p_wvalid = (hw_v && ws != 2'd0) ? hw_sel : '0;
   assign p_awaddr = {hw_a, 6'd0};
-  assign p_wdata = ws == 2'd2 ? hw_d[511:256] : hw_d[255:0];
-  assign p_wstrb = ws == 2'd2 ? hw_s[63:32] : hw_s[31:0];
-  assign p_wlast = ws == 2'd2;
+  assign p_wdata = hw_wd;
+  assign p_wstrb = hw_ws;
+  assign p_wlast = hw_wl;
   wire hw_aw = |(p_awvalid & p_awready);
   wire hw_w = |(p_wvalid & p_wready);
   wire hw_end = hw_v && (hw_null || (ws == 2'd2 && hw_w));
@@ -217,9 +225,12 @@ module otpu_f2_hbm_host #(
   end
   always_ff @(posedge hclk) begin
     if (xw_pop) begin
-      hw_a <= xw_a; hw_d <= xw_d; hw_s <= xw_s;
+      hw_a <= xw_a; hw_dh <= xw_d[511:256]; hw_sh <= xw_s[63:32];
+      hw_wd <= xw_d[255:0]; hw_ws <= xw_s[31:0]; hw_wl <= 1'b0;
       hw_null <= 32'(xw_a[27:23]) >= NPORT;
       for (int p = 0; p < NPORT; p++) hw_sel[p] <= xw_a[27:23] == 5'(p);
+    end else if (ws == 2'd1 && hw_w) begin
+      hw_wd <= hw_dh; hw_ws <= hw_sh; hw_wl <= 1'b1;
     end
     if (hrst_q) begin
       ws <= '0; hw_v <= 1'b0; btarget <= '0; bcnt <= '0; bgray <= '0;

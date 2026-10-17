@@ -1,7 +1,10 @@
 // F2 OCL crossing: unrelated clocks, independent AW/W, backpressure in both domains,
 // PCIS hold, byte masks, error responses, and ignored accesses outside the 4 KiB window.
+// NXR: the HBM build's SLR crossing stages (otpu_axil_xr) between the crossing's core side and
+// the register slave (0: wired, as the DDR build).
 module tb_f2axil;
   parameter int CORE_HALF = 5, AXI_HALF = 2;
+  parameter int NXR = 0;
   logic sclk = 0, mclk = 0, srst = 1, mrst = 1;
   always #(AXI_HALF) sclk = !sclk;
   always #(CORE_HALF) mclk = !mclk;
@@ -17,7 +20,27 @@ module tb_f2axil;
   logic m_awvalid, m_wvalid, m_bready, m_arvalid, m_rready;
   logic m_awready = 0, m_wready = 0, m_arready = 0, m_bvalid = 0, m_rvalid = 0;
   logic [1:0] m_bresp, m_rresp;
-  otpu_axil_cdc dut (.*);
+  logic [11:0] c_awaddr, c_araddr;
+  logic [31:0] c_wdata, c_rdata;
+  logic [3:0] c_wstrb;
+  logic c_awvalid, c_wvalid, c_bready, c_arvalid, c_rready;
+  logic c_awready, c_wready, c_arready, c_bvalid, c_rvalid;
+  logic [1:0] c_bresp, c_rresp;
+  otpu_axil_cdc dut (.*,
+    .m_awaddr(c_awaddr), .m_awvalid(c_awvalid), .m_awready(c_awready), .m_wdata(c_wdata),
+    .m_wstrb(c_wstrb), .m_wvalid(c_wvalid), .m_wready(c_wready), .m_bresp(c_bresp),
+    .m_bvalid(c_bvalid), .m_bready(c_bready), .m_araddr(c_araddr), .m_arvalid(c_arvalid),
+    .m_arready(c_arready), .m_rdata(c_rdata), .m_rresp(c_rresp), .m_rvalid(c_rvalid),
+    .m_rready(c_rready));
+  otpu_axil_xr #(.NXR(NXR)) u_cx (.clk(mclk), .rst(mrst), .srst(mrst),
+    .s_awaddr(c_awaddr), .s_awvalid(c_awvalid), .s_awready(c_awready), .s_wdata(c_wdata),
+    .s_wstrb(c_wstrb), .s_wvalid(c_wvalid), .s_wready(c_wready), .s_bresp(c_bresp),
+    .s_bvalid(c_bvalid), .s_bready(c_bready), .s_araddr(c_araddr), .s_arvalid(c_arvalid),
+    .s_arready(c_arready), .s_rdata(c_rdata), .s_rresp(c_rresp), .s_rvalid(c_rvalid),
+    .s_rready(c_rready),
+    .m_awaddr, .m_awvalid, .m_awready, .m_wdata, .m_wstrb, .m_wvalid, .m_wready, .m_bresp,
+    .m_bvalid, .m_bready, .m_araddr, .m_arvalid, .m_arready, .m_rdata, .m_rresp, .m_rvalid,
+    .m_rready);
 
   logic [31:0] mem [1024], shadow [1024];
   logic saw_aw = 0, saw_w = 0;
