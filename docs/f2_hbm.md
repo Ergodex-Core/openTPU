@@ -175,10 +175,11 @@ hdk/common/shell_stable/build/constraints/small_shell_level_1_fp_cl.xdc). Left t
 (docs/wide_port.md "Placement": two placed p4rl8 builds at -4.9 and -4.6 ns) one slice of 226K
 LUTs was spread over two SLRs with 7,693 unregistered crossings and every wide bus of the
 design (the host path's into the ports, the adapter's readies and the TMEM's grants into the
-units) ran 6-8 ns of route. `boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc`
-(appended by build.py to small_shell_cl_pnr_user.xdc for an HBM target, so the HDK reads it at
-placement after its own) pins the design by whole clock regions, every pblock a child of
-`pblock_CL` with `CONTAIN_ROUTING` off:
+units) ran 6-8 ns of route. `boards/f2/build/constraints/cl_pnr_user_hbm.tcl`
+(appended by build.py to cl_pnr_user.tcl for an HBM target, which build_level_1_cl.tcl reads
+unmanaged before the HDK's opt_design, after the HDK's own constraints: a managed XDC drops
+Tcl, docs/wide_port.md "Placement, round 3") pins the design by whole clock regions cut down
+to the sites `pblock_CL` holds, every pblock a child of `pblock_CL` with `CONTAIN_ROUTING` off:
 
 | pblock | hierarchy (WRAPPER/CL/u_sys/...) | clock regions | LUT budget | used |
 |---|---|---|---|---|
@@ -265,7 +266,8 @@ change, or split over slices (f2-hbm:s2, 3.65 GiB a slice) once its FFN is padde
 | no `OTPU_NCH` (NCH = 2) | the same 58, on the generalized adapter, top and model | pass |
 | `tests/test_f2_rtl.py::test_f2_hbm_fabric` (`tb_f2hbm`) | 4 / 8 / 16 / 32 ports, three clock ratios, the native ports through the build's three crossing stages each way (NXR 3) and wired (0): every channel's native contract on an HBM model that reorders across IDs, runs transactions in any per-ID order and interleaves two IDs' read beats; bridges inside their pseudo-channels, bursts formed (~18% of transactions multi-beat under the mixed traffic), INCR within 4 KiB; host writes / reads on every port in PCIS order, B / R IDs, zeros past the last port | pass |
 | `test_f2_ocl_crossing` (`tb_f2axil`) | the OCL's clock crossing alone (NXR 0) and through `otpu_axil_xr`'s three stages (3): 300 write / read pairs each, backpressure both sides, hold, errors, the other windows | pass |
-| `tests/test_f2_build.py::test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed` | the floorplan file under a Tcl mock: four pblocks under `pblock_CL`, whole clock regions one SLR each, stage k of every chain in SLR k, routing not contained; a missing hierarchy stops it | pass |
+| `tests/test_f2_build.py::test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed` | the floorplan file under a Tcl mock: four pblocks under `pblock_CL`, whole clock regions one SLR each cut down to the parent's sites, stage k of every chain in SLR k, routing not contained; a missing hierarchy stops it | pass |
+| `test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design` | build_level_1_cl.tcl under a mock HDK sequence: cl_pnr_user.tcl read `-unmanaged` after the HDK's managed user XDC and before its opt_design, once; no opt_design or a Tcl error stops the build | pass |
 | `test_f2_hbm_fabric_detects_missing_hazards` | HAZ = 0 returns stale data | pass |
 | `tests/test_f2_host.py` | S x NCH geometry (1x8, 2x8, 1x16, 4x8): bases, Board.write / read round trip with unaligned edges, every byte at beat_at's place; beat_at is the testbench's (RTL's) inverse | pass |
 | `tests/test_f2_build.py` | the HBM snapshot (top, scripts, constraints, wrapper, geometry, parameters, sources) for f2-hbm, :s2, :s4, f2-hbm16; the DDR snapshot without HBM files | pass |
