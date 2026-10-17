@@ -139,11 +139,13 @@ def place(cfg: Config, args: dict) -> tuple[_Dram, Layout, list]:
                 n_loc, parts = N, [a.array] * S
             L = Q.rl_lanes(a.fmt, cfg.PORTB, cfg.MCOLS) if a.rl and getattr(
                 cfg, "ROWLANES", False) else 0
-            if L:                       # row-lane groups (L D aligned, docs/row_lanes.md)
-                G = Q.rl_groups(n_loc, L)
-                rs, srs = Q.rl_row_stride(K, a.fmt, L, D), Q.rl_scale_bytes(K, a.fmt, L, D)
+            line = getattr(cfg, "ALINE", 32)
+            if L:                       # row-lane groups (L D aligned, docs/row_lanes.md; the
+                G = Q.rl_groups(n_loc, L)   # scale groups port-A lines)
+                rs, srs = Q.rl_row_stride(K, a.fmt, L, D), Q.rl_scale_bytes(K, a.fmt, L, D, line)
                 dram.alloc(-dram.next % (L * D)) if dram.next % (L * D) else None
                 daddr = dram.alloc(G * rs)
+                dram.alloc(-dram.next % line) if dram.next % line else None
                 saddr = dram.alloc(G * srs)
             else:
                 rs, srs = Q.row_bytes(K, a.fmt, D), Q.scale_bytes(K, a.fmt, D)
@@ -152,11 +154,11 @@ def place(cfg: Config, args: dict) -> tuple[_Dram, Layout, list]:
             for s, p in enumerate(parts):
                 q, sc = Q.quantize_mxu(p, a.fmt, D)
                 if L:
-                    q, sc = Q.rl_rows(q, L, D), Q.rl_scales(sc, a.fmt, K, L, D)
+                    q, sc = Q.rl_rows(q, L, D), Q.rl_scales(sc, a.fmt, K, L, D, line)
                 dram.put(s, daddr, q)
                 dram.put(s, saddr, sc)
             layout.params[name] = (a, (daddr, saddr))
-            desc = QTensor.weight(daddr, saddr, n_loc, K, a.fmt, D, rl=L)
+            desc = QTensor.weight(daddr, saddr, n_loc, K, a.fmt, D, rl=L, line=line)
             for s in range(S):
                 bound[s][name] = desc
         elif isinstance(a, KVCache):

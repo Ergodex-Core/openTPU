@@ -43,6 +43,7 @@ module otpu_f2_hbm_sys #(
   parameter bit T2         = 1'b0,       // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md)
   parameter int PORTB      = 1,          // chunks a cycle on port B (docs/wide_port.md; otpu_board)
   parameter int RL         = 0,          // row lanes (docs/row_lanes.md; otpu_board; CAPS2 bit4)
+  parameter int ALINE      = 32,         // port A's line, bytes (32, 64; otpu_board; CAPS2 bit5)
   parameter int CORE_KHZ   = 200000,
   parameter logic [31:0] BUILD_ID = 32'h0,
   parameter int DDR_MTS    = 0,
@@ -195,7 +196,7 @@ module otpu_f2_hbm_sys #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
-               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .PLATFORM(PLATFORM),
+               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),

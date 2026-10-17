@@ -31,6 +31,7 @@ SEQ_WC = true
 T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
 PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
 ROWLANES = false                # MM RL row lanes and QACT DUP8 (docs/row_lanes.md; CAPS2 bit4)
+ALINE = 32                      # port A's line, bytes: 32, or 64 (CAPS2 bit5; docs/row_lanes.md)
 
 [uarch]                         # the f2 target's (the YPCB card's m4)
 MXU_IMPL = 2
@@ -95,6 +96,12 @@ ROWLANES = true                 # (the 102 GB/s ceiling of the port); 8 channels
 PORTB = 4                       # (eight streams, otpu_mxu RL 8), the > 100 tok/s point of the
 ROWLANES = true                 # tally. build.py --target f2-hbm:p4rl8
 MCOLS = 8
+
+[variants.p4rl8a64]             # ... with port A at 64 bytes a line (Config.ALINE; CAPS2 bit5):
+PORTB = 4                       # int4 L 4's group Sw shares its first advance's line, one line
+ROWLANES = true                 # an advance, the MXU's roofline (docs/row_lanes.md "Port A at
+MCOLS = 8                       # 64 bytes"). build.py --target f2-hbm:p4rl8a64
+ALINE = 64
 
 [variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
 PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl

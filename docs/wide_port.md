@@ -443,6 +443,71 @@ int4 L 4 takes the int4 chunks in 1.43 M advances (1.7 M port-A lines) and int8 
 1.0 M, ~2.7 M MXU cycles a token against 12.36 M measured on the board today (the ISA tally;
 not run on the RTL).
 
+### Port A at 64 bytes a line, and prefill over the row-lane image (2026-10-17)
+
+docs/row_lanes.md "Port A at 64 bytes" (the decision and its arithmetic) and "Prefill over the
+group layout" (the group walk). The same method as the row-lane table above (Verilator 5.048,
+OTPU_TARGET=f2-hbm OTPU_NCH=8, --lat 60, 200 MHz; tools/perf_qwen.py `--model gemma3 --portb 4
+--mcols 8 --rowlanes --aline 64 [--wformat int4 --head-format int4] --layers 4 | 0`), the
+builds RL 8 / ALINE 64 (`f2-hbm:p4rl8a64`, CFG_HASH dd6b92a6):
+
+| Gemma-3-1B, RL 4 at PORTB 4 / MCOLS 8 | int4, ALINE 32 (above) | **int4, ALINE 64** | int8, ALINE 32 (above) | **int8, ALINE 64** |
+|---|---|---|---|---|
+| 4 layers + head: cycles | 579,306 | **565,739** | 949,474 | 949,474 |
+| roofline (port B / 4, port A lines, MXU) | 534,712 (port A; MXU 441,256, port B 442,699) | 442,699 (port B; port A 442,296, MXU 441,256) | 801,995 (port B; port A 801,592) | 801,995 (port B; port A 801,592) |
+| efficiency to it | 92.3% | 78.3% | 84.5% | 84.5% |
+| port A: lines, Sw alone | 528,278, 88,046 (16.7%: 1.2 lines an advance) | **440,232, 0 (one line an advance)** | 799,528, 0 | 799,528, 0 |
+| port B's utilization | 76.4% | 77.8% | 84.5% | 84.5% |
+| MXU: MAC / blocked / starved | 76.2% / 16.9% / 2.4% | 78.0% / 15.2% / 2.2% | 84.3% / 12.9% / 0.2% | 84.3% / 12.9% / 0.2% |
+| DRAM read beats a cycle a channel | 3.293 | 3.373 | 3.428 | 3.428 |
+| 4 layers + head: tok/s | 345.2 | 353.5 | 210.6 | 210.6 |
+| **whole model (26 layers): cycles, tok/s** | 1,474,025, 135.7 | **1,440,727, 138.8** (352 s; the roofline now 1,072,684 = port B's and port A's alike, the MXU 1,065,924: 74.5%; MAC 74.0%, blocked 12.6%, starved 2.6%; 1,059,268 lines, 0 alone; 3.230 beats) | 2,393,990, 83.5 | 2,394,111, 83.5 (681 s; 82.1%, MAC 81.8%, blocked 11.6%) |
+
+What it says:
+
+* **int4 RL 4 is off the port-A bound: one line an advance, 0 Sw-alone requests** (the group's
+  Sw rides its first advance's 64-byte line; 440,232 lines where 528,278 were needed at 32),
+  and the whole model gains 33 K cycles, 135.7 -> **138.8 tok/s**. Not the ~170 of the MXU's
+  roofline: with port A gone the next bound is port B itself, which int4 L 4 at four chunks an
+  advance runs at every cycle (1,063,919 port-B cycles against the MXU's 1,065,924: the two
+  rooflines coincide), and the native path delivers 3.23-3.43 beats a cycle a channel of 4 on
+  this model (int8 RL 4, port-B bound since the row-lane commit, reaches 84.5% the same way),
+  plus the other units' ~130 K net cycles (9% of an int4 token, 5% of an int8 one). So int4 at
+  ALINE 64 is where int8 was: the port's rate on 8 channels, and the VPU / quantizer / DMA
+  work the MXU does not overlap. The MXU's own roofline needs port B past 85% (f2-hbm16's 16
+  channels at half a beat each, docs/f2_hbm.md) and the other units overlapped (docs/vpu_pump.md).
+* **int8 is unchanged to the cycle** (949,474 at 4 layers; the whole model 2,394,111 against
+  2,393,990, the two runs' noise): int8 L 4's Sw shared its first advance's line at 32 already
+  (H 16 + A 4), as the arithmetic said.
+* The 32-byte builds and images are untouched (`ALINE` defaults to 32; `f2-hbm:p4rl8` keeps
+  172e5c73; the PORTB 1 build's netlist has no ALINE term).
+
+**Prefill over the row-lane image** (the group walk, docs/row_lanes.md "Prefill over the
+group layout"; the same image as decode; `--rows 4` at 4 layers + the head, logits for the
+last row; the row-lane image at ALINE 64, the adapter keeping 16 beats for port-A reuse on
+RL builds):
+
+| Gemma-3-1B prefill, 4 rows, PORTB 4 / MCOLS 8 | int4, standard image | **int4, row-lane image** | int8, standard image | **int8, row-lane image** |
+|---|---|---|---|---|
+| cycles (a row) | 1,761,842 (440,460) | **1,334,346 (333,586)** | 1,675,893 (418,973) | **1,614,575 (403,644)** |
+| roofline (MXU; port B / 4; port A) | 1,240,760; 443,581; 1,017,592 | 1,174,776 (port A = MXU 1,170,616); 443,581 | 1,240,760; 802,877; 1,017,592 | 1,436,920 (port A; MXU 1,432,760); 802,877 |
+| efficiency | 70.4% | 88.0% | 74.0% | 89.0% |
+| MXU: MAC / blocked / starved | 70.4% / 25.1% / 0.8% | 87.7% / 7.0% / 0.7% | 74.0% / 21.6% / 0.5% | 88.7% / 7.4% / 0.1% |
+| wide reads, two-part | 524,472, 34,952 | 327,864, **0** | 913,080, 332,527 | 590,008, **0** |
+| port A lines, Sw alone | 1,629,880, 0 | 1,166,520, 0 | 1,236,664, 0 | 1,428,664, 0 |
+
+No regression: the row-lane image's prefill is 24% faster in int4 and 3.7% in int8. The
+standard image's 4-row MMs take PAIR (M 4 = MCOLS / 2) and QUAD, whose wide reads go in two
+parts (34,952 int4, 332,527 int8: a pair twice) and whose scale windows wait on port A (the
+MXU blocked 21-25%); the walk reads one aligned chunk a request from the groups (0 two-part)
+and, with the adapter keeping a group's beats, one line a block with every row after a
+group's first a reuse (blocked 7%). (The walk has no PAIR / QUAD, so its MXU roofline is the
+plain MM's -- int8: 1,432,760 against the standard image's 1,240,760 -- and it still finishes
+first.) Before the adapter's beat reuse the int4 walk measured 4,753,621 cycles (2.7x the
+standard image, blocked 74%): a 4-bit row's scale data spans three beats of its group and
+every row restarted the adapter's run at the group's first beat; int8's rows sit in one beat
+and were 3.7% faster already.
+
 ### What the nightly needs (the f2-hbm target at PORTB 2)
 
 Verilator cannot give LUTs or a clock: the lanes' cost in silicon and the 2048-bit path's
@@ -485,6 +550,15 @@ timing come from the nightly's synthesis. What it needs:
   only. PORTB 4 on 8 channels runs every channel at a beat a cycle (3.43 read beats a cycle over
   8 channels in the int8 run): f2-hbm16 (NCH 16) halves that; the bridge's reads in flight
   (docs/f2_hbm.md) are the card's limit to check first.
+* **The 64-byte port-A line:** `f2-hbm:p4rl8a64` (PORTB 4, ROWLANES, MCOLS 8, ALINE 64; CFG_HASH
+  dd6b92a6; CAPS2 bit5): `rtl_params` carries `ALINE` (32 on every other target) into the F2
+  tops -> otpu_board -> the slice's MXU (the 512-bit line register and tag RAM, the window
+  selects), otpu_dram / otpu_native_dram (the beat returned whole) and otpu_ctrl; the adapter's
+  `APR` (16 kept port-A beats on RL builds) comes with RL. Programs and images for
+  `Config(PORTB=4, ROWLANES=True, MCOLS=8, ALINE=64)` (OTPU_ALINE=64 must agree with the
+  bitstream). To read off the synthesis: the MXU's line path (ln1, r_stl, the tags) at twice
+  the width, the adapter's 16 x 512-bit reuse RAM and comparators; the measured gain is the
+  table above (int4 RL 4 decode 135.7 -> 138.8 tok/s, prefill on the one image).
 * **On the board:** tools/perf_qwen.py's run with `--portb 2` is the expected cycles a token
   (table above); otpu-serve on the image with Gemma-3-1B int8 gives the tok/s to set against
   the RTL's and against the PORTB 1 board baseline (22.3 tok/s, ~89% of its RTL figure).

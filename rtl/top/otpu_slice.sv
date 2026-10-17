@@ -83,6 +83,7 @@ module otpu_slice
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
   parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
   parameter int RL         = 0,       // row lanes: MM RL (otpu_mxu's streams, 4 or 8), QACT DUP8
+  parameter int ALINE      = 32,      // port A's line, bytes (32, 64): a scale read's response (otpu_mxu)
   parameter int PORTB      = 1        // chunks a cycle on port B: the MXU's wide requests, MM
                                       // PAIR / QUAD for every format, QACT DUP4 (docs/wide_port.md)
 ) (
@@ -112,7 +113,7 @@ module otpu_slice
   output logic [31:0]   sw_wdata,
   output logic [3:0]    sw_be,
   input  logic          a_rvalid,
-  input  logic [255:0]  a_rdata,    // the aligned 32 bytes holding the word read (MM scale lines)
+  input  logic [8*ALINE-1:0] a_rdata,   // the aligned ALINE bytes holding the word read (MM scale lines)
   output logic          b_req,
   output logic          b_tag,
   output logic          b_we,
@@ -511,7 +512,7 @@ module otpu_slice
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PORTB(PORTB), .RL(RL), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),

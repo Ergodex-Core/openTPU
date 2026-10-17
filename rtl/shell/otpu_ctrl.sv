@@ -113,6 +113,7 @@ module otpu_ctrl #(
   parameter bit T2 = 1'b0,               // CAPS bit28: t2 weights, MM QUAD, QACT DUP4
   parameter int PORTB = 1,               // CAPS2 [3:1]: chunks a cycle on port B
   parameter int RL = 0,                  // CAPS2 bit4: row lanes (MM RL, QACT DUP8; docs/row_lanes.md)
+  parameter int ALINE = 32,              // CAPS2 bit5: port A's line is 64 bytes (docs/row_lanes.md)
   parameter int LDP = 2,                 // cycles after LOAD before the loaders' busy shows (>= 2)
   // the configuration registers (CFG_*, register map 4): the target's values
   parameter int S          = 1,
@@ -199,7 +200,8 @@ module otpu_ctrl #(
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  localparam logic [31:0] CAPS2 = {27'd0, RL != 0,                            // bit4 RL
+  localparam logic [31:0] CAPS2 = {26'd0, ALINE == 64,                        // bit5 ALINE 64
+                                   RL != 0,                                   // bit4 RL
                                    3'((PORTB > 1) ? PORTB : 0),               // [3:1] PORTB
                                    COLL_GATHER || S > 1};                     // bit0 GATHER
 

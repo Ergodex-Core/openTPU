@@ -258,6 +258,8 @@ def arch_hash(cfg) -> int:
             d.pop(k, None)
     if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
         d.pop("PORTB", None)
+    if d.get("ALINE", 32) == 32:          # (the 32-byte port-A line of every build before it)
+        d.pop("ALINE", None)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -302,6 +304,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
         "PORTB": int(a.get("PORTB", 1)),
         "RL": rl_streams(cfg),
+        "ALINE": int(a.get("ALINE", 32)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
@@ -331,8 +334,9 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PORTB, ROWLANES; the CFG_HASH it reports): ACT_ROWS equal to
-    MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PORTB, ROWLANES, ALINE; the CFG_HASH it
+    reports): ACT_ROWS equal to MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too
+    (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
     for k in ("MCOLS", "LANES", "ACT_ROWS", "TMEM_WORDS"):
@@ -350,6 +354,8 @@ def build_config(t: Target | str | None = None, **knobs):
         a["PORTB"] = int(knobs["PORTB"])
     if knobs.get("ROWLANES") is not None:
         a["ROWLANES"] = bool(int(knobs["ROWLANES"]))
+    if knobs.get("ALINE") is not None:
+        a["ALINE"] = int(knobs["ALINE"])
     return config(t, **a)
 
 

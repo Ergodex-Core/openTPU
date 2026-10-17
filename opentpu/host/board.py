@@ -620,6 +620,8 @@ class SimTransport:
         if getattr(cfg, "ROWLANES", False):         # row lanes (CAPS2 bit4; in CFG_HASH)
             from opentpu.target import rl_streams
             p["RL"] = rl_streams(cfg)
+        if getattr(cfg, "ALINE", 32) != 32:         # port A's 64-byte line (CAPS2 bit5; in CFG_HASH)
+            p["ALINE"] = cfg.ALINE
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -642,7 +644,8 @@ class SimTransport:
         p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(build_config(
             t, MCOLS=p["MCOLS"], LANES=p["LANES"], ACT_ROWS=p["ACT_ROWS"],
             TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0),
-            PORTB=p.get("PORTB", 1), ROWLANES=int(bool(p.get("RL", 0))))))
+            PORTB=p.get("PORTB", 1), ROWLANES=int(bool(p.get("RL", 0))),
+            ALINE=p.get("ALINE", 32))))
         exe = rtlsim.build("tb_board", srcs, p)
         with simtmp.tempdir("otpu_board_") as d:
             for c in range(len(self.ch)):
@@ -1420,9 +1423,15 @@ def device_config(info: dict, **kw):
         raise ConfigMismatch(f"the bitstream {'has' if rowlanes else 'lacks'} row lanes (CAPS2 "
                              f"bit4) but OTPU_ROWLANES={env}: unset OTPU_ROWLANES (the host "
                              f"follows the bitstream)")
+    aline = int((info.get("caps2") or {}).get("aline", 32))
+    env = os.environ.get("OTPU_ALINE")
+    if env is not None and int(env) != aline:
+        raise ConfigMismatch(f"the bitstream's port A reads {aline}-byte lines (CAPS2 bit5) "
+                             f"but OTPU_ALINE={env}: unset OTPU_ALINE (the host follows the "
+                             f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
-           "PORTB": portb, "ROWLANES": rowlanes, "STREAM": stream,
+           "PORTB": portb, "ROWLANES": rowlanes, "ALINE": aline, "STREAM": stream,
            "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
@@ -1492,6 +1501,7 @@ def check_hash(info: dict, cfg=None) -> None:
                            T2=bool(caps.get("t2")),
                            PORTB=(info.get("caps2") or {}).get("portb", 1),
                            ROWLANES=bool((info.get("caps2") or {}).get("rowlanes", False)),
+                           ALINE=int((info.get("caps2") or {}).get("aline", 32)),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:

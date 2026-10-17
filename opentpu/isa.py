@@ -33,6 +33,9 @@ RS_T2, RS_QUAD = 0x1, 0x2       # MM rs bits: t2 elements; QUAD (with PAIR): col
 RS_RL_SHIFT, RS_RL = 2, 0xC     # MM rs bits 3:2: row lanes (docs/row_lanes.md), log2 L (0: none)
 RS_MASK = 0xF                   # the rs bits that are flags (rs is a multiple of D >= 16; the
                                 # stride is rs & ~RS_MASK)
+SRS_GW = 1                      # MM srs bit 0 (with rs bits 3:2): the group walk, a plain MM over
+                                # the row-lane layout (srs is a multiple of 4: the stride is srs
+                                # & ~SRS_GW; docs/row_lanes.md "Prefill over the group layout")
 F_PAIR = 0x40                   # MM: column reuse, two K-blocks per cycle and row (int8: PORTB 2)
 F_RSC = 0x80                    # MM: row scales only (each scale row is Sw[n]; dw 0, m 1)
 F_ROW, F_CSCALE, F_RSCALE = 0x1, 0x2, 0x4   # QACT (QST: F_ROW)
@@ -398,8 +401,8 @@ def stream_hw_cfg(d: StreamDesc, flags: int = 0) -> dict | None:
 
 
 def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=False,
-       ascale=None, wf=W8, pair=False, k0=0, rsc=False, quad=False, rl=0, ra=0, rb=0, rc=0,
-       comment=""):
+       ascale=None, wf=W8, pair=False, k0=0, rsc=False, quad=False, rl=0, walk=False, ra=0,
+       rb=0, rc=0, comment=""):
     """MM (docs/isa.md). With `ascale` (a TMEM address; needs unit and acc) the old accumulator
     is first multiplied by a per-row factor: y = T[out] * T[ascale + j] + a.w (the
     flash-attention rescale, done in the MXU epilogue). The address travels in the (unused)
@@ -412,7 +415,12 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
     row lanes, the rows streamed `rl` at a time from groups of `rl` rows (`sa + g rs`, the
     group's chunks interleaved by chunk) with their scale rows in groups (`ssa + g srs`: the
     rows' Sw, then a block's data of the rows): lane l's row is output row g rl + l; M = 1,
-    not with pair / quad, k0 a multiple of the blocks a chunk; encoded as rs bits 3:2 = log2 rl."""
+    not with pair / quad, k0 a multiple of the blocks a chunk; encoded as rs bits 3:2 = log2 rl.
+    `walk` (with rl; srs bit 0, SRS_GW; docs/row_lanes.md "Prefill over the group layout"): the
+    group walk, a plain MM of any M over the matrix in groups of `rl`, the rows streamed one at
+    a time (row n's chunks at `sa + (n / rl) rs + (q rl + n mod rl) D`, its Sw and block data in
+    the group's scale line), the values and the cycles of a plain MM over standard rows; no
+    pair / quad either (prefill and the verify runs over a decode image)."""
     _check(0 < n < 65536 and 0 < kb < 256 and 0 < m < 256 and 0 <= ab < 256
            and 0 <= ors < 65536 and 0 <= k0 < 256,
            f"MM: n {n}, kb {kb}, m {m}, ab {ab}, ors {ors}, k0 {k0}")
@@ -422,7 +430,10 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
     _check(not rsc or wf != WT2, "MM: RSC does not take t2")
     _check(rs & RS_MASK == 0, f"MM: rs {rs} is not a multiple of 16")
     _check(rl in (0, 2, 4, 8), f"MM: rl {rl} (2, 4 or 8)")
-    _check(not rl or (m == 1 and not pair and not quad), "MM: RL needs M = 1 and no PAIR / QUAD")
+    _check(not rl or (not pair and not quad), "MM: RL (and the group walk) takes no PAIR / QUAD")
+    _check(not walk or rl, "MM: the group walk (walk) needs rl, the layout's groups")
+    _check(not rl or walk or m == 1, "MM: RL needs M = 1 (the group walk, walk=True, any M)")
+    _check(srs & SRS_GW == 0, f"MM: srs {srs} is not a multiple of 4")
     _check(not rl or k0 % blocks_per_chunk(wf) == 0, "MM: RL needs k0 a multiple of the blocks a chunk")
     if wf == WT2:
         rs, wf = rs | RS_T2, W4I
@@ -430,6 +441,8 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
         rs |= RS_QUAD
     if rl:
         rs |= (rl.bit_length() - 1) << RS_RL_SHIFT
+    if walk:
+        srs |= SRS_GW
     _check(not rsc or wf != WNV, "MM: RSC does not take NVFP4")
     if ascale is not None:
         _check(unit and acc, "MM: ASCALE needs UNIT and ACC")
@@ -452,10 +465,25 @@ def mm_format(ins) -> tuple[int, bool, bool]:
     return (WT2 if t2 else wf), pair, pair and bool(rs & RS_QUAD)
 
 
-def mm_lanes(ins) -> int:
-    """An MM's row lanes L (2, 4, 8; 0: none): rs bits 3:2 = log2 L (docs/row_lanes.md)."""
+def mm_layout(ins) -> int:
+    """The row-lane group size L (2, 4, 8; 0: standard rows) of the matrix an MM streams: rs
+    bits 3:2 = log2 L (docs/row_lanes.md), for the lanes mode and the group walk alike."""
     f = (ins.w[4] & RS_RL) >> RS_RL_SHIFT
     return 1 << f if f else 0
+
+
+def mm_walk(ins) -> int:
+    """The group size L of an MM that walks a row-lane layout row by row (rs bits 3:2 with srs
+    bit 0, SRS_GW: a plain MM over the groups at any M; docs/row_lanes.md); 0: not one."""
+    L = mm_layout(ins)
+    return L if L and ins.w[6] & SRS_GW else 0
+
+
+def mm_lanes(ins) -> int:
+    """An MM's row lanes L (2, 4, 8; 0: none): the lanes mode, rs bits 3:2 = log2 L at M = 1
+    without the walk bit (docs/row_lanes.md)."""
+    L = mm_layout(ins)
+    return L if L and not ins.w[6] & SRS_GW else 0
 
 
 def blocks_per_chunk(wf: int) -> int:

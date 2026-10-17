@@ -299,15 +299,17 @@ class QTensor:
     rl: int = 0
 
     @staticmethod
-    def weight(data, scale, n: int, k: int, fmt: str, D: int, rl: int = 0, **kw) -> "QTensor":
+    def weight(data, scale, n: int, k: int, fmt: str, D: int, rl: int = 0, line: int = 32,
+               **kw) -> "QTensor":
         """The descriptor of an [n, k] matrix in MXU format `fmt` ("int8", "int4", "fp4",
         "nvfp4", opentpu/quant.py quantize_mxu's rows): element rows row_bytes apart, scale rows
         scale_bytes apart; with `rl`, in row-lane groups of rl rows (quant.rl_row_stride,
-        rl_scale_bytes)."""
+        rl_scale_bytes; `line`: the port-A line the scale groups are rounded to, Config.ALINE)."""
         from . import quant as Q
         if rl:
             return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.rl_row_stride(k, fmt, rl, D),
-                           Q.rl_scale_bytes(k, fmt, rl, D), D, wf=Q.mxu_wf(fmt), rl=rl, **kw)
+                           Q.rl_scale_bytes(k, fmt, rl, D, line), D, wf=Q.mxu_wf(fmt), rl=rl,
+                           **kw)
         return QTensor(Affine.of(data), Affine.of(scale), (n, k), Q.row_bytes(k, fmt, D),
                        Q.scale_bytes(k, fmt, D), D, wf=Q.mxu_wf(fmt), **kw)
 
@@ -1961,19 +1963,27 @@ class Builder:
         # QUAD (t2): a chunk's four blocks a cycle from ACT rows j + c M (QACT DUP4)
         quad = pair and getattr(st, "quad", False) and \
             I.chunks_per_cycle(w.wf, True, True) <= portb
-        # row lanes (docs/row_lanes.md): a matrix in row-lane groups is streamed by MM RL only
-        # (M = 1, its L lanes' columns holding the row: the operand's copies)
+        # row lanes (docs/row_lanes.md): a matrix in row-lane groups is streamed by MM RL at
+        # M = 1 (its L lanes' columns holding the row: the operand's copies), and at M > 1 by
+        # the group walk (a plain MM over the groups, the rows one at a time: prefill and the
+        # verify runs over the decode image; no PAIR / QUAD, whose reuse would need a row's
+        # consecutive blocks' scale data contiguous, which the groups interleave)
         rl = getattr(w, "rl", 0)
+        walk = False
         if rl:
             bpc = I.blocks_per_chunk(w.wf)
-            if not getattr(self.cfg, "ROWLANES", False) or rl > portb or \
-                    rl * bpc > self.cfg.MCOLS:
+            if not getattr(self.cfg, "ROWLANES", False):
                 raise CompileError(f"dot: a matrix in row-lane groups of {rl} on a Config "
-                                   f"without ROWLANES, PORTB {portb} or MCOLS {self.cfg.MCOLS}")
-            if M != 1 or len(st.chunks) != 1 or getattr(st, "copies", 1) < rl * bpc:
-                raise CompileError(f"dot: a matrix in row-lane groups of {rl} needs a one-row "
-                                   f"operand in {rl * bpc} ACT RAM copies (QACT DUP / DUP4 / "
-                                   f"DUP8), not {M} rows x {getattr(st, 'copies', 1)}")
+                                   f"without ROWLANES")
+            walk = M != 1 or len(st.chunks) != 1       # (every chunk, a one-row tail's too)
+            if not walk:
+                if rl > portb or rl * bpc > self.cfg.MCOLS:
+                    raise CompileError(f"dot: a matrix in row-lane groups of {rl} at M = 1 on "
+                                       f"PORTB {portb}, MCOLS {self.cfg.MCOLS}")
+                if getattr(st, "copies", 1) < rl * bpc:
+                    raise CompileError(f"dot: a matrix in row-lane groups of {rl} needs a "
+                                       f"one-row operand in {rl * bpc} ACT RAM copies (QACT "
+                                       f"DUP / DUP4 / DUP8), not {getattr(st, 'copies', 1)}")
             pair = quad = False
         # one MM per QACT range of the operand (an MM's rows read one Sa: docs/isa.md "MM"),
         # added up in the output: the first as asked (overwrite, ACC or ASCALE), the rest ACC;
@@ -1996,12 +2006,13 @@ class Builder:
                 ins = I.mm(sak, ssa, out.base + m0 * ors, N, k1 - k0, w.rs, ors, mc,
                            ab + k0, w.srs, unit=unit, acc=acc is not None or not first,
                            rmax=rowmax and last, wf=w.wf, pair=ppair, k0=kp, rsc=w.rsc,
-                           quad=pquad, rl=rl,
+                           quad=pquad, rl=rl, walk=walk,
                            ascale=acc_scale.base if acc_scale is not None and first else None,
                            ra=ra, rb=rb,
                            comment=f"mm {M}x{K} . {N}x{K}^T"
                            + (f" part {k0}:{k1}" if len(parts) > 1 else "")
-                           + (f" rl{rl}" if rl else " quad" if pquad else " pair" if ppair else "")
+                           + (f" gw{rl}" if walk else f" rl{rl}" if rl
+                              else " quad" if pquad else " pair" if ppair else "")
                            + (" +rowmax" if rowmax and last else "")
                            + (" acc*=scale" if acc_scale is not None and first else ""))
                 self.emit(ins)

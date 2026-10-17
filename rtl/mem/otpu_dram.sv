@@ -1,5 +1,5 @@
 // Behavioural per-slice DRAM for simulation (the board version sits behind a DDR3/HBM
-// controller). Port A: one read of the aligned 32 bytes holding word a_addr (the MXU's scale
+// controller). Port A: one read of the aligned ALINE bytes holding word a_addr (the MXU's scale
 // lines) or one byte-enabled word write per cycle; port SW: one
 // byte-enabled word write per cycle (the quantizer's QST stores). Port B: one
 // D-byte burst per cycle, read (the MXU's streamed operand, DMA loads) or word-masked write
@@ -11,7 +11,8 @@ module otpu_dram #(
   parameter int D     = 32,
   parameter int LAT   = 8,
   parameter int SID   = 0,
-  parameter int PORTB = 1
+  parameter int PORTB = 1,
+  parameter int ALINE = 32        // port A's line, bytes (32, 64)
 ) (
   input  logic              clk,
   input  logic              a_req,
@@ -20,7 +21,7 @@ module otpu_dram #(
   input  logic [31:0]       a_wdata,
   input  logic [3:0]        a_be,
   output logic              a_rvalid,
-  output logic [255:0]      a_rdata,    // words (a_addr & ~7) .. (a_addr | 7), the lowest first
+  output logic [8*ALINE-1:0] a_rdata,   // the ALINE/4 words of the aligned line, the lowest first
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,
   input  logic [31:0]       sw_wdata,
@@ -42,11 +43,12 @@ module otpu_dram #(
 );
   localparam int AW = $clog2(WORDS);
   localparam int CW = D / 4;
+  localparam int LWW = $clog2(ALINE / 4);     // the word index in a port-A line
 
   logic [31:0] mem [WORDS];
 
   logic [LAT-1:0]    av, bv, bt;
-  logic [255:0]      ad [LAT];
+  logic [8*ALINE-1:0] ad [LAT];
   logic [PORTB*D*8-1:0] bd [LAT];
   logic [PORTB-1:0]  bm [LAT];
 
@@ -76,7 +78,7 @@ module otpu_dram #(
         if (sw_be[b]) mem[sw_addr[AW-1:0]][8*b +: 8] <= sw_wdata[8*b +: 8];
     end
     av[0] <= a_req && !a_we;
-    for (int w = 0; w < 8; w++) ad[0][32*w +: 32] <= mem[{a_addr[AW-1:3], 3'(w)}];
+    for (int w = 0; w < ALINE / 4; w++) ad[0][32*w +: 32] <= mem[{a_addr[AW-1:LWW], LWW'(w)}];
     bv[0] <= b_req && !b_we;
     bt[0] <= b_tag;
     for (int w = 0; w < PORTB * CW; w++)

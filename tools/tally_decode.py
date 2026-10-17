@@ -88,11 +88,13 @@ def tally(spec, cfg0, pos: int, mhz: float, wf: str, hf: str) -> dict:
             if Lr:
                 G = -(-N // Lr)
                 adv = G * KBc
-                sw_alone = Q.rl_header(fmt, Lr) + Q.rl_adv_bytes(fmt, Lr) > 32
+                line = getattr(cfg, "ALINE", 32)
+                sw_alone = Q.rl_sw_alone(fmt, Lr, line)
                 out["rl_chunks"] += G * Lr * KBc
                 out["rl_adv"] += adv
                 out["rl_lines"] += adv + (G if sw_alone else 0)
-                out["rl_bytes"] += G * Lr * KBc * D + G * Q.rl_scale_bytes(KB * D, fmt, Lr, D)
+                out["rl_bytes"] += G * Lr * KBc * D + G * Q.rl_scale_bytes(KB * D, fmt, Lr, D,
+                                                                          line)
                 out["rl_kinds"][f"{fmt} rl{Lr}"] += 1
             else:
                 out["rl_chunks"] += pb

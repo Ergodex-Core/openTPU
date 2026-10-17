@@ -32,6 +32,7 @@ module tb_top;
   parameter bit T2         = 1'b0;    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md)
   parameter int PORTB      = 1;       // chunks a cycle on port B (docs/wide_port.md)
   parameter int RL         = 0;       // row lanes: the MXU's streams, 4 or 8 (docs/row_lanes.md)
+  parameter int ALINE      = 32;      // port A's line, bytes (32, 64; docs/row_lanes.md)
   parameter bit TMEM_RQ    = 1'b0;    // TMEM_IMPL 1: request-priority bank addresses
   parameter int TMEM_NCP   = 3;       // TMEM_IMPL 1: copies
   parameter int TMEM_NSB   = 8;       // TMEM_IMPL 3: sub-banks per bank
@@ -62,7 +63,7 @@ module tb_top;
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
-             .T2(T2), .PORTB(PORTB), .RL(RL), .COLL_GATHER(COLL_GATHER || S > 1)) dut (
+             .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .COLL_GATHER(COLL_GATHER || S > 1)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 

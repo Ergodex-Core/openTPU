@@ -212,6 +212,9 @@ def main():
     ap.add_argument("--rowlanes", action="store_true",
                     help="row lanes (Config.ROWLANES, docs/row_lanes.md): the image in row-lane "
                          "groups, MM RL of the widest L for --portb / --mcols")
+    ap.add_argument("--aline", type=int, default=None, choices=[32, 64],
+                    help="port A's line in bytes (Config.ALINE; 64: an RL group's Sw shares "
+                         "its first advance's line, docs/row_lanes.md)")
     ap.add_argument("--block", type=int, default=None, help="attention block (tokens)")
     ap.add_argument("--depth", type=int, default=None, help="attention score blocks in flight")
     ap.add_argument("--check", action="store_true", help="compare with the ISA simulator")
@@ -293,6 +296,8 @@ def main():
         mk.update(PORTB=a.portb, PAIR=True)     # f2 targets' bitstreams have it)
     if a.rowlanes:
         mk.update(ROWLANES=True)
+    if a.aline:
+        mk.update(ALINE=a.aline)
     need = spec.image(board_config(DRAM_BYTES=1 << 40, **mk), a.cap, **wkw).nbytes
     need += (64 << 20) if qwen3_batch else 0           # the batch area (batch.alloc)
     cfg = board_config(DRAM_BYTES=1 << max(20, (need - 1).bit_length()), **mk)

@@ -142,7 +142,11 @@ module otpu_native_dram #(
   // between the scale stream and the others
   parameter int APF = 32,
   parameter int NCH = 2,                             // channels (a power of two; see the top)
-  parameter int PORTB = 1                            // B chunks a request and response (see the top)
+  parameter int PORTB = 1,                           // B chunks a request and response (see the top)
+  parameter int ALINE = 32,                          // port A's line: 32 (half a beat) or 64 (a beat)
+  parameter int APR = 1                              // A beats kept for reuse (1: the last; row-lane
+                                                     // builds 16: the group walk's rows revisit a
+                                                     // group's beats, docs/row_lanes.md)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -155,7 +159,7 @@ module otpu_native_dram #(
   input  logic [31:0]       a_wdata_x,
   input  logic [3:0]        a_be_x,
   output logic              a_rvalid,
-  output logic [255:0]      a_rdata,    // the aligned 32 bytes holding word a_addr (half a beat)
+  output logic [8*ALINE-1:0] a_rdata,   // the aligned ALINE bytes holding word a_addr (half a beat, or the beat)
   output logic              sw_rdy,
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,    // word address
@@ -330,19 +334,25 @@ module otpu_native_dram #(
   bt_t          bt_q [OD];                     // LUT RAM: tag, halves swapped (CHASH), pair
   logic [OW:0]  bt_n;
   logic [OW-1:0] bt_h;
-  // A reads in order: channel, word, reuse of the last beat, run beats to drop before this one
-  typedef struct packed { logic [CW-1:0] c; logic [3:0] idx; logic reuse; logic [RNW-1:0] drop; } ao_t;
+  // A reads in order: channel, word, reuse of a kept beat (ri: its entry; a fetch: the entry it
+  // fills), run beats to drop before this one
+  localparam int APRW = (APR > 1) ? $clog2(APR) : 1;
+  typedef struct packed { logic [CW-1:0] c; logic [3:0] idx; logic reuse; logic [APRW-1:0] ri;
+                          logic [RNW-1:0] drop; } ao_t;
   ao_t          ao_q [OD];
   ao_t          aoh;                           // the oldest A read
   logic [OW:0]  ao_n;
   logic [OW-1:0] ao_h;
 
   // A beat reuse: the logical beat (bits 29:4 of the word address), channel and channel beat of
-  // the last A read
-  logic         al_v;
-  logic [CW-1:0] al_c;
-  logic [27:0]  al_beat;
-  logic [24:0]  al_cb;
+  // the last APR A reads fetched (entry al_w next, round robin); their data in a_last (written as
+  // each fetch's beat goes out: in order, so a reuse taken after a fetch reads its data, and an
+  // entry reallocated by a later fetch is rewritten only after every earlier read went out)
+  logic [APR-1:0] al_v;
+  logic [CW-1:0] al_c [APR];
+  logic [27:0]  al_beat [APR];
+  logic [24:0]  al_cb [APR];
+  logic [APRW-1:0] al_w;
 
   // room in every channel's queue (for the request taken now, and at BREG the registered one)
   logic qb_room, qa_room, qw_room;
@@ -462,7 +472,13 @@ module otpu_native_dram #(
   wire [1:0] b_hnz = {bq_wmask[31:16] != 0, bq_wmask[15:0] != 0};   // the halves a B write writes
   // (bits 29:4 at NCH = 2, as the two-channel adapter's 4 GiB; 31:4 on more channels)
   wire [27:0] a_beat = NCH > 2 ? a_addr[31:4] : 28'(a_addr[29:4]);
-  wire a_reuse = !a_we && al_v && al_beat == a_beat;
+  logic a_reuse;
+  logic [APRW-1:0] a_ri;
+  always_comb begin
+    a_reuse = 1'b0; a_ri = al_w;
+    for (int i = 0; i < APR; i++)
+      if (!a_we && al_v[i] && al_beat[i] == a_beat) begin a_reuse = 1'b1; a_ri = APRW'(i); end
+  end
   // A runs per channel: the next channel beat of the run, valid (no write since), beats not
   // yet taken (in flight or stored)
   logic [24:0]  pnx [NCH];
@@ -677,7 +693,9 @@ module otpu_native_dram #(
   always_comb
     for (int c = 0; c < NCH; c++) begin
       wk_r[c] = wk_v[c] && pv[c] && 25'(wk_m[c] - pnx[c]) < 25'(pfl[c]);
-      wk_a[c] = wk_v[c] && al_v && al_c == CW'(c) && al_cb == wk_m[c];
+      wk_a[c] = 1'b0;
+      for (int i = 0; i < APR; i++)
+        if (wk_v[c] && al_v[i] && al_c[i] == CW'(c) && al_cb[i] == wk_m[c]) wk_a[c] = 1'b1;
     end
 
   // ------------------------------------------------------------------ merge
@@ -706,11 +724,11 @@ module otpu_native_dram #(
   // the entry pushed into an empty queue
   ao_t          ao_nx1, ao_in;
   assign ao_nx1 = ao_q[OW'(ao_h + 1'b1)];
-  assign ao_in = '{c: a_ch, idx: a_addr[3:0], reuse: a_reuse,
+  assign ao_in = '{c: a_ch, idx: a_addr[3:0], reuse: a_reuse, ri: a_ri,
                    drop: (a_reuse || a_hit) ? RNW'(0) : pfl[a_ch]};
-  logic [511:0] a_last;                          // the beat of the last fetched A read
+  logic [511:0] a_last [APR];                    // the beats of the last APR fetched A reads
   wire a_out = (ao_n != 0) && (aoh.reuse || ra_n[aoh.c] > (AW_ + 1)'(aoh.drop));
-  wire [511:0] a_src = aoh.reuse ? a_last : ra_head[aoh.c];
+  wire [511:0] a_src = aoh.reuse ? a_last[aoh.ri] : ra_head[aoh.c];
   always_ff @(posedge clk)
     if (a_out) aoh <= (ao_n == (OW + 1)'(1)) ? ao_in : ao_nx1;
     else if (ao_n == 0) aoh <= ao_in;
@@ -728,7 +746,8 @@ module otpu_native_dram #(
   // MXU's scale FIFO block RAM in one cycle)
   always_ff @(posedge clk) begin
     a_rvalid <= !rst && a_out;
-    a_rdata <= a_src[256 * aoh.idx[3] +: 256];
+    if (ALINE >= 64) a_rdata <= a_src[8*ALINE-1:0];        // the whole 64-byte beat
+    else a_rdata <= a_src[256 * aoh.idx[3] +: 256];
   end
 
   // the tag FIFO writes its tail every cycle too (the slot is not live unless the FIFO is full),
@@ -771,7 +790,7 @@ module otpu_native_dram #(
         iss_w[c] <= n_wdone[c];
       end
       bt_n <= '0; bt_h <= '0; ao_n <= '0; ao_h <= '0;
-      al_v <= 1'b0;
+      al_v <= '0; al_w <= '0;
       pv <= '0;
       for (int c = 0; c < NCH; c++) pfl[c] <= '0;
       wq_n <= '0; wacc_q <= '0;
@@ -870,7 +889,7 @@ module otpu_native_dram #(
         if (a_take && !a_we) aon = aon + 1;
         if (a_out) begin
           ao_h <= ao_h + 1; aon = aon - 1;
-          if (!aoh.reuse) a_last <= ra_head[aoh.c];
+          if (!aoh.reuse) a_last[aoh.ri] <= ra_head[aoh.c];
         end
         bt_n <= (OW + 1)'(updn(16'(bt_n), bq_go && !bq_we, b_out));
         ao_n <= aon;
@@ -905,19 +924,27 @@ module otpu_native_dram #(
       end
       for (int c = 0; c < NCH; c++) if (wk_r[c]) pv[c] <= 1'b0;
       if (a_take && a_we) pv <= '0;
-      // ---- A beat reuse: the beat of the last A read, forgotten on an A write or a write to it
-      if ((a_take && a_we) || (|wk_a)) al_v <= 1'b0;
-      else if (a_take && !a_we) begin
-        al_v <= 1'b1;
-        al_beat <= a_beat;
-        al_c <= a_ch;
-        al_cb <= a_cb;
+      // ---- A beat reuse: the beats of the last APR A reads fetched, each forgotten on a write
+      // to it, all on an A write
+      if (a_take && a_we) al_v <= '0;
+      else begin
+        for (int c = 0; c < NCH; c++)
+          if (wk_a[c])
+            for (int i = 0; i < APR; i++)
+              if (al_v[i] && al_c[i] == CW'(c) && al_cb[i] == wk_m[c]) al_v[i] <= 1'b0;
+        if (a_take && !a_we && !a_reuse) begin
+          al_v[al_w] <= 1'b1;
+          al_beat[al_w] <= a_beat;
+          al_c[al_w] <= a_ch;
+          al_cb[al_w] <= a_cb;
+          al_w <= (APR > 1) ? APRW'(al_w + 1'b1) : '0;
+        end
       end
       // ---- the host may have written since (last: an A read taken now decided with the old
       // state, and its run is dropped too)
       if (a_flush) begin
         pv <= '0;
-        al_v <= 1'b0;
+        al_v <= '0;
       end
     end
   end

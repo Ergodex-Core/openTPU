@@ -83,16 +83,20 @@ CAP2_GATHER = 1
 CAP2_PORTB_SHIFT, CAP2_PORTB_MASK = 1, 7
 # CAPS2 bit4: row lanes (MM RL, QACT DUP8; Config.ROWLANES; docs/row_lanes.md)
 CAP2_ROWLANES = 1 << 4
+# CAPS2 bit5: port A's line is 64 bytes (Config.ALINE 64; docs/row_lanes.md "Port A at 64
+# bytes"); 0: 32, as every build before the bit
+CAP2_ALINE64 = 1 << 5
 
 
 def caps2(v: int | None) -> dict:
     """CAPS2's value -> its capabilities; None (a register map before 5): all present (and a
-    one-chunk port B, no row lanes)."""
+    one-chunk port B, no row lanes, a 32-byte port-A line)."""
     if v is None:
-        return {"gather": True, "portb": 1, "rowlanes": False}
+        return {"gather": True, "portb": 1, "rowlanes": False, "aline": 32}
     return {"gather": bool(v & CAP2_GATHER),
             "portb": (v >> CAP2_PORTB_SHIFT & CAP2_PORTB_MASK) or 1,
-            "rowlanes": bool(v & CAP2_ROWLANES)}
+            "rowlanes": bool(v & CAP2_ROWLANES),
+            "aline": 64 if v & CAP2_ALINE64 else 32}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)
