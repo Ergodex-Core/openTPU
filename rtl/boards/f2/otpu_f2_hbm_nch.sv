@@ -39,6 +39,10 @@
 //
 // n_err: a response other than OKAY (sticky until rst). Resets: rst (core) and hrst (hclk) are
 // the same event, each side's synchronized; nothing is in flight while the accelerator is idle.
+// Each side takes its reset through a register of its own (rst_q, hrst_q: the bridges sit
+// along the HBM's ports, and the p4rl8 placement ran the CL's one hbm_reset_n flip-flop into
+// 120 of the 450 MHz domain's worst paths, docs/wide_port.md "Placement"), so a side leaves
+// reset a cycle after the top's does.
 module otpu_f2_hbm_nch #(
   parameter logic [33:0] BASE = 34'h0,  // the channel's first byte in the HBM
   parameter int CQ     = 16,            // the crossing's command FIFO, beats
@@ -94,31 +98,45 @@ module otpu_f2_hbm_nch #(
     $fatal(1, "otpu_f2_hbm_nch: RD, WOD, BMAX powers of two (BMAX <= 8), CQ >= 4");
 
   // ================================================================== core side
-  // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more)
+  logic rst_q, hrst_q;                    // the resets, registered here (see the top)
+  always_ff @(posedge clk) rst_q <= rst;
+  always_ff @(posedge hclk) hrst_q <= hrst;
+  // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more), the
+  // command FIFO's head into a register (h_*: the hazard compares below and the issue start
+  // from flip-flops. On the p4rl8 placement the head read by cf_h ran through the 80 compares
+  // into the crossing's 600 write enables, 9 levels, 92% route, -4.0 ns at 200 MHz; the
+  // crossing now writes its tail every cycle, otpu_afifo WT, so the issue reaches only its
+  // pointer). The register is a core cycle on a command's way (a stream's commands pipeline
+  // through it one a cycle: the first issues two cycles after its take, not one), 5 ns on the
+  // HBM's hundreds
   logic [25:0]  cf [4];
   logic [575:0] df [4];
   logic [2:0]   cf_n, df_n;
   logic [1:0]   cf_h, df_h;
-  logic         c_pop, d_pop;
+  logic         h_v, h_we;
+  logic [24:0]  h_a;
+  logic         c_pop, d_pop;              // the head issues; a write's data with it
   wire c_take = n_cvalid && n_cready;
   wire d_take = n_wvalid && n_wready;
+  wire h_load = cf_n != 0 && (!h_v || c_pop);   // the FIFO's head into the register
   always_ff @(posedge clk) begin
-    if (rst) begin
+    if (h_load) {h_we, h_a} <= cf[cf_h];
+    if (rst_q) begin
       cf_n <= '0; df_n <= '0; cf_h <= '0; df_h <= '0; n_cready <= 1'b0; n_wready <= 1'b0;
+      h_v <= 1'b0;
     end else begin
       if (c_take) cf[2'(cf_h + cf_n)] <= {n_cwe, n_caddr};
       if (d_take) df[2'(df_h + df_n)] <= {n_wmask, n_wdata};
-      cf_n <= cf_n + 3'(c_take) - 3'(c_pop);
+      cf_n <= cf_n + 3'(c_take) - 3'(h_load);
       df_n <= df_n + 3'(d_take) - 3'(d_pop);
-      if (c_pop) cf_h <= cf_h + 1'b1;
+      if (h_load) cf_h <= cf_h + 1'b1;
+      if (!h_v || c_pop) h_v <= cf_n != 0;
       if (d_pop) df_h <= df_h + 1'b1;
       // room for this cycle's take and the next's: at most 2 after this cycle's changes
-      n_cready <= (cf_n + 3'(c_take) - 3'(c_pop)) <= 3'd2;
+      n_cready <= (cf_n + 3'(c_take) - 3'(h_load)) <= 3'd2;
       n_wready <= (df_n + 3'(d_take) - 3'(d_pop)) <= 3'd2;
     end
   end
-  wire        h_we = cf[cf_h][25];
-  wire [24:0] h_a  = cf[cf_h][24:0];
 
   // ---- in flight: the beats of the issued writes (to n_wdone) and reads (to n_rvalid)
   logic [WOD-1:0][24:0] wa;
@@ -140,8 +158,8 @@ module otpu_f2_hbm_nch #(
 
   // ---- issue: the head command into the crossing (a write with its data)
   logic        x_ready;
-  wire iss_w = cf_n != 0 && h_we && df_n != 0 && x_ready && !wn[WW] && !hz_r;
-  wire iss_r = cf_n != 0 && !h_we && x_ready && !rn[RW] && !hz_w;
+  wire iss_w = h_v && h_we && df_n != 0 && x_ready && !wn[WW] && !hz_r;
+  wire iss_r = h_v && !h_we && x_ready && !rn[RW] && !hz_w;
   assign c_pop = iss_w || iss_r;
   assign d_pop = iss_w;
   logic        x_v, x_we;
@@ -150,15 +168,17 @@ module otpu_f2_hbm_nch #(
   logic        xr_v;
   logic [511:0] xr_d;
   logic x_pop;
-  otpu_afifo #(.W(602), .DEPTH(CQ)) u_xq (
-    .wclk(clk), .wrst(rst), .wvalid(c_pop), .wready(x_ready), .wdata({h_we, h_a, df[df_h]}),
+  // (RWR, WT: x_ready and the RAM's write enables are flip-flops; the tail takes the head and
+  // its data every cycle there is room, the issue moves the pointer)
+  otpu_afifo #(.W(602), .DEPTH(CQ), .RWR(1'b1), .WT(1'b1)) u_xq (
+    .wclk(clk), .wrst(rst_q), .wvalid(c_pop), .wready(x_ready), .wdata({h_we, h_a, df[df_h]}),
     .wslot('0), .wcommit(), .wused(), .rused(),
-    .rclk(hclk), .rrst(hrst), .rvalid(x_v), .rready(x_pop), .rdata({x_we, x_a, x_d}));
+    .rclk(hclk), .rrst(hrst_q), .rvalid(x_v), .rready(x_pop), .rdata({x_we, x_a, x_d}));
 
   always_ff @(posedge clk) begin
     if (iss_w) wa[wt] <= h_a;
     if (iss_r) ra[rt] <= h_a;
-    if (rst) begin
+    if (rst_q) begin
       wv <= '0; wn <= '0; wt <= '0; wr_ <= '0; wret <= wdone_s;
       rv <= '0; rn <= '0; rt <= '0; rh <= '0;
     end else begin
@@ -187,7 +207,7 @@ module otpu_f2_hbm_nch #(
   logic        k_pop;                  // the held command joins or opens a burst
   assign x_pop = x_v && (!k_v || k_pop);
   always_ff @(posedge hclk) begin
-    if (hrst) k_v <= 1'b0;
+    if (hrst_q) k_v <= 1'b0;
     else if (!k_v || k_pop) begin
       k_v <= x_v;
       if (x_v) begin
@@ -261,7 +281,7 @@ module otpu_f2_hbm_nch #(
     // push only moves the count, so its write enables are not the pop's
     if (!wf_n[WDW]) wf[WDW'(wf_h + wf_n)] <= k_d;
     if (aw_tk) begin wb_len[wb_t] <= awq[awq_h].len; bb_len[2'(bb_h + bb_n)] <= awq[awq_h].len; end
-    if (hrst) begin
+    if (hrst_q) begin
       o_v <= 1'b0; o_age <= '0; arq_n <= '0; awq_n <= '0; arq_h <= 1'b0; awq_h <= 1'b0;
       wf_n <= '0; wf_h <= '0; wb_n <= '0; bb_n <= '0; wb_h <= '0; bb_h <= '0; wb_t <= '0;
       w_cnt <= '0; btarget <= '0; bcnt <= '0; bgray <= '0; aerr <= 1'b0;
@@ -306,7 +326,7 @@ module otpu_f2_hbm_nch #(
   logic [255:0] r_lo, rr_d;
   always_ff @(posedge hclk) begin
     rr_d <= m_rdata;
-    if (hrst) begin r_half <= 1'b0; rr_v <= 1'b0; end
+    if (hrst_q) begin r_half <= 1'b0; rr_v <= 1'b0; end
     else begin
       rr_v <= r_tk;
       if (rr_v) begin
@@ -316,9 +336,9 @@ module otpu_f2_hbm_nch #(
     end
   end
   otpu_afifo #(.W(512), .DEPTH(RD)) u_rq (
-    .wclk(hclk), .wrst(hrst), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
+    .wclk(hclk), .wrst(hrst_q), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
     .wslot('0), .wcommit(), .wused(), .rused(),
-    .rclk(clk), .rrst(rst), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));
+    .rclk(clk), .rrst(rst_q), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));
   assign n_rvalid = xr_v;
   assign n_rdata = xr_d;
 
@@ -328,7 +348,7 @@ module otpu_f2_hbm_nch #(
   logic [15:0] bbin;
   always_comb for (int i = 0; i < 16; i++) bbin[i] = ^(bg2 >> i);
   always_ff @(posedge clk) begin
-    if (rst) begin
+    if (rst_q) begin
       bg1 <= '0; bg2 <= '0; e1 <= 1'b0; e2 <= 1'b0; n_wdone <= '0; n_err <= 1'b0;
     end else begin
       bg1 <= bgray; bg2 <= bg1; e1 <= aerr; e2 <= e1;
@@ -339,11 +359,11 @@ module otpu_f2_hbm_nch #(
   assign wdone_s = n_wdone;
 
 `ifndef SYNTHESIS
-  always_ff @(posedge hclk) if (!hrst) begin
+  always_ff @(posedge hclk) if (!hrst_q) begin
     if (b_tk && bb_n == 0) $fatal(1, "otpu_f2_hbm_nch: B with no write in flight");
     if (k_pop && k_we && !w_room) $fatal(1, "otpu_f2_hbm_nch: W FIFO overflow");
   end
-  always_ff @(posedge clk) if (!rst && n_rvalid && rn == 0)
+  always_ff @(posedge clk) if (!rst_q && n_rvalid && rn == 0)
     $fatal(1, "otpu_f2_hbm_nch: read data with no read in flight");
 `endif
 endmodule
