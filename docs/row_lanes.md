@@ -157,9 +157,11 @@ take block 1 (`hi`), J >= 2 L blocks 2 and 3 (`hq`), the row sum adds columns j 
   epilogue lanes: two cycles a row at MCOLS 4 and L 4, which a row's KBc >= 2 advances cover;
   the result FIFO absorbs KB 1 rows); then `+ L` for the next row (today + 1). The last row
   writes N - (G - 1) L results (`Mz`, a per-command field, with a row countdown in the drain).
-  RMAX: the per-column running maxima (today's `mk[j]`) are reduced over the L columns at the
-  end (an L-input key max, registered) into the one word; ASCALE's factor is `alpha[0]` for
-  every lane; ACC reads and writes per column as before.
+  RMAX: the one word is a running key max over the candidates the drain's lanes offer the
+  columns (`mkr`, two register stages: the cycle's lanes' max, then the running max; the same
+  word as a reduce over the per-column maxima `mk[j]` at the end, which the first synthesis at
+  MCOLS 8 showed is seven chained compares, -2.4 ns: docs/wide_port.md "Synthesis"); ASCALE's
+  factor is `alpha[0]` for every lane; ACC reads and writes per column as before.
 * **Two heads.** The pop head moves to the next command only if the pipeline treats both
   alike: the condition adds `rl` and L (`n.rl == h.rl`, M' = L compared under rl as M is under
   PAIR).
@@ -315,7 +317,7 @@ fifth for the other lanes' Sw), S1's block-major streams (`wrl`: stream s = bloc
 lane s mod L's chunk), the per-column stream select (s_hi / s_hq = J's bits in RL) beside the
 ACT RAM's block select, the eight decoders and the `dec1[{s_hq, s_hi}]` pick with the block's
 validity by `{hq, hi}`, Sw per column into the result FIFO (MCOLS words a row) and the lanes,
-RMAX reduced over the lanes' column maxima (`mkr`), ASCALE's alpha[0], the pop-head overlap
+RMAX as a running max over the lanes' candidates (`mkr`), ASCALE's alpha[0], the pop-head overlap
 condition on rl and L. Without RL every term is a constant or a generate branch not taken
 (the per-column Sw is one value), and the PORTB 1 / 2 regression suites are unchanged.
 

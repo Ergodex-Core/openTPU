@@ -563,6 +563,50 @@ timing come from the nightly's synthesis. What it needs:
   (table above); otpu-serve on the image with Gemma-3-1B int8 gives the tok/s to set against
   the RTL's and against the PORTB 1 board baseline (22.3 tok/s, ~89% of its RTL figure).
 
+### Synthesis (f2-hbm:p4rl8, the first run, 2026-10-17)
+
+The first synthesis of `f2-hbm:p4rl8` (PORTB 4, MCOLS 8, RL 8, NCH 8, clk_raw 200 MHz = 5.0 ns)
+on the VU47P, post-synthesis:
+
+* **Utilization**, the whole CL: 251,520 LUT (19%), 196,289 FF (7.5%), 426 BRAM (21%), 1,275
+  DSP (14%).
+* **Timing:** every path family positive (the HBM AXI, the shell clocks, hold) but one, 32
+  endpoints: `u_sys/u_board/u_slice/u_mxu/mx_have_reg[0]/C` -> `.../u_mxu/mkr_reg[31:0]/D`,
+  slack **-2.427 ns** (data path 7.250 ns = logic 2.249, 31%, + route 5.001, 69%; 33 logic
+  levels: CARRY8 x14, LUT3 x4, LUT4 x2, LUT5 x9, LUT6 x4).
+
+What the path was: `mkr` is the RL RMAX word (an MM RL writes one RMAX over the group's L rows,
+where the plain MM writes one per column), and it was a reduce over the MCOLS columns'
+running maxima in one cycle -- `for j: if (mx_have[j] && (!have || mk[j] > m)) m = mk[j]` --
+MCOLS - 1 chained 32-bit key compares, each compare's result selecting the next compare's
+operand, with the `have` flag starting the chain at `mx_have[0]`. At MCOLS 4 that is three
+chained compares; MCOLS 8 (the first RL 8 synthesis: p2rl8 and p4rl8 are the MCOLS 8 builds)
+doubles it to seven, 14 CARRY8 deep with the selects between them. Nothing in it is PORTB's
+or RL 8's: it is the MCOLS 8 term of an MM RL's one-word RMAX.
+
+What changed (otpu_mxu `mkr`): the word is a running max over the candidates the drain's lanes
+offer the columns (max is associative: the max over the columns' maxima that saw a value is
+the max over everything they were offered), in two register stages -- the cycle's candidates'
+max over the NL = 4 lanes (a lane without a hit as key 0, the unsigned minimum: two compare
+levels) and `mkr <= max(mkr, that)` (one level), cleared with `mx_have`. Its value at the
+RMAX write (`mx_go`) is the same word on the same cycle (an assertion in the RTL checks it
+against the columns' reduce at every RL RMAX write), so cycles are unchanged on every build:
+the longest path is now two 32-bit compares (8 CARRY8) and a select. Its sibling in the RL
+request path, the group walk's row-end step (`so = i_soff + w_ds` selected and added to
+`srow_next`, then the `same_line` compares that decide the next row's Sw request: two adds and
+a compare in the `go_iss` cycle), keeps the sum as a register (`w_sod`, advanced with
+`i_soff`; asserted equal), one add less on that path. The other RL-widened arithmetic in the
+issuer is one add deep (the command's first cycle's `so` -> `srow_addr + so` -> `same_line`,
+the group walk's `w_rd` / `w_sd` three-operand sums into registers) and was left. Measured
+after the change (the method of the tables above): Gemma-3-1B 4 layers + head at PORTB 4 /
+MCOLS 8 / RL 4, int4 579,306 and int8 949,474 cycles, the baselines to the cycle;
+tests/test_wide_port_rtl.py 168 passed, test_rtl's replay / act_reads / attention cases 25 (the
+PORTB 1 exact cycles), test_t2_rtl 24, test_observability at OTPU_ROWLANES=1 OTPU_PORTB=4
+OTPU_MCOLS=8 16 of 18 (the two that fail, test_mxu_starve_counter's cyc[20] < 0.3 cyc[400] at
+13,137 / 41,089 and test_trace_long_wait_is_exact's 52,189-cycle wait under its 65,535, fail
+identically on the commit before: their thresholds are PORTB 1 / 2's). The re-synthesis of
+this fix is the nightly's to report.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

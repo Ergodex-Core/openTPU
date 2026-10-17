@@ -279,6 +279,9 @@ module otpu_mxu
   logic [2:0]  i_wl;                        // per-row offset step (bs - 4), the row and Sw
   logic [31:0] w_so0, w_ds, w_rd, w_sd;     // steps at a group's end (rs - (L - 1) D, srs -
   wire  [2:0]  w_last = 3'((4'd1 << i_lg) - 4'd1);   // 4 (L - 1)); the group's last lane
+  logic [31:0] w_sod;                       // i_soff + w_ds, kept with i_soff: the next lane's
+                                            // offset is a register, not an add before the
+                                            // row-end's address add and line compares
   logic [31:0] i_cstep;                     // the chunk address step within a row
   logic        i_ini;                       // the command's first cycle: its addresses load
   logic [1:0]  i_wf;
@@ -617,6 +620,10 @@ module otpu_mxu
   assign a_req  = go_iss && need_a;
   assign a_addr = !a_req ? '0 : (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2)
                                                                            : (scale_addr >> 2);
+`ifndef SYNTHESIS
+  always @(posedge clk) if (!rst && i_act && i_gw && w_sod != i_soff + w_ds)
+    $fatal(1, "otpu_mxu: group walk w_sod %0h, i_soff %0h + w_ds %0h", w_sod, i_soff, w_ds);
+`endif
   // QUAD's blocks 4c+1, 4c+2, 4c+3 are in the row (not past a KB that is not a multiple of 4)
   wire q_o1 = !(last_k && c_KB[1:0] == 2'd1);
   wire q_o2 = !(last_k && (c_KB[1:0] == 2'd1 || c_KB[1:0] == 2'd2));
@@ -1604,10 +1611,40 @@ module otpu_mxu
   logic [LANES-1:0] mxm, mxm_nx;
   logic [LANES-1:0][31:0] mxl;
   always_comb for (int k = 0; k < LANES; k++) mxm_nx[k] = 32'(mx_i) + LANES + 32'(k) < 32'(c_Mr);
-  // RL: the one RMAX word is the max over the lanes' columns' running maxima (the key max of
-  // those that saw a value), registered (the maxima settle before the head drains)
-  logic [31:0] mkr;
-  always_ff @(posedge clk) begin
+  // RL: the one RMAX word is the key max over the lanes' columns' running maxima that saw a
+  // value, which is the max over every candidate the columns were ever offered (max is
+  // associative; a candidate that does not raise its column's mk is under mkr already). It is
+  // kept as a running max in two register stages off the drain's lane hits, not reduced over
+  // the columns: mkc, the cycle's candidates' max (lane k's key where it hits a column, rx's
+  // or rw's as mx_cand takes them, else key 0, the unsigned minimum: a tree of log2 NL
+  // compares), then mkr <= max(mkr, mkc), one compare. Cleared with mx_have (a candidate
+  // cannot be in mkc at c_done: c_drained needs rx / rw gone). mkr is valid one cycle after
+  // mk, as the columns' reduce it replaces was, and mx_go (mx_gq, a register of c_drained)
+  // first reads it a cycle after that. The columns' reduce (MCOLS - 1 chained 32-bit compares
+  // behind mx_have: 33 levels, 14 CARRY8, -2.43 ns at MCOLS 8 on f2-hbm:p4rl8's first
+  // synthesis, docs/wide_port.md "Synthesis") is gone.
+  logic [31:0] mkr, mkc;
+  logic [NL-1:0][31:0] mkk;
+  function automatic logic [31:0] kmax(input logic [31:0] a, input logic [31:0] b);
+    return (b > a) ? b : a;
+  endfunction
+  always_comb
+    for (int k = 0; k < NL; k++)
+      mkk[k] = (|rxh[k]) ? fkey(rx.nv[k]) : (|rwh[k]) ? fkey(ry[k]) : '0;
+  always_ff @(posedge clk)
+    if (rst || c_done) begin
+      mkc <= '0; mkr <= '0;
+    end else begin
+      logic [31:0] t [NL];
+      for (int k = 0; k < NL; k++) t[k] = mkk[k];
+      for (int s = 1; s < NL; s = 2 * s)
+        for (int k = 0; k + s < NL; k = k + 2 * s) t[k] = kmax(t[k], t[k + s]);
+      mkc <= t[0];
+      mkr <= kmax(mkr, mkc);
+    end
+`ifndef SYNTHESIS
+  // mkr at its reads is the columns' reduce
+  always @(posedge clk) if (!rst && mx_go && c_rl) begin
     logic [31:0] m;
     logic        have;
     m = '0; have = 1'b0;
@@ -1615,9 +1652,8 @@ module otpu_mxu
       if (mx_have[j] && (!have || mk[j] > m)) begin
         m = mk[j]; have = 1'b1;
       end
-    mkr <= m;
+    if (mkr != m) $fatal(1, "otpu_mxu: RL RMAX word %0h, the columns' max %0h", mkr, m);
   end
-`ifndef SYNTHESIS
   always @(posedge clk) if (!rst && q_n != 0)
     for (int k = 0; k < LANES; k++)
       if (mxm[k] != (32'(mx_i) + 32'(k) < 32'(c_Mr)))
@@ -1793,6 +1829,7 @@ module otpu_mxu
             ss = 6'(bs << i_lg);                  // step of L bs; the row's lane and steps
             w_so0 <= so;
             w_ds  <= 32'(bs) - 32'd4;
+            w_sod <= so + 32'(bs) - 32'd4;
             w_rd  <= i_rs - (32'(D) << i_lg) + 32'(D);
             w_sd  <= i_srs - (32'd4 << i_lg) + 32'd4;
             i_wl  <= '0;
@@ -1843,7 +1880,7 @@ module otpu_mxu
             // (the group walk: the next row is the group's next lane, D and 4 on, its block
             // data bs - 4 further in; past the group's last lane the next group's lane 0)
             rd = i_gw ? ((i_wl == w_last) ? w_rd : 32'(D)) : i_rs;
-            so = i_gw ? ((i_wl == w_last) ? w_so0 : i_soff + w_ds) : i_soff;
+            so = i_gw ? ((i_wl == w_last) ? w_so0 : w_sod) : i_soff;
             sa = srow_next + so;
             sn = srow_next + (i_gw ? ((i_wl + 3'd1 == w_last) ? w_sd : 32'd4) : i_srs);
             i_k <= '0;
@@ -1854,7 +1891,10 @@ module otpu_mxu
             srow_next <= sn;
             scale_addr <= sa;
             i_soff <= so;
-            if (i_gw) i_wl <= (i_wl == w_last) ? 3'd0 : i_wl + 3'd1;
+            if (i_gw) begin
+              w_sod <= so + w_ds;
+              i_wl <= (i_wl == w_last) ? 3'd0 : i_wl + 3'd1;
+            end
             // the next row's Sw came with this line, or is in its first advance's, or needs a
             // request of its own
             i_swd <= a_tag.swr;
