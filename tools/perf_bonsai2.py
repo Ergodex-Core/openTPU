@@ -101,6 +101,14 @@ def main():
     out["roofline"], out["efficiency"] = round(ideal), round(ideal / p.cycles, 3)
     out["tok_s"] = round(a.mhz * 1e6 / p.cycles, 2)
     out["native_b"] = st.get("native_b", [])
+    # the token's phases (DeltaNet / attention / MLP / LM head: perf_qwen's names, by the
+    # kernel source of each instruction; Profile.phases' running-max rule), the per-unit busy
+    # cycles: what tools/wideport_lpn.py calibrates its LPN estimate against, phase by phase
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    from perf_qwen import _phase
+    out["phases"] = p.phases(lambda r: _phase(progs[0][r.pc]))
+    out["busy"] = p.unit_busy(0)
+    out["lat"] = a.lat
     print(out, flush=True)
     if a.json:
         with open(a.json, "a") as f:

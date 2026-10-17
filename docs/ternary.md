@@ -347,6 +347,69 @@ overlapped with the next MM's streaming, then the scale entry in one line).
 MTP on t2 at MCOLS 8 (section 9's question): the 4B-MTP's loop at PORTB 2 / MCOLS 8 on the
 ISA simulator is in section 9.1.
 
+### 8.2 LPN estimate of the t2 RL 2 token (tools/wideport_lpn.py; estimated, calibrated per phase, 2026-10-18)
+
+The t2 RL 2 decode token through the Latency Petri Net of docs/wide_port.md "LPN estimate"
+(the hardware loop's LPN tier model with the wide port, the row lanes and the eight channels,
+extended with the t2 format -- a chunk of four blocks, QUAD one chunk an advance with its
+scale words in one 16-byte group, RL 2 two chunks and 1.25 port-A lines an advance at ALINE
+32 -- and with DSTEP on the DMA unit: the DeltaNet state update at DSTEP_LANES words a cycle,
+its state chunks read and written on port B, a read's round trip first; `--bonsai`, the
+step compiled as tools/perf_bonsai2.py compiles it, with SEQ_WC off in the model's Config:
+the programs do not change with it). Nothing fitted. The receipts: `tools/perf_bonsai2.py
+MODEL f2-hbm --layers 1 --wformat t2 --rotate --portb 2 --mcols 8 --rowlanes --lat 60 --mhz
+200 --json` on this tree (OTPU_NCH=8; the tool now writes the token's phases and unit busy
+into its JSON), 212 s (4B) and 111 s (2B) of simulation; the LPN runs 5 s (1 layer + head) to
+50 s (the whole 4B: 24,780 commands, 1,570 phase runs). The rule as there: no tok/s from a
+point whose mean |error| over the phases carrying >= 2% of the token is above 10%.
+
+**Calibration, 1 layer + head (the layer a DeltaNet one), PORTB 2 / MCOLS 8 / RL 2** (cycles;
+RTL measured, LPN estimated):
+
+| Bonsai-2 | phase | RTL (measured) | LPN (estimate) | error | what binds in the model (port B / MXU / port A / channel) |
+|---|---|---|---|---|---|
+| 4B | LM head | 778,545 | 780,188 | +0.2% | port B 745,472 (the advances and the groups' Sw-alone issue cycles) / 622,848 / 744,960 / 412,883 |
+| 4B | DeltaNet | 118,533 | 113,407 | -4.3% | port B (62,592 / 47,744 / 57,984 / 29,535) |
+| 4B | MLP | 101,551 | 103,591 | +2.0% | port B (94,976 / 75,776 / 89,856 / 47,934) |
+| 4B | other (the norms between) | 6,940 | 545 | -92% | 0.7% of the token: left out of the mean |
+| 4B | **token** | **1,005,571** | **997,731** | **-0.8%** | mean \|error\| 2.2% over the three carrying phases (cycle-weighted over all four 1.5%) |
+| 2B | LM head | 647,475 | 654,979 | +1.2% | port B (621,312 / 497,664 / 620,800 / 332,131) |
+| 2B | MLP | 66,218 | 66,680 | +0.7% | port B (61,952 / 44,032 / 55,296 / 27,232) |
+| 2B | DeltaNet | 68,740 | 61,934 | -9.9% | port B (31,488 / 23,808 / 28,928 / 14,803) |
+| 2B | other | 3,904 | 486 | -88% | 0.5% of the token: left out of the mean |
+| 2B | **token** | **786,339** | **784,079** | **-0.3%** | mean \|error\| 3.9% over the three carrying phases (weighted 2.3%) |
+
+The head and the MLP, where the token is, are within 2%: the RL 2 advances' two chunks, their
+1.25 scale lines (the Sw line alone every group, an issue cycle without a chunk: the model
+charges it on port B's credit, which is why its "port B" column stands above the port-A lines
+the RTL names as the roofline; both say the same thing, one scale request a cycle), the QUAD
+rotation MMs at one chunk an advance. **The DeltaNet phase reads low (-4% on the 4B, -10% on
+the 2B)**, the one place the model is weak: a DSTEP is one DMA operation at the lane rate here, and
+the RTL's phase also carries the VOP chains between the DSTEPs (36 K VPU-busy cycles of the
+4B's 118 K) and the DMA's write acknowledgements; which of the two the model underruns was
+not separated (a per-class profile of the receipt would say). The "other" phase (the norms between the phases, 0.5-
+0.7% of the token) is mostly missed, as the tier's PORTB 1 point missed its non-MM tail.
+
+**The whole model** (every layer and the head, `--layers 0`; estimated; 200 MHz; the RTL
+columns measured: section 8.1's 2B, and the 4B's 26.7 tok/s measured after 8.1's hand-back):
+
+| Bonsai-2, t2 RL 2 at PORTB 2 / MCOLS 8 | RTL (measured) | LPN (estimate) | error | the model's bound (port B / MXU / port A / channel) | tok/s RTL / LPN |
+|---|---|---|---|---|---|
+| 4B (32 layers) | 7,490,637 (26.7 tok/s) | 7,367,742 | -1.6% | port B 5,641,536 / 4,521,536 / 5,350,208 / 2,850,622: the scale requests, not the chunks; the DeltaNet's 2.74 M and the MLP's 3.40 M of the token | **26.7 / 27.1** |
+| 2B (24 layers) | 3,698,534 (54.1 tok/s) | 3,537,068 | -4.4% | port B 2,791,800 / 2,084,472 / 2,576,248 / 1,312,381; DeltaNet 1.12 M, MLP 1.60 M, head 0.65 M, attention 0.16 M | **54.1 / 56.5** |
+
+Both whole-model errors have the DeltaNet phase's sign (the layers are where the model reads
+low; the 2B's DeltaNet is a larger share of its token), so the estimates are a lower bound of
+a few percent on the layers' side. What the model and the RTL agree on, for section 10's
+decisions: the token is bound by port A's scale requests (one a cycle, 1.25 an advance for t2
+L 2), with the MXU at 60-80% of them; the channels are well under half their rate (2.85 M
+cycles of beats against the 4B's 7.4 M), so the t2 scale entry in one line (a 64-byte port-A line for
+t2 L 2, or two lines a cycle) is the lever, and a wider port B is not, as 8.1 said. Not
+modelled: the sequencer's wait entries (SEQ_WC: perf_bonsai2's RTL runs with them, the model
+is the range scoreboard's), the DMA's beats on the channels, the 9B (no RTL receipt to
+calibrate against; its layers' MMs are larger against its DeltaNet work than the 4B's, so
+its error should be between the 4B's -1.6% and the head's +0.2%).
+
 ## 9. MTP speculative decode on the t2 images (ISA)
 
 How the serving path does it (opentpu/llm/mtp.py, docs/mtp.md 9-10; otpu-serve --mtp): the

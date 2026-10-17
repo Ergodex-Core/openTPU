@@ -508,6 +508,81 @@ standard image, blocked 74%): a 4-bit row's scale data spans three beats of its 
 every row restarted the adapter's run at the group's first beat; int8's rows sit in one beat
 and were 3.7% faster already.
 
+### LPN estimate of the decode token (tools/wideport_lpn.py; estimated, calibrated per phase on the Verilator receipts, 2026-10-18)
+
+The decode token as a Latency Petri Net (MJChku/LPNDialect's compiled nets: the hardware
+loop's LPN tier on the hwloop branch, tools/hwloop/lpn), so that a configuration's tok/s comes
+in seconds instead of the minutes to hours of Verilator, with the error stated per phase. The
+model is the tier's **wide model** (hwloop's `tools/hwloop/lpn/wide.py`: upstream's
+CompactOpenTPU with port B as a credit of PORTB chunks a cycle plus the two-part reads counted
+from the MM's addresses, a row-lane group of L rows as one row of the model, the NCH channels
+each a credit held for its beats at RD / round trip = 64 / 74 = 0.865 beats a cycle; graded +1
+to +4% on the 96a90c2f export) imported from that worktree and extended in
+`tools/wideport_lpn.py` (the hwloop branch untouched): **port A at ALINE bytes** (a group's Sw
+line a request of its own only where `quant.rl_sw_alone` says so; a QUAD advance's two-line
+crossings at the line's boundaries), **t2 weights** (a chunk of four blocks, QUAD one chunk an
+advance with its scale words in one 16-byte group, RL 2 two chunks an advance: docs/ternary.md
+8.2), **DSTEP / STREAM** on the DMA unit (profile's lanes and chunks, the chunks on port B, a
+read's round trip first; upstream's frontend refuses them, so the command trace is recorded by
+the tool with the same rule), the units as the RTL has them (the board's MXU_E 4 epilogue
+lanes, WIN 16, FIFO_DEPTH 1024 from targets/f2-hbm.toml, otpu_board's NRD 64 reads in flight a
+channel, the round trip --lat + the adapter's 14 cycles of path) and **the phases**: one
+transition walks the runs of same-phase commands (perf_qwen's `_phase` by kernel source) and
+fires when every command of a run is complete, so the native run's `--trace` gives each run's
+end and the phase cycles add up as `opentpu.profile.Profile.phases` charges them (the running
+max of the ends in dispatch order). **Nothing is fitted**: every constant is the RTL's or
+upstream's validated model's. The one sensitivity is the adapter's path (`--adapter-latency`,
+derived from its structure, not measured): on the int8 point 10 / 12 / 14 / 16 cycles give
+-1.1% / +1.5% / +4.1% / +6.7% of the token (mean |phase error| 2.3 / 2.2 / 2.9 / 4.4%); 14
+stays.
+
+The receipts (Verilator 5.048, this tree, `OTPU_TARGET=f2-hbm OTPU_NCH=8`, `--lat 60`, 200
+MHz; `--json` for the phases): int8 `tools/perf_qwen.py --model gemma3 --layers 4 --portb 4
+--mcols 8 --rowlanes --aline 64` (949,474 cycles, 265 s of simulation; identical to the table
+above). The LPN runs: `python -I tools/wideport_lpn.py --model gemma3 --layers 4 --wformat int8
+--head-format int8 --portb 4 --mcols 8 --rowlanes --aline 64 --lat 60 --measured RECEIPT.jsonl`,
+a few seconds each (frontend 1-4 s, model 0.3-1.5 s, compile 0.4-0.6 s, native 0.2-0.8 s).
+The rule: no tok/s is reported from a point whose mean |error| over the phases carrying >= 2%
+of the token is above 10%.
+
+**Calibration, Gemma-3-1B int8, 4 layers + head, PORTB 4 / MCOLS 8 / RL 4 / ALINE 64**
+(cycles; the RTL column measured, the LPN column estimated):
+
+| phase | RTL (measured) | LPN (estimate) | error | what binds in the model (port B / MXU / port A / channel) |
+|---|---|---|---|---|
+| LM head (`other`) | 686,825 | 723,866 | +5.4% | channel (589,824 / 589,824 / 589,824 / 691,456) |
+| MLP | 222,470 | 224,931 | +1.1% | channel (186,624 / 186,624 / 186,624 / 219,281) |
+| attention | 40,177 | 39,344 | -2.1% | channel (24,104 / 24,104 / 23,080 / 27,363) |
+| **token** | **949,474** | **988,141** | **+4.1%** | channel 938,100 (port B = MXU 800,552, port A 799,528) |
+
+Mean |error| 2.9% over the three phases. The head is where the error is: RL 4's four chunks an
+advance put a beat on every channel every cycle, the model's channels sustain 0.865 of that
+(RD 64 beats in flight over a 74-cycle round trip) and the RTL's head runs at 0.859 of its
+589,824 requests a cycle with 12.9% of the MXU's cycles blocked (the receipt), i.e. the two
+agree on what binds and differ by the ~37 K cycles of the model's per-command tails and
+the credits' granularity. int4 (`--wformat int4 --head-format int4`, ALINE 64) has no
+per-phase receipt on this tree (the user's priority was int8; the 4-layer total 565,739 is the
+table above): the LPN gives 599,271, **+5.9%**, channel-bound likewise.
+
+**The whole model (26 layers + head, `--layers 0`; every LPN number estimated, 200 MHz):**
+
+| Gemma-3-1B, PORTB 4 / MCOLS 8 / RL 4 / ALINE 64 | RTL (measured) | LPN (estimate) | error | the model's bound | tok/s RTL / LPN |
+|---|---|---|---|---|---|
+| int8 / int8 head | 2,394,111 | 2,441,652 | +2.0% | channel 2,294,625 (port B = MXU 1,959,556, port A 1,952,900): the port's channels at 0.865 beats a cycle, as the RTL's 82% of its port-B roofline says | **83.5 / 81.9** |
+| int4 / int4 head | 1,440,727 | 1,476,251 | +2.5% | channel 1,321,067 (port B = MXU 1,065,924, port A 1,059,268) | **138.8 / 135.5** |
+
+Per phase of the int8 token (LPN): MLP 1,462,050, head 723,866, attention 255,736; int4: MLP
+847,642, head 439,818, attention 188,790. Both tokens are **port-bound on the channels** in the
+model as on the RTL (docs/row_lanes.md "Port A at 64 bytes": port B at four chunks every cycle
+is the same 1.07 M cycles as the MXU; what the model adds is that the native path's 64 reads in
+flight a channel cap it at 0.865 of that), so the next lever the model agrees with is the
+port's depth or f2-hbm16's channels, not the scale path. Bonsai-2's t2 RL 2 points are in
+docs/ternary.md 8.2 (4B 27.1 estimated against 26.7 measured, 2B 56.5 against 54.1). Not
+modelled (as the tier's README lists): the DMA's and QST's beats on the channels, QACT DUP8's
+copies, the adapter's A runs, SEQ_WC's wait entries (perf_bonsai2's runs use that sequencer,
+perf_qwen's the range scoreboard; the programs are the same), HALT CHAIN. The runs' JSON
+(`--json`, and `result.json` under `--work`) carry every number with the label `lpn-estimate`.
+
 ### What the nightly needs (the f2-hbm target at PORTB 2)
 
 Verilator cannot give LUTs or a clock: the lanes' cost in silicon and the 2048-bit path's
