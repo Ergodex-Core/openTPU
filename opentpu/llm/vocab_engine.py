@@ -44,7 +44,7 @@ class Layout:
 
     def __post_init__(self):
         object.__setattr__(self, "version", _integer(self.version, VERSION, VERSION, "version"))
-        object.__setattr__(self, "vocab", _integer(self.vocab, ENGINES, 1 << 24, "vocab"))
+        object.__setattr__(self, "vocab", _integer(self.vocab, 1, 1 << 24, "vocab"))
         object.__setattr__(self, "hidden", _integer(self.hidden, D, (HEADER - 4) * D, "hidden"))
         if self.hidden % D:
             raise ValueError("hidden must be a multiple of 128")

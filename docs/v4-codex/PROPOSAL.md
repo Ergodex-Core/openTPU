@@ -1,7 +1,7 @@
 # C3: dedicated vocabulary-head engine
 
-**Implementation approved; reference/layout and reduction milestones completed.**
-New Codex proposal, 2026-10-18. Hardware integration is still pending.
+**Implementation approved; reference and standalone pipelined RTL milestones completed.**
+New Codex proposal, 2026-10-18. HBM and production command integration are still pending.
 Branch: `codex/v4-c3-vocab-engine`. Base: `016e953a`.
 See [comparison and approval boundary](README.md).
 
@@ -173,9 +173,20 @@ the sidecar descriptor and `summary.txt` under `build/lens/c3/`:
    cycles/row, and no overlap among read, GEMV, epilogue and local reduction phases.
    It starts after QACT and includes activation distribution and final reduction.
 
-These profiles have different timing abstractions and boundaries; their cycle ratio is
-**not a speedup result**. C3 has no RTL timing, HBM latency/queue/contention simulation or
-predicted full-model token rate yet. The reference's CPU wall time is recorded separately.
+These reference profiles have different timing abstractions and boundaries; their cycle ratio is
+**not a speedup result**. Their service model has no RTL timing or HBM latency/queue/contention
+simulation. The reference's CPU wall time is recorded separately.
 The Lens generic floorplan's `S=4` represents head engines, not four full TPU slices or a
-validated physical floorplan. Milestones 3 and 4 must replace the accounting model with
-measured RTL events and preserve baseline/fallback behavior before any F2 synthesis.
+validated physical floorplan.
+
+## Completed standalone RTL milestone
+
+Milestone 3 now has one- and four-engine RTL, exact fp32 epilogues, diagnostic logits,
+local/global reduction, backpressure, reset and repeat-command validation. The new Lens
+bundle derives timing and overlap from actual Verilator events under a documented synthetic
+row service. It preserves the old service model as a separately labeled comparator.
+See [RTL implementation, evidence and remaining boundaries](RTL_VALIDATION.md).
+
+HBM request/reassembly RTL, the production command and greedy-loop integration, full-model
+validation and FPGA synthesis/timing are not complete. The existing fallback behavior remains
+unchanged. The next milestone must establish these interfaces before any F2 deployment.

@@ -1,6 +1,6 @@
 # Codex alternatives for openTPU v4 on F2
 
-Status: **user approved parallel implementation of C1-C3; C3 reference milestones complete**.
+Status: **user approved parallel implementation of C1-C3; C3 reference and standalone RTL milestones complete**.
 Date: 2026-10-18. Base: `016e953ad70e9dd78f1b10d8a9cc07318bee66dd` on `tpubench`.
 These C1-C3 designs are new alternatives to Claude's P1-P4 in [docs/v4](../v4/README.md).
 The user subsequently approved these alternatives and required openTPU Lens for performance
@@ -14,8 +14,8 @@ measurement and visualization. No cloud deployment or synthesis has been perform
 
 This branch's design is in [PROPOSAL.md](PROPOSAL.md). All worktrees are siblings under
 `/Users/rachittibrewal/ergodex-04`. Each starts from the same committed baseline. This C3
-branch now contains its own reference/layout implementation, tests and Lens exporter.
-Its generated evidence is in `build/lens/c3/`; the original profiles and untracked `formal/`
+branch now contains its own reference/layout implementation, streaming RTL, tests and Lens exporters.
+Its generated evidence is in `build/lens/c3/` and `build/lens/c3-rtl/`; the original profiles and untracked `formal/`
 directory remain in the original worktree. Work in the other candidate branches is separate.
 
 ## Recommendation and evidence
@@ -61,9 +61,14 @@ first two reference milestones are complete: byte-exact sidecar construction and
 canonical ISA logit equivalence and order-independent reduction checks. See
 [the proposal's evidence section](PROPOSAL.md#completed-reference-milestone-and-lens-evidence).
 
-Use openTPU Lens for every performance comparison. The exported C3 service-accounting
-profile is explicitly a model of executed work, not an RTL or FPGA measurement; its ratio
-to the canonical ISA profile is not a speedup claim. Concurrent Claude M0 evidence changes
-the appropriate memory baseline and is documented in the proposal. C3 still needs engine
-RTL, actual memory/completion timing, runtime integration and whole-loop validation before
-F2 synthesis or deployment.
+The user explicitly approved further implementation. The next milestone now includes one-
+and four-engine RTL with exact fp32 logits and greedy reduction. See
+[RTL validation](RTL_VALIDATION.md) for tests, actual simulated stage overlap, Lens profiles
+and the remaining integration boundaries.
+
+Use openTPU Lens for every performance comparison. The original service-accounting profile
+remains a model; the new profiles execute standalone RTL under synthetic row service.
+Neither supplies FPGA measurements, actual HBM behavior or full-token speedup claims.
+Concurrent Claude M0 evidence changes the appropriate memory baseline and is documented in
+the proposal. C3 still needs HBM request/reassembly logic, production command integration,
+whole-loop validation and a supported FPGA synthesis/timing flow before F2 deployment.
