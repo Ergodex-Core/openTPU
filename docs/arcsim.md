@@ -263,7 +263,13 @@ both say `LLVM version 23.0.0git, CIRCT 00f6937` (the manifest's `source_commit`
    slices driven by D `otpu_skew` instances (`.q(wc[0][i])`) and `for (j) wc[j] <= wc[j-1];` in an
    `always_ff`. The PE's weight copy, loaded from `wc[j-1][i]`, differs from `wc[j][i]` a cycle
    later: `Fatal: otpu_mxu: PE 1.0's weights are not wc` at cycle 153 of the Gemma receipt (the
-   first MM's weights). Sidestepped by one packed vector `logic [MCOLS-1:0][D-1:0][WS-1:0] wc;`.
+   first MM's weights). **Not** changed by declaring `wc` one packed vector
+   (`logic [MCOLS-1:0][D-1:0][WS-1:0] wc;`, kept since it is the simpler form), so the fault is
+   elsewhere in the three registers the check relates -- the PE's weight copy (read
+   hierarchically, `u_pe.whr / wlr`, as the select check `u_pe.selr` is, which passes), the shift
+   `wc[j] <= wc[j-1]`, or the pop-time select `s_hq0p` a cycle before `s_hq0`. The check is
+   disabled under `-DOTPU_ARCSIM` so the run's results judge the model (`perf_qwen.py --check`
+   against the ISA simulator): see the results below.
 
 Reproducer: `OTPU_SIM=arcsim OTPU_TARGET=f2-hbm OTPU_NCH=8 python tools/arcsim_model.py` on the
 RTL before each fix (any f2-hbm configuration; small `--dram-bytes` and the shrunken parameters

@@ -1230,9 +1230,14 @@ module otpu_mxu
       always @(posedge clk) begin
         if (hi_v && u_pe.selr != s_hi0[j])
           $fatal(1, "otpu_mxu: PE %0d.%0d's select %0d is not s_hi0 %0d", j, i, u_pe.selr, s_hi0[j]);
+`ifndef OTPU_ARCSIM
+        // (not under ArcSim: its lowering fails this comparison at the first MM's weights -- the
+        // PE's registered copy against wc under the pop-time select -- while Verilator passes it
+        // and the results are the judge there: docs/arcsim.md "Known arcilator issues")
         if (hi_v && j != 0 && {u_pe.whr, u_pe.wlr} !=
             (QD ? wc[j][i][16 * s_hq0[j] +: 16] : wc[j][i][15:0]))
           $fatal(1, "otpu_mxu: PE %0d.%0d's weights are not wc", j, i);
+`endif
       end
 `endif
     end
