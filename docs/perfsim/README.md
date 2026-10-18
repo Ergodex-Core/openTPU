@@ -1,3 +1,5 @@
+Start with the [reproducible HBM2 baseline](BASELINE.md) and its consolidated coverage matrix.
+
 For the latest WAITC/DSTEP/STREAM implementation, persistent hybrid validation, int4 diagnosis
 and host performance results, see [round five](validation-round5.md).
 

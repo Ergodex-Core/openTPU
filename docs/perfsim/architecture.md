@@ -123,7 +123,8 @@ chunks remain occupied until port acceptance. A full output FIFO freezes its rea
 including pending stages. Long-K and 128-by-128 DeltaNet regressions cover these boundaries.
 
 The production board target remains outside the validated topology: pumped/replay TMEM,
-MXU_E=4 and the DDR3/LiteDRAM shell are not validated. Round five adds baseline WAITC and
+the production composition with MXU_E=4 and the DDR3/LiteDRAM shell are not validated.
+E4 on replicated TMEM has separate bounded HBM2 evidence in [BASELINE.md](BASELINE.md). Round five adds baseline WAITC and
 DSTEP/STREAM, with evidence and remaining limits in [validation-round5.md](validation-round5.md).
 
 
@@ -161,3 +162,7 @@ No core or memory cycles are skipped, and refresh still runs. With ingress queue
 tick is fused with completion polling. `OTPU_PERFSIM_MEMORY_BATCH=0` selects scalar tick/poll;
 older libraries use that same scalar path. There is no backend substitution. Metrics include
 `host_execution.ramulator_tick_batching` and `core_cycles_skipped` (zero).
+
+The native RTL comparators now enforce every compute parameter through `baseline.py`, including
+TMEM topology and epilogue width. Builds supply explicit parameters instead of inheriting
+`rtlsim.UARCH`. `Architecture.tmem_impl` accepts only zero; other topologies fail explicitly.

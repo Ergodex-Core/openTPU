@@ -98,6 +98,11 @@
           "type": "integer",
           "minimum": 1,
           "default": 32
+        },
+        "tmem_impl": {
+          "type": "integer",
+          "const": 0,
+          "description": "Pinned replicated TMEM baseline; pumped/banked variants are rejected."
         }
       },
       "additionalProperties": false

@@ -1,0 +1,108 @@
+STAGE_START index=0 global=0
+T0 D c=3 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00000180
+T0 D c=4 s=1 pc=1 op=21 w1=00000000 w2=00010003 w3=00000080
+T0 S c=5 s=0 u=0 r=5
+T0 D c=5 s=2 pc=2 op=20 w1=00000600 w2=00000f80 w3=00000180
+T0 D c=6 s=3 pc=3 op=11 w1=00001080 w2=00000180 w3=00000039
+T0 S c=7 s=2 u=1 r=7
+MXS0 a=19 sw=0
+T0 P c=63 n=64 bm=19 bd=12 am=19 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=240 ld=0
+T0 E c=66 s=0
+T0 S c=68 s=1 u=2 r=68
+T0 P c=127 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=1204 ld=0
+T0 U c=185 u=2 frz=0
+T0 E c=187 s=1
+T0 G c=189 s=2
+T0 P c=191 n=64 bm=0 bd=0 am=0 aq=0 mx=1 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=1216 ld=0
+T0 U c=247 u=1 starve=0 bp=0 frz=0 deny=25
+T0 E c=248 s=2
+T0 S c=250 s=3 u=0 r=250
+T0 P c=255 n=64 bm=0 bd=0 am=0 aq=0 mx=18 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=171 ld=0
+T0 E c=275 s=3
+STAGE_RESULT index=0 cycles=277 halted=1 error=0
+MXSCALE s0 areq=19 sw=0
+MXACT s0 cyc=277 rd=171 pop=19 use=57 cols=4 any=7
+T0 H c=277 bmxu=19 bdma=14 amxu=19 aq=0
+T0 P c=277 n=22 bm=0 bd=2 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=277 n=22 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+STAGE_START index=1 global=285
+T0 D c=3 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00000200
+T0 D c=4 s=1 pc=1 op=21 w1=00000000 w2=00010004 w3=00000080
+T0 S c=5 s=0 u=0 r=5
+T0 D c=5 s=2 pc=2 op=20 w1=00000800 w2=00002980 w3=00000200
+T0 D c=6 s=3 pc=3 op=11 w1=00002c00 w2=00000200 w3=0000010c
+T0 S c=7 s=2 u=1 r=7
+T0 P c=63 n=64 bm=20 bd=16 am=20 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=156 ld=0
+T0 E c=80 s=0
+T0 S c=82 s=1 u=2 r=82
+T0 P c=127 n=64 bm=32 bd=0 am=32 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=1822 ld=0
+MXS0 a=67 sw=0
+T0 P c=191 n=64 bm=15 bd=0 am=15 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=3782 ld=0
+T0 U c=216 u=2 frz=0
+T0 E c=218 s=1
+T0 G c=220 s=2
+T0 P c=255 n=64 bm=0 bd=0 am=0 aq=0 mx=34 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=3727 ld=0
+T0 P c=319 n=64 bm=0 bd=0 am=0 aq=0 mx=33 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=561 ld=0
+T0 U c=326 u=1 starve=0 bp=0 frz=0 deny=80
+T0 E c=327 s=2
+T0 S c=329 s=3 u=0 r=329
+T0 P c=383 n=64 bm=0 bd=9 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=388 s=3
+STAGE_RESULT index=1 cycles=390 halted=1 error=0
+MXSCALE s0 areq=86 sw=0
+MXACT s0 cyc=670 rd=591 pop=86 use=325 cols=4 any=15
+T0 H c=390 bmxu=67 bdma=25 amxu=67 aq=0
+T0 P c=390 n=7 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=390 n=7 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+STAGE_START index=2 global=683
+T0 D c=3 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00000400
+T0 D c=4 s=1 pc=1 op=21 w1=00000000 w2=00020004 w3=00000100
+T0 S c=5 s=0 u=0 r=5
+T0 D c=5 s=2 pc=2 op=20 w1=00001000 w2=00003100 w3=00000400
+T0 D c=6 s=3 pc=3 op=11 w1=00003280 w2=00000400 w3=00000084
+T0 S c=7 s=2 u=1 r=7
+T0 P c=63 n=64 bm=8 bd=42 am=8 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=10 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=127 n=64 bm=18 bd=0 am=18 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=810 ld=0
+T0 E c=144 s=0
+T0 S c=146 s=1 u=2 r=146
+T0 P c=191 n=64 bm=15 bd=0 am=15 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=1292 ld=0
+MXS0 a=66 sw=0
+T0 P c=255 n=64 bm=25 bd=0 am=25 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=3107 ld=0
+T0 P c=319 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=4222 ld=0
+T0 U c=360 u=2 frz=0
+T0 E c=362 s=1
+T0 G c=364 s=2
+T0 P c=383 n=64 bm=0 bd=0 am=0 aq=0 mx=18 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=4071 ld=0
+T0 P c=447 n=64 bm=0 bd=0 am=0 aq=0 mx=48 fm=0 fq=0 fv=0 fc=0
+T0 Q c=447 n=64 bs=0 as=0 ms=0 mb=0 ff=1176 ld=0
+T0 U c=469 u=1 starve=0 bp=0 frz=0 deny=166
+T0 E c=470 s=2
+T0 S c=472 s=3 u=0 r=472
+T0 E c=505 s=3
+STAGE_RESULT index=2 cycles=507 halted=1 error=0
+MXSCALE s0 areq=152 sw=0
+MXACT s0 cyc=1180 rd=1010 pop=152 use=589 cols=4 any=15
+T0 H c=507 bmxu=66 bdma=47 amxu=66 aq=0
+T0 P c=507 n=60 bm=0 bd=5 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=507 n=60 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+- /private/tmp/opentpu-rtl-r6-e4/tb_perfsim.sv:127: Verilog $finish
+TMEMSTAT sid=0 cyc=1174 lose=0,0,0,0 n= 875,299,0,0,0,0,0 d= 875,299,0,0,0,0,0,0,0 dw= 516,658,0,0,0,0,0,0,0,0 rd= 0,59,240,0,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 12ns; walltime 0.214 s; speed 70.196 ns/s
+- Verilator: cpu 0.171 s on 1 threads; allocated 88 MB

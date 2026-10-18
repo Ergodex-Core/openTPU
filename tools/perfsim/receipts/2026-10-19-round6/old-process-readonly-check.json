@@ -1,0 +1,12 @@
+{
+  "pid": 58041,
+  "ppid": 1,
+  "state": "UE",
+  "started": "Mon Oct 19 03:20:23 2026 (host display)",
+  "cpu_time": "0:00.09",
+  "executable": "/private/tmp/opentpu-rtl-native-debug-vpu/obj/Vtb_perfsim",
+  "run_directory": "/private/tmp/opentpu-stream-check2",
+  "identity": "same earlier task-owned failed child",
+  "action_this_round": "read-only ps identity/state check; no signal sent",
+  "termination_status": "unconfirmed after earlier termination request; process remains exiting/uninterruptible"
+}

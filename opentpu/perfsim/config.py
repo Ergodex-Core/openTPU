@@ -9,6 +9,7 @@ class Unsupported(ValueError):
 
 @dataclass(frozen=True)
 class Architecture:
+    tmem_impl: int = 0
     core_period_ps: int = 5000
     window: int = 16
     mxu_queue: int = 2
@@ -31,8 +32,10 @@ class Architecture:
 
     def validate(self, cfg: Config):
         for k, v in asdict(self).items():
-            if not isinstance(v, int) or v < (0 if k in ('mxu_epilogue_lanes', 'vpu_composite_lanes') else 1):
+            if not isinstance(v, int) or v < (0 if k in ('mxu_epilogue_lanes', 'vpu_composite_lanes','tmem_impl') else 1):
                 raise ValueError(f'{k} must be a positive integer (lane overrides may be zero)')
+        if self.tmem_impl!=0:
+            raise Unsupported('only TMEM_IMPL=0 replicated-port topology is implemented; pumped/banked TMEM requires a separate model')
         if cfg.S != 1:
             raise Unsupported('multi-slice collective/interconnect timing is not implemented; S must be 1')
         if (cfg.STREAM or cfg.DSTEP) and cfg.LANES!=8:

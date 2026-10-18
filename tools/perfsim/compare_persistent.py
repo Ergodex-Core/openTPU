@@ -10,6 +10,7 @@ from opentpu.perfsim.ports import NativeMemorySystem
 from opentpu.perfsim.io import load_bundle,save_bundle,write_json,manifest,digest
 from tools.perfsim.compare_native import port_schedule
 from tools.perfsim.timing_suite import parse_trace
+from opentpu.perfsim.baseline import verify_rtl_parameters
 
 
 def main():
@@ -25,9 +26,7 @@ def main():
     receipt=json.loads((a.executable.resolve().parents[1]/'build-receipt.json').read_text())
     if not receipt.get('persistent') or digest(a.executable)!=receipt['binary_sha256']:raise ValueError('persistent build receipt mismatch')
     cfg=bundles[0][0]
-    for key,value in {'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024,'SEQ_WC':int(cfg.SEQ_WC)}.items():
-        if receipt['parameters'].get(key,0 if key=='SEQ_WC' else None)!=value:raise ValueError(f'RTL build mismatch: {key}')
-    profile=json.loads(a.profile.read_text());mc=profile['memory'].copy()
+    profile=json.loads(a.profile.read_text());verify_rtl_parameters(receipt,cfg,Architecture(**profile['architecture']));mc=profile['memory'].copy()
     mc.update(bridge=str(a.bridge.resolve()),record_trace=True)
     mc['ramulator_config']=str((a.profile.resolve().parent/mc['ramulator_config']).resolve())
     if not mc.get('native_ports'):raise ValueError('native_ports must be explicit')

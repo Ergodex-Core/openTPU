@@ -3,11 +3,13 @@
 import argparse,hashlib,json,subprocess,sys,sysconfig,platform
 from pathlib import Path
 ROOT=Path(__file__).resolve().parents[2];sys.path.insert(0,str(ROOT))
-from opentpu.rtlsim import RTL_SOURCES,top_params
+from opentpu.rtlsim import RTL_SOURCES
+from opentpu.perfsim import Architecture
+from opentpu.perfsim.baseline import rtl_parameters
 from opentpu.perfsim.io import load_bundle,digest
 
 def main():
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--bundle',required=True,type=Path);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--jobs',type=int,default=4);ap.add_argument('--persistent',action='store_true');a=ap.parse_args()
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--bundle',required=True,type=Path);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--jobs',type=int,default=4);ap.add_argument('--persistent',action='store_true');ap.add_argument('--profile',type=Path);a=ap.parse_args()
  out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
  cfg,_,_,_=load_bundle(a.bundle)
  if cfg.S!=1:raise ValueError('isolated harness currently supports S=1')
@@ -58,7 +60,8 @@ def main():
   includes+=f' -arch {platform.machine()}'
   ld=f'-arch {platform.machine()} -F{sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX")} -framework Python'
  else:ld=f'-L{sysconfig.get_config_var("LIBDIR")} -lpython{sysconfig.get_config_var("LDVERSION")} -ldl -lm'
- params=top_params(cfg,uarch={'WIN':16,'RPB':32,'WPB':1,'MXU_IMPL':2,'FIFO_DEPTH':1024,'SEQ_WC':int(cfg.SEQ_WC)})
+ arch=Architecture(**json.loads(a.profile.read_text()).get('architecture',{})) if a.profile else Architecture()
+ params=rtl_parameters(cfg,arch)
  cmd=['verilator','--binary','-j',str(a.jobs),'-Wno-fatal','-Wno-WIDTHEXPAND','-Wno-WIDTHTRUNC','-O3','--x-assign','0','--x-initial','0','--top-module','tb_perfsim','-Mdir',str(out/'obj'),'-CFLAGS',includes,'-LDFLAGS',ld,*[f'-G{k}={int(v)}' for k,v in params.items()],*[str(p) for p in sources],str(cpp)]
  (out/'build-command.json').write_text(json.dumps(cmd,indent=2)+'\n')
  with (out/'build.log').open('w') as log:r=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)

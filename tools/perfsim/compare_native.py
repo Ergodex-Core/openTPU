@@ -11,6 +11,7 @@ from opentpu.perfsim import Simulator,MemoryConfig,Architecture
 from opentpu.perfsim.ports import NativeMemorySystem
 from opentpu.perfsim.io import load_bundle,save_bundle,write_json,digest,manifest
 from tools.perfsim.timing_suite import parse_trace
+from opentpu.perfsim.baseline import verify_rtl_parameters
 
 
 def port_schedule(events):
@@ -29,10 +30,10 @@ def main():
  if out.exists():ap.error('output must not exist')
  out.mkdir(parents=True)
  cfg,prog,img,obj=load_bundle(a.bundle);params=json.loads(a.executable.resolve().parents[1].joinpath('build-receipt.json').read_text())
- wanted={'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024,'AXI':0,'SEQ_WC':int(cfg.SEQ_WC)}
- if any(params['parameters'].get(k,0 if k=='SEQ_WC' else None)!=v for k,v in wanted.items()):raise ValueError('RTL build/config mismatch')
+ profile=json.loads(a.profile.read_text())
+ verify_rtl_parameters(params,cfg,Architecture(**profile['architecture']))
  if digest(a.executable)!=params['binary_sha256']:raise ValueError('RTL binary hash mismatch')
- profile=json.loads(a.profile.read_text());mc=profile['memory'].copy()
+ mc=profile['memory'].copy()
  for k in ('bridge','ramulator_config'):
   if mc.get(k):mc[k]=str((a.profile.resolve().parent/mc[k]).resolve())
  if a.bridge:mc['bridge']=str(a.bridge.resolve())
