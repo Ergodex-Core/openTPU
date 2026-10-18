@@ -305,10 +305,12 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # Config at 64 on the card's target) keeps the replaying arbiter it implies (ARB_MASK:
         # otpu_slice's TMEM_IMPL 3 check), so RPB follows the simulated lanes
         p["RPB"] = _target.NRP * cfg.LANES
-    if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
+    if p.get("TMEM_IMPL") == 3:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
-        # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
-        p["TMEM_SBP"] = max(3, (cfg.LANES - 1).bit_length())
+        # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4; a simulation with more
+        # lanes than the target (OTPU_LANES, a test's Config at 64 on f2-vla32's 32, whose toml
+        # states 5) raises the target's bit to its lanes' (timing only)
+        p["TMEM_SBP"] = max(int(p.get("TMEM_SBP", 3)), (cfg.LANES - 1).bit_length())
     return p
 
 

@@ -471,7 +471,8 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('name,S,nch,dram_log2', [('f2-hbm', 1, 8, 32), ('f2-hbm:s2', 2, 8, 32),
-                                                  ('f2-hbm:s4', 4, 8, 32), ('f2-hbm16', 1, 16, 33)])
+                                                  ('f2-hbm:s4', 4, 8, 32), ('f2-hbm16', 1, 16, 33),
+                                                  ('f2-vla', 1, 8, 32), ('f2-vla32', 1, 8, 32)])
 def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2):
     """An HBM target (docs/f2_hbm.md): the HBM top in cl_opentpu's place, its synthesis script
     and CDC constraints in the DDR ones' places, the HDK's wrapper copied in, the geometry the
@@ -484,9 +485,14 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
     t = T.load(name)
     assert flow.is_hbm(t) and t.core_khz == 200000 and t.uarch['TMEM_PMP'] == 1
-    if S == 1:                          # f2's programs and T2 (docs/ternary.md)
+    if S == 1 and not name.startswith('f2-vla'):   # f2's programs and T2 (docs/ternary.md)
         assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True)
         assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
+    elif S == 1:                        # the VLA variants: their own arch (MXROT, no T2), 32 or
+        assert T.config(t).MXROT and not T.config(t).T2 and T.config(t).MCOLS == 32   # 64 lanes
+        assert T.config(t).LANES == (32 if name.endswith('32') else 64)
+        assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
+        assert T.rtl_params(t)['COLL_GATHER'] == 0 and T.rtl_params(t)['MXROT'] == 1
     out = tmp_path / 'run'
     cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
     d = cl / 'design'

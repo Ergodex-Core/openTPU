@@ -525,6 +525,84 @@ grant / lost / frz interfaces to the VPU, quant and DMA (a protocol change) so t
 span two SLRs at 64 lanes. A free placement across SLRs (the wide-port branch's rounds 1-2,
 -4.6 to -4.9 ns) is the measured outcome of neither.
 
+### 6g. The LANES 32 point, f2-vla32 (2026-10-19; the user's D18 A: the placement round at LANES 32, MCOLS 32 packed, in one SLR)
+
+**The target** (targets/f2-vla32.toml): f2-vla with LANES 32, ULANES 32, TMEM_SBP 5 (log2 LANES,
+stated: opentpu.target now fails closed on a TMEM_IMPL 3 target whose stated or default SBP is
+below log2 LANES, and on ULANES / MXU_E / VPU_CL above LANES), MXU_E 32 (= LANES: a packed pass's
+two rows in two steps as at 64 lanes), VPU_CL 16, COLL_GATHER 0; the rest f2-vla's (MCOLS 32
+packed, MXROT, ACT_ROWS 255, TMEM 1.5M in URAM, the ACT RAM in block RAM, TMEM_WARB 2).
+f2-vla stays the 64-lane point: 6b-6f and docs/pi05.md 5.4 / 5.5 are measured there, and the
+>= 1 Hz slice is the 64-lane one once the TMEM's unit interfaces are registered (6e). The two
+have their own CFG_HASH (LANES is in it) and programs (the compiler's row groups the tally picks,
+128 / 255 / 64 as at 64 lanes: the TMEM is the same).
+
+**Regression and the phases** (the m7a, Verilator 5.048, OTPU_TARGET=f2-vla32 OTPU_MCOLS=32
+OTPU_LANES=32 OTPU_PACK=1): MEASURED_6G_TESTS
+
+| phase (Np 558, rows 128 / 255 / 64) | LANES 64 (5.4, 6e's RTL) | **LANES 32** | the LPN at 32 (lpnlang) |
+|---|---|---|---|
+MEASURED_6G_TABLE
+
+**The LPN** (tools/pi05_lpn.py --full, the real model, 200 MHz): MEASURED_6G_LPN tools/pi05_cost.py
+--target f2-vla32 (its "today" row groups 16 / 8 / 8, the card's shape, not the plan's) reads
+port B 6.647 s bound / 10.8 s serial: the 255-row group is what makes the plan's tally (the LPN
+prints it at 128 / 255 / 64).
+
+**The pre-synthesis estimate at LANES 32**, from 6f's hierarchy (f2-vla, 64 lanes: u_tmem
+124,593, u_vpu 205,531, u_quant 56,268, u_mxu 233,490, u_act 2,361, the sequencer and DMA
+~20K; the slice 642,912) and what scales with the lanes:
+
+| hierarchy | 6f (64 lanes) | LANES 32 (est.) | why |
+|---|---:|---:|---|
+| u_tmem | 124,593 | ~63K | the eight read rotators, three write rotators and the enables / rows scale with the lanes (~86K -> ~43K), the IMPL 3 arbitration and sub-bank selects with the RAMs (128 -> 64: ~20K -> ~10K), the rest ~10K |
+| u_vpu | 205,531 | **~160K** (VPU_CL 16) / ~112K (VPU_CL 8) | the 64 plain lanes ~1.7K each halve (~109K -> ~54K); the 16 composite lanes (VPU_CL: EXP2 / RECIP / ... pipelines, ~6K each, ~96K) and the 16-lane sum sub-datapath do not; f2-hbm16's 36K at LANES 8 / VPU_CL 2 fits the same split with ~10K fixed |
+| u_quant | 56,268 | ~36K | the lanes' prescale, max and q8 paths halve; the scale unit, the group RAMs and QST T's transposer stay |
+| u_mxu | 233,490 | 233K | the 32 packed columns and the drain's 32 epilogue lanes (E = LANES = 32) are what they were |
+| u_act, seq, DMA, ctrl | ~22K | ~22K | |
+| **the slice** | 642,912 | **~515K (VPU_CL 16), ~465K (VPU_CL 8)** | |
+| + the adapter u_mem and the control / trace (SLR2 with it in pb_otpu_board) | ~43K | ~43K | |
+| **pb_otpu_board** | | **~560K / ~510K against SLR2's ~435K: 128% / 117%** | |
+
+So the slice does **not** land at ~340K: that number (6e) was the SLR2 side of the array-against-
+the-rest split, with the MXU's 85K of columns and the ACT RAM in SLR1; the whole slice in one
+SLR at LANES 32 is ~465-515K, over SLR2's CL area before the adapter, because the MXU (233K)
+and the VPU's composite lanes (~96K) do not shrink with the lanes. VPU_CL 8 takes ~48K off at
+MEASURED_6G_CL8 on the LPN. RAM is 6f's (the ACT RAM 1,088 RAMB36, the TMEM 384 URAM: the
+banks are 32 x 2 x 24,576 words, 6 URAM a sub-bank, the same 384), DSP 6f's.
+
+**The build mechanism** (the second deliberate cross-merge, from the wide-port branch at
+223a3bf7, read-only there; the eleven commits cherry-picked with -x before e7b1683e):
+boards/f2/build.py's --place-directive and its pnr handling (cl_pnr_user_hbm.tcl appended to
+cl_pnr_user.tcl for an HBM target), build_level_1_cl.tcl's opt_design wrapper (cl_pnr_user.tcl
+and otpu_clk2x.tcl read unmanaged on the linked design, fail-closed: the reset exception on
+exactly 12 endpoints, the floorplan's cells found by name, the pumped RAM cells cross-checked
+by module and name and the worst read-request path asserted at two fast periods), the
+floorplan (pb_otpu_hbm SLR0, pb_otpu_mid SLR1, pb_otpu_pcis SLR1, pb_otpu_board SLR2,
+pb_otpu_tmem inside it: the TMEM alone here, see the file), the three-stage otpu_xr chains on
+every net between the HBM fabric and the board (otpu_f2_hbm_mem NXR 3, otpu_axil_xr, the
+reset and HBM ready), the fabric's host-path and bridge fixes of that branch's rounds 4-5
+(the host registered per port, the PCIS skids, pcis_wbusy from registers, the bridge's beat
+register and W count), and tests/test_f2_build.py's tclsh mocks. Not ported: that branch's
+round-6 list (item 9, pb_otpu_pcis's hop to u_host, unresolved there and here; item 10, the
+adapter's write-address cone; item 11, the pumped banks' write side: on this branch the write
+pins come from the per-RAM pk_* flip-flops within one fast period by design and cannot take
+the read side's multicycle, nothing to port), and the wide port itself (PORTB > 1, RL,
+ROWLANES, ALINE: not on this branch). One conflict by hand (the sys top's u_board instantiation).
+otpu_clk2x.tcl's new cross-check counts block RAM primitives under the pump cells with
+`PRIMITIVE_TYPE =~ BLOCKRAM.*`, which URAM288 (BLOCKRAM.URAM) satisfies; the synthesis log's
+"[otpu_clk2x.tcl] ... 384 block RAM primitives" line is the confirmation.
+
+**Can the synthesis + P&R be launched?** The synthesis of f2-vla32, yes: it is the measurement
+this section's estimate needs (u_vpu's and u_tmem's real counts at 32 lanes). The one-SLR P&R
+on the estimate, no: pb_otpu_board at ~560K (VPU_CL 16) or ~510K (VPU_CL 8) is over SLR2 and
+the HDK's opt_design would stop on the over-full pblock (fail closed, by design); if the
+measured slice comes in under ~330K the pblocks apply as they are. What brings it there: the
+array-against-the-rest split (6e: the MXU's internal issuer / drain handshake and the result
+FIFO's push registered, then pb_otpu_mxu in SLR1 for the columns and the ACT RAM: ~100K out of
+SLR2, the rest ~365-415K = 84-95%, still above the 72% line without VPU_CL 8), or the
+registered TMEM interfaces at 64 lanes. The plan's numbers to carry: f2-vla32 at MEASURED_6G_HZ.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
