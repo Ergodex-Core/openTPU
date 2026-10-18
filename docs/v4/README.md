@@ -182,7 +182,15 @@ SmartConnect) and 22.3 tok/s on burst200. The branch to port is `f2-hbm` (ef3356
 no core-RTL conflicts with this branch); P1's adapter rewrite must not be adopted (it drops the
 host's channel map); P2's lane ports are tied off at the board top and need the adapter's
 per-lane queues. Build host when resumed: `fpga-dev-f2` (i-00a83cab3c81ac10f, idle).
-**Decision: hold everything on F2 for now; the proposals continue in simulation.**
+**2026-10-19: resumed.** The `f2-hbm` branch is merged into tpubench (61d07199,
+[f2-port-status.md](f2-port-status.md): Gemma 3 bit-exact through the eight-channel board
+model in 8.03 M cycles, 97.8% of the bound). The first routed build of the `f2-hbm` CL
+(today's compute, one slice on 8 HBM pseudo-channels, 200 MHz) runs on `fpga-dev-f2`
+(`/home/ubuntu/rachit/src/tpubench`, unit `otpu-f2hbm-build`, log
+`/home/ubuntu/rachit/logs/f2hbm-build.log`, output `/home/ubuntu/rachit/f2hbm-run`); the
+Gemma 3 checkpoint is staged at `/home/ubuntu/rachit/models/gemma-3-1b-it`. Next: the AFI
+(upload of the Developer_CL.tar, `create_fpga_image`), load on slot 0, Gemma 3 with the
+hardware Lens trace; then `f2-hbm:s4` with the Gemma split (P4 on silicon).
 
 ## Decision (taken 2026-10-18)
 
