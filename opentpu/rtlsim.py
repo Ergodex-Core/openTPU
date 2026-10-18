@@ -263,7 +263,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "ACT_ROWS": cfg.act_rows,
          "TMEM_WORDS": cfg.TMEM_WORDS, "IMEM_WORDS": cfg.IMEM_WORDS,
          "DRAM_WORDS": (dram_bytes or cfg.DRAM_BYTES) // 4, "DRAM_LAT": dram_lat,
-         "LANES": cfg.LANES,
+         "LANES": cfg.LANES, "CPC": int(getattr(cfg, "CPC", 1) or 1),
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})

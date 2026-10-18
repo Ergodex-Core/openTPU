@@ -52,7 +52,7 @@ from pathlib import Path
 from . import isa as I
 from . import rtlsim
 from . import target as T
-from .profile import UNITS, OPNAMES, Profile, _describe
+from .profile import UNITS, OPNAMES, Profile, _describe, cpc_of
 
 FORMAT, VERSION = "openTPU-profile", 1
 CLOCK_MHZ = T.current().platform["core_mhz"]    # the core clock of the target (OTPU_TARGET)
@@ -176,7 +176,7 @@ def _config(cfg, uarch: dict | None) -> dict:
     ua = dict(rtlsim.UARCH)
     ua.update(uarch or {})
     lanes = cfg.LANES
-    return {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes,
+    return {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes, "CPC": cpc_of(cfg),
             "CL": lanes // 4 if lanes >= 8 else 1, "ACT_BLOCKS": cfg.ACT_BLOCKS,
             "TMEM_WORDS": cfg.TMEM_WORDS, "DRAM_BYTES": cfg.DRAM_BYTES,
             "IMEM_WORDS": cfg.IMEM_WORDS, "FIFO_DEPTH": 128, "NRP": 8, "NWP": 4, **ua}
@@ -218,13 +218,14 @@ def to_data(p: Profile, uarch: dict | None = None, kind: str = "rtl") -> dict:
                        "buckets": p.buckets[s] if getattr(p, "buckets", None) else {}})
     macs = p.macs()
     bytes_b = sum(x["portb"] for x in rl["per_slice"]) * cfg.D
+    C = cpc_of(cfg)
     return {
         "kind": kind, "name": p.name, "cycles": p.cycles, "clock_mhz": CLOCK_MHZ,
         "config": _config(cfg, uarch),
-        "roofline": {"bound": rl["bound"], "efficiency": rl["efficiency"],
+        "roofline": {"bound": rl["bound"], "dram": rl["dram"], "efficiency": rl["efficiency"],
                      "per_slice": rl["per_slice"]},
         "macs": macs, "bytes": bytes_b,
-        "peak_macs": cfg.D * cfg.MCOLS * cfg.S, "peak_bytes": cfg.D * cfg.S,
+        "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
         "units": UNITS, "slices": slices, "instrs": instrs,
         "programs": _programs(p.programs, cfg, src), "sources": src.list,
         "notes": notes(p), "mxu_gaps": {k: v for k, v in p.mxu_gaps(0).items() if k != "blame"},
@@ -263,13 +264,18 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
     the run's arguments (R8..R15: a resident decode program's position and token).
     candidate (parse_candidate): the same instruction stream timed on a wider machine, C
     chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
-    model for comparing architecture candidates (docs/v4/), not a measurement."""
+    model for comparing architecture candidates (docs/v4/), not a measurement. A candidate's
+    C streams flat pairs (an int8 MM ceil(N x KB / C) cycles: the proposal's milestone 4);
+    a Config's CPC (no candidate C) times the RTL's half pairs (N x ceil(KB / CPC); the same
+    code, opentpu.profile._describe, with flat off), the only difference between
+    `--candidate C=2` and a CPC 2 Config."""
     from dataclasses import replace
 
     from .isasim import Machine
     cand = dict(candidate or {})
-    C = int(cand.get("C", 1))
-    dcfg = replace(cfg, LANES=int(cand["LANES"])) if "LANES" in cand else cfg
+    flat = "C" in cand
+    C = int(cand.get("C", cpc_of(cfg)))
+    dcfg = replace(cfg, CPC=C, LANES=int(cand.get("LANES", cfg.LANES)))
     m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
@@ -290,9 +296,7 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             ins = programs[s][pc]
             if ins.op not in unit_of:
                 continue
-            nm, det, work, pb, pa = _describe(ins, dcfg)
-            if ins.op == I.MM and C > 1:            # C chunks a cycle into the MXU
-                work = -(-work // C)
+            nm, det, work, pb, pa = _describe(ins, dcfg, flat)   # C chunks a cycle into the MXU
             work = max(1, work)
             instrs.append([s, idx, pc, unit_of[ins.op], nm, det, t, t, -1, t, t + work,
                            src.id(ins), {}, work, pb, pa])
@@ -300,8 +304,10 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             b += pb
             a += pa
         cycles = max(cycles, t)
-        per.append({"portb": b, "porta": a, "bound": max(-(-a // C), -(-b // C))})
+        per.append({"portb": b, "porta": a, "dram": -(-b // C),
+                    "bound": max(-(-a // C), -(-b // C))})
     bound = max((x["bound"] for x in per), default=0)
+    dram = max((x["dram"] for x in per), default=0)
     busy = []
     for s in range(cfg.S):
         u = {n: 0 for n in UNITS}
@@ -314,19 +320,26 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
               "nominal work, no overlap between units). The roofline fraction is a lower "
               "bound on what the RTL achieves; record with the RTL for real timing."}]
     config = _config(cfg, uarch)
+    config["CPC"] = C
     if cand:
         config.update(C=C, LANES=dcfg.LANES, CL=dcfg.LANES // 4 if dcfg.LANES >= 8 else 1)
         config.update({k: v for k, v in cand.items() if k in CANDIDATE_KEYS[3:]})
         notes.append({"level": "warn", "text":
                       f"Candidate architecture model: {C} chunk(s) of {cfg.D} B a cycle "
-                      f"through the port and the MXU, {dcfg.LANES} vector lanes, at "
-                      f"{cand.get('MHZ', CLOCK_MHZ):g} MHz. The same instruction stream as "
-                      f"the measured run, re-timed; not a measurement."})
+                      f"through the port and the MXU{' (flat pairs)' if flat else ''}, "
+                      f"{dcfg.LANES} vector lanes, at {cand.get('MHZ', CLOCK_MHZ):g} MHz. "
+                      f"The same instruction stream as the measured run, re-timed; not a "
+                      f"measurement."})
+    elif C > 1:
+        notes.append({"level": "info", "text":
+                      f"CPC {C}: {C} chunks of {cfg.D} B a cycle through the port and the MXU; "
+                      f"an int8 MM N x ceil(KB / {C}) cycles (an odd KB's last advance a half "
+                      f"pair), 4-bit MMs one chunk an advance."})
     return {
         "kind": "isa", "name": name, "cycles": cycles,
         "clock_mhz": float(cand.get("MHZ", CLOCK_MHZ)),
         "config": config,
-        "roofline": {"bound": bound, "efficiency": bound / cycles if cycles else 0,
+        "roofline": {"bound": bound, "dram": dram, "efficiency": bound / cycles if cycles else 0,
                      "per_slice": per},
         "macs": 0, "bytes": sum(x["portb"] for x in per) * cfg.D,
         "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
@@ -946,7 +959,8 @@ def render_summary(d: dict, s: int = 0) -> str:
     eff = rl.get("efficiency") or 0.0
     bound = rl.get("bound") or 0
     mhz = m["clock_mhz"] or CLOCK_MHZ
-    cfg_bits = " ".join(f"{k}={cfg[k]}" for k in ("S", "D", "MCOLS", "LANES") if k in cfg)
+    cfg_bits = " ".join(f"{k}={cfg[k]}" for k in ("S", "D", "MCOLS", "LANES", "CPC")
+                        if k in cfg and (k != "CPC" or cfg[k] != 1))
     lines = [
         f"{m['name']}  [{m['kind']}]  slice {s}  {cfg_bits}",
         f"  {_fmt_n(m['cycles'])} cycles   {_time_at(m['cycles'], mhz)} at {mhz:g} MHz   "
@@ -954,6 +968,10 @@ def render_summary(d: dict, s: int = 0) -> str:
         f"  Roofline {_bar(eff)} {_pct(eff)} of DRAM-bound minimum "
         f"(bound {_fmt_n(bound)} cycles)",
     ]
+    dram = rl.get("dram")
+    if dram and dram != bound:          # the port-B bound alone (CPC 2: the MXU's half pairs above it)
+        lines.append(f"  DRAM port B bound {_fmt_n(dram)} cycles ({_pct(dram / cyc)} of the run); "
+                     f"the roofline above is the MXU's advances")
     if m["macs"]:
         lines.append(f"  MACs/cycle {m['macs'] / cyc:.0f}  (peak {m['peak_macs']})")
     ports = _slice(d, s).get("ports") or {}

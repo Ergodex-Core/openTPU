@@ -20,13 +20,16 @@ The slice prints the lines a cycle after the fact, in a fixed order within a cyc
 U, H, P, Q), from the same signals the board's hardware trace records (opentpu/hwtrace.py
 rebuilds these lines from the trace buffer; docs/observability.md).
 
-Roofline. Per slice the DRAM burst port (B) moves one D-byte chunk per cycle and the MXU
-consumes one chunk per cycle, so both the memory and the compute roof are "chunks per cycle".
-The bound for a program is the number of port-B transfers it needs (MM chunks + the chunks LD/ST touch),
-the port-A cycles (MM scales, one word per cycle or a PAIR MM's scale pair per cycle, + QST
-bytes) and the MXU's own cycles (4-bit: one block per cycle, PAIR one chunk); the roofline is
-the largest, taken over slices. Efficiency = roofline cycles / measured cycles. This is a bound
-at the core's ports; dram_efficiency() compares against the DDR3 peak instead.
+Roofline. Per slice the DRAM burst port (B) moves CPC D-byte chunks per cycle (Config.CPC: one
+today, two on the wide port of docs/v4/proposal-1-wide-port.md) and the MXU consumes as many,
+so both the memory and the compute roof are "chunks per cycle". The bound for a program is the
+number of port-B transfers it needs (MM chunks + the chunks LD/ST touch) over CPC (the DRAM
+bound), the port-A cycles (MM scales, one word per cycle or a PAIR MM's scale pair per cycle,
+an int8 MM's CPC words at CPC 2, + QST bytes) and the MXU's own cycles (an int8 MM: N x
+ceil(KB / CPC) advances, an odd KB's last one a half pair; 4-bit: one block per cycle, PAIR
+one chunk, at any CPC); the roofline is the largest, taken over slices. Efficiency = roofline
+cycles / measured cycles. This is a bound at the core's ports; dram_efficiency() compares
+against the DDR3 peak instead.
 """
 from __future__ import annotations
 
@@ -101,9 +104,18 @@ class Rec:
     porta: int = 0           # DRAM port-A transfers it needs
 
 
-def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
-    """(name, detail, nominal cycles, port-B transfers, port-A transfers) of an instruction."""
+def cpc_of(cfg) -> int:
+    """The chunks per cycle of a Config (1 before the key existed)."""
+    return int(getattr(cfg, "CPC", 1) or 1)
+
+
+def _describe(ins: I.Instr, cfg, flat: bool = False) -> tuple[str, str, int, int, int]:
+    """(name, detail, nominal cycles, port-B transfers, port-A transfers) of an instruction.
+    An int8 MM at CPC > 1 takes N x ceil(KB / CPC) cycles (its rows' half pairs as the RTL
+    streams them), or ceil(N x KB / CPC) with `flat` (the flat pair stream of the proposal's
+    milestone 4; Lens's candidate model)."""
     w, D, L = ins.w, cfg.D, cfg.LANES
+    C = cpc_of(cfg)
     burst = min(D // 4, L)
     op = ins.op
     if op in (I.LD, I.ST):
@@ -130,8 +142,10 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf = (ins.flags >> I.WF_SHIFT) & 3
         if wf == I.W8:
-            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", N * KB, N * KB, scales
+            work = -(-N * KB // C) if flat else N * -(-KB // C)
+            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", work, N * KB, scales
         # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle
+        # (one chunk an advance at any CPC: docs/v4/p1-status.md)
         pair = bool(ins.flags & I.F_PAIR)
         return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {'int4' if wf == I.W4I else 'fp4'}"
                       f"{' pair' if pair else ''}{acc}",
@@ -176,20 +190,27 @@ class Profile:
         return [r for r in self.recs if r.slice == s]
 
     def roofline(self) -> dict:
-        """Lower bound on cycles from the DRAM ports (and the MXU, which shares their rate)."""
+        """Lower bound on cycles from the DRAM ports (and the MXU, which shares their rate):
+        per slice the port-B transfers over CPC (dram: the DRAM bound), the port-A cycles and
+        the MXU's advances; bound the largest."""
         per = []
+        C = cpc_of(self.cfg)
         for s in range(self.cfg.S):
             rs = self.slice_recs(s)
             b = sum(r.portb for r in rs)
             a = sum(r.porta for r in rs)
-            # port A delivers one scale word per MXU cycle, a PAIR MM's 8-byte scale pair at once
-            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else r.porta
-                     for r in rs)
+            # port A delivers one scale word per MXU cycle, a PAIR MM's 8-byte scale pair at
+            # once, an int8 MM's CPC block bytes at once on the wide port
+            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc"))
+                     else -(-r.porta // C) if r.op == I.MM and r.detail.find(" int4") < 0
+                     and r.detail.find(" fp4") < 0 else r.porta for r in rs)
             m = sum(r.work for r in rs if r.op == I.MM)
-            per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m,
-                        "bound": max(ac, b, m)})
+            dram = -(-b // C)
+            per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m, "dram": dram,
+                        "bound": max(ac, dram, m)})
         bound = max(p["bound"] for p in per) if per else 0
-        return {"bound": bound, "per_slice": per,
+        dram = max(p["dram"] for p in per) if per else 0
+        return {"bound": bound, "dram": dram, "per_slice": per,
                 "efficiency": bound / self.cycles if self.cycles else 0.0}
 
     def unit_busy(self, s: int = 0) -> dict:

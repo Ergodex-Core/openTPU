@@ -1,0 +1,69 @@
+# openTPU v4 candidate P1 "wide port" on an AWS EC2 F2 instance (docs/v4/proposal-1-wide-port.md,
+# docs/v4/p1-status.md): Virtex UltraScale+ VU47P with 16 GB of HBM2e in 32 pseudo-channels. One
+# slice as the card's (D 128, 4 MX columns, 8 lanes), DRAM port B two 128-byte chunks a cycle
+# (CPC = 2) into an MXU of two column groups in lock step. Not yet built: the simulators run
+# this target on the two-channel native memory model behind otpu_native_dram at CPC 2 (the HBM
+# adapter and the board's shell are later milestones); the core clock is the one the F2
+# synthesis of the current design closed.
+
+[target]
+name = "f2"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2: xcvu47p, HBM2e (32 PCs); 1 slice, port B 256 B/cycle (CPC 2)"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # 32-bit DRAM addresses per slice: 128 MiB of each pseudo-channel
+LANES = 8
+CPC = 2                         # chunks per cycle on DRAM port B and into the MXU (the wide port)
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true                   # as the card (WAITC; needs WIN <= 16)
+
+[uarch]
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3                   # the card's one pumped copy (targets/ypcb-00338.toml)
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 512                # chunk FIFO entries of CPC chunks: 1024 chunks, 128 KiB as the card
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 200.0                # the F2 synthesis of the current design closed 200 MHz
+mem = "hbm"
+mem_ctrl = "hbm"
+hostcal = false
+channels_per_slice = 32         # HBM2e pseudo-channels (the simulation: the native model's 2)
+channel_bytes = 134217728       # 128 MiB of each pseudo-channel in the slice's 4 GiB window
+beat_bytes = 32
+hbm_pcs = 32
+interleave_bytes = 256          # a chunk pair on one pseudo-channel (otpu_hbm_dram, later)
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 8

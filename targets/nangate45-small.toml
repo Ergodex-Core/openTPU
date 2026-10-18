@@ -17,6 +17,7 @@ TMEM_WORDS = 16384
 IMEM_WORDS = 8192
 DRAM_BYTES = 268435456
 LANES = 4
+CPC = 1                         # chunks per cycle on DRAM port B and into the MXU (2: the wide port)
 PAIR = false
 DSTEP = false
 STREAM = false

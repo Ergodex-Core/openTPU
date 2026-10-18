@@ -195,6 +195,8 @@ def load(name: str | None = None) -> Target:
     a = raw["arch"]
     if a["S"] < 1 or a["D"] % 32 or a["MCOLS"] < 1 or a["LANES"] & (a["LANES"] - 1):
         raise TargetError(f"{path}: bad arch (S >= 1, D a multiple of 32, LANES a power of two)")
+    if a["CPC"] not in (1, 2):
+        raise TargetError(f"{path}: CPC {a['CPC']}: 1 or 2 chunks per cycle (otpu_mxu CPC)")
     if raw["arch"]["SEQ_WC"] and raw["uarch"]["WIN"] > 16:
         raise TargetError(f"{path}: SEQ_WC (otpu_seq's wait entries) needs WIN <= 16: 4-bit "
                           f"counts name a unit's last 15 instructions")
@@ -242,10 +244,13 @@ def arch_hash(cfg) -> int:
     programs compiled for one Config run on any device whose Config hashes the same). SEQ_WC
     (EXPERIMENTAL, the sequencer's wait entries) is in it only when on: the hash of every
     build without it stays, and a host that writes no entries refuses a build with it (its
-    hash leaves it out: opentpu/host/board.py check_hash)."""
+    hash leaves it out: opentpu/host/board.py check_hash). CPC (chunks per cycle) likewise is
+    in it only above 1: every one-chunk build's hash stays."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
     if not d.get("SEQ_WC"):
         d.pop("SEQ_WC", None)
+    if d.get("CPC", 1) == 1:
+        d.pop("CPC", None)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -281,6 +286,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
         "IMEM_WORDS": a["IMEM_WORDS"], "LANES": a["LANES"], "DSTEP": int(a["DSTEP"]),
+        "CPC": a["CPC"],
         "MXU_IMPL": u["MXU_IMPL"], "MXU_CL": u["MXU_CL"], "MXU_E": u.get("MXU_E", 0),
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
