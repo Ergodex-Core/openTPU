@@ -1,6 +1,7 @@
 # C3: dedicated vocabulary-head engine
 
-**Draft; awaiting user approval before implementation.** New Codex proposal, 2026-10-18.
+**Implementation approved; reference/layout and reduction milestones completed.**
+New Codex proposal, 2026-10-18. Hardware integration is still pending.
 Branch: `codex/v4-c3-vocab-engine`. Base: `016e953a`.
 See [comparison and approval boundary](README.md).
 
@@ -75,7 +76,7 @@ per-token penalties, enough retained candidates, matching ordering and matching 
 
 ## Realistic payoff
 
-The recorded baseline is about 10.28M cycles, of which about 3.1M is the head. With all other
+The original DDR-like recorded baseline is about 10.28M cycles, of which about 3.1M is the head. With all other
 cycles unchanged, total time is 7.18M + 3.1M / head_speedup. At an assumed 200 MHz:
 
 | Conditional head speedup | Total modeled cycles | Conditional token rate | Whole-token speedup |
@@ -85,6 +86,16 @@ cycles unchanged, total time is 7.18M + 3.1M / head_speedup. At an assumed 200 M
 | Infinite | 7.180M | 27.9 tok/s | 1.43x ceiling |
 
 These are Amdahl sensitivity calculations, not measured or predicted engine performance.
+They are historical comparisons, not the preferred F2 baseline. Concurrent Claude milestone-0
+work on `tpubench` (`112ef960`, `docs/v4/m0-gating-split.md`) measured the existing RTL at
+8,221,777 cycles with stall=0, LAT=30. Reading that run's actual Lens profile, the first head
+MM starts at cycle 5,806,145 and the remaining head/tail is 2,415,632 cycles. The corresponding
+infinite-head speedup cap is **1.416x**, with unchanged layers. This is still a DDR memory
+simulation with HBM-like settings, not an F2 card measurement. Its head has no blocked cycles
+from result credits or missing scales. C3 does not count recovery of the original 18.2% as
+an architectural gain: milestone 0 attributes almost all that item to the memory's delivery
+rate. These concurrent RTL changes have not been cherry-picked into this isolated branch.
+
 Four 128-byte engines give a nominal 102.4 GB/s weight-path ceiling; the head's 302 MB of
 weight bytes alone take about 2.95 ms at full duty. Scales, row turnarounds, broadcasts and
 reduction add time. Layers remain serially before the head for one sequence.
@@ -105,7 +116,7 @@ Other risks are output-selection corner cases, PC-scale traffic, new command com
 ordering, stale sidecar weights and shared HBM arbitration slowing the existing layers.
 C3 should be rejected as a performance project if measured layer slowdown cancels head gains.
 
-## First milestones, only after approval
+## Implementation milestones (approved)
 
 1. Model sidecar addressing and exact head logits against the existing ISA. Check every row's
    weight/scale identity, extreme offsets, dropped terms and rounding boundaries.
@@ -116,4 +127,55 @@ C3 should be rejected as a performance project if measured layer slowdown cancel
 4. Integrate the command with greedy generation and explicitly exercise all fallback modes,
    EOS, cancellation, reset and bucket chaining before F2 shell synthesis.
 
-No implementation, simulation or synthesis of C3 has been performed.
+## Completed reference milestone and Lens evidence
+
+Implemented [vocab_engine.py](../../opentpu/llm/vocab_engine.py), an isolated executable
+reference, with [tests](../../tests/test_vocab_engine.py) and a reproducible
+[validation/export command](../../tools/c3_head_check.py):
+
+- Versioned per-PC layout, address/range validation, uneven vocabulary tails, and legal
+  32-byte read bursts that respect 4 KiB boundaries and a configurable beat limit.
+- Immutable sidecar images made from existing quantized bytes, preserving every canonical
+  weight and scale byte (including scale padding). Source and per-PC SHA-256 checks verify
+  descriptor reloads, payload integrity and consistency with the retained tied image.
+- Independent scalar/Python-integer row accumulation, repository fp32 epilogue semantics,
+  and local/global reduction with lowest-global-ID ties under the ISA bit ordering.
+  Duplicate, missing and foreign completions are rejected. The completion order is varied.
+- Explicit fallback reasons for unsupported models/dimensions/formats, sampling, penalties,
+  full-logit output and absent/wrong capability versions. No caller dispatches C3 hardware;
+  the current chat and generate loop remain on the established path.
+
+The tests compare full logit bits against **executed canonical ISA LD/QACT/MM/ST programs**,
+not a second call to the same C3 implementation. They include extreme offsets, dropped
+groups, 48-bit integer-to-float rounding ties, negative accumulations, exceptional values,
+signed zero, shuffled shard completions and multi-MM vocabulary chunks. Reduced dimensions
+are supported for validation; production eligibility remains Gemma 3 1B only.
+
+```sh
+python -m pytest -q tests/test_vocab_engine.py
+PYTHONPATH=. python tools/c3_head_check.py --output build/lens/c3
+python -m opentpu.lens open build/lens/c3/c3-head-reference.otpuprof
+```
+
+The default validation executes a **synthetic 4,096 x 1,152 head** with seed 3. All 4,096
+logits match the canonical ISA bit for bit, with winner token 1987. The sidecar is 4,849,664
+bytes. The input is synthetic, not a claim of full-checkpoint model validation.
+
+Every performance characterization must be exported to **openTPU Lens**, as requested.
+The command writes a two-profile `.otpuprof`, a standalone Lens HTML page, `validation.json`,
+the sidecar descriptor and `summary.txt` under `build/lens/c3/`:
+
+1. Canonical ISA head execution with stock Lens nominal instruction timings (37,808 cycles
+   for this workload, including QACT and full-logit stores).
+2. C3's executed row counts, bytes, MACs, dropped groups and transaction counts, with a
+   clearly labeled **serial service accounting model** (27,918 schedule cycles here).
+   It assumes 128 read bytes/cycle/engine, 128 integer products/cycle/engine, 8 epilogue
+   cycles/row, and no overlap among read, GEMV, epilogue and local reduction phases.
+   It starts after QACT and includes activation distribution and final reduction.
+
+These profiles have different timing abstractions and boundaries; their cycle ratio is
+**not a speedup result**. C3 has no RTL timing, HBM latency/queue/contention simulation or
+predicted full-model token rate yet. The reference's CPU wall time is recorded separately.
+The Lens generic floorplan's `S=4` represents head engines, not four full TPU slices or a
+validated physical floorplan. Milestones 3 and 4 must replace the accounting model with
+measured RTL events and preserve baseline/fallback behavior before any F2 synthesis.

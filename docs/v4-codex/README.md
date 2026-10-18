@@ -1,9 +1,10 @@
 # Codex alternatives for openTPU v4 on F2
 
-Status: **proposal review only; implementation awaits explicit user approval**.
+Status: **user approved parallel implementation of C1-C3; C3 reference milestones complete**.
 Date: 2026-10-18. Base: `016e953ad70e9dd78f1b10d8a9cc07318bee66dd` on `tpubench`.
 These C1-C3 designs are new alternatives to Claude's P1-P4 in [docs/v4](../v4/README.md).
-The approval recorded in Claude's documents does not approve these alternatives.
+The user subsequently approved these alternatives and required openTPU Lens for performance
+measurement and visualization. No cloud deployment or synthesis has been performed here.
 
 | Candidate | Architectural change | Branch | Worktree directory |
 |---|---|---|---|
@@ -12,9 +13,10 @@ The approval recorded in Claude's documents does not approve these alternatives.
 | C3 | Dedicated vocabulary projection and exact greedy reduction alongside the existing layer datapath | `codex/v4-c3-vocab-engine` | `opentpu-v4-c3-vocab-engine` |
 
 This branch's design is in [PROPOSAL.md](PROPOSAL.md). All worktrees are siblings under
-`/Users/rachittibrewal/ergodex-04`. Each starts from the same committed baseline and contains
-only its own proposal and this comparison. Generated profiles and the untracked `formal/`
-directory remain in the original worktree.
+`/Users/rachittibrewal/ergodex-04`. Each starts from the same committed baseline. This C3
+branch now contains its own reference/layout implementation, tests and Lens exporter.
+Its generated evidence is in `build/lens/c3/`; the original profiles and untracked `formal/`
+directory remain in the original worktree. Work in the other candidate branches is separate.
 
 ## Recommendation and evidence
 
@@ -52,12 +54,16 @@ vector work, tails, command transitions, response latency, drain credits and fal
 Keep int8 weights and existing quantization as the common comparison; mixed precision,
 speculation, extra users and software row folding are separate experiments.
 
-## Approval boundary
+## Implementation boundary and validation
 
-Prepared now: design documents and isolated branches/worktrees.
-No implementation, instrumentation changes, new simulator, RTL edits, synthesis or cloud
-runs have been started for C1-C3.
+The user approved fan-out implementation of all three candidates after review. On C3, the
+first two reference milestones are complete: byte-exact sidecar construction and integrity,
+canonical ISA logit equivalence and order-independent reduction checks. See
+[the proposal's evidence section](PROPOSAL.md#completed-reference-milestone-and-lens-evidence).
 
-After approval, begin with the chosen proposal's first validation milestone. Compare it
-against the existing ISA and a same-clock baseline before committing to full F2 integration.
-The user may approve any subset; setup of a branch is not approval to implement it.
+Use openTPU Lens for every performance comparison. The exported C3 service-accounting
+profile is explicitly a model of executed work, not an RTL or FPGA measurement; its ratio
+to the canonical ISA profile is not a speedup claim. Concurrent Claude M0 evidence changes
+the appropriate memory baseline and is documented in the proposal. C3 still needs engine
+RTL, actual memory/completion timing, runtime integration and whole-loop validation before
+F2 synthesis or deployment.
