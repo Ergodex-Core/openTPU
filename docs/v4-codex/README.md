@@ -22,8 +22,9 @@ See [C2 validation evidence and reproduction](VALIDATION.md).
 
 Evaluate **C2 first**: at M=1 it aims to use all 512 existing product PEs, compared with
 Claude P2's 512 useful product PEs out of 2,048. This is a proposed utilization improvement,
-not a fourfold end-to-end performance claim. The new operand feeds, metadata, result
-addressing and mode transitions still need validation.
+not a fourfold end-to-end performance claim. Standalone operand routing, metadata,
+result addressing and mode transitions now pass RTL tests; production integration and
+physical timing remain unvalidated.
 
 C1 is the alternative if independent memory progress is more valuable than preserving the
 MXU structure. C3 limits the scope of the accelerated operation, but accelerating a phase

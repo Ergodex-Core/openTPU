@@ -149,11 +149,12 @@ def build():
 FIELDS = ("cycle", "accept", "accepted_tag", "advance", "array_tag", "weight_accept_mask",
           "scale_accept_mask", "act_accept_mask", "commit", "commit_tag", "old_wait",
           "output_wait", "mode_wait", "credit_wait", "weight_wait_mask", "scale_wait_mask",
-          "act_wait_mask", "live_groups", "result_groups", "weight_peak01", "weight_peak23")
+          "act_wait_mask", "live_groups", "result_groups", "weight_peak01", "weight_peak23",
+          "fill_bank", "compute_bank", "operand_bank_wait", "old_response_backpressure")
 
 
 def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
-        ostall=0, rstall=0, hold=0, old_hold=0, delay_pc0=0, reset_at=0, reset_skip=0):
+        ostall=0, rstall=0, hold=0, old_hold=0, delay_pc0=0, reset_at=0, reset_skip=0, hold_response=0):
     if not groups or len(groups) > 128 or len({g.tag for g in groups}) != len(groups):
         raise ValueError("C2 requires 1..128 uniquely tagged groups")
     for group in groups:
@@ -168,19 +169,30 @@ def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
         with tempfile.TemporaryDirectory(prefix="c2-rtl-") as temp:
             return run(groups, out_dir=temp, seed=seed, wstall=wstall, sstall=sstall,
                        astall=astall, ostall=ostall, rstall=rstall, hold=hold, old_hold=old_hold,
-                       delay_pc0=delay_pc0, reset_at=reset_at, reset_skip=reset_skip)
+                       delay_pc0=delay_pc0, reset_at=reset_at, reset_skip=reset_skip, hold_response=hold_response)
     out_dir = Path(out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     _write(groups, out_dir / "input.bin")
     params = dict(seed=seed, wstall=wstall, sstall=sstall, astall=astall, ostall=ostall,
                   rstall=rstall, hold=hold, old_hold=old_hold, delay_pc0=delay_pc0,
-                  reset_at=reset_at, reset_skip=reset_skip)
+                  reset_at=reset_at, reset_skip=reset_skip, hold_response=hold_response)
     command = [str(exe), f"+input={out_dir/'input.bin'}", f"+events={out_dir/'events.txt'}",
                f"+results={out_dir/'results.txt'}", *[f"+{k}={v}" for k, v in params.items()]]
     result = rtlsim.run_sim(command, timeout=120)
     if result.returncode:
         raise RuntimeError("C2 RTL failed:\n" + result.stdout + result.stderr)
     events = [dict(zip(FIELDS, map(int, line.split()))) for line in (out_dir / "events.txt").read_text().splitlines()]
+    # Reconstruct the filling bank's owner from observed acceptance/bank signals.
+    # array_tag is independently tapped from RTL's compute-bank descriptor.
+    owners = [-1, -1]
+    previous_cycle = 0
+    for event in events:
+        if previous_cycle and event["cycle"] != previous_cycle + 1:
+            owners = [-1, -1]  # the reset tests omit reset-active trace rows
+        event["fill_tag"] = owners[event["fill_bank"]]
+        if event["accept"]:
+            owners[event["fill_bank"]] = event["accepted_tag"]
+        previous_cycle = event["cycle"]
     rows = (out_dir / "results.txt").read_text().splitlines()
     surviving = groups[reset_skip:] if reset_at else groups
     if len(rows) != len(surviving):
@@ -198,7 +210,9 @@ def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
         assert got_int == integers, ("integer mismatch", tag, got_int, integers)
         assert bits == expected.tolist(), ("fp32 mismatch", tag, [hex(v) for v in bits], [hex(v) for v in expected])
         outputs.append(dict(tag=tag, cycle=cycle, mask=mask, bits=bits, integers=got_int))
-    counts = {k: sum(e[k] for e in events) for k in ("advance", "old_wait", "output_wait", "mode_wait", "credit_wait")}
+    counts = {k: sum(e[k] for e in events) for k in ("advance", "old_wait", "output_wait", "mode_wait", "credit_wait", "operand_bank_wait", "old_response_backpressure")}
+    counts["fill_compute_overlap_cycles"] = sum(bool(e["advance"] and
+        (e["weight_accept_mask"] or e["scale_accept_mask"] or e["act_accept_mask"])) for e in events)
     for source in ("weight", "scale", "act"):
         counts[source + "_wait_column_cycles"] = [sum(bool(e[source + "_wait_mask"] & (1 << c)) for e in events) for c in range(4)]
         counts[source + "_transactions"] = sum(e[source + "_accept_mask"].bit_count() for e in events)
@@ -206,7 +220,7 @@ def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
                   peak_live_groups=max(e["live_groups"] for e in events),
                   peak_result_groups=max(e["result_groups"] for e in events),
                   peak_weight_chunks_per_column=max(max(e["weight_peak01"], e["weight_peak23"]) for e in events))
-    return dict(bit_exact=True, model="standalone-c2-verilator-v1", service=params,
+    return dict(bit_exact=True, model="standalone-c2-verilator-v2-pingpong", service=params,
                 counts=counts, outputs=outputs, events=events)
 
 
@@ -226,7 +240,7 @@ def lens_data(groups, evidence, name):
     macs = sum(g.kb * g.count * 128 for g in groups)
     bound = counts["advance"]
     cfg = Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=256)
-    return {"kind": "rtl", "name": name + " [STANDALONE RTL / SYNTHETIC SERVICE]",
+    return {"kind": "rtl", "name": name + " [PING-PONG RTL / SYNTHETIC SERVICE]",
             "cycles": cycles, "clock_mhz": 200.0,
             "config": lens._config(cfg, {"C": 1, "C2_COLUMNS": 4, "FIFO_DEPTH": 256, "MXU_E": 4}),
             "roofline": {"bound": bound, "efficiency": bound / cycles,

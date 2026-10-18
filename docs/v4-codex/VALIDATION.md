@@ -106,12 +106,16 @@ and adapts ACT RAM, PC-local reads, TMEM banks and read responses. Reset cancels
 work, so the adapter must cancel its corresponding external responses. Four-bit formats,
 PAIR/RMAX/ASCALE and production dependencies remain on unchanged `otpu_mxu`.
 
-`tests/test_c2_rtl.py`: **12 passed** at D=128/C=4. Tests cover KB=1/9/54/255, tails1..4,
+`tests/test_c2_rtl.py`: **16 passed** at D=128/C=4. Tests cover KB=1/9/54/255, tails 1..4,
 plain/ACC, distinct scales/offsets, extreme int8 and fp32 patterns, legacy/decode/legacy
 transitions, random independent delivery/grants, eight live/results, simultaneous
 accept/commit, and reset during operand fill, blocked ACC and blocked output. Every
 retired integer is checked independently and every fp32 word against canonical ISA MM.
 The harness asserts held request/output stability. The reference suite remains **86 passed**.
+Four unchanged production `test_mm_mx_rtl` regressions at D=128/C=4 also pass: int8,
+int4 with PAIR, FP4 and NVFP4 (parameter IDs `0-128-4-False-False-3-1`,
+`1-128-4-True-False-2-2`, `2-128-4-False-False-0-1`, `3-128-4-False-False-1-2`).
+These exercise their existing UNIT, ACC, ASCALE, RMAX, offsets and fp32 corners.
 
 ```sh
 python -m pytest -q tests/test_c2_rtl.py
@@ -119,7 +123,9 @@ PYTHONPATH=. python tools/c2_rtl_profile.py --out-dir build/lens/c2/rtl
 python -m opentpu.lens summary build/lens/c2/rtl/c2-rtl.otpuprof
 ```
 
-The single-buffer baseline is preserved in `build/lens/c2/rtl-single-buffer/` (10 profiles).
+The single-buffer baseline is commit `7b6c3bd1`, preserved in
+`build/lens/c2/rtl-single-buffer/` (10 profiles). Its `c2-rtl-labeled.otpuprof` copy adds
+explicit baseline names/provenance; the original bundle remains unchanged.
 Matched decode and legacy cases use the same 31 weight rows, ACT bytes, offsets, scales
 and initial values; decode groups four outputs while legacy uses one M=1 output per group.
 The exporter checks their flattened output words are identical.
@@ -131,10 +137,60 @@ The exporter checks their flattened output words are identical.
 | 54 | 432 | 910 | 3,417 |
 
 These are observed cycles of the standalone RTL with synthetic service, not production
-MXU or HBM benchmarks. The gap between 432 advances and 910 cycles exposes the current
-single-buffer fill-then-compute schedule. Delaying column0 delivery by 40 cycles per group
-raises KB1 from62 to382 cycles (+320 over eight groups). Forced ACC/commit backpressure
+MXU or HBM benchmarks. The gap between 432 advances and 910 cycles exposed the initial
+single-buffer fill-then-compute schedule. Delaying column 0 delivery by 40 cycles per group
+raised KB1 from 62 to 382 cycles (+320 over eight groups). Forced ACC/commit backpressure
 reaches eight live groups and eight queued results. Wait counters are overlapping exposure
 counts, not an additive cycle breakdown; pending mode wait also includes useful older work.
 200 MHz is an assumed Lens display clock, not an achieved frequency. The earlier serialized
 reference slots are not a comparable speed baseline. No FPGA synthesis has been performed.
+
+## Measured improvement: ping-pong operand banks
+
+The follow-up implementation adds two ordered operand banks. Once all required weight,
+scale and ACT packets of one group arrive, the next same-mode command may reserve the
+other bank while the first streams into the array. A compute bank remains owned until
+its final arithmetic read; its metadata and scales are captured into the array pipeline
+before reuse. Eight result credits still cover the whole path through commit. Mode
+changes drain both operand banks, array, result FIFO and epilogue. Reset clears all bank
+ownership and outstanding valid/credit state.
+
+Two extra tests recycle 16 groups through both banks, with and without independent stalls,
+assert actual fill/compute overlap and different bank/tag ownership during every overlap,
+and check all outputs against the ISA. Existing reset/stall/tail tests run on this version.
+Peer-review cases additionally alternate KB=1/255/9/54 across 16 recycled groups with
+varying masks/ACC and independent stalls, and hold an ACC response's valid/data stable
+while the epilogue refuses it under output backpressure. Both pass. The ACC request
+remains stable; a response is consumed only when `old_valid && old_ready`.
+
+| Matched 31-output case | Single-buffer cycles | Ping-pong cycles | Ping-pong fill/compute overlap |
+|---|---:|---:|---:|
+| Decode KB1 | 62 | 55 | 0 |
+| Decode KB9 | 190 | 127 | 56 |
+| Decode KB54 | 910 | 532 | 371 |
+| Legacy M1 KB1 | 182 | 176 | 0 |
+| Legacy M1 KB9 | 627 | 357 | 240 |
+| Legacy M1 KB54 | 3,417 | 1,797 | 1,590 |
+
+The KB54 decode case performs the same 432 arithmetic advances in 532 total cycles,
+an 81.2% advance duty versus 47.5% initially. This is a standalone scheduling improvement;
+legacy M1 benefits too. KB1 saves command scheduling cycles even though its one-cycle
+compute burst cannot overlap an operand transfer. The tests use identical seed/service
+settings before and after, and matched legacy/decode numerical work.
+
+Limits remain visible: delaying column 0 still adds 320 cycles (55 to 375); independent
+random service raises decode KB9 from 127 to 235 cycles; the forced ACC/commit case stays
+at 535 cycles with eight live/queued groups. Mixed-mode work changes only 425 to 419 cycles
+because switching modes still drains. The next measurement priorities are real PC/scale
+service and TMEM bank/RMW arbitration, followed by production dependency/dispatch and
+eligible-versus-fallback Gemma tracing. These are not F2 throughput measurements.
+
+Final profiles are `build/lens/c2/rtl/c2-rtl.{otpuprof,html,json}`. Names explicitly identify
+ping-pong RTL, and each profile records its source commit, dirty flag and source hashes.
+Raw per-cycle input masks, compute/fill ownership, credits, waits and output words remain
+alongside the bundle. Weight buffering is 256 KiB total; this experimental interface also
+uses 256 KiB of ACT packet buffering plus metadata, before any physical mapping analysis.
+
+Verilator lint passes. A generic sv2v/Yosys attempt encountered undriven converted
+early-return temporaries also reproduced in unchanged `otpu_fmul`; it is not accepted as
+synthesis evidence. There is no resource-fit or achieved-clock claim.

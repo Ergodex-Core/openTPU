@@ -65,3 +65,36 @@ def test_reject_malformed_operand_packet():
     group.weights=group.weights[:3]
     with pytest.raises(ValueError,match="weights shape/type"):
         C.run([group])
+
+
+@pytest.mark.parametrize("stalls", [False, True])
+def test_pingpong_overlap_and_bank_recycling(have_verilator, stalls):
+    groups=[C.make_group(9, count=1+i%4, tag=i, acc=bool(i%2), seed=1200+i)
+            for i in range(16)]
+    r=C.run(groups, seed=81, wstall=31 if stalls else 0,
+            sstall=51 if stalls else 0, astall=23 if stalls else 0,
+            ostall=47 if stalls else 0, rstall=53 if stalls else 0)
+    assert r["counts"]["fill_compute_overlap_cycles"]>0
+    accepts=[e for e in r["events"] if e["accept"]]
+    assert [e["fill_bank"] for e in accepts]==[i%2 for i in range(16)]
+    for e in r["events"]:
+        if e["advance"] and (e["weight_accept_mask"] or e["scale_accept_mask"] or e["act_accept_mask"]):
+            assert e["fill_bank"]!=e["compute_bank"]
+            assert e["fill_tag"]!=e["array_tag"]
+
+
+def test_recycled_banks_with_unequal_kb(have_verilator):
+    groups=[C.make_group([1,255,9,54][i%4], count=1+i%4, tag=i,
+                         acc=bool(i%2), seed=1400+i) for i in range(16)]
+    r=C.run(groups, seed=802, wstall=31, sstall=39, astall=20, ostall=40, rstall=35)
+    assert r["counts"]["fill_compute_overlap_cycles"]>0
+    assert r["counts"]["operand_bank_wait"]>0
+    assert [o["tag"] for o in r["outputs"]]==list(range(16))
+
+
+def test_held_acc_response_through_blocked_epilogue(have_verilator):
+    groups=[C.make_group(1, tag=i, acc=True, seed=1500+i) for i in range(20)]
+    r=C.run(groups, seed=902, hold=300, rstall=75, ostall=30, hold_response=1)
+    assert r["counts"]["old_response_backpressure"]>0
+    assert r["counts"]["output_wait"]>0
+    assert r["bit_exact"]

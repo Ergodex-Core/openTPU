@@ -36,6 +36,9 @@ module tb_c2_mxu;
   int seed=1,limit=1000000;
   int reset_at=0,reset_skip=0,reset_left=0;
   bit reset_happened=0;
+  int hold_response=0;
+  bit response_pending=0;
+  logic [3:0][31:0] response_data;
   int input_fd,evfd,resfd;
   string input_path,events_path,result_path;
   function automatic logic [31:0] read32();
@@ -52,6 +55,7 @@ module tb_c2_mxu;
     void'($value$plusargs("rstall=%d",rstall));void'($value$plusargs("hold=%d",hold_cycles));
     void'($value$plusargs("old_hold=%d",old_hold));
     void'($value$plusargs("reset_at=%d",reset_at));void'($value$plusargs("reset_skip=%d",reset_skip));
+    void'($value$plusargs("hold_response=%d",hold_response));
     void'($value$plusargs("delay_pc0=%d",delay_pc0));void'($value$plusargs("seed=%d",seed));
     void'($urandom(seed));
     input_fd=$fopen(input_path,"rb");evfd=$fopen(events_path,"w");resfd=$fopen(result_path,"w");
@@ -115,14 +119,23 @@ module tb_c2_mxu;
       out_ready=cy>=hold_cycles && $urandom_range(0,99)>=ostall;
       old_valid=old_ready && cy>=old_hold && $urandom_range(0,99)>=rstall;
       for(int c=0;c<C;c++) old_data[c]=memory[old_addr[c][15:0]];
+      if(hold_response!=0) begin
+        if(!response_pending && old_req && cy>=old_hold && $urandom_range(0,99)>=rstall) begin
+          response_pending=1;
+          for(int c=0;c<C;c++) response_data[c]=memory[old_addr[c][15:0]];
+        end
+        old_valid=response_pending;old_data=response_data;
+      end
     end
   end
   logic stalled=0;
   logic old_stalled=0;
+  logic response_stalled=0;
+  logic [127:0] response_held;
   logic [C*32+32+4-1:0] old_held;
   logic [C*(32+32+48)+32+4+2-1:0] held;
   always @(posedge clk) if(rst) begin
-    stalled=0;old_stalled=0;
+    stalled=0;old_stalled=0;response_stalled=0;response_pending=0;
     if(reset_happened) cy=cy+1;
   end
   always @(posedge clk) if(!rst) begin
@@ -136,12 +149,18 @@ module tb_c2_mxu;
       $fatal(1,"C2 ACC read request changed before response");
     old_stalled=old_req && !(old_valid && old_ready);
     old_held={old_tag,old_mask,old_addr};
-    $fdisplay(evfd,"%0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d",
+    if(response_stalled && (!old_valid || old_data!=response_held))
+      $fatal(1,"C2 ACC response source violated backpressure");
+    response_stalled=old_valid && !old_ready;response_held=old_data;
+    if(old_valid && old_ready) response_pending=0;
+    $fdisplay(evfd,"%0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d",
       cy,cmd_valid&&cmd_ready,cmd_tag,pf_advance,dut.command.tag,w_valid&w_ready,s_valid&s_ready,
       a_valid&a_ready,out_valid&&out_ready,out_tag,pf_old_wait,pf_out_wait,pf_mode_wait,pf_credit_wait,
       pf_w_wait,pf_s_wait,pf_a_wait,pf_live,pf_results,
       (pf_w_level[0]>pf_w_level[1] ? pf_w_level[0]:pf_w_level[1]),
-      (pf_w_level[2]>pf_w_level[3] ? pf_w_level[2]:pf_w_level[3]));
+      (pf_w_level[2]>pf_w_level[3] ? pf_w_level[2]:pf_w_level[3]),
+      dut.fill_bank,dut.compute_bank,cmd_valid && !dut.filling && dut.occupied[dut.fill_bank],
+      old_valid && !old_ready);
     if(cmd_valid && cmd_ready) begin
       feed=next_cmd;next_cmd=next_cmd+1;feed_cycle=cy;
       for(int c=0;c<C;c++) begin wi[c]=0;si[c]=0;ai[c]=0;end

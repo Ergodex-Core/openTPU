@@ -2,8 +2,9 @@
 // ONE product bank serves both modes: legacy = shared W / distinct ACT columns;
 // decode = distinct W rows / broadcast ACT[0]. Not an encoded production opcode.
 // A command is one row group. All its needed operand/scale chunks must arrive
-// before the non-stallable array starts. Independent ordered ingress streams may
-// stall arbitrarily. Same-mode groups overlap; a mode change drains all commits.
+// before the non-stallable array starts. Two banks overlap the next group's fill
+// with the current group's compute. Independent ordered ingress streams may stall
+// arbitrarily. Same-mode groups overlap; a mode change drains all commits.
 // The external ACC interface supplies old TMEM words with old_valid. Commit is a
 // four-wide ready/valid transaction (bank arbitration belongs to its adapter).
 module otpu_c2_mxu
@@ -57,55 +58,61 @@ module otpu_c2_mxu
     logic [C-1:0][47:0] x;
     logic [C-1:0][31:0] sw, sa;
   } result_t;
-  meta_t command;
-  logic active, mode, mode_valid;
-  logic [8:0] kb, issued;
+  meta_t command, fill_command, command_bank[2];
+  logic filling, mode, mode_valid, fill_bank, compute_bank;
+  logic [1:0] occupied, filled;
+  logic [8:0] kb, fkb, kb_bank[2], issued;
   logic [C-1:0][8:0] wn, sn, an;
-  logic [D*8-1:0] wm[C][DEPTH], am[C][DEPTH];
-  logic [39:0] sm[C][DEPTH];
-  logic [63:0] asc[C][DEPTH];
+  logic [D*8-1:0] wm[2][C][DEPTH], am[2][C][DEPTH];
+  logic [39:0] sm[2][C][DEPTH];
+  logic [63:0] asc[2][C][DEPTH];
   logic [C-1:0] need_w, need_a;
-  logic operands_ready;
+  logic fill_complete;
   logic [FW:0] live, rn;
   logic [FW-1:0] rh, rt;
   result_t results[RF], head;
   wire accept=cmd_valid && cmd_ready;
   wire commit=out_valid && out_ready;
-  assign cmd_ready=!rst && !active && live < RF &&
+  assign command=command_bank[compute_bank];
+  assign fill_command=command_bank[fill_bank];
+  assign kb=kb_bank[compute_bank];
+  assign fkb=kb_bank[fill_bank];
+  assign cmd_ready=!rst && !filling && !occupied[fill_bank] && live < RF &&
                    (!mode_valid || cmd_decode == mode || live == 0);
   assign pf_mode_wait=cmd_valid && mode_valid && cmd_decode != mode && live != 0;
-  assign pf_credit_wait=cmd_valid && !active && live == RF;
+  assign pf_credit_wait=cmd_valid && !filling && live == RF;
   assign pf_live=16'(live);
   assign pf_results=16'(rn);
   assign pf_w_level=wn;
   assign pf_s_level=sn;
   assign pf_a_level=an;
   always_comb begin
-    need_w=command.decode ? command.mask : C'(1);
-    need_a=command.decode ? C'(1) : command.mask;
-    operands_ready=active;
+    need_w=fill_command.decode ? fill_command.mask : C'(1);
+    need_a=fill_command.decode ? C'(1) : fill_command.mask;
+    fill_complete=filling;
     for (int c=0;c<C;c++) begin
-      w_ready[c]=active && need_w[c] && wn[c]<kb;
-      s_ready[c]=active && need_w[c] && sn[c]<kb;
-      a_ready[c]=active && need_a[c] && an[c]<kb;
-      pf_w_wait[c]=active && need_w[c] && wn[c]<kb;
-      pf_s_wait[c]=active && need_w[c] && sn[c]<kb;
-      pf_a_wait[c]=active && need_a[c] && an[c]<kb;
-      if ((need_w[c] && (wn[c]!=kb || sn[c]!=kb)) || (need_a[c] && an[c]!=kb))
-        operands_ready=0;
+      w_ready[c]=filling && need_w[c] && wn[c]<fkb;
+      s_ready[c]=filling && need_w[c] && sn[c]<fkb;
+      a_ready[c]=filling && need_a[c] && an[c]<fkb;
+      pf_w_wait[c]=filling && need_w[c] && wn[c]<fkb;
+      pf_s_wait[c]=filling && need_w[c] && sn[c]<fkb;
+      pf_a_wait[c]=filling && need_a[c] && an[c]<fkb;
+      if ((need_w[c] && (wn[c]+9'(w_valid[c]&&w_ready[c])!=fkb ||
+                          sn[c]+9'(s_valid[c]&&s_ready[c])!=fkb)) ||
+          (need_a[c] && an[c]+9'(a_valid[c]&&a_ready[c])!=fkb)) fill_complete=0;
     end
   end
-  assign pf_advance=operands_ready;
+  assign pf_advance=filled[compute_bank];
   // S0: choose operands before the shared physical PEs. The invalid columns are
   // masked in bm2 and at retirement; no input/read is requested for their padding.
   logic [C-1:0][D*8-1:0] a0, w0;
   logic [C-1:0][31:0] da0, sa0, sw0;
   logic [C-1:0][7:0] dw0;
   always_comb for (int c=0;c<C;c++) begin
-    a0[c]=am[command.decode ? 0:c][issued[AW-1:0]];
-    {da0[c],sa0[c]}=asc[command.decode ? 0:c][issued[AW-1:0]];
-    w0[c]=wm[command.decode ? c:0][issued[AW-1:0]];
-    {sw0[c],dw0[c]}=sm[command.decode ? c:0][issued[AW-1:0]];
+    a0[c]=am[compute_bank][command.decode ? 0:c][issued[AW-1:0]];
+    {da0[c],sa0[c]}=asc[compute_bank][command.decode ? 0:c][issued[AW-1:0]];
+    w0[c]=wm[compute_bank][command.decode ? c:0][issued[AW-1:0]];
+    {sw0[c],dw0[c]}=sm[compute_bank][command.decode ? c:0][issued[AW-1:0]];
   end
   logic [C-1:0][D-1:0][7:0] wd;
   logic [C-1:0][31:0] da1, sw1, sap1;
@@ -187,7 +194,9 @@ module otpu_c2_mxu
   assign out_integer=ex;
   always_ff @(posedge clk) begin
     if(rst) begin
-      active<=0;mode_valid<=0;mode<=0;command<='0;kb<=0;issued<=0;
+      filling<=0;mode_valid<=0;mode<=0;issued<=0;fill_bank<=0;compute_bank<=0;
+      occupied<=0;filled<=0;
+      for(int b=0;b<2;b++) begin command_bank[b]<='0;kb_bank[b]<=0;end
       wn<='0;sn<='0;an<='0;live<=0;rn<=0;rh<=0;rt<=0;
       row_valid<='0;ev<='0;
     end else begin
@@ -199,20 +208,26 @@ module otpu_c2_mxu
         default:;
       endcase
       if(accept) begin
-        active<=1;mode<=cmd_decode;mode_valid<=1;kb<=cmd_kb;issued<=0;
-        command<='{decode:cmd_decode,acc:cmd_acc,tag:cmd_tag,mask:cmd_mask,addr:cmd_addr};
+        filling<=1;mode<=cmd_decode;mode_valid<=1;kb_bank[fill_bank]<=cmd_kb;
+        occupied[fill_bank]<=1;
+        command_bank[fill_bank]<='{decode:cmd_decode,acc:cmd_acc,tag:cmd_tag,mask:cmd_mask,addr:cmd_addr};
         wn<='0;sn<='0;an<='0;
       end
       for(int c=0;c<C;c++) begin
-        if(w_valid[c] && w_ready[c]) begin wm[c][wn[c][AW-1:0]]<=w_data[c];wn[c]<=wn[c]+1'b1;end
-        if(s_valid[c] && s_ready[c]) begin sm[c][sn[c][AW-1:0]]<={s_sw[c],s_dw[c]};sn[c]<=sn[c]+1'b1;end
+        if(w_valid[c] && w_ready[c]) begin wm[fill_bank][c][wn[c][AW-1:0]]<=w_data[c];wn[c]<=wn[c]+1'b1;end
+        if(s_valid[c] && s_ready[c]) begin sm[fill_bank][c][sn[c][AW-1:0]]<={s_sw[c],s_dw[c]};sn[c]<=sn[c]+1'b1;end
         if(a_valid[c] && a_ready[c]) begin
-          am[c][an[c][AW-1:0]]<=a_data[c];asc[c][an[c][AW-1:0]]<={a_da[c],a_sa[c]};an[c]<=an[c]+1'b1;
+          am[fill_bank][c][an[c][AW-1:0]]<=a_data[c];asc[fill_bank][c][an[c][AW-1:0]]<={a_da[c],a_sa[c]};an[c]<=an[c]+1'b1;
         end
+      end
+      if(fill_complete) begin
+        filling<=0;filled[fill_bank]<=1;fill_bank<=!fill_bank;
       end
       if(pf_advance) begin
         issued<=issued+1'b1;
-        if(issued+1==kb) active<=0;
+        if(issued+1==kb) begin
+          issued<=0;filled[compute_bank]<=0;occupied[compute_bank]<=0;compute_bank<=!compute_bank;
+        end
       end
       if(push) begin
         results[rt]<='{meta:tail_meta,x:integers,sw:tail_sw,sa:tail_sa};rt<=rt+1'b1;
@@ -232,11 +247,14 @@ module otpu_c2_mxu
     if(push && rn==RF && !pop) $fatal(1,"C2 result overflow");
     if(commit && live==0) $fatal(1,"C2 unreserved commit");
     for(int c=0;c<C;c++) begin
-      if(s_valid[c] && s_ready[c] && sn[c]!=0 && s_sw[c]!=sm[c][0][39:8])
+      if(s_valid[c] && s_ready[c] && sn[c]!=0 && s_sw[c]!=sm[fill_bank][c][0][39:8])
         $fatal(1,"C2 Sw changes within a row");
-      if(a_valid[c] && a_ready[c] && an[c]!=0 && a_sa[c]!=asc[c][0][31:0])
+      if(a_valid[c] && a_ready[c] && an[c]!=0 && a_sa[c]!=asc[fill_bank][c][0][31:0])
         $fatal(1,"C2 Sa changes within a row");
     end
+    if(filling && (!occupied[fill_bank] || filled[fill_bank])) $fatal(1,"C2 fill bank ownership");
+    if(pf_advance && (!occupied[compute_bank] || (filling && fill_bank==compute_bank)))
+      $fatal(1,"C2 compute bank ownership");
   end
 `endif
 endmodule

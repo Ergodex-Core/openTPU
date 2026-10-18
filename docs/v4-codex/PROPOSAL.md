@@ -173,5 +173,8 @@ The next milestone adds `rtl/mxu/otpu_c2_mxu.sv`: a standalone D128/C4 dual-mode
 datapath using one product bank, independently stalled operand/scale streams, tagged
 result credits, four fp32 epilogue lanes, ACC service and mode-drain control. Its Verilator
 cycle traces are exported separately to Lens; see [validation evidence](VALIDATION.md).
+Two operand banks now overlap the next same-mode group's fill with current computation.
+Each column has two 256-chunk weight banks (512 chunks, matching the proposed 256 KiB
+total weight capacity); this standalone harness also buffers ACT packets and metadata.
 It does not yet replace production `otpu_mxu`, encode `MM_ROWS`, or implement packed-PC
 address generation/HBM. Synthesis, F2 execution and whole-token integration remain open.
