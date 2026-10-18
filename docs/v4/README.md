@@ -159,9 +159,13 @@ since int4x's power-of-two sub-block scales cannot hold a bf16 group scale exact
 host-side bug fixed on the way (the row server wrote slice 0 only; `tests/test_qwen38.py`).
 Measured on the first 8 layers (`build/lens/v4/qwen38-27b-int4-8layers-isa.otpuprof`):
 6.15 M analytic cycles a slice, 742 MB streamed a slice, the LM head 2.48 M of them.
-Extrapolated to 64 layers: 31.8 M cycles a slice a token, 159 ms at 200 MHz, **6.3 tok/s**
-on four of today's slices (3.7 GB streamed per slice per token); P2 or P3 lanes would scale
-it as they scale Gemma 3. The full 64-layer greedy run is in flight on the simulator.
+Measured on all 64 layers (`build/lens/v4/qwen38-27b-int4-isa.otpuprof`, 2026-10-19):
+31.67 M analytic cycles a slice a token, 158 ms at 200 MHz, **6.3 tok/s** on four of
+today's slices (3.7 GB of weights streamed per slice per token, 14.8 GB over the four; the
+MXU 89% busy: the MLP 53%, DeltaNet 27%, the head 8%, attention 5%); the greedy reply to
+"Why is the sky blue? Answer in one sentence." is "The sky appears blue because shorter
+wavelengths of" (8 tokens; 110 s a token on the ISA simulator). P2 or P3 lanes would scale it
+as they scale Gemma 3.
 
 ## How to inspect
 
