@@ -95,8 +95,11 @@ module otpu_slice
                                       //   compiler's layout rule; docs/vla_frequency_plan.md 6c)
   parameter int ACT_RAM    = 0,       // the ACT RAM's technology RAM style (otpu_actram STYLE):
                                       //   0 "auto" (the card's), 1 "block", 2 "ultra"
-  parameter int TMEM_RAM   = 0        // TMEM_IMPL 3's RAMs (otpu_tmem RSTYLE): 0 / 1 "block", 2
+  parameter int TMEM_RAM   = 0,       // TMEM_IMPL 3's RAMs (otpu_tmem RSTYLE): 0 / 1 "block", 2
                                       //   "ultra" (f2-vla's pumped banks: 3 URAM a sub-bank)
+  parameter bit COLL_GATHER = 1'b1    // the collective unit runs GATHER (otpu_top / otpu_board;
+                                      //   0: BAR alone, the collective port reads RLD's one word
+                                      //   and never writes: with MXROT its TMEM lanes go)
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused
@@ -427,6 +430,10 @@ module otpu_slice
   otpu_tmem #(.WORDS(TMEM_WORDS), .LANES(LANES), .NRP(NRP), .NWP(NWP), .WPB(WPB),
               .GEN_R(MXROT ? '0 : NRP'(1) << P_MXU), .GEN_W(MXROT ? '0 : NWP'(1) << W_MXU),
               .ROW_R(MXROT ? NRP'(1) << P_MXU : '0), .ROW_W(MXROT ? NWP'(1) << W_MXU : '0),
+              // the f2-vla lane budget (MXROT builds): the one-word ports take one lane, the
+              // collective's ports are RLD's lane 0 and no write on a BAR-only unit (COLL_GATHER 0)
+              .ONE_R(MXROT ? (NRP'(1) << P_Q3) | (COLL_GATHER ? NRP'(0) : NRP'(1) << P_COLL) : NRP'(0)),
+              .NUL_W((MXROT && !COLL_GATHER) ? NWP'(1) << W_COLL : NWP'(0)),
               .RSTYLE((TMEM_RAM == 2) ? "ultra" : "block"),
               .SH_HOST(P_DMA),
               .SH_MASK((TMEM_IMPL == 2) ? '0 : (NRP'(1) << P_Q3) | (NRP'(1) << P_COLL)),

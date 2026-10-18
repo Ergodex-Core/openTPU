@@ -34,6 +34,15 @@
 // data back, LANES x log2 LANES multiplexers of IW + 33 bits, where the crossbar was LANES x
 // LANES x 47 at 64 lanes (the two GEN ports were ~300 K of f2-vla's 425 K TMEM LUTs). The
 // simulation stops if a ROW port's lanes are not in the rotation pattern.
+// A rotator's read data path is a barrel too (lane l takes bank (l + rot) mod LANES through
+// log2 LANES stages of 2:1, each lane's stage selects from its own copy of the rotation): as
+// an indexed select per lane, qb[(l + rot) % LANES], Vivado built a 64:1 multiplexer per lane
+// and bit (~16 LUT6 each, ~33 K a port, ~260 K of f2-vla's 298 K TMEM LUTs in its second
+// synthesis, docs/vla_frequency_plan.md 6e) where the barrel is ~3 LUT6 per lane and bit.
+// ONE_R: ports that read one word (lane 0: the quantizer's row factor, the collective's RLD at
+// S = 1) decode their bank instead of rotating, take one lane's data and drive the others 0
+// (their request into the pumped banks' addresses is the shortest path: 6e). NUL_W: write
+// ports that never write (the collective's at S = 1), tied off.
 //
 // Within one port the enabled lanes must hit distinct banks (or read the same word); the
 // simulation stops on a violation, so the timing it reports is honest.
@@ -61,6 +70,8 @@ module otpu_tmem #(
   parameter logic [NWP-1:0] GEN_W = '1,   // write ports with the general crossbar (WPB = 1)
   parameter logic [NRP-1:0] ROW_R = '0,   // rotator read ports whose lanes carry their rows (top)
   parameter logic [NWP-1:0] ROW_W = '0,   // ... write ports (a GEN port is neither)
+  parameter logic [NRP-1:0] ONE_R = '0,   // read ports that read one word, lane 0 (top)
+  parameter logic [NWP-1:0] NUL_W = '0,   // write ports that never write (tied off)
   parameter int SH_HOST = 0,              // the read port whose copy SH_MASK's ports share
   parameter logic [NRP-1:0] SH_MASK = '0, // guests on SH_HOST's copy (the arbiter lets a guest
                                           // read only when no port before it on the copy asks)
@@ -119,8 +130,8 @@ module otpu_tmem #(
   initial if (PMP != 0 && !TDP) $fatal(1, "otpu_tmem: PMP needs TDP (its read ports' sides)");
   initial if (IMPL == 1) for (int p = 0; p < NRP; p++)
     if (CPY[p] >= NCP) $fatal(1, "otpu_tmem: port %0d's copy %0d >= NCP %0d", p, CPY[p], NCP);
-  initial if ((GEN_R & ROW_R) != '0 || (GEN_W & ROW_W) != '0)
-    $fatal(1, "otpu_tmem: a port is a crossbar (GEN) or a rotator with rows (ROW), not both");
+  initial if ((GEN_R & ROW_R) != '0 || (GEN_W & ROW_W) != '0 || (ONE_R & (GEN_R | ROW_R)) != '0)
+    $fatal(1, "otpu_tmem: a port is a crossbar (GEN), a rotator with rows (ROW) or one word (ONE), not several");
   // the read port that holds each port's copy: IMPL 0, the port itself or SH_HOST (a guest);
   // IMPL 1, the first port on its copy
   function automatic int host_of(input int p);
@@ -176,7 +187,11 @@ module otpu_tmem #(
     logic [NWP-1:0][LANES-1:0][IW-1:0] pa;
     logic [NWP-1:0][LANES-1:0][31:0]   pdt;
     for (genvar p = 0; p < NWP; p++) begin : g_wp
-      if (GEN_W[p]) begin : g_x
+      if (NUL_W[p]) begin : g_n
+        assign pv[p] = '0;
+        assign pa[p] = '0;
+        assign pdt[p] = '0;
+      end else if (GEN_W[p]) begin : g_x
         always_comb begin
           pv[p] = '0; pa[p] = '0; pdt[p] = '0;
           for (int b = 0; b < LANES; b++)
@@ -289,6 +304,12 @@ module otpu_tmem #(
               b_en[b] = 1'b1;
               b_a[b] = b_a[b] | r_addr[p][l][BW +: IW];
             end
+      end else if (ONE_R[p]) begin
+        // one word: lane 0's bank decoded, its row everywhere
+        for (int b = 0; b < LANES; b++) begin
+          b_en[b] = rs[0] && rot == BW'(b);
+          b_a[b] = a0[BW +: IW];
+        end
       end else begin
         // a rotator: the enables to the banks, with the lanes' rows (ROW_R) or a0's row
         logic [LANES-1:0]         t;
@@ -929,17 +950,29 @@ module otpu_tmem #(
       end
 `endif
     end
+    localparam int NLN = ONE_R[p] ? 1 : LANES;   // the lanes with data
     always_ff @(posedge clk)
-      for (int l = 0; l < LANES; l++) begin
+      for (int l = 0; l < NLN; l++) begin
         fresh[l] <= r_en[p][l] | rpf[p][l];   // (rpf: IMPL 3 RPL's replays)
         if (GEN_R[p] && r_en[p][l]) sel[l] <= r_addr[p][l][BW-1:0];
         if (fresh[l]) held[l] <= lq[l];
       end
-    always_comb
+    // the rotator's data: a barrel of BW stages (lane l's stage k takes lane l + 2^k when its
+    // copy's bit k is set), which ends with lane l holding bank (l + rot) mod LANES; the crossbar
+    // its lanes' selects; a one-word port lane 0's bank
+    always_comb begin
+      logic [LANES-1:0][31:0] v, t;
+      v = qb;
+      if (!GEN_R[p] && !ONE_R[p])
+        for (int k = 0; k < BW; k++) begin
+          t = v;
+          for (int l = 0; l < LANES; l++) v[l] = rq[l][k] ? t[(l + (1 << k)) % LANES] : t[l];
+        end
       for (int l = 0; l < LANES; l++) begin
-        lq[l] = GEN_R[p] ? qb[sel[l]] : qb[(l + int'(rq[l])) % LANES];
-        r_data[p][l] = fresh[l] ? lq[l] : held[l];
+        lq[l] = GEN_R[p] ? qb[sel[l]] : ONE_R[p] ? qb[rq[0]] : v[l];
+        r_data[p][l] = (l >= NLN) ? '0 : fresh[l] ? lq[l] : held[l];
       end
+    end
   end
 
 `ifndef SYNTHESIS
@@ -981,6 +1014,12 @@ module otpu_tmem #(
           if (w_en[p][i] && w_addr[p][i] % LANES == b) n++;
       if (n > WPB) $fatal(1, "TMEM%0d: %0d writes to bank %0d at %0t", SID, n, b, $time);
     end
+    for (int p = 0; p < NRP; p++)
+      if (ONE_R[p] && |r_req[p][LANES-1:1])
+        $fatal(1, "TMEM%0d read port %0d: a one-word port with lanes above 0 at %0t", SID, p, $time);
+    for (int p = 0; p < NWP; p++)
+      if (NUL_W[p] && |w_req[p])
+        $fatal(1, "TMEM%0d write port %0d: a tied-off port writing at %0t", SID, p, $time);
     for (int p = 0; p < NRP; p++)
       if (!GEN_R[p] && !(ROW_R[p] ? rotated(r_req[p], r_addr[p]) : contiguous(r_req[p], r_addr[p])))
         $fatal(1, "TMEM%0d read port %0d: lanes not %s at %0t", SID, p,

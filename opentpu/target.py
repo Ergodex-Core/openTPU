@@ -63,6 +63,11 @@ ARB_KEYS = ("TMEM_WARB",)
 # pumped banks, otpu_tmem RSTYLE); f2-vla's 4 MB ACT RAM in block RAM and its 1.5M-word TMEM in
 # URAM (docs/vla_frequency_plan.md 6c)
 MEM_KEYS = ("ACT_RAM", "TMEM_RAM")
+# COLL_GATHER (optional; the tops' default 1): 0 builds the one-slice collective unit without
+# GATHER (otpu_coll_bar; the simulations do so for every one-slice FPGA target, rtlsim.BOARD_UARCH;
+# the YPCB flow's run_vivado.sh too), which on f2-vla also drops the collective port's TMEM lanes
+# (otpu_slice ONE_R / NUL_W under MXROT, docs/vla_frequency_plan.md 6e)
+OPT_KEYS = ("COLL_GATHER",)
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
@@ -187,7 +192,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS + MEM_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS + MEM_KEYS + OPT_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -290,6 +295,9 @@ def sim_uarch(t: Target | str | None = None) -> dict:
     for k in ARB_KEYS + MEM_KEYS:
         if u.get(k):
             d[k] = int(u[k])
+    for k in OPT_KEYS:
+        if k in u:
+            d[k] = int(u[k])
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
@@ -310,6 +318,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
     cfg = config(t)
     tm3 = {k: int(u[k]) for k in TMEM3_KEYS if k in u} if u["TMEM_IMPL"] == 3 else {}
     tm3 |= {k: int(u[k]) for k in ARB_KEYS + MEM_KEYS if k in u}
+    tm3 |= {k: int(u[k]) for k in OPT_KEYS if k in u}
     return tm3 | {
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],

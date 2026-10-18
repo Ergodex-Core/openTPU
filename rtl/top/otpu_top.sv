@@ -147,7 +147,7 @@ module otpu_top
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                  .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                  .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM), .SEQ_WC(SEQ_WC),
-                 .T2(T2), .PACK(PACK))
+                 .T2(T2), .PACK(PACK), .COLL_GATHER(COLL_GATHER))
     u_slice (
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,

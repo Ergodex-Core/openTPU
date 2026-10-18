@@ -1509,24 +1509,30 @@ module otpu_mxu
       end
   otpu_delay #(.W(NL * MCOLS), .N(LM + LA - 1)) u_rwh (.clk, .en(t_gnt), .d(rh), .q(rh_p));
   always_ff @(posedge clk) if (rst) rwh <= '0; else if (t_gnt) rwh <= rh_p;
-  // per column: the candidate key is selected by the hits alone, the compare only makes the
-  // enable. At most one lane hits a column per cycle (lanes drain distinct columns) and rx / rw
-  // are exclusive (rx only for !c_acc commands, rw only for c_acc ones)
-  logic [MCOLS-1:0] mx_hit, mx_upd;
+  // per column: the candidate key is selected by the hits alone (an AND-OR over the lanes) into
+  // a register of its own (mc_k, mc_v), and the next cycle one compare against mk makes the
+  // enable: mk <= max(mk, mc_k), a running max in two register stages (the wide-port branch's
+  // form for its RL word, mkr, c5af9505). Comparing every lane's key against mk and OR-ing the
+  // results into mk's enable was f2-vla's worst clk_raw path post-synthesis (rx.nv -> mk's CE:
+  // 23 levels, 2 CARRY8, -0.739 ns at 200 MHz, docs/vla_frequency_plan.md 6d / 6e). At most one
+  // lane hits a column per cycle (lanes drain distinct columns) and rx / rw are exclusive (rx
+  // only for !c_acc commands, rw only for c_acc ones). Two hits on a column in consecutive
+  // granted cycles are fine: the second compares against the mk the first updated the cycle
+  // before. mk is final a cycle later than it was: c_drained waits for mc_v.
+  logic [MCOLS-1:0] mx_hit, mc_v;
   logic [31:0] mx_cand [MCOLS];
+  logic [31:0] mc_k [MCOLS];
   always_comb
     for (int j = 0; j < MCOLS; j++) begin
-      mx_hit[j] = 1'b0; mx_upd[j] = 1'b0; mx_cand[j] = '0;
+      mx_hit[j] = 1'b0; mx_cand[j] = '0;
       for (int k = 0; k < NL; k++) begin
         if (rxh[k][j]) begin
           mx_hit[j] = 1'b1;
           mx_cand[j] = mx_cand[j] | fkey(rx.nv[k]);
-          mx_upd[j] = mx_upd[j] | !mx_have[j] | (fkey(rx.nv[k]) > mk[j]);
         end
         if (rwh[k][j]) begin
           mx_hit[j] = 1'b1;
           mx_cand[j] = mx_cand[j] | fkey(ry[k]);
-          mx_upd[j] = mx_upd[j] | !mx_have[j] | (fkey(ry[k]) > mk[j]);
         end
       end
     end
@@ -1542,7 +1548,7 @@ module otpu_mxu
 `endif
 
   wire c_drained = c_act && !cl_ld && (pn || c_left == 0) && (rows_live == 0) && (rmw_n == 0) &&
-                   (ln_n == 0) && !rA.v && !r0.v && !r1.v && !rx.v;
+                   (ln_n == 0) && !rA.v && !r0.v && !r1.v && !rx.v && (mc_v == '0);
   // RMAX writes start a cycle after the head has drained: mx_q registers the test, so the
   // drained compares (c_left == 0, rows_live, rmw_n, ...) are off the TMEM write request and the
   // grant it feeds. The test holds while drained (nothing new enters the head until it
@@ -1661,7 +1667,7 @@ module otpu_mxu
       ck <= '0; cg <= '0; dg <= '0; dg1 <= GW'(1); c_left <= '0; cl_ld <= 1'b0; rows_live <= '0;
       rf_q <= '0; rf_hs <= 1'b0; rf_t <= '0; rf_n <= '0; rf_nz <= 1'b0; rl_nz <= 1'b0;
       t_urg <= 1'b0;
-      dj <= '0; mx_done <= 1'b0; mx_have <= '0;
+      dj <= '0; mx_done <= 1'b0; mx_have <= '0; mc_v <= '0;
       d_last <= 1'b0; d_lastg <= 1'b0; d_fin <= 1'b0; ncnt <= '0; dln <= '0; mxm <= '0;
       i_pk <= 1'b0; i_odd <= 1'b0; i_lrow <= 1'b0; i_nodd <= 1'b0; i_slot <= '0; i_sb <= '0;
       lp <= 1'b0;
@@ -1899,10 +1905,13 @@ module otpu_mxu
             dal <= dlane_a(dad, dj + ncnt);
           end
         end
-        // RMAX (rx: registered so the lane selection and the max compare are in different cycles)
+        // RMAX (rx: registered so the lane selection and the candidate's select are in different
+        // cycles; mc: the candidate registered, the compare the cycle after)
         for (int j = 0; j < MCOLS; j++) begin
-          if (mx_upd[j]) mk[j] <= mx_cand[j];
-          if (mx_hit[j]) mx_have[j] <= 1'b1;
+          mc_v[j] <= mx_hit[j];
+          if (mx_hit[j]) mc_k[j] <= mx_cand[j];
+          if (mc_v[j] && (!mx_have[j] || mc_k[j] > mk[j])) mk[j] <= mc_k[j];
+          if (mc_v[j]) mx_have[j] <= 1'b1;
         end
         rmw_n <= rmw_n + ((lo.v && c_acc) ? 4'd1 : 4'd0) - (rw.v ? 4'd1 : 4'd0);
         ln_n <= ln_n + (drain_go ? 4'd1 : 4'd0) - (lo.v ? 4'd1 : 4'd0);
@@ -1984,7 +1993,7 @@ module otpu_mxu
           drow[j] <= a;
           if (j < NL) dal[j] <= a;
         end
-        mx_done <= 1'b0; mx_have <= '0;
+        mx_done <= 1'b0; mx_have <= '0; mc_v <= '0;
         al_st <= 2'd0; al_i <= '0; mx_i <= '0;
         pf_u <= 1'b1;
         pf_uv <= {st_deny + 32'(st_g[3]), st_frz + 32'(st_g[2]), st_bp + 32'(st_g[1]),

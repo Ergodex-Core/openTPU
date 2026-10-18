@@ -46,6 +46,7 @@ module otpu_f2_hbm_sys #(
   parameter bit SEQ_WC     = 1'b1,
   parameter bit T2         = 1'b0,       // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md)
   parameter bit PACK       = 1'b0,       // the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md)
+  parameter bit COLL_GATHER = 1'b1,      // 0: the collective unit runs BAR alone (otpu_board; f2-vla)
   parameter int CORE_KHZ   = 200000,
   parameter logic [31:0] BUILD_ID = 32'h0,
   parameter int DDR_MTS    = 0,
@@ -198,7 +199,7 @@ module otpu_f2_hbm_sys #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
-               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PACK(PACK), .PLATFORM(PLATFORM),
+               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PACK(PACK), .COLL_GATHER(COLL_GATHER), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),

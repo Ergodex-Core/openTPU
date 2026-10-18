@@ -125,7 +125,7 @@ module otpu_asic_top
                .ULANES(ULANES), .HAS_DSTEP(HAS_DSTEP), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
-               .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM),
+               .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM), .COLL_GATHER(COLL_GATHER),
                .SEQ_WC(SEQ_WC), .T2(T2)) u_slice (
     // clk_f: TMEM_PMP 0 (above), so no 2x clock
     .clk, .clk_f(1'b0), .sys_rst, .rst, .rinit(rinit_a), .ld_start, .ld_addr, .ld_n, .ld_busy,
