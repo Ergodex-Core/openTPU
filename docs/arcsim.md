@@ -268,8 +268,22 @@ both say `LLVM version 23.0.0git, CIRCT 00f6937` (the manifest's `source_commit`
    elsewhere in the three registers the check relates -- the PE's weight copy (read
    hierarchically, `u_pe.whr / wlr`, as the select check `u_pe.selr` is, which passes), the shift
    `wc[j] <= wc[j-1]`, or the pop-time select `s_hq0p` a cycle before `s_hq0`. The check is
-   disabled under `-DOTPU_ARCSIM` so the run's results judge the model (`perf_qwen.py --check`
-   against the ISA simulator): see the results below.
+   disabled under `-DOTPU_ARCSIM` so the run's results judge the model.
+3. **With that check off, the model is functionally wrong further on.** The receipt then runs
+   to cycle 643 (the first MM's chunks streaming) and stops in the adapter's own protocol check
+   `Fatal: otpu_native_dram: B chunks 0 and 3 on pair 3 in one cycle` -- the port-B scheduler
+   issued two chunks of one channel pair in a cycle, which the RTL never does and Verilator never
+   sees; identically in the single-threaded model and in task mode (`ARC_THREADS` 4 / 2 / 8), so
+   the lowering, not the runtime's scheduling. No results reach the ISA comparison. The models'
+   builds: single-threaded `{frontend 33, lower 91, opt 75, llc 3821} s`, task mode
+   `{30, 93, 93, 3162} s`.
+
+So on this bundle the ArcSim model of the f2-hbm board configuration is not the design, and the
+receipt's ArcSim cycle count, cycles/s and thread scaling do not exist yet; the behavioural-DRAM
+configurations (D 32, the tests above) are bit-exact. The nested-array lowering (issue 1) is
+confirmed and worked around; issues 2 and 3 are the adapter / MXU at D 128, NCH 8, PORTB 4, RL 8,
+and need Ergodex's debugger (no waveform from this flow): the reproducer is the receipt itself on
+this branch.
 
 Reproducer: `OTPU_SIM=arcsim OTPU_TARGET=f2-hbm OTPU_NCH=8 python tools/arcsim_model.py` on the
 RTL before each fix (any f2-hbm configuration; small `--dram-bytes` and the shrunken parameters
