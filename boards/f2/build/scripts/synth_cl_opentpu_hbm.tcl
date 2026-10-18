@@ -17,6 +17,8 @@ read_ip [list \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter/cl_axi_clock_converter.xci \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter_light/cl_axi_clock_converter_light.xci]
 read_xdc ${constraints_dir}/cl_synth_user.xdc
+# the HBM CL's own (the wrapper's AXI reset pipe replicated toward the IP's ports)
+read_xdc ${constraints_dir}/cl_synth_user_hbm.xdc
 update_compile_order -fileset sources_1
 synth_design -mode out_of_context -top cl_opentpu -part $DEVICE_TYPE \
   -flatten_hierarchy rebuilt -keep_equivalent_registers
