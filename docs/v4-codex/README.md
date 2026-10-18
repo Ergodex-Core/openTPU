@@ -1,6 +1,6 @@
 # Codex alternatives for openTPU v4 on F2
 
-Status: **user approved parallel implementation of C1-C3; C2 reference milestone complete**.
+Status: **user approved parallel implementation of C1-C3; C2 reference and standalone RTL implemented**.
 The user requires openTPU Lens for performance measurement and visualization.
 Date: 2026-10-18. Base: `016e953ad70e9dd78f1b10d8a9cc07318bee66dd` on `tpubench`.
 These C1-C3 designs are new alternatives to Claude's P1-P4 in [docs/v4](../v4/README.md).
@@ -56,11 +56,12 @@ speculation, extra users and software row folding are separate experiments.
 
 ## Approval and current boundary
 
-The user approved fan-out implementation of all three proposals. This branch completes
-C2's first validation milestone: an executable packed reference with exact arithmetic,
-canonical fallback, and Lens event profiles. It does not report the other worktrees' status.
+The user approved continuing all three proposals. This branch now includes the packed
+reference and a standalone dual-mode RTL datapath with exact arithmetic, tails, ACC,
+independent ingress service, tagged results and drain-gated mode transitions. It does not
+report the other worktrees' status. New Lens traces contain observed Verilator cycles;
+the earlier reference profiles remain labeled arithmetic slots.
 
-Next are RTL operand routing and metadata, followed by measured cycle traces in Lens.
-No C2 RTL, synthesis, deployment or cloud execution has been performed. The current Lens
-microbenchmarks measure executed functional work and traffic; their arithmetic-slot axis
-is a model, not a measured FPGA clock timeline or a Gemma throughput forecast.
+Production command/packed-image integration, HBM adapters and synthesis remain open.
+No deployment, achieved-clock or Gemma/F2 throughput claim follows from these synthetic
+RTL microbenchmarks. See [validation evidence](VALIDATION.md) for scope and reproduction.

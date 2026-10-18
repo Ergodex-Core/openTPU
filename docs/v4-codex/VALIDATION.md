@@ -1,4 +1,4 @@
-# C2 milestone 1: packed reference and Lens evidence
+# C2 validation: packed reference and standalone dual-mode RTL
 
 Completed after the user's approval to implement all three proposals in separate worktrees.
 All files in this milestone belong to `codex/v4-c2-dual-mode-mxu`.
@@ -81,11 +81,60 @@ use Timeline/Instructions to inspect this milestone's actual event evidence.
 
 ## Remaining work
 
-RTL selectable ingress, independent weight-scale metadata, mode tags and drain addressing;
-production compiler/image integration and binary opcode assignment; per-cycle simulation
-and HBM/scale-service modeling; then shell-constrained synthesis and physical measurement.
+Production compiler/image integration and binary opcode assignment; packed-PC/HBM adapters
+and scale-cache service; then shell-constrained synthesis and physical measurement.
 No resource-fit, timing-closure or end-to-end tokens/s claim follows from this milestone.
 
 Baseline interpretation incorporates the newer `tpubench` evidence at commit `112ef960`,
 `docs/v4/m0-gating-split.md`: the original blocked loss is mostly memory delivery, not
 result credits. Its 8,221,777-cycle stall-0/LAT-30 trace is RTL simulation, not F2 hardware.
+
+## Standalone RTL milestone
+
+`rtl/mxu/otpu_c2_mxu.sv` instantiates exactly one generated bank of 4*128 `otpu_pe`
+product cells and four existing `otpu_mxce` column ends. Operand routing changes by mode:
+shared weight/independent ACT for legacy int8 MM, independent weight/broadcast ACT for
+decode. Column skew, exact 48-bit accumulation and the repository's four fp32 epilogue
+lanes are retained. Each result carries its mode, command tag, mask, addresses, independent
+Sw/Sa and integer result. ACC reads old words through a request/response-ready interface;
+commits remain stable until accepted. Eight credits stay reserved until final commit.
+Mode changes wait for complete drain, while same-mode groups can overlap.
+
+This is a standalone row-group interface, not production instruction dispatch. The caller
+provides ordered chunks/scales per accepted command, serializes overlapping destinations,
+and adapts ACT RAM, PC-local reads, TMEM banks and read responses. Reset cancels in-flight
+work, so the adapter must cancel its corresponding external responses. Four-bit formats,
+PAIR/RMAX/ASCALE and production dependencies remain on unchanged `otpu_mxu`.
+
+`tests/test_c2_rtl.py`: **12 passed** at D=128/C=4. Tests cover KB=1/9/54/255, tails1..4,
+plain/ACC, distinct scales/offsets, extreme int8 and fp32 patterns, legacy/decode/legacy
+transitions, random independent delivery/grants, eight live/results, simultaneous
+accept/commit, and reset during operand fill, blocked ACC and blocked output. Every
+retired integer is checked independently and every fp32 word against canonical ISA MM.
+The harness asserts held request/output stability. The reference suite remains **86 passed**.
+
+```sh
+python -m pytest -q tests/test_c2_rtl.py
+PYTHONPATH=. python tools/c2_rtl_profile.py --out-dir build/lens/c2/rtl
+python -m opentpu.lens summary build/lens/c2/rtl/c2-rtl.otpuprof
+```
+
+The single-buffer baseline is preserved in `build/lens/c2/rtl-single-buffer/` (10 profiles).
+Matched decode and legacy cases use the same 31 weight rows, ACT bytes, offsets, scales
+and initial values; decode groups four outputs while legacy uses one M=1 output per group.
+The exporter checks their flattened output words are identical.
+
+| KB | Decode arithmetic advances | Decode total RTL cycles | Legacy M=1 total RTL cycles |
+|---:|---:|---:|---:|
+| 1 | 8 | 62 | 182 |
+| 9 | 72 | 190 | 627 |
+| 54 | 432 | 910 | 3,417 |
+
+These are observed cycles of the standalone RTL with synthetic service, not production
+MXU or HBM benchmarks. The gap between 432 advances and 910 cycles exposes the current
+single-buffer fill-then-compute schedule. Delaying column0 delivery by 40 cycles per group
+raises KB1 from62 to382 cycles (+320 over eight groups). Forced ACC/commit backpressure
+reaches eight live groups and eight queued results. Wait counters are overlapping exposure
+counts, not an additive cycle breakdown; pending mode wait also includes useful older work.
+200 MHz is an assumed Lens display clock, not an achieved frequency. The earlier serialized
+reference slots are not a comparable speed baseline. No FPGA synthesis has been performed.

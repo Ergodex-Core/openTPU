@@ -1,6 +1,6 @@
 # C2: dual-mode MXU using the existing columns for decode
 
-**Approved for implementation; first reference-validation milestone complete.**
+**Approved for implementation; reference and standalone RTL milestones complete.**
 New Codex proposal, 2026-10-18. The user approved parallel work on C1-C3 and requires
 openTPU Lens for performance measurement and visualization. See [validation evidence](VALIDATION.md).
 Branch: `codex/v4-c2-dual-mode-mxu`. Base: `016e953a`.
@@ -167,5 +167,11 @@ Report prefill, decode, achieved clock and resource use separately when comparin
 
 Milestone 1 is implemented and validated: byte-preserving sidecars, explicit reference
 dispatch/fallback, independent exact arithmetic, and Lens profiles of actual reference
-events. The Lens axis is a serialized arithmetic-slot model, not an RTL cycle measurement.
-No C2 RTL, encoded opcode, production compiler integration, synthesis or F2 run exists yet.
+events. Those original profiles retain their serialized arithmetic-slot axis.
+
+The next milestone adds `rtl/mxu/otpu_c2_mxu.sv`: a standalone D128/C4 dual-mode int8
+datapath using one product bank, independently stalled operand/scale streams, tagged
+result credits, four fp32 epilogue lanes, ACC service and mode-drain control. Its Verilator
+cycle traces are exported separately to Lens; see [validation evidence](VALIDATION.md).
+It does not yet replace production `otpu_mxu`, encode `MM_ROWS`, or implement packed-PC
+address generation/HBM. Synthesis, F2 execution and whole-token integration remain open.
