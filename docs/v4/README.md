@@ -134,6 +134,21 @@ Reading the models:
   P4 ~67. Each proposal says how its design removes the row-gating loss and what the RTL
   should then reach.
 
+## Qwen3.8-27B-INT4 on the baseline (2026-10-19)
+
+RedHatAI/Qwen3.8-27B-INT4 (a Qwen3.5-family hybrid, 64 layers, hidden 5120, compressed-tensors
+int4 symmetric group-128) runs on today's design at S = 4 slices on the ISA simulator
+([../qwen38.md](../qwen38.md)): a compressed-tensors loader (`opentpu/llm/ctensors.py`, the
+nibbles offset-binary as the library packs them), the image 3.67 GiB a slice (int4 layers,
+int8 head, the embedding table on the host; re-quantized to int4x at 4.6% relative RMS error,
+since int4x's power-of-two sub-block scales cannot hold a bf16 group scale exactly), and a
+host-side bug fixed on the way (the row server wrote slice 0 only; `tests/test_qwen38.py`).
+Measured on the first 8 layers (`build/lens/v4/qwen38-27b-int4-8layers-isa.otpuprof`):
+6.15 M analytic cycles a slice, 742 MB streamed a slice, the LM head 2.48 M of them.
+Extrapolated to 64 layers: 31.8 M cycles a slice a token, 159 ms at 200 MHz, **6.3 tok/s**
+on four of today's slices (3.7 GB streamed per slice per token); P2 or P3 lanes would scale
+it as they scale Gemma 3. The full 64-layer greedy run is in flight on the simulator.
+
 ## How to inspect
 
 ```sh
