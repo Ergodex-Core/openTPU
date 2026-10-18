@@ -94,8 +94,17 @@
 //   (the 35B's back-to-back embed runs: token 0's block scales for tokens 1 and 2).
 // Requests are taken when req && rdy; rdy depends on registered state only. Reads return in
 // order per port (the B tag with its data).
+//
+// CPC 2 (the wide port, docs/v4/proposal-1-wide-port.md; a simulation stand-in for the HBM
+// adapter of a later milestone): a wide B read (b_wide) is a pair of chunks, chunk b_addr's and
+// the next one's: two beats a channel, one B queue entry issuing two consecutive commands (b_iss)
+// with two response slots reserved, and the merge pops two beats a channel and returns both
+// chunks (each with its own CHASH swap: the second chunk's parity is computed here). A narrow
+// read (the DMA's, the loader's, the MXU's half pair) is one beat a channel, in the low chunk.
+// At CPC 1 nothing here changes.
 module otpu_native_dram #(
   parameter int D = 128,
+  parameter int CPC = 1,                             // chunks a wide B read returns
   parameter int QD = 16,                             // request queue depth per channel and port
   parameter int WQD = 32,                            // SW (gathered beat) queue depth per channel
   parameter bit CHASH = 1'b1,                        // address map: see the top
@@ -132,9 +141,10 @@ module otpu_native_dram #(
   input  logic [D*8-1:0]    b_wdata,
   input  logic [31:0]       b_addr,     // word address (chunk aligned)
   input  logic              b_par,      // ^b_addr[31:5] (the channel hash; see b_sw)
+  input  logic              b_wide,     // CPC 2: a read of the pair at b_addr (two beats a channel)
   output logic              b_rvalid,
   output logic              b_rtag,
-  output logic [D*8-1:0]    b_rdata,
+  output logic [CPC*D*8-1:0] b_rdata,   // (a narrow read's chunk in the low D bytes)
   output logic              wr_idle,
   output logic              rd_idle,    // no A or B read in flight (taken, its data not yet out)
   // native memory masters, one per channel ([1:0] = channel)
@@ -151,6 +161,7 @@ module otpu_native_dram #(
   input  logic [1:0][15:0]  n_wdone     // write beats taken by the controller (mod 2^16)
 );
   initial if (D != 128) $fatal(1, "otpu_native_dram: D must be 128 (one beat per channel)");
+  initial if (CPC != 1 && CPC != 2) $fatal(1, "otpu_native_dram: CPC %0d (1 or 2)", CPC);
   // (AD >= 2 APF - 1: a run can start while the previous run's untaken beats are stored)
   initial if (APF < 1 || APF > 64 || AD < 2 * APF - 1) $fatal(1, "otpu_native_dram: bad APF");
   localparam int QW = $clog2(QD);
@@ -189,6 +200,7 @@ module otpu_native_dram #(
   // per channel: qb (port B beats), qa (port A beats), qw (gathered SW beats); m: the channel beat
   typedef struct packed {
     logic         we;
+    logic         wide;        // CPC 2: a read of beats m and m + 1 (two commands)
     logic [24:0]  m;
     logic [511:0] data;
     logic [15:0]  wmask;       // word enables
@@ -212,6 +224,7 @@ module otpu_native_dram #(
 
   logic [QW:0] qb_n [2];
   logic [QW:0] qb_h [2];                    // (2 QD slots: see qbm)
+  logic [1:0]  b_iss;                       // the head B read's second beat is next (wide)
   logic [QW:0] qa_n [2];
   logic [QW-1:0] qa_h [2];
   logic [RNW-1:0] a_iss [2];                // the head A read's run: beats already issued
@@ -255,7 +268,9 @@ module otpu_native_dram #(
   (* keep = "true" *) logic [31:0] gw_wdata [2];
 
   // order of B reads (tags) and of A reads (channel, word, reuse)
-  logic [1:0]   bt_q [OD];                     // LUT RAM: tag, halves swapped (CHASH)
+  // a B read in order: wide, the second chunk's halves swapped, the first's, the tag
+  typedef struct packed { logic wide; logic sw2; logic sw; logic tag; } bo_t;
+  bo_t          bt_q [OD];                     // LUT RAM
   logic [OW:0]  bt_n;
   logic [OW-1:0] bt_h;
   // A reads in order: channel, word, reuse of the last beat, run beats to drop before this one
@@ -292,6 +307,10 @@ module otpu_native_dram #(
   // (DMA request -> the MXU's grant and request -> the port's address mux), and its 27-bit parity
   // then ran into every queue write (b_par: the slice muxes its sources' parities instead)
   wire b_sw = CHASH && b_par;
+  // a wide read's second chunk (CPC 2): the parity of the next chunk index, computed here (a
+  // simulation stand-in; the HBM adapter keeps a pair on one pseudo-channel)
+  wire b_wd = (CPC > 1) && b_wide && !b_we;
+  wire b_sw2 = CHASH && (^(b_addr[31:5] + 27'd1));
   wire [1:0] b_hnz = {b_wmask[31:16] != 0, b_wmask[15:0] != 0};   // the halves a B write writes
   wire [25:0] a_beat = a_addr[29:4];
   wire a_reuse = !a_we && al_v && al_beat == a_beat;
@@ -333,13 +352,14 @@ module otpu_native_dram #(
   logic [24:0]  wadr_o [2];
   logic [HW-1:0] wh_o [2];
 `endif
-  logic [511:0] rb_head [2], ra_head [2], wr_head [2];
+  logic [511:0] rb_head [2], rb_head1 [2], ra_head [2], wr_head [2];
   logic [1:0]   rtk;                               // a read command taken (tag push)
   always_comb begin
     for (int c = 0; c < 2; c++) begin
       // channel c holds the chunk's half c ^ b_sw
       qb_push[c] = b_take && (!b_we || b_hnz[c ^ b_sw]);
       qb_e[c].we = b_we;
+      qb_e[c].wide = b_wd;
       qb_e[c].m = b_addr[29:5];
       qb_e[c].data = b_wdata[512 * (c ^ b_sw) +: 512];
       qb_e[c].wmask = b_we ? b_wmask[16 * (c ^ b_sw) +: 16] : '0;
@@ -415,6 +435,9 @@ module otpu_native_dram #(
       always_ff @(posedge clk)
         if (n_rvalid[c] && tgh[c].k == K_B) rbm[rb_tq[c][k]] <= n_rdata[c][PB * k +: PB];
       assign rb_head[c][PB * k +: PB] = rbm[rb_h[c]];
+      if (CPC > 1) begin : g_w            // the beat after the head: a wide read's second chunk
+        assign rb_head1[c][PB * k +: PB] = rbm[RW'(rb_h[c] + 1'b1)];
+      end
     end
     always_ff @(posedge clk)
       if (n_rvalid[c] && tgh[c].k == K_A) ram[ra_t[c]] <= n_rdata[c];
@@ -453,7 +476,9 @@ module otpu_native_dram #(
       e_wr = (qw_rn[c] != 0) && wp_r[c] && !w_blk[c];
       // an SW write once its slot is past the read point and, if partial, has its fill data
       e_ww = (qw_n[c] != qw_rn[c]) && (!wpart[c][qw_f[c]] || wgot[c][qw_f[c]]) && !w_hold[c];
-      e_b = (qb_n[c] != 0) && (hb[c].we || rb_res[c] < (RW + 1)'(RD));
+      // (a wide read reserves its two beats' room as it starts: its second needs none)
+      e_b = (qb_n[c] != 0) && (hb[c].we || b_iss[c] ||
+                               rb_res[c] + (RW + 1)'(hb[c].wide ? 1 : 0) < (RW + 1)'(RD));
       sv[c] = hv[c] || e_a || e_wr || e_ww || e_b;
       src[c] = hv[c] ? hsrc[c] : e_a ? S_A : e_wr ? S_WR : e_ww ? S_WW : S_B;
       swr[c] = (src[c] == S_A && ha[c].we) || src[c] == S_WW || (src[c] == S_B && hb[c].we);
@@ -464,7 +489,7 @@ module otpu_native_dram #(
         S_A:  n_caddr[c] = ha[c].m + 25'(a_iss[c]);
         S_WR: n_caddr[c] = wadr_r[c];
         S_WW: n_caddr[c] = hw[c].m;
-        default: n_caddr[c] = hb[c].m;
+        default: n_caddr[c] = hb[c].m + 25'(b_iss[c]);     // a wide read's second beat
       endcase
       n_wdata[c] = '0;
       n_wmask[c] = '0;
@@ -505,7 +530,11 @@ module otpu_native_dram #(
     end
 
   // ------------------------------------------------------------------ merge
-  wire b_out = (bt_n != 0) && (rb_n[0] != 0) && (rb_n[1] != 0);
+  // the oldest B read's beats (a wide one's two a channel) are in
+  bo_t bth;
+  assign bth = bt_q[bt_h];
+  wire [RW:0] b_need = (RW + 1)'((CPC > 1 && bth.wide) ? 2 : 1);
+  wire b_out = (bt_n != 0) && (rb_n[0] >= b_need) && (rb_n[1] >= b_need);
   // the oldest A read, registered (the order FIFO's LUT RAM read stays out of the run-beat and
   // word select into a_rdata): after a pop the next entry (written at least a cycle before), or
   // the entry pushed into an empty queue
@@ -525,9 +554,12 @@ module otpu_native_dram #(
       if (n_rvalid[c]) tgh[c] <= (tg_n[c] == (TW + 1)'(1)) ? tg_in[c] : tg_nx1[c];
       else if (tg_n[c] == 0) tgh[c] <= tg_in[c];
   assign b_rvalid = b_out;
-  wire [1:0] bth = bt_q[bt_h];
-  assign b_rtag = bth[0];
-  assign b_rdata = bth[1] ? {rb_head[0], rb_head[1]} : {rb_head[1], rb_head[0]};
+  assign b_rtag = bth.tag;
+  assign b_rdata[D*8-1:0] = bth.sw ? {rb_head[0], rb_head[1]} : {rb_head[1], rb_head[0]};
+  if (CPC > 1) begin : g_rd2
+    assign b_rdata[2*D*8-1:D*8] = bth.sw2 ? {rb_head1[0], rb_head1[1]}
+                                          : {rb_head1[1], rb_head1[0]};
+  end
   // the A read data registered on the way out (the head's run-beat and word select ran into the
   // MXU's scale FIFO block RAM in one cycle)
   always_ff @(posedge clk) begin
@@ -538,7 +570,7 @@ module otpu_native_dram #(
   // the tag FIFO writes its tail every cycle too (the slot is not live unless the FIFO is full),
   // so its write enable is a register, not b_take
   always_ff @(posedge clk) begin
-    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= {b_sw, b_tag};
+    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= '{wide: b_wd, sw2: b_sw2, sw: b_sw, tag: b_tag};
     if (a_take && !a_we)
       ao_q[OW'(ao_h + ao_n)] <= ao_in;
   end
@@ -559,6 +591,7 @@ module otpu_native_dram #(
 
   always_ff @(posedge clk) begin
     if (rst) begin
+      b_iss <= '0;
       for (int c = 0; c < 2; c++) begin
         qb_n[c] <= '0; qb_h[c] <= '0; qa_n[c] <= '0; qa_h[c] <= '0; a_iss[c] <= '0;
         qw_n[c] <= '0; qw_f[c] <= '0; qw_r[c] <= '0; qw_rn[c] <= '0; wnz[c] <= '0;
@@ -606,14 +639,17 @@ module otpu_native_dram #(
         c_done[c] <= swr[c] && !wiss[c] && (c_done[c] || ctk[c]);
         d_done[c] <= swr[c] && !wiss[c] && (d_done[c] || dtk[c]);
         popa = src[c] == S_A && (swr[c] ? wiss[c] : ctk[c] && a_iss[c] == RNW'(APF - 1));
-        popb = src[c] == S_B && (swr[c] ? wiss[c] : ctk[c]);
+        popb = src[c] == S_B && (swr[c] ? wiss[c] : ctk[c] && (!hb[c].wide || b_iss[c]));
         popw = src[c] == S_WW && wiss[c];
         if (rtk[c]) ntg = ntg + 1;
         if (src[c] == S_A && rtk[c]) begin      // an A run's beat; the run reserves its room
           a_iss[c] <= (a_iss[c] == RNW'(APF - 1)) ? RNW'(0) : a_iss[c] + 1'b1;
           if (a_iss[c] == 0) rar = rar + (AW_ + 1)'(APF);
         end
-        if (src[c] == S_B && rtk[c]) rbr = rbr + 1;
+        if (src[c] == S_B && rtk[c]) begin      // a wide read's two beats, the room reserved
+          b_iss[c] <= hb[c].wide && !b_iss[c];  // at its first
+          rbr = rbr + (hb[c].wide ? (b_iss[c] ? 0 : 2) : 1);
+        end
         // a fill read passes the read point; a whole beat needs no fill read (e_wr is never set
         // for one): it passes the read point at once, so before its write can go (h_inc: either)
         if (h_inc[c]) qw_r[c] <= qw_r[c] + 1;
@@ -634,10 +670,10 @@ module otpu_native_dram #(
           tg_h[c] <= tg_h[c] + 1;
           ntg = ntg - 1;
         end
-        // ---- merge pops
+        // ---- merge pops (a wide read: two beats)
         if (b_out) begin
-          rb_h[c] <= rb_h[c] + 1;
-          rbn = rbn - 1; rbr = rbr - 1;
+          rb_h[c] <= rb_h[c] + RW'(b_need);
+          rbn = rbn - b_need; rbr = rbr - b_need;
         end
         if (a_out && !aoh.reuse && aoh.c == c[0]) begin    // (and the dropped run beats)
           ra_h[c] <= ra_h[c] + AW_'(aoh.drop) + 1'b1;
@@ -780,10 +816,10 @@ module otpu_native_dram #(
     if (!rst && b_req && b_par != ^b_addr[31:5])
       $fatal(1, "otpu_native_dram: b_par %0d, address %h", b_par, b_addr);
   logic [$bits(qb_t)-1:0] qbr [2][QD];
-  logic [1:0] btr [OD];
+  bo_t btr [OD];
   always_ff @(posedge clk) begin
     for (int c = 0; c < 2; c++) if (qb_push[c]) qbr[c][QW'(qb_h[c] + qb_n[c])] <= qb_e[c];
-    if (b_take && !b_we) btr[OW'(bt_h + bt_n)] <= {b_sw, b_tag};
+    if (b_take && !b_we) btr[OW'(bt_h + bt_n)] <= '{wide: b_wd, sw2: b_sw2, sw: b_sw, tag: b_tag};
   end
   always_ff @(posedge clk)
     if (!rst) begin

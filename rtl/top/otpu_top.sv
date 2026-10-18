@@ -17,8 +17,9 @@ module otpu_top
   parameter int IMEM_WORDS = 1 << 16,
   parameter int DRAM_WORDS = 1 << 18,
   parameter int DRAM_LAT   = 8,
-  parameter int FIFO_DEPTH = 128,
+  parameter int FIFO_DEPTH = 128,     // MXU chunk FIFO entries (of CPC chunks)
   parameter int LANES      = 8,
+  parameter int CPC        = 1,       // chunks per cycle on port B and into the MXU (otpu_mxu)
   parameter int WIN        = 32,
   parameter int RPB        = 4,
   parameter int WPB        = 2,
@@ -70,13 +71,13 @@ module otpu_top
   wire coll_gnt = &coll_gl;
 
   for (genvar s = 0; s < S; s++) begin : g_slice
-    logic          a_req, a_we, a_rvalid, b_req, b_tag, b_we, b_par, b_rvalid, b_rtag;
+    logic          a_req, a_we, a_rvalid, b_req, b_tag, b_we, b_par, b_wide, b_rvalid, b_rtag;
     logic [D/4-1:0] b_wmask;
     logic [D*8-1:0] b_wdata;
     logic [31:0]   a_addr, a_wdata, b_addr;
     logic [255:0]  a_rdata;
     logic [3:0]    a_be;
-    logic [D*8-1:0] b_rdata;
+    logic [CPC*D*8-1:0] b_rdata;
     logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, a_inval;
     logic [31:0]   sw_addr, sw_wdata;
     logic [3:0]    sw_be;
@@ -86,24 +87,24 @@ module otpu_top
       assign sw_rdy = 1'b1;
       assign b_rdy = 1'b1;
       assign wr_idle = 1'b1;
-      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s)) u_dram (
+      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .CPC(CPC), .LAT(DRAM_LAT), .SID(s)) u_dram (
         .clk, .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
         .sw_req, .sw_addr, .sw_wdata, .sw_be,
-        .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_rvalid, .b_rtag, .b_rdata, .rd_idle,
-        .dump);
+        .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_wide, .b_rvalid, .b_rtag, .b_rdata,
+        .rd_idle, .dump);
     end else begin : g_native
       logic [1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
       logic [1:0][24:0] caddr;
       logic [1:0][511:0] wdata, rdata;
       logic [1:0][63:0] wmask;
       logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D)) u_adapt (
+      otpu_native_dram #(.D(D), .CPC(CPC)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
         .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-        .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-        .b_rdata, .wr_idle, .rd_idle,
+        .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid,
+        .b_rtag, .b_rdata, .wr_idle, .rd_idle,
         .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
         .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
         .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone));
@@ -133,7 +134,7 @@ module otpu_top
 
     otpu_slice #(.SID(s), .S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS),
                  .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS),
-                 .FIFO_DEPTH(FIFO_DEPTH), .LANES(LANES), .WIN(WIN), .RPB(RPB),
+                 .FIFO_DEPTH(FIFO_DEPTH), .LANES(LANES), .CPC(CPC), .WIN(WIN), .RPB(RPB),
                  .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES),
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
@@ -144,7 +145,8 @@ module otpu_top
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
       .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
+      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid, .b_rtag,
+      .b_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,
       .coll_ren(coll_ren[s]), .coll_raddr(coll_raddr[s]), .coll_rdata(coll_rdata[s]),
       .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl[s]), .coll_gnt,

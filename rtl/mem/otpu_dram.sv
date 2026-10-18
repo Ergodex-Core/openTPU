@@ -3,10 +3,13 @@
 // lines) or one byte-enabled word write per cycle; port SW: one
 // byte-enabled word write per cycle (the quantizer's QST stores). Port B: one
 // D-byte burst per cycle, read (the MXU's streamed operand, DMA loads) or word-masked write
-// (DMA stores). Reads return LAT cycles later, in order; data is sampled at the request.
+// (DMA stores); at CPC 2 a read returns the CPC chunks from b_addr on (a wide request's pair; a
+// narrow one takes the low chunk, b_wide is not needed here). Reads return LAT cycles later, in
+// order; data is sampled at the request.
 module otpu_dram #(
   parameter int WORDS = 1 << 18,
   parameter int D     = 32,
+  parameter int CPC   = 1,
   parameter int LAT   = 8,
   parameter int SID   = 0
 ) (
@@ -28,20 +31,22 @@ module otpu_dram #(
   input  logic [D/4-1:0]    b_wmask,    // word enables for a burst write
   input  logic [D*8-1:0]    b_wdata,
   input  logic [31:0]       b_addr,     // word address of the chunk
+  input  logic              b_wide,     // CPC 2: a pair (unused: a read returns CPC chunks)
   output logic              b_rvalid,
   output logic              b_rtag,
-  output logic [D*8-1:0]    b_rdata,
+  output logic [CPC*D*8-1:0] b_rdata,
   output logic              rd_idle,    // no read in flight
   input  logic              dump
 );
   localparam int AW = $clog2(WORDS);
   localparam int CW = D / 4;
+  localparam int RW = CPC * CW;        // words a read returns
 
   logic [31:0] mem [WORDS];
 
   logic [LAT-1:0]    av, bv, bt;
   logic [255:0]      ad [LAT];
-  logic [D*8-1:0]    bd [LAT];
+  logic [CPC*D*8-1:0] bd [LAT];
 
 `ifndef SYNTHESIS
   // the host's writes during the run (WAITW's tests): <dir>/poke_<SID>.txt, lines "cycle word
@@ -72,7 +77,7 @@ module otpu_dram #(
     for (int w = 0; w < 8; w++) ad[0][32*w +: 32] <= mem[{a_addr[AW-1:3], 3'(w)}];
     bv[0] <= b_req && !b_we;
     bt[0] <= b_tag;
-    for (int w = 0; w < CW; w++) bd[0][32*w +: 32] <= mem[AW'(b_addr + w)];
+    for (int w = 0; w < RW; w++) bd[0][32*w +: 32] <= mem[AW'(b_addr + w)];
     if (b_req && b_we)
       for (int w = 0; w < CW; w++) if (b_wmask[w]) mem[AW'(b_addr + w)] <= b_wdata[32*w +: 32];
     for (int k = 1; k < LAT; k++) begin
@@ -114,9 +119,13 @@ module otpu_dram #(
       end
     end
   end
+  // (+dump_words=N: the first N words only, the image's extent: rtlsim)
+  int dump_words;
+  initial if (!$value$plusargs("dump_words=%d", dump_words) || dump_words > WORDS)
+    dump_words = WORDS;
   always @(posedge clk) if (dump) begin
     fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
-    for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", mem[i]);
+    for (int i = 0; i < dump_words; i++) $fwrite(fd, "%u", mem[i]);
     $fclose(fd);
   end
 `endif

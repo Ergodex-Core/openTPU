@@ -26,13 +26,13 @@ def _cos(a, b):
     return (a * b).sum(-1) / np.linalg.norm(a, axis=-1) / np.linalg.norm(b, axis=-1)
 
 
-def _model(d, layers=LAYERS):
+def _model(d, layers=LAYERS, hidden=256, inter=512):
     """A tiny random Gemma 3 (HF's layer pattern: 5 sliding then a global): (HF model, the
     weights folded for Gemma 4's code, Spec), its config.json in d."""
     torch.manual_seed(0)
     hc = transformers.Gemma3TextConfig(
-        hidden_size=256, num_hidden_layers=layers, num_attention_heads=4,
-        num_key_value_heads=1, head_dim=128, intermediate_size=512, vocab_size=1000,
+        hidden_size=hidden, num_hidden_layers=layers, num_attention_heads=4,
+        num_key_value_heads=1, head_dim=128, intermediate_size=inter, vocab_size=1000,
         sliding_window=512, sliding_window_pattern=6, query_pre_attn_scalar=128,
         max_position_embeddings=4096, final_logit_softcapping=None,
         attn_logit_softcapping=None)
@@ -51,6 +51,13 @@ def _model(d, layers=LAYERS):
 @pytest.fixture(scope="module")
 def tiny(tmp_path_factory):
     return _model(tmp_path_factory.mktemp("gemma3"))
+
+
+@pytest.fixture(scope="module")
+def tiny_odd(tmp_path_factory):
+    """Hidden 384 and intermediate 640: odd block counts (KB 3 and 5 rows, as the real model's
+    KB 9), the half pairs of a CPC 2 machine on every matrix but o (KB 4)."""
+    return _model(tmp_path_factory.mktemp("gemma3odd"), hidden=384, inter=640)
 
 
 def _cfg():
@@ -103,6 +110,35 @@ def test_resident_and_prefill_are_bit_exact(tiny):
     np.testing.assert_array_equal(c.prefill(toks[:790]), ref[789])
     for t, r in zip(toks[790:], ref[790:]):
         np.testing.assert_array_equal(c.step(t), r)
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("cpc", [1, 2], ids=["cpc1", "cpc2"])
+def test_token_on_rtl_is_bit_exact(have_verilator, tiny_odd, cpc):
+    """A decode token at position 600 (past the sliding window) of the odd-block tiny model
+    (half pairs on every KB 3 / 5 row at CPC 2) on the Verilator RTL through the board's memory
+    path (the native adapter at CPC chunks a request, random stalls, the boot loader) equals
+    the ISA simulator bit for bit, logits and the whole DRAM image (the caches), at one and at
+    two chunks a cycle (Config.CPC; docs/v4/p1-status.md). Resident, as otpu-chat runs."""
+    from dataclasses import replace
+
+    from opentpu import rtlsim
+    from opentpu.llm.rtl_backend import RtlBackend
+    _, W, spec = tiny_odd
+    toks = [int(t) for t in np.random.default_rng(5).integers(0, 1000, 601)]
+    eng = Engine(spec, W, cap=1024, cfg=replace(_cfg(), CPC=cpc), resident=True)
+    assert eng.cfg.CPC == cpc
+    eng.prefill(toks[:-1])
+    n, isa = eng.image.nbytes, eng.backend
+    # the chunk FIFO holds 1024 chunks either way (the f2 target's 512 entries of 2)
+    uarch = dict(rtlsim.BOARD_UARCH, FIFO_DEPTH=rtlsim.BOARD_UARCH["FIFO_DEPTH"] // cpc)
+    rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in isa.machine.slices], uarch=uarch, axi=True,
+                     boot=True)
+    want = eng.step(toks[-1])
+    eng.backend, eng.pos = rtl, eng.pos - 1
+    got = eng.step(toks[-1])
+    assert np.array_equal(want.view(np.uint32), got.view(np.uint32))
+    assert np.array_equal(isa.machine.slices[0].dram[:n], rtl.drams[0][:n])
 
 
 def checkpoint(d: Path) -> Path:

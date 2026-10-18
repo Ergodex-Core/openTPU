@@ -334,8 +334,10 @@ module otpu_native_mem #(
                n_rmw[c]);
     end
     if (PHYS == 0) begin
+      int dw;                         // +dump_words=N: the first N words (the image's extent)
+      if (!$value$plusargs("dump_words=%d", dw) || dw > WORDS) dw = WORDS;
       fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
-      for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", rdw(i));
+      for (int i = 0; i < dw; i++) $fwrite(fd, "%u", rdw(i));
       $fclose(fd);
     end else begin
       for (int c = 0; c < 2; c++) begin

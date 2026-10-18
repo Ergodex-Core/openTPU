@@ -507,12 +507,17 @@ class _Capture:
 
     args = True
 
-    def __init__(self, cfg, images, uarch, run_kw, isa: bool = False):
+    def __init__(self, cfg, images, uarch, run_kw, isa: bool = False, check: bool = False):
         from .llm.qwen3 import IsaBackend
         self.cfg, self.uarch, self.run_kw, self.isa_mode = cfg, uarch, run_kw, isa
+        # the images' extent: the RTL is given (and dumps) that much of the DRAM, not the whole
+        self.extent = [len(i) for i in images]
         self.isa = IsaBackend(cfg, images)
         self.traced = False
         self.last = None
+        # check: the traced run on the ISA simulator too (on a copy of the DRAM before it), the
+        # RTL's DRAM compared with it byte for byte: self.check = (bytes compared, bytes differing)
+        self.check_mode, self.check = check, None
 
     def write(self, s, addr, data):
         self.isa.write(s, addr, data)
@@ -526,12 +531,24 @@ class _Capture:
         if self.isa_mode:
             self.last = (programs, args, [sl.dram.copy() for sl in self.isa.machine.slices])
             return self.isa.run(programs, args)
-        n = [len(sl.dram) for sl in self.isa.machine.slices]
-        drams, _, st = rtlsim.run(self.cfg, programs, [sl.dram for sl in self.isa.machine.slices],
+        import numpy as np
+        from .llm.qwen3 import IsaBackend
+        n = self.extent
+        ref = None
+        if self.check_mode:
+            ref = IsaBackend(self.cfg, [sl.dram[:k].copy()
+                                        for sl, k in zip(self.isa.machine.slices, n)])
+            ref.run(programs, args)
+        drams, _, st = rtlsim.run(self.cfg, programs,
+                                  [sl.dram[:k] for sl, k in zip(self.isa.machine.slices, n)],
                                   max_cycles=1 << 40, trace=True, uarch=self.uarch, args=args,
                                   **self.run_kw)
+        if ref is not None:
+            self.check = (sum(n), sum(int(np.count_nonzero(d[:k] != sl.dram[:k]))
+                                      for sl, d, k in zip(ref.machine.slices, drams, n)))
+            del ref
         for sl, d, k in zip(self.isa.machine.slices, drams, n):
-            sl.dram[:] = d[:k]
+            sl.dram[:k] = d[:k]
         self.last = (programs, st)
         return st
 
@@ -539,7 +556,7 @@ class _Capture:
 def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
                 prompt: str, resident: bool = True, wformat: str = "auto",
                 head_format: str | None = None, candidate: dict | None = None,
-                mhz: float | None = None) -> dict:
+                mhz: float | None = None, check: bool = False) -> dict:
     """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
     on its real weights: the prompt (a user turn of the chat template; plain text without
     one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
@@ -547,7 +564,9 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     runs traced on the RTL (board model of the card's configuration where the model takes one
     slice, as Gemma 3 / Gemma 4, or with --board), or on the ISA simulator with analytic
     timing (`isa`). resident: the resident decode program (the token's rows gathered on the
-    device), as otpu-chat runs."""
+    device), as otpu-chat runs. check: the traced step on the ISA simulator too, the RTL's
+    DRAM (the logits, the caches) compared with it byte for byte; the result in the profile's
+    name and notes (and the next token is the RTL's)."""
     import numpy as np
     from .host.board import sim_config
     from .isasim import board_config, design_config
@@ -587,7 +606,7 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     holder = {}
 
     def mk(c, images):
-        holder["b"] = _Capture(c, images, uarch, run_kw, isa=isa)
+        holder["b"] = _Capture(c, images, uarch, run_kw, isa=isa, check=check and not isa)
         return holder["b"]
     eng = Engine(spec, load_weights(path), cap=cap, cfg=cfg, backend=mk, wformat=wformat,
                  head_format=head_format, resident=resident)
@@ -615,9 +634,20 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     if candidate:
         raise SystemExit("--candidate is an ISA model: add --isa")
     programs, st = holder["b"].last
+    chk = holder["b"].check
+    if chk is not None:
+        name += " [bit-exact with the ISA simulator]" if chk[1] == 0 else \
+                f" [DIFFERS from the ISA simulator: {chk[1]} of {chk[0]} bytes]"
     p = parse(st["trace"], cfg, programs, name)
     p.cycles = st["cycles"]
     d = _mem(to_data(p, uarch), cfg, run_kw.get("axi"))
+    if chk is not None:
+        d["check"] = {"bytes": chk[0], "differ": chk[1], "next_token": nxt}
+        d["notes"].insert(0, {"level": "good" if chk[1] == 0 else "bad", "text":
+                              f"The traced step's DRAM ({chk[0]} bytes: the logits and the "
+                              f"caches) {'equals' if chk[1] == 0 else 'differs from'} the ISA "
+                              f"simulator's{'' if chk[1] == 0 else f' in {chk[1]} bytes'}; "
+                              f"next token {nxt} ({tok.decode([nxt])!r})."})
     if mhz:                     # the same cycles at another clock (an F2 build's 200 MHz)
         d["clock_mhz"] = float(mhz)
         d["name"] += f" at {mhz:g} MHz"
@@ -722,10 +752,11 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
            bucket: int = 64, axi: bool | None = None, stall: int | None = None,
            model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
            resident: bool = True, wformat: str = "auto", head_format: str | None = None,
-           candidate: str | None = None, mhz: float | None = None) -> dict:
+           candidate: str | None = None, mhz: float | None = None, check: bool = False) -> dict:
     """Run one workload and return its profile dict; `workload` "model" with `model` a
     checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
-    re-times it on a wider machine (parse_candidate), `mhz` labels the clock."""
+    re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `check` compares
+    the RTL's step with the ISA simulator's."""
     from .profile import profile
     uarch = dict(rtlsim.BOARD_UARCH) if board else None
     run_kw = {"plusargs": [f"+bucket={bucket}"]}
@@ -737,7 +768,7 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         if model is None:
             raise SystemExit("workload model: --model NAME|DIR")
         return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
-                           wformat, head_format, parse_candidate(candidate), mhz)
+                           wformat, head_format, parse_candidate(candidate), mhz, check)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -1084,6 +1115,9 @@ def main(argv=None) -> None:
                    help="workload model with --isa: re-time the token on a candidate machine "
                         "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
     r.add_argument("--mhz", type=float, help="workload model: the clock the times are at")
+    r.add_argument("--check", action="store_true",
+                   help="workload model on the RTL: run the traced step on the ISA simulator "
+                        "too and compare the DRAM (logits, caches) byte for byte")
     r.add_argument("--bucket", type=int, default=64, help="cycles per counter bucket")
     r.add_argument("--open", action="store_true", help="open the app afterwards")
     o = sub.add_parser("open", help="open a profile file in the app")
@@ -1113,7 +1147,7 @@ def main(argv=None) -> None:
                        axi=True if a.axi else None, stall=a.stall, model=a.model,
                        prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
                        wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
-                       mhz=a.mhz)
+                       mhz=a.mhz, check=a.check)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)

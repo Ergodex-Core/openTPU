@@ -308,8 +308,10 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         plusargs: list | None = None, args=None, ldc: int | None = None,
         pokes: dict | None = None, again: list | None = None, reload: bool = False,
         error_ok: bool = False):
-    """Run the RTL; returns (drams as uint8 arrays, tmems as uint32 arrays, stats). args: the
-    run's arguments (R8..R15 at the start, as isasim.Machine). ldc: MEMORY's LDC for this run
+    """Run the RTL; returns (drams as uint8 arrays, tmems as uint32 arrays, stats): the DRAM
+    returned covers the images given (the whole DRAM when the images are whole DRAMs), the
+    rest of it zero. args: the run's arguments (R8..R15 at the start, as isasim.Machine). ldc:
+    MEMORY's LDC for this run
     (the core at MEMORY's LDC_MHZ unless `plusargs` set +ldc_ratio: ldc_plusargs). pokes:
     {slice: [(cycle, DRAM byte address, uint32 word)]}, the host's writes during the run (the
     behavioural DRAM, or the native memory model: not the LDC). again: more runs of the same
@@ -397,6 +399,10 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         (tmp / f"pokeb_{s}.txt").write_text("".join(
             f"{r:x} {ad // 4:x} {v & 0xFFFFFFFF:x}\n" for r, ad, v in pk))
     args = [str(exe), f"+dir={tmp}", f"+max_cycles={max_cycles}"] + (["+trace"] if trace else [])
+    # the dump covers the images given (with the boot program after them): a caller that gives
+    # a model's image rather than the whole DRAM gets a dump of that extent (a 1 GiB image in a
+    # 4 GiB DRAM: a quarter of the file), and the result's length is the image's
+    args += [f"+dump_words={max(len(i) for i in imgs) // 4}"]
     args += list(plusargs or [])
     # e.g. OTPU_SIM_PLUSARGS=+hz_rh=1,+hz_log=/path (docs/seq_vpu.md) or +tm_nsb=8,+tm_sbp=3
     # (docs/tmem_nocopy.md; commas or spaces); %n is this process's simulation count (0, 1,
