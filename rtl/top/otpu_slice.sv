@@ -920,18 +920,20 @@ module otpu_slice
   // gave is taken once wr_idle && !sw_req && !(b_req && b_we) (otpu_board's STATUS WR_IDLE and
   // go_ok). Only the loader's reset clears it: a write the quantizer gave before a run's reset
   // (rst) still goes out, as one in the DRAM's queues does. The units and the arbiters read the
-  // DRAM's sw_rdy and wr_idle only through it (tests/test_target.py)
+  // DRAM's sw_rdy and wr_idle only through it (tests/test_target.py).
+  // Round 7 (docs/wide_port.md "Round 7 RTL"): the register is a two-entry skid buffer
+  // (otpu_skidbuf, u_sw), so what the arbiters see (sw_rdy_i: its second slot free, a flip-flop
+  // of the slice's own) no longer depends on the DRAM's sw_rdy in the cycle: round 6 placed
+  // the adapter's queue count through sw_rdy and the quantizer's grant into the ACT RAM's write
+  // enables over 6.8 ns of route. The DRAM's ready moves only the buffer's exit (its take, next
+  // to the buffer); the quantizer is withheld when both slots hold a write
   wire  sw_req_c = q_areq && q_awe;
-  logic sw_v;
-  assign sw_rdy_i  = !sw_v || sw_rdy;
-  assign wr_idle_i = wr_idle && !sw_v && !(b_req && b_we);
-  assign sw_req    = sw_v;
-  always_ff @(posedge clk) begin : sw_reg
-    if (sys_rst) sw_v <= 1'b0;
-    else if (sw_rdy_i) sw_v <= sw_req_c;
-    if (sw_rdy_i && sw_req_c) begin
-      sw_addr <= q_aaddr; sw_wdata <= q_awdata; sw_be <= q_abe;
-    end
+  logic sw_any;
+  if (1) begin : sw_reg                 // (the block tests/test_target.py knows as the SW register)
+    otpu_skidbuf #(.W(4 + 32 + 32)) u_sw (
+      .clk, .rst(sys_rst), .i_v(sw_req_c), .i_r(sw_rdy_i), .i_d({q_abe, q_awdata, q_aaddr}),
+      .o_v(sw_req), .o_r(sw_rdy), .o_d({sw_be, sw_wdata, sw_addr}), .any(sw_any));
+    assign wr_idle_i = wr_idle && !sw_any && !(b_req && b_we);
   end : sw_reg
 `ifndef SYNTHESIS
   // the arbiters withhold the quantizer's grant while the port cannot take its write

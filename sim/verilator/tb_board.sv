@@ -192,13 +192,13 @@ module tb_board;
   for (genvar s = 0; s < S; s++) begin : g_swchk
     logic sw_v, a_v, b_v, b_w, b_rv, wi, ri, li;
     if (s == 0) begin : g_0
-      assign sw_v = dut.u_slice.sw_v;
+      assign sw_v = dut.u_slice.sw_any;      // (round 7: a write in either slot of the SW skid buffer)
       assign a_v = dut.u_slice.a_req;
       assign b_v = dut.u_slice.b_req; assign b_w = dut.u_slice.b_we;
       assign b_rv = dut.u_slice.b_rvalid_i;
       assign li = dut.u_slice.rd_idle_i;
     end else begin : g_s
-      assign sw_v = dut.g_slice[s].u_slice.sw_v;
+      assign sw_v = dut.g_slice[s].u_slice.sw_any;
       assign a_v = dut.g_slice[s].u_slice.a_req;
       assign b_v = dut.g_slice[s].u_slice.b_req; assign b_w = dut.g_slice[s].u_slice.b_we;
       assign b_rv = dut.g_slice[s].u_slice.b_rvalid_i;

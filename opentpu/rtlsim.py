@@ -26,7 +26,7 @@ RTL_SOURCES = [
     "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
     "tech/generic/otpu_tech_ram.sv",
     "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv", "vpu/otpu_vpu.sv",
-    "top/otpu_coll.sv", "exp/tmem_nocopy/otpu_tmem_model.sv", "top/otpu_slice.sv",
+    "top/otpu_coll.sv", "exp/tmem_nocopy/otpu_tmem_model.sv", "shell/otpu_skidbuf.sv", "top/otpu_slice.sv",
     "top/otpu_top.sv",
 ]
 

@@ -6,7 +6,7 @@
 // shell register path (two SLR hops in the 4 ns of clk_main_a0, docs/wide_port.md "Round 4
 // RTL" and "Round 5 RTL") cannot form.
 (* keep_hierarchy = "yes" *)
-module otpu_skid #(
+module otpu_skidbuf #(
   parameter int W = 1
 ) (
   input  logic         clk,
