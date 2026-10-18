@@ -673,8 +673,11 @@ def test_one_sequence_one_slice(tiny):
     with pytest.raises(ValueError, match="one sequence"):
         Engine(spec, W, cap=256, cfg=_cfg(), batch=2)
     from opentpu.isasim import design_config
-    with pytest.raises(ValueError, match="one slice"):
-        spec.image(design_config(), 256)
+    # the design's two slices take the tensor-parallel split (docs/gemma4.md "Slices"; the
+    # simulators still default to the card's one slice for this model); three are refused
+    assert spec.one_slice_default and spec.image(design_config(DRAM_BYTES=1 << 26), 256).S == 2
+    with pytest.raises(ValueError, match="slices S in"):
+        spec.image(design_config(S=3, DRAM_BYTES=1 << 26), 256)
     # whole attention blocks only (the sliding ring and the global layers' masked block):
     # a capacity of 384 (a multiple of D) is refused, not run past the cache
     with pytest.raises(ValueError, match="multiple of the attention block"):

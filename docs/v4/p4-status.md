@@ -62,9 +62,9 @@ All on the ISA simulator, the card's configuration (D 128, MCOLS 4, ACT_ROWS 16,
 
 | Check | Result |
 |:--|:--|
-| `tests/test_gemma3.py`, `tests/test_gemma4.py` at S = 1 | as before (one pre-existing failure, below) |
+| `tests/test_gemma3.py` (11, the new ones included), `tests/test_gemma4.py` (43), `tests/test_lens.py` on the ISA simulator | all pass but the pre-existing fp4 failure (below); `test_one_sequence_one_slice` now asserts the new rule (the design's two slices build, three are refused); the S = 1 ring-wrap test 294 s as at the baseline |
 | tiny Gemma 3, S = 2 and 4, per-position and resident, 20 tokens vs HF and S = 1 | cosine vs HF 0.998 (S = 1's); **bit-exact to S = 1** |
-| tiny Gemma 3 (256-token window), S = 4, 530 tokens: resident decode and chunked prefill vs the per-position programs across the ring's wrap at 512 | **bit-exact** (`test_four_slices_resident_and_prefill_are_bit_exact`) |
+| tiny Gemma 3 (256-token window), S = 4, 530 tokens: resident decode and chunked prefill vs the per-position programs across the ring's wrap at 512 | **bit-exact** (`test_four_slices_resident_and_prefill_are_bit_exact`; 544 s on a laptop: the ISA simulator runs the four slices in turn) |
 | tiny Gemma 4 (PLE, 8 heads, double-wide MLP), S = 2, per-position and resident vs S = 1 | **bit-exact** (`test_two_slices_match_one`) |
 | Gemma 3 1B, `compare_hf.py --model gemma3 --chat --cfg board --resident --tokens 12 --slices 4` | the S = 1 tokens on both prompts: `Okay, let's break down why the sky is blue` (HF `The`, its #2 at 0.609 below) and the haiku identical; logits vs HF max 2.269 / 3.455, min cosine 0.99869 / 0.99872, the S = 1 values |
 | Gemma 3 1B image a slice (2048-token capacity) | 1,053 MiB at S = 1, 715 at S = 2, 547 at S = 4 (layers 731 / 393 / 225 MiB; KV 55 MiB and the head 292 MiB in every slice) |
