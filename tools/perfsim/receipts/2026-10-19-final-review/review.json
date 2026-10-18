@@ -1,0 +1,43 @@
+{
+  "implementation_commit": "e8cefd45c1d945607a573c298bafed8f55ad62d7",
+  "independent_reviewed_commit": "4987ba7d29e834cffbc1d49f7811a76dbedc232e",
+  "defect_fixed": "Persistent comparison now rejects missing/non-Ramulator backend before creating output or executing RTL.",
+  "tests": {
+    "passed": 304,
+    "seconds": 47.63,
+    "meaning": "unit cases and frozen RTL observation replays, not 304 fresh RTL runs",
+    "previous_count": 302,
+    "new_backend_rejection_cases": 2
+  },
+  "canonical_retained_observations": 284,
+  "canonical_numeric_float": {
+    "pass": 153,
+    "fail": 2,
+    "unrecorded": 129
+  },
+  "coverage_source_hashes_independently_verified": 127,
+  "review_new_canonical_entries": 0,
+  "review_fresh_rtl_launches": 5,
+  "review_fresh_rtl_breakdown": "3 passing packaged hybrid reruns; 2 sensitivity probes (issue delay 2 masked by dependencies; issue delay 50 detects timing mismatch)",
+  "negative_control": {
+    "dispatch_latency_cycles": 50,
+    "rtl_cycles": 230,
+    "model_cycles": 278,
+    "timing_passed": false,
+    "numeric_bit_exact": true,
+    "exit_code": 2
+  },
+  "independence": "No expected RTL cycles/events read by predictor. RTL and model independently generate requests against shared external controller/Ramulator implementation; compute comparison does not independently validate the memory controller.",
+  "hashes": {
+    "pytest.log": "da9c1325694614d92ca0fea53242cb25d43e15e940e91a6eb985590cb1770e54",
+    "source-export.json": "ef4ff130c4acf25892670b33aa353d0bf1820391a8e4ea42e16f0e09fdd41a1e",
+    "baseline-report.json": "828e047821d485678d1f1d2ae687a02a19e5980e1ed3ee35aea6a0e82cf93550",
+    "baseline-manifest.json": "4b26dbf9679843a6037d54de077dbc506301f15b19611ddcf5cfd76831497cc4",
+    "baseline-commands.json": "aed56e8f78d0bcbb22eee3a36ad6c37ae50d868e130634d5c81e149f9174159d",
+    "baseline-rtl-summary.json": "bd91d7843a28b45bf3b27a0a71d1b57087c82ffa37b30297fdb8e51810062ce1",
+    "baseline-rtl-manifest.json": "b023229ad964e218d46d70f988088d93b94db09f23b162b9f9353693f8c45e1f",
+    "negative-control-2.json": "5dbc09cc533ce809ca1e3f07ff035ee98de13165cfaf4f0339f275693c1bdea2",
+    "negative-control-50.json": "28ea67eeba9bb465e4a42de3b0297e0774610aeccb0fe5a3de374fd89e7fe79c",
+    "negative-control-50.py": "3f01126e52304439bfb8b4f39e671080822f8bbed94a0f9cb5d840014bb99523"
+  }
+}
