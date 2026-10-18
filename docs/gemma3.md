@@ -97,6 +97,13 @@ top on a span of 73), and the device's continuation is fluent ("Okay, let's brea
 sky is blue"). The errors are the W8A8 quantization's, in the range of the other models'
 ([llama.md](llama.md), [gemma4.md](gemma4.md)).
 
+**Four slices** (`--slices 4`, [gemma4.md](gemma4.md) "Slices"; 2026-10-18, the same command
+on the ISA simulator with the model split over 4 slices, one program per slice): the same
+tokens on both prompts (`Okay, let's break down why the sky is blue` and the haiku), the same
+logit error (max 2.269 / 3.455, min cosine 0.99869 / 0.99872) step for step: the split keeps
+every fp32 sum in the one-slice program's order, and the tiny model's tests show it bit-exact
+(`tests/test_gemma3.py`).
+
 ## Lens
 
 `lens record model` (added with this model) records one decode token of any checkpoint after a
@@ -119,3 +126,10 @@ consuming (drain / row credits), 3.9% the MXU computing between streams, 0.6% th
 starved; the MXU drain lost 2.1% to TMEM bank arbitration. The MXU is in flight 100% of the
 run, the VPU 4.5% (gelu_tanh's and the norms' VOPs: the hottest source lines), the quantizer
 1.2%. The profiles are `build/lens/gemma3-decode-{rtl,isa}.otpuprof` on the build host.
+
+**Four slices** (`--isa --slices 4`, 2026-10-18, [v4/p4-status.md](v4/p4-status.md)): the
+same token split over 4 slices, each slice 3,820 instructions, 1,979,552 of the 7,837,472
+streamed chunks (a quarter plus the replicated KV reads and the embedding gather's one-hot
+MMs), 156 GATHERs receiving 279,552 words (6 a layer: k, v, the heads, W_o's rows, the MLP
+product, the down rows), 2,248,050 analytic cycles a slice (88.4% of its 1,986,791-cycle DRAM
+bound; 11.2 ms at 200 MHz, 89 tok/s), against 8,281,554 on one slice.
