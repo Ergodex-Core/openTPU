@@ -511,7 +511,8 @@ module otpu_slice
     .act_blk(act_rblk), .act_blk2(act_rblk2), .act_hi(act_rhi), .act_grp(act_rgrp), .act_ren, .act_data(act_rdata), .act_scale(act_rscale),
     .a_req(mxu_areq), .a_addr(mxu_aaddr), .a_gnt(mxu_agnt), .a_rvalid, .a_rdata,
     .b_req(mxu_breq), .b_wide(mxu_bwide), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt),
-    .b_rvalid(b_rvalid_i && !b_rtag_i), .b_rdata(b_rdata_i),
+    .b_rvalid(b_rvalid_i && !b_rtag_i),
+    .b_rdata(b_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
     .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
 

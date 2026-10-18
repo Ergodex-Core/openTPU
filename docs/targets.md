@@ -40,9 +40,10 @@ pair; 4-bit MMs one chunk an advance at any CPC), but the RTL's width (`otpu_mxu
 analytic timing (`opentpu.profile._describe`, Lens) follow it, and the image's streamed rows
 need no new alignment. `OTPU_CPC=2` sets it in `board_config()` as `OTPU_MCOLS` does; it is in
 the arch hash only above 1, so every one-chunk build's CFG_HASH stays. `targets/f2.toml` is the
-CPC 2 target (docs/v4/p1-status.md): the simulators run it on the two-channel native memory
-model behind `otpu_native_dram` at CPC 2 (a wide port-B read is two beats a channel); its HBM
-adapter and board shell are later milestones, so it has no `rtl/boards/f2` yet.
+CPC 2 target (docs/v4/p1-status.md): the simulators run it on the native memory model behind
+`otpu_native_dram` at 2 x CPC channels (chunk m on channel pair m mod CPC: a wide port-B read
+is one beat on each of four channels, 256 B a cycle); its HBM adapter and board shell are later
+milestones, so it has no `rtl/boards/f2` yet.
 
 ## What is derived
 
