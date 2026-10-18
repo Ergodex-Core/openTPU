@@ -106,7 +106,7 @@ def test_caps2_gather_and_the_load_refusal():
     gather = I.assemble([I.gather(0, 256, 4, 64, 256, 64, 0), I.halt()])
     bar = I.assemble([I.bar(), I.halt()])
     b = Board(FakeTransport(devname=None, regmap=5, gather=False))
-    assert b.info()["caps2"] == {"gather": False, "pack": False} and not b.gather
+    assert b.info()["caps2"] == {"gather": False, "pack": False, "mxrot": False} and not b.gather
     with pytest.raises(NoGather, match="instruction 0"):
         b.load_program(4096, gather)
     with pytest.raises(NoGather, match="slice 0"):
@@ -116,7 +116,7 @@ def test_caps2_gather_and_the_load_refusal():
     for t in (FakeTransport(devname=None, regmap=5), FakeTransport(devname=None, regmap=4),
               FakeTransport(devname=None)):
         ok = Board(t)
-        assert ok.gather and ok.info()["caps2"] == {"gather": True, "pack": False}
+        assert ok.gather and ok.info()["caps2"] == {"gather": True, "pack": False, "mxrot": False}
         ok.load_program(4096, gather)
         assert t.reg_read(R.R_PROG_N) == 2
     cfg = board_config()
