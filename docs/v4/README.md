@@ -39,7 +39,11 @@ AXI memory never withholding a handshake, 30 cycles of latency;
 | | Cycles | Of the DRAM bound | ms at 200 MHz | Device tok/s |
 |:--|--:|--:|--:|--:|
 | memory model with the DDR3 default, 20% random stalls | 10.28 M | 76.4% | 51.4 | 19.5 |
+| memory model with 5% random stalls (HBM jitter) | 8.65 M | 90.7% | 43.3 | 23.1 |
 | memory model with no stalls (HBM-like) | 8.22 M | 95.5% | 41.1 | 24.3 |
+
+The "MXU not consuming" loss follows the stall rate (20%: 18.2%, 5%: 5.1%, 0%: 1.4%): it is
+the memory's irregularity seen from the MXU's row gating.
 
 With the smooth memory the "MXU not consuming" loss is 1.4% (from 18.2%), the turnarounds
 1.5% (from 3.9%), the quantizer waits 0.8%, the VPU 0.5%, the chunk FIFO 0.2%: today's
