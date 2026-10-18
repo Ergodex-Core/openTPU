@@ -114,3 +114,9 @@ consuming (drain / row credits), 3.9% the MXU computing between streams, 0.6% th
 starved; the MXU drain lost 2.1% to TMEM bank arbitration. The MXU is in flight 100% of the
 run, the VPU 4.5% (gelu_tanh's and the norms' VOPs: the hottest source lines), the quantizer
 1.2%. The profiles are `build/lens/gemma3-decode-{rtl,isa}.otpuprof` on the build host.
+Split by cause ([v4/m0-gating-split.md](v4/m0-gating-split.md), the Q line's `mbc` / `mbr` /
+`mbs` / `mbo`): 97% of the "not consuming" cycles are rows whose chunks had not all arrived
+with the FIFO under one row deep, the memory model delivering 0.76 chunks a cycle below the
+port's one; 2.6% scale entries behind their chunks; 0.1% result-FIFO credits. With the memory
+at the port's rate (`--stall 0`, `OTPU_LAT=30`) the token is 8.22 M cycles, 95.5% of the
+roofline, and the item is 2.1%.
