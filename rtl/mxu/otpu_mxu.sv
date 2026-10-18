@@ -872,7 +872,11 @@ module otpu_mxu
     logic [1:0] q;        // t2: the low stream's block in the chunk (the high stream's: q | 1)
   } cm_t;
 
-  cm_t                 m0, m0p;             // (m0p: at the pop; m0 a cycle later, with w0)
+  // (max_fanout on the S0 records S1's weight decode selects by: each reaches the D x NS x 8
+  // decode LUTs, ~8K loads; round 4's placement ran lg0's copies into the weight hops' SRLs
+  // over 5.4 of 6.0 ns, docs/wide_port.md "Round 5 RTL". A copy per 64 loads, each beside them)
+  (* max_fanout = 64 *) cm_t m0;             // (m0p: at the pop; m0 a cycle later, with w0)
+  cm_t                 m0p;
   logic [FW-1:0]       w0, w0r;             // the entry: the FIFO read register (w0r), and
                                             //   a register later (w0, S0 proper)
   logic [MCOLS*D*8-1:0] a0;
@@ -880,13 +884,17 @@ module otpu_mxu
   // output register: otpu_actram, with the entry's stage above)
   assign a0 = act_data;
   logic cu0, pr0, rs0, cu0p, pr0p, rs0p;
-  logic [1:0] wf0, wf0p;
+  (* max_fanout = 64 *) logic [1:0] wf0;
+  logic [1:0] wf0p;
   logic [MCOLS-1:0] hi0, hi0p;              // PAIR: the columns of the high block
-  logic t20, qd0, t20p, qd0p;               // t2; QUAD
+  (* max_fanout = 64 *) logic t20;          // t2; QUAD
+  logic qd0, t20p, qd0p;
   logic [MCOLS-1:0] hq0, hq0p;              // QUAD: the columns of blocks 4c+2, 4c+3
   logic [7:0] M0, M0p;                      // the command's M (constant while its blocks flow)
-  logic rl0, rl0p;                          // row lanes (constant 0 without RL), log2 L
-  logic [1:0] lg0, lg0p;
+  (* max_fanout = 64 *) logic rl0;          // row lanes (constant 0 without RL), log2 L
+  (* max_fanout = 64 *) logic [1:0] lg0;
+  logic rl0p;
+  logic [1:0] lg0p;
   wire  w40 = (wf0 != WF_W8);
   // the per-column stream select (the PE's pair, s_hq, and its INMODE, s_hi): RL column J
   // takes stream J, else the block's hq / hi
@@ -1154,7 +1162,10 @@ module otpu_mxu
   // A wide port (PORTB > 1) makes the four streams the entry's blocks: int8 chunks 0 .. 3, 4-bit
   // chunk 0's halves and chunk 1's (PAIR: the first two), so QUAD's columns take them as t2's.
   localparam int WS = 8 * NS;                         // the streams' bits
-  logic [D-1:0][WS-1:0] wd;                           // S1: {[4c+3, 4c+2,] high block, low block / half}
+  // (shreg_extract off: wd stays a flip-flop stage with the decode's six levels into it, not
+  // the first stage of the weight hops' shift registers; the skew and the hops behind it may
+  // still be SRLs)
+  (* shreg_extract = "no" *) logic [D-1:0][WS-1:0] wd;  // S1: {[4c+3, 4c+2,] high block, low block / half}
   wire  [NSX*FW1-1:0] w0x = (NSX * FW1)'(w0);         // (the entry, chunks past PORTB zero)
   // row lanes: stream s = block p = s / L of lane l = s mod L's chunk (int8 the chunk, 4-bit
   // its half p, t2 its block p), block-major
