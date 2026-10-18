@@ -18,8 +18,8 @@
 // this block is a register's cycle. The resets through registers of their own (arst_q, hrst_q:
 // otpu_f2_hbm_nch).
 //
-// Order (otpu_f2_mem's): pcis_wbusy (an AW or W shown, in a skid buffer or taken, a burst's B
-// not yet given back) holds the host's reads (an AR leaves its skid buffer for the read queue
+// Order (otpu_f2_mem's): pcis_wbusy (an AW or W in a skid buffer or taken, a burst's B not yet
+// given back; registers only) holds the host's reads (an AR leaves its skid buffer for the read queue
 // only while no write is in flight), so a read after a write returns the written data whichever
 // ports the two use, and holds the OCL's writes (otpu_axil_cdc), so a RUN after the data finds
 // it in the HBM. Reads: each beat of an AR crosses as a read of its 64 bytes (two AXI beats), at
@@ -28,7 +28,7 @@
 // across ports), so the data comes back in the host's order. A read past NPORT returns zeros.
 //
 // PCIS side (aclk): every output is a flip-flop (AW, W, AR behind two-entry skid buffers whose
-// ready is a register; B and R from output registers; otpu_f2_hbm_skid / _oreg, below), so no
+// ready is a register, otpu_skid; B and R from output registers, otpu_f2_hbm_oreg below), so no
 // path runs from a shell register through this block and back in the 4 ns cycle (round 3's
 // placement, docs/wide_port.md "Round 4 RTL": the shell's register in SLR1 into the readies'
 // LUTs in SLR0 and back, -5.01 ns).
@@ -97,7 +97,7 @@ module otpu_f2_hbm_host #(
   // ================================================================== aclk: the PCIS registers
   // Every PCIS output is a flip-flop, and nothing the shell drives reaches a shell input's
   // logic and goes back in the cycle: AW, W and AR enter two-entry skid buffers whose ready is
-  // a register (otpu_f2_hbm_skid, below: the beat the logic here sees comes from the buffer's
+  // a register (otpu_skid, rtl/shell: the beat the logic here sees comes from the buffer's
   // output register), B and R leave through output registers (otpu_f2_hbm_oreg: valid and data
   // loaded when the host took the last or holds none). Round 3's placement (docs/wide_port.md
   // "Placement, round 3") ran the shell's PCIS register in SLR1 into this block's ready LUTs in
@@ -118,13 +118,13 @@ module otpu_f2_hbm_host #(
   logic         ro_v, ro_r, ro_l;       // R: into its output register
   logic [15:0]  ro_id;
   logic [511:0] ro_d;
-  otpu_f2_hbm_skid #(.W($bits(aw_t))) u_pcis_aw (
+  otpu_skid #(.W($bits(aw_t))) u_pcis_aw (
     .clk(aclk), .rst(arst_q), .i_v(h_awvalid), .i_r(h_awready),
     .i_d({h_awid, h_awaddr[33:6]}), .o_v(aw_v), .o_r(aw_r), .o_d(aw_i), .any(aw_any));
-  otpu_f2_hbm_skid #(.W(1 + 64 + 512)) u_pcis_w (
+  otpu_skid #(.W(1 + 64 + 512)) u_pcis_w (
     .clk(aclk), .rst(arst_q), .i_v(h_wvalid), .i_r(h_wready), .i_d({h_wlast, h_wstrb, h_wdata}),
     .o_v(w_v), .o_r(w_r), .o_d({w_l, w_s, w_d}), .any(w_any));
-  otpu_f2_hbm_skid #(.W($bits(ar_t))) u_pcis_ar (
+  otpu_skid #(.W($bits(ar_t))) u_pcis_ar (
     .clk(aclk), .rst(arst_q), .i_v(h_arvalid), .i_r(h_arready),
     .i_d({h_arid, h_araddr[33:6], h_arlen}), .o_v(ar_v), .o_r(ar_r), .o_d(ar_i), .any());
   otpu_f2_hbm_oreg #(.W(16)) u_pcis_b (
@@ -155,8 +155,12 @@ module otpu_f2_hbm_host #(
   assign bo_v = b_n != 0 && !b_gap[15];
   assign bo_id = bq[b_h].id;
   wire b_tk = bo_v && bo_r;
-  // (a write shown, in a skid buffer, queued, or its B not yet given back)
-  assign pcis_wbusy = aw_n != 0 || b_n != 0 || aw_any || w_any || h_awvalid || h_wvalid;
+  // (a write in a skid buffer, queued, or its B not yet given back: registers only. The shell's
+  // live AW / W valids are not in it: round 4's placement ran sh_cl_dma_pcis_wvalid through
+  // it into u_ocl's awready and back to the shell, two SLR hops; a write shown is taken into
+  // its buffer in that cycle (the buffer's ready is high whenever its second slot is free, and
+  // the OCL side's take is a cycle later now, otpu_axil_cdc), so the hold still comes first)
+  assign pcis_wbusy = aw_n != 0 || b_n != 0 || aw_any || w_any;
   always_ff @(posedge aclk) begin
     if (aw_tk) awq[HW'(aw_h + aw_n)] <= aw_i;
     if (w_tk && w_l) bq[HW'(b_h + b_n)] <= '{id: awq[aw_h].id, cum: wpushed + 1'b1};
@@ -360,43 +364,6 @@ module otpu_f2_hbm_host #(
     if (|(p_rvalid & cur_sel) && h_out == 0) $fatal(1, "otpu_f2_hbm_host: R with no read in flight");
   end
 `endif
-endmodule
-
-// A two-entry skid buffer: the input's ready is a flip-flop (the second slot is free), the beat
-// shown downstream comes from the first slot's registers, a beat a cycle through it while the
-// consumer keeps up, no combinational path from an input to an output. The PCIS side of
-// otpu_f2_hbm_host (AW, W, AR).
-(* keep_hierarchy = "yes" *)
-module otpu_f2_hbm_skid #(
-  parameter int W = 1
-) (
-  input  logic         clk,
-  input  logic         rst,
-  input  logic         i_v,
-  output logic         i_r,
-  input  logic [W-1:0] i_d,
-  output logic         o_v,
-  input  logic         o_r,
-  output logic [W-1:0] o_d,
-  output logic         any                 // a beat in either slot
-);
-  logic         r1_v;                      // the second slot (holds the beat taken as the
-  logic [W-1:0] r1_d;                      //   consumer stalled)
-  assign i_r = !r1_v;
-  assign any = o_v || r1_v;
-  wire i_tk = i_v && !r1_v;
-  wire o_tk = o_v && o_r;
-  always_ff @(posedge clk) begin
-    if (o_tk || !o_v) o_d <= r1_v ? r1_d : i_d;
-    else if (i_tk) r1_d <= i_d;
-    if (rst) begin
-      o_v <= 1'b0; r1_v <= 1'b0;
-    end else if (o_tk || !o_v) begin
-      o_v <= r1_v || i_tk; r1_v <= 1'b0;
-    end else if (i_tk) begin
-      r1_v <= 1'b1;
-    end
-  end
 endmodule
 
 // An output register: valid and data flip-flops, loaded when the consumer took the last beat

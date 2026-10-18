@@ -106,12 +106,12 @@ module tb_f2axil;
     @(negedge sclk);
     s_awaddr = a; s_wdata = d; s_wstrb = mask;
     for (int t = 0; t < 1000; t++) begin
+      automatic logic req_was = dut.x_req;
       hold = t < 4 || $urandom % 5 == 0;
       s_awvalid = !awdone && t >= awdelay;
       s_wvalid = !wdone && t >= wdelay;
       s_bready = $urandom % 3 != 0;
       @(posedge sclk);
-      if (hold && (s_awready || s_wready)) $fatal(1, "write accepted during PCIS hold");
       if (s_awvalid && s_awready) awdone = 1;
       if (s_wvalid && s_wready) wdone = 1;
       if (s_bvalid && s_bready) begin
@@ -119,6 +119,9 @@ module tb_f2axil;
         done = 1;
       end
       @(negedge sclk);
+      // (the AW and W may enter their skid buffers during the hold; the write must not start:
+      // its request toggle, with x_wr, waits for a cycle without hold)
+      if (hold && dut.x_req != req_was && dut.x_wr) $fatal(1, "write started during PCIS hold");
       if (done) break;
     end
     if (!done) $fatal(1, "write timed out");
