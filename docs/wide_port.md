@@ -583,6 +583,129 @@ copies, the adapter's A runs, SEQ_WC's wait entries (perf_bonsai2's runs use tha
 perf_qwen's the range scoreboard; the programs are the same), HALT CHAIN. The runs' JSON
 (`--json`, and `result.json` under `--work`) carry every number with the label `lpn-estimate`.
 
+### Lens profile of the int8 decode token: baseline vs wide-port (2026-10-18)
+
+One traced decode token of the whole 26-layer model through openTPU Lens (docs/lens.md: the
+perf tool's `--dump` is `lens.to_data` of the run, `lens.save` makes the `.otpuprof`, `python -m
+opentpu.lens summary / html` read it), int8 weights and head, `--pos 9`, `--lat 60`, 200 MHz,
+`OTPU_TARGET=f2-hbm OTPU_NCH=8 OTPU_SEED=1`, Verilator 5.048 on the m7a box, five
+configurations at once (12-20 minutes of simulation each; the artifacts, the exact commands and
+wall times in `~/ergodex-03/lens-runs/gemma3-int8/`, not in git). The baseline is run twice:
+the f2-hbm branch's own RTL (ef33566c, the RTL of the board-measured 22.3 tok/s AFI: PORTB 1,
+MCOLS 4, no row lanes) and this tree (2b08ae69) at `--portb 1 --mcols 4`; the two are 43
+cycles apart and every counter below agrees within tens of cycles, so the wide-port RTL at
+PORTB 1 is the baseline to the cycle. The wide-port point is `--portb 4 --mcols 8 --rowlanes
+--aline 64` (the 83.5 tok/s configuration: 2,394,257 cycles here against 2,394,111 and
+2,393,990 in the two runs above). The intermediate points (`--portb 2 --mcols 4`, and `--portb 4
+--mcols 8` without row lanes) show which lever moved what. One caution on the tool: Lens's own
+"Roofline ... of DRAM-bound minimum" counts port B's chunks at one a cycle, so it reads 98.4%
+at PORTB 1 and "168% / 207% / 327%" at PORTB 2 / 4; the roofline below is the perf tool's
+core-port roofline (port B chunks / PORTB, port A lines, MXU advances).
+
+| Gemma-3-1B int8, 26 layers + head, one token | f2-hbm ef33566c (PORTB 1) | this tree, PORTB 1 / MCOLS 4 | PORTB 2 / MCOLS 4 | PORTB 4 / MCOLS 8 | **PORTB 4 / MCOLS 8 / RL / ALINE 64** |
+|---|---|---|---|---|---|
+| cycles, tok/s at 200 MHz | 7,955,192, 25.1 | 7,955,235, 25.1 | 4,652,654, 43.0 | 3,779,404, 52.9 | **2,394,257, 83.5** |
+| roofline (port B / PORTB, port A lines, MXU advances) | 7,830,202 (port B; A 7,824,496, MXU 7,817,736) | 7,830,202 (port B) | 4,243,208 (MXU; port B 3,915,101, A 3,919,216) | 2,590,468 (MXU; port B 1,957,551, A 1,966,316) | **1,966,316 (port A; MXU 1,959,556, port B 1,957,551)** |
+| efficiency to it; port B streaming (the roofline fraction of the token) | 98.4%; 7,830,202 = 98.4% | 98.4%; 98.4% | 91.2%; 4,255,706 = 91.5% | 68.5%; 2,603,248 = 68.9% | **82.1%; 1,972,446 = 82.4%** |
+| wide reads two-part; DRAM beats a cycle a channel | -; 1.001 | -; 1.001 | 300,202 of 3,574,528; 1.712 | 1,093,150 of 1,922,308; 2.108 | **0 of 1,952,900; 3.341** |
+| phases: MLP / head / attention | 4,895,046 / 2,368,740 / 691,404 | same | 2,837,530 / 1,392,889 / 422,233 | 2,346,049 / 1,102,466 / 330,887 | 1,446,104 / 686,820 / 261,331 |
+
+**Idle-cycle attribution** (Lens "Where the cycles went": every port-B cycle either streaming
+or charged to one cause, in this order; cycles):
+
+| port B cycle | f2-hbm (PORTB 1) | this tree, PORTB 1 | PORTB 2 | PORTB 4 | **wide-port** |
+|---|---|---|---|---|---|
+| streaming | 7,830,202 | 7,830,202 | 4,255,706 | 2,603,248 | 1,972,446 |
+| DRAM not ready (backpressure) | 0 | 0 | 28 | 314 | 217 |
+| MXU starved (chunk FIFO empty: latency) | 0 | 0 | 981 | 23,435 | 8,612 |
+| MXU not consuming (drain / row credits) | 0 | 0 | 231,276 | 973,823 | **218,296** |
+| TMEM bank arbitration | 8,977 | 8,989 | 23,872 | 25,507 | 14,782 |
+| MXU computing, not streaming | 21,484 | 21,525 | 80,877 | 97,188 | **103,211** |
+| waiting on VPU work | 57,032 | 57,047 | 24,275 | 20,589 | **41,072** |
+| waiting on quantizer work | 35,602 | 35,556 | 33,871 | 31,843 | 33,178 |
+| waiting on collectives | 0 | 0 | 0 | 0 | 0 |
+| waiting on DMA work | 1,888 | 1,913 | 1,758 | 3,452 | 2,439 |
+| nothing in flight (dispatch / program order) | 7 | 5 | 11 | 7 | 5 |
+| idle total | 125.0 K (1.6%) | 125.0 K (1.6%) | 396.9 K (8.5%) | 1,176.2 K (31.1%) | **421.8 K (17.6%)** |
+
+**Unit utilisation** (cycles with an instruction in flight, share of the token) and the TMEM
+arbitration losses (the per-unit `fm` / `fq` / `fv` counters, which overlap with streaming):
+
+| unit | f2-hbm (PORTB 1) | this tree, PORTB 1 | PORTB 2 | PORTB 4 | **wide-port** |
+|---|---|---|---|---|---|
+| MXU | 7,954,091 (100.0%) | 7,954,135 (100.0%) | 4,651,554 (100.0%) | 3,778,303 (100.0%) | 2,378,694 (99.3%) |
+| VPU | 432,549 (5.4%) | 432,523 (5.4%) | 433,529 (9.3%) | 434,228 (11.5%) | 435,043 (18.2%) |
+| QUANT | 114,530 (1.4%) | 114,531 (1.4%) | 114,519 (2.5%) | 114,502 (3.0%) | 116,407 (4.9%) |
+| DMA | 70,248 (0.9%) | 70,272 (0.9%) | 69,878 (1.5%) | 69,519 (1.8%) | 68,308 (2.9%) |
+| port B (MXU + DMA chunks) | 98.4% | 98.4% | 91.5% | 68.9% | 82.4% |
+| port A (MXU lines + QST) | 7,819,478 (98.3%) | 98.3% | 4,244,950 (91.2%) | 2,592,210 (68.6%) | 1,961,298 (81.9%) |
+| TMEM arbitration: MXU drain / QUANT / VPU | 228,040 (2.9%) / 6,338 / 6,801 | 228,014 / 6,338 / 6,775 | 231,679 (5.0%) / 6,340 / 7,797 | 233,455 (6.2%) / 6,338 / 8,480 | 197,741 (8.3%) / 8,250 / 8,381 |
+
+**By instruction class** (busy = start to end summed over the instructions, so overlapping
+MMs sum past the token; nominal = the work cycles; dependency wait = ready - dispatch; unit
+wait = start - ready; the same 5,221 instructions in every run):
+
+| class (count) | f2-hbm (PORTB 1): busy / nominal / dep wait / unit wait | **wide-port**: busy / nominal / dep wait / unit wait |
+|---|---|---|
+| MM (890) | 8,817,506 / 7,817,736 / 7,199,714 / 31,355,501 | 2,630,426 / 1,959,556 / 2,286,448 / 8,965,098 |
+| LD (185) | 35,816 / 17,044 / 46,837 / 1,229 | 33,859 / 17,044 / 21,854 / 1,173 |
+| ST (32) | 34,435 / 32,768 / 16,855,411 / 0 | 34,452 / 32,768 / 4,862,136 / 0 |
+| VOP, all 3,697 (mul 1,822, add 755, recip 260, exp2 234, rssq 157, rsqrt 157, fill 130, ...) | 504,065 / 275,319 / 52,368,604 / 58,634 | 508,673 / 275,319 / 15,808,591 / 67,356 |
+| QACT (365) | 96,535 / 76,832 / 5,259,128 / 28,341 | 96,535 / 76,832 / 1,606,892 / 1,590 |
+| QST (52) | 18,021 / 14,976 / 445,900 / 0 | 19,924 / 14,976 / 134,950 / 14,335 |
+
+The intermediate points' MM row: PORTB 2 4,904,089 / 4,243,208 / 4,282,597 / 18,372,628, PORTB
+4 without lanes 3,948,228 / 2,590,468 / 3,507,624 / 14,842,443. The other classes' busy cycles
+do not move between the runs (the VPU's 504-509 K, the quantizer's 96.5 K, the DMA's 68-70 K):
+what shrinks with the port is the MM's busy and everyone's dependency wait behind it.
+
+**Top source lines by busy cycles** (Lens's source attribution, the innermost `ol.` call;
+the f2-hbm branch's line numbers first, this tree's second):
+
+| source | f2-hbm (PORTB 1) | **wide-port** |
+|---|---|---|
+| `mlp.py` gate_up, `ol.dot(xs, w_gate[c0:c0 + C, :]), ol.dot(xs, w_up[...])` (468 MMs) | 3,761,862 | 1,095,172 |
+| `qwen3.py` _lm_head_rows, `ol.store(m.logitsr[...], ol.dot(xs, m.head[c0:c0 + n, :]))` (64) | 2,410,237 | 725,992 |
+| `mlp.py` swiglu_down, `ol.dot(at, cols, acc=y)` (416) | 1,700,920 | 520,856 |
+| `gemma4.py` _attention, `q = ol.dot(xs, lw.wq)` (26) | 304,805 | 105,934 |
+| `lib.py:34` gelu_tanh, `x * ol.recip(ol.exp2(...) + 1.0)` (1,872 VOPs) | 288,674 | 290,186 |
+| `gemma4.py` _attention, `y = ol.dot(o, lw.wo)` (52) | 279,024 | 99,075 |
+| `mlp.py` swiglu_down, `y = ol.dot(at, cols)` (52) | 213,538 | 64,730 |
+| `gemma4.py` _attention, `k = ol.dot(xs, lw.wk)` (26) | 87,516 | 39,447 |
+
+What it says:
+
+* **What the wide port removed: 5.86 M of the 7.83 M port-B streaming cycles.** The token is
+  the same 7,817,736 chunks (1.00 GB) in every run; at PORTB 1 they stream one a cycle for
+  98.4% of the token (the roofline to 1.6%: 125 K idle cycles, 57 K of them the VPU between
+  MMs, 36 K the quantizer), at PORTB 4 with row lanes four a cycle for 1,972,446 cycles. The
+  levers: PORTB 2 alone takes 3.30 M (port B at 1.71 beats a cycle a channel, 91.5% streaming,
+  the MXU's 4,243,208 advances now the roofline, and the first "MXU not consuming" cycles,
+  231 K, with 300 K two-part reads); PORTB 4 / MCOLS 8 without lanes takes 0.87 M more but
+  streams 68.9% of the token because the MXU does not consume for 973,823 cycles (QUAD rows of
+  9 chunks in 3 advances and 1,093,150 of 1,922,308 wide reads in two parts, docs/row_lanes.md);
+  the row lanes with ALINE 64 take the last 1.39 M: the two-part reads go to 0, "MXU not
+  consuming" falls to 218 K, the MXU's 1,959,556 advances equal port B's chunks / 4
+  (1,957,551) and port A's lines (1,966,316).
+* **What remains the bound in the wide-port profile: the channel and port A, as expected.**
+  The three rooflines coincide within 0.5% (port A lines 1,966,316, MXU 1,959,556, port B
+  1,957,551), and the run is 82.1% of them: the native path delivers 3.341 beats a cycle a
+  channel of 4 on 8 channels (the 0.865 credit of the LPN section above), with port A's line
+  stream feeding the MXU one line an advance. Of the 421.8 K idle port-B cycles (17.6% of the
+  token), the three largest causes are **MXU not consuming (drain / row credits) 218,296**
+  (the array taking chunks without a MAC: each hiccup of port A's line stream, mostly in the
+  head's 64 and the MLP's 884 MMs; the MXU drain lost 197,741 cycles to TMEM bank arbitration
+  under them), **MXU computing, not streaming 103,211** (each MM's prologue and epilogue, and
+  the attention's small MMs: 130 mid-run MXU gaps of 135,812 cycles, five a layer, where no
+  weight streams), and **waiting on VPU work 41,072** (gelu_tanh and the norms between the MMs:
+  the VPU's 435 K busy cycles are 18.2% of this token where they were 5.4% of the PORTB 1 one,
+  and 41 K of them are not overlapped). Behind them: the quantizer 33,178 (Lens's findings: the
+  MXU waited 40,872 cycles for QACT at gemma4.py:1730 in _dense, 39,300 at gemma4.py:1670 in
+  _attention, 33,164 at attention.py:117), TMEM arbitration 14,782, starvation 8,612. The
+  wide port's next step is therefore not another lever on port B: it is the channel rate
+  (f2-hbm16's 16 channels at half a beat each, docs/f2_hbm.md) and the other units overlapped
+  (docs/vpu_pump.md), the same conclusion the row-lane and LPN sections reached.
+
 ### What the nightly needs (the f2-hbm target at PORTB 2)
 
 Verilator cannot give LUTs or a clock: the lanes' cost in silicon and the 2048-bit path's
