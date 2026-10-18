@@ -575,8 +575,16 @@ module otpu_dma
   // that request where adv will be up: adv_nx, adv a cycle ahead from its flip-flops' next
   // values, so no adv gate sits between the register and TMEM (the r2 slice OOC's worst clk ->
   // clk2x path: pl -> adv -> the gate -> the TMEM's ranks -> a pumped bank's address, 12 levels)
-  logic [LANES-1:0]       t_ren_c, t_rv, t_re_q;
+  // (max_fanout: a read enable or address bit reaches TMEM's lane rotation, its bank compares
+  // and the pumped banks' address AND-OR multiplexers, ~16-40 loads over the TMEM; synthesis
+  // keeps a register copy per 16, each beside its loads: the 61d07199 placement ran t_re_q[5]
+  // into a pumped bank's ADDRBWRADDR over 4.1 of 4.7 ns of route against the 5 ns the pump's
+  // read request has, docs/v4/f2-timing.md)
+  logic [LANES-1:0]       t_ren_c, t_rv;
+  (* max_fanout = 16 *) logic [LANES-1:0]       t_re_q;
+  (* max_fanout = 16 *) logic [LANES-1:0][31:0] t_rq;
   logic [LANES-1:0][31:0] t_raddr_c;
+  assign t_raddr = t_rq;
   // st_pend, pl and oc_nf move in the ST branch of the process below (st_pend and pl with adv,
   // occ with the push and the issue); a start clears st_pend; elsewhere st_pend is low, so adv
   // stays up
@@ -592,7 +600,7 @@ module otpu_dma
   always_ff @(posedge clk)
     if (rst) begin t_rv <= '0; t_re_q <= '0; end
     else begin
-      if (adv) begin t_rv <= t_ren_c; t_raddr <= t_raddr_c; end
+      if (adv) begin t_rv <= t_ren_c; t_rq <= t_raddr_c; end
       t_re_q <= adv_nx ? (adv ? t_ren_c : t_rv) : '0;
     end
   assign t_ren = t_re_q;

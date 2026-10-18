@@ -1171,11 +1171,15 @@ module otpu_mxu
   // stage of the grant's pipeline (it advances with t_gnt), so no unit logic (the ASCALE
   // addresses' adder and compare, the drain's lane mux) precedes TMEM's lane routing, ranks and
   // block RAM pins; the word arrives a cycle later (rA, al_st 3)
+  // (max_fanout: a copy of the address register per 16 loads over the TMEM, as the DMA's t_re_q
+  // and the VPU's ta_addr; docs/v4/f2-timing.md)
   logic [LANES-1:0]       t_ren_c;
   logic [LANES-1:0][31:0] t_raddr_c;
+  (* max_fanout = 16 *) logic [LANES-1:0][31:0] t_rq;
+  assign t_raddr = t_rq;
   always_ff @(posedge clk)
     if (rst) t_ren <= '0;
-    else if (t_gnt) begin t_ren <= t_ren_c; t_raddr <= t_raddr_c; end
+    else if (t_gnt) begin t_ren <= t_ren_c; t_rq <= t_raddr_c; end
   always_comb begin
     t_ren_c = '0; t_raddr_c = '0; t_wen = '0; t_waddr = '0; t_wdata = '0;
     if (lo.v) begin
