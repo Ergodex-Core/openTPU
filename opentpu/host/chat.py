@@ -1013,6 +1013,10 @@ def main(argv=None):
                          "tensor-parallel split, a program per slice, as lens record model "
                          "--slices; Qwen3.8-27B: 4, docs/qwen38.md). Default: the design's two "
                          "slices where the model maps onto them, else the card's one")
+    ap.add_argument("--layers", type=int, metavar="N",
+                    help="a model of the checkpoint's first N layers (Spec.truncated: a quick "
+                         "end-to-end run of one too slow to simulate whole; its text is not "
+                         "the model's)")
     ap.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix (--backend board)")
     ap.add_argument("--clock-mhz", type=float,
                     help="core clock, to turn device cycles into tokens/s (default: the "
@@ -1108,6 +1112,12 @@ def main(argv=None):
                          f"feed the turns' text as is")
     tokenizer = load_tokenizer(path)        # (on a thread, while the model loads)
     spec = load_spec(path)
+    if a.layers:
+        if not hasattr(spec, "truncated"):
+            raise SystemExit("otpu-chat: --layers takes a Qwen3.5 model")
+        spec = spec.truncated(a.layers)
+        print(f"otpu-chat: the first {a.layers} layers only (--layers): the text is not the "
+              f"model's", flush=True)
     wformat = FM.auto(spec, a.wformat)
     streams = ST.streams(spec)          # a MoE: its experts streamed (opentpu/host/streamed.py)
     if streams:

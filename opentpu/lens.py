@@ -600,7 +600,8 @@ class _Capture:
 def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
                 prompt: str, resident: bool = True, wformat: str = "auto",
                 head_format: str | None = None, candidate: dict | None = None,
-                mhz: float | None = None, slices: int | None = None) -> dict:
+                mhz: float | None = None, slices: int | None = None,
+                layers: int | None = None) -> dict:
     """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
     on its real weights: the prompt (a user turn of the chat template; plain text without
     one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
@@ -620,6 +621,8 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     from .profile import parse
     path = model_dir(model)
     spec = load_spec(path)
+    if layers:                      # the checkpoint's first layers (Spec.truncated)
+        spec = spec.truncated(layers)
     wformat = FM.auto(spec, wformat)
     try:
         spec.check(design_config())
@@ -671,7 +674,8 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     if candidate:
         tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
                                         for k, v in cand.items()) + "]"
-    name = (f"{path.name} token at pos {pos}" +
+    name = (f"{path.name}" + (f" (first {layers} layers)" if layers else "") +
+            f" token at pos {pos}" +
             ((f" (board config, {cfg.S} slices)" if cfg.S > 1 else " (board config)")
              if board else "") + (" [ISA]" if isa else "") + tag +
             f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
@@ -790,7 +794,7 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
            model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
            resident: bool = True, wformat: str = "auto", head_format: str | None = None,
            candidate: str | None = None, mhz: float | None = None,
-           slices: int | None = None) -> dict:
+           slices: int | None = None, layers: int | None = None) -> dict:
     """Run one workload and return its profile dict; `workload` "model" with `model` a
     checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
     re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `slices` runs
@@ -806,7 +810,8 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         if model is None:
             raise SystemExit("workload model: --model NAME|DIR")
         return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
-                           wformat, head_format, parse_candidate(candidate), mhz, slices)
+                           wformat, head_format, parse_candidate(candidate), mhz, slices,
+                           layers)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -1164,6 +1169,9 @@ def main(argv=None) -> None:
                    help="workload model: per-position programs instead of the resident decode")
     r.add_argument("--wformat", default="auto", help="workload model: the weights' format")
     r.add_argument("--head-format", help="workload model: the LM head's format")
+    r.add_argument("--layers", type=int, metavar="N",
+                   help="workload model: the checkpoint's first N layers only (Spec.truncated; "
+                        "a model too slow to simulate whole, docs/qwen38.md)")
     r.add_argument("--candidate", metavar="C=n,LANES=n,MHZ=f",
                    help="workload model with --isa: re-time the token on a candidate machine "
                         "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
@@ -1200,7 +1208,7 @@ def main(argv=None) -> None:
                        axi=True if a.axi else None, stall=a.stall, model=a.model,
                        prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
                        wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
-                       mhz=a.mhz, slices=a.slices)
+                       mhz=a.mhz, slices=a.slices, layers=a.layers)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)

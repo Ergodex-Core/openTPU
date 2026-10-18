@@ -182,6 +182,16 @@ class Spec:
                     or 4 * c["vocab_size"] * c["hidden_size"] > EMBED_F32_MAX else "f32",
                     mix=FM.mix_for(c))
 
+    def truncated(self, layers: int) -> "Spec":
+        """A model of the checkpoint's first `layers` layers (the embedding, final norm and
+        head as they are): a quick end-to-end run of a model too slow to simulate whole
+        (Qwen3.8-27B's 64 layers on the ISA simulator, docs/qwen38.md); its text is not the
+        model's."""
+        from dataclasses import replace
+        if not 0 < layers <= self.layers:
+            raise ValueError(f"{layers} layers of {self.layers}")
+        return replace(self, kinds=self.kinds[:layers])
+
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
         need = [(self.head_dim % D == 0, f"head_dim {self.head_dim} % D"),
