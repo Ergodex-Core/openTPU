@@ -20,16 +20,18 @@ def main():
     a=ap.parse_args();out=a.out.resolve()
     if out.exists():ap.error('output must not exist')
     if a.host_gap<0:ap.error('host gap must be nonnegative')
+    profile=json.loads(a.profile.read_text());mc=profile['memory'].copy()
+    if mc.get('backend')!='ramulator':raise ValueError('persistent RTL comparison requires explicit Ramulator backend')
+    if not mc.get('native_ports'):raise ValueError('native_ports must be explicit')
     out.mkdir(parents=True)
     sequence=json.loads((a.bundles/'sequence.json').read_text())
     bundles=[load_bundle(a.bundles/name) for name in sequence['programs']]
     receipt=json.loads((a.executable.resolve().parents[1]/'build-receipt.json').read_text())
     if not receipt.get('persistent') or digest(a.executable)!=receipt['binary_sha256']:raise ValueError('persistent build receipt mismatch')
     cfg=bundles[0][0]
-    profile=json.loads(a.profile.read_text());verify_rtl_parameters(receipt,cfg,Architecture(**profile['architecture']));mc=profile['memory'].copy()
+    verify_rtl_parameters(receipt,cfg,Architecture(**profile['architecture']))
     mc.update(bridge=str(a.bridge.resolve()),record_trace=True)
     mc['ramulator_config']=str((a.profile.resolve().parent/mc['ramulator_config']).resolve())
-    if not mc.get('native_ports'):raise ValueError('native_ports must be explicit')
     profile['memory']=mc;write_json(out/'profile.json',profile)
     cmd=[str(a.executable.resolve()),f'+dir={out}',f'+memory_profile={out}/profile.json',f'+python_root={ROOT}',f'+python_site={sysconfig.get_paths()["purelib"]}',f'+python_executable={sys.executable}',f'+stages={len(bundles)}',f'+host_gap={a.host_gap}','+max_cycles=1000000','+trace']
     for index,(c,program,image,obj) in enumerate(bundles):
