@@ -26,14 +26,14 @@ def _cos(a, b):
     return (a * b).sum(-1) / np.linalg.norm(a, axis=-1) / np.linalg.norm(b, axis=-1)
 
 
-def _model(d, layers=LAYERS):
+def _model(d, layers=LAYERS, window=512):
     """A tiny random Gemma 3 (HF's layer pattern: 5 sliding then a global): (HF model, the
     weights folded for Gemma 4's code, Spec), its config.json in d."""
     torch.manual_seed(0)
     hc = transformers.Gemma3TextConfig(
         hidden_size=256, num_hidden_layers=layers, num_attention_heads=4,
         num_key_value_heads=1, head_dim=128, intermediate_size=512, vocab_size=1000,
-        sliding_window=512, sliding_window_pattern=6, query_pre_attn_scalar=128,
+        sliding_window=window, sliding_window_pattern=6, query_pre_attn_scalar=128,
         max_position_embeddings=4096, final_logit_softcapping=None,
         attn_logit_softcapping=None)
     hc._attn_implementation = "eager"
@@ -53,8 +53,10 @@ def tiny(tmp_path_factory):
     return _model(tmp_path_factory.mktemp("gemma3"))
 
 
-def _cfg():
-    return board_config(DRAM_BYTES=1 << 26)
+def _cfg(S: int = 1):
+    """The card's configuration (S slices: the tensor-parallel split, docs/gemma4.md
+    "Slices") with a DRAM the tiny model's image fits."""
+    return board_config(DRAM_BYTES=1 << 26, S=S)
 
 
 def test_spec(tiny):
@@ -103,6 +105,75 @@ def test_resident_and_prefill_are_bit_exact(tiny):
     np.testing.assert_array_equal(c.prefill(toks[:790]), ref[789])
     for t, r in zip(toks[790:], ref[790:]):
         np.testing.assert_array_equal(c.step(t), r)
+
+
+@pytest.mark.parametrize("S", [2, 4])
+def test_slices_match_hf_and_one_slice(tiny, S):
+    """Proposal P4's split (docs/gemma4.md "Slices"): on S slices every matrix is split by
+    output rows with the inputs all-gathered, so every fp32 sum is the one-slice program's:
+    the logits of the per-position programs and of the resident decode are bit-exact to
+    S = 1's (and so match Hugging Face as they do), on every slice's own copy of the K / V."""
+    m, W, spec = tiny
+    toks = [int(t) for t in np.random.default_rng(3).integers(0, 1000, 20)]
+    with torch.no_grad():
+        hf = m(torch.tensor([toks])).logits[0].numpy()
+    ref = Engine(spec, W, cap=1024, cfg=_cfg())
+    one = np.array([ref.step(t) for t in toks])
+    eng = Engine(spec, W, cap=1024, cfg=_cfg(S))
+    assert eng.cfg.S == S and eng.image.v_loc == spec.vocab // S
+    dev = np.array([eng.step(t) for t in toks])
+    assert _cos(dev, hf).min() > 0.985
+    np.testing.assert_array_equal(dev, one)
+    res = Engine(spec, W, cap=1024, cfg=_cfg(S), resident=True)
+    assert res.resident
+    np.testing.assert_array_equal(np.array([res.step(t) for t in toks]), one)
+
+
+@pytest.fixture(scope="module")
+def tiny_w256(tmp_path_factory):
+    """The tiny model with a 256-token window: its sliding ring (window + an attention
+    block) wraps at 512 slots."""
+    return _model(tmp_path_factory.mktemp("gemma3_w256"), window=256)
+
+
+def test_four_slices_resident_and_prefill_are_bit_exact(tiny_w256):
+    """At S = 4 the resident decode and a chunked prefill give the per-position programs'
+    logits across the sliding ring's wrap (512 slots at a 256-token window), as the S = 1
+    test above does at 768."""
+    _, W, spec = tiny_w256
+    assert spec.window == 256
+    rng = np.random.default_rng(4)
+    toks = [int(t) for t in rng.integers(0, 1000, 530)]
+    cfg = _cfg(4)
+    a = Engine(spec, W, cap=1024, cfg=cfg)
+    assert a.image.ring == 512
+    ref = [a.step(t) for t in toks]
+    b = Engine(spec, W, cap=1024, cfg=cfg, resident=True)
+    got = [b.step(t) for t in toks]
+    for i in (0, 1, 5, 255, 256, 511, 512, 529):
+        np.testing.assert_array_equal(got[i], ref[i])
+    c = Engine(spec, W, cap=1024, cfg=cfg, resident=True)
+    np.testing.assert_array_equal(c.prefill(toks[:520]), ref[519])
+    assert max(s.get("rows", 1) for s in c.stats) > 1            # runs of several rows
+    for t, r in zip(toks[520:], ref[520:]):
+        np.testing.assert_array_equal(c.step(t), r)
+
+
+def test_slices_the_model_does_not_split_over():
+    """Spec.check: S in (1, 2, 4) and the dimensions divisible by S."""
+    spec = G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=4,
+                  n_kv=1, head_dim=128, global_head_dim=128, vocab=1000, ple_dim=0)
+    spec.check(_cfg(4))
+    with pytest.raises(ValueError, match="slices S in"):
+        spec.check(_cfg(3))
+    with pytest.raises(ValueError, match="n_q 2 % S"):
+        G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=2,
+               n_kv=1, head_dim=128, global_head_dim=128, vocab=1000, ple_dim=0,
+               ).check(_cfg(4))
+    with pytest.raises(ValueError, match="vocab 1002 % S"):
+        G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=4,
+               n_kv=1, head_dim=128, global_head_dim=128, vocab=1002, ple_dim=0,
+               ).check(_cfg(4))
 
 
 def checkpoint(d: Path) -> Path:

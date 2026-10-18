@@ -2,7 +2,7 @@
 
     python3 tools/compare_hf.py [--model qwen3|lfm2|qwen35|DIR] [--tokens 16] [--chat] [--emulate]
                                 [--cfg board|CFG.pkl] [--wformat F] [--head-format F]
-                                [--backend isa|board] [--resident] [prompt ...]
+                                [--backend isa|board] [--resident] [--slices S] [prompt ...]
 
 For each prompt: the two continuations, the first token where they differ with Hugging Face's
 logit gap there, and the device's logit error against Hugging Face's logits over the steps
@@ -14,7 +14,8 @@ from kernel bugs (it agrees with Hugging Face). --cfg runs the ISA simulator in 
 configuration (the card's, as tools/qual/refs.py cfg pickles it) instead of the design one;
 --wformat / --head-format pick the weight formats (Engine). --backend board runs the device
 on the card (the host driver, as otpu-chat --backend board; a card session), --resident with
-the resident decode program. Hugging Face runs first and is freed before the device's image is
+the resident decode program; --slices S (with --cfg) the configuration with S slices (Gemma 3
+/ Gemma 4's tensor-parallel split, one program per slice on the ISA simulator). Hugging Face runs first and is freed before the device's image is
 built (a 4B model is 16 GB in fp32).
 """
 from __future__ import annotations
@@ -62,6 +63,9 @@ def main() -> None:
     ap.add_argument("--dev", default="/dev/xdma0", help="the card's XDMA device (--backend board)")
     ap.add_argument("--resident", action="store_true",
                     help="decode with the resident program (Engine resident=True)")
+    ap.add_argument("--slices", type=int, default=None,
+                    help="with --cfg: the configuration with this many slices (Gemma 3 / "
+                    "Gemma 4's tensor-parallel split, docs/gemma4.md)")
     a = ap.parse_args()
     path = model_dir(a.model)
     tok = transformers.AutoTokenizer.from_pretrained(path)
@@ -104,8 +108,12 @@ def main() -> None:
         from opentpu.host.board import sim_config
         from opentpu.isasim import board_config
         base = board_config() if a.cfg == "board" else pickle.loads(Path(a.cfg).read_bytes())
+        if a.slices:
+            base = replace(base, S=a.slices)
         cfg = sim_config(spec, cap, replace(base, DRAM_BYTES=1 << 32), wformat=a.wformat,
                          head_format=a.head_format)
+    elif a.slices:
+        raise SystemExit("--slices takes --cfg board (or a pickled configuration)")
     eng = Engine(spec, W, cap=cap, cfg=cfg, backend=backend, wformat=a.wformat,
                  head_format=a.head_format, resident=a.resident)
     print(f"device: {a.backend} {eng.cfg}, weights {a.wformat}, head {a.head_format or a.wformat}"
