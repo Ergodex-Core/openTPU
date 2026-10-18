@@ -138,6 +138,9 @@ class Spec:
     expert_ffn: int = 0
     k_rows: bool = False    # sliding K rows at their own stride, not the RoPE row's (Image.ks):
                             # 26B-A4B's 8 KV heads x 25 layers, 414 -> 146 MB at 1152 slots
+    v_norm: bool = True     # V normed without a weight (Gemma 4); Gemma 3's is not (gemma3.py)
+    global_rope_div: float = 1.0    # the global RoPE's frequencies divided (Gemma 3's linear
+                                    # scaling, the 4B+ checkpoints' factor 8)
 
     @property
     def layers(self) -> int:
@@ -309,8 +312,13 @@ class Weights(dict):
 
     def __init__(self, model_dir):
         from safetensors import safe_open
+        from .gemma3 import folder
         super().__init__()
         self.model_dir = Path(model_dir)
+        # a Gemma 3 checkpoint: its norms (1 + w), attention scale and missing layer scalars
+        # folded as this code reads them (gemma3.folder); None for a Gemma 4
+        cfg = Path(model_dir) / "config.json"
+        self.fold = folder(json.loads(cfg.read_text())) if cfg.exists() else None
         self._files, text = {}, {}
         for p in sorted(Path(model_dir).glob("*.safetensors")):
             f = safe_open(str(p), "pt")
@@ -321,7 +329,7 @@ class Weights(dict):
                     text[k] = (f, k)
         self._files = self._files or text       # (Gemma4ForCausalLM's: model.*, lm_head.*)
         if not self._files:
-            raise ValueError(f"{model_dir}: no Gemma 4 language model tensors")
+            raise ValueError(f"{model_dir}: no Gemma 4 / Gemma 3 language model tensors")
 
     def keys(self):
         return self._files.keys()
@@ -336,10 +344,15 @@ class Weights(dict):
         return len(self._files)
 
     def __getitem__(self, k):
+        if k not in self._files and self.fold is not None:
+            v = self.fold(k, None)              # a tensor Gemma 3 has not (layer_scalar)
+            if v is not None:
+                return v
         f, name = self._files[k]
         if k == self.PLE:
             return _Rows(f, name)
-        return finite(f.get_tensor(name).float().numpy(), k)
+        a = finite(f.get_tensor(name).float().numpy(), k)
+        return a if self.fold is None else self.fold(k, a)
 
     def get(self, k, default=None):
         return self[k] if k in self._files else default
@@ -381,7 +394,8 @@ def rope_freqs(spec: Spec, kind: str) -> np.ndarray:
     global ("proportional"), the global_rot rotated pairs over the global head dimension."""
     if kind == FULL:
         d = spec.global_head_dim
-        return 1.0 / spec.global_theta ** (np.arange(spec.global_rot, dtype=np.float64) * 2 / d)
+        return 1.0 / spec.global_theta ** (np.arange(spec.global_rot, dtype=np.float64) * 2 / d) \
+            / spec.global_rope_div
     d = spec.head_dim
     return 1.0 / spec.theta ** (np.arange(d // 2, dtype=np.float64) * 2 / d)
 
@@ -485,7 +499,7 @@ def reference_logits(spec: Spec, W, tokens) -> np.ndarray:
             k = (h @ W[a + "k_proj.weight"].T).reshape(T, nkv, d)
             v = k if spec.kv_same(i) else (h @ W[a + "v_proj.weight"].T).reshape(T, nkv, d)
             kv[i] = (_rot(_norm(k, W[a + "k_norm.weight"], spec.eps), cos, sin, d // 2),
-                     _norm(v, None, spec.eps))
+                     _norm(v, None, spec.eps) if spec.v_norm else v)
         k, v = kv[spec.kv_src[i]]
         o = np.zeros((T, spec.n_q, d), f32)
         for hq in range(spec.n_q):
@@ -579,7 +593,8 @@ def emulated_logits(spec: Spec, W, tokens, D: int = 128, wformat: str = "int8",
                 v = k if spec.kv_same(i) else (w(a + "v_proj.weight", fa) @ h).reshape(nkv, d)
                 k = _rot(_norm(k, W[a + "k_norm.weight"], spec.eps), c, s_, d // 2)
                 K.setdefault(i, []).append(_fake_k(k, D))
-                V.setdefault(i, []).append(_v_parts(_norm(v, None, spec.eps)))
+                V.setdefault(i, []).append(_v_parts(_norm(v, None, spec.eps) if spec.v_norm
+                                                    else v))
             src = spec.kv_src[i]
             lo = max(0, pos + 1 - spec.window) if kind == SLIDE else 0
             Kh = np.stack([a_ for a_, _ in K[src][lo:]], 1)
@@ -1604,7 +1619,8 @@ def _attention(x, lw, m, pos, ropes, block: int):
     a RunPos). Own K / V: projected, normed, RoPE'd (K) and appended row by row; the KV-shared
     layers read their source's cache. The query group of each KV head attends in parts of
     MCOLS heads, every (row, part) one entry of the pipelined flash attention. K = V (lw.same):
-    V is the K projection, normed without a weight (K: with k_norm, then RoPE'd)."""
+    V is the K projection, normed without a weight (K: with k_norm, then RoPE'd); Gemma 3's V
+    (spec.v_norm False) is the projection as it is."""
     spec = m.spec
     R, d, nkv, eps = x.rows, lw.hd, lw.nkv, spec.eps
     G = spec.n_q // nkv
@@ -1624,7 +1640,9 @@ def _attention(x, lw, m, pos, ropes, block: int):
         for r in range(R):
             c, s_ = cos_sin(r)
             kr = _rope(rmsnorm(k[r, :].reshape(nkv, d), kn, eps), c, s_)
-            vr = rmsnorm(v[r, :].reshape(nkv, d), None, eps)
+            vr = v[r, :].reshape(nkv, d)
+            if spec.v_norm:
+                vr = rmsnorm(vr, None, eps)
             slot = _slot(m, lw.kind, pos[r] if isinstance(pos, list) else pos)
             for j in range(nkv):
                 ol.kv_append(kv, j, slot, kr[j:j + 1, :], vr[j:j + 1, :])

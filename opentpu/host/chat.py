@@ -9,6 +9,7 @@
     otpu-chat --prompt "Why is the sky blue?" # one-shot
     otpu-chat --think                         # Qwen3 thinking mode
     otpu-chat --model gemma4                  # Gemma 4 E2B, its instruct checkpoint
+    otpu-chat --model gemma3                  # Gemma 3 1B (gemma-3-1b-it)
                                               # (gemma-4-E2B-it; --think: thinking mode too)
     otpu-chat --model qwen35-2b --mtp         # Qwen3.5 with its MTP drafter (docs/mtp.md)
     otpu-chat --model phi4-mini --wformat fp4 # the weights' format (default auto: the model's
