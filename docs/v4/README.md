@@ -31,6 +31,25 @@ its chunks, scales and a result-FIFO credit) 18.2%, MXU row turnarounds 3.9%, ch
 starved 0.6%; the MXU drain lost 2.1% to TMEM arbitration. The VPU is in flight 4.5% of the
 run, the quantizer 1.2%. The layers take 7.2 M cycles, the LM head 3.1 M.
 
+**Measured at 200 MHz with an HBM-like memory model** (2026-10-18, `lens record model
+--model gemma3 --axi --stall 0 --mhz 200` with `OTPU_LAT=30`: the Verilator board model's
+AXI memory never withholding a handshake, 30 cycles of latency;
+`build/lens/v4/today-rtl-200mhz-measured.otpuprof`):
+
+| | Cycles | Of the DRAM bound | ms at 200 MHz | Device tok/s |
+|:--|--:|--:|--:|--:|
+| memory model with the DDR3 default, 20% random stalls | 10.28 M | 76.4% | 51.4 | 19.5 |
+| memory model with no stalls (HBM-like) | 8.22 M | 95.5% | 41.1 | 24.3 |
+
+With the smooth memory the "MXU not consuming" loss is 1.4% (from 18.2%), the turnarounds
+1.5% (from 3.9%), the quantizer waits 0.8%, the VPU 0.5%, the chunk FIFO 0.2%: today's
+datapath is within 5% of its port's roofline when the memory keeps up. The 18.2% in the
+133 MHz trace was the DDR3 model's random stalls making rows arrive irregularly (the row is
+not complete when the MXU could pop it), not result-FIFO credits. Milestone 0 measures the
+split at both settings; the proposals' loss models, written against the 20%-stall trace, are
+pessimistic by that amount, and the row-gating fixes they propose are worth less than they
+estimated. What remains true: the port is the limit, and every fixed cost grows C times.
+
 Two conclusions drive v4:
 
 1. **At batch 1 the port is the limit, not the memory.** The MXU consumes one 128-byte chunk

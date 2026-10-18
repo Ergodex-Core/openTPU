@@ -109,7 +109,12 @@ weights and head, the resident decode program, 5,350 instructions; 2026-10-18):
 | ISA simulator, analytic timing (`--isa`) | 8.28 M | 62.1 ms | 94.8% |
 | RTL, the board model with the AXI DDR3 path (`--axi`) | 10.28 M | 77.1 ms, 13.0 tok/s | 76.4% |
 
-On the RTL, DRAM port B streams 76.4% of the cycles. Of the rest, 18.2% is the MXU not
+At 200 MHz (the F2 build's clock) with the memory model never withholding a handshake
+(`--stall 0`, `OTPU_LAT=30`: HBM-like) the same token takes 8.22 M cycles, 95.5% of the
+bound, 41.1 ms, 24.3 tok/s on the device: the DDR3 model's 20% random stalls were most of the
+"MXU not consuming" loss (18.2% -> 1.4%; [v4/README.md](v4/README.md)).
+
+On the RTL with the DDR3 model's default 20% stalls, DRAM port B streams 76.4% of the cycles. Of the rest, 18.2% is the MXU not
 consuming (drain / row credits), 3.9% the MXU computing between streams, 0.6% the chunk FIFO
 starved; the MXU drain lost 2.1% to TMEM bank arbitration. The MXU is in flight 100% of the
 run, the VPU 4.5% (gelu_tanh's and the norms' VOPs: the hottest source lines), the quantizer
