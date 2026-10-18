@@ -1,0 +1,569 @@
+{
+  "baseline_ISA_opcodes_missing": [
+    "GATHER",
+    "WAITW"
+  ],
+  "baseline_commit": "3c542bd9cb98f11499729ea52703788f4588e4d2",
+  "compiled_program_inventory": {
+    "/tmp/opentpu-hybrid-chunk-stream/hybrid_0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "STREAM",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-hybrid-chunk-stream/hybrid_1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "STREAM",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-hybrid-chunk-stream/hybrid_2": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "STREAM",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-hybrid-chunk-v2-dstep/hybrid_0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "DSTEP",
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-hybrid-chunk-v2-dstep/hybrid_1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "DSTEP",
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-hybrid-chunk-v2-dstep/hybrid_2": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": true,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "DSTEP",
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_col_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_col_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_const_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_const_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_one_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta1_one_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_col_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_col_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_const_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_const_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_one_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/delta_one_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_col_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_col_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_const_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_const_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_one_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/dot_one_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_col_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_col_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_const_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_const_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_one_q0": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "STREAM"
+      ]
+    },
+    "/tmp/opentpu-stream-modes-v2/scale_one_q1": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": true,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": true,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "STREAM"
+      ]
+    }
+  },
+  "frontends": {
+    "bonsai_gguf_module_in_pinned_baseline": false,
+    "gemma3_module_in_pinned_baseline": false,
+    "local_newer_exports": "not silently imported; T2/wide fields and production TMEM topology remain incompatible"
+  },
+  "full_model_limits": [
+    "no complete pretrained Gemma3/Bonsai inference run",
+    "no production bitstream cycle equivalence",
+    "no Fmax/resource/power measurement"
+  ],
+  "implemented_base_opcodes": [
+    "ADDI",
+    "BAR",
+    "DSTEP",
+    "HALT",
+    "LD",
+    "LI",
+    "LOOP",
+    "MM",
+    "NOP",
+    "QACT",
+    "QST",
+    "RLD",
+    "ST",
+    "STREAM",
+    "VOP"
+  ],
+  "implemented_inference_path": "single slice, footprint or WAITC issue, replicated/count-arbitrated TMEM, dense/packed MXU, VPU or DMA/SE DeltaNet, explicit native Ramulator controller",
+  "memory_contract": "DDR4 and HBM2 supplied profiles only; shared simulated controller, not claimed equivalent to board external-memory shell",
+  "missing_production_paths": [
+    "TMEM_IMPL=3 replay/guest/pumped dual-port topology",
+    "DDR3 LiteDRAM/native AXI shell and channel hashing",
+    "program-loader/HALT CHAIN and host WAITW polling"
+  ],
+  "not_needed_by_measured_fallback_programs": [
+    "GATHER: S=1 compiler collectives reduce to local work",
+    "WAITW/CHAIN: explicit program-resident host launch boundary"
+  ],
+  "production_target": {
+    "architecture": {
+      "ACT_BLOCKS": 128,
+      "ACT_ROWS": 16,
+      "D": 128,
+      "DRAM_BYTES": 4294967296,
+      "DSTEP": true,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "MCOLS": 4,
+      "PAIR": true,
+      "S": 1,
+      "SEQ_WC": true,
+      "STREAM": true,
+      "TMEM_WORDS": 65536
+    },
+    "path": "targets/ypcb-00338.toml",
+    "platform": {
+      "beat_bytes": 64,
+      "board": "ypcb-00338",
+      "channel_bytes": 2147483648,
+      "channels_per_slice": 2,
+      "core_mhz": 133.33,
+      "host": "pcie",
+      "hostcal": true,
+      "mem": "ddr3",
+      "mem_ctrl": "litedram",
+      "mem_mts": 1066,
+      "pcie_gen": 2,
+      "pcie_lanes": 8
+    },
+    "sha256": "885f565ebd331abc503a660f176ee76947b6b3ce22151f3f2b4672bbf37a96fc",
+    "uarch": {
+      "CHASH": true,
+      "FIFO_DEPTH": 1024,
+      "MXU_CL": 16,
+      "MXU_E": 4,
+      "MXU_IMPL": 2,
+      "PQ_WIN": 1024,
+      "RPB": 0,
+      "TMEM_GST": true,
+      "TMEM_IMPL": 3,
+      "TMEM_NSB": 2,
+      "TMEM_PMP": 1,
+      "TMEM_RPL": true,
+      "TMEM_TDP": true,
+      "TRACE_DEPTH": 16384,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "WIN": 16,
+      "WPB": 1
+    }
+  },
+  "production_target_timing_supported": false,
+  "sources": {
+    "opentpu/isa.py": "6ff71f284c38804ed127ff0eae185a0fbdc3bee229c451db6fba96d51810543c",
+    "opentpu/isasim.py": "d0fc7a987213fb2334d4e869743f940516319753a5d714d77c254ec59b413666",
+    "opentpu/perfsim/engine.py": "fa44fd9bc238158a62ece7aff7afb9732138943cd57517c61d6c040874eacd22",
+    "opentpu/perfsim/units.py": "2c3265324d47eaafbc6a1d0541745d6cb3d8b2a35d6cbd408dc47d59ebeb5820"
+  }
+}

@@ -7,6 +7,7 @@ from collections import Counter, deque
 from dataclasses import dataclass, field
 import ctypes as C
 import heapq
+import os
 from pathlib import Path
 
 
@@ -58,6 +59,12 @@ class RamulatorMemory:
         for name, (args, result) in signatures.items():
             f = getattr(self.lib, name)
             f.argtypes, f.restype = args, result
+        self.batched = hasattr(self.lib,'otpu_advance') and os.environ.get('OTPU_PERFSIM_MEMORY_BATCH','1')!='0'
+        if self.batched:
+            self.lib.otpu_advance.argtypes=[C.c_void_p,C.c_int,C.POINTER(C.c_uint64),C.c_int,C.POINTER(C.c_int)]
+            self.lib.otpu_advance.restype=C.c_int
+            self.completion_buffer=(C.c_uint64*cfg.outstanding)()
+            self.completion_count=C.c_int()
         self.handle = self.lib.otpu_create(str(Path(cfg.ramulator_config).resolve()).encode())
         if not self.handle:
             raise RuntimeError(self.lib.otpu_error().decode())
@@ -80,6 +87,12 @@ class RamulatorMemory:
         while self.lib.otpu_poll(self.handle, C.byref(tag)):
             done.append(tag.value)
         return done
+
+    def advance(self,limit):
+        if not self.batched:return 1,self.tick()
+        elapsed=self.lib.otpu_advance(self.handle,limit,self.completion_buffer,len(self.completion_buffer),C.byref(self.completion_count))
+        if elapsed<0:raise RuntimeError(self.lib.otpu_error().decode())
+        return elapsed,list(self.completion_buffer[:self.completion_count.value])
 
     def close(self):
         if self.handle:
@@ -211,7 +224,14 @@ class MemorySystem:
             return
         now = cycle * period_ps
         while self.next_tick_ps <= now:
-            for tag in self.backend.tick():
+            # No ingress can occur between these ticks. Stop at the first completion,
+            # then process callbacks/RMW and ingress exactly as in the scalar loop.
+            if not self.queue and isinstance(self.backend,RamulatorMemory):
+                elapsed,done=self.backend.advance((now-self.next_tick_ps)//self.cfg.memory_period_ps+1)
+                self.next_tick_ps+=(elapsed-1)*self.cfg.memory_period_ps
+            elif isinstance(self.backend,RamulatorMemory):_,done=self.backend.advance(1)
+            else:done=self.backend.tick()
+            for tag in done:
                 tr = self.inflight.pop(tag)
                 self._trace({'event': 'complete', 'id': tag, 'time_ps': self.next_tick_ps,
                                    'owner': tr.owner, 'address': tr.addr, 'write': tr.write})
@@ -247,7 +267,8 @@ class MemorySystem:
                 key = 'write' if tr.write else 'read'
                 self.stats[key + '_transactions'] += 1
                 self.stats[key + '_bytes'] += self.cfg.transaction_bytes
-                owner = self.by_owner.setdefault(tr.owner, Counter())
+                owner = self.by_owner.get(tr.owner)
+                if owner is None:owner=self.by_owner.setdefault(tr.owner,Counter())
                 owner[key + '_transactions'] += 1
                 owner[key + '_bytes'] += self.cfg.transaction_bytes
                 self._trace({'event': 'accept', 'id': tag, 'time_ps': self.next_tick_ps,

@@ -1,0 +1,8 @@
+{
+  "backend": "ramulator",
+  "statistics": {
+    "peak_outstanding": 0
+  },
+  "transactions": [],
+  "ports": []
+}

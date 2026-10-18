@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "model_host_wall_seconds": 0.007142249989556149,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999997,
+        "passed": true,
+        "relative_l2": 2.4459174436283262e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999997,
+        "passed": true,
+        "relative_l2": 2.4459174436283262e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 381,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 66,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 78,
+      "pc": 1,
+      "start": 65
+    },
+    {
+      "dispatch": 7,
+      "end": 90,
+      "pc": 2,
+      "start": 77
+    },
+    {
+      "dispatch": 8,
+      "end": 366,
+      "pc": 3,
+      "start": 89
+    },
+    {
+      "dispatch": 9,
+      "end": 379,
+      "pc": 4,
+      "start": 366
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 381,
+  "rtl_host_wall_seconds": 0.09134829099639319,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 66,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 78,
+      "id": 1,
+      "pc": 1,
+      "start": 65
+    },
+    {
+      "dispatch": 7,
+      "end": 90,
+      "id": 2,
+      "pc": 2,
+      "start": 77
+    },
+    {
+      "dispatch": 8,
+      "end": 366,
+      "id": 3,
+      "pc": 3,
+      "start": 89
+    },
+    {
+      "dispatch": 9,
+      "end": 379,
+      "id": 4,
+      "pc": 4,
+      "start": 366
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

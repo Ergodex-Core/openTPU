@@ -1,0 +1,37 @@
+T0 D c=5 s=0 pc=0 op=10 w1=00000000 w2=00000064 w3=00000180
+T0 S c=6 s=0 u=0 r=6
+T0 D c=6 s=1 pc=1 op=10 w1=00001000 w2=000002bc w3=00000003
+T0 D c=7 s=2 pc=2 op=10 w1=00002000 w2=000003e8 w3=00000003
+T0 D c=8 s=3 pc=3 op=12 w1=00010000 w2=00000064 w3=000002bc
+T0 D c=9 s=4 pc=4 op=11 w1=00010900 w2=00000fa0 w3=00000003
+T0 P c=63 n=64 bm=0 bd=48 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 S c=65 s=1 u=0 r=7
+T0 E c=66 s=0
+T0 S c=77 s=2 u=0 r=8
+T0 E c=78 s=1
+T0 S c=89 s=3 u=0 r=89
+T0 E c=90 s=2
+T0 P c=127 n=64 bm=0 bd=38 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=191 n=64 bm=0 bd=36 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=255 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=319 n=64 bm=0 bd=63 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=366 s=3
+T0 S c=366 s=4 u=0 r=366
+T0 E c=379 s=4
+T0 H c=381 bmxu=0 bdma=195 amxu=0 aq=0
+T0 P c=381 n=62 bm=0 bd=10 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=381 n=62 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=637 rd=0 pop=0 use=0 cols=4 any=0
+RESULT cycles=381 halted=1 error=0
+SLICE 0 icount=6
+- /private/tmp/opentpu-rtl-native-debug-vpu/tb_perfsim.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=381 lose=0,0,0,0 n= 329,52,0,0,0,0,0 d= 329,52,0,0,0,0,0,0,0 dw= 278,103,0,0,0,0,0,0,0,0 rd= 0,52,0,0,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 6ns; walltime 0.085 s; speed 77.689 ns/s
+- Verilator: cpu 0.083 s on 1 threads; allocated 49 MB

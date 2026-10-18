@@ -25,8 +25,8 @@ def main():
     receipt=json.loads((a.executable.resolve().parents[1]/'build-receipt.json').read_text())
     if not receipt.get('persistent') or digest(a.executable)!=receipt['binary_sha256']:raise ValueError('persistent build receipt mismatch')
     cfg=bundles[0][0]
-    for key,value in {'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024}.items():
-        if receipt['parameters'].get(key)!=value:raise ValueError(f'RTL build mismatch: {key}')
+    for key,value in {'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024,'SEQ_WC':int(cfg.SEQ_WC)}.items():
+        if receipt['parameters'].get(key,0 if key=='SEQ_WC' else None)!=value:raise ValueError(f'RTL build mismatch: {key}')
     profile=json.loads(a.profile.read_text());mc=profile['memory'].copy()
     mc.update(bridge=str(a.bridge.resolve()),record_trace=True)
     mc['ramulator_config']=str((a.profile.resolve().parent/mc['ramulator_config']).resolve())
@@ -36,6 +36,9 @@ def main():
     for index,(c,program,image,obj) in enumerate(bundles):
         if c!=cfg:raise ValueError('all launches must use the same hardware configuration')
         save_bundle(out/f'stage{index}',c,program,image,args=obj.get('args',()),labels=obj.get('labels'),metadata=obj.get('metadata'))
+        if c.SEQ_WC:
+            from opentpu import waits as W
+            (out/f'stage{index}'/'waits.hex').write_text(''.join(f'{int(e):016x}\n' for e in W.wait_counts(program,c.D,c.S)))
         if index==0:save_bundle(out,c,program,image)
         cmd.extend(f'+stage{index}_arg{k}={v}' for k,v in enumerate(obj.get('args',())))
     write_json(out/'command.json',cmd)

@@ -81,7 +81,8 @@ def main():
                  'device_ttft_seconds':prefill_elapsed,'conditional_decode_tokens_per_second':seq['decode_steps']/decode_elapsed,
                  'prefill_elapsed_seconds':prefill_elapsed,'decode_elapsed_seconds':decode_elapsed,'launch_overhead_cycles':a.launch_overhead_cycles,
                  'core_only_decode_tokens_per_second':seq['decode_steps']/decode,
-                 'boundary':'program-resident core start through final write completion; serial prompt steps, no sampling, host, queueing or input-transfer time',
+                 'boundary':'program-resident core start through final write completion; no sampling, host, queueing or input-transfer time',
+                 'prefill_mode':seq.get('prefill_mode','see per-stage bundle metadata'),'prefill_tokens':seq.get('prefill_tokens'),
                  'memory_state':'persistent DRAM/TMEM/ACT/controller and KV; core pipeline/register reset; explicit idle/reset launch edges',
                  'full_pretrained_model':False,'hardware_measured':False,'fmax_verified':False}
         write_json(out/'summary.json',summary)

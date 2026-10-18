@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "model_host_wall_seconds": 0.25184387498302385,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.6653205698404625e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.6653205698404625e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 8671,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 83,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 127,
+      "pc": 1,
+      "start": 82
+    },
+    {
+      "dispatch": 7,
+      "end": 140,
+      "pc": 2,
+      "start": 126
+    },
+    {
+      "dispatch": 8,
+      "end": 8614,
+      "pc": 3,
+      "start": 139
+    },
+    {
+      "dispatch": 9,
+      "end": 8669,
+      "pc": 4,
+      "start": 8614
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 8671,
+  "rtl_host_wall_seconds": 0.5322294999787118,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 83,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 127,
+      "id": 1,
+      "pc": 1,
+      "start": 82
+    },
+    {
+      "dispatch": 7,
+      "end": 140,
+      "id": 2,
+      "pc": 2,
+      "start": 126
+    },
+    {
+      "dispatch": 8,
+      "end": 8614,
+      "id": 3,
+      "pc": 3,
+      "start": 139
+    },
+    {
+      "dispatch": 9,
+      "end": 8669,
+      "id": 4,
+      "pc": 4,
+      "start": 8614
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

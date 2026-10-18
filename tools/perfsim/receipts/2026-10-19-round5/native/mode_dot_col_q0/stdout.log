@@ -1,0 +1,39 @@
+T0 D c=5 s=0 pc=0 op=10 w1=00000000 w2=00000064 w3=00000300
+T0 S c=6 s=0 u=0 r=6
+T0 D c=6 s=1 pc=1 op=10 w1=00001000 w2=000003e8 w3=00000003
+T0 D c=7 s=2 pc=2 op=10 w1=00002000 w2=0000044c w3=00000002
+T0 D c=8 s=3 pc=3 op=10 w1=00003000 w2=000007d0 w3=00000006
+T0 D c=9 s=4 pc=4 op=13 w1=000107d0 w2=00010000 w3=00020000
+T0 P c=63 n=64 bm=0 bd=29 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=5 as=0 ms=0 mb=0 ff=0 ld=0
+T0 S c=114 s=1 u=0 r=7
+T0 E c=115 s=0
+T0 S c=127 s=2 u=0 r=8
+T0 P c=127 n=64 bm=0 bd=1 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=128 s=1
+T0 S c=140 s=3 u=0 r=9
+T0 E c=141 s=2
+T0 S c=153 s=4 u=0 r=153
+T0 E c=154 s=3
+T0 P c=191 n=64 bm=0 bd=21 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=1 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=255 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=319 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=383 n=64 bm=0 bd=9 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=424 s=4
+T0 H c=426 bmxu=0 bdma=69 amxu=0 aq=0
+T0 P c=426 n=43 bm=0 bd=9 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=426 n=43 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=682 rd=0 pop=0 use=0 cols=4 any=0
+RESULT cycles=426 halted=1 error=0
+SLICE 0 icount=6
+- /private/tmp/opentpu-rtl-stream-d128/tb_perfsim.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=426 lose=0,0,0,0 n= 350,76,0,0,0,0,0 d= 350,76,0,0,0,0,0,0,0 dw= 251,175,0,0,0,0,0,0,0,0 rd= 0,76,0,0,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 7ns; walltime 0.090 s; speed 77.271 ns/s
+- Verilator: cpu 0.089 s on 1 threads; allocated 51 MB

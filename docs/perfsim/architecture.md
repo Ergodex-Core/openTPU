@@ -33,10 +33,10 @@ cover arithmetic. Sharing ISA arithmetic is explicitly **not** an independent nu
 
 | Unit | Implemented behaviour | RTL reference and remaining approximation |
 |---|---|---|
-| Issue | finite window; control/register/loop handling; range conflicts; separate MM stream dependencies; 2-entry MXU queue | `rtl/seq/otpu_seq.sv`, `opentpu/waits.py`. Four-stage footprint pipeline, registered unit starts and drained HALT boundary; alternate WAITC issue is unsupported |
+| Issue | finite window; control/register/loop handling; range conflicts; separate MM stream dependencies; 2-entry MXU queue | `rtl/seq/otpu_seq.sv`, `opentpu/waits.py`. Four-stage footprint pipeline, registered unit starts and drained HALT boundary; optional two-stage WAITC frontend with unit-count waits and a 31-entry VPU mask |
 | MXU | actual D-byte block stream, row-gated consumption, finite prefetch FIFO, scale-line requests, ACT row replay, int8/int4/fp4/nvfp4 packing, PAIR, partial M/N and KB; result FIFO/drain, ACC/ASCALE/RMAX | `rtl/mxu/otpu_mxu.sv`: CLS=min(D/8,CL), LROW=CLS+MCOLS+5, epilogue lanes default MCOLS/2. Independent prefetch, array advance and result drain pipelines; LROW followed by S0/row/FIFO stages, nine-cycle conversion/scaling epilogue. Coupled A/B requests are atomic, A is fetched on each scale advance, and an active issuer blocks the next command. B response FIFO visibility takes one additional core edge; native A line/tag plus scale-count visibility takes two. Next-head pop and serialized drain, including epilogue freeze, are explicit. PAIR/alternate scaling variants and other geometries remain incompletely validated |
 | VPU | all current arithmetic/copy/fill/nonlinear/reduction/OUTER functions, broadcast addressing, masked partial lanes, 64-partial reduction tail, buffered pipeline writes | `rtl/vpu/otpu_vpu.sv`: LM=2, LA=4, SL=7; ADD/MUL/OUTER 1 slot, EXP2/EXP2SUB 9, RECIP 6, RSQRT/LOG2 10. Default C8 composite path uses eight lanes and 25-cycle recirculation passes (HAS_DSTEP defaults on even without DSTEP opcodes). Two-entry command queue, arithmetic latency ordering, padded reduction streams, RTL folding-tree latency and pipeline freeze on denied output writes. Cross-command read arbitration and non-C8 configurations lack matched timing coverage |
-| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. QACT overlaps four row banks with finite chunk credits, scale readiness and ACT packing. Overflow reread path is rejected. QST is an unbuffered two-pass path: full-row max reads, scale records first, a second TMEM read pass, then four-byte writes only for aligned ES=1 (otherwise byte writes). A denied SW write freezes its finite 12-stage reader/writer pipeline. QST readiness may precede sequencer completion |
+| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. QACT overlaps four row banks with finite chunk credits, scale readiness and ACT packing. Overflow reread path is rejected. QST is an unbuffered two-pass path: full-row max reads, scale records first, a second TMEM read pass, then four-byte writes only for aligned ES=1 (otherwise byte writes). A denied SW write freezes its finite 12-stage reader/writer pipeline. QACT and QST readiness precede sequencer completion by one edge |
 | DMA | D-chunk boundaries, lane gathering/scattering, finite gathered chunk, port-B sharing and read/write completion | `rtl/dma/otpu_dma.sv`. Independent request/gather and completion/drain paths, 128-chunk buffer, store run threshold 32 and pipeline stages; tested aligned/unaligned transfers, partial chunks and long runs |
 | TMEM | modulo banking, independent configurable read/write capacity, address-specific contention, pipeline drain stalls | `rtl/mem/otpu_tmem.sv`. Abstract bank model; replicated-port guests, subbank/hash/pump and WBUF variants are not implemented; only the tested default topology is validated |
 | Memory adapter | real addresses/transactions, finite occupancy, per-line RMW ordering, callback completion, explicit clocks | Deliberately a documented abstract adapter, not cycle-exact `otpu_native_dram`/F2 shell. Partial QST writes incur explicit per-request RMW rather than undocumented shell combining; this adapter contract is identical on both sides of native RTL comparisons |
@@ -49,11 +49,11 @@ There is no assumed ternary compression or sparse bypass. Capacity does not impl
 
 Supported in this initial implementation: one slice, D=32/64/128, LANES=4/8/16, MCOLS=2/4/8/16,
 ACT row replay, PAIR where the ISA permits it, NOP/HALT/LI/ADDI/LOOP/BAR/RLD/LD/ST/MM/QACT/QST/
-VOP. Zero/illegal shapes, buffer overflows and unknown functions/flags fail rather than invent
+VOP/DSTEP/STREAM and optional SEQ_WC. The stream engine requires eight lanes. Zero/illegal shapes, buffer overflows and unknown functions/flags fail rather than invent
 cycles. Functional semantic errors still raise the original ISA errors.
 
-Explicitly rejected: S>1/GATHER interconnect timing, WAITW host polling, DSTEP/STREAM,
-HALT CHAIN/program-loader timing, SEQ_WC wait-count issue, unknown wide-export configuration
+Explicitly rejected: S>1/GATHER interconnect timing, WAITW host polling,
+HALT CHAIN/program-loader timing, unknown wide-export configuration
 fields, unsupported memory backends and divided controller clocks. These are coverage gaps,
 not operations assigned zero cost. Architecture sweeps beyond the accepted domain fail.
 
@@ -122,6 +122,42 @@ on the actual final replay consumption; packed int4 halves do not release early.
 chunks remain occupied until port acceptance. A full output FIFO freezes its read pipeline,
 including pending stages. Long-K and 128-by-128 DeltaNet regressions cover these boundaries.
 
-The production board target is outside the validated topology: it enables wait-count issue,
-DSTEP/STREAM, pumped/replay TMEM, MXU_E=4 and a DDR3/LiteDRAM shell. The round-four audit
-reports these concrete baseline gaps separately from the compatible S=1 inference fallback.
+The production board target remains outside the validated topology: pumped/replay TMEM,
+MXU_E=4 and the DDR3/LiteDRAM shell are not validated. Round five adds baseline WAITC and
+DSTEP/STREAM, with evidence and remaining limits in [validation-round5.md](validation-round5.md).
+
+
+## WAITC and DMA stream engine
+
+With `Config.SEQ_WC=true`, the unchanged compiler's `wait_counts` emits one 64-bit entry per
+static instruction. The default uses conservative unknown-runtime-argument ranges. A caller
+can supply `wait_entries` explicitly, with one valid entry per instruction. Seven four-bit
+unit distances plus a 31-bit older-VPU mask determine readiness; same-unit counts are ignored,
+while the VPU mask still applies. A two-stage frontend dispatches first at cycle 3, registered
+readiness takes two edges, non-VPU units preserve unit order, and the VPU selects oldest ready.
+The 31-entry VPU tag lifetime stalls dispatch before aliasing. Dynamic LOOP iterations consume
+the static compiler table and maintain dynamic unit history. No average issue-rate shortcut.
+
+`stream.py` follows the original DMA/SE control path: descriptor TMEM reads; VPU drain/ownership;
+q/k/optional-A/column-gate/x/constant fill; 128 input chunks; 64-chunk read/write runs; three
+registered enable stages; 128-chunk output gather; read availability and write-idle completion.
+The SE arithmetic progresses only on enabled edges, with Y after X + T_U(97) + U(7) = 105
+steps and q output after another 35 steps. Backpressure freezes enable propagation. Columns64
+use sixteen eight-lane segments, with eight pad segments discarded from output. Independent
+arithmetic still executes through the ISA at completion and is checked separately.
+
+DSTEP supports rows1..256 and columns64/128/192/256, zero initialization and in-place state.
+STREAM accepts the unchanged `stream_hw_cfg` hardware subset: DELTA, DELTA1, SCALE and DOT,
+constant/column/unit gate, optional q output and A slot1/2, aligned identical or disjoint DRAM
+ranges. TMEM-source/destination, nodst, partial-overlap ranges, arbitrary programs, persistent
+scalar registers and other descriptors raise `Unsupported`. The measured modes and geometries
+are finite coverage, not an exhaustive descriptor proof.
+
+## Exact host-side batching
+
+The optional `otpu_advance` ABI executes every Ramulator tick in C++ until the first callback or
+the next core boundary. Python then processes completion/RMW/ingress before advancing again.
+No core or memory cycles are skipped, and refresh still runs. With ingress queued, only one
+tick is fused with completion polling. `OTPU_PERFSIM_MEMORY_BATCH=0` selects scalar tick/poll;
+older libraries use that same scalar path. There is no backend substitution. Metrics include
+`host_execution.ramulator_tick_batching` and `core_cycles_skipped` (zero).

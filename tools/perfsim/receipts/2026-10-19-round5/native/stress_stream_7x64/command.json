@@ -1,0 +1,10 @@
+[
+  "/private/tmp/opentpu-rtl-stream-d128/obj/Vtb_perfsim",
+  "+dir=/private/tmp/opentpu-r5-extra-stress_stream_7x64",
+  "+memory_profile=/private/tmp/opentpu-r5-extra-stress_stream_7x64/profile.json",
+  "+python_root=/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim",
+  "+python_site=/Users/rachittibrewal/ergodex-03/bonsai2-venv/lib/python3.14/site-packages",
+  "+python_executable=/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+  "+max_cycles=1000000",
+  "+trace"
+]

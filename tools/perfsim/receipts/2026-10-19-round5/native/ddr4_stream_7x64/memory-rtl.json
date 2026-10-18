@@ -1,0 +1,1708 @@
+{
+  "backend": "ramulator",
+  "statistics": {
+    "peak_outstanding": 14,
+    "logical_read_bytes": 2688,
+    "read_transactions": 43,
+    "read_bytes": 2752,
+    "logical_write_bytes": 1820,
+    "write_transactions": 29,
+    "write_bytes": 1856
+  },
+  "transactions": [
+    {
+      "event": "accept",
+      "id": 0,
+      "time_ps": 45815,
+      "owner": 0,
+      "address": 0,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 1,
+      "time_ps": 46648,
+      "owner": 0,
+      "address": 64,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 2,
+      "time_ps": 50813,
+      "owner": 0,
+      "address": 128,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 3,
+      "time_ps": 51646,
+      "owner": 0,
+      "address": 192,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 4,
+      "time_ps": 55811,
+      "owner": 0,
+      "address": 256,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 5,
+      "time_ps": 56644,
+      "owner": 0,
+      "address": 320,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 6,
+      "time_ps": 60809,
+      "owner": 0,
+      "address": 384,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 7,
+      "time_ps": 61642,
+      "owner": 0,
+      "address": 448,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 0,
+      "time_ps": 76636,
+      "owner": 0,
+      "address": 0,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 1,
+      "time_ps": 77469,
+      "owner": 0,
+      "address": 64,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 2,
+      "time_ps": 81634,
+      "owner": 0,
+      "address": 128,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 3,
+      "time_ps": 82467,
+      "owner": 0,
+      "address": 192,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 4,
+      "time_ps": 86632,
+      "owner": 0,
+      "address": 256,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 5,
+      "time_ps": 87465,
+      "owner": 0,
+      "address": 320,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 6,
+      "time_ps": 91630,
+      "owner": 0,
+      "address": 384,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 7,
+      "time_ps": 92463,
+      "owner": 0,
+      "address": 448,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 8,
+      "time_ps": 190757,
+      "owner": 0,
+      "address": 4096,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 9,
+      "time_ps": 191590,
+      "owner": 0,
+      "address": 4160,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 8,
+      "time_ps": 208250,
+      "owner": 0,
+      "address": 4096,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 9,
+      "time_ps": 209083,
+      "owner": 0,
+      "address": 4160,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 10,
+      "time_ps": 245735,
+      "owner": 0,
+      "address": 8192,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 11,
+      "time_ps": 246568,
+      "owner": 0,
+      "address": 8256,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 10,
+      "time_ps": 263228,
+      "owner": 0,
+      "address": 8192,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 11,
+      "time_ps": 264061,
+      "owner": 0,
+      "address": 8256,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 12,
+      "time_ps": 300713,
+      "owner": 0,
+      "address": 12288,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 13,
+      "time_ps": 301546,
+      "owner": 0,
+      "address": 12352,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 12,
+      "time_ps": 318206,
+      "owner": 0,
+      "address": 12288,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 13,
+      "time_ps": 319039,
+      "owner": 0,
+      "address": 12352,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 14,
+      "time_ps": 375683,
+      "owner": 0,
+      "address": 65536,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 15,
+      "time_ps": 376516,
+      "owner": 0,
+      "address": 65600,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 16,
+      "time_ps": 380681,
+      "owner": 0,
+      "address": 65664,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 17,
+      "time_ps": 381514,
+      "owner": 0,
+      "address": 65728,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 18,
+      "time_ps": 385679,
+      "owner": 0,
+      "address": 65792,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 19,
+      "time_ps": 386512,
+      "owner": 0,
+      "address": 65856,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 20,
+      "time_ps": 390677,
+      "owner": 0,
+      "address": 65920,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 21,
+      "time_ps": 391510,
+      "owner": 0,
+      "address": 65984,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 22,
+      "time_ps": 395675,
+      "owner": 0,
+      "address": 66048,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 23,
+      "time_ps": 396508,
+      "owner": 0,
+      "address": 66112,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 24,
+      "time_ps": 400673,
+      "owner": 0,
+      "address": 66176,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 25,
+      "time_ps": 401506,
+      "owner": 0,
+      "address": 66240,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 26,
+      "time_ps": 405671,
+      "owner": 0,
+      "address": 66304,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 14,
+      "time_ps": 406504,
+      "owner": 0,
+      "address": 65536,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 27,
+      "time_ps": 406504,
+      "owner": 0,
+      "address": 66368,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 15,
+      "time_ps": 407337,
+      "owner": 0,
+      "address": 65600,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 28,
+      "time_ps": 410669,
+      "owner": 0,
+      "address": 66432,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 16,
+      "time_ps": 411502,
+      "owner": 0,
+      "address": 65664,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 29,
+      "time_ps": 411502,
+      "owner": 0,
+      "address": 66496,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 17,
+      "time_ps": 412335,
+      "owner": 0,
+      "address": 65728,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 30,
+      "time_ps": 415667,
+      "owner": 0,
+      "address": 66560,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 18,
+      "time_ps": 416500,
+      "owner": 0,
+      "address": 65792,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 31,
+      "time_ps": 416500,
+      "owner": 0,
+      "address": 66624,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 19,
+      "time_ps": 417333,
+      "owner": 0,
+      "address": 65856,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 32,
+      "time_ps": 420665,
+      "owner": 0,
+      "address": 66688,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 20,
+      "time_ps": 421498,
+      "owner": 0,
+      "address": 65920,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 33,
+      "time_ps": 421498,
+      "owner": 0,
+      "address": 66752,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 21,
+      "time_ps": 422331,
+      "owner": 0,
+      "address": 65984,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 34,
+      "time_ps": 425663,
+      "owner": 0,
+      "address": 66816,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 22,
+      "time_ps": 426496,
+      "owner": 0,
+      "address": 66048,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 35,
+      "time_ps": 426496,
+      "owner": 0,
+      "address": 66880,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 23,
+      "time_ps": 427329,
+      "owner": 0,
+      "address": 66112,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 36,
+      "time_ps": 430661,
+      "owner": 0,
+      "address": 66944,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 24,
+      "time_ps": 431494,
+      "owner": 0,
+      "address": 66176,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 37,
+      "time_ps": 431494,
+      "owner": 0,
+      "address": 67008,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 25,
+      "time_ps": 432327,
+      "owner": 0,
+      "address": 66240,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 38,
+      "time_ps": 435659,
+      "owner": 0,
+      "address": 67072,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 26,
+      "time_ps": 436492,
+      "owner": 0,
+      "address": 66304,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 39,
+      "time_ps": 436492,
+      "owner": 0,
+      "address": 67136,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 27,
+      "time_ps": 437325,
+      "owner": 0,
+      "address": 66368,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 40,
+      "time_ps": 440657,
+      "owner": 0,
+      "address": 67200,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 28,
+      "time_ps": 441490,
+      "owner": 0,
+      "address": 66432,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 41,
+      "time_ps": 441490,
+      "owner": 0,
+      "address": 67264,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 29,
+      "time_ps": 442323,
+      "owner": 0,
+      "address": 66496,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 30,
+      "time_ps": 446488,
+      "owner": 0,
+      "address": 66560,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 31,
+      "time_ps": 447321,
+      "owner": 0,
+      "address": 66624,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 32,
+      "time_ps": 451486,
+      "owner": 0,
+      "address": 66688,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 33,
+      "time_ps": 452319,
+      "owner": 0,
+      "address": 66752,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 34,
+      "time_ps": 456484,
+      "owner": 0,
+      "address": 66816,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 35,
+      "time_ps": 457317,
+      "owner": 0,
+      "address": 66880,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 36,
+      "time_ps": 461482,
+      "owner": 0,
+      "address": 66944,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 37,
+      "time_ps": 462315,
+      "owner": 0,
+      "address": 67008,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 38,
+      "time_ps": 466480,
+      "owner": 0,
+      "address": 67072,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 39,
+      "time_ps": 467313,
+      "owner": 0,
+      "address": 67136,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 40,
+      "time_ps": 471478,
+      "owner": 0,
+      "address": 67200,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 41,
+      "time_ps": 472311,
+      "owner": 0,
+      "address": 67264,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 42,
+      "time_ps": 1060409,
+      "owner": 0,
+      "address": 65536,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 43,
+      "time_ps": 1061242,
+      "owner": 0,
+      "address": 65600,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 42,
+      "time_ps": 1074570,
+      "owner": 0,
+      "address": 65536,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 43,
+      "time_ps": 1075403,
+      "owner": 0,
+      "address": 65600,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 44,
+      "time_ps": 1075403,
+      "owner": 0,
+      "address": 65664,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 45,
+      "time_ps": 1076236,
+      "owner": 0,
+      "address": 65728,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 44,
+      "time_ps": 1089564,
+      "owner": 0,
+      "address": 65664,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 45,
+      "time_ps": 1090397,
+      "owner": 0,
+      "address": 65728,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 46,
+      "time_ps": 1135379,
+      "owner": 0,
+      "address": 65792,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 47,
+      "time_ps": 1136212,
+      "owner": 0,
+      "address": 65856,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 46,
+      "time_ps": 1149540,
+      "owner": 0,
+      "address": 65792,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 47,
+      "time_ps": 1150373,
+      "owner": 0,
+      "address": 65856,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 48,
+      "time_ps": 1155371,
+      "owner": 0,
+      "address": 65920,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 49,
+      "time_ps": 1156204,
+      "owner": 0,
+      "address": 65984,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 48,
+      "time_ps": 1169532,
+      "owner": 0,
+      "address": 65920,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 49,
+      "time_ps": 1170365,
+      "owner": 0,
+      "address": 65984,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 50,
+      "time_ps": 1215347,
+      "owner": 0,
+      "address": 66048,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 51,
+      "time_ps": 1216180,
+      "owner": 0,
+      "address": 66112,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 50,
+      "time_ps": 1229508,
+      "owner": 0,
+      "address": 66048,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 51,
+      "time_ps": 1230341,
+      "owner": 0,
+      "address": 66112,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 52,
+      "time_ps": 1235339,
+      "owner": 0,
+      "address": 66176,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 53,
+      "time_ps": 1236172,
+      "owner": 0,
+      "address": 66240,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 52,
+      "time_ps": 1249500,
+      "owner": 0,
+      "address": 66176,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 53,
+      "time_ps": 1250333,
+      "owner": 0,
+      "address": 66240,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 54,
+      "time_ps": 1295315,
+      "owner": 0,
+      "address": 66304,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 55,
+      "time_ps": 1296148,
+      "owner": 0,
+      "address": 66368,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 54,
+      "time_ps": 1309476,
+      "owner": 0,
+      "address": 66304,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 55,
+      "time_ps": 1310309,
+      "owner": 0,
+      "address": 66368,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 56,
+      "time_ps": 1315307,
+      "owner": 0,
+      "address": 66432,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 57,
+      "time_ps": 1316140,
+      "owner": 0,
+      "address": 66496,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 56,
+      "time_ps": 1329468,
+      "owner": 0,
+      "address": 66432,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 57,
+      "time_ps": 1330301,
+      "owner": 0,
+      "address": 66496,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 58,
+      "time_ps": 1375283,
+      "owner": 0,
+      "address": 66560,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 59,
+      "time_ps": 1376116,
+      "owner": 0,
+      "address": 66624,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 58,
+      "time_ps": 1389444,
+      "owner": 0,
+      "address": 66560,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 59,
+      "time_ps": 1390277,
+      "owner": 0,
+      "address": 66624,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 60,
+      "time_ps": 1395275,
+      "owner": 0,
+      "address": 66688,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 61,
+      "time_ps": 1396108,
+      "owner": 0,
+      "address": 66752,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 60,
+      "time_ps": 1409436,
+      "owner": 0,
+      "address": 66688,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 61,
+      "time_ps": 1410269,
+      "owner": 0,
+      "address": 66752,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 62,
+      "time_ps": 1455251,
+      "owner": 0,
+      "address": 66816,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 63,
+      "time_ps": 1456084,
+      "owner": 0,
+      "address": 66880,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 62,
+      "time_ps": 1469412,
+      "owner": 0,
+      "address": 66816,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 63,
+      "time_ps": 1470245,
+      "owner": 0,
+      "address": 66880,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 64,
+      "time_ps": 1475243,
+      "owner": 0,
+      "address": 66944,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 65,
+      "time_ps": 1476076,
+      "owner": 0,
+      "address": 67008,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 64,
+      "time_ps": 1489404,
+      "owner": 0,
+      "address": 66944,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 65,
+      "time_ps": 1490237,
+      "owner": 0,
+      "address": 67008,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 66,
+      "time_ps": 1535219,
+      "owner": 0,
+      "address": 67072,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 67,
+      "time_ps": 1536052,
+      "owner": 0,
+      "address": 67136,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 66,
+      "time_ps": 1549380,
+      "owner": 0,
+      "address": 67072,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 67,
+      "time_ps": 1550213,
+      "owner": 0,
+      "address": 67136,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 68,
+      "time_ps": 1555211,
+      "owner": 0,
+      "address": 67200,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 69,
+      "time_ps": 1556044,
+      "owner": 0,
+      "address": 67264,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 68,
+      "time_ps": 1569372,
+      "owner": 0,
+      "address": 67200,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 69,
+      "time_ps": 1570205,
+      "owner": 0,
+      "address": 67264,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 70,
+      "time_ps": 1820105,
+      "owner": 0,
+      "address": 67328,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 70,
+      "time_ps": 1837598,
+      "owner": 0,
+      "address": 67328,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 71,
+      "time_ps": 1837598,
+      "owner": 0,
+      "address": 67328,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 71,
+      "time_ps": 1851759,
+      "owner": 0,
+      "address": 67328,
+      "write": true
+    }
+  ],
+  "ports": [
+    {
+      "cycle": 9,
+      "event": "port_accept",
+      "port": "B",
+      "id": 0,
+      "address": 0,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 10,
+      "event": "port_accept",
+      "port": "B",
+      "id": 1,
+      "address": 128,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 11,
+      "event": "port_accept",
+      "port": "B",
+      "id": 2,
+      "address": 256,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 12,
+      "event": "port_accept",
+      "port": "B",
+      "id": 3,
+      "address": 384,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 16,
+      "event": "port_complete",
+      "port": "B",
+      "id": 0
+    },
+    {
+      "cycle": 17,
+      "event": "port_complete",
+      "port": "B",
+      "id": 1
+    },
+    {
+      "cycle": 18,
+      "event": "port_complete",
+      "port": "B",
+      "id": 2
+    },
+    {
+      "cycle": 19,
+      "event": "port_complete",
+      "port": "B",
+      "id": 3
+    },
+    {
+      "cycle": 38,
+      "event": "port_accept",
+      "port": "B",
+      "id": 4,
+      "address": 4096,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 42,
+      "event": "port_complete",
+      "port": "B",
+      "id": 4
+    },
+    {
+      "cycle": 49,
+      "event": "port_accept",
+      "port": "B",
+      "id": 5,
+      "address": 8192,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 53,
+      "event": "port_complete",
+      "port": "B",
+      "id": 5
+    },
+    {
+      "cycle": 60,
+      "event": "port_accept",
+      "port": "B",
+      "id": 6,
+      "address": 12288,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 64,
+      "event": "port_complete",
+      "port": "B",
+      "id": 6
+    },
+    {
+      "cycle": 75,
+      "event": "port_accept",
+      "port": "B",
+      "id": 7,
+      "address": 65536,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 76,
+      "event": "port_accept",
+      "port": "B",
+      "id": 8,
+      "address": 65664,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 77,
+      "event": "port_accept",
+      "port": "B",
+      "id": 9,
+      "address": 65792,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 78,
+      "event": "port_accept",
+      "port": "B",
+      "id": 10,
+      "address": 65920,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 79,
+      "event": "port_accept",
+      "port": "B",
+      "id": 11,
+      "address": 66048,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 80,
+      "event": "port_accept",
+      "port": "B",
+      "id": 12,
+      "address": 66176,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 81,
+      "event": "port_accept",
+      "port": "B",
+      "id": 13,
+      "address": 66304,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 82,
+      "event": "port_accept",
+      "port": "B",
+      "id": 14,
+      "address": 66432,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 82,
+      "event": "port_complete",
+      "port": "B",
+      "id": 7
+    },
+    {
+      "cycle": 83,
+      "event": "port_accept",
+      "port": "B",
+      "id": 15,
+      "address": 66560,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 83,
+      "event": "port_complete",
+      "port": "B",
+      "id": 8
+    },
+    {
+      "cycle": 84,
+      "event": "port_accept",
+      "port": "B",
+      "id": 16,
+      "address": 66688,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 84,
+      "event": "port_complete",
+      "port": "B",
+      "id": 9
+    },
+    {
+      "cycle": 85,
+      "event": "port_accept",
+      "port": "B",
+      "id": 17,
+      "address": 66816,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 85,
+      "event": "port_complete",
+      "port": "B",
+      "id": 10
+    },
+    {
+      "cycle": 86,
+      "event": "port_accept",
+      "port": "B",
+      "id": 18,
+      "address": 66944,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 86,
+      "event": "port_complete",
+      "port": "B",
+      "id": 11
+    },
+    {
+      "cycle": 87,
+      "event": "port_accept",
+      "port": "B",
+      "id": 19,
+      "address": 67072,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 87,
+      "event": "port_complete",
+      "port": "B",
+      "id": 12
+    },
+    {
+      "cycle": 88,
+      "event": "port_accept",
+      "port": "B",
+      "id": 20,
+      "address": 67200,
+      "size": 128,
+      "write": false
+    },
+    {
+      "cycle": 88,
+      "event": "port_complete",
+      "port": "B",
+      "id": 13
+    },
+    {
+      "cycle": 89,
+      "event": "port_complete",
+      "port": "B",
+      "id": 14
+    },
+    {
+      "cycle": 90,
+      "event": "port_complete",
+      "port": "B",
+      "id": 15
+    },
+    {
+      "cycle": 91,
+      "event": "port_complete",
+      "port": "B",
+      "id": 16
+    },
+    {
+      "cycle": 92,
+      "event": "port_complete",
+      "port": "B",
+      "id": 17
+    },
+    {
+      "cycle": 93,
+      "event": "port_complete",
+      "port": "B",
+      "id": 18
+    },
+    {
+      "cycle": 94,
+      "event": "port_complete",
+      "port": "B",
+      "id": 19
+    },
+    {
+      "cycle": 95,
+      "event": "port_complete",
+      "port": "B",
+      "id": 20
+    },
+    {
+      "cycle": 212,
+      "event": "port_accept",
+      "port": "B",
+      "id": 21,
+      "address": 65536,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 215,
+      "event": "port_accept",
+      "port": "B",
+      "id": 22,
+      "address": 65664,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 216,
+      "event": "port_complete",
+      "port": "B",
+      "id": 21
+    },
+    {
+      "cycle": 219,
+      "event": "port_complete",
+      "port": "B",
+      "id": 22
+    },
+    {
+      "cycle": 227,
+      "event": "port_accept",
+      "port": "B",
+      "id": 23,
+      "address": 65792,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 231,
+      "event": "port_accept",
+      "port": "B",
+      "id": 24,
+      "address": 65920,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 231,
+      "event": "port_complete",
+      "port": "B",
+      "id": 23
+    },
+    {
+      "cycle": 235,
+      "event": "port_complete",
+      "port": "B",
+      "id": 24
+    },
+    {
+      "cycle": 243,
+      "event": "port_accept",
+      "port": "B",
+      "id": 25,
+      "address": 66048,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 247,
+      "event": "port_accept",
+      "port": "B",
+      "id": 26,
+      "address": 66176,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 247,
+      "event": "port_complete",
+      "port": "B",
+      "id": 25
+    },
+    {
+      "cycle": 251,
+      "event": "port_complete",
+      "port": "B",
+      "id": 26
+    },
+    {
+      "cycle": 259,
+      "event": "port_accept",
+      "port": "B",
+      "id": 27,
+      "address": 66304,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 263,
+      "event": "port_accept",
+      "port": "B",
+      "id": 28,
+      "address": 66432,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 263,
+      "event": "port_complete",
+      "port": "B",
+      "id": 27
+    },
+    {
+      "cycle": 267,
+      "event": "port_complete",
+      "port": "B",
+      "id": 28
+    },
+    {
+      "cycle": 275,
+      "event": "port_accept",
+      "port": "B",
+      "id": 29,
+      "address": 66560,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 279,
+      "event": "port_accept",
+      "port": "B",
+      "id": 30,
+      "address": 66688,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 279,
+      "event": "port_complete",
+      "port": "B",
+      "id": 29
+    },
+    {
+      "cycle": 283,
+      "event": "port_complete",
+      "port": "B",
+      "id": 30
+    },
+    {
+      "cycle": 291,
+      "event": "port_accept",
+      "port": "B",
+      "id": 31,
+      "address": 66816,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 295,
+      "event": "port_accept",
+      "port": "B",
+      "id": 32,
+      "address": 66944,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 295,
+      "event": "port_complete",
+      "port": "B",
+      "id": 31
+    },
+    {
+      "cycle": 299,
+      "event": "port_complete",
+      "port": "B",
+      "id": 32
+    },
+    {
+      "cycle": 307,
+      "event": "port_accept",
+      "port": "B",
+      "id": 33,
+      "address": 67072,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 311,
+      "event": "port_accept",
+      "port": "B",
+      "id": 34,
+      "address": 67200,
+      "size": 128,
+      "write": true
+    },
+    {
+      "cycle": 311,
+      "event": "port_complete",
+      "port": "B",
+      "id": 33
+    },
+    {
+      "cycle": 315,
+      "event": "port_complete",
+      "port": "B",
+      "id": 34
+    },
+    {
+      "cycle": 364,
+      "event": "port_accept",
+      "port": "B",
+      "id": 35,
+      "address": 67328,
+      "size": 28,
+      "write": true
+    },
+    {
+      "cycle": 371,
+      "event": "port_complete",
+      "port": "B",
+      "id": 35
+    }
+  ]
+}

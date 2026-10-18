@@ -47,11 +47,20 @@ def main():
     arch=[f'-DCMAKE_OSX_ARCHITECTURES={platform.machine()}'] if sys.platform=='darwin' else []
     call(['cmake','-S',source,'-B',source/'build',*opts,*arch])
     call(['cmake','--build',source/'build','-j',args.jobs])
-    call(['cmake','-S',HERE/'ramulator','-B',build,f'-DRAMULATOR_ROOT={source}',*arch])
+    # A build-local snapshot avoids synced-folder transient reads by CMake.
+    snapshot=build/'bridge-source';snapshot.mkdir(parents=True,exist_ok=True)
+    snapshot_hashes={}
+    for name in ('CMakeLists.txt','bridge.cpp'):
+        raw=(HERE/'ramulator'/name).read_bytes()
+        if not raw:raise RuntimeError(f'empty bridge source: {name}')
+        (snapshot/name).write_bytes(raw);snapshot_hashes[name]=hashlib.sha256(raw).hexdigest()
+    call(['cmake','-S',snapshot,'-B',build,f'-DRAMULATOR_ROOT={source}',*arch])
     call(['cmake','--build',build,'-j',args.jobs])
+    libraries={p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in build.glob('*opentpu_ramulator*') if p.is_file()}
+    if not libraries:raise RuntimeError('CMake returned success without a bridge library')
     diff=subprocess.check_output(['git','-C',str(source),'diff','--binary'])
     receipt={'lock':lock,'python_architecture':platform.machine(),'patch_sha256':hashlib.sha256(diff).hexdigest(),
-             'libraries':{p.name:hashlib.sha256(p.read_bytes()).hexdigest() for p in build.glob('*opentpu_ramulator*') if p.is_file()}}
+             'bridge_sources':snapshot_hashes,'libraries':libraries}
     (build/'dependency-build.json').write_text(json.dumps(receipt,indent=2)+'\n')
     print(build)
 

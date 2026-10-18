@@ -52,6 +52,22 @@ int otpu_poll(void* p, uint64_t* id) {
   }
   return 0;
 }
+// Advance only while the caller has no pending ingress. Stop at the first callback
+// visible to the caller, preserving every memory tick (including refresh/write tails).
+// Returning at the first event lets Python enqueue RMW writes before the next tick.
+int otpu_advance(void* p, int limit, uint64_t* ids, int capacity, int* count) {
+  *count=0;
+  for (int elapsed=1; elapsed<=limit; ++elapsed) {
+    if (otpu_tick(p)<0) return -1;
+    uint64_t id;
+    while (otpu_poll(p,&id)) {
+      if (*count>=capacity) { error="completion buffer overflow"; return -1; }
+      ids[(*count)++]=id;
+    }
+    if (*count || elapsed==limit) return elapsed;
+  }
+  error="advance limit must be positive"; return -1;
+}
 int otpu_tck_ps(void* p) { return int(static_cast<Bridge*>(p)->memory->get_tCK()*1000+0.5); }
 int otpu_tx_bytes(void* p) {
   auto d=static_cast<Bridge*>(p)->memory->get_ifce<Ramulator::IDRAM>();

@@ -29,8 +29,8 @@ def main():
  if out.exists():ap.error('output must not exist')
  out.mkdir(parents=True)
  cfg,prog,img,obj=load_bundle(a.bundle);params=json.loads(a.executable.resolve().parents[1].joinpath('build-receipt.json').read_text())
- wanted={'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024,'AXI':0}
- if any(params['parameters'].get(k)!=v for k,v in wanted.items()):raise ValueError('RTL build/config mismatch')
+ wanted={'S':cfg.S,'D':cfg.D,'MCOLS':cfg.MCOLS,'LANES':cfg.LANES,'ACT_BLOCKS':cfg.ACT_BLOCKS,'ACT_ROWS':cfg.act_rows,'TMEM_WORDS':cfg.TMEM_WORDS,'IMEM_WORDS':cfg.IMEM_WORDS,'DRAM_WORDS':cfg.DRAM_BYTES//4,'WIN':16,'RPB':32,'WPB':1,'FIFO_DEPTH':1024,'AXI':0,'SEQ_WC':int(cfg.SEQ_WC)}
+ if any(params['parameters'].get(k,0 if k=='SEQ_WC' else None)!=v for k,v in wanted.items()):raise ValueError('RTL build/config mismatch')
  if digest(a.executable)!=params['binary_sha256']:raise ValueError('RTL binary hash mismatch')
  profile=json.loads(a.profile.read_text());mc=profile['memory'].copy()
  for k in ('bridge','ramulator_config'):
@@ -41,6 +41,9 @@ def main():
  save_bundle(out,cfg,prog,img,args=obj.get('args',()),labels=obj.get('labels'),metadata=obj.get('metadata'))
  args=[str(a.executable.resolve()),f'+dir={out}',f'+memory_profile={out}/profile.json',f'+python_root={ROOT}',f'+python_site={sysconfig.get_paths()["purelib"]}',f'+python_executable={sys.executable}','+max_cycles=1000000','+trace']
  args += [f'+arg{k}={v}' for k,v in enumerate(obj.get('args',()))]
+ if cfg.SEQ_WC:
+  from opentpu import waits as W
+  waits=W.wait_counts(prog,cfg.D,cfg.S);W.sync_file(waits,out/'waits.txt');args.append(f'+hz_sync_s0={out}/waits.txt')
  if a.micro_trace:args.append('+uarch_trace')
  write_json(out/'command.json',args)
  started=time.perf_counter();run=subprocess.run(args,capture_output=True,text=True,timeout=180);rtl_wall=time.perf_counter()-started

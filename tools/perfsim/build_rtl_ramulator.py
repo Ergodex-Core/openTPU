@@ -28,12 +28,28 @@ def main():
       $display("VX c=%0d dst=%0d issue=%0d en=%0d cw=%0d ca=%0d w=%0d wa=%0d di=%0d done=%0d ew=%0d begin=%0d",
        u_slice.u_seq.cyc,u_slice.u_vpu.dst,u_slice.u_vpu.issuing,u_slice.u_vpu.en,u_slice.u_vpu.cw_en,u_slice.u_vpu.cw_addr[0],u_slice.v_wen,u_slice.v_waddr[0],u_slice.u_vpu.done_i,u_slice.u_vpu.done,u_slice.u_vpu.ew_n,u_slice.u_vpu.can_begin);
 '''
+ block+='''
+    always @(posedge clk) if (!rst && $test$plusargs("uarch_trace") && u_slice.u_dma.is_ds)
+      $display("SX c=%0d su=%0d wait=%0d fill=%0d run=%0d out=%0d req=%0d gnt=%0d pe=%0d take=%0d y=%0d o=%0d og=%0d left=%0d wr=%0d rr=%0d cnt=%0d occ=%0d done=%0d",
+       u_slice.u_seq.cyc,u_slice.u_dma.ds_su,u_slice.u_dma.ds_wait,u_slice.u_dma.ds_fill,u_slice.u_dma.ds_run,u_slice.u_dma.ds_out,
+       u_slice.u_dma.ss_req,u_slice.u_dma.ss_gnt,u_slice.u_dma.ss_pe,u_slice.u_dma.ds_take,u_slice.u_dma.y_v,u_slice.u_dma.o_v,
+       u_slice.u_dma.og,u_slice.u_dma.ds_left,u_slice.u_dma.ds_wr,u_slice.u_dma.ds_rr,u_slice.u_dma.cnt,u_slice.u_dma.occ,u_slice.u_dma.done);
+'''
  derived=top[:start]+block+top[end:];derived=derived.replace('module otpu_top','module otpu_perfsim_top',1)
  (out/'otpu_perfsim_top.sv').write_text(derived)
  tb=(ROOT/'sim/verilator/tb_top.sv').read_text().replace('module tb_top;','module tb_perfsim;').replace('otpu_top #(','otpu_perfsim_top #(')
  if a.persistent:
   start=tb.index("  initial begin\n    void'($value$plusargs(\"max_cycles=")
-  tb=tb[:start]+(ROOT/'tools/perfsim/rtl/persistent_body.sv').read_text()+'\nendmodule\n'
+  body=(ROOT/'tools/perfsim/rtl/persistent_body.sv').read_text()
+  if cfg.SEQ_WC:
+   body=body.replace('  int stages=1', '  logic [63:0] wait_words [IMEM_WORDS/8];\n  int stages=1')
+   body=body.replace('      pm_stage(stage);', '''      pm_stage(stage);
+      for (int i=0;i<IMEM_WORDS/8;i++) wait_words[i]='0;
+      $readmemh($sformatf("%s/waits.hex",stage_dir),wait_words);
+      for (int row=0;row<IMEM_WORDS/32;row++)
+        for (int e=0;e<4;e++)
+          dut.g_slice[0].u_slice.u_seq.g_sync.u_sync.g_auto.mem[row][59*e+:59]={wait_words[4*row+e][62:32],wait_words[4*row+e][27:0]};''')
+  tb=tb[:start]+body+'\nendmodule\n'
  (out/'tb_perfsim.sv').write_text(tb)
  sources=[ROOT/'rtl'/p for p in RTL_SOURCES if p!='top/otpu_top.sv']+[ROOT/'tools/perfsim/rtl/otpu_perfsim_memory.sv',out/'otpu_perfsim_top.sv',out/'tb_perfsim.sv']
  cpp=ROOT/'tools/perfsim/rtl/driver.cpp'
@@ -42,7 +58,7 @@ def main():
   includes+=f' -arch {platform.machine()}'
   ld=f'-arch {platform.machine()} -F{sysconfig.get_config_var("PYTHONFRAMEWORKPREFIX")} -framework Python'
  else:ld=f'-L{sysconfig.get_config_var("LIBDIR")} -lpython{sysconfig.get_config_var("LDVERSION")} -ldl -lm'
- params=top_params(cfg,uarch={'WIN':16,'RPB':32,'WPB':1,'MXU_IMPL':2,'FIFO_DEPTH':1024})
+ params=top_params(cfg,uarch={'WIN':16,'RPB':32,'WPB':1,'MXU_IMPL':2,'FIFO_DEPTH':1024,'SEQ_WC':int(cfg.SEQ_WC)})
  cmd=['verilator','--binary','-j',str(a.jobs),'-Wno-fatal','-Wno-WIDTHEXPAND','-Wno-WIDTHTRUNC','-O3','--x-assign','0','--x-initial','0','--top-module','tb_perfsim','-Mdir',str(out/'obj'),'-CFLAGS',includes,'-LDFLAGS',ld,*[f'-G{k}={int(v)}' for k,v in params.items()],*[str(p) for p in sources],str(cpp)]
  (out/'build-command.json').write_text(json.dumps(cmd,indent=2)+'\n')
  with (out/'build.log').open('w') as log:r=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)

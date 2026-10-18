@@ -35,8 +35,10 @@ class Architecture:
                 raise ValueError(f'{k} must be a positive integer (lane overrides may be zero)')
         if cfg.S != 1:
             raise Unsupported('multi-slice collective/interconnect timing is not implemented; S must be 1')
-        if cfg.SEQ_WC or cfg.STREAM or cfg.DSTEP:
-            raise Unsupported('WAITC/STREAM/DSTEP configurations are not modelled')
+        if (cfg.STREAM or cfg.DSTEP) and cfg.LANES!=8:
+            raise Unsupported('stream engine requires LANES=8')
+        if cfg.SEQ_WC and self.window > 16:
+            raise Unsupported('WAITC supports a window of at most 16')
         if cfg.D not in (32, 64, 128) or cfg.LANES not in (4, 8, 16):
             raise Unsupported('supported D: 32/64/128; LANES: 4/8/16')
         if cfg.MCOLS not in (2, 4, 8, 16) or cfg.act_rows < cfg.MCOLS:

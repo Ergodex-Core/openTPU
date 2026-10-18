@@ -16,10 +16,11 @@ from .ports import make_memory
 class Banks:
     def __init__(self, cfg, arch):
         self.cfg, self.arch = cfg, arch
+        self.reads,self.writes=Counter(),Counter()
         self.reset()
 
     def reset(self):
-        self.reads, self.writes = Counter(), Counter()
+        self.reads.clear();self.writes.clear()
 
     def grant(self, reads=(), writes=(), probe=False):
         r = Counter(a % self.cfg.LANES for a in reads)
@@ -64,6 +65,7 @@ class Command:
         if self.ins.op == I.RLD and self.ins.rd:
             sl.R[self.ins.rd] = value
         self.end = self.sim.cycle
+        self.sim.last_completed_end=self.end
 
     def record(self):
         return dict(id=self.id, pc=self.pc, loop_context=self.loop_context, opcode=I.OPNAMES[self.ins.op], unit=self.unit,
@@ -75,7 +77,7 @@ class Command:
 
 
 class Simulator:
-    def __init__(self, cfg, program, image, *, architecture=None, memory=None, args=None, labels=None, memory_system=None):
+    def __init__(self, cfg, program, image, *, architecture=None, memory=None, args=None, labels=None, memory_system=None, wait_entries=None):
         self.cfg = cfg
         self.arch = architecture or Architecture()
         self.memcfg = memory_system.cfg if memory_system is not None else memory or MemoryConfig()
@@ -85,6 +87,10 @@ class Simulator:
         self.program = program
         self.labels = {int(k):v for k,v in (labels or {}).items()}
         self.loop_counts = {}
+        self.wait_entries = list(W.wait_counts(program,cfg.D,cfg.S)) if cfg.SEQ_WC and wait_entries is None else wait_entries
+        if cfg.SEQ_WC and (len(self.wait_entries)!=len(program) or any(int(e)<0 or int(e)>>63 for e in self.wait_entries)):
+            raise ValueError('WAITC requires one valid 64-bit entry per instruction')
+        self.unit_history = [[] for _ in range(W.NUNITS)]
         if len(program)*8 > cfg.IMEM_WORDS:
             raise ValueError('program exceeds IMEM')
         self._validate_program()
@@ -104,23 +110,29 @@ class Simulator:
         self.cycle, self.next_dispatch = 0, 1
         self.pipeline = deque()
         self.halt_cycle = None
+        self.last_completed_end=0
         self.last_start = {}
         self.vpu_loop_busy = set()
         self.retired_this_cycle = 0
         self.stalls, self.resources, self.busy = Counter(), set(), Counter()
         self.rld_pending = None
         self.halt_seen = False
+        self.stream_request=None;self.stream_release=0
 
     def _validate_program(self):
-        supported = {I.NOP,I.HALT,I.LI,I.ADDI,I.LOOP,I.BAR,I.RLD,I.LD,I.ST,I.MM,I.QACT,I.QST,I.VOP}
+        supported = {I.NOP,I.HALT,I.LI,I.ADDI,I.LOOP,I.BAR,I.RLD,I.LD,I.ST,I.MM,I.QACT,I.QST,I.VOP,I.DSTEP,I.STREAM}
         for pc, ins in enumerate(self.program):
             if ins.op not in supported or (ins.op == I.HALT and ins.flags):
                 raise Unsupported(f'pc {pc}: {I.OPNAMES.get(ins.op, hex(ins.op))} flags {ins.flags:#x}')
-            masks={I.NOP:0,I.HALT:0,I.LI:0,I.ADDI:0,I.LOOP:0,I.BAR:0,I.RLD:7,I.LD:0,I.ST:0,I.MM:255,I.QACT:15,I.QST:3,I.VOP:3 if ((ins.w[5]>>16)&255)==I.V_OUTER else 0}
+            masks={I.DSTEP:1,I.STREAM:1,I.NOP:0,I.HALT:0,I.LI:0,I.ADDI:0,I.LOOP:0,I.BAR:0,I.RLD:7,I.LD:0,I.ST:0,I.MM:255,I.QACT:15,I.QST:3,I.VOP:3 if ((ins.w[5]>>16)&255)==I.V_OUTER else 0}
             if ins.flags & ~masks[ins.op]:
                 raise Unsupported(f'pc {pc}: unsupported flags {ins.flags:#x}')
             if ins.op == I.VOP and (ins.w[5] >> 16) & 255 not in I.VFUNCS:
                 raise Unsupported(f'pc {pc}: unknown VOP function')
+            if ins.op in (I.DSTEP,I.STREAM) and not (self.cfg.DSTEP or self.cfg.STREAM):
+                raise Unsupported(f'pc {pc}: stream engine requires DSTEP hardware')
+            if ins.op == I.STREAM and not self.cfg.STREAM:
+                raise Unsupported(f'pc {pc}: STREAM disabled by configuration')
             if ins.op == I.MM:
                 kb, m = (ins.w[3] >> 16) & 255, (ins.w[5] >> 16) & 255
                 if not (ins.w[3] & 65535) or not kb or not m:
@@ -139,12 +151,26 @@ class Simulator:
     def dispatch(self):
         # R -> P -> S -> Q -> C: four elastic footprint stages (otpu_seq.sv).
         if self.pipeline and self.pipeline[0][0] <= self.cycle:
-            if len(self.window)+self.retired_this_cycle < self.arch.window:
+            candidate=self.pipeline[0][1]
+            history=self.unit_history[W.U_VPU]
+            vhold=self.cfg.SEQ_WC and candidate.unit==W.U_VPU and len(history)>=31 and (history[-31].end is None or history[-31].end>=self.cycle)
+            if len(self.window)+self.retired_this_cycle < self.arch.window and not vhold:
                 _,cmd=self.pipeline.popleft()
                 cmd.dispatch=self.cycle
-                for older in self.window:
-                    if W.conflict(cmd.fp,older.fp): cmd.deps.append(older)
-                    if W.conflict(cmd.fp,older.fp,dram_only=True): cmd.dram_deps.append(older)
+                if self.cfg.SEQ_WC:
+                    entry=int(self.wait_entries[cmd.pc])
+                    for j,u in enumerate(W.WUNIT):
+                        k=(entry>>(j*4))&15
+                        history=self.unit_history[u]
+                        if k and u not in (cmd.unit,W.U_VPU) and k<=len(history):
+                            (cmd.deps if j<5 else cmd.dram_deps).append(history[-k])
+                    mask=entry>>32
+                    cmd.deps.extend(h for rank,h in enumerate(reversed(self.unit_history[W.U_VPU][-31:]),1) if rank<=31 and mask&(1<<(rank-1)))
+                else:
+                    for older in self.window:
+                        if W.conflict(cmd.fp,older.fp): cmd.deps.append(older)
+                        if W.conflict(cmd.fp,older.fp,dram_only=True): cmd.dram_deps.append(older)
+                if self.cfg.SEQ_WC:self.unit_history[cmd.unit].append(cmd)
                 self.window.append(cmd)
             else:
                 self.stalls['window_full'] += 1
@@ -153,7 +179,7 @@ class Simulator:
         if self.rld_pending is not None and (self.rld_pending.end is None or self.rld_pending.end>=self.cycle):
             self.stalls['scalar_dependency'] += 1
             return
-        if len(self.pipeline)>=4:
+        if len(self.pipeline)>=(2 if self.cfg.SEQ_WC else 4):
             self.stalls['frontend_pipeline_full'] += 1
             return
         sl=self.state
@@ -170,7 +196,7 @@ class Simulator:
         else:
             cmd=Command(self,self.owner_base+len(self.commands),sl.pc,ins,[sl.reg(r) for r in range(16)])
             self.commands.append(cmd); self.memory.next_owner=cmd.id+1
-            self.pipeline.append((self.cycle+4,cmd))
+            self.pipeline.append((self.cycle+(2 if self.cfg.SEQ_WC else 4),cmd))
             sl.advance()
             if ins.op==I.RLD: self.rld_pending=cmd
 
@@ -185,10 +211,15 @@ class Simulator:
                 self.retired_this_cycle=0
                 for cmd in sorted(self.window,key=lambda c:({W.U_DMA:0,W.U_COLL:1,W.U_VPU:2,W.U_MXU:3,W.U_Q:4}[c.unit], (0,c.start) if c.unit==W.U_VPU and c.task is not None else (1,c.id))):
                     ready = all((cmd.unit==W.U_MXU and d.unit==cmd.unit and d.task is not None) or (d.end is not None and d.end < self.cycle) for d in cmd.deps)
+                    if self.cfg.SEQ_WC:
+                        ready=self.cycle>=cmd.dispatch+2 and all(d.end is not None and d.end+1<self.cycle for d in cmd.deps)
                     if ready and cmd.release is None:
                         cmd.release = self.cycle
                     if cmd.task is None:
                         if self.cycle < cmd.dispatch + self.arch.dispatch_latency:
+                            continue
+                        if cmd.unit==W.U_VPU and ((self.stream_request is not None and self.cycle>self.stream_request.request_cycle) or self.cycle<self.stream_release):
+                            cmd.stalls['stream_engine_owned']+=1
                             continue
                         older_unit = [x for x in self.window if x.id < cmd.id and x.unit == cmd.unit]
                         active = [x for x in self.window if x.unit == cmd.unit and x.task is not None]
@@ -204,13 +235,16 @@ class Simulator:
                         if cmd.unit == W.U_VPU:
                             active=[x for x in active if x.task.begin_cycle is None or x.task.begin_cycle>=self.cycle]
                             capacity=2  # actual cq[2], distinct from in-flight arithmetic
-                        if self.cycle < self.last_start.get(cmd.unit,-2)+2 or len(active) >= capacity or (cmd.unit in (W.U_MXU,W.U_COLL) and any(x.task is None for x in older_unit)):
+                        if self.cycle < self.last_start.get(cmd.unit,-2)+2 or len(active) >= capacity or ((self.cfg.SEQ_WC and cmd.unit!=W.U_VPU or cmd.unit in (W.U_MXU,W.U_COLL)) and any(x.task is None for x in older_unit)):
                             cmd.stalls['unit_queue'] += 1
                             continue
                         stream_ready = all(d.end is not None and d.end < self.cycle for d in cmd.dram_deps)
                         unit_ready=ready
                         if cmd.unit!=W.U_VPU:
                             unit_ready=all((d.unit==cmd.unit and d.task is not None) or (d.end is not None and d.end<self.cycle) for d in cmd.deps)
+                        if self.cfg.SEQ_WC:
+                            unit_ready=ready
+                            stream_ready=self.cycle>=cmd.dispatch+2 and all(d.end is not None and d.end+1<self.cycle for d in cmd.dram_deps)
                         if not (stream_ready if cmd.unit == W.U_MXU else unit_ready):
                             cmd.stalls['dependency'] += 1
                             continue
@@ -223,7 +257,7 @@ class Simulator:
                         self.window.remove(cmd)
                         self.retired_this_cycle+=1
                 self.dispatch()
-                last_end=max((c.end or 0 for c in self.commands),default=0)
+                last_end=self.last_completed_end
                 if self.halt_seen and not self.pipeline and not self.window and self.memory.idle and self.cycle>max(last_end,self.halt_cycle):
                     break
                 self.cycle += 1
@@ -261,6 +295,7 @@ class Simulator:
         macs = sum(c.work['macs'] for c in self.commands)
         return dict(schema_version=1, label='opentpu-perfsim-estimate', timing_validation='unvalidated',
                     backend=self.memcfg.backend, cycles=cycles,
+                    host_execution={'ramulator_tick_batching':bool(getattr(self.memory.backend,'batched',False)),'core_cycles_skipped':0},
                     seconds=cycles*self.arch.core_period_ps*1e-12,
                     core_frequency_hz=1e12/self.arch.core_period_ps,
                     config=asdict(self.cfg), architecture=asdict(self.arch), memory_config=asdict(self.memcfg),

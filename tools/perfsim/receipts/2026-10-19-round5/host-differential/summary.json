@@ -1,0 +1,251 @@
+{
+  "baseline": "same Python implementation; scalar versus batched FFI only",
+  "boundary": "simulator construction/run and ISA arithmetic, excludes memory backend construction, file loading, independent reference and serialization",
+  "cases": [
+    {
+      "bundle": "/tmp/opentpu-model-full-shapes-d128/gemma_mlp_up",
+      "comparison": "every physical and port acceptance/completion, instruction cycles/stalls/work, memory statistics and final DRAM/TMEM",
+      "cycles": 136314,
+      "exact_scalar_batched": true,
+      "observations": [
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 22982.768123755148,
+          "host_wall_seconds": 5.93113933299901,
+          "process_peak_rss_bytes": 700252160,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 22959.727318615463,
+          "host_wall_seconds": 5.937091416999465,
+          "process_peak_rss_bytes": 1227603968,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 26516.545955604382,
+          "host_wall_seconds": 5.140714790992206,
+          "process_peak_rss_bytes": 1307508736,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 27633.419191732744,
+          "host_wall_seconds": 4.932940040976973,
+          "process_peak_rss_bytes": 1361494016,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 27278.239483614183,
+          "host_wall_seconds": 4.997169999987818,
+          "process_peak_rss_bytes": 1393229824,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 26394.387692870052,
+          "host_wall_seconds": 5.164506999979494,
+          "process_peak_rss_bytes": 1393229824,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 26329.324728659674,
+          "host_wall_seconds": 5.177269125008024,
+          "process_peak_rss_bytes": 1393229824,
+          "repeat": 2,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "830f5153196ff5819d26fa6691c71633e586464711621438199cad60cb93e004",
+          "cycles_per_host_second": 27378.52766760857,
+          "host_wall_seconds": 4.978865249984665,
+          "process_peak_rss_bytes": 1393229824,
+          "repeat": 2,
+          "trace_enabled": false
+        }
+      ]
+    },
+    {
+      "bundle": "/tmp/opentpu-model-full-shapes-d128/bonsai_mlp_down",
+      "comparison": "every physical and port acceptance/completion, instruction cycles/stalls/work, memory statistics and final DRAM/TMEM",
+      "cycles": 214732,
+      "exact_scalar_batched": true,
+      "observations": [
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 23587.798248621802,
+          "host_wall_seconds": 9.10352029200294,
+          "process_peak_rss_bytes": 1393229824,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 23617.060189233805,
+          "host_wall_seconds": 9.09224087500479,
+          "process_peak_rss_bytes": 1952268288,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 27442.6128541514,
+          "host_wall_seconds": 7.824765124998521,
+          "process_peak_rss_bytes": 2014183424,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 28403.44415024346,
+          "host_wall_seconds": 7.560069084021961,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 28589.88080324109,
+          "host_wall_seconds": 7.510769334010547,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 27257.6953343395,
+          "host_wall_seconds": 7.877848709002137,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 27297.945968807806,
+          "host_wall_seconds": 7.866232875006972,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 2,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "e110d8682c4cc8905ec0833a66ffb2fc6c431a574bb269c6680bf9668897918d",
+          "cycles_per_host_second": 28193.529207528496,
+          "host_wall_seconds": 7.61635758401826,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 2,
+          "trace_enabled": false
+        }
+      ]
+    },
+    {
+      "bundle": "/tmp/opentpu-hybrid-chunk-v2-stream/hybrid_0",
+      "comparison": "every physical and port acceptance/completion, instruction cycles/stalls/work, memory statistics and final DRAM/TMEM",
+      "cycles": 25352,
+      "exact_scalar_batched": true,
+      "observations": [
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 14673.874983619306,
+          "host_wall_seconds": 1.7276963329932187,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 15846.827337297827,
+          "host_wall_seconds": 1.5998154999979306,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 0,
+          "trace_enabled": true
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 15549.283798404522,
+          "host_wall_seconds": 1.630428792006569,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 16149.533519820146,
+          "host_wall_seconds": 1.5698286250117235,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 0,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 16172.049809411697,
+          "host_wall_seconds": 1.5676429579907563,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 15600.432344004359,
+          "host_wall_seconds": 1.6250831669894978,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 1,
+          "trace_enabled": false
+        },
+        {
+          "batched": false,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 15809.796030937085,
+          "host_wall_seconds": 1.6035627499804832,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 2,
+          "trace_enabled": false
+        },
+        {
+          "batched": true,
+          "cycle_instruction_state_statistics_sha256": "2f7e73ee644dc51be72c4b2bfd2841ab58c8cd36aa1cdaf9e7d2858090010930",
+          "cycles_per_host_second": 16362.63581902753,
+          "host_wall_seconds": 1.5493836250097957,
+          "process_peak_rss_bytes": 2045018112,
+          "repeat": 2,
+          "trace_enabled": false
+        }
+      ]
+    }
+  ],
+  "core_cycles_skipped": 0,
+  "host": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+  "memory_ticks_skipped": 0,
+  "numeric_validation": "differential equivalence; independent correctness is checked by separate RTL/reference comparisons",
+  "python": "3.14.5"
+}

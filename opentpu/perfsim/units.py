@@ -375,8 +375,12 @@ class QuantActTask(Task):
         self.chunks=self.kb*cfg.D//cfg.LANES
         if self.chunks>self.sim.arch.quant_row_buffer_chunks:
             raise Unsupported('unbuffered QACT reread path not implemented')
-        self.rows=deque(); self.credits=0; self.read_rows=0; self.packed_rows=0
+        self.rows=deque(); self.credits=0; self.read_rows=0; self.packed_rows=0; self.accept_at=None
         self.coroutines=[Coroutine(self,self.scan()),Coroutine(self,self.pack())]
+
+    def accepts_next(self):
+        # busy clears with done_w; sequencer observes done one edge later.
+        return self.accept_at is not None and self.sim.cycle>=self.accept_at
 
     def scan(self):
         w,fl,cfg=self.cmd.w,self.cmd.ins.flags,self.sim.cfg
@@ -405,6 +409,7 @@ class QuantActTask(Task):
                 self.credits-=1
             self.rows.popleft(); self.packed_rows+=1
         # mb0/mb1/mb2 (2), writer select (1), multiply (2), q8 (2), done_w/done/seq (3).
+        self.accept_at=self.sim.cycle+8
         yield pause(9)  # coroutine resumes one cycle after the final pop
 
 
@@ -598,6 +603,9 @@ class MatrixTask(Task):
 
 
 def make_task(cmd):
+    if cmd.ins.op in (I.DSTEP,I.STREAM):
+        from .stream import StreamTask
+        return StreamTask(cmd)
     if cmd.ins.op in (I.LD,I.ST):
         return DMATask(cmd)
     if cmd.ins.op==I.QACT:

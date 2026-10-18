@@ -1,0 +1,29 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 32,
+    "DRAM_BYTES": 1048576,
+    "DSTEP": true,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": true,
+    "TMEM_WORDS": 8192
+  },
+  "instruction_counts": [
+    6
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "dstep_3x192_zero",
+    "independent_reference": "NumPy float64 gated DeltaNet state and output; not a pretrained model",
+    "logits_address": 65536,
+    "logits_count": 579,
+    "phase": "synthetic baseline recurrence"
+  }
+}

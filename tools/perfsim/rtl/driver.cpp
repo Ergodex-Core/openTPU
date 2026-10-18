@@ -6,7 +6,7 @@
 #include <cstdlib>
 #include <initializer_list>
 static PyObject* driver=nullptr;
-static void check(bool ok) { if(!ok){PyErr_Print();std::fputs("perfsim DPI Python failure\n",stderr);std::abort();} }
+static void check(bool ok) { if(!ok){PyErr_Print();std::fputs("perfsim DPI Python failure\n",stderr);std::fflush(stderr);std::_Exit(1);} }
 extern "C" void pm_init(const char* profile,const char* directory,const char* root,const char* site,const char* executable,int width,int words){
   PyConfig config;PyConfig_InitPythonConfig(&config);
   check(!PyStatus_Exception(PyConfig_SetBytesString(&config,&config.program_name,executable)));

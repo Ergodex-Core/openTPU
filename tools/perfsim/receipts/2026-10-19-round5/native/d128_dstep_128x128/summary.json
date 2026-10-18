@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "model_host_wall_seconds": 0.06611200000043027,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999996,
+        "passed": true,
+        "relative_l2": 3.625637506443936e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999996,
+        "passed": true,
+        "relative_l2": 3.625637506443936e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 2419,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 51,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 79,
+      "pc": 1,
+      "start": 50
+    },
+    {
+      "dispatch": 7,
+      "end": 92,
+      "pc": 2,
+      "start": 78
+    },
+    {
+      "dispatch": 8,
+      "end": 2358,
+      "pc": 3,
+      "start": 91
+    },
+    {
+      "dispatch": 9,
+      "end": 2417,
+      "pc": 4,
+      "start": 2358
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 2419,
+  "rtl_host_wall_seconds": 0.20766170899150893,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 51,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 79,
+      "id": 1,
+      "pc": 1,
+      "start": 50
+    },
+    {
+      "dispatch": 7,
+      "end": 92,
+      "id": 2,
+      "pc": 2,
+      "start": 78
+    },
+    {
+      "dispatch": 8,
+      "end": 2358,
+      "id": 3,
+      "pc": 3,
+      "start": 91
+    },
+    {
+      "dispatch": 9,
+      "end": 2417,
+      "id": 4,
+      "pc": 4,
+      "start": 2358
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

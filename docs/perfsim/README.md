@@ -1,3 +1,6 @@
+For the latest WAITC/DSTEP/STREAM implementation, persistent hybrid validation, int4 diagnosis
+and host performance results, see [round five](validation-round5.md).
+
 # OpenTPU standalone performance simulator
 
 **Experimental structural timing model, not a cycle-exact replacement for RTL.** It executes

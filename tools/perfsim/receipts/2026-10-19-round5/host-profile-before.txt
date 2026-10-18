@@ -1,0 +1,38 @@
+Mon Oct 19 03:14:01 2026    /tmp/opentpu-round5.prof
+
+         25370014 function calls (25366668 primitive calls) in 13.310 seconds
+
+   Ordered by: cumulative time
+   List reduced from 1630 to 30 due to restriction <30>
+
+   ncalls  tottime  percall  cumtime  percall filename:lineno(function)
+    148/1    0.007    0.000   13.481   13.481 {built-in method builtins.exec}
+        1    0.000    0.000   13.481   13.481 benchmark_shapes.py:1(<module>)
+        1    0.000    0.000   13.337   13.337 benchmark_shapes.py:11(main)
+        1    0.787    0.787   13.108   13.108 engine.py:177(run)
+   136314    0.166    0.000    8.964    0.000 ports.py:64(begin_cycle)
+   136314    0.286    0.000    8.760    0.000 ports.py:18(step)
+   136314    3.012    0.000    7.693    0.000 memory.py:193(begin_cycle)
+   135392    0.101    0.000    2.481    0.000 units.py:496(tick)
+   681565    2.135    0.000    2.349    0.000 memory.py:76(tick)
+   136805    0.193    0.000    2.329    0.000 units.py:156(tick)
+   409002    0.365    0.000    2.014    0.000 units.py:68(tick)
+   624096    1.138    0.000    1.138    0.000 memory.py:70(send)
+   198056    0.517    0.000    0.710    0.000 memory.py:154(request)
+   216289    0.063    0.000    0.666    0.000 {method 'send' of 'generator' objects}
+   947723    0.478    0.000    0.634    0.000 __init__.py:602(__init__)
+   124418    0.206    0.000    0.449    0.000 units.py:514(prefetch)
+   135326    0.233    0.000    0.417    0.000 ports.py:90(request_many)
+  1563532    0.243    0.000    0.314    0.000 {built-in method builtins.max}
+3581727/3581199    0.297    0.000    0.297    0.000 {built-in method builtins.len}
+    79557    0.037    0.000    0.297    0.000 units.py:564(<lambda>)
+    22032    0.090    0.000    0.269    0.000 engine.py:24(grant)
+    79557    0.141    0.000    0.259    0.000 units.py:477(ready)
+       17    0.001    0.000    0.251    0.015 __init__.py:1(<module>)
+   136315    0.084    0.000    0.234    0.000 engine.py:21(reset)
+   977971    0.114    0.000    0.198    0.000 __init__.py:679(update)
+   136328    0.081    0.000    0.165    0.000 {built-in method builtins.sorted}
+   157/10    0.001    0.000    0.161    0.016 <frozen importlib._bootstrap>:1360(_find_and_load)
+   157/10    0.001    0.000    0.160    0.016 <frozen importlib._bootstrap>:1308(_find_and_load_unlocked)
+   153/11    0.000    0.000    0.158    0.014 <frozen importlib._bootstrap>:914(_load_unlocked)
+   131/10    0.000    0.000    0.157    0.016 <frozen importlib._bootstrap_external>:753(exec_module)
