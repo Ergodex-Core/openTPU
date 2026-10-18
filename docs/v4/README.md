@@ -1,9 +1,9 @@
 # openTPU v4: an F2 HBM target for fast Gemma 3 1B decode
 
-Design doc and plan. Status (2026-10-18): **approved to try P2 and P4 in parallel**, with
+Design doc and plan. Status (2026-10-18): **approved to try P1, P2 and P4 in parallel**, with
 Milestone 0 (the row-gating loss split in Lens) first and correctness checks (bit-exact
 against the ISA simulator / per-position programs, Hugging Face greedy agreement) gating every
-milestone before any F2 synthesis. P1 and P3 stay documented as alternatives. Branch
+milestone before any F2 synthesis. P3 stays documented as an alternative. Branch
 `tpubench`.
 
 ## Goal
@@ -141,8 +141,8 @@ reproduces today's token to 0.7%.
 
 ## Decision (taken 2026-10-18)
 
-Try **P2** (four lock-step chunk lanes) and **P4** (four tensor-parallel slices), both,
-and pick between them on measured results; **Milestone 0** first: split the RTL's "MXU not
+Try **P1** (the wide port), **P2** (four lock-step chunk lanes) and **P4** (four
+tensor-parallel slices), all three, and pick on measured results; **Milestone 0** first: split the RTL's "MXU not
 consuming" counter by cause (result-FIFO credits / row not in the FIFO / scales missing /
 drain) and measure it on the Gemma 3 trace, since every estimate hinges on it. Correctness
 checks run after each implementation milestone, before any F2 synthesis. The work is carried
