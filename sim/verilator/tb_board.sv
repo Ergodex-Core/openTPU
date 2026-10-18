@@ -64,6 +64,7 @@ module tb_board;
   parameter bit MXROT      = 1'b0;    // the MXU's TMEM ports as rotators (otpu_slice; CAPS2 bit7)
   parameter int ACT_RAM    = 0;       // the ACT RAM's RAM style (otpu_slice: 0 auto, 1 block, 2 ultra)
   parameter int TMEM_RAM   = 0;       // TMEM_IMPL 3's RAM style (otpu_slice: 0 / 1 block, 2 ultra)
+  parameter bit MXU_ARR    = 1'b0;    // the MXU's array side behind a registered boundary (otpu_slice)
 
   logic clk = 1'b0, clk_f = 1'b0, rst = 1'b1, dump = 1'b0;
   // TMEM_PMP 1: clk_f (2 x clk) rises with each edge of clk, in clk's own process (as tb_top);
@@ -111,7 +112,7 @@ module tb_board;
                .ARCH_HASH(ARCH_HASH), .COLL_GATHER(COLL_GATHER || S > 1), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL),
                .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK),
-               .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM)) dut (
+               .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM), .MXU_ARR(MXU_ARR)) dut (
     .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),

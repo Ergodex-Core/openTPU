@@ -509,7 +509,12 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     # the floorplan after the reset exception, in the one file build_level_1_cl.tcl reads
     # unmanaged at placement; the managed XDC the HDK reads stays Tcl-free
     floorplan = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl').read_text()
-    assert pnr.endswith('\n' + floorplan) and pnr.index('hbm_reset_n}') < pnr.index('pb_otpu_hbm')
+    if T.load(name).uarch.get('MXU_ARR'):            # the array's SLR1 pblock after the floorplan
+        mxu = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_mxu.tcl').read_text()
+        assert pnr.endswith('\n' + floorplan + '\n' + mxu) and not (cl / 'build/constraints/cl_pnr_user_mxu.tcl').exists()
+    else:
+        assert pnr.endswith('\n' + floorplan) and 'pb_otpu_mxu' not in pnr
+    assert pnr.index('hbm_reset_n}') < pnr.index('pb_otpu_hbm')
     assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
     managed = (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
     assert all(line.startswith('#') for line in managed.splitlines() if line.strip())
@@ -597,6 +602,38 @@ def test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed(fault):
     if not tclsh:
         pytest.skip('Tcl is unavailable')
     script = ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl'
+    _floorplan_mock(tclsh, script, fault)
+
+
+def test_mxu_array_floorplan_adds_the_slr1_pblock_for_mxu_arr_targets(tmp_path):
+    """The MXU's array side (f2-vla32, MXU_ARR: otpu_mxu_arr, the FIFO RAMs, the ACT RAM and the
+    adapter) in SLR1's box, appended after the HBM floorplan by build.py for such a target only
+    (docs/vla_frequency_plan.md 6i)."""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    both = tmp_path / 'both.tcl'
+    both.write_text((ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl').read_text() + '\n' +
+                    (ROOT / 'boards/f2/build/constraints/cl_pnr_user_mxu.tcl').read_text())
+    out = _floorplan_mock(tclsh, both, 'none')
+    assert 'OTPU_FLOORPLAN_MXU_APPLIED pblocks=1' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem pb_otpu_mxu' in out
+    ranges = [l.split(' ', 2)[2] for l in out.splitlines() if l.startswith('RANGE pb_otpu_mxu ')]
+    assert ranges == ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7']          # SLR1, pb_otpu_mid's box
+    mxu = [l.split(' ', 2)[2] for l in out.splitlines() if l.startswith('CELL pb_otpu_mxu ')]
+    assert sorted(mxu) == sorted('WRAPPER/CL/u_sys/u_board/' + c for c in (
+        'u_slice/u_mxu/u_arr', 'u_slice/u_mxu/g_fd[*].u_fd', 'u_slice/u_mxu/g_fd[*].g_b.u_fdb',
+        'u_slice/u_mxu/u_fs0', 'u_slice/u_mxu/u_fs1', 'u_slice/u_mxu/g_fsb.u_fsb', 'u_slice/u_act',
+        'u_mem'))
+    props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
+    assert props[('pb_otpu_mxu', 'PARENT')] == 'pblock_CL' and props[('pb_otpu_mxu', 'IS_SOFT')] == '0'
+    assert 'OTPU_FLOORPLAN pb_otpu_mxu parent=pblock_CL held=7 removed=0' in out
+    # the HBM targets without MXU_ARR keep the six pblocks: the file is not appended
+    from boards.f2 import build as flow
+    assert not T.load('f2-hbm').uarch.get('MXU_ARR') and T.load('f2-vla32').uarch['MXU_ARR'] == 1
+
+
+def _floorplan_mock(tclsh, script, fault):
     report = r'''
 puts "PBLOCKS $pblocks"
 foreach r $ranges { puts "RANGE [lindex $r 0] [lindex $r 1]" }
@@ -613,6 +650,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         return
     assert result.returncode == 0, result.stderr
     out = result.stdout
+    if script.name != 'cl_pnr_user_hbm.tcl':          # the MXU file's own test checks the rest
+        return out
     assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=6' in out
     assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem' in out
     ranges = {}

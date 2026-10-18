@@ -783,7 +783,7 @@ def test_fmax_prompt_and_xunit(tmp_path):
         f"rtl/boards/ypcb-00338/{n}.sv" for n in ("otpu_fpga_top_ld", "otpu_native_sys")]
     assert AG.expand(ROOT, ["rtl/shell/*.sv"]) == [
         f"rtl/shell/{n}.sv" for n in (
-            "otpu_afifo", "otpu_axi_split2", "otpu_board", "otpu_ctrl", "otpu_mem_ch",
+            "otpu_afifo", "otpu_axi_split2", "otpu_board", "otpu_ctrl", "otpu_link", "otpu_mem_ch",
             "otpu_skid", "otpu_trace", "otpu_xr")]
 
 

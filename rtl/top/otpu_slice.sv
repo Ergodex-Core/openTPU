@@ -97,9 +97,12 @@ module otpu_slice
                                       //   0 "auto" (the card's), 1 "block", 2 "ultra"
   parameter int TMEM_RAM   = 0,       // TMEM_IMPL 3's RAMs (otpu_tmem RSTYLE): 0 / 1 "block", 2
                                       //   "ultra" (f2-vla's pumped banks: 3 URAM a sub-bank)
-  parameter bit COLL_GATHER = 1'b1    // the collective unit runs GATHER (otpu_top / otpu_board;
+  parameter bit COLL_GATHER = 1'b1,   // the collective unit runs GATHER (otpu_top / otpu_board;
                                       //   0: BAR alone, the collective port reads RLD's one word
                                       //   and never writes: with MXROT its TMEM lanes go)
+  parameter bit MXU_ARR    = 1'b0     // the MXU's array side behind a registered boundary (otpu_mxu
+                                      //   ARR, otpu_actram RREG): the F2 build's pb_otpu_mxu in its
+                                      //   own SLR (plan 6i); three cycles more a row to the drain
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused
@@ -468,7 +471,8 @@ module otpu_slice
   logic [MCOLS*D*8-1:0]   act_rdata;
   logic [MCOLS*64-1:0]    act_rscale;
   otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES),
-                .T2(T2), .STYLE((ACT_RAM == 1) ? "block" : (ACT_RAM == 2) ? "ultra" : "auto")) u_act (
+                .T2(T2), .STYLE((ACT_RAM == 1) ? "block" : (ACT_RAM == 2) ? "ultra" : "auto"),
+                .RREG(MXU_ARR)) u_act (
     .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
     .w_dup4(act_dup4), .w_off(act_off), .swe(asc_we),
     .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren), .r_use(mxu_pop), .r_blk(act_rblk),
@@ -535,7 +539,7 @@ module otpu_slice
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PACK(PACK), .MXROT(MXROT), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PACK(PACK), .MXROT(MXROT), .ARR(MXU_ARR), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),

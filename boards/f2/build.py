@@ -143,9 +143,15 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         if old not in pnr.read_text():
             raise RuntimeError(f'{pnr}: the reset synchronizer list moved')
         floorplan = cons / 'cl_pnr_user_hbm.tcl'
-        pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' +
-                       floorplan.read_text())
+        # and, for a target whose MXU array side sits behind the registered boundary (uarch
+        # MXU_ARR, f2-vla32), the array's SLR1 pblock after it (docs/vla_frequency_plan.md 6i)
+        mxu = cons / 'cl_pnr_user_mxu.tcl'
+        text = pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' + floorplan.read_text()
+        if t.uarch.get('MXU_ARR'):
+            text += '\n' + mxu.read_text()
+        pnr.write_text(text)
         floorplan.unlink()
+        mxu.unlink()
         w = wrapper or sh.parents[2] / HBM_WRAPPER
         if not w.is_file():
             raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
@@ -157,6 +163,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
         (cons / 'cl_pnr_user_hbm.tcl').unlink()
+        (cons / 'cl_pnr_user_mxu.tcl').unlink()
     files = target.sources(t)
     for name in files:
         dest = cl / 'design/rtl' / name

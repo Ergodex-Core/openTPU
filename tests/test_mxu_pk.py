@@ -15,7 +15,7 @@ from opentpu import rtlsim
 D, CLS, NG = 128, 16, 8
 LANE_MAX = CLS * 127 * 127                       # 258,064 < 2^18: the lane bound
 SOURCES = [rtlsim.RTL / "vpu/otpu_fp.sv", rtlsim.RTL / "vpu/otpu_fpipe.sv",
-           rtlsim.RTL / "top/otpu_pkg.sv", rtlsim.RTL / "mxu/otpu_mxu.sv",
+           rtlsim.RTL / "top/otpu_pkg.sv", rtlsim.RTL / "mxu/otpu_mxu_arr.sv", rtlsim.RTL / "mxu/otpu_mxu.sv",
            rtlsim.RTL / "tech/generic/otpu_tech_dsp.sv", rtlsim.RTL / "mxu/otpu_mxu_pk_col.sv",
            rtlsim.TB / "tb_mxu_pk.sv"]
 

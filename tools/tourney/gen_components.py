@@ -34,7 +34,7 @@ C = {
                "tests/test_rtl.py::test_fuzz_two_slices[0]",
                "tests/test_rtl.py::test_scoreboard_stress_two_slices[0]"]),
     "otpu_mxu": dict(
-        files=["rtl/mxu/otpu_mxu.sv", "rtl/tech/xilinx7/otpu_tech_dsp.sv"], top="otpu_mxu",
+        files=["rtl/mxu/otpu_mxu_arr.sv", "rtl/mxu/otpu_mxu.sv", "rtl/tech/xilinx7/otpu_tech_dsp.sv"], top="otpu_mxu",
         params=dict(D=128, MCOLS=4, DEPTH=1024, LANES=8, IMPL=2, SID=0),
         desc="MXU, the MX column: streams weight chunks (D bytes/cycle) and their scale lines "
              "through prefetch FIFOs against up to MCOLS stationary int8 rows in ACT RAM; products "

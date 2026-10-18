@@ -67,7 +67,9 @@ MEM_KEYS = ("ACT_RAM", "TMEM_RAM")
 # GATHER (otpu_coll_bar; the simulations do so for every one-slice FPGA target, rtlsim.BOARD_UARCH;
 # the YPCB flow's run_vivado.sh too), which on f2-vla also drops the collective port's TMEM lanes
 # (otpu_slice ONE_R / NUL_W under MXROT, docs/vla_frequency_plan.md 6e)
-OPT_KEYS = ("COLL_GATHER",)
+# MXU_ARR (optional; 0): the MXU's array side behind a registered boundary (otpu_mxu ARR,
+# otpu_actram RREG), the F2 build's pb_otpu_mxu in its own SLR (f2-vla32, plan 6i)
+OPT_KEYS = ("COLL_GATHER", "MXU_ARR")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
@@ -85,7 +87,7 @@ SIM_LANES_MAX = 16
 # Makefile, create_project.tcl, tools/synth).
 CORE = ["vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_tmem.sv",
         "mem/otpu_actram.sv", "seq/otpu_seq.sv", "vpu/otpu_vtree.sv", "dma/otpu_dma.sv",
-        "mxu/otpu_mxu.sv", "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv",
+        "mxu/otpu_mxu_arr.sv", "mxu/otpu_mxu.sv", "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv",
         "vpu/otpu_vpu.sv", "top/otpu_coll.sv", "top/otpu_slice.sv"]
 TECH = {"generic": ["tech/generic/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         "xilinx7": ["tech/xilinx7/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],

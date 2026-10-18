@@ -23,7 +23,7 @@ BUILD = ROOT / "build" / "verilator"
 RTL_SOURCES = [
     "vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_dram.sv", "mem/otpu_tmem.sv",
     "mem/otpu_native_dram.sv", "mem/otpu_actram.sv", "seq/otpu_seq.sv",
-    "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
+    "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu_arr.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
     "tech/generic/otpu_tech_ram.sv",
     "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv", "vpu/otpu_vpu.sv",
     "top/otpu_coll.sv", "exp/tmem_nocopy/otpu_tmem_model.sv", "top/otpu_slice.sv",
@@ -241,6 +241,9 @@ for _k in ("NSB", "SBP", "SBH", "RPL", "TDP", "GST", "PMP", "PRK", "SDM"):
 # the target's in BOARD_UARCH, f2-vla's 3); in simulation +tm_warb=N overrides a build's
 if os.environ.get("OTPU_TMEM_WARB"):
     UARCH["TMEM_WARB"] = BOARD_UARCH["TMEM_WARB"] = int(os.environ["OTPU_TMEM_WARB"])
+# OTPU_MXU_ARR=1: the MXU's array side behind a registered boundary (otpu_mxu ARR; timing only)
+if os.environ.get("OTPU_MXU_ARR"):
+    UARCH["MXU_ARR"] = BOARD_UARCH["MXU_ARR"] = int(os.environ["OTPU_MXU_ARR"])
 # TMEM lanes of the MXU and the quantizer when fewer than LANES (timing only): OTPU_ULANES=8
 if os.environ.get("OTPU_ULANES"):
     UARCH["ULANES"] = int(os.environ["OTPU_ULANES"])

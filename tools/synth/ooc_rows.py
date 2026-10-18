@@ -27,7 +27,7 @@ BASE = ["rtl/vpu/otpu_fp.sv", "rtl/vpu/otpu_fpipe.sv", "rtl/top/otpu_pkg.sv",
         "rtl/tech/generic/otpu_tech_ram.sv"]
 TOPS = {   # the board's parameters (rtl/shell/otpu_board.sv, boards/ypcb-00338/Makefile)
     "otpu_actram": (["rtl/mem/otpu_actram.sv"], dict(D=128, BLOCKS=128, LANES=8)),
-    "otpu_mxu": (["rtl/mxu/otpu_mxu.sv", "rtl/tech/xilinx7/otpu_tech_dsp.sv"],
+    "otpu_mxu": (["rtl/mxu/otpu_mxu_arr.sv", "rtl/mxu/otpu_mxu.sv", "rtl/tech/xilinx7/otpu_tech_dsp.sv"],
                  dict(D=128, DEPTH=1024, LANES=8, IMPL=2, SID=0)),
 }
 

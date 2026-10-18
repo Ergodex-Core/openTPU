@@ -33,6 +33,7 @@ module otpu_native_sys #(
   parameter bit MXROT     = 1'b0,    // the MXU's TMEM ports as rotators (otpu_slice; CAPS2 bit7)
   parameter int ACT_RAM   = 0,       // the ACT RAM's RAM style (otpu_slice: 0 auto, 1 block, 2 ultra)
   parameter int TMEM_RAM  = 0,       // TMEM_IMPL 3's RAM style (otpu_slice: 0 / 1 block, 2 ultra)
+  parameter bit MXU_ARR   = 1'b0,    // the MXU's array side behind a registered boundary (otpu_slice)
   parameter int TMEM_WORDS = 1 << 16,    // TMEM words (otpu_board; the CFG_TMEM register)
   parameter int LANES = 8,
   parameter int ULANES = 8,
@@ -198,7 +199,7 @@ module otpu_native_sys #(
                .MXU_E(MXU_E), .LANES(LANES), .ULANES(ULANES),
                .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM),
+               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM), .MXU_ARR(MXU_ARR),
                .TMEM_WORDS(TMEM_WORDS),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS), .DSTEP(DSTEP),
                .HOSTCAL(HOSTCAL), .SEQ_WC(SEQ_WC), .PLATFORM(PLATFORM), .ARCH_HASH(ARCH_HASH),

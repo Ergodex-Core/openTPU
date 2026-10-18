@@ -67,6 +67,11 @@ ACT_RAM = 1                     # the ACT RAM (4 MB: 255 rows x 128 blocks x 32 
 TMEM_RAM = 2                    # the pumped TMEM banks in URAM (otpu_pump_bank STYLE "ultra"): 64 banks
                                 # x 2 sub-banks x 12288 words x 32 bits = 384 URAM288 (3 a sub-bank,
                                 # cascaded), where block RAM took 2,048 RAMB36 of the part's 2,016 (6b)
+MXU_ARR = 1                     # the MXU's array side (otpu_mxu_arr: the PEs, column ends, the chunk
+                                # decode and shifts, the row assembly) behind a registered boundary,
+                                # with the ACT RAM's read request registered (otpu_actram RREG): the
+                                # F2 build places it in SLR1 (pb_otpu_mxu) apart from the issuer,
+                                # the drain and the TMEM in SLR2 (plan 6i); +3 cycles a row
 COLL_GATHER = 0                 # the one-slice collective unit without GATHER (otpu_coll_bar, as the
                                 # simulations and the YPCB flow build it): the collective's TMEM port
                                 # is RLD's one word, so its lanes and its write port go (plan 6e)
