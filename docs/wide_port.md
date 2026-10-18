@@ -1264,6 +1264,31 @@ or attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 1
 tests/test_observability.py 18 passed, tests/test_f2_build.py 87 passed (Tcl mock). Receipts
 (as above): int8 949,497 (unchanged from round 4), int4 565,678 (unchanged).
 
+**Round 5 placed (2b08ae69 = the round-5 RTL + the same five pblocks, host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-2b08ae69): WNS -2.303 ns** after place_design (round 4
+-4.546), the first round with every constraint applied at implementation (the reset exception
+on 12 endpoints, the five pblocks, otpu_clk2x.tcl's 64 pump cells with the worst read-request
+path's requirement asserted at 5.000 ns). By clock after place_design (place_rpt/ in the run
+dir):
+
+| clock | round 4 | round 5 | worst path, what it says |
+|---|---|---|---|
+| clk_raw 200 MHz | -1.62 | **-1.43** (7,653 endpoints) | the adapter `u_board/u_mem/wh_r_reg[7]` (the SW queue's bucket hash) -> `wadr_r_reg[7]/CE`, 10 levels (MUXF7 / F8) + 5.5 of 6.1 ns route: the MXU's lg0 path is gone; the adapter's write-address cone is next |
+| hclk_raw 450 MHz | -2.04 (25,160) | **-2.25** (28,415) | `u_mem/u_host/u_rt/wbin_reg[3]` -> the R-return FIFO's LUTRAM `WE`, 3 levels, 3.5 of 3.7 ns route: fix 7 removed the bridge's wf_n cone from the top, and the domain stays ~2 ns short with as many endpoints |
+| clk_raw -> clk_f_raw | -1.97 | **-2.04** (3,767) | `u_tmem/g_one.rpv_reg[0]` -> `g_pc[3].u_pb/.../ENBWREN`, 6 levels, a 4.6 ns path failing by 2.0: the asserted multicycle covers the read pins (ra / rb / rena / renb); this is the pumped bank's **write** side, never in the constraint (round 4's `ADDRBWRADDR` endpoint was the same side) |
+| clk_main_a0 250 MHz | -4.55 | **-2.28** (2,964) | `u_host/u_rt/rbin_reg` (SLR0) <-> `u_host/u_pcis_r` (pb_otpu_pcis, SLR1), 5.4 of 5.6 ns route: the shell-side pass-through is fixed; the hop moved to the PCIS registers' link with u_host across the SLR boundary |
+| clk_f_raw intra | | +0.70 | |
+
+Round 6's list: (9) a register stage between `u_pcis_*` and u_host's queues / the R-return FIFO
+(an otpu_xr-style aclk stage at SLR0's top, so both hops are flip-flop to flip-flop), or
+pb_otpu_pcis back beside u_host with the shell hop measured; (10) the adapter's `wh_r` ->
+`wadr_r` cone pipelined; (11) the pumped banks' write side under the same 2-fast-period
+multicycle (if the pump's write timing is the read's) or registered on clk_f, with the
+assertion extended to the write pins; and the 450 MHz domain: three rounds of point fixes
+moved its worst path (k_d enables -> wf_n state -> the host R FIFO) without moving the count
+of failing endpoints (30.9K / 25.2K / 28.4K), which argues for hclk 300 MHz with NCH 16
+(16 x 256 bit x 300 MHz = 153 GB/s raw) over a fourth round at 2.2 ns.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
