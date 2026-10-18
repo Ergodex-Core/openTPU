@@ -3085,6 +3085,7 @@ and the misses fall, and three costs take it back:
 1. DRAM write contention. A run with no misses waits for nothing, yet it slows down while
    parts stream into DRAM during it. This is 0.13-0.18 s of the card's compute per GB written
    during compute. A demand miss writes the same bytes while the card waits, and does not pay it.
+   The bridge's batches (13.19) take a third off it in co-simulation.
 
    | run with no misses | no ahead | with ahead | parts during it | slower |
    |:--|--:|--:|--:|--:|
@@ -4425,6 +4426,84 @@ branch les (15.4); step 2 is not.
   - the next pass's rows quantized to a second ACT RAM block range while the current pass's MMs
     read the first.
 
+### 13.19 The write contention in co-simulation, and the bridge's batches (2026-10-14)
+
+13.8's contention comes from the channel bridge, not from the link or the controller.
+`tools/litedram/h2c_contention.py` runs a card program on the RTL with the card's LiteDRAM
+controllers (DDR3-1066, the core at 133.33 MHz, the board's configuration), once alone and once
+beside a host load on XDMA's side of each channel's `otpu_mem_ch`
+(`sim/verilator/otpu_ldc_mem.sv`'s `+h2c_*`: 256-byte INCR bursts at a rate, into the channels'
+top, which no program uses). CT is the run's extra time per GB the controllers took from the
+load. The works are Qwen3.5-35B-A3B's: a layer run (`layer:PREFIX:R`, the prefix's last layer on
+R rows; `1` DeltaNet, `4` attention) and the expert run on 131 rows (`em:131`, 13.17).
+
+- **The card's case.** With the server's parts (512 KiB at 2.2 GB/s, 0.29 ms between them) the
+  DeltaNet layer at R = 2 runs 12.9% slower and attention 13.6%: 13.8 measured 13% and 15% on the
+  card.
+- **Steady loads** (s a GB; R = 1 is a decode step's layer):
+
+  | load | DeltaNet R = 1 | attention R = 1 | DeltaNet R = 2 | expert run |
+  |:--|--:|--:|--:|--:|
+  | 1 GB/s | 0.199 | 0.206 | 0.193 | 0.032 |
+  | 2 GB/s | 0.128 | | 0.121 | |
+  | 3 GB/s | 0.101 | 0.105 | 0.098 | 0.025 |
+  | 2 GB/s in 4 KiB bursts | 0.092 | | 0.086 | 0.024 |
+
+- **What it is.** The floor is the writes' own data on the bus, a beat a cycle on each channel:
+  0.059 s a GB. Channel 0's cycles (`+ldc_break`) at 2 GB/s beside DeltaNet R = 1 split the
+  extra time into the writes' column commands 46%, the multiplexer's read-write turnarounds 31%,
+  rows 19%, the crossbar 8%, refresh 3% and 7% less idle. Everything but the data comes once per
+  turn of the bridge's arbiter: it let XDMA in after each 32 of the accelerator's commands, and
+  XDMA's 16-beat FIFOs held a burst or two, so each 256-byte burst paid a turnaround and a row
+  change. CT falls as more beats come per turn: with the rate (0.20 at 1 GB/s, 0.10 at 3), and
+  with the burst size.
+- **LiteDRAM's own batching does not help** (`tools/litedram/gen_ldc.py` variants). Its
+  multiplexer's read and write times (128 / 64, 512 / 256 and 1024 / 512 cycles against 256 /
+  128) and command buffers of 16 (against 8) leave CT within 0.004 of the default, and move the
+  runs alone by -0.3 to +0.3%. The controller already batches what it holds; the bridge gave it
+  too little at a time.
+- **The bridge's batches** (`otpu_mem_ch` XQD, XT, XB). Once the accelerator has had its RUN, a
+  ready XDMA goes only when it has waited XT = 256 cycles since its last command or has XB = 24
+  commands queued, in FIFOs of XQD = 32 beats. With the accelerator idle (a demand miss) it goes
+  at once, and with XDMA idle the arbiter is the one before. CT, s a GB (load landed, GB/s):
+
+  | load | work | without | XT 256 alone | XT 256, XB 24 |
+  |:--|:--|--:|--:|--:|
+  | 1 GB/s | DeltaNet R = 1 | 0.199 | 0.104 | 0.104 |
+  | | DeltaNet R = 2 | 0.193 | 0.097 | 0.097 |
+  | | expert run | 0.032 | 0.016 | 0.016 |
+  | 2 GB/s | DeltaNet R = 1 | 0.128 | 0.078 | 0.082 |
+  | | DeltaNet R = 2 | 0.121 | 0.074 | 0.078 |
+  | | expert run | | 0.012 | 0.013 |
+  | 3 GB/s | DeltaNet R = 1 | 0.101 | 0.070 (2.80) | 0.075 (3.00) |
+  | | DeltaNet R = 2 | 0.098 | 0.067 (2.75) | 0.073 (3.00) |
+  | | expert run | 0.025 (2.98) | 0.013 (2.98) | 0.015 (3.00) |
+  | parts, 2.2 GB/s | DeltaNet R = 2 | 0.107 (12.9% slower) | | 0.075 (8.3%) |
+  | | attention R = 2 | 0.119 (13.6%) | | 0.081 (9.1%) |
+
+  The wait alone caps XDMA at RUN commands per XT + RUN cycles while the accelerator streams, so
+  at the link's 3 GB/s it landed 2.75-2.80 GB/s beside a layer run; XB lets a stream go once its
+  batch is in, and costs 0.005 s a GB at 2 GB/s for it. XT 512 gains under 0.005 over 256 and
+  caps XDMA at 1.93-1.95 of 2 GB/s.
+- **Cost** (Vivado out of context, routed, xc7k480t-2, a channel; `tools/memch_ooc.tcl`
+  MEMCH_GENERICS): +51 LUTs and +32 flip-flops a channel, no LUTRAM (a RAM32M is 32 deep, so 16
+  -> 32 beats takes the same cells) and no block RAM. uclk's worst slack +0.120 -> +0.174 ns
+  (the same output path, which the change does not touch), the arbiter's registers 3.4-4.2 ns;
+  every crossing constrained as before.
+- **No host writes, no change.** The layer and expert runs alone take the same cycles with and
+  without the batches, and so does a whole decode token (`tools/perf_ddr.py`, fp4 at 133.33 MHz:
+  Qwen3 3,714,482 cycles, Qwen3.5 4,803,926, the same DRAM commands).
+- **Tests.** `test_ldc_host_writes` (test_rtl.py): a stream of loads at 400 MHz beside 2 GB/s,
+  the core bit-exact, every burst landed, CT 0.006 s a GB against 0.034 without the batches.
+  `tools/memch_test.py`'s functional suite runs the bridge at its defaults (and `ldcn` without
+  batches); its perf run "acc seq rd + xdma seq wr" has the accelerators at 0.88 / 0.83 beats a
+  cycle beside XDMA's full rate (0.78 / 0.77 without the batches).
+
+In the card's case the batches take 30-32% off CT (0.107-0.119 -> 0.075-0.081 s a GB); on
+13.8's 0.13-0.18 measured on the card that would be about 0.09-0.13, which moves LES's estimate
+(15.3) part of the way toward its CT = 0.07 column. An ASIC's memory system needs the same: host
+writes batched per arbitration turn (docs/asic.md).
+
 ## 14. Chatting with a streamed MoE (otpu-chat)
 
 otpu-chat runs the three MoE models bigger than the card's 4 GiB. Their experts stream from a pool
@@ -4788,8 +4867,9 @@ ways:
 
 So the LES prefetch is closed on the measurement above (not built). It is worth another look
 if any of these change, since each moves the balance; `lesim.py time --set K=V` re-runs it:
-- the write contention falls: CT = 0 lifts `pre` to +10% and `prev_in` to +8%. It is a
-  property of the controller's write and read turnarounds, which an RTL change could batch;
+- the write contention falls: CT = 0 lifts `pre` to +10% and `prev_in` to +8%. It comes from
+  the controller's write and read turnarounds, which the bridge's batches cut by about a third
+  (13.19);
 - the link gets faster (PART and REC shorter);
 - the slot count changes (`--slots`);
 - MCOLS 8 changes the card's own time (F, W0).
@@ -5065,6 +5145,18 @@ two fixes remove (-0.31 / +0.06 / +0.33 / +0.33 / +0.59 s: the first call's part
 2-5), and from the traced pair the expert-major turns' (3-5) calls by run kind (layer, expert,
 K / V, head): device and wall time, the gaps between runs, the server's idle parts and requests.
 
+mtp2 passed (2026-10-14, token-exact throughout): decode 1.123x, TTFT B - A +0.00 / +0.29 / +0.23 /
++0.33 / +0.32 s. F2 took the last call's extra row away (its part +0.02 to -0.02 s, from +0.16 to
++0.20); F1b only ~0.035 s (0.08 in turn 1). What is left in turns 2-5, besides the first call's,
+is +0.10 to +0.13 s outside the calls, which the call times cannot place. chatmoe.py --trace now
+stamps each turn's host phases up to its first token (_Phases: the template, the rollback with its
+restore, each prefill_layers and its end_prefill, the snapshot and MTP's held row's read, MTP's own
+prefill, a0, and each device run outside the calls with its cycles; host bookkeeping, the same runs
+and tokens: tests/test_mtp_moe.py test_chatmoe_traces_each_turns_host_phases, 16 DeltaNet heads). On
+the ISA simulator only turn 1's MTP prefill of the first conv_k - 1 rows leaves time outside them
+(its compiles, ~0.11 s); the card's step is tools/offload/sessions/mtpt.sh (~10 min: a traced run
+of each arm from one tree, A's and B's tokens the same, each turn's TTFT B - A by phase).
+
 Turn 3's 0.55 is the reply's content and the draft head, not the loop: on the fp32 reference
 (Hugging Face's float32 35B along the card's tokens, the base's own mtp.* layer, mtp_transplant.py
 accept, replayed as the k = 1 loop) the head the card has (fp4, the 32K lowest ids) accepts 12 of
@@ -5085,3 +5177,58 @@ with code -1.2: ~+0.2-0.4% decode. The device's side would be cheap: the draft i
 table in DRAM (an RLD MUL into a register and a one-word load, as qwen3._embed_word) costs D +372
 cycles (+0.056%) and D1 +46 in co-sim (the prototype: branch draft-ids, e7c58f75), but not worth a
 table and its mechanism in every MTP image: the draft head stays the lowest 32K ids.
+
+### 15.7 MTP on m8, and the compiles in its TTFT
+
+Session mtp_rel (2026-10-14, right after r2.1's promotion: production m8, bitstream 039b34d5,
+host d57a3568; ~11 min under the lock after the emprol A/B, the selftest ALL PASS before and
+after):
+- (a) production's host, both arms with OTPU_TILE=0 (before mtp-slot-fix a tiled run refuses the
+  states' slot 1; batch3's MTP engines run untiled), chatmoe.py's two default turns at
+  --max-new 16: --mtp's tokens plain's, and both the release's chatmoe reference.
+- (b) mtpt.sh's traced pair from mtp-stamps on mtp-slot-fix (tiled), each arm after a one-turn
+  warm-up: les1's five turns at 32 tokens, the same tokens in every turn. Device decode, Mcycles a
+  token A / B: 27.46 / 25.71, 25.45 / 22.12, 26.80 / 26.47, 26.20 / 22.05, 25.58 / 21.64, so
+  1.12x token-weighted (m4's mtp1c: 1.127x), 1.15-1.19x in turns 2, 4 and 5 (13 of 18, 14 of 17
+  and 14 of 17 drafts accepted), 1.01x in turn 3 (11 of 20). TTFT B - A: -0.02 / +3.40 / +0.58 /
+  +9.40 / +0.15 s.
+
+The two jumps are the host's, not the card's. In the grown calls the card's work is the same
+(device 3.67 / 3.76 s in turn 2's layer-major call, 9.46 / 9.46 s in turn 4's expert-major one;
+the server's serve and parts times, needs and misses within 0.1%), but B waits before nearly
+every layer's first run: 29 gaps of 40-375 ms (2.96 s) in turn 2, 51 (9.30 s) in turn 4, where
+A has none over 30 ms and 3 (0.15 s).
+
+- **The states' slot 1, compiled per process.** Engine._layer_run keeps an MTP image's runs of
+  the DeltaNet states' slot 1 apart from slot 0's (under (key, "slot", 1); mtp-slot-fix compiles
+  them with that slot's descriptors), and layer_programs has no disk cache: each process
+  compiles each run kind once per slot. After a reply the loop's committed slot is the parity of
+  its accepted drafts (S_PAR: c ^= n, a draft accepted with an end id as a1 included), and a
+  rollback restores into it, so the five prefills ran in slots 0, 1, 0, 1, 1 (3, 13, 11, 14
+  accepted). Turn 2 is the first layer-major call in slot 1; turn 3 the first expert-major one
+  (the tiles) in either arm, 17.0 / 17.6 s of gaps in A / B; turn 4 the first expert-major one in
+  slot 1; turn 5 finds them compiled (no gap over 30 ms). On the ISA simulator (the tiny MTP MoE
+  through chatmoe.py --mtp, the slot set to 1 before turn 2; a scratch run): turn 2 compiles all
+  29 runs turn 1 did again (20 expert-major, 9 layer-major, 0.27 s against turn 1's 0.25 s), plain
+  decode's turn 2 only its 5 new ones. Why the worker processes (_precompile_layers) hide turn
+  1's first compiles on the card and not these is open: follow-up 1 times them by key.
+- **Both arms:** turn 4's 4-row call, 3.6 / 3.7 s of gaps: the first layer-major runs past
+  position 256 (the attention's next block).
+- **The decode's first reply in a bucket.** Turn 4's reply is the first in the KV cache's second
+  bucket: A 3.44 tok/s against the device's 5.09 (+3.0 s, the plain loop's bucket programs
+  compiled on first use, gen_warm's ~3.6 s), B 1.94 against 6.05 (+11.2 s, the MTP loop's:
+  compile_gen's verify and drafts). gen_warm compiles plain decode's buckets ahead in otpu-chat and
+  otpu-serve but not the MTP loop's (chat.py starts it only without MTP; chatmoe.py starts none);
+  the MTP loop's programs are in the program cache per tree (Engine.cached), the slot-1 layer runs
+  in none.
+
+So with --mtp (otpu-chat, otpu-serve --mtp) a process pays its slot-1 compiles once per run kind
+(here +3 s layer-major, +9 s expert-major), and the first reply in each bucket ~11 s once per
+tree; past them TTFT B - A is mtp2's (+0.0 to +0.3 s) and decode 1.12x. MTP stays opt-in in
+r2.2, and mtps.sh (otpu-serve's A/B for MTP by default: a server per run, so B would pay the
+slot-1 compiles in each) waits for:
+1. DeltaNet runs that take the committed slot as a run word (the states' base) instead of in
+   their compiled addresses: one set of programs, nothing compiled twice (smaller:
+   _precompile_layers compiling both slots for an MTP image, or the layer runs through the
+   program cache);
+2. gen_warm for the MTP loop's bucket programs.

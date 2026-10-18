@@ -14,6 +14,7 @@ from opentpu.isasim import Machine, SimError, Slice
 from opentpu.kernels import attention_decode, attention_layer, mlp
 from opentpu.runtime import compile_kernel, run
 from opentpu import rtlsim
+from opentpu import target as _target
 
 from conftest import assert_same_state, rel
 from test_kernels import attn_args, layer_args, mlp_args
@@ -305,6 +306,10 @@ def test_fuzz_mm_replay(have_verilator, mcols, rows, seed):
 # the single pumped TMEM copy as release r2 builds it (targets/ypcb-00338.toml: r2pgRs)
 R2_TMEM = {"TMEM_IMPL": 3, "TMEM_NSB": 2, "TMEM_SBP": 3, "TMEM_RPL": 1, "TMEM_TDP": 1,
            "TMEM_GST": 1, "TMEM_PMP": 1}
+# and the slice's arbiter its replays run under (otpu_slice ARB_MASK: RPB every read lane, the
+# card's RPB 0 as rtlsim builds it, and WPB 1), whatever the selected target's TMEM
+# (nangate45-small's banked one: RPB 1); a board top sets its own (otpu_board RPB)
+R2_ARB = {"RPB": _target.NRP * _target.SIM_LANES_MAX, "WPB": 1}
 
 
 @pytest.mark.parametrize("mcols,rows,seed", [(2, 8, 1), (2, 6, 3)])
@@ -322,7 +327,7 @@ def test_one_copy_replays_make_progress(have_verilator, mcols, rows, seed):
     imgs = _images(rng, 1)
     m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
     drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
-                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, "COLL_GATHER": 1},
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB, "COLL_GATHER": 1},
                                  max_cycles=1_000_000)
     assert np.array_equal(drams[0], m.slices[0].dram)
     assert np.array_equal(tmems[0], m.slices[0].tmem)
@@ -341,7 +346,7 @@ def test_one_copy_tmem_of_128k_words(have_verilator, mcols, rows, seed):
     m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
     assert m.slices[0].tmem[1 << 16:].any()                 # (words past 64K written)
     drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
-                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, "COLL_GATHER": 1},
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB, "COLL_GATHER": 1},
                                  max_cycles=1_000_000)
     assert np.array_equal(drams[0], m.slices[0].dram)
     assert np.array_equal(tmems[0], m.slices[0].tmem)
@@ -376,7 +381,8 @@ def test_collective_reads_held_behind_dma_reads(have_verilator, seed, tmp_path, 
     imgs = _images(rng, 2)
     m = Machine(cfg, progs, [i.copy() for i in imgs]).run()
     drams, tmems, _ = rtlsim.run(cfg, progs, [i.copy() for i in imgs],
-                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM}, max_cycles=1_000_000)
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB},
+                                 max_cycles=1_000_000)
     for s in range(2):
         assert np.array_equal(tmems[s], m.slices[s].tmem), f"slice {s} TMEM"
         assert np.array_equal(drams[s], m.slices[s].dram), f"slice {s} DRAM"
@@ -773,6 +779,59 @@ def test_ldc_memory_path(have_verilator, prog, seed, ldc, mhz):
     assert np.array_equal(tmems[0], m.slices[0].tmem)
     assert np.array_equal(drams[0], m.slices[0].dram)
     assert all(r > 0 for r, _ in st["axi_reads"]), st["axi_reads"]
+
+
+H2C_SPAN = 32 << 10             # each channel's bytes the host load writes: the image's top 2x
+
+
+def _stream_program(n_ld: int, words: int = 8192, region: int = 768 << 10):
+    """Loads alone, one after another through `region` bytes of DRAM, each `words` words into
+    TMEM's two halves in turn: the core reading as fast as its DMA moves (decode's weights)."""
+    prog = [I.ld((k * 4 * words) % region, (k % 2) * words, words) for k in range(n_ld)]
+    return prog + [I.halt()]
+
+
+def _h2c_cosim(rate: float, mhz: float = 400, n_ld: int = 48):
+    """The stream program on the card's channels at `mhz`, alone and beside a host load of `rate`
+    GB/s over both channels (otpu_ldc_mem's +h2c_*: 256-byte bursts on XDMA's side of each bridge,
+    into the H2C_SPAN bytes below each channel's half of the image, the image's top, which the
+    program never touches; zeros over 0x5A). The program goes above the image (rtlsim's boot: the
+    simulated DRAM doubles). Returns (ISA DRAM and TMEM, then per run: DRAM, TMEM, stats)."""
+    rng = np.random.default_rng(6300)
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    p = _stream_program(n_ld)
+    img = rng.integers(0, 256, cfg.DRAM_BYTES, dtype=np.uint8)
+    img[-2 * H2C_SPAN:] = 0x5A
+    m = Machine(cfg, [p], [img.copy()]).run()
+    xhz = 1.25 * mhz * 1e6                          # otpu_ldc_mem's xclk: 1.25x the core's
+    load = [f"+h2c_bpk={round(1000 * rate / 2 * 1e9 / xhz)}", "+h2c_burst=256",
+            f"+h2c_span={H2C_SPAN}", f"+h2c_base={cfg.DRAM_BYTES // 2 - H2C_SPAN}"]
+    out = []
+    for plus in ([], load):
+        drams, tmems, st = rtlsim.run(cfg, [p], [img.copy()], axi=True, boot=True, ldc=1066,
+                                      uarch=rtlsim.BOARD_UARCH,
+                                      plusargs=rtlsim.ldc_plusargs(1066, mhz) + plus)
+        out.append((drams[0], tmems[0], st))
+    return (m.slices[0].dram, m.slices[0].tmem), out
+
+
+# XDMA's writes beside the core's on the card's channels (docs/offload.md 13.19, the write
+# contention): the core's results stay bit-exact, every host burst lands (the image's top ends all
+# zeros) and is answered (but those in flight at the end), and otpu_mem_ch's batches (XT, XB: a
+# host turn carries a batch, so the controller turns its bus and changes rows once a batch) keep
+# the run's extra time per GB written under 0.015 s: 0.006 here (1.3% slower), against 0.034
+# without them (XT 0: 7.2% slower).
+def test_ldc_host_writes(have_verilator):
+    (dram, tmem), ((d0, t0, s0), (d1, t1, s1)) = _h2c_cosim(2.0)
+    want = dram.copy()
+    want[-2 * H2C_SPAN:] = 0
+    assert np.array_equal(t0, tmem) and np.array_equal(d0, dram)
+    assert np.array_equal(t1, tmem) and np.array_equal(d1, want)
+    h = s1["h2c"]
+    assert len(h) == 2 and all(0 <= x["bursts"] - x["bresp"] <= 4 and x["bytes"] >= H2C_SPAN
+                               and x["bytes"] == 256 * x["bursts"] for x in h), h
+    ct = (s1["cycles"] - s0["cycles"]) / 400e6 / (sum(x["bytes"] for x in h) / 1e9)
+    assert ct < 0.015, (ct, s0["cycles"], s1["cycles"], h)
 
 
 def _dma_program(rng, cfg: Config, n_ops=70):
@@ -1373,6 +1432,7 @@ def test_additive_mask_block_rtl(have_verilator, board):
     prog, cases, t, qa = [], [], 0, Q
     for M, tpos, KB in [(1, 0, 1), (2, 255, 2), (3, 77, 1), (4, 1, 2), (4, 0, 1), (4, 255, 1),
                         (3, 254, 2), (4, -1, 1)]:
+        M = min(M, cfg.MCOLS)                              # a score tile's rows (the table's)
         q = (rng.standard_normal((M, KB * D)) * 2).astype(np.float32)
         img[qa:qa + q.nbytes] = q.view(np.uint8).ravel()
         tq = t
