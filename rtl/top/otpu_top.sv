@@ -25,6 +25,7 @@ module otpu_top
   parameter int MXU_IMPL   = 2,
   parameter int MXU_CL     = 16,
   parameter int MXU_E      = 0,       // MXU epilogue lanes (0: MCOLS / 2; otpu_mxu E)
+  parameter int MXU_C      = 1,       // MXU chunk lanes (otpu_mxu_lanes; the memory models' lane ports)
   parameter int QUANT_XD   = 1024,    // quantizer row buffer chunks (0: two passes over TMEM; otpu_quant XD)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer
@@ -80,18 +81,27 @@ module otpu_top
     logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, a_inval;
     logic [31:0]   sw_addr, sw_wdata;
     logic [3:0]    sw_be;
+    // the MXU's chunk lanes' reads (MXU_C > 1; otpu_slice lb_* / la_*)
+    logic [MXU_C-1:0]          lb_req, lb_rdy, lb_rvalid, la_req, la_rdy, la_rvalid;
+    logic [MXU_C-1:0][31:0]    lb_addr, la_addr;
+    logic [MXU_C-1:0][D*8-1:0] lb_rdata;
+    logic [MXU_C-1:0][255:0]   la_rdata;
 
     if (AXI == 0) begin : g_dram
       assign a_rdy = 1'b1;
       assign sw_rdy = 1'b1;
       assign b_rdy = 1'b1;
       assign wr_idle = 1'b1;
-      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s)) u_dram (
+      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s), .NL(MXU_C)) u_dram (
         .clk, .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
         .sw_req, .sw_addr, .sw_wdata, .sw_be,
         .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_rvalid, .b_rtag, .b_rdata, .rd_idle,
+        .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
+        .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
         .dump);
     end else begin : g_native
+      logic ad_idle, l_idle;              // the adapter's reads, the lane ports' reads
+      assign rd_idle = ad_idle && l_idle;
       logic [1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
       logic [1:0][24:0] caddr;
       logic [1:0][511:0] wdata, rdata;
@@ -103,22 +113,29 @@ module otpu_top
         .a_be_x(a_be), .a_rvalid, .a_rdata,
         .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
         .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-        .b_rdata, .wr_idle, .rd_idle,
+        .b_rdata, .wr_idle, .rd_idle(ad_idle),
         .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
         .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
         .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone));
       if (AXI == 2) begin : g_ldc
+        // (the co-simulated controller has no lane ports: MXU_C 1 only)
+        initial if (MXU_C > 1) $fatal(1, "otpu_top: MXU_C %0d needs the native memory model (AXI 1)", MXU_C);
+        assign lb_rdy = '0; assign lb_rvalid = '0; assign lb_rdata = '0;
+        assign la_rdy = '0; assign la_rvalid = '0; assign la_rdata = '0;
+        assign l_idle = 1'b1;
         otpu_ldc_mem #(.WORDS(DRAM_WORDS), .SID(s)) u_mem (
           .clk, .rst(sys_rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
       end else begin : g_model
-        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s)) u_mem (
+        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NL(MXU_C)) u_mem (
           .clk, .rst(sys_rst), .run_rst(rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
-          .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
+          .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone),
+          .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
+          .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata, .l_idle, .dump);
       end
       // the adapter's counters (rtlsim: A runs and fill reads, the partial writes by source)
       always @(posedge clk) if (dump)
@@ -134,7 +151,7 @@ module otpu_top
     otpu_slice #(.SID(s), .S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS),
                  .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS),
                  .FIFO_DEPTH(FIFO_DEPTH), .LANES(LANES), .WIN(WIN), .RPB(RPB),
-                 .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES),
+                 .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .MXU_C(MXU_C), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES),
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                  .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
@@ -145,6 +162,8 @@ module otpu_top
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
       .sw_req, .sw_addr, .sw_wdata, .sw_be,
       .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
+      .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
+      .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,
       .coll_ren(coll_ren[s]), .coll_raddr(coll_raddr[s]), .coll_rdata(coll_rdata[s]),
       .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl[s]), .coll_gnt,

@@ -4,11 +4,14 @@
 // byte-enabled word write per cycle (the quantizer's QST stores). Port B: one
 // D-byte burst per cycle, read (the MXU's streamed operand, DMA loads) or word-masked write
 // (DMA stores). Reads return LAT cycles later, in order; data is sampled at the request.
+// Lane ports (NL > 1: the MXU's chunk lanes 1 .. NL-1, otpu_mxu_lanes; [0] unused): per lane
+// one chunk read (lb_*) and one scale-line read (la_*) a cycle, as ports B and A, LAT cycles.
 module otpu_dram #(
   parameter int WORDS = 1 << 18,
   parameter int D     = 32,
   parameter int LAT   = 8,
-  parameter int SID   = 0
+  parameter int SID   = 0,
+  parameter int NL    = 1
 ) (
   input  logic              clk,
   input  logic              a_req,
@@ -32,6 +35,17 @@ module otpu_dram #(
   output logic              b_rtag,
   output logic [D*8-1:0]    b_rdata,
   output logic              rd_idle,    // no read in flight
+  // the chunk lanes' reads ([0] unused)
+  input  logic [NL-1:0]          lb_req,
+  input  logic [NL-1:0][31:0]    lb_addr,    // word address of the chunk
+  output logic [NL-1:0]          lb_rdy,
+  output logic [NL-1:0]          lb_rvalid,
+  output logic [NL-1:0][D*8-1:0] lb_rdata,
+  input  logic [NL-1:0]          la_req,
+  input  logic [NL-1:0][31:0]    la_addr,    // word address
+  output logic [NL-1:0]          la_rdy,
+  output logic [NL-1:0]          la_rvalid,
+  output logic [NL-1:0][255:0]   la_rdata,
   input  logic              dump
 );
   localparam int AW = $clog2(WORDS);
@@ -42,6 +56,11 @@ module otpu_dram #(
   logic [LAT-1:0]    av, bv, bt;
   logic [255:0]      ad [LAT];
   logic [D*8-1:0]    bd [LAT];
+  logic [NL-1:0][LAT-1:0] lbv, lav;
+  logic [D*8-1:0]    lbd [NL][LAT];
+  logic [255:0]      lad [NL][LAT];
+  assign lb_rdy = '1;
+  assign la_rdy = '1;
 
 `ifndef SYNTHESIS
   // the host's writes during the run (WAITW's tests): <dir>/poke_<SID>.txt, lines "cycle word
@@ -82,13 +101,31 @@ module otpu_dram #(
       bt[k] <= bt[k-1];
       bd[k] <= bd[k-1];
     end
+    // the lanes' reads: sampled at the request, back LAT cycles later
+    for (int l = 1; l < NL; l++) begin
+      lbv[l][0] <= lb_req[l];
+      for (int w = 0; w < CW; w++) lbd[l][0][32*w +: 32] <= mem[AW'(lb_addr[l] + w)];
+      lav[l][0] <= la_req[l];
+      for (int w = 0; w < 8; w++) lad[l][0][32*w +: 32] <= mem[{la_addr[l][AW-1:3], 3'(w)}];
+      for (int k = 1; k < LAT; k++) begin
+        lbv[l][k] <= lbv[l][k-1]; lbd[l][k] <= lbd[l][k-1];
+        lav[l][k] <= lav[l][k-1]; lad[l][k] <= lad[l][k-1];
+      end
+    end
   end
   assign a_rvalid = av[LAT-1];
   assign a_rdata  = ad[LAT-1];
   assign b_rvalid = bv[LAT-1];
   assign b_rtag   = bt[LAT-1];
   assign b_rdata  = bd[LAT-1];
-  assign rd_idle  = !(|av) && !(|bv);
+  always_comb begin
+    lb_rvalid = '0; la_rvalid = '0; lb_rdata = '0; la_rdata = '0;
+    for (int l = 1; l < NL; l++) begin
+      lb_rvalid[l] = lbv[l][LAT-1]; lb_rdata[l] = lbd[l][LAT-1];
+      la_rvalid[l] = lav[l][LAT-1]; la_rdata[l] = lad[l][LAT-1];
+    end
+  end
+  assign rd_idle  = !(|av) && !(|bv) && !(|lbv) && !(|lav);
 
 `ifndef SYNTHESIS
   // Images are raw binary: dram_<SID>.bin holds big-endian words ($fread order) and the dump
@@ -99,6 +136,8 @@ module otpu_dram #(
     av = '0;
     bv = '0;
     bt = '0;
+    lbv = '0;
+    lav = '0;
     for (int i = 0; i < WORDS; i++) mem[i] = '0;
     if ($value$plusargs("dir=%s", dir)) begin
       fd = $fopen($sformatf("%s/dram_%0d.bin", dir, SID), "rb");

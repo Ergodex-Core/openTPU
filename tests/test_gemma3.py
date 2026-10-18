@@ -159,3 +159,27 @@ def test_real_spec():
     assert spec.n_q == 4 and spec.n_kv == 1 and spec.head_dim == 256 and spec.window == 512
     assert spec.eos == (1, 106) and spec.softcap is None and spec.vocab == 262144
     spec.check(board_config())
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize("mxu_c", [1, 4])
+def test_token_on_board_rtl_is_bit_exact(have_verilator, tiny, mxu_c):
+    """A decode token of the tiny Gemma 3 at position 600 (past the sliding window) on the
+    Verilator RTL through the board's memory path (AXI adapter, boot loader), with the card's
+    uarch at MXU_C chunk lanes (docs/v4/proposal-2-four-lanes.md: 4 lanes stream 4 rows of
+    every MM side by side), equals the ISA simulator bit for bit: the logits and the whole
+    DRAM image (the KV cache the token wrote)."""
+    from opentpu import rtlsim
+    from opentpu.llm.rtl_backend import RtlBackend
+    _, W, spec = tiny
+    toks = [int(t) for t in np.random.default_rng(5).integers(0, 1000, 601)]
+    eng = Engine(spec, W, cap=1024, cfg=_cfg(), resident=True)
+    eng.prefill(toks[:-1])
+    n, isa = eng.image.nbytes, eng.backend
+    rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in isa.machine.slices],
+                     uarch={**rtlsim.BOARD_UARCH, "MXU_C": mxu_c}, axi=True, boot=True)
+    want = eng.step(toks[-1])
+    eng.backend, eng.pos = rtl, eng.pos - 1
+    got = eng.step(toks[-1])
+    assert np.array_equal(want.view(np.uint32), got.view(np.uint32))
+    assert np.array_equal(isa.machine.slices[0].dram[:n], rtl.drams[0][:n])

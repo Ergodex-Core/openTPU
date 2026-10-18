@@ -49,6 +49,7 @@ module otpu_slice
   parameter int MXU_IMPL   = 2,       // MXU dot product: 2 systolic, the only one (docs/mxu_systolic.md)
   parameter int MXU_CL     = 16,      // cascade chain length
   parameter int MXU_E      = 0,       // MXU epilogue lanes (0: MCOLS / 2; otpu_mxu E)
+  parameter int MXU_C      = 1,       // MXU chunk lanes (otpu_mxu_lanes C; docs/v4/proposal-2-four-lanes.md)
   parameter int QUANT_XD   = 1024,    // quantizer row buffer chunks (0: two passes over TMEM; otpu_quant XD)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,  // VPU lanes with the composite functions
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer (<= LANES)
@@ -119,6 +120,21 @@ module otpu_slice
   input  logic          b_rvalid,
   input  logic          b_rtag,
   input  logic [D*8-1:0] b_rdata,
+  // the MXU's chunk lanes 1 .. MXU_C-1 (otpu_mxu_lanes; [0] unused, MXU_C 1: nothing): their
+  // chunk reads (lb_*, word addresses, chunk aligned) and scale-line reads (la_*, the aligned 32
+  // bytes holding the word), read-only DRAM ports beside port B and port A with the same
+  // discipline: a request leaves from a register (its req the valid bit; rdy must not depend on
+  // this cycle's req), the data return in order per port and enter through a register
+  output logic [MXU_C-1:0]          lb_req,
+  output logic [MXU_C-1:0][31:0]    lb_addr,
+  input  logic [MXU_C-1:0]          lb_rdy,
+  input  logic [MXU_C-1:0]          lb_rvalid,
+  input  logic [MXU_C-1:0][D*8-1:0] lb_rdata,
+  output logic [MXU_C-1:0]          la_req,
+  output logic [MXU_C-1:0][31:0]    la_addr,
+  input  logic [MXU_C-1:0]          la_rdy,
+  input  logic [MXU_C-1:0]          la_rvalid,
+  input  logic [MXU_C-1:0][255:0]   la_rdata,
   // collective
   output logic                    coll_req,
   output cmd_t                    coll_cmd,
@@ -151,6 +167,11 @@ module otpu_slice
   logic [D*8-1:0] b_rdata_i;
   // port A's ready as the MXU sees it: through its output register (see "port A's register")
   logic a_rdy_i;
+  // the chunk lanes' ports as the MXU's lanes see them (their registers, as port B's)
+  logic [MXU_C-1:0] lb_rdy_i, lb_rvalid_i, la_rdy_i, la_rvalid_i, lb_req_c, la_req_c;
+  logic [MXU_C-1:0][31:0] lb_addr_c, la_addr_c;
+  logic [MXU_C-1:0][D*8-1:0] lb_rdata_i;
+  logic [MXU_C-1:0][255:0] la_rdata_i;
   // the stream engine (docs/stream.md): the DMA moves a stream (DSTEP, STREAM) through SE in
   // the VPU; streams need 8 lanes on both sides (otpu_dma W = 8: D >= 32). Without it DSTEP and
   // STREAM are illegal instructions (otpu_seq STREAMS: the slice stops with ERROR)
@@ -494,8 +515,10 @@ module otpu_slice
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
-  otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .SID(SID)) u_mxu (
+  // the MXU: MXU_C lock-step chunk lanes (otpu_mxu_lanes; 1: today's otpu_mxu), lane 0 on
+  // ports A and B, the others on the lane ports
+  otpu_mxu_lanes #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES),
+                   .IMPL(MXU_IMPL), .CL(MXU_CL), .E(MXU_E), .SID(SID), .C(MXU_C)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
@@ -503,8 +526,53 @@ module otpu_slice
     .a_req(mxu_areq), .a_addr(mxu_aaddr), .a_gnt(mxu_agnt), .a_rvalid, .a_rdata,
     .b_req(mxu_breq), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt), .b_rvalid(b_rvalid_i && !b_rtag_i),
     .b_rdata(b_rdata_i),
+    .lb_req(lb_req_c), .lb_addr(lb_addr_c), .lb_gnt(lb_rdy_i), .lb_rvalid(lb_rvalid_i),
+    .lb_rdata(lb_rdata_i),
+    .la_req(la_req_c), .la_addr(la_addr_c), .la_gnt(la_rdy_i), .la_rvalid(la_rvalid_i),
+    .la_rdata(la_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
     .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
+  // the lane ports' registers (as port B's below): a request is taken when the register is
+  // empty or drains this cycle, the data enter through a register; a request or data in them
+  // is a read not back (rd_idle_i). Lane 0's bits are unused (zero)
+  always_ff @(posedge clk) begin : pl_reg
+    for (int l = 0; l < MXU_C; l++) begin
+      if (sys_rst || l == 0) begin lb_req[l] <= 1'b0; la_req[l] <= 1'b0; end
+      else begin
+        if (lb_rdy_i[l]) lb_req[l] <= lb_req_c[l];
+        if (la_rdy_i[l]) la_req[l] <= la_req_c[l];
+      end
+      if (lb_rdy_i[l] && lb_req_c[l]) lb_addr[l] <= lb_addr_c[l];
+      if (la_rdy_i[l] && la_req_c[l]) la_addr[l] <= la_addr_c[l];
+      lb_rvalid_i[l] <= !sys_rst && l != 0 && lb_rvalid[l];
+      la_rvalid_i[l] <= !sys_rst && l != 0 && la_rvalid[l];
+      if (lb_rvalid[l]) lb_rdata_i[l] <= lb_rdata[l];
+      if (la_rvalid[l]) la_rdata_i[l] <= la_rdata[l];
+    end
+  end : pl_reg
+  always_comb
+    for (int l = 0; l < MXU_C; l++) begin
+      lb_rdy_i[l] = (l != 0) && (!lb_req[l] || lb_rdy[l]);
+      la_rdy_i[l] = (l != 0) && (!la_req[l] || la_rdy[l]);
+    end
+  // a lane's read in flight (its register, or data in the input register), for rd_idle_i
+  logic ln_busy;
+  always_comb begin
+    ln_busy = 1'b0;
+    for (int l = 1; l < MXU_C; l++)
+      ln_busy |= lb_req[l] || la_req[l] || lb_rvalid_i[l] || la_rvalid_i[l];
+  end
+  // the lanes' DRAM requests for the counters (pf: bm counts the cycles the MXU stream asked
+  // port B or a lane port, am the same for the scale lines; at MXU_C 1 the MXU's own)
+  logic mxu_breq_pf, mxu_areq_pf, lw_pf;
+  always_comb begin
+    mxu_breq_pf = mxu_breq; mxu_areq_pf = mxu_areq; lw_pf = 1'b0;
+    for (int l = 1; l < MXU_C; l++) begin
+      mxu_breq_pf |= lb_req_c[l];
+      mxu_areq_pf |= la_req_c[l];
+      lw_pf |= (lb_req_c[l] && !lb_rdy_i[l]) || (la_req_c[l] && !la_rdy_i[l]);
+    end
+  end
 
   // the quantizer's group maxes of a row (MX offsets; not ROW mode): a QACT's 4 KB (KB <=
   // ACT_BLOCKS: the ACT RAM's bound) and a QST's KB (its row in TMEM: KB <= TMEM_WORDS / D), so
@@ -960,7 +1028,7 @@ module otpu_slice
   // (tests/test_target.py). One cycle more each way costs nothing measurable (co-simulated:
   // within +-0.07% at m4 on decode, a tiled prompt run and a MoE step, signs mixed)
   assign b_rdy_i   = !b_req || b_rdy;
-  assign rd_idle_i = rd_idle && !a_req && !(b_req && !b_we) && !b_rvalid_i;
+  assign rd_idle_i = rd_idle && !a_req && !(b_req && !b_we) && !b_rvalid_i && !ln_busy;
   always_ff @(posedge clk) begin : pb_reg
     if (sys_rst) b_req <= 1'b0;
     else if (b_rdy_i) b_req <= b_req_c;
@@ -1001,7 +1069,8 @@ module otpu_slice
   logic bw_r, dw_r;
   always_ff @(posedge clk) begin
     bw_r <= !sys_rst && b_req_c && !b_rdy_i;
-    dw_r <= !sys_rst && ((b_req_c && !b_rdy_i) || (mxu_areq && !a_rdy_i) || (q_awant && !sw_rdy_i));
+    dw_r <= !sys_rst && ((b_req_c && !b_rdy_i) || (mxu_areq && !a_rdy_i) || (q_awant && !sw_rdy_i) ||
+                         lw_pf);
   end
 
   // ---- activity and trace events (pf; docs/observability.md). The sequencer's events come
@@ -1173,10 +1242,10 @@ module otpu_slice
   logic [NP-1:0] ap, ap_r;
   logic [4:0]    aq, aq_r;
   logic [FW-1:0] af_r;
-  assign ap = {lose_col, lose_vpu, lose_q, lose_mxu, mxu_pop, q_areq, mxu_areq, dma_breq,
-               mxu_breq};
+  assign ap = {lose_col, lose_vpu, lose_q, lose_mxu, mxu_pop, q_areq, mxu_areq_pf, dma_breq,
+               mxu_breq_pf};
   assign aq = {ld_busy && ld_req, mxu_block, mxu_starve,
-               (mxu_areq && !a_rdy_i) || (q_awant && !sw_rdy_i), b_req_c && !b_rdy_i};
+               (mxu_areq && !a_rdy_i) || (q_awant && !sw_rdy_i) || lw_pf, b_req_c && !b_rdy_i};
   logic [31:0] w_n, n_r;             // cycles of the current window before this one; last n
   logic        h_d, we_r, h_ev;      // halted a cycle ago; a window ended / the halt, last cycle
   logic [NP-1:0][31:0] sp;           // window sums, a cycle behind
