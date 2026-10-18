@@ -1,8 +1,8 @@
 # Codex alternatives for openTPU v4 on F2
 
 Status: **user explicitly approved parallel implementation of C1-C3**, with openTPU Lens
-required for performance measurement and visualization. C1's first reference-validation
-milestone is complete in this branch; see [C1 evidence](C1-VALIDATION.md).
+required for performance measurement and visualization. C1's reference milestone is complete and its bounded row-engine RTL milestone is
+implemented; see [reference evidence](C1-VALIDATION.md) and [RTL scope](C1-RTL.md).
 Date: 2026-10-18. Base: `016e953ad70e9dd78f1b10d8a9cc07318bee66dd` on `tpubench`.
 These C1-C3 designs are new alternatives to Claude's P1-P4 in [docs/v4](../v4/README.md).
 This approval is the user's subsequent instruction for these new alternatives, independent
@@ -59,10 +59,11 @@ speculation, extra users and software row folding are separate experiments.
 ## Approved scope and current boundary
 
 The user approved fan-out across all three branches and required Lens for performance work.
-This branch implements C1's descriptor/packing and arithmetic-reference milestone, with
-focused validation and explicitly analytic Lens profiles. Sibling branch status is tracked
+This branch implements C1's descriptor/packing and arithmetic reference, plus a bounded
+multi-outstanding row-engine cluster and exact shared fp32 RTL epilogue. Lens records
+separate analytic-policy and actual Verilator-kernel profiles with abstract memory. Sibling branch status is tracked
 in those worktrees. C1 does not yet change compiler dispatch or the existing ISA, and contains
-no C1 RTL, synthesis result or cloud deployment.
+no integrated C1 AXI/TMEM path, FPGA timing result or cloud deployment.
 
 Continue comparing each implementation against the existing ISA and a same-clock baseline
 before full F2 integration. Reference CPU duration, analytic policy cycles, RTL simulation

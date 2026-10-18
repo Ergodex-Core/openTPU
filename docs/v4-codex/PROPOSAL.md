@@ -1,8 +1,9 @@
 # C1: independent HBM row engines
 
-**Approved for implementation; first reference-validation milestone complete.** New Codex
+**Approved for implementation; reference and bounded RTL milestones implemented.** New Codex
 proposal, 2026-10-18. The user explicitly approved parallel work on C1-C3 and required openTPU
-Lens for performance measurement/visualization. See [validation evidence](C1-VALIDATION.md).
+Lens for performance measurement/visualization. See [reference evidence](C1-VALIDATION.md)
+and [RTL validation scope](C1-RTL.md).
 Branch: `codex/v4-c1-hbm-row-engines`. Base: `016e953a`.
 See [comparison and approval boundary](README.md).
 
@@ -129,4 +130,14 @@ scale/header request overhead; central TMEM drain saturation; and insufficient u
 Milestone 1 now has a versioned byte-preserving sidecar, an independent executable arithmetic
 reference and tests against canonical ISA execution. An initial Lens event-policy experiment
 helps inspect independent progress, bounded row credits and delayed PCs; it is not the full
-milestone 2 memory model. No C1 RTL, compiler dispatch, F2 integration or synthesis exists yet.
+the later bounded RTL milestone below. Compiler dispatch and F2 integration remain future work.
+
+
+## Approved bounded RTL milestone
+
+The user approved continuing all three candidates. C1 now has a synthesizable-style
+per-PC row engine with bounded multi-outstanding slots, an ordered cluster, and the
+repository-exact shared fp32 epilogue. See [C1-RTL.md](C1-RTL.md) for the executable
+interface contract, tests, Lens artifacts and exclusions. Plain-output kernel execution
+is separate from the earlier reference ACC support; AXI/header/TMEM integration and
+F2 timing remain future gates. The original proposal estimates are not measured RTL.

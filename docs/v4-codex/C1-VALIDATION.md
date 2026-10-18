@@ -1,5 +1,8 @@
 # C1 first milestone: row image and arithmetic reference
 
+This records the completed first milestone. The later [bounded RTL milestone](C1-RTL.md)
+adds actual kernel simulation; the analytic results below retain their original scope.
+
 User approval: on 2026-10-18 the user explicitly approved parallel C1-C3 implementation and
 required openTPU Lens for performance measurement/visualization. This work is confined to
 `codex/v4-c1-hbm-row-engines`; it does not modify Claude's branch or either sibling candidate.
