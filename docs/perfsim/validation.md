@@ -1,6 +1,6 @@
-# Validation status
+# Historical validation: initial implementation
 
-This is an experimental implementation. **The timing acceptance gate fails.** Do not use
+This page preserves the initial implementation results at commit `760e3c8`. **These predictions are historical and superseded by [round-two validation](validation-round2.md).** The initial timing acceptance gate failed. Do not use
 its predicted cycles or tokens/second as measured OpenTPU performance. The existing LPN
 model and validation registry are preserved; their reported 0.8–4.2% aggregate errors apply
 only to the five configurations in that registry and do not validate this simulator.

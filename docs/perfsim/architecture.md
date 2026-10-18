@@ -8,14 +8,13 @@ cover arithmetic. Sharing ISA arithmetic is explicitly **not** an independent nu
 
 ## Dataflow
 
-1. In-order dispatch resolves scalar register-relative addresses and expands LOOP dynamically.
+1. Four elastic footprint stages (R→P→S→Q→C) resolve scalar register-relative addresses and expand LOOP dynamically. The first R edge is cycle 1, earliest dispatch is cycle 5, and the unit start is observed one cycle later.
    A finite issue window retains outstanding commands. RLD blocks younger dispatch until its
    scalar result commits. BAR waits for older commands; HALT waits for all commands and writes.
 2. `opentpu.waits.footprint/conflict` supplies the same conservative RAW/WAR/WAW address-range
-   semantics as `otpu_pkg`. Per-unit queues prevent in-order units from overtaking an older
-   unstarted command; VPU can choose an independent younger command. MXU prefetch is released
+   semantics as `otpu_pkg`. MXU and collectives consider their oldest unstarted command; DMA, quantizer and VPU choose the oldest ready candidate. Started same-unit dependencies are cleared for internally ordered units, but not VPU. Registered starts cannot occur on consecutive cycles. MXU prefetch is released
    on DRAM dependencies separately from activation/TMEM dependencies.
-3. All unit steps arbitrate banked TMEM at `word_address % LANES`, with separate per-bank read
+3. Unit steps arbitrate in DMA→collective→VPU→MXU→quantizer priority order on banked TMEM at `word_address % LANES`, with separate per-bank read
    and write capacities. Atomic lane operations stall as a group. MXU scattered drains split
    into conflict-free groups. Buffered outputs exert backpressure at finite queue limits.
 4. Every memory command reaches a finite adapter. Port A (32-byte scale lines), B (D-byte DMA/
@@ -34,12 +33,12 @@ cover arithmetic. Sharing ISA arithmetic is explicitly **not** an independent nu
 
 | Unit | Implemented behaviour | RTL reference and remaining approximation |
 |---|---|---|
-| Issue | finite window; control/register/loop handling; range conflicts; separate MM stream dependencies; 2-entry MXU queue | `rtl/seq/otpu_seq.sv`, `opentpu/waits.py`. Fetch/resolve overlap represented by configurable dispatch delay, not every sequencer register |
-| MXU | actual D-byte block stream, row-gated consumption, finite prefetch FIFO, scale-line requests, ACT row replay, int8/int4/fp4/nvfp4 packing, PAIR, partial M/N and KB; result FIFO/drain, ACC/ASCALE/RMAX | `rtl/mxu/otpu_mxu.sv`: CLS=min(D/8,CL), LROW=CLS+MCOLS+5, epilogue lanes default MCOLS/2. Micro-op epilogue/command overlap and scale holding-register scheduling are structural approximations, not an RTL port |
-| VPU | all current arithmetic/copy/fill/nonlinear/reduction/OUTER functions, broadcast addressing, masked partial lanes, 64-partial reduction tail, buffered pipeline writes | `rtl/vpu/otpu_vpu.sv`: LM=2, LA=4, SL=7; ADD/MUL/OUTER 1 slot, EXP2/EXP2SUB 9, RECIP 6, RSQRT/LOG2 10. Lane tapping, per-partial recurrence and inter-command issue arbitration are simplified |
-| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. Rows processed serially; four-bank row overlap and overflow reread path not implemented (overflow rejected) |
-| DMA | D-chunk boundaries, lane gathering/scattering, finite gathered chunk, port-B sharing and read/write completion | `rtl/dma/otpu_dma.sv`. Conservative single-chunk scheduling, not the full RTL lookahead pipeline |
-| TMEM | modulo banking, independent configurable read/write capacity, address-specific contention, pipeline drain stalls | `rtl/mem/otpu_tmem.sv`. Abstract bank model; exact replicated-port guests, subbank/hash/pump modes and priority encoding not implemented |
+| Issue | finite window; control/register/loop handling; range conflicts; separate MM stream dependencies; 2-entry MXU queue | `rtl/seq/otpu_seq.sv`, `opentpu/waits.py`. Four-stage footprint pipeline, registered unit starts and drained HALT boundary; alternate WAITC issue is unsupported |
+| MXU | actual D-byte block stream, row-gated consumption, finite prefetch FIFO, scale-line requests, ACT row replay, int8/int4/fp4/nvfp4 packing, PAIR, partial M/N and KB; result FIFO/drain, ACC/ASCALE/RMAX | `rtl/mxu/otpu_mxu.sv`: CLS=min(D/8,CL), LROW=CLS+MCOLS+5, epilogue lanes default MCOLS/2. Independent prefetch, array advance and result drain pipelines; LROW followed by S0/row/FIFO stages, nine-cycle conversion/scaling epilogue. Coupled A/B requests are atomic, A is fetched on each scale advance, and an active issuer blocks the next command. Row-gated response readiness, result-credit lifetime, overlapping commands and ACC/ASCALE/RMAX remain approximations |
+| VPU | all current arithmetic/copy/fill/nonlinear/reduction/OUTER functions, broadcast addressing, masked partial lanes, 64-partial reduction tail, buffered pipeline writes | `rtl/vpu/otpu_vpu.sv`: LM=2, LA=4, SL=7; ADD/MUL/OUTER 1 slot, EXP2/EXP2SUB 9, RECIP 6, RSQRT/LOG2 10. Default C8 composite path uses eight lanes and 25-cycle recirculation passes (HAS_DSTEP defaults on even without DSTEP opcodes). Two-entry command queue, arithmetic latency ordering, padded reduction streams, RTL folding-tree latency and pipeline freeze on denied output writes. Cross-command read arbitration and non-C8 configurations lack matched timing coverage |
+| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. QACT overlaps four row banks with finite chunk credits, scale readiness and ACT packing. Overflow reread path is rejected. QST still uses a serial row/byte-store approximation and is a known compiled-model timing gap |
+| DMA | D-chunk boundaries, lane gathering/scattering, finite gathered chunk, port-B sharing and read/write completion | `rtl/dma/otpu_dma.sv`. Independent request/gather and completion/drain paths, 128-chunk buffer, store run threshold 32 and pipeline stages; tested aligned/unaligned transfers, partial chunks and long runs |
+| TMEM | modulo banking, independent configurable read/write capacity, address-specific contention, pipeline drain stalls | `rtl/mem/otpu_tmem.sv`. Abstract bank model; replicated-port guests, subbank/hash/pump and WBUF variants are not implemented; only the tested default topology is validated |
 | Memory adapter | real addresses/transactions, finite occupancy, per-line RMW ordering, callback completion, explicit clocks | Deliberately a documented abstract adapter, not cycle-exact `otpu_native_dram`/F2 shell. QST byte writes currently incur individual RMW traffic rather than the hardware's possible write combining; results can be pessimistic |
 
 MXU counters count actual useful `M*N*KB*D` work and packed weight traffic; zero values do not
@@ -88,3 +87,9 @@ it includes unit waiting on memory. `mxu_advance_fraction`: actual model advance
 `useful_mac_fraction`: useful MACs / (cycles*D*MCOLS). Stalls are **micro-operation blocked events**;
 producer and consumer can block in the same cycle, so counters are not mutually exclusive or
 additive wall-time buckets. Region `span_cycles` includes waits and can overlap other regions.
+
+## Matched behavioral-memory validation backend
+
+`rtl_fixed` models the existing `otpu_dram` AXI=0 contract for identical RTL-program comparisons. It must be explicitly selected; it is never substituted for Ramulator. Core/controller/memory periods must agree, `transaction_bytes` must equal D, and `rmw` must be false. B uses D-byte physical transfers, A reads 32-byte scale lines, and SW writes four physical bytes with native masks. Local requests are registered before the DRAM edge; read tickets become unit-visible at local-request cycle + DRAM_LAT + 2, writes at +2. Each port accepts at most once per core cycle. This behavioral memory has no controller queue or channel-contention model. Its pending response pipeline follows DRAM_LAT, not the generic adapter's outstanding setting. It does not model DDR/HBM or the FPGA shell.
+
+The matching receipts use D=32, LANES=8, MCOLS=4, RPB=32, WPB=1, WIN=16 and DRAM_LAT=8. Exact results for this subset do not establish all supported parameter combinations. The legacy `vpu_slots` field accepts only its default (10); arithmetic paths are fixed and the actual command queue depth is two. Non-default C8 lane widths and TMEM read latencies are rejected. `dma_buffer_chunks` and `dma_store_run` are explicit capacities; overrides are design experiments until compared against corresponding RTL parameters.

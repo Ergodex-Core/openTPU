@@ -3,7 +3,7 @@
 Functional commits use the repository's ISA engine, independently of timing. This is
 not a claim of an independent numerical implementation; validation also runs NumPy/RTL.
 """
-from collections import Counter
+from collections import Counter, deque
 from dataclasses import asdict
 import time
 
@@ -21,7 +21,7 @@ class Banks:
     def reset(self):
         self.reads, self.writes = Counter(), Counter()
 
-    def grant(self, reads=(), writes=()):
+    def grant(self, reads=(), writes=(), probe=False):
         r = Counter(a % self.cfg.LANES for a in reads)
         w = Counter(a % self.cfg.LANES for a in writes)
         if any(v > self.arch.tmem_read_ports_per_bank for v in r.values()) or any(
@@ -30,8 +30,9 @@ class Banks:
         if any(self.reads[b] + n > self.arch.tmem_read_ports_per_bank for b, n in r.items()) or any(
                 self.writes[b] + n > self.arch.tmem_write_ports_per_bank for b, n in w.items()):
             return False
-        self.reads.update(r)
-        self.writes.update(w)
+        if not probe:
+            self.reads.update(r)
+            self.writes.update(w)
         return True
 
 
@@ -74,6 +75,8 @@ class Simulator:
         self.arch = architecture or Architecture()
         self.memcfg = memory_system.cfg if memory_system is not None else memory or MemoryConfig()
         self.arch.validate(cfg)
+        if self.memcfg.backend=='rtl_fixed' and self.memcfg.transaction_bytes!=cfg.D:
+            raise Unsupported('rtl_fixed port B transaction_bytes must equal D')
         self.program = program
         self.labels = labels or {}
         if len(program)*8 > cfg.IMEM_WORDS:
@@ -92,7 +95,12 @@ class Simulator:
         self.memory_baseline = self.memory.stats.copy()
         self.banks = Banks(cfg, self.arch)
         self.commands, self.window = [], []
-        self.cycle, self.next_dispatch = 0, self.arch.dispatch_latency
+        self.cycle, self.next_dispatch = 0, 1
+        self.pipeline = deque()
+        self.halt_cycle = None
+        self.last_start = {}
+        self.vpu_loop_busy = set()
+        self.retired_this_cycle = 0
         self.stalls, self.resources, self.busy = Counter(), set(), Counter()
         self.rld_pending = None
         self.halt_seen = False
@@ -123,36 +131,41 @@ class Simulator:
         return True
 
     def dispatch(self):
+        # R -> P -> S -> Q -> C: four elastic footprint stages (otpu_seq.sv).
+        if self.pipeline and self.pipeline[0][0] <= self.cycle:
+            if len(self.window)+self.retired_this_cycle < self.arch.window:
+                _,cmd=self.pipeline.popleft()
+                cmd.dispatch=self.cycle
+                for older in self.window:
+                    if W.conflict(cmd.fp,older.fp): cmd.deps.append(older)
+                    if W.conflict(cmd.fp,older.fp,dram_only=True): cmd.dram_deps.append(older)
+                self.window.append(cmd)
+            else:
+                self.stalls['window_full'] += 1
         if self.halt_seen or self.cycle < self.next_dispatch:
             return
         if self.rld_pending is not None and self.rld_pending.end is None:
             self.stalls['scalar_dependency'] += 1
             return
-        if len(self.window) >= self.arch.window:
-            self.stalls['window_full'] += 1
+        if len(self.pipeline)>=4:
+            self.stalls['frontend_pipeline_full'] += 1
             return
-        sl = self.state
+        sl=self.state
         if not 0 <= sl.pc < len(self.program):
             raise ValueError('program ran past IMEM without HALT')
-        ins = self.program[sl.pc]
-        self.next_dispatch = self.cycle + self.arch.issue_period
-        if ins.op == I.HALT:
-            self.halt_seen = True
-        elif ins.op in (I.NOP, I.LI, I.ADDI, I.LOOP):
+        ins=self.program[sl.pc]
+        self.next_dispatch=self.cycle+self.arch.issue_period
+        if ins.op==I.HALT:
+            self.halt_seen=True; self.halt_cycle=self.cycle
+        elif ins.op in (I.NOP,I.LI,I.ADDI,I.LOOP):
             sl.step()
+            if ins.op==I.LOOP: self.next_dispatch+=1  # loop count/stack setup has two R cycles
         else:
-            cmd = Command(self, self.owner_base+len(self.commands), sl.pc, ins, [sl.reg(r) for r in range(16)])
-            for older in self.window:
-                if W.conflict(cmd.fp, older.fp):
-                    cmd.deps.append(older)
-                if W.conflict(cmd.fp, older.fp, dram_only=True):
-                    cmd.dram_deps.append(older)
-            self.commands.append(cmd)
-            self.memory.next_owner = cmd.id+1
-            self.window.append(cmd)
+            cmd=Command(self,self.owner_base+len(self.commands),sl.pc,ins,[sl.reg(r) for r in range(16)])
+            self.commands.append(cmd); self.memory.next_owner=cmd.id+1
+            self.pipeline.append((self.cycle+4,cmd))
             sl.advance()
-            if ins.op == I.RLD:
-                self.rld_pending = cmd
+            if ins.op==I.RLD: self.rld_pending=cmd
 
     def run(self):
         from .units import make_task
@@ -162,8 +175,9 @@ class Simulator:
                 self.memory.begin_cycle(self.memory_offset+self.cycle, self.arch.core_period_ps)
                 self.banks.reset()
                 self.resources.clear()
-                for cmd in list(self.window):
-                    ready = all(d.end is not None for d in cmd.deps)
+                self.retired_this_cycle=0
+                for cmd in sorted(self.window,key=lambda c:({W.U_DMA:0,W.U_COLL:1,W.U_VPU:2,W.U_MXU:3,W.U_Q:4}[c.unit], c.id)):
+                    ready = all((cmd.unit==W.U_MXU and d.unit==cmd.unit and d.task is not None) or (d.end is not None and d.end < self.cycle) for d in cmd.deps)
                     if ready and cmd.release is None:
                         cmd.release = self.cycle
                     if cmd.task is None:
@@ -173,21 +187,35 @@ class Simulator:
                         active = [x for x in self.window if x.unit == cmd.unit and x.task is not None]
                         capacity = self.arch.mxu_queue if cmd.unit == W.U_MXU else self.arch.vpu_slots if cmd.unit == W.U_VPU else 1
                         # In-order units cannot pass an older unstarted command; VPU oldest ready can.
-                        if len(active) >= capacity or (cmd.unit != W.U_VPU and any(x.task is None for x in older_unit)):
+                        if cmd.unit==W.U_DMA:
+                            active=[x for x in active if not x.task.accepts_next()]
+                        if cmd.unit==W.U_MXU and any(not x.task.prefetch_done for x in active):
+                            cmd.stalls['mxu_issuer_busy']+=1
+                            continue
+                        if cmd.unit == W.U_VPU:
+                            active=[x for x in active if not x.task.begun]
+                            capacity=2  # actual cq[2], distinct from in-flight arithmetic
+                        if self.cycle < self.last_start.get(cmd.unit,-2)+2 or len(active) >= capacity or (cmd.unit in (W.U_MXU,W.U_COLL) and any(x.task is None for x in older_unit)):
                             cmd.stalls['unit_queue'] += 1
                             continue
-                        stream_ready = all(d.end is not None for d in cmd.dram_deps)
-                        if not (stream_ready if cmd.unit == W.U_MXU else ready):
+                        stream_ready = all(d.end is not None and d.end < self.cycle for d in cmd.dram_deps)
+                        unit_ready=ready
+                        if cmd.unit!=W.U_VPU:
+                            unit_ready=all((d.unit==cmd.unit and d.task is not None) or (d.end is not None and d.end<self.cycle) for d in cmd.deps)
+                        if not (stream_ready if cmd.unit == W.U_MXU else unit_ready):
                             cmd.stalls['dependency'] += 1
                             continue
                         cmd.start = self.cycle
+                        self.last_start[cmd.unit]=self.cycle
                         cmd.task = make_task(cmd)
                     self.busy[str(cmd.unit)] += 1
                     if cmd.task.tick():
                         cmd.complete()
                         self.window.remove(cmd)
+                        self.retired_this_cycle+=1
                 self.dispatch()
-                if self.halt_seen and not self.window and self.memory.idle:
+                last_end=max((c.end or 0 for c in self.commands),default=0)
+                if self.halt_seen and not self.pipeline and not self.window and self.memory.idle and self.cycle>max(last_end,self.halt_cycle):
                     break
                 self.cycle += 1
             else:

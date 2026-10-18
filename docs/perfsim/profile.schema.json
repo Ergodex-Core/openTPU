@@ -79,7 +79,7 @@
         },
         "dispatch_latency": {
           "type": "integer",
-          "default": 2
+          "default": 1
         },
         "tmem_read_latency": {
           "type": "integer",
@@ -88,6 +88,16 @@
         "max_cycles": {
           "type": "integer",
           "default": 10000000
+        },
+        "dma_buffer_chunks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 128
+        },
+        "dma_store_run": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 32
         }
       },
       "additionalProperties": false
@@ -97,7 +107,12 @@
       "properties": {
         "backend": {
           "type": "string",
-          "default": "simple"
+          "default": "simple",
+          "enum": [
+            "simple",
+            "ramulator",
+            "rtl_fixed"
+          ]
         },
         "controller_period_ps": {
           "type": "integer",

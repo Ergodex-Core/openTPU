@@ -1,0 +1,4635 @@
+{
+  "binary_sha256": "3d9f8c05c5f0b41b3c2aaee4c7a90c08a18108bca8089639e5bc79805bab47b0",
+  "build_receipt_sha256": "fdc0e748ac0338bc738dec00694cbcea3239adba34bfd80cdb56158c143dda66",
+  "parameters": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 4,
+    "AXI": 0,
+    "D": 32,
+    "DRAM_LAT": 8,
+    "DRAM_WORDS": 262144,
+    "FIFO_DEPTH": 1024,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "MXU_IMPL": 2,
+    "RPB": 32,
+    "S": 1,
+    "TMEM_WORDS": 8192,
+    "WIN": 16,
+    "WPB": 1
+  },
+  "configuration": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 32,
+    "DRAM_BYTES": 1048576,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 8192
+  },
+  "provenance": "Unmodified tb_top, AXI=0 DRAM_LAT=8. Frozen from RTL observations, not simulator predictions. See round2 receipts.",
+  "cases": [
+    {
+      "name": "halt",
+      "program_words": [
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 3,
+      "rtl_trace": [],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "282622870c2c83be17b4499b0fe1fae7700cd8beac529e730f21dbec7a086b5f",
+        "prog_0.hex": "0a0722c4d7fcabdf6be52868e2db8708598b2f4f5deed8cef136d1b2f00298f1"
+      },
+      "rtl_stdout_sha256": "3b877314c3d1ebad80f892daab8e1c9fed006c1880bb85b6662b87e5899f9bff"
+    },
+    {
+      "name": "fill_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 16,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "3304492e9b2efeb0a20e031ec74f58571f06fc9cdedd0b2f4c8022e5c59efa7e"
+      },
+      "rtl_stdout_sha256": "95a1f987d6cc928ee15f61bbc5521508b07023feb6d650675060c682f57967f3"
+    },
+    {
+      "name": "fill_8",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        524289,
+        524296,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 16,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "dddb3d89a690c7d08f0a6d77592137c0cc34d8c872ee78578ca3ef05d26dae84"
+      },
+      "rtl_stdout_sha256": "c46bbdd35cb5af51f2a5f355f402cd24de6a29ee7c25a0a41fd5b920bead5948"
+    },
+    {
+      "name": "fill_9",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        589825,
+        589833,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 17,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 15,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "d8e290c75390e99a06950fb0277851354e4df45bf0d1aad924bcc86479d40550"
+      },
+      "rtl_stdout_sha256": "31cc04f3bd4e602195d500827875caf6f8c1918c8243f70a9c6cea772732e0f9"
+    },
+    {
+      "name": "fill_64",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4194305,
+        4194368,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 23,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 21,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "9b61b8f9c15eb1fb78f6010e480a7b6c236c28a293a62819c84a2c212b4ed361"
+      },
+      "rtl_stdout_sha256": "62c6b2042b20922073b801b65a27023f6ecc535bfe04693f9687647eb3f4a1a8"
+    },
+    {
+      "name": "fill_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 24,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "094638eaca11985d45add5f70f2855216c81e60dbf9ec26fc3afa69b75e5302a"
+      },
+      "rtl_stdout_sha256": "e60d5130e1da5a023b7cb345b6ca843c9b4a938794d4130423df62c70e6d9748"
+    },
+    {
+      "name": "fill_129",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        8454145,
+        8454273,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 32,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "c123500d34ac61536bfc0c331976b84efaeba7fbe02bc7f8e2b0a69bd496f819"
+      },
+      "rtl_stdout_sha256": "672804753b776d116b7ae0914d24aebf20357e2a055ac2cacee4b29196fbcbdb"
+    },
+    {
+      "name": "func_3_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        50528256,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 32,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 30,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "79c881cd4f29ae005a5b113184a2fa75f5299c574cab633b1140570b7fd0bc56"
+      },
+      "rtl_stdout_sha256": "7dcabcf8d5a403a10e36a709dbd16b94964495be0234a74b2a30f74eb9b729d8"
+    },
+    {
+      "name": "func_3_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        50528256,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 48,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 46,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "5a076ee8577b20b71a5e465cbd4a0e0d57834234a563765b4f61dd286accb3b6"
+      },
+      "rtl_stdout_sha256": "b708a01d463fd9ba398bf5e1f45c36f4af34a679f88ebcfaf0f6ddb864d1dfa9"
+    },
+    {
+      "name": "func_9_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        50921472,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 100,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 98,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "b1f48a2e5519bad170b08250577e062551ad81ff8f15668d29ea888f83a85876"
+      },
+      "rtl_stdout_sha256": "763deca2f5ad07e556084972006d0eb1ea24713454713390cf941e45901a4294"
+    },
+    {
+      "name": "func_9_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        50921472,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 116,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 114,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "94c6ab08b5800f27f78a3217b21ef877a2515281cb84564fc14208a3f1bb3d03"
+      },
+      "rtl_stdout_sha256": "365ddee9c0c5609b5717665cbc88dfe4a1bef3cd9b6ecdfd524cba1d22a9cac0"
+    },
+    {
+      "name": "func_10_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        50987008,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 75,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 73,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "f977ba30c90cd7f5e413f7b7ff69d499a836deb82ea10c51f55f4f9131292d52"
+      },
+      "rtl_stdout_sha256": "b8e287321a47bac07efe96053b75e590d631aab8816497a9aae8cad426b2c501"
+    },
+    {
+      "name": "func_10_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        50987008,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 91,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 89,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "656c83805b1e1c1e89aed3de637084603e2216090f75762d2b2f85345872ac4b"
+      },
+      "rtl_stdout_sha256": "8472eb4a7509685023c8f1429dc2f863132443657dbc6677cf7a5934ff373da5"
+    },
+    {
+      "name": "func_11_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51052544,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 125,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 123,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "81914db8ac1dfe94d4903711f79ac5170942cabb62d0598f6dd7b3394a1be9b3"
+      },
+      "rtl_stdout_sha256": "49ecdcab1589ae0568efb811d213beb76bca3cc0c3283d4237e227ec24d425ad"
+    },
+    {
+      "name": "func_11_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51052544,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 141,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 139,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "869e61a7321190c66a9b95e5818595ff59930c92d16811f4f9786798954cf479"
+      },
+      "rtl_stdout_sha256": "16ca3425ce517992411e8c251bc505f8323b99a569d056196d5de2b19b1646fa"
+    },
+    {
+      "name": "func_15_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51314688,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 125,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 123,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "92765d01e060479bf70d51611de3cf7f9a22ad2aeeaf6db4e72046b2998359f5"
+      },
+      "rtl_stdout_sha256": "98966225a2abbfca739534c61f41784598b67d4477fb7e4f042e8b2512d58aa2"
+    },
+    {
+      "name": "func_15_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51314688,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 141,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 139,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "626d7d11d583637a4d721e6f8c896c50a275a6038dfb53caf1cb95ab3f6c61e6"
+      },
+      "rtl_stdout_sha256": "012ee0d9dc3b24f00ded45d1d7655fc1c6be37eb066ae35c1f07db23da6325eb"
+    },
+    {
+      "name": "func_16_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51380224,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 67,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 65,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "d61eca970a06df68015691f13b074977f80d8bbc97df7ca9a574219299e37267"
+      },
+      "rtl_stdout_sha256": "e045096a0302a2dfd426c459605f0316e822aaa139389533a710f81b056cb86d"
+    },
+    {
+      "name": "func_16_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51380224,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 83,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 81,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "badf484a054ab274f0e80d227d544adfad795d8fa6b047d2c2e6d13c83629454"
+      },
+      "rtl_stdout_sha256": "481bc5b920dbd3dd9aad206cb7150e4fa0f17430db195846ff1df7dc0177f63b"
+    },
+    {
+      "name": "func_18_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51511296,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 67,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 65,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "c5d7e57a80f92bbcc55b053ccb0ff9d0c6bfad16eadc27d04efdd96f591181bb"
+      },
+      "rtl_stdout_sha256": "93d077f3ad2b013edc6e3857285e130f9530b3e911aa80c17335f8384b3042d5"
+    },
+    {
+      "name": "func_18_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51511296,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 83,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 81,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "32c625f9c5259b3dfe93d7c7e31e61285336bfeef9f4c9b728254be1eb1d7325"
+      },
+      "rtl_stdout_sha256": "6409eab7bed8628362558ffd75aa0b36ac49c768710dc78d976193205113e7c8"
+    },
+    {
+      "name": "func_19_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51576832,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 68,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 66,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "4707016e04690797c89d0cd2206a5e4173ac80d724eaf08812ef68d31e1fd45a"
+      },
+      "rtl_stdout_sha256": "e473f860107ee5eda3f6519d13bbb5106d0899a1971ba4f392085d0ad5238ca4"
+    },
+    {
+      "name": "func_19_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51576832,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 83,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 81,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "ae89c5ccfd2a6501ee63238df4dead0d4f39f2c7d1c0098a31fb1cc6da2b3f94"
+      },
+      "rtl_stdout_sha256": "1db8e2eb378dd89e10ae184e6c38e86e1a0dc8570d4282a8d9e71562d3e9277a"
+    },
+    {
+      "name": "func_17_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51445760,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 28,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 26,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "57fe5d6a995277593e6aab74211916b1493186b6dd5ad795bdc167db5eef3843"
+      },
+      "rtl_stdout_sha256": "d5c27dd0d9d2d45defc671d2966ab4b84e8b56ef75d5bf021a75b69113c7fc33"
+    },
+    {
+      "name": "func_17_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51445760,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 44,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 42,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "852d08fae5ab28f0cfeceb83bf2bd3c705d309ace846a91968cf5f6608f46d67"
+      },
+      "rtl_stdout_sha256": "73e7eedccdfe97eb02837e223b2dee2f9fbdb913c76b692cf1c3f88d38d87d80"
+    },
+    {
+      "name": "func_20_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        65537,
+        65537,
+        51642368,
+        3,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 32,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 30,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "86654e9137b3d51e01ce3730c5cbcc8c88518e6788c6ec198520fb13db9208f7"
+      },
+      "rtl_stdout_sha256": "477f2bc98748c02658c7bb1f31dbcbd8a6ded84edb514dd3520efa6a38e67604"
+    },
+    {
+      "name": "func_20_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4390913,
+        4390979,
+        51642368,
+        3,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 48,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 46,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "631b2b71b282ca5d40887855fdb65d3c26c7cb9cf4d3d2f977cd5262429b1917"
+      },
+      "rtl_stdout_sha256": "61eb5ae4d66b44b9657bdf1e98bf2371f29d5e505ffb6592624b37658d83fe2c"
+    },
+    {
+      "name": "multirow_16",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245187,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        1245187,
+        1245185,
+        51380224,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 91,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 89,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "5d9380d54b6afcde061328587d6385e225fad69356a6c9486e9d54c37b024989"
+      },
+      "rtl_stdout_sha256": "3230f9cfb7dc1dbcec33a9f17cea2baafa20cd68c8fca353640db58a058beb0f"
+    },
+    {
+      "name": "multirow_19",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245187,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        1245187,
+        1245185,
+        51576832,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 92,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 90,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "aa88c3fd2a9a3a5a463abc6b7d9ff92111e11f6a62bc23359f64273387147519"
+      },
+      "rtl_stdout_sha256": "0502cb1eddd5b0ac1940f5b212b1dd94ca7f2ad6e21d39664a01916e1fa743eb"
+    },
+    {
+      "name": "multirow_17",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245187,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        1245187,
+        1245185,
+        51445760,
+        1077936128,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 44,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 42,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "d0de14f564f1ea539e7fb7f9db671afc969bbadb128ab1a1e376c227aefe4a2b"
+      },
+      "rtl_stdout_sha256": "86488f4359b1221bdc0d4da252db8b60a217f2ce068670e49e27b98ce467b9f5"
+    },
+    {
+      "name": "initial_failure",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        4390913,
+        4390979,
+        50528256,
+        1077936128,
+        48,
+        256,
+        128,
+        0,
+        4390913,
+        4390979,
+        51380224,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 107,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 46,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        },
+        {
+          "dispatch": 7,
+          "end": 105,
+          "id": 2,
+          "pc": 2,
+          "start": 47
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "53d98e068a3d09f0eb769d745de7e1a60d7546b4c569008eacdcbd09feef11f8"
+      },
+      "rtl_stdout_sha256": "ac40f58161679cfdc6638ae789c119a78f5023455770b97c129be6a7d3616093"
+    },
+    {
+      "name": "overlap_9_8",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245185,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        1245185,
+        1245203,
+        50921472,
+        0,
+        48,
+        256,
+        0,
+        0,
+        1245185,
+        1245203,
+        50855936,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 111,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 16,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 102,
+          "id": 1,
+          "pc": 1,
+          "start": 17
+        },
+        {
+          "dispatch": 7,
+          "end": 109,
+          "id": 2,
+          "pc": 2,
+          "start": 19
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "de8c26ea9f40fb59196ffe900d70299f4a99f1907ec9650cad870d9f02451a0b"
+      },
+      "rtl_stdout_sha256": "517d06712a626a4d38f065a289ef3e030e285a72b71df0292a95b5b58cf9b135"
+    },
+    {
+      "name": "overlap_8_9",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245185,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        1245185,
+        1245203,
+        50855936,
+        0,
+        48,
+        256,
+        0,
+        0,
+        1245185,
+        1245203,
+        50921472,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 108,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 16,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 27,
+          "id": 1,
+          "pc": 1,
+          "start": 17
+        },
+        {
+          "dispatch": 7,
+          "end": 106,
+          "id": 2,
+          "pc": 2,
+          "start": 19
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "7c67aad2dd888d5fb272eaf3357d6351a9bc18a2d2492d23f0d04336daa3c25f"
+      },
+      "rtl_stdout_sha256": "02f4cd89429d1d6cac0283880cdf9c2ff2288af51363e21c0f1ddec0a4305cde"
+    },
+    {
+      "name": "overlap_9_16",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245185,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        1245185,
+        1245203,
+        50921472,
+        0,
+        48,
+        256,
+        0,
+        0,
+        1245185,
+        1245203,
+        51380224,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 151,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 16,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 102,
+          "id": 1,
+          "pc": 1,
+          "start": 17
+        },
+        {
+          "dispatch": 7,
+          "end": 149,
+          "id": 2,
+          "pc": 2,
+          "start": 19
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "295c5b9e06752f17cc5789cf46f9e527df7935479010e3f6c840b78a43b09eea"
+      },
+      "rtl_stdout_sha256": "b5e1b0851803ad9bc24beaa582525dfb5881f3a1d3940e361303f890a93cfacf"
+    },
+    {
+      "name": "window_pressure",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        8,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        16,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        24,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        32,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        40,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        48,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        56,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        64,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        72,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        80,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        88,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        96,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        104,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        112,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        120,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        136,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        144,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        152,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        160,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        168,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        176,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        184,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        192,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        200,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        208,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        216,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        224,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        232,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        240,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        248,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        256,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        264,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        272,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        280,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        288,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        296,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        304,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        48,
+        312,
+        0,
+        0,
+        65537,
+        65537,
+        51183616,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 94,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 16,
+          "id": 1,
+          "pc": 1,
+          "start": 8
+        },
+        {
+          "dispatch": 7,
+          "end": 18,
+          "id": 2,
+          "pc": 2,
+          "start": 10
+        },
+        {
+          "dispatch": 8,
+          "end": 20,
+          "id": 3,
+          "pc": 3,
+          "start": 12
+        },
+        {
+          "dispatch": 9,
+          "end": 22,
+          "id": 4,
+          "pc": 4,
+          "start": 14
+        },
+        {
+          "dispatch": 10,
+          "end": 24,
+          "id": 5,
+          "pc": 5,
+          "start": 16
+        },
+        {
+          "dispatch": 11,
+          "end": 26,
+          "id": 6,
+          "pc": 6,
+          "start": 18
+        },
+        {
+          "dispatch": 12,
+          "end": 28,
+          "id": 7,
+          "pc": 7,
+          "start": 20
+        },
+        {
+          "dispatch": 13,
+          "end": 30,
+          "id": 8,
+          "pc": 8,
+          "start": 22
+        },
+        {
+          "dispatch": 14,
+          "end": 32,
+          "id": 9,
+          "pc": 9,
+          "start": 24
+        },
+        {
+          "dispatch": 15,
+          "end": 34,
+          "id": 10,
+          "pc": 10,
+          "start": 26
+        },
+        {
+          "dispatch": 16,
+          "end": 36,
+          "id": 11,
+          "pc": 11,
+          "start": 28
+        },
+        {
+          "dispatch": 17,
+          "end": 38,
+          "id": 12,
+          "pc": 12,
+          "start": 30
+        },
+        {
+          "dispatch": 18,
+          "end": 40,
+          "id": 13,
+          "pc": 13,
+          "start": 32
+        },
+        {
+          "dispatch": 19,
+          "end": 42,
+          "id": 14,
+          "pc": 14,
+          "start": 34
+        },
+        {
+          "dispatch": 20,
+          "end": 44,
+          "id": 15,
+          "pc": 15,
+          "start": 36
+        },
+        {
+          "dispatch": 21,
+          "end": 46,
+          "id": 16,
+          "pc": 16,
+          "start": 38
+        },
+        {
+          "dispatch": 22,
+          "end": 48,
+          "id": 17,
+          "pc": 17,
+          "start": 40
+        },
+        {
+          "dispatch": 23,
+          "end": 50,
+          "id": 18,
+          "pc": 18,
+          "start": 42
+        },
+        {
+          "dispatch": 24,
+          "end": 52,
+          "id": 19,
+          "pc": 19,
+          "start": 44
+        },
+        {
+          "dispatch": 25,
+          "end": 54,
+          "id": 20,
+          "pc": 20,
+          "start": 46
+        },
+        {
+          "dispatch": 26,
+          "end": 56,
+          "id": 21,
+          "pc": 21,
+          "start": 48
+        },
+        {
+          "dispatch": 27,
+          "end": 58,
+          "id": 22,
+          "pc": 22,
+          "start": 50
+        },
+        {
+          "dispatch": 29,
+          "end": 60,
+          "id": 23,
+          "pc": 23,
+          "start": 52
+        },
+        {
+          "dispatch": 31,
+          "end": 62,
+          "id": 24,
+          "pc": 24,
+          "start": 54
+        },
+        {
+          "dispatch": 33,
+          "end": 64,
+          "id": 25,
+          "pc": 25,
+          "start": 56
+        },
+        {
+          "dispatch": 35,
+          "end": 66,
+          "id": 26,
+          "pc": 26,
+          "start": 58
+        },
+        {
+          "dispatch": 37,
+          "end": 68,
+          "id": 27,
+          "pc": 27,
+          "start": 60
+        },
+        {
+          "dispatch": 39,
+          "end": 70,
+          "id": 28,
+          "pc": 28,
+          "start": 62
+        },
+        {
+          "dispatch": 41,
+          "end": 72,
+          "id": 29,
+          "pc": 29,
+          "start": 64
+        },
+        {
+          "dispatch": 43,
+          "end": 74,
+          "id": 30,
+          "pc": 30,
+          "start": 66
+        },
+        {
+          "dispatch": 45,
+          "end": 76,
+          "id": 31,
+          "pc": 31,
+          "start": 68
+        },
+        {
+          "dispatch": 47,
+          "end": 78,
+          "id": 32,
+          "pc": 32,
+          "start": 70
+        },
+        {
+          "dispatch": 49,
+          "end": 80,
+          "id": 33,
+          "pc": 33,
+          "start": 72
+        },
+        {
+          "dispatch": 51,
+          "end": 82,
+          "id": 34,
+          "pc": 34,
+          "start": 74
+        },
+        {
+          "dispatch": 53,
+          "end": 84,
+          "id": 35,
+          "pc": 35,
+          "start": 76
+        },
+        {
+          "dispatch": 55,
+          "end": 86,
+          "id": 36,
+          "pc": 36,
+          "start": 78
+        },
+        {
+          "dispatch": 57,
+          "end": 88,
+          "id": 37,
+          "pc": 37,
+          "start": 80
+        },
+        {
+          "dispatch": 59,
+          "end": 90,
+          "id": 38,
+          "pc": 38,
+          "start": 82
+        },
+        {
+          "dispatch": 61,
+          "end": 92,
+          "id": 39,
+          "pc": 39,
+          "start": 84
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "47896e2d50d67015c6a5c707ee1e436f4f1e185ca279ade02fe3cf65b68b9584",
+        "prog_0.hex": "93b4b98717d738c90399b178b1e52dd1f4db7bb278e0fc0340db3a69688c9a38"
+      },
+      "rtl_stdout_sha256": "33a45c68a75470456483fff810f5f09ebf854d9696ec6183ae7d8a348621ed5b"
+    },
+    {
+      "name": "load_8",
+      "program_words": [
+        16,
+        0,
+        0,
+        8,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 24,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "ac1c8d6bb1c8d4af301da8646b658e17f25e0764a8efd060c7253b857071d1b4"
+      },
+      "rtl_stdout_sha256": "74c15432e03d92f9e5f0cf1ec99496a32d42184a7d01f96bf0179dc28f1db564"
+    },
+    {
+      "name": "store_8",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        524289,
+        524296,
+        51183616,
+        1073741824,
+        17,
+        0,
+        0,
+        8,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 27,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 14,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 25,
+          "id": 1,
+          "pc": 1,
+          "start": 15
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "f2a769a50dde86abde378e764af5cd331ec55deec13d58eec1e907c2a68f2237"
+      },
+      "rtl_stdout_sha256": "3c2785d9da23f1e954f40f2dd330fdbe863e17f3abe553ea76199863cebdc5f8"
+    },
+    {
+      "name": "load_add_store_8",
+      "program_words": [
+        16,
+        0,
+        0,
+        8,
+        0,
+        0,
+        0,
+        0,
+        48,
+        128,
+        0,
+        0,
+        524289,
+        524296,
+        50331648,
+        1065353216,
+        17,
+        512,
+        128,
+        8,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 51,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 38,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        },
+        {
+          "dispatch": 7,
+          "end": 49,
+          "id": 2,
+          "pc": 2,
+          "start": 39
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "513d23bd5d1b5f56f060a0fffbbd93d9d7d75af5bcc933c211032e5fefa0f398"
+      },
+      "rtl_stdout_sha256": "261464596ad3869e63eec13a2b7faefb2e47401692daa217dbc131da80d72231"
+    },
+    {
+      "name": "load_19",
+      "program_words": [
+        16,
+        0,
+        0,
+        19,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 26,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 24,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "1e395585de8f9a96064f3450e6ef4b87c773e923fd857d094e51a9f52fbb7ba0"
+      },
+      "rtl_stdout_sha256": "7bbc81fbe6cd1b066c2301130efdfd79fdd289bc0a79cbcb510df815c08ce567"
+    },
+    {
+      "name": "store_19",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        1245185,
+        1245203,
+        51183616,
+        1073741824,
+        17,
+        0,
+        0,
+        19,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 33,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 16,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 31,
+          "id": 1,
+          "pc": 1,
+          "start": 17
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "e8face3e2ee260ca21d53c1ff914cd3e3646bb9119cdaa09c53ab31a62db2ae8"
+      },
+      "rtl_stdout_sha256": "5bd9f7ce5e731ad411c3772f9e815ec8b8c4e5547fd1d828ef1c074cdd45f7e8"
+    },
+    {
+      "name": "load_add_store_19",
+      "program_words": [
+        16,
+        0,
+        0,
+        19,
+        0,
+        0,
+        0,
+        0,
+        48,
+        128,
+        0,
+        0,
+        1245185,
+        1245203,
+        50331648,
+        1065353216,
+        17,
+        512,
+        128,
+        19,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 59,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 24,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 42,
+          "id": 1,
+          "pc": 1,
+          "start": 25
+        },
+        {
+          "dispatch": 7,
+          "end": 57,
+          "id": 2,
+          "pc": 2,
+          "start": 43
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "63c85fdb820608952983ef955880ef18b0d6367492f57e01188c5b89c56a8df3"
+      },
+      "rtl_stdout_sha256": "b0cf4c5455baa60662d4e18d952ce18c4ef81ef6c1563fd620113ec242302773"
+    },
+    {
+      "name": "load_67",
+      "program_words": [
+        16,
+        0,
+        0,
+        67,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 32,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "86f6f7c3cdad94d747e70ca799db20b20e1d4a91e2888c5e283019c2297fcbac",
+        "prog_0.hex": "bb372873efc6a86f6ab41591b52b8bf7752756addd9d440c0b58d5ba43d9a384"
+      },
+      "rtl_stdout_sha256": "c802d8e17f8ec6e556d79a5966c866809f980467451f2a999e2956dc9f3e936c"
+    },
+    {
+      "name": "store_67",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        17,
+        0,
+        0,
+        67,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 51,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 49,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "60bb82fd79d7a1cbd301cc61e145776b59bcd5f3646d9870089b8dfdac34b921"
+      },
+      "rtl_stdout_sha256": "bb6b25941b9ebb090a1df9344b798d73869abb90b9bad54383b023aa1d612aca"
+    },
+    {
+      "name": "load_add_store_67",
+      "program_words": [
+        16,
+        0,
+        0,
+        67,
+        0,
+        0,
+        0,
+        0,
+        48,
+        128,
+        0,
+        0,
+        4390913,
+        4390979,
+        50331648,
+        1065353216,
+        17,
+        512,
+        128,
+        67,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 83,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 54,
+          "id": 1,
+          "pc": 1,
+          "start": 31
+        },
+        {
+          "dispatch": 7,
+          "end": 81,
+          "id": 2,
+          "pc": 2,
+          "start": 55
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "b6ba1059ab4edb4111df2f773f69d0cb53f81d0fc6f25bef1b45e75ff4357440"
+      },
+      "rtl_stdout_sha256": "24f4e702c3824734e7e4741fa63e2edacb3ff3a6c8c83f3a5dd3c514deb52d53"
+    },
+    {
+      "name": "heldout_long_9",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        33619969,
+        33620481,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        33619969,
+        33620481,
+        50921472,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 328,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 78,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 326,
+          "id": 1,
+          "pc": 1,
+          "start": 79
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "50d6b94a5ef3f04410155c2775e08ad130c4fa4807e47ea036fe463f3e0adddd"
+      },
+      "rtl_stdout_sha256": "eade0401b4f071e2454dcab1e96289b8ffa5a1ad4f9e86de63184d8c7888d794"
+    },
+    {
+      "name": "heldout_long_10",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        33619969,
+        33620481,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        33619969,
+        33620481,
+        50987008,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 253,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 78,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 251,
+          "id": 1,
+          "pc": 1,
+          "start": 79
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "ae3d3244a0a3724ae3dcd29aa8e582cea4291ba76c467dc7c553a43142bd008f"
+      },
+      "rtl_stdout_sha256": "69864efb8120034e284d7510de710de234a33538303ac76c2ee2fb925d78c5a8"
+    },
+    {
+      "name": "heldout_long_16",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        33619969,
+        33620481,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        33619969,
+        33620481,
+        51380224,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 195,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 78,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 193,
+          "id": 1,
+          "pc": 1,
+          "start": 79
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "7d61c292ff338195453983a5c85d2be0e2a7929bc2873d94ccaff7e4943af550"
+      },
+      "rtl_stdout_sha256": "b37931a7ef5a1e622fd365c4dcc1cb1f0496425988ea127dd5acb087f938b70b"
+    },
+    {
+      "name": "heldout_long_19",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        33619969,
+        33620481,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        33619969,
+        33620481,
+        51576832,
+        1073741824,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 195,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 78,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 193,
+          "id": 1,
+          "pc": 1,
+          "start": 79
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "ec3d3f4db1c1b70041265a1d16369895de5fd3996ec10b28758751e4c22783f0"
+      },
+      "rtl_stdout_sha256": "1910b5e627e5d3e6f2e095212656733e8f6981e2014622d78b082eee04b5568a"
+    },
+    {
+      "name": "heldout_rows_16",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4259849,
+        4259905,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4259849,
+        4259842,
+        51380224,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 283,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 94,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 281,
+          "id": 1,
+          "pc": 1,
+          "start": 95
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "face64b835cb4595f5761f3c5b50f5772c0a872f36d855728628721531a7a4a5"
+      },
+      "rtl_stdout_sha256": "e0b6f5eba40e2b08c2c64c56ea4ffd1434d5c17608fc9bb0b9decfd51c8192ef"
+    },
+    {
+      "name": "heldout_rows_19",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4259849,
+        4259905,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4259849,
+        4259842,
+        51576832,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 283,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 94,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 281,
+          "id": 1,
+          "pc": 1,
+          "start": 95
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "8559d4af6871eaffb5eb1f3e5b30b2921b7315fc87a1a3a4544b82f5e25c5340"
+      },
+      "rtl_stdout_sha256": "229cdea282a3f4b60484bf5a74ab0258c56113a67a8768f146924f8c9e7a0052"
+    },
+    {
+      "name": "heldout_rows_20",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4259849,
+        4259905,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        4259849,
+        4259842,
+        51642368,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 192,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 94,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 190,
+          "id": 1,
+          "pc": 1,
+          "start": 95
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "236f96803cc64d46da4bdcd97c6a9eee97edb47fdb6de6c7408facb9a94cea52"
+      },
+      "rtl_stdout_sha256": "0d6768c9b68e80f8ae967a54b92e1eb755ba9925e123bb291b97a35bf485dbb5"
+    },
+    {
+      "name": "heldout_loop",
+      "program_words": [
+        4,
+        2,
+        3,
+        0,
+        0,
+        0,
+        0,
+        0,
+        48,
+        0,
+        0,
+        0,
+        1245185,
+        1245203,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        1245185,
+        1245203,
+        50331648,
+        1065353216,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 96,
+      "rtl_trace": [
+        {
+          "dispatch": 7,
+          "end": 18,
+          "id": 0,
+          "pc": 1,
+          "start": 8
+        },
+        {
+          "dispatch": 8,
+          "end": 36,
+          "id": 1,
+          "pc": 2,
+          "start": 19
+        },
+        {
+          "dispatch": 9,
+          "end": 47,
+          "id": 2,
+          "pc": 1,
+          "start": 37
+        },
+        {
+          "dispatch": 10,
+          "end": 65,
+          "id": 3,
+          "pc": 2,
+          "start": 48
+        },
+        {
+          "dispatch": 11,
+          "end": 76,
+          "id": 4,
+          "pc": 1,
+          "start": 66
+        },
+        {
+          "dispatch": 12,
+          "end": 94,
+          "id": 5,
+          "pc": 2,
+          "start": 77
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "531303db0b60c94a72329454deb6174328ffac290fe3f533c186e167399fa0c3"
+      },
+      "rtl_stdout_sha256": "316019605d0d323a9c507df74ea1ba9d53636c0945239b0a908c741a21004235"
+    },
+    {
+      "name": "heldout_dma_5",
+      "program_words": [
+        16,
+        4,
+        3,
+        5,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16388,
+        3,
+        5,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 33,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 31,
+          "id": 1,
+          "pc": 1,
+          "start": 21
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "dee6d83222a837f7e675b3cd45b4160bd83712d4f26efbcfeb06f3d52d722f11"
+      },
+      "rtl_stdout_sha256": "ec399c41a4ef158d3a27cf696a6a15ccac5fea16d9522b839a2bc13e91b781c3"
+    },
+    {
+      "name": "heldout_dma_17",
+      "program_words": [
+        16,
+        4,
+        3,
+        17,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16388,
+        3,
+        17,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 39,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 24,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 37,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "17a1dbbc793547354ab1cfe87ee5fda055cbda6df947768987701f41c3131358"
+      },
+      "rtl_stdout_sha256": "1ba719e72296a17c31f8839f12aa5ff38f58e96d2af27f2ad825e91cb4cf5767"
+    },
+    {
+      "name": "heldout_dma_70",
+      "program_words": [
+        16,
+        4,
+        3,
+        70,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16388,
+        3,
+        70,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 57,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 55,
+          "id": 1,
+          "pc": 1,
+          "start": 29
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "e691ff4555cb6ba0ee7c0779586711bb68b35f5214ffc7582234a5c518599c02"
+      },
+      "rtl_stdout_sha256": "32dd8f821100304db9e0a05820cb5c9ceee337c2ef3892eb0a7162224ea463a0"
+    },
+    {
+      "name": "heldout_dma_2048",
+      "program_words": [
+        16,
+        4,
+        3,
+        2048,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16388,
+        3,
+        2048,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 583,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 278,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 581,
+          "id": 1,
+          "pc": 1,
+          "start": 277
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "27df771b0421d0d55395f15cf23e2f584dc59b795e784d48c94074d82cee9027"
+      },
+      "rtl_stdout_sha256": "ac5001419b75b7fdaa19c63d8d2217ffd43768270e606975eae506f62065329e"
+    },
+    {
+      "name": "heldout_contention",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        33619969,
+        33620481,
+        51183616,
+        1073741824,
+        48,
+        4096,
+        0,
+        0,
+        33619969,
+        33620481,
+        50921472,
+        0,
+        16,
+        0,
+        2048,
+        1024,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 456,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 206,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 454,
+          "id": 1,
+          "pc": 1,
+          "start": 207
+        },
+        {
+          "dispatch": 7,
+          "end": 151,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "ad38e63c246a08a21987a1a3ed13906cdc6be12840f65eaf87c4d976407f449a"
+      },
+      "rtl_stdout_sha256": "84d1af14b488a6fcd22ed4e9d065a9573d99f7cd74ef3838ed153c67db4b844f"
+    },
+    {
+      "name": "heldout_dependency",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        128,
+        0,
+        0,
+        4390913,
+        4390979,
+        50528256,
+        1077936128,
+        48,
+        0,
+        0,
+        0,
+        4390913,
+        4390979,
+        51183616,
+        1073741824,
+        48,
+        256,
+        128,
+        0,
+        4390913,
+        4390979,
+        50331648,
+        1082130432,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 82,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 22,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 46,
+          "id": 1,
+          "pc": 1,
+          "start": 23
+        },
+        {
+          "dispatch": 7,
+          "end": 63,
+          "id": 2,
+          "pc": 2,
+          "start": 47
+        },
+        {
+          "dispatch": 8,
+          "end": 80,
+          "id": 3,
+          "pc": 3,
+          "start": 49
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "0053acd80337d94333d92f095a0526d293e5ef1e37eedf5951069b26443c7cc7",
+        "prog_0.hex": "5b8abd80f7b3dfe58326d072b14ab4d136f75f622a2825c364a8c81c60709edd"
+      },
+      "rtl_stdout_sha256": "d879834e773f5f41c8df952b58648f603b6d7a02be8f7e4eb6a8dfb68222f720"
+    },
+    {
+      "name": "quant_1_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        2097153,
+        2097184,
+        51183616,
+        1073741824,
+        33,
+        0,
+        65537,
+        32,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 81,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 17,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 79,
+          "id": 1,
+          "pc": 1,
+          "start": 18
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "ee54d38897b977da813d8ee532b33c4cacfffe229912d396db3cd3f4983f4abc"
+      },
+      "rtl_stdout_sha256": "421b2a7430fe2e7b26ac534365df9fa401c62b0c97091e2b7f297a07cb6d9fde"
+    },
+    {
+      "name": "quant_1_2",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4194305,
+        4194368,
+        51183616,
+        1073741824,
+        33,
+        0,
+        131073,
+        64,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 93,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 21,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 91,
+          "id": 1,
+          "pc": 1,
+          "start": 22
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "8ae525ba75761552d47c33609eaf7ab14fa2f9eb6ddda453ebfdf3896c4baed3"
+      },
+      "rtl_stdout_sha256": "afca68d9859c80902b54bf2a003999348a61ecd2a7f487465e1dd249ba982392"
+    },
+    {
+      "name": "quant_2_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        2097154,
+        2097184,
+        51183616,
+        1073741824,
+        33,
+        0,
+        65538,
+        32,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 90,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 21,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 88,
+          "id": 1,
+          "pc": 1,
+          "start": 22
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "2200469cd9f631ffd3e8a6e1fd6bd1a31bb4b35b420f33eb16cf834a16352cb3"
+      },
+      "rtl_stdout_sha256": "1790977587d0f63e2c3f407b6f5e234ecee468ab562e9af685d9098da8fbc5ab"
+    },
+    {
+      "name": "quant_3_2",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4194307,
+        4194368,
+        51183616,
+        1073741824,
+        33,
+        0,
+        131075,
+        64,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 127,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 37,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 125,
+          "id": 1,
+          "pc": 1,
+          "start": 38
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "1761050d7cb4e4138f7fecea747b182c2499f0fa8a59af3aff77f54d8550f9a7"
+      },
+      "rtl_stdout_sha256": "58dd5d8e2c3011b4c6f1648d16efe013d5bf625713ff9e4f6d836dfad01ae742"
+    },
+    {
+      "name": "quant_4_8",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        16777220,
+        16777472,
+        51183616,
+        1073741824,
+        33,
+        0,
+        524292,
+        256,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 360,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 141,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 358,
+          "id": 1,
+          "pc": 1,
+          "start": 142
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "9e34ace83e450ff84dca659a7417e0dbc9e921a743643caa73bdc2bee549c693"
+      },
+      "rtl_stdout_sha256": "b6d71dbf4b6e18190d9d5e0825c9fdcf898cf7d8986422e2749336c5cd5d50e7"
+    },
+    {
+      "name": "mxu_partial_1_1_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        2097153,
+        2097184,
+        51183616,
+        1073741824,
+        33,
+        0,
+        65537,
+        32,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        65537,
+        32,
+        65537,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 111,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 17,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 79,
+          "id": 1,
+          "pc": 1,
+          "start": 18
+        },
+        {
+          "dispatch": 7,
+          "end": 109,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "22a09797645bf9d45f1967941f046ce5f89e0254dc0323fb92823ff43a4cf7e9"
+      },
+      "rtl_stdout_sha256": "5dd6127b87804f9b6db333a62decf8a7dd413c2601e0955ed3d6eb29c5d5a0e0"
+    },
+    {
+      "name": "mxu_partial_1_7_2",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4194305,
+        4194368,
+        51183616,
+        1073741824,
+        33,
+        0,
+        131073,
+        64,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        131079,
+        64,
+        65543,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 136,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 21,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 91,
+          "id": 1,
+          "pc": 1,
+          "start": 22
+        },
+        {
+          "dispatch": 7,
+          "end": 134,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "aa334745df5cd96f230ecd8aeb86c94ac82daf4c8f06f32efba870103e80b914"
+      },
+      "rtl_stdout_sha256": "f39ae48236d5ddb1ce1e2d073fd4ef3e05a4918ab1755e24398c2ad82a7546f2"
+    },
+    {
+      "name": "mxu_partial_2_13_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        2097154,
+        2097184,
+        51183616,
+        1073741824,
+        33,
+        0,
+        65538,
+        32,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        65549,
+        32,
+        131085,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 132,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 21,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 88,
+          "id": 1,
+          "pc": 1,
+          "start": 22
+        },
+        {
+          "dispatch": 7,
+          "end": 130,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "d12aae97a1fb259605deab5f9837e59540f84901c55de99fabdb95d3e26d5f45"
+      },
+      "rtl_stdout_sha256": "b1bd9784e4183fd4952a3c4ec0f955ce63a9bd4ff6017b5a766d628d22045799"
+    },
+    {
+      "name": "mxu_partial_3_17_2",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        4194307,
+        4194368,
+        51183616,
+        1073741824,
+        33,
+        0,
+        131075,
+        64,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        131089,
+        64,
+        196625,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 191,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 37,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 125,
+          "id": 1,
+          "pc": 1,
+          "start": 38
+        },
+        {
+          "dispatch": 7,
+          "end": 189,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "e6119c00892120f6073a08ffa863cfa0646298a006e6c7fd3a0792531252ffdf"
+      },
+      "rtl_stdout_sha256": "4e9fd26022d4b336c422adbcb01079476274b6c963cdabbf38dbb997629e8dca"
+    },
+    {
+      "name": "mxu_partial_4_9_4",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        8388612,
+        8388736,
+        51183616,
+        1073741824,
+        33,
+        0,
+        262148,
+        128,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        262153,
+        128,
+        262153,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 282,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 77,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 214,
+          "id": 1,
+          "pc": 1,
+          "start": 78
+        },
+        {
+          "dispatch": 7,
+          "end": 280,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "1e336c4424bceba5e03c82eaf78b3b5d23e071ef305d44e2b8584f7232e8d947"
+      },
+      "rtl_stdout_sha256": "6f477145b6de724df22a7b03fe59fa26c4b8b11442622df1b91d1aa8510ebeb7"
+    },
+    {
+      "name": "mxu_partial_3_1_4",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        8388611,
+        8388736,
+        51183616,
+        1073741824,
+        33,
+        0,
+        262147,
+        128,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        262145,
+        128,
+        196609,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 217,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 61,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 181,
+          "id": 1,
+          "pc": 1,
+          "start": 62
+        },
+        {
+          "dispatch": 7,
+          "end": 215,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "72b5cae125b09bcd2b706abb81060bc4ec2ea72d844b8c5f99ad73466d7bbfbe"
+      },
+      "rtl_stdout_sha256": "347330f1600ecc8fc7d5fbf8686883b92708343e345e04c896f433c593761033"
+    },
+    {
+      "name": "mxu_partial_4_33_1",
+      "program_words": [
+        48,
+        0,
+        0,
+        0,
+        2097156,
+        2097184,
+        51183616,
+        1073741824,
+        33,
+        0,
+        65540,
+        32,
+        0,
+        0,
+        0,
+        0,
+        16777248,
+        0,
+        0,
+        4096,
+        65569,
+        32,
+        262177,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 203,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 29,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 106,
+          "id": 1,
+          "pc": 1,
+          "start": 30
+        },
+        {
+          "dispatch": 7,
+          "end": 201,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "1008e2701db3a93588ffb777d721b7f7c8df4167a41c9fcf64d38529b8375bea",
+        "prog_0.hex": "88fe7710bb39aed9bd494a20697d4ea5aa368a88eaadb9b40743107801b602cf"
+      },
+      "rtl_stdout_sha256": "81bff711883ae9bd147bbf0fd98411e98b6820998754ffa2a8e277e1c4932c8d"
+    },
+    {
+      "name": "frozen_dma_31",
+      "program_words": [
+        16,
+        12,
+        1,
+        31,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16396,
+        1,
+        31,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 45,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 26,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 43,
+          "id": 1,
+          "pc": 1,
+          "start": 25
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "16d2139ce36569daee8bfb8c62fc131f2533ee6fdb041a18933d42046344325d"
+      },
+      "rtl_stdout_sha256": "c394166a976923a94f4f1330688e3d09f251f73558d5207aba8a8768bc9cee09"
+    },
+    {
+      "name": "frozen_dma_33",
+      "program_words": [
+        16,
+        12,
+        1,
+        33,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16396,
+        1,
+        33,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 45,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 26,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 43,
+          "id": 1,
+          "pc": 1,
+          "start": 25
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "f13686e6fb262ca5d7913192857cacc3225066fdd7af347b3179920cc547ac44"
+      },
+      "rtl_stdout_sha256": "e2744c19ff7115a9623f2069c698c1facfd3b1dfdf04451ca761f5c6c31d986c"
+    },
+    {
+      "name": "frozen_dma_63",
+      "program_words": [
+        16,
+        12,
+        1,
+        63,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16396,
+        1,
+        63,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 57,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 55,
+          "id": 1,
+          "pc": 1,
+          "start": 29
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "75a14ebd45d3aea1a7b6bd009fbdd91015b8f93b24a347e5c8cf5e6a9a353b39"
+      },
+      "rtl_stdout_sha256": "5f3afd543642513a58a7f45f23e1f7cb15362736924bb8e6438e43e707621b75"
+    },
+    {
+      "name": "frozen_dma_65",
+      "program_words": [
+        16,
+        12,
+        1,
+        65,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16396,
+        1,
+        65,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 57,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 30,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 55,
+          "id": 1,
+          "pc": 1,
+          "start": 29
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "52f4d5eedc8df5538c5cd85d77da3e4348bf152a19820034032cb5786fc1395d"
+      },
+      "rtl_stdout_sha256": "7c57758f606d13aaf314e4d4fde7a4e19dac6950be46fe686e4d7c50c4aca02d"
+    },
+    {
+      "name": "frozen_dma_257",
+      "program_words": [
+        16,
+        12,
+        1,
+        257,
+        0,
+        0,
+        0,
+        0,
+        17,
+        16396,
+        1,
+        257,
+        0,
+        0,
+        0,
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "rtl_cycles": 129,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 54,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 127,
+          "id": 1,
+          "pc": 1,
+          "start": 53
+        }
+      ],
+      "input_sha256": {
+        "dram_0.bin": "21ed0d28b89e08dc4f32b9bfc380374058488ebdccf91fa5d8f62a9b21d09e3d",
+        "input.json": "b075e9376231ff6092ce232ae8ad67e952929074dc1e821c6292e3a04d83ad48",
+        "prog_0.hex": "b082b7ed5e6d3da92bcf45e8bb543d95d5608795ebe14adb3677012991de0cca"
+      },
+      "rtl_stdout_sha256": "1e4f7c52a69a0bb0bcfbd3ea0cd4c502fd1a2c00455a87ed4d2fe42cfb03da80"
+    }
+  ]
+}

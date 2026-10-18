@@ -29,7 +29,7 @@ def state_hash(state):
 def source_hashes():
     # Hash this simulator and its evaluator. Upstream ISA/compiler/RTL are identified
     # by the repository revision, not a claim of a separately clean working tree.
-    paths=[*ROOT.glob('opentpu/perfsim/*.py'),*ROOT.glob('tests/perfsim/*.py'),
+    paths=[*ROOT.glob('opentpu/perfsim/*.py'),*ROOT.glob('tests/perfsim/**/*.py'),*ROOT.glob('tests/perfsim/fixtures/*.json'),
            *ROOT.glob('tools/perfsim/**/*')]
     return {str(p.relative_to(ROOT)):digest(p) for p in sorted(paths)
             if p.is_file() and '__pycache__' not in p.parts and 'receipts' not in p.parts}

@@ -8,7 +8,7 @@ ISA golden model, FPGA workloads, `tools/hwloop/lpn` and its validation registry
 
 This implementation is a starting point toward the requested fully validated simulator.
 It does **not** establish pretrained full-model timing accuracy, hardware Fmax or physical fit.
-See [architecture and limitations](architecture.md) and [validation](validation.md).
+See [architecture and limitations](architecture.md) and [current validation](validation-round2.md) and [preserved initial evidence](validation.md).
 
 ## Quick start
 
@@ -103,3 +103,17 @@ No SCALE-Sim source code is copied. Ternary/zero weights receive no timing speed
 is an MIT-licensed external dependency, pinned with yaml-cpp/spdlog/argparse commits. The
 small compatibility patch, build receipt and license are retained. See
 `tools/perfsim/ramulator/NOTICE.md`. Simulator code follows this repository's Apache-2.0 license.
+
+## Reproducing instruction-level timing comparisons
+
+Use the unchanged RTL executable built by `tools/perfsim/validate.py --rtl`, or an existing `Vtb_top` with its `Vtb_top__verFiles.dat` build receipt. The corpus verifies the parameter set before running:
+
+```sh
+python tools/perfsim/timing_suite.py --executable /path/to/Vtb_top \
+  --config-bundle build/perfsim/bundles/compute --out /tmp/opentpu-timing \
+  --memory rtl_fixed --compiled
+```
+
+This writes raw RTL traces, actual input bundles, output hashes, simulator metrics, per-instruction comparisons and content-addressed manifests. Exit 2 means the exact trace/cycle gate failed; it is expected for the current tiny-model cases. Exit 1 means a numeric or execution failure. The ±5% aggregate-cycle check is recorded separately and cannot override the exact gate. Golden RTL, its counters and measurement boundaries are unchanged. Frozen RTL observations in `tests/perfsim/fixtures` are replayed by ordinary pytest; they do not run Verilator and are not new RTL measurements.
+
+On hosts with file-provider stalls in synced Documents folders, use a disposable **non-synced** directory for both the pinned Ramulator checkout and build, for example `--source /tmp/opentpu-ramulator --build /tmp/opentpu-bridge`. Upstream Ramulator places its library in its source tree, so moving only the build directory is insufficient. Populate all pinned dependencies (or explicitly use `--fetch`), then run the same build command. The round-two receipt records a successful offline build and repeat build on macOS ARM64, followed by tests against that exact library. No system installation is needed.

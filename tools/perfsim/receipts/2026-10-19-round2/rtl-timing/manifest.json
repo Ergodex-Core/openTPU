@@ -1,0 +1,86 @@
+{
+  "branch": "refs/heads/codex/opentpu-cycle-sim",
+  "dependency_lock": {
+    "numpy": "2.5.4",
+    "opentpu_base": "3c542bd9cb98f11499729ea52703788f4588e4d2",
+    "pytest": "9.1.1",
+    "python_tested": "3.14.5",
+    "ramulator": {
+      "commit": "be93be78055d922aa1d4d33e15bcc8f2b0c61a9d",
+      "license": "MIT",
+      "prepare": "ramulator/prepare.py",
+      "release": "v2.0a",
+      "url": "https://github.com/CMU-SAFARI/ramulator2.git"
+    },
+    "ramulator_dependencies": {
+      "argparse": {
+        "commit": "997da9255618311d1fcb0135ce86022729d1f1cb",
+        "license": "MIT",
+        "url": "https://github.com/p-ranav/argparse.git"
+      },
+      "spdlog": {
+        "commit": "ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36",
+        "license": "MIT",
+        "url": "https://github.com/gabime/spdlog.git"
+      },
+      "yaml-cpp": {
+        "commit": "0579ae3d976091d7d664aa9d2527e0d0cff25763",
+        "license": "MIT",
+        "url": "https://github.com/jbeder/yaml-cpp.git"
+      }
+    },
+    "scale_sim_reference_only": {
+      "commit": "9f98c4371055a54c75209c2e02b640b897550532",
+      "license": "MIT",
+      "paper": "https://arxiv.org/abs/2504.15377v2",
+      "runtime_dependency": false,
+      "url": "https://github.com/scalesim-project/SCALE-Sim.git"
+    },
+    "schema_version": 1
+  },
+  "git_commit": "760e3c8c70bad869e6a38c401737cbbe97a9d877",
+  "inputs": {
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/build/verilator/tb_top_3a5911cfe166/Vtb_top": "3d9f8c05c5f0b41b3c2aaee4c7a90c08a18108bca8089639e5bc79805bab47b0",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/build/verilator/tb_top_3a5911cfe166/Vtb_top__verFiles.dat": "fdc0e748ac0338bc738dec00694cbcea3239adba34bfd80cdb56158c143dda66"
+  },
+  "label": "opentpu-perfsim-estimate",
+  "numpy": "2.5.4",
+  "physical_implementation_validated": false,
+  "python": "3.14.5",
+  "schema_version": 1,
+  "source_hash_scope": "perfsim implementation and evaluator; upstream ISA/compiler/RTL identified by git commit",
+  "sources": {
+    "opentpu/perfsim/__init__.py": "c5a4b7f1a983ac1c1e4b2d53d5e1ccce19f0299248fdadfdeb62841d8ac233da",
+    "opentpu/perfsim/__main__.py": "ad44f546092d07d47ea51c1ebc8bebc9b9c4f817a09cd221cdb4b633cbfd05e1",
+    "opentpu/perfsim/config.py": "50aa0768909b9bc3fd4bdfd1c408703009e38dd2713492252ee6be6052070844",
+    "opentpu/perfsim/engine.py": "b863cab282b396e61a95d8f87c85e3f5f288ab59bd0639c32ccee8a04e7d5f6f",
+    "opentpu/perfsim/io.py": "48f6dc2fb5d1540f2175668eeb5c4ada5fac7c34276eca31699aef8766a5e6be",
+    "opentpu/perfsim/memory.py": "efe01284e17f75c083b6e3892e15583f6b135015cbb4e744a96e6fab4fa1b60e",
+    "opentpu/perfsim/units.py": "66a6411c4ad9c51b6caa4d7deab9886b885df1a814b5c37adf6fdfc5d8c32d2c",
+    "tests/perfsim/fixtures/rtl_fixed_d32_l8.json": "448ea147ebaf46639236fb6669c2af68bfead1e8eec7fb79c8e5d25e8486ec61",
+    "tests/perfsim/test_engine.py": "69b622017d1773ac1b97e13c369d517535290e908de58ffe836ad9862150aa90",
+    "tests/perfsim/test_io.py": "18ef925d944327bbd3a9183c3d521651a98fb29a7571ffd59d1642fb7a094d52",
+    "tests/perfsim/test_ramulator.py": "911349533ac13a1eccaa0107b5667494aaa14f6227b8fa16772e90e6fe1dffb6",
+    "tests/perfsim/test_rtl_regressions.py": "90f5965f8988e835ad45ba1bbe47b488d83c0f40edca6965ab1491f1d59cf163",
+    "tools/perfsim/build_ramulator.py": "7ad12854fd0e267baebd22b311df611aa90b015a15e0eebcb44471faedea18f7",
+    "tools/perfsim/configs/ddr4-200mhz.json": "1654cff5543021993e29c2364ea4f524642c8317734d60bdd79c74731299416b",
+    "tools/perfsim/configs/ddr4.yaml": "9491259e05e7a717e6a66ae4d55911eb0bda951fac15f027df249c1a7de86fad",
+    "tools/perfsim/configs/hbm2-asic-1ghz.json": "f188d1ac07d653cc60f189c85a5cafc0bee1758f28a71310442e9bcce1b2c29a",
+    "tools/perfsim/configs/hbm2-f2-200mhz.json": "ace103d745139eed568905e26f9df4f27af8bbabc6abbac873a009236c5eb609",
+    "tools/perfsim/configs/hbm2.yaml": "15ef4030e055c3e04302111fb7597c2d1e43e534a062e43cd9880382731af5d5",
+    "tools/perfsim/configs/rtl-fixed.json": "f43ec1f04e2ab3afdde526b7d686b9e82db8ce4c3bd4b3bf16f1bb039f614aba",
+    "tools/perfsim/configs/simple.json": "497207e86746495b59632ddd12b8fa967c5bb5e009a301621a7c81ecf0fc1974",
+    "tools/perfsim/dependencies.lock.json": "edcc13f8b173ffdc16fd5aa0a1c56d610e539e395cafd3d565a1526487b7cdc4",
+    "tools/perfsim/examples.py": "71470977b9586e3e594b2bcc3cd2e3294087ee574e8740d62d0b5d413e9dd38b",
+    "tools/perfsim/ramulator/CMakeLists.txt": "f6cd4eae484a08a731f8bb10252edb78de7fd62d811f2c4ccabcf5625b9da0fd",
+    "tools/perfsim/ramulator/LICENSE.ramulator": "74a1f19701bb06cb80b4ec31e6de6472f5fd767e5949c1c4d51f70007d18b3f2",
+    "tools/perfsim/ramulator/NOTICE.md": "1eff55604c40ab95153c843e413eec8a04159fb4c5280f5eb9333503064ea46d",
+    "tools/perfsim/ramulator/bridge.cpp": "fab59ddbbb7c65858ac25fde92ccd3aea2cacac09a7c4c2b962f93602ff9adc4",
+    "tools/perfsim/ramulator/prepare.py": "958acec8607e60c30e424dea3f16a6e17ed54e5750fe3278e9ea4ec5d6ec3ad8",
+    "tools/perfsim/sequence.py": "fffaa4768c2f1bba9fd689765cb4dfb4511f7df5bb89eb95ae1aa9a9dccc1872",
+    "tools/perfsim/timing_suite.py": "ff0c4819103f663bc24ff518235631d0c9e856a59dc08dc8761cac6b16263baf",
+    "tools/perfsim/validate.py": "0334654fb486cd1f7354ab775e934793df10b0e4106a86c903eefe6101d427d9",
+    "tools/perfsim/validate_cached.py": "31de5695532f496d37c84372a466c5524708931849da84f7a8546c42d9a87ca4"
+  },
+  "working_tree_status": "content-addressed source snapshot; cleanliness not inferred"
+}

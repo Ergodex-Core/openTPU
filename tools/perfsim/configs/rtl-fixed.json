@@ -1,0 +1,16 @@
+{
+  "schema_version": 1,
+  "name": "RTL AXI=0 fixed memory contract",
+  "description": "otpu_dram with DRAM_LAT=8, D=32, AXI=0; deterministic test backend, not DDR/HBM",
+  "architecture": {
+    "core_period_ps": 5000
+  },
+  "memory": {
+    "backend": "rtl_fixed",
+    "controller_period_ps": 5000,
+    "memory_period_ps": 5000,
+    "transaction_bytes": 32,
+    "simple_latency_ticks": 8,
+    "rmw": false
+  }
+}

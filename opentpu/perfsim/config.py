@@ -16,6 +16,8 @@ class Architecture:
     mxu_result_rows: int = 32
     mxu_chain: int = 16
     mxu_epilogue_lanes: int = 0
+    dma_buffer_chunks: int = 128
+    dma_store_run: int = 32
     vpu_slots: int = 10
     vpu_composite_lanes: int = 0
     result_queue: int = 128
@@ -23,7 +25,7 @@ class Architecture:
     tmem_write_ports_per_bank: int = 1
     quant_row_buffer_chunks: int = 1024
     issue_period: int = 1
-    dispatch_latency: int = 2
+    dispatch_latency: int = 1
     tmem_read_latency: int = 2
     max_cycles: int = 10_000_000
 
@@ -39,8 +41,16 @@ class Architecture:
             raise Unsupported('supported D: 32/64/128; LANES: 4/8/16')
         if cfg.MCOLS not in (2, 4, 8, 16) or cfg.act_rows < cfg.MCOLS:
             raise Unsupported('MCOLS must be 2/4/8/16; ACT_ROWS must cover MCOLS')
+        if self.vpu_slots != 10:
+            raise Unsupported('vpu_slots is a legacy field; the hardware has a two-command queue and fixed arithmetic paths')
+        if cfg.LANES==8 and self.vpu_composite_lanes not in (0,8):
+            raise Unsupported('C8 composite arithmetic uses all eight lanes')
+        if self.tmem_read_latency!=2:
+            raise Unsupported('only the two-stage TMEM read pipeline is implemented')
         if self.vpu_composite_lanes > cfg.LANES or self.mxu_epilogue_lanes > cfg.MCOLS:
             raise ValueError('lane override exceeds hardware width')
+        if self.dma_store_run>self.dma_buffer_chunks:
+            raise Unsupported('DMA store run threshold cannot exceed its finite buffer')
         if self.mxu_fifo_chunks < cfg.ACT_BLOCKS:
             raise Unsupported('MXU FIFO must hold a complete maximum weight row')
 
@@ -62,7 +72,7 @@ class MemoryConfig:
     record_trace: bool = False
 
     def validate(self):
-        if self.backend not in ('simple', 'ramulator'):
+        if self.backend not in ('simple', 'ramulator', 'rtl_fixed'):
             raise Unsupported(f'unknown memory backend {self.backend}')
         for k, v in asdict(self).items():
             if k in ('backend', 'bridge', 'ramulator_config', 'rmw', 'record_trace'):
@@ -73,5 +83,7 @@ class MemoryConfig:
             raise ValueError('transaction_bytes must be a power of two')
         if self.controller_period_ps != self.memory_period_ps:
             raise Unsupported('this Ramulator controller ticks at DRAM tCK; independent ingress is modelled, divided controller clocks are unsupported')
+        if self.backend=='rtl_fixed' and self.rmw:
+            raise Unsupported('rtl_fixed has native masked writes; rmw must be false')
         if self.backend == 'ramulator' and (not self.bridge or not self.ramulator_config):
             raise ValueError('Ramulator requires bridge and ramulator_config; there is no fallback')

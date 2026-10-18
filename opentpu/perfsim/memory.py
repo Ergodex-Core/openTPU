@@ -109,6 +109,7 @@ class MemorySystem:
         cfg.validate()
         self.cfg = cfg
         self.backend = RamulatorMemory(cfg) if cfg.backend == 'ramulator' else SimpleMemory(cfg)
+        self.fixed_pending=[]
         self.queue, self.inflight = deque(), {}
         self.next_tag, self.next_tick_ps = 0, cfg.memory_period_ps
         self.line_writers, self.line_readers = {}, Counter()
@@ -125,9 +126,26 @@ class MemorySystem:
         if self.cfg.record_trace:
             self.trace.append(event)
 
+    def request_many(self, requests, owner):
+        """Atomically accept the coupled A/B ports of one MXU advance."""
+        if any(size<=0 or addr<0 for addr,size,write,port in requests):
+            raise ValueError('invalid coupled memory request')
+        ports=[r[3] for r in requests]
+        if len(ports)!=len(set(ports)) or any(p in self.ports for p in ports): return None
+        if self.cfg.backend!='rtl_fixed':
+            tx=self.cfg.transaction_bytes
+            count=sum((addr%tx+size+tx-1)//tx for addr,size,write,port in requests)
+            if count>self.cfg.outstanding: raise ValueError('coupled transfer exceeds adapter capacity')
+            if len(self.queue)+len(self.inflight)+count>self.cfg.outstanding: return None
+        tickets=[self.request(*r,owner) for r in requests]
+        assert all(t is not None for t in tickets)
+        return tickets
+
     def request(self, addr, size, write, port, owner):
         if size <= 0 or addr < 0:
             raise ValueError('invalid memory request')
+        if self.cfg.backend=='rtl_fixed':
+            return self._fixed_request(addr,size,write,port,owner)
         tx = self.cfg.transaction_bytes
         count = (addr % tx + size + tx - 1) // tx
         if count > self.cfg.outstanding:
@@ -142,6 +160,26 @@ class MemorySystem:
             self.queue.append(Transaction(a, write and not partial, ticket, owner, partial))
         return ticket
 
+    def _fixed_request(self,addr,size,write,port,owner):
+        # Local slice port -> request register -> otpu_dram -> response register.
+        # No RMW, channel arbitration or DRAM technology claim in this backend.
+        if port in self.ports: return None
+        self.ports.add(port)
+        ticket=Ticket(1,accepted_cycle=self.cycle)
+        tag=self.next_tag; self.next_tag+=1
+        due=self.cycle+2+(0 if write else self.cfg.simple_latency_ticks)
+        self.fixed_pending.append((due,ticket,tag,owner,addr,write))
+        physical=self.cfg.transaction_bytes if port=='B' else 4 if write else 32
+        key='write' if write else 'read'
+        self.stats['logical_'+key+'_bytes']+=size
+        self.stats[key+'_bytes']+=physical; self.stats[key+'_transactions']+=1
+        counts=self.by_owner.setdefault(owner,Counter())
+        counts[key+'_bytes']+=physical; counts[key+'_transactions']+=1
+        self._trace({'event':'accept','id':tag,'time_ps':(self.cycle+1)*self.core_period_ps,'owner':owner,'address':addr,'write':write})
+        self.run_peak=max(self.run_peak,len(self.fixed_pending))
+        self.stats['peak_outstanding']=max(self.stats['peak_outstanding'],self.run_peak)
+        return ticket
+
     def begin_cycle(self, cycle, period_ps):
         if cycle <= self.cycle:
             raise ValueError('memory clock must advance monotonically')
@@ -150,6 +188,17 @@ class MemorySystem:
         self.core_period_ps = period_ps
         self.cycle = cycle
         self.ports.clear()
+        if self.cfg.backend=='rtl_fixed':
+            if period_ps!=self.cfg.memory_period_ps:
+                raise ValueError('rtl_fixed memory clock must equal the core clock')
+            future=[]
+            for due,ticket,tag,owner,addr,write in self.fixed_pending:
+                if due<=cycle:
+                    ticket.done=True; ticket.pending=0; ticket.complete_cycle=cycle
+                    self._trace({'event':'complete','id':tag,'time_ps':cycle*period_ps,'owner':owner,'address':addr,'write':write})
+                else: future.append((due,ticket,tag,owner,addr,write))
+            self.fixed_pending=future
+            return
         now = cycle * period_ps
         while self.next_tick_ps <= now:
             for tag in self.backend.tick():
@@ -199,7 +248,7 @@ class MemorySystem:
 
     @property
     def idle(self):
-        return not self.queue and not self.inflight
+        return not self.queue and not self.inflight and not self.fixed_pending
 
     def close(self):
         self.backend.close()
