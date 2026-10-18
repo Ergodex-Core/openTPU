@@ -75,7 +75,10 @@ Makefile, `create_project.tcl` and `rtlsim.RTL_SOURCES` hold the same lists, whi
 
 ## Adding a target
 
-1. Copy the closest `targets/*.toml`, give it a new name and a new `platform_id`.
+1. Copy the closest `targets/*.toml`, give it a new name and a new `platform_id` (a board's:
+   the device reports it in CFG_PLATFORM, and `target.by_platform` reads the family, the wait
+   window and the memory kind from the first target with it; the F2's DDR and HBM targets share
+   3, the memory told apart by CFG_DRAM's channel count).
 2. A new board: its top under `rtl/boards/<board>/`, its flow under `boards/<board>/`
    (constraints, the memory and host IP), reading `python3 -m opentpu.target env <name>`.
 3. A new cell family: `rtl/tech/<family>/` with the same module names as `rtl/tech/generic/`.
