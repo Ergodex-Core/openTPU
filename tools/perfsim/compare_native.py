@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Run the same program on RTL and model with independently generated closed-loop memory traffic."""
-import argparse,json,re,subprocess,sys,sysconfig
+import argparse,json,re,subprocess,sys,sysconfig,time
 from pathlib import Path
 from dataclasses import asdict
 from collections import Counter
@@ -43,7 +43,7 @@ def main():
  args += [f'+arg{k}={v}' for k,v in enumerate(obj.get('args',()))]
  if a.micro_trace:args.append('+uarch_trace')
  write_json(out/'command.json',args)
- run=subprocess.run(args,capture_output=True,text=True,timeout=180)
+ started=time.perf_counter();run=subprocess.run(args,capture_output=True,text=True,timeout=180);rtl_wall=time.perf_counter()-started
  log=run.stdout+run.stderr;(out/'stdout.log').write_text(log)
  match=re.search(r'RESULT cycles=(\d+) halted=1 error=0',log)
  if run.returncode or not match:
@@ -77,7 +77,7 @@ def main():
    got=data[addr:addr+4*n].view(np.float32).astype(np.float64);error=float(np.linalg.norm(got-want)/np.linalg.norm(want));cos=float(got@want/(np.linalg.norm(got)*np.linalg.norm(want))) if np.linalg.norm(got)>0 else None
    reports[name]={'relative_l2':error,'cosine':cos,'passed':error<0.05 and cos is not None and cos>0.995}
   numeric['independent_float_reference']=reports
- summary={'backend':mc['backend'],'native_ports':True,'rtl_cycles':int(match[1]),'predicted_cycles':result['cycles'],'trace_match':exact,'traffic_multiset_match':traffic,'physical_traffic_match':physical,'port_arrival_completion_match':port_match,'numerical':numeric,'timing_passed':exact and int(match[1])==result['cycles'] and port_match,'same_backend_configuration':True,'request_arrivals':'independently generated; no trace replay or arrival-time forcing','rtl_trace':rt,'predicted_trace':pt,'clocks_ps':{'core':profile['architecture']['core_period_ps'],'controller':mc['controller_period_ps'],'memory':mc['memory_period_ps']}}
+ summary={'rtl_host_wall_seconds':rtl_wall,'model_host_wall_seconds':result['host_wall_seconds'],'backend':mc['backend'],'native_ports':True,'rtl_cycles':int(match[1]),'predicted_cycles':result['cycles'],'trace_match':exact,'traffic_multiset_match':traffic,'physical_traffic_match':physical,'port_arrival_completion_match':port_match,'numerical':numeric,'timing_passed':exact and int(match[1])==result['cycles'] and port_match,'same_backend_configuration':True,'request_arrivals':'independently generated; no trace replay or arrival-time forcing','rtl_trace':rt,'predicted_trace':pt,'clocks_ps':{'core':profile['architecture']['core_period_ps'],'controller':mc['controller_period_ps'],'memory':mc['memory_period_ps']}}
  write_json(out/'summary.json',summary)
  inputs=[a.executable,out/'profile.json',a.bundle/'input.json',a.bundle/'prog_0.hex',a.bundle/'dram_0.bin']
  if mc.get('bridge'):inputs.append(Path(mc['bridge']))

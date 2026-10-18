@@ -8,7 +8,7 @@ ISA golden model, FPGA workloads, `tools/hwloop/lpn` and its validation registry
 
 This implementation is a starting point toward the requested fully validated simulator.
 It does **not** establish pretrained full-model timing accuracy, hardware Fmax or physical fit.
-See [architecture and limitations](architecture.md) and [current validation](validation-round3.md) and [round-two history](validation-round2.md) and [preserved initial evidence](validation.md).
+See [architecture and limitations](architecture.md) and [current validation](validation-round4.md) and [round-three history](validation-round3.md) and [round-two history](validation-round2.md) and [preserved initial evidence](validation.md).
 
 ## Quick start
 
@@ -142,6 +142,8 @@ Numerical checks have a separate verdict; available independent NumPy logits mus
 The harness explicitly rejects non-contiguous native masks and supports S=1, D<=128.
 
 A standalone stage starts with a cold Ramulator controller. `sequence.py` instead preserves
-controller and KV state across launches. Its persistent sequence timing remains a prediction
-until compared with a correspondingly persistent RTL harness; summing cold-stage RTL times
-is not a substitute. Use the native profiles explicitly for this registered-port contract.
+controller and KV state across launches, with an explicit eight-cycle default launch gap.
+`compare_persistent.py` checks this contract against one persistent RTL process. The measured
+five-launch sequences, full-sized operators, numerical failures and production-target gaps are
+documented in [round four](validation-round4.md). Generic sequence outputs remain predictions
+unless a matching comparison exists. Use native profiles for this registered-port contract.

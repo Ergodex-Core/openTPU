@@ -114,5 +114,14 @@ necessary even when total cycles accidentally agree without them.
 
 Memory timestamps are global across launches; unit-local comparisons add the launch offset.
 A dedicated persistent-launch regression guards against comparing local core cycles with
-absolute memory completion cycles. Persistent-controller sequence timing is not yet measured
-against a persistent RTL process.
+absolute memory completion cycles. Round four compares five-launch sequences against a persistent RTL process, including explicit
+reset/host gaps and retained TMEM/ACT probes. See [the exact scope](validation-round4.md).
+
+MXU weight FIFO credits are reserved per accepted chunk across active commands and released
+on the actual final replay consumption; packed int4 halves do not release early. DMA store
+chunks remain occupied until port acceptance. A full output FIFO freezes its read pipeline,
+including pending stages. Long-K and 128-by-128 DeltaNet regressions cover these boundaries.
+
+The production board target is outside the validated topology: it enables wait-count issue,
+DSTEP/STREAM, pumped/replay TMEM, MXU_E=4 and a DDR3/LiteDRAM shell. The round-four audit
+reports these concrete baseline gaps separately from the compatible S=1 inference fallback.

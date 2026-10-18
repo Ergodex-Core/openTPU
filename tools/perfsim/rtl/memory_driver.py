@@ -18,7 +18,7 @@ class Driver:
         for key in ('bridge','ramulator_config'):
             if cfg.get(key):cfg[key]=str((base/cfg[key]).resolve())
         if not cfg.get('native_ports'):raise ValueError('RTL comparison requires native_ports=true')
-        self.controller=PortController(MemoryConfig(**cfg));self.width=width;self.dir=Path(directory)
+        self.controller=PortController(MemoryConfig(**cfg));self.width=width;self.dir=Path(directory);self.root=self.dir
         data=np.fromfile(self.dir/'dram_0.bin',dtype='>u4').astype('<u4').tobytes()
         self.data=bytearray(words*4);self.data[:len(data)]=data
         self.next_ident=0;self.pending={};self.offers={};self.read_data={}
@@ -64,6 +64,17 @@ class Driver:
         (self.dir/'dram_out_0.bin').write_bytes(self.data)
         m=self.controller.memory
         (self.dir/'memory-rtl.json').write_text(json.dumps({'backend':m.cfg.backend,'statistics':dict(m.stats),'transactions':m.trace,'ports':self.controller.events},indent=2)+'\n')
+
+    def stage(self,index):
+        if not self.controller.idle or self.pending or self.offers:
+            raise RuntimeError('host launch while memory requests remain in flight')
+        self.dir=self.root/f'stage{index}'
+        obj=json.loads((self.dir/'input.json').read_text())
+        if index:
+            image=np.fromfile(self.dir/'dram_0.bin',dtype='>u4').astype('<u4').tobytes()
+            for addr,size in obj.get('metadata',{}).get('host_inputs',[]):
+                if addr<0 or size<0 or addr+size>len(self.data):raise ValueError('host input outside DRAM')
+                self.data[addr:addr+size]=image[addr:addr+size]
 
     def close(self):
         self.controller.memory.close()

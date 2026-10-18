@@ -44,6 +44,7 @@ def tiny_model():
 def main():
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--out',required=True)
+    p.add_argument('--steps',type=int,default=3)
     a=p.parse_args(); out=Path(a.out)
     out.mkdir(parents=True,exist_ok=True)
     cfg=Config(D=32,MCOLS=4,TMEM_WORDS=8192,DRAM_BYTES=1<<20)
@@ -62,7 +63,8 @@ def main():
     from opentpu.isasim import Machine
     img=spec.image(cfg,cap=256)
     dram=img.build(weights)[0]
-    tokens=[1,5,9]
+    if not 3<=a.steps<=32: p.error('steps must be between 3 and 32')
+    tokens=[(1+4*k)%64 for k in range(a.steps)]
     refs=reference_logits(spec,weights,tokens)
     for pos,tok in enumerate(tokens):
         cos,sin=rope_tables(spec,pos)
@@ -84,8 +86,8 @@ def main():
         np.save(out/f'tiny_qwen_{pos}'/'reference_logits.npy',refs[pos])
         machine=Machine(cfg,progs,[dram]).run()
         dram=machine.slices[0].dram.copy()
-    write_json(out/'sequence.json',{'programs':['tiny_qwen_0','tiny_qwen_1','tiny_qwen_2'],
-                                   'prefill_steps':2,'decode_steps':1,'full_pretrained_model':False})
+    write_json(out/'sequence.json',{'programs':[f'tiny_qwen_{k}' for k in range(a.steps)],
+                                   'prefill_steps':2,'decode_steps':a.steps-2,'full_pretrained_model':False})
     print(out)
 
 if __name__=='__main__': main()

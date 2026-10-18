@@ -1,0 +1,155 @@
+T0 D c=5 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00001200
+T0 S c=6 s=0 u=0 r=6
+T0 D c=6 s=1 pc=1 op=21 w1=00000000 w2=00240004 w3=00000480
+T0 D c=7 s=2 pc=2 op=20 w1=00004800 w2=00016800 w3=00001200
+T0 S c=8 s=2 u=1 r=8
+T0 D c=8 s=3 pc=3 op=11 w1=00017200 w2=00001200 w3=00000040
+T0 D c=9 s=4 pc=4 op=11 w1=00017300 w2=00001241 w3=00000040
+T0 D c=10 s=5 pc=5 op=11 w1=00017400 w2=00001282 w3=00000040
+T0 D c=11 s=6 pc=6 op=11 w1=00017500 w2=000012c3 w3=00000040
+T0 P c=63 n=64 bm=0 bd=56 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=127 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=191 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=255 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=319 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=383 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=447 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=447 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=511 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=511 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=575 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=575 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=594 s=0
+T0 S c=595 s=1 u=2 r=595
+T0 P c=639 n=64 bm=56 bd=8 am=56 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=639 n=64 bs=0 as=0 ms=0 mb=0 ff=1176 ld=0
+T0 P c=703 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=703 n=64 bs=0 as=0 ms=0 mb=0 ff=5152 ld=0
+T0 P c=767 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=767 n=64 bs=0 as=0 ms=0 mb=0 ff=9248 ld=0
+T0 P c=831 n=64 bm=27 bd=0 am=27 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=831 n=64 bs=0 as=0 ms=0 mb=0 ff=12309 ld=0
+T0 P c=895 n=64 bm=42 bd=0 am=42 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=895 n=64 bs=0 as=0 ms=0 mb=0 ff=13300 ld=0
+T0 P c=959 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=959 n=64 bs=0 as=0 ms=0 mb=0 ff=17120 ld=0
+T0 P c=1023 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1023 n=64 bs=0 as=0 ms=0 mb=0 ff=21216 ld=0
+T0 P c=1087 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1087 n=64 bs=0 as=0 ms=0 mb=0 ff=25312 ld=0
+T0 P c=1151 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1151 n=64 bs=0 as=0 ms=0 mb=0 ff=29408 ld=0
+T0 P c=1215 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1215 n=64 bs=0 as=0 ms=0 mb=0 ff=33504 ld=0
+T0 P c=1279 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1279 n=64 bs=0 as=0 ms=0 mb=0 ff=37600 ld=0
+T0 P c=1343 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1343 n=64 bs=0 as=0 ms=0 mb=0 ff=41696 ld=0
+T0 U c=1369 u=2 frz=0
+T0 E c=1371 s=1
+T0 G c=1372 s=2
+T0 P c=1407 n=64 bm=64 bd=0 am=64 aq=0 mx=34 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1407 n=64 bs=0 as=0 ms=0 mb=0 ff=45231 ld=0
+T0 P c=1471 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1471 n=64 bs=0 as=0 ms=0 mb=0 ff=45696 ld=0
+T0 P c=1535 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1535 n=64 bs=0 as=0 ms=0 mb=0 ff=45696 ld=0
+T0 P c=1599 n=64 bm=39 bd=0 am=39 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1599 n=64 bs=0 as=0 ms=0 mb=0 ff=45420 ld=0
+T0 P c=1663 n=64 bm=30 bd=0 am=30 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1663 n=64 bs=0 as=0 ms=0 mb=0 ff=42522 ld=0
+T0 P c=1727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1727 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=1791 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1791 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=1855 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1855 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=1919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1919 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=1983 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1983 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2047 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2047 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2111 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2175 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2175 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2239 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2239 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2303 n=64 bs=0 as=0 ms=0 mb=0 ff=41856 ld=0
+T0 P c=2367 n=64 bm=51 bd=0 am=51 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2367 n=64 bs=0 as=0 ms=0 mb=0 ff=41801 ld=0
+T0 P c=2431 n=64 bm=18 bd=0 am=18 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2431 n=64 bs=0 as=0 ms=0 mb=0 ff=39256 ld=0
+T0 P c=2495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2495 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2559 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2559 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2623 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2623 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2687 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2687 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2751 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2751 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2815 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2815 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2879 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2879 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=2943 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2943 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=3007 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3007 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+MXS0 a=2304 sw=0
+T0 P c=3071 n=64 bm=57 bd=0 am=57 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3071 n=64 bs=0 as=0 ms=0 mb=0 ff=38080 ld=0
+T0 P c=3135 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3135 n=64 bs=0 as=0 ms=0 mb=0 ff=36702 ld=0
+T0 P c=3199 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3199 n=64 bs=0 as=0 ms=0 mb=0 ff=32672 ld=0
+T0 P c=3263 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3263 n=64 bs=0 as=0 ms=0 mb=0 ff=28576 ld=0
+T0 P c=3327 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3327 n=64 bs=0 as=0 ms=0 mb=0 ff=24480 ld=0
+T0 P c=3391 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3391 n=64 bs=0 as=0 ms=0 mb=0 ff=20384 ld=0
+T0 P c=3455 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3455 n=64 bs=0 as=0 ms=0 mb=0 ff=16288 ld=0
+T0 P c=3519 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3519 n=64 bs=0 as=0 ms=0 mb=0 ff=12192 ld=0
+T0 P c=3583 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3583 n=64 bs=0 as=0 ms=0 mb=0 ff=8096 ld=0
+T0 P c=3647 n=64 bm=0 bd=0 am=0 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3647 n=64 bs=0 as=0 ms=0 mb=0 ff=4000 ld=0
+T0 U c=3704 u=1 starve=0 bp=0 frz=0 deny=750
+T0 E c=3705 s=2
+T0 S c=3706 s=3 u=0 r=3706
+T0 P c=3711 n=64 bm=0 bd=0 am=0 aq=0 mx=30 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3711 n=64 bs=0 as=0 ms=0 mb=0 ff=465 ld=0
+T0 E c=3731 s=3
+T0 S c=3731 s=4 u=0 r=3706
+T0 E c=3756 s=4
+T0 S c=3756 s=5 u=0 r=3706
+T0 P c=3775 n=64 bm=0 bd=22 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3775 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=3781 s=5
+T0 S c=3781 s=6 u=0 r=3706
+T0 E c=3806 s=6
+T0 H c=3808 bmxu=2304 bdma=608 amxu=2304 aq=0
+T0 P c=3808 n=33 bm=0 bd=10 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3808 n=33 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=2304 sw=0
+MXACT s0 cyc=4064 rd=9324 pop=2304 use=9216 cols=4 any=15
+RESULT cycles=3808 halted=1 error=0
+SLICE 0 icount=8
+- /private/tmp/opentpu-rtl-shapes-v1/tb_perfsim.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=3808 lose=0,0,0,0 n= 3200,608,0,0,0,0,0 d= 3200,608,0,0,0,0,0,0,0 dw= 2496,1312,0,0,0,0,0,0,0,0 rd= 0,32,576,0,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 41ns; walltime 0.264 s; speed 164.695 ns/s
+- Verilator: cpu 0.247 s on 1 threads; allocated 105 MB

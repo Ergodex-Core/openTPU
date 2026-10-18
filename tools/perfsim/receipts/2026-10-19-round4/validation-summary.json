@@ -1,0 +1,549 @@
+{
+  "full_operators": [
+    {
+      "case": "full-rtl-bonsai-down",
+      "cycles": 214732,
+      "independent_numeric_passed": true,
+      "timing_passed": true
+    },
+    {
+      "case": "full-rtl-gemma-up",
+      "cycles": 136314,
+      "independent_numeric_passed": true,
+      "timing_passed": true
+    }
+  ],
+  "operator_cases": [
+    {
+      "D": 32,
+      "case": "bonsai_deltanet_head128",
+      "cycles": 8790,
+      "independent_numeric_passed": true,
+      "relative_l2": 3.6523156289795044e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_int4_pair_shard",
+      "cycles": 2945,
+      "independent_numeric_passed": false,
+      "relative_l2": 0.057727200854166834,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_mlp_down",
+      "cycles": 14897,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.009468642599984076,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_mlp_up",
+      "cycles": 4993,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.008716800985029534,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_rmsnorm",
+      "cycles": 1292,
+      "independent_numeric_passed": true,
+      "relative_l2": 2.7630219195006324e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_silu",
+      "cycles": 7933,
+      "independent_numeric_passed": true,
+      "relative_l2": 4.9518316874013754e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "bonsai_ternary_int4_pair",
+      "cycles": 2945,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.004126016687623257,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_gelu",
+      "cycles": 11606,
+      "independent_numeric_passed": true,
+      "relative_l2": 5.033844233819731e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_local_q_projection",
+      "cycles": 40389,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.00948779209294083,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_mlp_down",
+      "cycles": 16935,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.009744707812457107,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_mlp_up",
+      "cycles": 2865,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.008322755582337244,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_prefill4_q_shard",
+      "cycles": 3808,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.008392465121783557,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_q",
+      "cycles": 2865,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.00829623953991578,
+      "timing_passed": true
+    },
+    {
+      "D": 32,
+      "case": "gemma_rmsnorm",
+      "cycles": 881,
+      "independent_numeric_passed": true,
+      "relative_l2": 3.399938332550667e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_deltanet_head128",
+      "cycles": 8544,
+      "independent_numeric_passed": true,
+      "relative_l2": 3.6523156289795044e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_int4_pair_shard",
+      "cycles": 1418,
+      "independent_numeric_passed": false,
+      "relative_l2": 0.07946628603309096,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_mlp_down",
+      "cycles": 7097,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.010447028915100041,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_mlp_up",
+      "cycles": 2417,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.009163404024287176,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_rmsnorm",
+      "cycles": 1306,
+      "independent_numeric_passed": true,
+      "relative_l2": 2.7630219195006324e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_silu",
+      "cycles": 7916,
+      "independent_numeric_passed": true,
+      "relative_l2": 4.9518316874013754e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "bonsai_ternary_int4_pair",
+      "cycles": 1418,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.004130793382140065,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_gelu",
+      "cycles": 11491,
+      "independent_numeric_passed": true,
+      "relative_l2": 5.033844233819731e-08,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_local_q_projection",
+      "cycles": 20366,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.01046201813711829,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_mlp_down",
+      "cycles": 8094,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.010452871570252658,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_mlp_up",
+      "cycles": 1357,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.008414834620253633,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_prefill4_q_shard",
+      "cycles": 2078,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.008230987329936226,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_q",
+      "cycles": 1357,
+      "independent_numeric_passed": true,
+      "relative_l2": 0.00821915269613618,
+      "timing_passed": true
+    },
+    {
+      "D": 128,
+      "case": "gemma_rmsnorm",
+      "cycles": 903,
+      "independent_numeric_passed": true,
+      "relative_l2": 3.399938332550667e-08,
+      "timing_passed": true
+    }
+  ],
+  "persistent_sequences": [
+    {
+      "case": "persistent-ddr5",
+      "cycles": [
+        5783,
+        5781,
+        5744,
+        5746,
+        5748
+      ],
+      "fixed_gap": 8,
+      "host_gap": 0,
+      "numeric_passed": true,
+      "timing_passed": true
+    },
+    {
+      "case": "persistent-hbm5",
+      "cycles": [
+        5748,
+        5758,
+        5715,
+        5752,
+        5763
+      ],
+      "fixed_gap": 8,
+      "host_gap": 0,
+      "numeric_passed": true,
+      "timing_passed": true
+    },
+    {
+      "case": "persistent-retained",
+      "cycles": [
+        81,
+        52,
+        74
+      ],
+      "fixed_gap": 8,
+      "host_gap": 0,
+      "numeric_passed": true,
+      "timing_passed": true
+    },
+    {
+      "case": "persistent-stress5-gap256",
+      "cycles": [
+        18319,
+        18687,
+        18721,
+        18711,
+        18477
+      ],
+      "fixed_gap": 8,
+      "host_gap": 256,
+      "numeric_passed": true,
+      "timing_passed": true
+    }
+  ],
+  "pytest": {
+    "log": "pytest.log",
+    "note": "completed before final documentation and metadata-only tool additions; not repeated",
+    "passed": 200,
+    "seconds": 19.51
+  },
+  "remaining_limit": "No complete pretrained model or production board configuration validation; see baseline-audit.json and docs/perfsim/validation-round4.md.",
+  "run_source_comparison": [
+    {
+      "engine_matches_delivery": true,
+      "manifest": "full-rtl-bonsai-down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "full-rtl-gemma-up/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "host-d128/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "host-d32/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_deltanet_head128/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_int4_pair_shard/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_mlp_up/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_rmsnorm/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_silu/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/bonsai_ternary_int4_pair/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_gelu/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_local_q_projection/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_mlp_up/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_prefill4_q_shard/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_q/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d128/gemma_rmsnorm/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_deltanet_head128/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": true
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_int4_pair_shard/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_mlp_up/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_rmsnorm/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_silu/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/bonsai_ternary_int4_pair/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_gelu/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_local_q_projection/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_mlp_up/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_prefill4_q_shard/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_q/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "operators-d32/gemma_rmsnorm/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "persistent-ddr5/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "persistent-hbm5/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "persistent-retained/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "persistent-stress5-gap256/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "sequence/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "superseded/opentpu-shape-rtl-bonsai_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "superseded/opentpu-shape-rtl-gemma_mlp_down/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    },
+    {
+      "engine_matches_delivery": true,
+      "manifest": "superseded/opentpu-shape-rtl-v2-bonsai_deltanet_head128/manifest.json",
+      "ports_matches_delivery": true,
+      "units_matches_delivery": false
+    }
+  ],
+  "source_snapshot_notes": "Run manifests retain their actual earlier snapshots. Some persistent/early operator runs predate the FIFO fixes; frozen instruction/port/state regressions passed against final units.py in the 200-test suite. Final full-operator and host benchmarks use the fixed units. Metadata-only tools and documentation were subsequently finalized.",
+  "total_operator_numeric_pass": 26
+}

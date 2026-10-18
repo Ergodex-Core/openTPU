@@ -15,6 +15,7 @@ module otpu_perfsim_memory #(parameter int WORDS=262144,D=32,SID=0) (
  import "DPI-C" function void pm_dump();
  import "DPI-C" function void pm_finish();
  string profile,dir,root,site,exe;
+ bit running=0;
  longint cycle=-1; // otpu_seq.cyc is zero at the first edge after rst
  int ready,arv,brv,brt,ri,wi;
  bit [255:0] ard;
@@ -32,10 +33,11 @@ module otpu_perfsim_memory #(parameter int WORDS=262144,D=32,SID=0) (
  // Logical periods are supplied to the shared controller in ps, independently of #5 clock units.
  always @(negedge clk) begin
   #1;
-  if(!rst) begin
+  if(!rst || running) begin
+   running=1;
    cycle=cycle+1;
-   pm_step(cycle,int'(a_req),int'(a_we),a_addr,a_wdata,32'(a_be),int'(b_req),int'(b_we),b_addr,
-      32'(b_wmask),int'(b_tag),1024'(b_wdata),int'(sw_req),sw_addr,sw_wdata,32'(sw_be),
+   pm_step(cycle,int'(a_req && !rst),int'(a_we),a_addr,a_wdata,32'(a_be),int'(b_req && !rst),int'(b_we),b_addr,
+      32'(b_wmask),int'(b_tag),1024'(b_wdata),int'(sw_req && !rst),sw_addr,sw_wdata,32'(sw_be),
       ready,arv,ard,brv,brt,brd,ri,wi);
    a_rdy=ready[0];b_rdy=ready[1];sw_rdy=ready[2];a_rvalid=arv[0];a_rdata=ard;
    b_rvalid=brv[0];b_rtag=brt[0];b_rdata=brd[D*8-1:0];rd_idle=ri[0];wr_idle=wi[0];

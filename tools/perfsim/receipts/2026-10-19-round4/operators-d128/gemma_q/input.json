@@ -1,0 +1,40 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    5
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "gemma_q",
+    "compile_wall_seconds": 0.004175875015789643,
+    "complete_operator_shape": false,
+    "data": "synthetic activations and weights",
+    "full_operator_N": 1024,
+    "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+    "kind": "projection",
+    "logits_address": 79360,
+    "logits_count": 64,
+    "shape_M_K_N": [
+      1,
+      1152,
+      64
+    ],
+    "weight_format": "int8",
+    "weight_source": null
+  }
+}

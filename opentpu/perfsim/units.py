@@ -111,6 +111,7 @@ class Coroutine:
                     t.cmd.stalls['memory_backpressure'] += 1
                     return
                 self.reply=ticket
+                if a.value=='dma_store':t.rows.popleft()
             elif a.kind == 'bank':
                 if len(t.outputs) >= sim.arch.result_queue:
                     t.cmd.stalls['result_buffer_full'] += 1
@@ -138,6 +139,7 @@ class Coroutine:
                     return
                 t.cmd.work['mxu_advances'] += 1
                 t.cmd.work['macs'] += a.size
+                if a.value:t.used-=1  # fpop frees a chunk on the final replay group
             else:
                 raise RuntimeError(a.kind)
             self.action=None
@@ -196,7 +198,8 @@ class DMATask(Task):
     def produce(self):
         yield pause(2)  # sequencer start register and DMA command setup
         for base,addr,amount,groups in self.segments():
-            yield predicate(lambda:len(self.rows)<self.sim.arch.dma_buffer_chunks,'dma_buffer_full')
+            if not self.is_store:
+                yield predicate(lambda:len(self.rows)<self.sim.arch.dma_buffer_chunks,'dma_buffer_full')
             if self.is_store:
                 for xs in groups: yield banks(reads=xs)
                 # pa0 -> pa -> st_pend, then the gathered chunk enters lb.
@@ -220,8 +223,8 @@ class DMATask(Task):
                 # st_fin/occ observed -> st_wq registered -> first B request.
                 yield pause(1 if last_request is not None and self.sim.cycle==last_request+1 else 2)
                 for _ in range(n):
-                    _,addr,amount,_,_=self.rows.popleft()
-                    ticket=yield mem(addr,amount,True,'B'); tickets.append(ticket)
+                    _,addr,amount,_,_=self.rows[0]
+                    ticket=yield Action('memory',addr=addr,size=amount,write=True,port='B',value='dma_store'); tickets.append(ticket)
                     last_request=self.sim.cycle-1
             for ticket in tickets: yield wait(ticket)
             yield predicate(lambda:self.sim.memory.write_idle,'global_write_drain')
@@ -235,6 +238,15 @@ class DMATask(Task):
                 self.rows.popleft()
 
     def tick(self):
+        if self.is_store:
+            ready=sum(row[0]<self.sim.cycle for row in self.rows)
+            pending=any(row[0]==self.sim.cycle for row in self.rows)
+            if pending and ready>=self.sim.arch.dma_buffer_chunks:
+                self.rows=deque((due+1 if due>=self.sim.cycle else due,addr,size,groups,ticket)
+                                for due,addr,size,groups,ticket in self.rows)
+                self.cmd.stalls['dma_store_pipeline_frozen']+=1
+                self.coroutines[1].tick()  # the output port can free a slot while reads hold
+                return False
         done=super().tick()
         if self.is_store: return done
         if self.drained is None and all(co.done for co in self.coroutines) and (not self.outputs or self.outputs[-1][0]<=self.sim.cycle+1): self.drained=self.sim.cycle
@@ -506,8 +518,7 @@ class MatrixTask(Task):
         for n in range(self.n):
             packed=self.kb*cfg.D if self.wf==I.W8 else (self.kb*cfg.D+1)//2
             cost=(packed+cfg.D-1)//cfg.D
-            yield predicate(lambda:self.used+cost<=self.sim.arch.mxu_fifo_chunks,'mxu_fifo_full')
-            row=Row(n,cost); self.rows.append(row); self.used+=cost
+            row=Row(n,cost); self.rows.append(row)
             base=w[1]+n*w[6]
             offset,sz=(4,1) if self.wf==I.W8 else (16,8) if self.wf==I.WNV else (8,4)
             first_scale=base+offset+self.k0*sz
@@ -523,7 +534,12 @@ class MatrixTask(Task):
                 if not fl&I.F_UNIT and (not fl&I.F_RSC or need_b):
                     requests.append((scale//32*32,32,False,'A'))
                 if requests:
+                    if need_b:
+                        yield predicate(lambda:sum(c.task.used for c in self.sim.window if isinstance(c.task,MatrixTask))<self.sim.arch.mxu_fifo_chunks,'mxu_fifo_full')
                     tickets=yield Action('memory_pair',value=requests)
+                    if need_b:
+                        self.used+=1
+                        self.cmd.work['peak_weight_fifo_chunks']=max(self.cmd.work['peak_weight_fifo_chunks'],sum(c.task.used for c in self.sim.window if isinstance(c.task,MatrixTask)))
                     # B response -> FIFO count; A additionally registers line/tag before scale count.
                     row.tickets.extend((ticket,2 if request[3]=='A' and self.sim.memcfg.native_ports else 1) for ticket,request in zip(tickets,requests))
                 else: yield pause(1)
@@ -551,10 +567,11 @@ class MatrixTask(Task):
                 useful=min(cfg.MCOLS,self.m-rg*cfg.MCOLS)
                 for k in range(advances):
                     kb_count=min(2,self.kb-2*k) if self.pair else 1
-                    yield Action('mxu',size=useful*cfg.D*kb_count)
+                    free=rg==replay-1 and (self.wf==I.W8 or self.pair or k%2==1 or k==advances-1)
+                    yield Action('mxu',size=useful*cfg.D*kb_count,value=free)
                 # S0 -> LROW -> row register -> registered FIFO head.
                 self.results.append((self.sim.cycle-1+latency+3,n,rg,useful))
-            row=self.rows.popleft(); self.used-=row.cost
+            self.rows.popleft()
         self.compute_done=True
 
     def drain(self):

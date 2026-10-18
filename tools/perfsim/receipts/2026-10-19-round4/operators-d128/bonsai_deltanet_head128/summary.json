@@ -1,0 +1,207 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999998,
+        "passed": true,
+        "relative_l2": 3.6523156289795044e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999998,
+        "passed": true,
+        "relative_l2": 3.6523156289795044e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 8544,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 2067,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 2095,
+      "pc": 1,
+      "start": 2066
+    },
+    {
+      "dispatch": 7,
+      "end": 2121,
+      "pc": 2,
+      "start": 2094
+    },
+    {
+      "dispatch": 8,
+      "end": 2147,
+      "pc": 3,
+      "start": 2120
+    },
+    {
+      "dispatch": 9,
+      "end": 2158,
+      "pc": 4,
+      "start": 2146
+    },
+    {
+      "dispatch": 10,
+      "end": 4228,
+      "pc": 5,
+      "start": 2122
+    },
+    {
+      "dispatch": 11,
+      "end": 4259,
+      "pc": 6,
+      "start": 4229
+    },
+    {
+      "dispatch": 12,
+      "end": 4290,
+      "pc": 7,
+      "start": 4260
+    },
+    {
+      "dispatch": 13,
+      "end": 4321,
+      "pc": 8,
+      "start": 4291
+    },
+    {
+      "dispatch": 14,
+      "end": 6400,
+      "pc": 9,
+      "start": 4322
+    },
+    {
+      "dispatch": 15,
+      "end": 8510,
+      "pc": 10,
+      "start": 6401
+    },
+    {
+      "dispatch": 16,
+      "end": 8507,
+      "pc": 11,
+      "start": 6401
+    },
+    {
+      "dispatch": 17,
+      "end": 8542,
+      "pc": 12,
+      "start": 8510
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 8544,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 2067,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 2095,
+      "id": 1,
+      "pc": 1,
+      "start": 2066
+    },
+    {
+      "dispatch": 7,
+      "end": 2121,
+      "id": 2,
+      "pc": 2,
+      "start": 2094
+    },
+    {
+      "dispatch": 8,
+      "end": 2147,
+      "id": 3,
+      "pc": 3,
+      "start": 2120
+    },
+    {
+      "dispatch": 9,
+      "end": 2158,
+      "id": 4,
+      "pc": 4,
+      "start": 2146
+    },
+    {
+      "dispatch": 10,
+      "end": 4228,
+      "id": 5,
+      "pc": 5,
+      "start": 2122
+    },
+    {
+      "dispatch": 11,
+      "end": 4259,
+      "id": 6,
+      "pc": 6,
+      "start": 4229
+    },
+    {
+      "dispatch": 12,
+      "end": 4290,
+      "id": 7,
+      "pc": 7,
+      "start": 4260
+    },
+    {
+      "dispatch": 13,
+      "end": 4321,
+      "id": 8,
+      "pc": 8,
+      "start": 4291
+    },
+    {
+      "dispatch": 14,
+      "end": 6400,
+      "id": 9,
+      "pc": 9,
+      "start": 4322
+    },
+    {
+      "dispatch": 15,
+      "end": 8510,
+      "id": 10,
+      "pc": 10,
+      "start": 6401
+    },
+    {
+      "dispatch": 16,
+      "end": 8507,
+      "id": 11,
+      "pc": 11,
+      "start": 6401
+    },
+    {
+      "dispatch": 17,
+      "end": 8542,
+      "id": 12,
+      "pc": 12,
+      "start": 8510
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

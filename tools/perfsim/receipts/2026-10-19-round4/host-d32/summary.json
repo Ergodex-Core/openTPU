@@ -1,0 +1,132 @@
+{
+  "backend": "ramulator",
+  "cases": [
+    {
+      "complete_operator_shape": true,
+      "cycles": 40389,
+      "dynamic_instructions": 4,
+      "host_wall_seconds": 1.551464958989527,
+      "model_seconds": 0.000201945,
+      "name": "gemma_q",
+      "numeric": {
+        "cosine": 0.9999604182850307,
+        "passed": true,
+        "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+        "relative_l2": 0.00890676423324133
+      },
+      "physical_transactions": 148000,
+      "process_peak_rss_bytes": 76988416,
+      "shape_M_K_N": [
+        1,
+        1152,
+        1024
+      ],
+      "simulated_cycles_per_host_second": 26032.81483476459,
+      "timing_validation": "prediction; this full operator is not asserted RTL-validated by this benchmark",
+      "weight_format": "int8"
+    },
+    {
+      "complete_operator_shape": true,
+      "cycles": 271183,
+      "dynamic_instructions": 4,
+      "host_wall_seconds": 10.295848125009798,
+      "model_seconds": 0.001355915,
+      "name": "gemma_mlp_up",
+      "numeric": {
+        "cosine": 0.9999619059889142,
+        "passed": true,
+        "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+        "relative_l2": 0.008730413367501267
+      },
+      "physical_transactions": 997344,
+      "process_peak_rss_bytes": 296370176,
+      "shape_M_K_N": [
+        1,
+        1152,
+        6912
+      ],
+      "simulated_cycles_per_host_second": 26339.06373786394,
+      "timing_validation": "prediction; this full operator is not asserted RTL-validated by this benchmark",
+      "weight_format": "int8"
+    },
+    {
+      "complete_operator_shape": true,
+      "cycles": 272300,
+      "dynamic_instructions": 4,
+      "host_wall_seconds": 9.9422047919943,
+      "model_seconds": 0.0013615,
+      "name": "gemma_mlp_down",
+      "numeric": {
+        "cosine": 0.9999570166541314,
+        "passed": true,
+        "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+        "relative_l2": 0.009273889884159418
+      },
+      "physical_transactions": 997344,
+      "process_peak_rss_bytes": 425295872,
+      "shape_M_K_N": [
+        1,
+        6912,
+        1152
+      ],
+      "simulated_cycles_per_host_second": 27388.29119867481,
+      "timing_validation": "prediction; this full operator is not asserted RTL-validated by this benchmark",
+      "weight_format": "int8"
+    },
+    {
+      "complete_operator_shape": true,
+      "cycles": 428147,
+      "dynamic_instructions": 4,
+      "host_wall_seconds": 15.731048000016017,
+      "model_seconds": 0.002140735,
+      "name": "bonsai_mlp_up",
+      "numeric": {
+        "cosine": 0.9999610881720775,
+        "passed": true,
+        "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+        "relative_l2": 0.008821944733451857
+      },
+      "physical_transactions": 1574912,
+      "process_peak_rss_bytes": 696664064,
+      "shape_M_K_N": [
+        1,
+        2048,
+        6144
+      ],
+      "simulated_cycles_per_host_second": 27216.686389842816,
+      "timing_validation": "prediction; this full operator is not asserted RTL-validated by this benchmark",
+      "weight_format": "int8"
+    },
+    {
+      "complete_operator_shape": true,
+      "cycles": 428647,
+      "dynamic_instructions": 4,
+      "host_wall_seconds": 16.73650733300019,
+      "model_seconds": 0.002143235,
+      "name": "bonsai_mlp_down",
+      "numeric": {
+        "cosine": 0.9999581376806905,
+        "passed": true,
+        "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+        "relative_l2": 0.009150305192388011
+      },
+      "physical_transactions": 1574912,
+      "process_peak_rss_bytes": 720470016,
+      "shape_M_K_N": [
+        1,
+        6144,
+        2048
+      ],
+      "simulated_cycles_per_host_second": 25611.496560863434,
+      "timing_validation": "prediction; this full operator is not asserted RTL-validated by this benchmark",
+      "weight_format": "int8"
+    }
+  ],
+  "host": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+  "numpy": "2.5.4",
+  "pretrained_model_validated": false,
+  "purpose": "measured host simulator throughput; model cycles remain predictions unless separately matched to RTL",
+  "python": "3.14.5",
+  "trace_enabled": false,
+  "wall_boundary": "Simulator construction and run, including ISA functional execution; excludes compiler, independent reference and file serialization"
+}

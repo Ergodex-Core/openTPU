@@ -37,3 +37,5 @@ extern "C" void pm_step(long long cycle,int ar,int aw,unsigned int aa,unsigned i
 extern "C" void pm_dump(){PyObject* r=PyObject_CallMethod(driver,"dump",nullptr);check(r);Py_DECREF(r);}
 
 extern "C" void pm_finish(){if(driver){PyObject* r=PyObject_CallMethod(driver,"close",nullptr);check(r);Py_DECREF(r);}}
+
+extern "C" void pm_stage(int index){PyObject* r=PyObject_CallMethod(driver,"stage","i",index);check(r);Py_DECREF(r);}

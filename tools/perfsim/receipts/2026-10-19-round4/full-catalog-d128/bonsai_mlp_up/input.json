@@ -1,0 +1,40 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    5
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "bonsai_mlp_up",
+    "compile_wall_seconds": 0.2555141249904409,
+    "complete_operator_shape": true,
+    "data": "synthetic activations and weights",
+    "full_operator_N": 6144,
+    "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+    "kind": "projection",
+    "logits_address": 12713984,
+    "logits_count": 6144,
+    "shape_M_K_N": [
+      1,
+      2048,
+      6144
+    ],
+    "weight_format": "int8",
+    "weight_source": null
+  }
+}

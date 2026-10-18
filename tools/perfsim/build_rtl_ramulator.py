@@ -7,7 +7,7 @@ from opentpu.rtlsim import RTL_SOURCES,top_params
 from opentpu.perfsim.io import load_bundle,digest
 
 def main():
- ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--bundle',required=True,type=Path);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--jobs',type=int,default=4);a=ap.parse_args()
+ ap=argparse.ArgumentParser(description=__doc__);ap.add_argument('--bundle',required=True,type=Path);ap.add_argument('--out',required=True,type=Path);ap.add_argument('--jobs',type=int,default=4);ap.add_argument('--persistent',action='store_true');a=ap.parse_args()
  out=a.out.resolve();out.mkdir(parents=True,exist_ok=True)
  cfg,_,_,_=load_bundle(a.bundle)
  if cfg.S!=1:raise ValueError('isolated harness currently supports S=1')
@@ -31,6 +31,9 @@ def main():
  derived=top[:start]+block+top[end:];derived=derived.replace('module otpu_top','module otpu_perfsim_top',1)
  (out/'otpu_perfsim_top.sv').write_text(derived)
  tb=(ROOT/'sim/verilator/tb_top.sv').read_text().replace('module tb_top;','module tb_perfsim;').replace('otpu_top #(','otpu_perfsim_top #(')
+ if a.persistent:
+  start=tb.index("  initial begin\n    void'($value$plusargs(\"max_cycles=")
+  tb=tb[:start]+(ROOT/'tools/perfsim/rtl/persistent_body.sv').read_text()+'\nendmodule\n'
  (out/'tb_perfsim.sv').write_text(tb)
  sources=[ROOT/'rtl'/p for p in RTL_SOURCES if p!='top/otpu_top.sv']+[ROOT/'tools/perfsim/rtl/otpu_perfsim_memory.sv',out/'otpu_perfsim_top.sv',out/'tb_perfsim.sv']
  cpp=ROOT/'tools/perfsim/rtl/driver.cpp'
@@ -44,6 +47,6 @@ def main():
  (out/'build-command.json').write_text(json.dumps(cmd,indent=2)+'\n')
  with (out/'build.log').open('w') as log:r=subprocess.run(cmd,stdout=log,stderr=subprocess.STDOUT)
  if r.returncode:raise RuntimeError(f'Verilator build failed; see {out}/build.log')
- receipt={'command':cmd,'parameters':params,'executable':str(out/'obj/Vtb_perfsim'),'binary_sha256':digest(out/'obj/Vtb_perfsim'),'sources':{str(p):digest(p) for p in sources+[cpp]},'original_top_sha256':digest(ROOT/'rtl/top/otpu_top.sv'),'original_testbench_sha256':digest(ROOT/'sim/verilator/tb_top.sv'),'derivation':'Only top module names and external memory boundary replaced; original RTL units and tb counter/dump sequence retained. No original source writes.'}
+ receipt={'persistent':a.persistent,'command':cmd,'parameters':params,'executable':str(out/'obj/Vtb_perfsim'),'binary_sha256':digest(out/'obj/Vtb_perfsim'),'sources':{str(p):digest(p) for p in sources+[cpp]},'original_top_sha256':digest(ROOT/'rtl/top/otpu_top.sv'),'original_testbench_sha256':digest(ROOT/'sim/verilator/tb_top.sv'),'derivation':'Only top module names and external memory boundary replaced; original RTL units and tb counter/dump sequence retained. No original source writes.'}
  (out/'build-receipt.json').write_text(json.dumps(receipt,indent=2)+'\n');print(receipt['executable'])
 if __name__=='__main__':main()

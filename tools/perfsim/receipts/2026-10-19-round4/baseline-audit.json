@@ -1,0 +1,683 @@
+{
+  "baseline_ISA_opcodes_missing": [
+    "DSTEP",
+    "GATHER",
+    "STREAM",
+    "WAITW"
+  ],
+  "baseline_commit": "3c542bd9cb98f11499729ea52703788f4588e4d2",
+  "compiled_program_inventory": {
+    "/tmp/opentpu-model-shapes-d128/bonsai_deltanet_head128": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_int4_pair_shard": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": true,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_mlp_down": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_mlp_up": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_rmsnorm": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_silu": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/bonsai_ternary_int4_pair": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": true,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_gelu": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_local_q_projection": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_mlp_down": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_mlp_up": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_prefill4_q_shard": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_q": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-d128/gemma_rmsnorm": {
+      "ACT_ROWS": 4,
+      "D": 128,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_deltanet_head128": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_int4_pair_shard": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": true,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_mlp_down": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_mlp_up": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_rmsnorm": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_silu": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/bonsai_ternary_int4_pair": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": true,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_gelu": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_local_q_projection": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_mlp_down": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_mlp_up": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_prefill4_q_shard": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_q": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "/tmp/opentpu-model-shapes-v3/gemma_rmsnorm": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "ST",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/compute": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/gemm": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "HALT",
+        "LD",
+        "MM",
+        "QACT",
+        "ST"
+      ]
+    },
+    "build/perfsim/bundles-v4/tiny_qwen_0": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "ADDI",
+        "HALT",
+        "LD",
+        "LI",
+        "LOOP",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/tiny_qwen_1": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "ADDI",
+        "HALT",
+        "LD",
+        "LI",
+        "LOOP",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/tiny_qwen_2": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "ADDI",
+        "HALT",
+        "LD",
+        "LI",
+        "LOOP",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/tiny_qwen_3": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "ADDI",
+        "HALT",
+        "LD",
+        "LI",
+        "LOOP",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    },
+    "build/perfsim/bundles-v4/tiny_qwen_4": {
+      "ACT_ROWS": 4,
+      "D": 32,
+      "DSTEP": false,
+      "PAIR": false,
+      "SEQ_WC": false,
+      "STREAM": false,
+      "all_base_opcodes_implemented": true,
+      "opcodes": [
+        "ADDI",
+        "HALT",
+        "LD",
+        "LI",
+        "LOOP",
+        "MM",
+        "QACT",
+        "QST",
+        "ST",
+        "VOP"
+      ]
+    }
+  },
+  "frontends": {
+    "bonsai_gguf_module_in_pinned_baseline": false,
+    "gemma3_module_in_pinned_baseline": false,
+    "local_newer_exports": "not silently imported; T2/wide fields, streaming/wait-count targets remain incompatible"
+  },
+  "full_model_limits": [
+    "no complete pretrained Gemma3/Bonsai inference run",
+    "no production bitstream cycle equivalence",
+    "no Fmax/resource/power measurement"
+  ],
+  "implemented_base_opcodes": [
+    "ADDI",
+    "BAR",
+    "HALT",
+    "LD",
+    "LI",
+    "LOOP",
+    "MM",
+    "NOP",
+    "QACT",
+    "QST",
+    "RLD",
+    "ST",
+    "VOP"
+  ],
+  "implemented_inference_path": "single slice, ordinary footprint scoreboard, replicated/count-arbitrated TMEM, dense/packed MXU, VPU DeltaNet fallback, explicit native Ramulator controller",
+  "memory_contract": "DDR4 and HBM2 supplied profiles only; shared simulated controller, not claimed equivalent to board external-memory shell",
+  "missing_production_paths": [
+    "SEQ_WC wait-entry issue",
+    "DSTEP DMA recurrence",
+    "STREAM engine",
+    "TMEM_IMPL=3 replay/guest/pumped dual-port topology",
+    "DDR3 LiteDRAM/native AXI shell and channel hashing",
+    "program-loader/HALT CHAIN and host WAITW polling"
+  ],
+  "not_needed_by_measured_fallback_programs": [
+    "DSTEP/STREAM: measured DeltaNet head uses RDOT/OUTER VPU path",
+    "GATHER: S=1 compiler collectives reduce to local work",
+    "WAITW/CHAIN: explicit program-resident host launch boundary"
+  ],
+  "production_target": {
+    "architecture": {
+      "ACT_BLOCKS": 128,
+      "ACT_ROWS": 16,
+      "D": 128,
+      "DRAM_BYTES": 4294967296,
+      "DSTEP": true,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "MCOLS": 4,
+      "PAIR": true,
+      "S": 1,
+      "SEQ_WC": true,
+      "STREAM": true,
+      "TMEM_WORDS": 65536
+    },
+    "path": "targets/ypcb-00338.toml",
+    "platform": {
+      "beat_bytes": 64,
+      "board": "ypcb-00338",
+      "channel_bytes": 2147483648,
+      "channels_per_slice": 2,
+      "core_mhz": 133.33,
+      "host": "pcie",
+      "hostcal": true,
+      "mem": "ddr3",
+      "mem_ctrl": "litedram",
+      "mem_mts": 1066,
+      "pcie_gen": 2,
+      "pcie_lanes": 8
+    },
+    "sha256": "885f565ebd331abc503a660f176ee76947b6b3ce22151f3f2b4672bbf37a96fc",
+    "uarch": {
+      "CHASH": true,
+      "FIFO_DEPTH": 1024,
+      "MXU_CL": 16,
+      "MXU_E": 4,
+      "MXU_IMPL": 2,
+      "PQ_WIN": 1024,
+      "RPB": 0,
+      "TMEM_GST": true,
+      "TMEM_IMPL": 3,
+      "TMEM_NSB": 2,
+      "TMEM_PMP": 1,
+      "TMEM_RPL": true,
+      "TMEM_TDP": true,
+      "TRACE_DEPTH": 16384,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "WIN": 16,
+      "WPB": 1
+    }
+  },
+  "production_target_timing_supported": false,
+  "sources": {
+    "opentpu/isa.py": "6ff71f284c38804ed127ff0eae185a0fbdc3bee229c451db6fba96d51810543c",
+    "opentpu/isasim.py": "d0fc7a987213fb2334d4e869743f940516319753a5d714d77c254ec59b413666",
+    "opentpu/perfsim/engine.py": "b98f930250e34ca4c89be411cf6f4933f2ddaf848f4803e7eca6a2c967bbbb44",
+    "opentpu/perfsim/units.py": "e29690f689746d904c0bdd6297c3765e106090eb081b81deedcc2fedd8e39729"
+  }
+}
