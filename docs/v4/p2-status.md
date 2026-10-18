@@ -171,9 +171,12 @@ At MXU_C 1 (the suite as it was, plus the new tests at C 1): `tests/test_target.
 `tests/test_lens.py` (ISA parts, then the whole file with its RTL fixture), `tests/test_kernels.py`,
 `tests/test_mx.py`, `tests/test_pair.py`, `tests/test_isa.py`, `tests/test_config_matrix.py` (111
 pass, the one pre-existing failure above), `tests/test_fp_rtl.py`, `tests/test_quant_rtl.py`,
-`tests/test_stream_rtl.py`, `tests/test_perf.py`, `tests/test_rtl.py` (TBD_RTLSUITE), the 8
-cycle-probe runs (identical cycles and hashes); at MXU_C 4: `tests/test_rtl.py -k chunk_lanes`
-(12), `tests/test_gemma3.py -k token_on_board --runslow` (C 1 and 4), the three real-token runs.
+`tests/test_stream_rtl.py`, `tests/test_perf.py` (with test_lens: 67 passed, 1 pre-existing
+xfail, 70 min), `tests/test_rtl.py` (188 passed, 1 skipped, 81 min; one run hit a full disk
+during a Verilator build and passed alone), the 8 cycle-probe runs (identical cycles and
+hashes); at MXU_C 4: `tests/test_rtl.py -k chunk_lanes` (12), `tests/test_gemma3.py -k
+token_on_board --runslow` (C 1 and 4), the three real-token runs. Each Verilator build is
+~0.4 GB under build/verilator: clear it between suites on a full disk.
 
 ## What remains (M3-M7)
 
