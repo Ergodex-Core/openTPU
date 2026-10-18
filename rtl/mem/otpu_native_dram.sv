@@ -299,6 +299,11 @@ module otpu_native_dram #(
   // of a bucket that is not live starts it at 1
   logic [WW:0]  whb [NCH][NH];
   logic [NH-1:0] wnz [NCH];
+  // wnz[c][wh_r[c]] as a register (w_blk, kept equal to it: see its process with wadr_r): the
+  // fill read's hazard check without the 64:1 select by the bucket in front of the command
+  // select (round 5's placement, docs/wide_port.md "Round 6 RTL": wh_r_reg -> the select
+  // (MUXF7 / F8) -> e_wr -> src -> the take -> h_inc -> wadr_r's enables, 10 levels)
+  logic [NCH-1:0] w_blk;
   logic [NCH-1:0]   h_inc, h_dec;               // slot qw_r passes the read point / qw_f's write goes
   // reads in flight per channel, in command order; the oldest one's tag registered (tgh)
   logic [TW:0]  tg_n [NCH];
@@ -630,14 +635,13 @@ module otpu_native_dram #(
   logic [NCH-1:0] swr;                               // it is a write
   logic [NCH-1:0] ctk, dtk;                          // command / write data taken this cycle
   logic [NCH-1:0] wiss;                              // a write goes out (both taken)
-  logic [NCH-1:0] w_blk, w_hold;                     // the fill read waits (an older write of its
-                                                 //   beat); the SW writes wait
+  logic [NCH-1:0] w_hold;                            // the SW writes wait (w_blk, above: the fill
+                                                 //   read waits, an older write of its beat)
   always_comb begin
     for (int c = 0; c < NCH; c++) begin
       logic e_a, e_wr, e_ww, e_b;
       // the SW queue's next partial beat: blocked while an older live entry may have its
-      // address (one in its bucket; a hash collision only delays the read)
-      w_blk[c] = wnz[c][wh_r[c]];
+      // address (one in its bucket; a hash collision only delays the read): w_blk, a register
       // the queue's writes wait while its fill reads still go out (not blocked), unless half full
       w_hold[c] = (qw_rn[c] != 0) && wp_r[c] && !w_blk[c] && qw_n[c] < (WW + 1)'(WQD / 2);
       // A: a read's run (response room for the whole run as it starts), or a write
@@ -970,14 +974,45 @@ module otpu_native_dram #(
   // qw_r moves by one exactly on h_inc; the slot it then points to is the tail, whose write
   // (see g_mem) lands in it this cycle, when no entry past the read point is left (qw_rn 1, or 0
   // while it stays), otherwise the next slot as stored
+  // w_blk's next value is wnz's next at the next read point: the next point's bucket is one of
+  // three (the tail's hash, the next slot's, the same), each candidate's live bit selected from
+  // wnz early (from registers: the three selects, the bucket compares and the decrement's
+  // outcome below are ready before h_inc / h_dec are), and the late signals (tw, h_inc, h_dec)
+  // only pick among them in the last level
+  logic [NCH-1:0] w_blk_t, w_blk_n, eq_tr, eq_tf, eq_nr, eq_nf, eq_fr, dec_keep;
+  always_comb
+    for (int c = 0; c < NCH; c++) begin
+      logic [HW-1:0] ht;
+      ht = whash(gb[c].m);
+      w_blk_t[c] = wnz[c][ht];
+      w_blk_n[c] = wnz[c][wh_n[c]];
+      eq_tr[c] = ht == wh_r[c];
+      eq_tf[c] = ht == wh_f[c];
+      eq_nr[c] = wh_n[c] == wh_r[c];
+      eq_nf[c] = wh_n[c] == wh_f[c];
+      eq_fr[c] = wh_f[c] == wh_r[c];
+      dec_keep[c] = whb[c][wh_f[c]] != (WW + 1)'(1);   // the decremented bucket stays live
+    end
+  // the live bit of bucket x after this cycle's increment (at wh_r) and decrement (at wh_f;
+  // neither applies when both hit one bucket), from its bit now (m) and its compares
+  function automatic logic wnz_nx(input logic m, input logic eq_r, input logic eq_f, input logic inc,
+                                  input logic dec, input logic both, input logic keep);
+    if (inc && !(dec && both) && eq_r) return 1'b1;
+    if (dec && !(inc && both) && eq_f) return keep;
+    return m;
+  endfunction
   always_ff @(posedge clk)
     for (int c = 0; c < NCH; c++) begin
       logic tw;
       tw = !qw_n[c][WW] && qw_rn[c] == (h_inc[c] ? (WW + 1)'(1) : (WW + 1)'(0));
       if (tw) begin
         wadr_r[c] <= gb[c].m; wh_r[c] <= whash(gb[c].m); wp_r[c] <= !(&gb[c].strb);
+        w_blk[c] <= wnz_nx(w_blk_t[c], eq_tr[c], eq_tf[c], h_inc[c], h_dec[c], eq_fr[c], dec_keep[c]);
       end else if (h_inc[c]) begin
         wadr_r[c] <= wadr_n[c]; wh_r[c] <= wh_n[c]; wp_r[c] <= wpart[c][WW'(qw_r[c] + 1'b1)];
+        w_blk[c] <= wnz_nx(w_blk_n[c], eq_nr[c], eq_nf[c], 1'b1, h_dec[c], eq_fr[c], dec_keep[c]);
+      end else begin
+        w_blk[c] <= wnz_nx(w_blk[c], 1'b1, eq_fr[c], 1'b0, h_dec[c], eq_fr[c], dec_keep[c]);
       end
     end
   always_ff @(posedge clk)
@@ -985,7 +1020,14 @@ module otpu_native_dram #(
       for (int k = 0; k < NH; k++)
         if (h_ik[c][k] || h_dk[c][k])
           whb[c][k] <= !h_iv[c][k] ? whb[c][wh_f[c]] - 1'b1 :
-                       wnz[c][wh_r[c]] ? whb[c][wh_r[c]] + 1'b1 : (WW + 1)'(1);
+                       w_blk[c] ? whb[c][wh_r[c]] + 1'b1 : (WW + 1)'(1);
+`ifndef SYNTHESIS
+  initial w_blk = '0;
+  always @(posedge clk) if (!rst)
+    for (int c = 0; c < NCH; c++)
+      if (w_blk[c] != wnz[c][wh_r[c]])
+        $fatal(1, "otpu_native_dram: channel %0d w_blk %0d, wnz[wh_r %0d] %0d", c, w_blk[c], wh_r[c], wnz[c][wh_r[c]]);
+`endif
 
 `ifndef SYNTHESIS
   // The hazard counts are read only while live: a write goes out only from a live bucket, and
