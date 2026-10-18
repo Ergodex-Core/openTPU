@@ -182,6 +182,12 @@ if os.environ.get("OTPU_MXU", "systolic") != "systolic":
 UARCH["MXU_IMPL"] = 2
 if os.environ.get("OTPU_MXU_E"):
     UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
+# OTPU_MXU_C: the MXU's lock-step chunk lanes (otpu_mxu_lanes C; timing only, docs/v4/
+# proposal-2-four-lanes.md): C copies of the array, lane l streaming row n + l of every MM, C
+# chunks a cycle through port B (the memory models' lane ports). Default the target's (MXU_C,
+# 1 unless the target states it: the card's c4 variant is 4)
+if os.environ.get("OTPU_MXU_C"):
+    UARCH["MXU_C"] = BOARD_UARCH["MXU_C"] = int(os.environ["OTPU_MXU_C"])
 # OTPU_QUANT_XD: the quantizer's row buffer in chunks (otpu_quant XD; timing only, 0: QACT reads
 # its rows from TMEM twice)
 if os.environ.get("OTPU_QUANT_XD"):
@@ -272,6 +278,12 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
         p["TMEM_SBP"] = max(3, (cfg.LANES - 1).bit_length())
     return p
+
+
+def chunk_lanes(uarch: dict | None = None) -> int:
+    """The MXU's lock-step chunk lanes of a simulation (UARCH with `uarch` over it: MXU_C; 1
+    today): C chunks a cycle through port B and the MXU (docs/v4/proposal-2-four-lanes.md)."""
+    return int({**UARCH, **(uarch or {})}.get("MXU_C", 1))
 
 
 def gathers(S: int, uarch: dict | None = None) -> bool:

@@ -176,10 +176,14 @@ def _config(cfg, uarch: dict | None) -> dict:
     ua = dict(rtlsim.UARCH)
     ua.update(uarch or {})
     lanes = cfg.LANES
-    return {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes,
-            "CL": lanes // 4 if lanes >= 8 else 1, "ACT_BLOCKS": cfg.ACT_BLOCKS,
-            "TMEM_WORDS": cfg.TMEM_WORDS, "DRAM_BYTES": cfg.DRAM_BYTES,
-            "IMEM_WORDS": cfg.IMEM_WORDS, "FIFO_DEPTH": 128, "NRP": 8, "NWP": 4, **ua}
+    d = {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes,
+         "CL": lanes // 4 if lanes >= 8 else 1, "ACT_BLOCKS": cfg.ACT_BLOCKS,
+         "TMEM_WORDS": cfg.TMEM_WORDS, "DRAM_BYTES": cfg.DRAM_BYTES,
+         "IMEM_WORDS": cfg.IMEM_WORDS, "FIFO_DEPTH": 128, "NRP": 8, "NWP": 4, **ua}
+    # the MXU's lock-step chunk lanes (MXU_C, docs/v4/proposal-2-four-lanes.md) as the
+    # candidates' C: C chunks a cycle through port B and the MXU
+    d["C"] = rtlsim.chunk_lanes(uarch)
+    return d
 
 
 def _programs(programs, cfg, src: _Sources) -> list:
@@ -218,13 +222,14 @@ def to_data(p: Profile, uarch: dict | None = None, kind: str = "rtl") -> dict:
                        "buckets": p.buckets[s] if getattr(p, "buckets", None) else {}})
     macs = p.macs()
     bytes_b = sum(x["portb"] for x in rl["per_slice"]) * cfg.D
+    C = max(1, p.C)                 # chunk lanes: C chunks a cycle through port B and the MXU
     return {
         "kind": kind, "name": p.name, "cycles": p.cycles, "clock_mhz": CLOCK_MHZ,
-        "config": _config(cfg, uarch),
+        "config": {**_config(cfg, uarch), "C": C},
         "roofline": {"bound": rl["bound"], "efficiency": rl["efficiency"],
                      "per_slice": rl["per_slice"]},
         "macs": macs, "bytes": bytes_b,
-        "peak_macs": cfg.D * cfg.MCOLS * cfg.S, "peak_bytes": cfg.D * cfg.S,
+        "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
         "units": UNITS, "slices": slices, "instrs": instrs,
         "programs": _programs(p.programs, cfg, src), "sources": src.list,
         "notes": notes(p), "mxu_gaps": {k: v for k, v in p.mxu_gaps(0).items() if k != "blame"},
@@ -263,12 +268,14 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
     the run's arguments (R8..R15: a resident decode program's position and token).
     candidate (parse_candidate): the same instruction stream timed on a wider machine, C
     chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
-    model for comparing architecture candidates (docs/v4/), not a measurement."""
+    model for comparing architecture candidates (docs/v4/), not a measurement. Without a
+    candidate's C the uarch's chunk lanes (MXU_C, rtlsim.chunk_lanes) are C: a configuration
+    with MXU_C 4 profiles as the candidate C=4."""
     from dataclasses import replace
 
     from .isasim import Machine
     cand = dict(candidate or {})
-    C = int(cand.get("C", 1))
+    C = int(cand.get("C", rtlsim.chunk_lanes(uarch)))
     dcfg = replace(cfg, LANES=int(cand["LANES"])) if "LANES" in cand else cfg
     m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
     seqs = [[] for _ in range(cfg.S)]
@@ -602,7 +609,7 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     if candidate:
         raise SystemExit("--candidate is an ISA model: add --isa")
     programs, st = holder["b"].last
-    p = parse(st["trace"], cfg, programs, name)
+    p = parse(st["trace"], cfg, programs, name, C=rtlsim.chunk_lanes(uarch))
     p.cycles = st["cycles"]
     d = _mem(to_data(p, uarch), cfg, run_kw.get("axi"))
     if mhz:                     # the same cycles at another clock (an F2 build's 200 MHz)

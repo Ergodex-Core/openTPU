@@ -51,8 +51,12 @@ FAMILIES = ("generic", "xilinx7", "xilinxus", "asic")
 UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB", "WIN",
               "FIFO_DEPTH", "TRACE_DEPTH", "PQ_WIN", "CHASH")
 # and the optional ones (absent: the RTL's default): MXU_E, the MXU's epilogue lanes (0: MCOLS / 2;
-# above MCOLS: MCOLS); with TMEM_IMPL 3 the one copy's knobs (otpu_slice TMEM_<K>,
-# docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
+# above MCOLS: MCOLS); MXU_C, the MXU's lock-step chunk lanes (1: today's MXU; C: C copies of
+# the MCOLS x D array, lane l streaming row n + l of every MM, C chunks a cycle through port B;
+# timing only, the rows' sums and the ISA, image and programs unchanged: docs/v4/
+# proposal-2-four-lanes.md, otpu_mxu_lanes); with TMEM_IMPL 3 the one copy's knobs (otpu_slice
+# TMEM_<K>, docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
+MXU_OPT_KEYS = ("MXU_E", "MXU_C")
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
@@ -169,7 +173,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + MXU_OPT_KEYS + TMEM3_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -195,6 +199,8 @@ def load(name: str | None = None) -> Target:
     a = raw["arch"]
     if a["S"] < 1 or a["D"] % 32 or a["MCOLS"] < 1 or a["LANES"] & (a["LANES"] - 1):
         raise TargetError(f"{path}: bad arch (S >= 1, D a multiple of 32, LANES a power of two)")
+    if int(raw["uarch"].get("MXU_C", 1)) < 1:
+        raise TargetError(f"{path}: MXU_C (the MXU's chunk lanes) is at least 1")
     if raw["arch"]["SEQ_WC"] and raw["uarch"]["WIN"] > 16:
         raise TargetError(f"{path}: SEQ_WC (otpu_seq's wait entries) needs WIN <= 16: 4-bit "
                           f"counts name a unit's last 15 instructions")
@@ -264,6 +270,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
+    if int(u.get("MXU_C", 1)) != 1:             # the chunk lanes (1: left out, today's MXU)
+        d["MXU_C"] = int(u["MXU_C"])
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     return d
@@ -282,6 +290,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
         "IMEM_WORDS": a["IMEM_WORDS"], "LANES": a["LANES"], "DSTEP": int(a["DSTEP"]),
         "MXU_IMPL": u["MXU_IMPL"], "MXU_CL": u["MXU_CL"], "MXU_E": u.get("MXU_E", 0),
+        "MXU_C": int(u.get("MXU_C", 1)),
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],

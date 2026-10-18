@@ -123,6 +123,15 @@ def test_card_variants(tmp_path):
                                       DSTEP=1, SEQ_WC=1)) == 0x4ffd1e17
     with pytest.raises(T.TargetError, match="no variant 'm9'"):
         T.load("ypcb-00338:m9")
+    # c4 (docs/v4/proposal-2-four-lanes.md): m4's arch with MXU_C 4 lock-step chunk lanes, a
+    # uarch key (the same CFG_HASH: the programs and images do not change); the simulators and
+    # the RTL parameters take it, and a target without it is at 1 (today's MXU)
+    c4v = T.load("ypcb-00338:c4")
+    assert T.config(c4v) == c4 and c4v.uarch["MXU_C"] == 4 and m4.uarch["MXU_C"] == 1
+    assert T.sim_uarch(c4v)["MXU_C"] == 4 and "MXU_C" not in T.sim_uarch(m4)
+    assert T.rtl_params(c4v)["MXU_C"] == 4 and T.rtl_params(m4)["MXU_C"] == 1
+    for n in T.names():
+        assert T.rtl_params(n)["MXU_C"] == 1
     # the file's [arch] / [uarch] state its default variant's values
     p = tmp_path / "ypcb-00338.toml"
     p.write_text((ROOT / "targets/ypcb-00338.toml").read_text().replace(

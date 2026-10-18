@@ -24,7 +24,7 @@ at E 4, 64K TMEM words) and m8 (8 at E 8, 128K words).
 | Section | What | Who depends on it |
 |---|---|---|
 | `[arch]` | the `opentpu.isasim.Config` fields: S, D, MCOLS, ACT_BLOCKS, ACT_ROWS, TMEM / IMEM words, DRAM bytes per slice, LANES, PAIR / DSTEP / STREAM, SEQ_WC (EXPERIMENTAL: the sequencer's wait entries, which the host loads with every program; docs/isa.md "Wait counts") | the compiler and the programs. Two targets with the same arch run the same programs |
-| `[uarch]` | timing-only RTL parameters: MXU_IMPL, MXU_E (optional), VPU_CL, ULANES, TMEM_IMPL, RPB / WPB, WIN, FIFO_DEPTH, the trace buffer | the RTL, the co-simulation |
+| `[uarch]` | timing-only RTL parameters: MXU_IMPL, MXU_E (optional), MXU_C (optional: the MXU's lock-step chunk lanes, below), VPU_CL, ULANES, TMEM_IMPL, RPB / WPB, WIN, FIFO_DEPTH, the trace buffer | the RTL, the co-simulation |
 | `[tech]` | the cell family (`rtl/tech/<family>`: generic, xilinx7, xilinxus, asic), the part or the PDK | the RTL file list |
 | `[platform]` | the board: memory type and rate, channels per slice, bytes a slice addresses per channel, the host link, the core clock | the board flow, the host runtime |
 
@@ -32,6 +32,22 @@ Every `[arch]` field is stated: the file is the hardware's truth. `board_config(
 simulators and tests use, takes the target's sizes but keeps its optional features (PAIR,
 DSTEP, STREAM, SEQ_WC) off unless `OTPU_PAIR` / `OTPU_DSTEP` / `OTPU_STREAM` / `OTPU_SEQ_WC`
 turn them on, as it did before targets; `opentpu.target.config(name)` is the full truth.
+
+### MXU_C: the MXU's chunk lanes (v4 candidate P2)
+
+`MXU_C` (optional, default 1) is the number of lock-step chunk lanes of the MXU
+(`otpu_mxu_lanes` in `rtl/mxu/otpu_mxu.sv`; docs/v4/proposal-2-four-lanes.md): C copies of the
+MCOLS x D array, lane l streaming rows l, l + C, ... of every MM, C chunks a cycle through port B
+(in simulation lane 0 on the slice's ports A / B, lanes 1 .. C-1 on the memory models' lane
+ports; the HBM adapter is the proposal's M4). It is timing-only: each row is summed in one lane
+in the same order as at C = 1, RMAX folds the lanes' maxima under the keys' total order, so the
+results, the ISA, the images and the programs are unchanged and the CFG_HASH is the same. It
+reaches the Verilator builds through `sim_uarch` (`rtlsim.BOARD_UARCH`, the top's `MXU_C`), the
+board / ASIC tops through `rtl_params`, the profiler's analytic timing (`opentpu.profile`: an MM
+of N rows takes ceil(N / C) x KB chunk-cycles, the DRAM bound / C) and Lens (`isa_data` without a
+`--candidate C=` times the stream as the candidate; the RTL profile's roofline divides by C).
+`OTPU_MXU_C=n` in the environment overrides the target's for a simulation. The card's `c4`
+variant (`OTPU_TARGET=ypcb-00338:c4`) is m4 at MXU_C 4.
 
 ## What is derived
 

@@ -286,3 +286,27 @@ def test_summary_json_default_uses_item_or_typeerror():
     with pytest.raises(TypeError, match="not JSON serializable"):
         json.dumps({"a": np.arange(2)}, default=lens._json_default)
     assert json.loads(json.dumps({"a": np.float64(1.9)}, default=lens._json_default))["a"] == 1.9
+
+
+def test_isa_timing_takes_the_uarchs_chunk_lanes():
+    """MXU_C in the uarch (docs/v4/proposal-2-four-lanes.md) times the ISA profile as the
+    candidate C=n does: an MM of N rows ceil(N / C) x KB cycles, the DRAM bound / C, the peak
+    C times; its transfers (chunks, scale lines) unchanged."""
+    import numpy as np
+    from opentpu import Config, isa as I
+    from opentpu.kernels import mlp
+    from opentpu.profile import _describe
+    from opentpu.runtime import compile_kernel
+    from test_kernels import mlp_args
+    a, _ = mlp_args(np.random.default_rng(0), M=3)
+    comp, imgs = compile_kernel(mlp, Config(), **a)
+    c1 = lens.isa_data("c1", comp.cfg, comp.programs, imgs)
+    c4 = lens.isa_data("c4", comp.cfg, comp.programs, imgs, uarch={"MXU_C": 4})
+    cand = lens.isa_data("cand", comp.cfg, comp.programs, imgs, candidate={"C": 4})
+    assert c4["cycles"] == cand["cycles"] < c1["cycles"]
+    assert c4["roofline"]["bound"] == cand["roofline"]["bound"] < c1["roofline"]["bound"]
+    assert c4["config"]["C"] == 4 and c1["config"]["C"] == 1
+    assert c4["peak_macs"] == 4 * c1["peak_macs"] and c4["bytes"] == c1["bytes"]
+    mm = I.mm(0, 0, 0, 10, 3, 3 * 32, 10, 1, 0, 64)
+    assert _describe(mm, Config())[2:] == (30, 30, 30)
+    assert _describe(mm, Config(), 4)[2:] == (9, 30, 30)       # ceil(10 / 4) = 3 rows a lane
