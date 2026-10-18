@@ -101,6 +101,14 @@ add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pc
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_ar}]
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_b}]
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r}]
+# round 6: the links' SLR1 halves (otpu_link_tx after the skids, otpu_link_rx before the output
+# registers) sit with them; their SLR0 halves (u_host/u_xs_*) stay with u_host, the stage the
+# placer puts at the boundary (or a pblock of their own)
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_aw_tx}]
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_w_tx}]
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_ar_tx}]
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_b_rx}]
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r_rx}]
 
 ########################################
 # pb_otpu_board: the slice side, SLR2
