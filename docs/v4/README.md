@@ -134,6 +134,20 @@ Reading the models:
   P4 ~67. Each proposal says how its design removes the row-gating loss and what the RTL
   should then reach.
 
+## Branch state (2026-10-19)
+
+Merged into tpubench: Milestone 0 (the blocked-cycle split), P4's Milestone 1 (the Gemma
+split over slices), the `f2-hbm` port, the Qwen3.8 loader and runs. On their own branches,
+complete and independently re-verified (their RTL gates re-run by the coordinator: P1
+`test_token_on_rtl_is_bit_exact[cpc1,cpc2]` 2 passed, P2 the chunk-lane tests 6 passed,
+P4's slice tests 3 passed): `v4-p1-wide-port` (`docs/v4/p1-status.md`) and
+`v4-p2-four-lanes` (`docs/v4/p2-status.md`). They are not merged yet because both replace
+the simulation memory path that the `f2-hbm` port's NCH adapter now owns (P1 rewrites
+`otpu_native_dram` to 2 x CPC channels without the fold the host's channel map assumes and
+adds a second `targets/f2.toml`; P2's lane ports are tied off at the board top): the next
+engineering step is to reconcile each with the HBM adapter (the fork's `wide-port` PORTB
+adapter is the model for P1; P2 needs per-lane queues in `otpu_f2_hbm_nch`), then build.
+
 ## Qwen3.8-27B-INT4 on the baseline (2026-10-19)
 
 RedHatAI/Qwen3.8-27B-INT4 (a Qwen3.5-family hybrid, 64 layers, hidden 5120, compressed-tensors
