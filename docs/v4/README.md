@@ -220,6 +220,13 @@ model in 8.03 M cycles, 97.8% of the bound). The first routed build of the `f2-h
 Gemma 3 checkpoint is staged at `/home/ubuntu/rachit/models/gemma-3-1b-it`. Next: the AFI
 (upload of the Developer_CL.tar, `create_fpga_image`), load on slot 0, Gemma 3 with the
 hardware Lens trace; then `f2-hbm:s4` with the Gemma split (P4 on silicon).
+Build 1 (61d07199, `SSI_SpreadLogic_high`) failed timing after placement (WNS -4.03 ns on the
+host write bus at 450 MHz, -2.0 on the bridge's write-done into the slice at 200 MHz, -1.0 on
+the DMA-to-TMEM address at 400 MHz; [f2-timing.md](f2-timing.md)) and was stopped; the fixes
+(registers per port on the host master, a write-done stage, fan-out replication of the TMEM
+address sources, CDC bounds) are merged (a2af0904, all F2 Verilator suites and the Gemma 3
+token bit-exact) and **build 2** runs with `--place-directive Default` (unit
+`otpu-f2hbm-build2`, output `/home/ubuntu/rachit/f2hbm-run2`).
 
 ## Decision (taken 2026-10-18)
 
