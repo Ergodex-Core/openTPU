@@ -144,3 +144,20 @@ streamed chunks (a quarter plus the replicated KV reads and the embedding gather
 MMs), 156 GATHERs receiving 279,552 words (6 a layer: k, v, the heads, W_o's rows, the MLP
 product, the down rows), 2,248,050 analytic cycles a slice (88.4% of its 1,986,791-cycle DRAM
 bound; 11.2 ms at 200 MHz, 89 tok/s), against 8,281,554 on one slice.
+
+## On the F2 (the f2-hbm merge)
+
+The AWS F2 target ([f2.md](f2.md), [f2_hbm.md](f2_hbm.md)) came from openTPU-vla-rhino's
+`f2-hbm` branch, which carried a Gemma 3 of its own (a `gemma3.Spec` subclassing Gemma 4's with
+`norm_offset` / `attn_scale` / `layer_scale`, an HF / MLX / GGUF loader, and FunctionGemma 270M).
+The merge keeps this document's implementation (Gemma 4's Spec and kernels, the parameters
+folded by `gemma3.folder`; its tokens above are the reference) and routes that branch's tools
+to it: `tools/fpga_inference_check.py --model gemma3` and `tools/gemma3_check.py` take
+`gemma3.reference_logits` / `emulated_logits` (Gemma 4's, re-exported) with the folded
+`gemma4.Weights`; `functiongemma` (`models/functiongemma-270m-it`, a `gemma3_text`
+checkpoint) resolves through `spec_from_hf` like any Gemma 3. Not carried over: the GGUF
+reader (`gemma3-int4`, `gaunernst/gemma-3-1b-it-int4-gguf`) and MLX tensor names. The board
+driver's NCH-channel map (`opentpu/host/board.py` `beat_at` / `split` / `join`) is the
+general one: on the card's two channels per slice it is the map this document's runs used,
+on the F2 HBM build's 8 it rotates the chunks over the channel pairs; the slices' Gemma
+programs (`--slices 4`) address each slice's logical DRAM as before.

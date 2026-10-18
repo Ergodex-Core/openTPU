@@ -75,7 +75,10 @@ Makefile, `create_project.tcl` and `rtlsim.RTL_SOURCES` hold the same lists, whi
 
 ## Adding a target
 
-1. Copy the closest `targets/*.toml`, give it a new name and a new `platform_id`.
+1. Copy the closest `targets/*.toml`, give it a new name and a new `platform_id` (a board's:
+   the device reports it in CFG_PLATFORM, and `target.by_platform` reads the family, the wait
+   window and the memory kind from the first target with it; the F2's DDR and HBM targets share
+   3, the memory told apart by CFG_DRAM's channel count).
 2. A new board: its top under `rtl/boards/<board>/`, its flow under `boards/<board>/`
    (constraints, the memory and host IP), reading `python3 -m opentpu.target env <name>`.
 3. A new cell family: `rtl/tech/<family>/` with the same module names as `rtl/tech/generic/`.
@@ -88,3 +91,5 @@ DRAM addresses are 32 bits per slice, so a slice addresses 4 GiB. A platform wit
 (the BCU1525's 64 GB) uses it through more slices (each on its own channels); offsets 0xA0 + 4s
 are reserved for per-slice DRAM windows the host would set, and far-memory DMA for MoE expert
 pools held on the card is a later ISA decision.
+The F2 HBM build's channels can hold more per slice (f2-hbm16: 8 GiB) than the 32-bit byte
+addresses reach; docs/f2_hbm.md ("Past 4 GiB a slice") lists the fields and the smallest fix.
