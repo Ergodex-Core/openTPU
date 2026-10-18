@@ -189,8 +189,20 @@ on a `BackendDram`) wrote the requested row and the served word into slice 0 onl
 every slice of a tensor-parallel decode posts the request in lockstep and waits on its own
 served word (the MoE models that use it run on one slice). `BackendDram(slices=...)` now
 writes every slice; `tests/test_qwen38.py` runs a 2-slice tiny Qwen3.5 with the table on
-the host through `generate_card` and fails the same way without the fix. The run was
-started again with it (its numbers below when it completes).
+the host through `generate_card` and fails the same way without the fix.
+
+With the fix, on the host once quiet (load 4 .. 20): the image built in 516 s (8 workers),
+the process 17 .. 19 GiB resident (peak 18.7 GiB in the tree's samples), and the greedy
+reply to "Why is the sky blue? Answer in one sentence." was
+
+    The sky appears blue because shorter wavelengths of
+
+tokens `[760, 12515, 7701, 6105, 1521, 22602, 89661, 314]` (8, stopped at `--max-new 8`): the
+model's text (the sentence continues past the 8 tokens). TTFT 2,470 s (the 23-token prefill
+in 3 runs of 8 rows, each streaming the 14.8 GB of weights through the simulator's exact
+float64 MMs, and the first token's step); the 7 tokens after it 769 s = **110 s per token
+on the ISA simulator** (one core, bit-exact); 3,758 s in all with the build. The simulator's
+time is the emulation's, not the device's: the device's is the Lens number below.
 A 64-layer decode token costs the simulator about 6x the 8-layer one below (24.3 of 25.6
 GMAC), i.e. ~3 .. 4 min of CPU per token when its images stay resident.
 
@@ -247,7 +259,7 @@ image's own profile was not recorded (the second 16 GiB run on this host: the me
 
 ## Open points
 
-- The 64-layer run's text and per-token time on the simulator (above): needs ~20 GB of
+- The 64-layer Lens profile (its text and per-token time are above): needs ~20 GB of
   resident memory for the four images for a few hours of one core.
 - The prompt-run programs of the 8-layer truncation do not fit (`_probe`), the 64-layer
   ones do; `--no-prompt-runs` for the truncated model.
