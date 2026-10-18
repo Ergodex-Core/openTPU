@@ -114,8 +114,13 @@ channel alone at the core's full rate (12.8 GB/s) would need ~80.
 ### The host path (otpu_f2_hbm_host)
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk) and goes to the
-port of its address (`addr[33:29]`) as one two-beat AXI3 burst, one at a time (~4 hclk cycles a
-beat: 7 GB/s, above BAR4 write combining's ~2 GB/s). The host's B for a burst goes back when the
+port of its address (`addr[33:29]`) as one two-beat AXI3 burst, one at a time (~7 hclk cycles a
+beat through the ports' registers: 4 GB/s, above BAR4 write combining's ~2 GB/s). The host's
+master at every port is registered there (`otpu_f2_hbm_hreg` in otpu_f2_hbm_mem: a one-entry
+register for AW, W and AR whose ready is its own emptiness, R and B registered back), and the
+host block shows its AW / W valids and the W beat from flip-flops, so no hclk net between the
+host block and a port carries logic across the die ([v4/f2-timing.md](v4/f2-timing.md)). The
+host's B for a burst goes back when the
 host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
 `pcis_wbusy` (an AW / W shown or taken, a B not given back) holds the host's reads and the OCL's
 writes (a RUN after data finds the data in the HBM) as on the DDR build. PCIS reads: a beat at a
@@ -134,9 +139,12 @@ dropped, reads return zeros. The host transport maps BAR4 for S x NCH x 512 MiB.
 | clk_hbm_ref 100 MHz | shell | the HBM's reference and APB clock |
 
 `boards/f2/build/constraints/cl_timing_user_hbm.tcl` (applied after synthesis, in place of the
-DDR build's): max delay, datapath only, between every pair of {core, main, hclk} at the smaller
-period of the pair; bus skew on every otpu_afifo's gray pointers and on every write count's gray
-bus (bridges and host path); the MMCMs' lock false-pathed to reset pins only. otpu_clk2x.tcl (the
+DDR build's): max delay, datapath only, between every pair of {core, main, hclk} at the
+destination clock's period (a crossing's word is read only after its pointer or count has gone
+through the destination's two synchronizer flip-flops; [v4/f2-timing.md](v4/f2-timing.md)); bus
+skew on every otpu_afifo's gray pointers and on every write count's gray bus (bridges and host
+path) at the smallest period; the MMCMs' lock false-pathed to reset pins only. The bridges' write
+counts and error bits reach the adapter through a register stage in otpu_f2_hbm_mem. otpu_clk2x.tcl (the
 pumped TMEM's multicycles) as on the DDR build. The clocks are not grouped asynchronously.
 
 ## Bandwidth
