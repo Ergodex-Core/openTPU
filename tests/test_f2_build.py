@@ -662,8 +662,9 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
 
 
 # build_level_1_cl.tcl: the HDK reads the user placement XDC managed (its Tcl dropped), so the
-# wrapper reads cl_pnr_user.tcl unmanaged inside the HDK's opt_design call, once, and fails if
-# the HDK's sequence never reached it
+# wrapper reads cl_pnr_user.tcl, then otpu_clk2x.tcl (the pumped TMEM's multicycles, on the
+# linked design), unmanaged inside the HDK's opt_design call, once, and fails if the HDK's
+# sequence never reached it
 @pytest.mark.parametrize('fault', ['none', 'no_opt', 'bad_tcl'])
 def test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design(tmp_path, fault):
     tclsh = shutil.which('tclsh')
@@ -680,6 +681,7 @@ def test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design(tmp_pa
     (cons / 'small_shell_cl_pnr_user.xdc').write_text('# managed\n')
     (cons / 'cl_pnr_user.tcl').write_text('error "bad tcl"\n' if fault == 'bad_tcl' else
                                           'puts "PNR_TCL_RAN"\n')
+    (cons / 'otpu_clk2x.tcl').write_text('puts "CLK2X_TCL_RAN"\n')
     harness = f'''
 set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
 set constraints_dir {{{cons}}}
@@ -708,12 +710,14 @@ foreach l $log {{ puts "LOG $l" }}
     out = result.stdout
     log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
     if fault == 'none':
-        assert 'PNR_TCL_RAN' in out
+        assert 'PNR_TCL_RAN' in out and 'CLK2X_TCL_RAN' in out
         assert log == [f'read_xdc {cons}/small_shell_cl_pnr_user.xdc',
                        f'read_xdc -unmanaged {cons}/cl_pnr_user.tcl',
+                       f'read_xdc -unmanaged {cons}/otpu_clk2x.tcl',
                        'opt_design -directive Explore', 'place_design']
         assert 'STOPPED openTPU: implementation produced no routed checkpoint' in out
     elif fault == 'no_opt':
         assert 'STOPPED openTPU: the HDK sequence ran no opt_design' in out and 'PNR_TCL_RAN' not in out
     else:
         assert 'STOPPED bad tcl' in out and 'opt_design' not in ' '.join(log)
+        assert 'CLK2X_TCL_RAN' not in out
