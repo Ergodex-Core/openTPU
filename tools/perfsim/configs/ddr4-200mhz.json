@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "ddr4-2400r-two-channel-200mhz",
+  "description": "Ramulator DDR4_2400R preset rounded to its 833 ps tCK; hypothetical core at 200 MHz.",
+  "architecture": {"core_period_ps": 5000},
+  "memory": {"backend": "ramulator", "controller_period_ps": 833, "memory_period_ps": 833, "transaction_bytes": 64, "outstanding": 64, "ramulator_config": "ddr4.yaml", "bridge": "../../../build/perfsim/bridge/libopentpu_ramulator.dylib"}
+}

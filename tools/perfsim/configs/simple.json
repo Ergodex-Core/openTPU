@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "deterministic-test-memory-200mhz",
+  "description": "Unit-test backend, no DDR/HBM timing claim; core at user-provided 200 MHz.",
+  "architecture": {"core_period_ps": 5000},
+  "memory": {"backend": "simple", "controller_period_ps": 1000, "memory_period_ps": 1000, "transaction_bytes": 16, "outstanding": 64, "simple_latency_ticks": 20}
+}

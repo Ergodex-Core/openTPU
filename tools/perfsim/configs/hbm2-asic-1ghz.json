@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "hbm2-hypothetical-asic-1ghz",
+  "description": "Hypothetical 1 GHz core projection. Keeps the same 1 ns HBM/controller tick. No resource, physical timing or Fmax validation.",
+  "architecture": {"core_period_ps": 1000},
+  "memory": {"backend": "ramulator", "controller_period_ps": 1000, "memory_period_ps": 1000, "transaction_bytes": 16, "outstanding": 64, "ramulator_config": "hbm2.yaml", "bridge": "../../../build/perfsim/bridge/libopentpu_ramulator.dylib"}
+}

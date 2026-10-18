@@ -1,0 +1,26 @@
+T0 D c=5 s=0 pc=0 op=30 w1=00000000 w2=00000000 w3=00000000
+T0 S c=6 s=0 u=3 r=6
+T0 D c=6 s=1 pc=1 op=30 w1=00000080 w2=00000000 w3=00000000
+T0 D c=7 s=2 pc=2 op=30 w1=00000100 w2=00000080 w3=00000000
+T0 U c=20 u=3 frz=0
+T0 E c=22 s=0
+T0 S c=23 s=1 u=3 r=23
+T0 U c=44 u=3 frz=0
+T0 E c=46 s=1
+T0 S c=47 s=2 u=3 r=47
+T0 P c=63 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 U c=103 u=3 frz=0
+T0 E c=105 s=2
+T0 H c=107 bmxu=0 bdma=0 amxu=0 aq=0
+T0 P c=107 n=44 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=107 n=44 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=363 rd=0 pop=0 use=0 cols=4 any=0
+RESULT cycles=107 halted=1 error=0
+SLICE 0 icount=4
+- /Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/sim/verilator/tb_top.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=107 lose=0,0,0,0 n= 89,18,0,0,0,0,0 d= 89,18,0,0,0,0,0,0,0 dw= 70,37,0,0,0,0,0,0,0,0 rd= 0,0,0,18,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 4ns; walltime 0.109 s; speed 38.095 ns/s
+- Verilator: cpu 0.097 s on 1 threads; allocated 10 MB

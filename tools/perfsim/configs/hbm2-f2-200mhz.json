@@ -1,0 +1,7 @@
+{
+  "schema_version": 1,
+  "name": "hbm2-user-f2-clock-200mhz",
+  "description": "User-specified F2 core clock, not verified Fmax or a model of the F2 shell; architecture comes from the input bundle. HBM2 timing is independent.",
+  "architecture": {"core_period_ps": 5000},
+  "memory": {"backend": "ramulator", "controller_period_ps": 1000, "memory_period_ps": 1000, "transaction_bytes": 16, "outstanding": 64, "ramulator_config": "hbm2.yaml", "bridge": "../../../build/perfsim/bridge/libopentpu_ramulator.dylib"}
+}

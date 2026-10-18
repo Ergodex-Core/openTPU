@@ -1,0 +1,105 @@
+# OpenTPU standalone performance simulator
+
+**Experimental structural timing model, not a cycle-exact replacement for RTL.** It executes
+OpenTPU's eight-word instructions and models their resource/dependency interactions. All
+predictions are labelled `opentpu-perfsim-estimate`; the simple backend is explicitly `simple`.
+There is no fallback from a missing/broken Ramulator installation. Existing RTL, compiler,
+ISA golden model, FPGA workloads, `tools/hwloop/lpn` and its validation registry are unchanged.
+
+This implementation is a starting point toward the requested fully validated simulator.
+It does **not** establish pretrained full-model timing accuracy, hardware Fmax or physical fit.
+See [architecture and limitations](architecture.md) and [validation](validation.md).
+
+## Quick start
+
+From the repository root, with Python >=3.10 and NumPy (the tested versions are in
+`tools/perfsim/dependencies.lock.json`):
+
+```sh
+python tools/perfsim/examples.py --out build/perfsim/bundles
+python -m opentpu.perfsim --bundle build/perfsim/bundles/gemm \
+  --profile tools/perfsim/configs/simple.json --out build/perfsim/simple-run --numeric-check
+python -m pytest tests/perfsim -q
+```
+
+This compiles a partial GEMM and a **tiny random two-layer Qwen3 topology** with the real
+OpenTPU compiler, all attention/norm/MLP/head paths included. No checkpoint is downloaded.
+The tiny sequence is two serial prompt-token steps and one teacher-forced decode step, not
+a pretrained billion-parameter model and not a benchmark of a batched serving system.
+
+Build the actual Ramulator backend (CMake >=3.14, C++20; public source downloads require
+network access, no system installation):
+
+```sh
+python tools/perfsim/build_ramulator.py --source build/perfsim/ramulator2 --fetch --jobs 4
+python -m opentpu.perfsim --bundle build/perfsim/bundles/gemm \
+  --profile tools/perfsim/configs/hbm2-f2-200mhz.json \
+  --bridge build/perfsim/bridge/libopentpu_ramulator.dylib \
+  --out build/perfsim/hbm-run --numeric-check --trace
+OTPU_RAMULATOR_BRIDGE="$PWD/build/perfsim/bridge/libopentpu_ramulator.dylib" \
+  python -m pytest tests/perfsim -q
+```
+
+Use `.so` instead of `.dylib` on Linux. `--bridge` overrides the example profile's macOS path.
+Omit `--fetch` for an offline build after populating all exact commits in the lock file.
+The build script refuses to discard edits in a checkout at the wrong revision. Use a new,
+disposable source directory. On macOS it builds for the architecture of the running Python.
+
+Run the full bounded sequence with persistent KV and Ramulator controller/row state:
+
+```sh
+python tools/perfsim/sequence.py --bundles build/perfsim/bundles \
+  --profile tools/perfsim/configs/hbm2-f2-200mhz.json --out build/perfsim/hbm-sequence
+python tools/perfsim/sequence.py --bundles build/perfsim/bundles \
+  --profile tools/perfsim/configs/hbm2-asic-1ghz.json --out build/perfsim/asic-sequence
+python tools/perfsim/validate.py --bundle build/perfsim/bundles/compute \
+  --out build/perfsim/compute-rtl --rtl
+```
+
+Output directories must be empty: runs never overwrite prior evidence. `metrics.json` reports
+core cycles, physical and logical memory bytes, transactions, stalls, unit busy fractions,
+MXU advances/useful MAC fraction, per-instruction and labelled-region spans. These spans can
+overlap and must not be added as wall time. `--trace` enables request-accept/completion JSONL;
+it is off by default so a long run does not retain every memory event. `manifest.json` records
+input, source, dependency and backend-library hashes. CLI failures write `failure.json`.
+
+## Inputs and measurement boundaries
+
+`input.json`, `prog_0.hex` and `dram_0.bin` use the LPN input-bundle convention: eight 32-bit
+instruction words, one hex word per line, DRAM file in big-endian 32-bit words converted back
+to byte memory on load. Trailing zero program words may be omitted only when the manifest
+supplies the complete instruction count. Register arguments initialise R8..R15. Unknown
+architecture fields (including wide-model-only `PORTB`, `ROWLANES` or `T2`) are rejected.
+The implementation targets this branch's actual RTL/Config, not an invented wide-port target.
+
+Optional `labels` maps static PCs to layer/region names. Without it, compiler comments name
+regions. Repeated loop visits are aggregated by that name: to distinguish repeated model layers,
+provide a suitably unrolled program or extend label mapping with dynamic loop context. Reported
+region spans are not a claim that source comments identify every semantic layer automatically.
+
+The boundary starts with the program resident and the core beginning the run; it ends after
+HALT, outstanding commands and writes have drained. It excludes loading weights/programs,
+PCIe/XDMA, host scheduling, sampling and network time. Standalone runs report TTFT/prefill/
+decode/TPS as null because those concepts require workload boundaries. `sequence.py` declares
+them explicitly, maintains KV across steps and reports **device-only conditional** decode TPS
+at the stated clock. Changing core clock does not rescale HBM's time constants.
+
+The 200 MHz profile is the user's requested F2 clock, **not verified achieved Fmax**; it is not
+an F2 shell model. The 1 GHz profile is a hypothetical core-frequency projection with the same
+memory and on-chip architecture. FPGA/ASIC area, routing, power and timing closure are outside
+this simulator and need physical implementation.
+
+## Research and licensing
+
+The [SCALE-Sim v3 paper](https://arxiv.org/abs/2504.15377v2) and
+[official implementation](https://github.com/scalesim-project/SCALE-Sim/tree/9f98c4371055a54c75209c2e02b640b897550532)
+inform the modular compute/buffer/memory design and reporting. Its checked `README_ramulator.md`
+describes demand-trace generation, Ramulator response replay and a second SCALE-Sim run. This
+implementation instead makes accepted requests and completions feed back during execution;
+it does not reuse SCALE-Sim's GEMM timing kernel, replay approximation or sparsity assumptions.
+No SCALE-Sim source code is copied. Ternary/zero weights receive no timing speedup.
+
+[Ramulator 2.0a](https://github.com/CMU-SAFARI/ramulator2/tree/be93be78055d922aa1d4d33e15bcc8f2b0c61a9d)
+is an MIT-licensed external dependency, pinned with yaml-cpp/spdlog/argparse commits. The
+small compatibility patch, build receipt and license are retained. See
+`tools/perfsim/ramulator/NOTICE.md`. Simulator code follows this repository's Apache-2.0 license.
