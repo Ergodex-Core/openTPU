@@ -9,6 +9,8 @@
 // one ID's responses; it may interleave the two IDs' read bursts, beat by beat, which the ID bit
 // routes). The address, W and AR outputs are registered (aw_o, w_o, ar_o: one transaction each);
 // R and B pass through by ID. A port with no channel (an unused bridge) is tied off by its parent.
+// The reset through a register of its own (hrst_q: the arbiters sit at the HBM's ports, a reset
+// tree's leaves; otpu_f2_hbm_nch).
 module otpu_f2_hbm_port (
   input  logic                hclk,
   input  logic                hrst,
@@ -61,6 +63,8 @@ module otpu_f2_hbm_port (
   input  logic                m_rvalid,
   output logic                m_rready
 );
+  logic hrst_q;
+  always_ff @(posedge hclk) hrst_q <= hrst;
   // ---- AW, then the granted master's W to WLAST
   logic aw_o, w_o, wbusy, wsel, aw_last;
   logic [1:0] aw_gnt;
@@ -89,7 +93,7 @@ module otpu_f2_hbm_port (
     if (w_take) begin
       m_wdata <= s_wdata[wsel]; m_wstrb <= s_wstrb[wsel]; m_wlast <= s_wlast[wsel];
     end
-    if (hrst) begin
+    if (hrst_q) begin
       aw_o <= 1'b0; w_o <= 1'b0; wbusy <= 1'b0; wsel <= 1'b0; aw_last <= 1'b1;
     end else begin
       aw_o <= (aw_gnt != '0) || (aw_o && !m_awready);
@@ -122,7 +126,7 @@ module otpu_f2_hbm_port (
       m_araddr <= s_araddr[ar_gnt[1]];
       m_arlen <= s_arlen[ar_gnt[1]];
     end
-    if (hrst) begin
+    if (hrst_q) begin
       ar_o <= 1'b0; ar_last <= 1'b1;
     end else begin
       ar_o <= (ar_gnt != '0) || (ar_o && !m_arready);

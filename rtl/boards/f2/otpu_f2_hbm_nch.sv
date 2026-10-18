@@ -39,6 +39,9 @@
 //
 // n_err: a response other than OKAY (sticky until rst). Resets: rst (core) and hrst (hclk) are
 // the same event, each side's synchronized; nothing is in flight while the accelerator is idle.
+// Each side's reset goes through a register of its own here (rst_q, hrst_q: the bridges sit
+// along the HBM's ports, the leaves of the top's reset trees; otpu_f2_hbm_mem registers them
+// once more on the way), so a reset pin is a flip-flop's cycle from its driver.
 module otpu_f2_hbm_nch #(
   parameter logic [33:0] BASE = 34'h0,  // the channel's first byte in the HBM
   parameter int CQ     = 16,            // the crossing's command FIFO, beats
@@ -93,6 +96,10 @@ module otpu_f2_hbm_nch #(
               BMAX != (1 << BW) || CQ < 4)
     $fatal(1, "otpu_f2_hbm_nch: RD, WOD, BMAX powers of two (BMAX <= 8), CQ >= 4");
 
+  logic rst_q, hrst_q;
+  always_ff @(posedge clk) rst_q <= rst;
+  always_ff @(posedge hclk) hrst_q <= hrst;
+
   // ================================================================== core side
   // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more)
   logic [25:0]  cf [4];
@@ -103,7 +110,7 @@ module otpu_f2_hbm_nch #(
   wire c_take = n_cvalid && n_cready;
   wire d_take = n_wvalid && n_wready;
   always_ff @(posedge clk) begin
-    if (rst) begin
+    if (rst_q) begin
       cf_n <= '0; df_n <= '0; cf_h <= '0; df_h <= '0; n_cready <= 1'b0; n_wready <= 1'b0;
     end else begin
       if (c_take) cf[2'(cf_h + cf_n)] <= {n_cwe, n_caddr};
@@ -151,14 +158,14 @@ module otpu_f2_hbm_nch #(
   logic [511:0] xr_d;
   logic x_pop;
   otpu_afifo #(.W(602), .DEPTH(CQ)) u_xq (
-    .wclk(clk), .wrst(rst), .wvalid(c_pop), .wready(x_ready), .wdata({h_we, h_a, df[df_h]}),
+    .wclk(clk), .wrst(rst_q), .wvalid(c_pop), .wready(x_ready), .wdata({h_we, h_a, df[df_h]}),
     .wslot('0), .wcommit(), .wused(), .rused(),
-    .rclk(hclk), .rrst(hrst), .rvalid(x_v), .rready(x_pop), .rdata({x_we, x_a, x_d}));
+    .rclk(hclk), .rrst(hrst_q), .rvalid(x_v), .rready(x_pop), .rdata({x_we, x_a, x_d}));
 
   always_ff @(posedge clk) begin
     if (iss_w) wa[wt] <= h_a;
     if (iss_r) ra[rt] <= h_a;
-    if (rst) begin
+    if (rst_q) begin
       wv <= '0; wn <= '0; wt <= '0; wr_ <= '0; wret <= wdone_s;
       rv <= '0; rn <= '0; rt <= '0; rh <= '0;
     end else begin
@@ -185,13 +192,21 @@ module otpu_f2_hbm_nch #(
   logic        k_nx, k_bnd;
   logic [575:0] k_d;
   logic        k_pop;                  // the held command joins or opens a burst
-  assign x_pop = x_v && (!k_v || k_pop);
+  // the head loads (the register is free, or its command goes): the beat's 576 enables take
+  // this net alone, not qualified by x_v or the reset (what loads while no command is there is
+  // never read: k_v is 0, and the W FIFO's count moves only on k_pop && k_we), and synthesis
+  // replicates its LUT per 64 of them (max_fanout; rhino's round-3 placement, docs/wide_port.md:
+  // one LUT into 604 clock enables, 3.6 ns of route at 450 MHz)
+  (* max_fanout = 64 *) logic k_ld;
+  assign k_ld = !k_v || k_pop;
+  assign x_pop = x_v && k_ld;
+  always_ff @(posedge hclk) if (k_ld) k_d <= x_d;
   always_ff @(posedge hclk) begin
-    if (hrst) k_v <= 1'b0;
-    else if (!k_v || k_pop) begin
+    if (hrst_q) k_v <= 1'b0;
+    else if (k_ld) begin
       k_v <= x_v;
       if (x_v) begin
-        k_we <= x_we; k_a <= x_a; k_d <= x_d;
+        k_we <= x_we; k_a <= x_a;
         // (the three candidates compared in parallel, the late select last)
         k_nx <= k_open ? x_a == k_a + 1'b1 : k_join ? x_a == o_nx + 1'b1 : x_a == o_nx;
         k_bnd <= BW == 0 ? 1'b1 : (x_a % BMAX) == 0;
@@ -213,15 +228,25 @@ module otpu_f2_hbm_nch #(
   logic [575:0] wf [WD];
   logic [WDW:0] wf_n;
   logic [WDW-1:0] wf_h;
+  logic         wf_nz;                  // wf_n != 0, a register kept alongside (below)
   // the head continues the open burst: same direction, the next beat, room, no BMAX boundary
   wire cont = o_v && k_we == o_we && k_nx && o_len != (BW + 1)'(BMAX) && !k_bnd;
   // close the open burst: full, the head does not continue it, or it waited GATHER cycles
   wire q_room = o_we ? awq_n != 2'd2 : arq_n != 2'd2;
   wire close = o_v && q_room && (o_len == (BW + 1)'(BMAX) || (k_v && !cont) ||
                                  (!k_v && o_age >= 4'(GATHER)));
-  wire w_room = wf_n <= (WDW + 1)'(WD - 1);
-  // the head joins the open burst, or opens one where none is or the open one closes now
-  assign k_pop = k_v && (!k_we || w_room) && (cont || !o_v || close);
+  wire w_room = !wf_n[WDW];             // wf_n <= WD - 1 (WD a power of two)
+  // the head joins the open burst, or opens one where none is or the open one closes now. With
+  // the head held, "the open burst closes now" is o_v && q_room && (full || !cont), and cont
+  // implies not full, so (cont || !o_v || close) is (cont || !o_v || q_room): two LUT levels
+  // from the registers (cont and q_room, then this), where the form with close was four
+  // (rhino's round-4 placement, docs/wide_port.md "Round 5 RTL": wf_n_reg[1] -> wf_n_reg[4]
+  // through six levels at 450 MHz: wf_n != 0 into the W valid, the W take, this pop, the count)
+  assign k_pop = k_v && (!k_we || w_room) && (cont || !o_v || q_room);
+`ifndef SYNTHESIS
+  always @(posedge hclk) if (!hrst_q && k_pop != (k_v && (!k_we || w_room) && (cont || !o_v || close)))
+    $fatal(1, "otpu_f2_hbm_nch: k_pop's short form differs from its definition");
+`endif
   wire k_join = k_pop && cont;
   wire k_open = k_pop && !cont;
 
@@ -239,8 +264,9 @@ module otpu_f2_hbm_nch #(
   assign m_arlen   = 4'(2 * arq[arq_h].len - 1);
   assign aw_tk = m_awvalid && m_awready;
   assign ar_tk = m_arvalid && m_arready;
-  // W: the oldest sent AW's burst, from the W FIFO's head (two AXI beats per native beat)
-  assign wb_v = wb_n != 0 && wf_n != 0;
+  // W: the oldest sent AW's burst, from the W FIFO's head (two AXI beats per native beat; the
+  // valid from two registers' flags: wb_n != 0 is one LUT, wf_nz a flip-flop)
+  assign wb_v = wb_n != 0 && wf_nz;
   wire [575:0] wh = wf[wf_h];
   assign m_wvalid = wb_v;
   assign m_wdata  = w_cnt[0] ? wh[511:256] : wh[255:0];
@@ -261,9 +287,9 @@ module otpu_f2_hbm_nch #(
     // push only moves the count, so its write enables are not the pop's
     if (!wf_n[WDW]) wf[WDW'(wf_h + wf_n)] <= k_d;
     if (aw_tk) begin wb_len[wb_t] <= awq[awq_h].len; bb_len[2'(bb_h + bb_n)] <= awq[awq_h].len; end
-    if (hrst) begin
+    if (hrst_q) begin
       o_v <= 1'b0; o_age <= '0; arq_n <= '0; awq_n <= '0; arq_h <= 1'b0; awq_h <= 1'b0;
-      wf_n <= '0; wf_h <= '0; wb_n <= '0; bb_n <= '0; wb_h <= '0; bb_h <= '0; wb_t <= '0;
+      wf_n <= '0; wf_nz <= 1'b0; wf_h <= '0; wb_n <= '0; bb_n <= '0; wb_h <= '0; bb_h <= '0; wb_t <= '0;
       w_cnt <= '0; btarget <= '0; bcnt <= '0; bgray <= '0; aerr <= 1'b0;
     end else begin
       // the open burst
@@ -284,8 +310,16 @@ module otpu_f2_hbm_nch #(
       arq_n <= arq_n + 2'(close && !o_we) - 2'(ar_tk);
       if (aw_tk) awq_h <= !awq_h;
       if (ar_tk) arq_h <= !arq_h;
-      // W
-      wf_n <= wf_n + (WDW + 1)'(k_pop && k_we) - (WDW + 1)'(w_tk && w_cnt[0]);
+      // W: the count by +1 / -1 / 0 as one addend (one carry chain behind one LUT level: the
+      // push k_pop && k_we is two levels, the pop w_tk && w_cnt[0] one), its nonzero flag kept
+      // alongside from the count's bits above the lowest (one LUT) and the same push / pop
+      begin
+        logic w_push, w_pop_;
+        w_push = k_pop && k_we;
+        w_pop_ = w_tk && w_cnt[0];
+        wf_n <= wf_n + {{WDW{w_pop_ && !w_push}}, w_push ^ w_pop_};
+        wf_nz <= w_push || (|wf_n[WDW:1]) || (wf_nz && !w_pop_);
+      end
       if (w_tk && w_cnt[0]) wf_h <= wf_h + 1'b1;
       if (w_tk) w_cnt <= m_wlast ? '0 : w_cnt + 1'b1;
       if (aw_tk) wb_t <= wb_t + 1'b1;
@@ -306,7 +340,7 @@ module otpu_f2_hbm_nch #(
   logic [255:0] r_lo, rr_d;
   always_ff @(posedge hclk) begin
     rr_d <= m_rdata;
-    if (hrst) begin r_half <= 1'b0; rr_v <= 1'b0; end
+    if (hrst_q) begin r_half <= 1'b0; rr_v <= 1'b0; end
     else begin
       rr_v <= r_tk;
       if (rr_v) begin
@@ -316,9 +350,9 @@ module otpu_f2_hbm_nch #(
     end
   end
   otpu_afifo #(.W(512), .DEPTH(RD)) u_rq (
-    .wclk(hclk), .wrst(hrst), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
+    .wclk(hclk), .wrst(hrst_q), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
     .wslot('0), .wcommit(), .wused(), .rused(),
-    .rclk(clk), .rrst(rst), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));
+    .rclk(clk), .rrst(rst_q), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));
   assign n_rvalid = xr_v;
   assign n_rdata = xr_d;
 
@@ -328,7 +362,7 @@ module otpu_f2_hbm_nch #(
   logic [15:0] bbin;
   always_comb for (int i = 0; i < 16; i++) bbin[i] = ^(bg2 >> i);
   always_ff @(posedge clk) begin
-    if (rst) begin
+    if (rst_q) begin
       bg1 <= '0; bg2 <= '0; e1 <= 1'b0; e2 <= 1'b0; n_wdone <= '0; n_err <= 1'b0;
     end else begin
       bg1 <= bgray; bg2 <= bg1; e1 <= aerr; e2 <= e1;
@@ -339,11 +373,12 @@ module otpu_f2_hbm_nch #(
   assign wdone_s = n_wdone;
 
 `ifndef SYNTHESIS
-  always_ff @(posedge hclk) if (!hrst) begin
+  always_ff @(posedge hclk) if (!hrst_q) begin
     if (b_tk && bb_n == 0) $fatal(1, "otpu_f2_hbm_nch: B with no write in flight");
     if (k_pop && k_we && !w_room) $fatal(1, "otpu_f2_hbm_nch: W FIFO overflow");
+    if (wf_nz != (wf_n != 0)) $fatal(1, "otpu_f2_hbm_nch: wf_nz %0d, wf_n %0d", wf_nz, wf_n);
   end
-  always_ff @(posedge clk) if (!rst && n_rvalid && rn == 0)
+  always_ff @(posedge clk) if (!rst_q && n_rvalid && rn == 0)
     $fatal(1, "otpu_f2_hbm_nch: read data with no read in flight");
 `endif
 endmodule
