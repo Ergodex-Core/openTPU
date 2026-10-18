@@ -53,6 +53,27 @@ def cases():
     for n in (31,33,63,65,257):
         yield f'frozen_dma_{n}',[I.ld(12,1,n),I.st(16396,1,n),I.halt()]
 
+    for rows,kb,es,dst,rowmode,half in ((1,1,1,8192,True,False),(1,1,256,8194,True,False),(2,2,1,8192,False,False),(3,1,1,8193,True,False),(1,3,1,8192,True,True)):
+        yield f'qst_{rows}_{kb}_{es}_{dst}_{int(rowmode)}_{int(half)}',[fill(0,32*kb,rows),I.qst(0,dst,16384,rows,kb,32*kb,32*kb*es,es,row=rowmode,half=half),I.halt()]
+
+    for m,n,kb in ((1,3,1),(2,3,1),(3,17,2),(4,9,4)):
+        yield f'mxu_rmax_{m}_{n}_{kb}',[fill(0,32*kb,m),I.qact(0,m,0,kb,32*kb),I.mm(0,0,4096,n,kb,32*kb,n,m,0,0,unit=True,rmax=True),I.halt()]
+    for kb in (1,2,4):
+        yield f'mxu_overlap_{kb}',[fill(0,32*kb,2),I.qact(0,2,0,kb,32*kb),I.mm(0,0,4096,17,kb,32*kb,17,2,0,0,unit=True),I.mm(2048,0,4192,17,kb,32*kb,17,2,0,0,unit=True),I.halt()]
+
+    for f in (I.V_SUB,I.V_RSUB,I.V_MAX,I.V_MIN,I.V_COPY,I.V_ABS,I.V_EXP2SUB):
+        yield f'coverage_vop_{f}',[fill(0,128),I.vop(f,4096,0,64,2,19,23,32,32,I.B_FULL),I.halt()]
+    for mode in (I.B_FULL,I.B_ROW,I.B_COL,I.B_SCALAR):
+        yield f'coverage_broadcast_{mode}',[fill(0,128),I.vop(I.V_ADD,4096,1,65,3,19,23,32,1,mode,2),I.halt()]
+    for mode in ('scalar','column','one'):
+        yield f'coverage_outer_{mode}',[fill(0,512),I.outer(256,0,128,64,2,19,32,1,dmode=mode),I.halt()]
+    yield 'coverage_scalar',[I.li(1,2),I.addi(1,1,1),I.loop(1,2),fill(0,8),I.nop(),I.bar(),I.halt()]
+    yield 'coverage_rld',[fill(0,1,1),I.rld(1,0),I.vop(I.V_ADD,64,0,0,1,8,8,8,0,I.B_SCALAR,1),I.halt()]
+    for dup in (False,True):
+        yield f'coverage_qact_scaling_{int(dup)}',[fill(0,512),I.qact(0,2,0,2,64,cscale=256,rscale=384,dup=dup),I.halt()]
+    for wf in (I.W4I,I.W4F,I.WNV):
+        yield f'coverage_packed_{wf}',[fill(0,128),I.qact(0,2,0,2,64),I.mm(0,0,4096,13,2,32,13,2,0,0,unit=True,wf=wf),I.halt()]
+
 
 def parse_trace(log):
     active={}; records=[]

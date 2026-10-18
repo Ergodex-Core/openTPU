@@ -1,0 +1,647 @@
+[
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 585,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 585,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "dma",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 456,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 456,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "contention",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 229,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 229,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "qst",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 228,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 228,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "gemm",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        },
+        "rtl": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5748,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5748,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_0",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        },
+        "rtl": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5750,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5750,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_1",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 5000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        },
+        "rtl": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5752,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5752,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_2",
+    "profile": "native-hbm2-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 1310,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 1310,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "dma",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 456,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 456,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "contention",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 348,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 348,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "qst",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 255,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 255,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "gemm",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        },
+        "rtl": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5783,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5783,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_0",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        },
+        "rtl": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5785,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5785,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_1",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 833,
+      "core": 5000,
+      "memory": 833
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        },
+        "rtl": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 5787,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 5787,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_2",
+    "profile": "native-ddr4-200mhz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 1606,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 1606,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "dma",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 479,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 479,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "contention",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 726,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 726,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "qst",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": null,
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 466,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 466,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "gemm",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        },
+        "rtl": {
+          "cosine": 0.99979730527387,
+          "passed": true,
+          "relative_l2": 0.020373155088889424
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 18319,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 18319,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_0",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        },
+        "rtl": {
+          "cosine": 0.9997845748134054,
+          "passed": true,
+          "relative_l2": 0.020884309088197456
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 18314,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 18314,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_1",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  },
+  {
+    "backend": "ramulator",
+    "clocks_ps": {
+      "controller": 1000,
+      "core": 1000,
+      "memory": 1000
+    },
+    "native_ports": true,
+    "numerical": {
+      "independent_float_reference": {
+        "model": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        },
+        "rtl": {
+          "cosine": 0.999788780049068,
+          "passed": true,
+          "relative_l2": 0.02109902108721265
+        }
+      },
+      "model_vs_isa_bit_exact": true,
+      "rtl_vs_isa_bit_exact": true
+    },
+    "physical_traffic_match": true,
+    "port_arrival_completion_match": true,
+    "predicted_cycles": 18314,
+    "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+    "rtl_cycles": 18314,
+    "same_backend_configuration": true,
+    "timing_passed": true,
+    "trace_match": true,
+    "traffic_multiset_match": true,
+    "name": "tiny_qwen_2",
+    "profile": "native-hbm2-stress-1ghz",
+    "returncode": 0
+  }
+]

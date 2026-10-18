@@ -215,7 +215,8 @@ class DMATask(Task):
                     return n>=self.sim.arch.dma_store_run or (self.produced and n==len(self.rows))
                 yield predicate(ready,'dma_store_gather')
                 if not self.rows: break
-                n=sum(r[0]<=self.sim.cycle for r in self.rows)
+                boundary=self.sim.cycle-(1 if last_request is not None and self.sim.cycle==last_request+1 else 0)
+                n=sum(r[0]<=boundary for r in self.rows)
                 # st_fin/occ observed -> st_wq registered -> first B request.
                 yield pause(1 if last_request is not None and self.sim.cycle==last_request+1 else 2)
                 for _ in range(n):
@@ -223,19 +224,20 @@ class DMATask(Task):
                     ticket=yield mem(addr,amount,True,'B'); tickets.append(ticket)
                     last_request=self.sim.cycle-1
             for ticket in tickets: yield wait(ticket)
+            yield predicate(lambda:self.sim.memory.write_idle,'global_write_drain')
             yield pause(1)  # ackw/wr_idle -> done -> sequencer observation
         else:
             while not self.produced or self.rows:
                 yield predicate(lambda:(self.produced and not self.rows) or (bool(self.rows) and self.rows[0][4].done),'dma_read_response')
                 if not self.rows: break
                 _,_,_,groups,_=self.rows[0]
-                for xs in groups: yield banks(writes=xs,latency=2)  # lb read and TMEM write register
+                for xs in groups: yield banks(writes=xs,latency=3)  # response visibility, lb read, registered TMEM write
                 self.rows.popleft()
 
     def tick(self):
         done=super().tick()
         if self.is_store: return done
-        if done and self.drained is None: self.drained=self.sim.cycle
+        if self.drained is None and all(co.done for co in self.coroutines) and (not self.outputs or self.outputs[-1][0]<=self.sim.cycle+1): self.drained=self.sim.cycle
         return self.drained is not None and self.sim.cycle>=self.drained+2
 
 
@@ -257,37 +259,45 @@ def reduction_tree_latency(lanes):
 class VectorTask(Task):
     def __init__(self,cmd):
         super().__init__(cmd)
-        self.begun=False; self.issue_finished=False; self.payload_done=None
+        self.begun=False; self.begin_cycle=None; self.issue_finished=False; self.payload_done=None
         self.function=(cmd.w[5]>>16)&255
         self.slots=vector_slots(self.function)
         self.coroutines=[Coroutine(self,vector(self))]
 
     def tick(self):
+        if 'vpu_preflight' not in self.sim.resources:
+            self.sim.resources.add('vpu_preflight')
+            active=[c.task for c in self.sim.window if c.unit==self.cmd.unit and c.task is not None]
+            # A denied registered write freezes all instructions, including an older
+            # command whose done is pending but whose own last write already left.
+            denied=any(t.outputs and t.outputs[0][0]<=self.sim.cycle and
+                       not self.sim.banks.grant(writes=t.outputs[0][1],probe=True) for t in active)
+            if denied:
+                for other in active:
+                    other.outputs=deque((due+1,xs) for due,xs in other.outputs)
+                    if other.payload_done is not None:other.payload_done+=1
+                    for co in other.coroutines:
+                        if co.action is not None and co.action.until is not None:co.action.until+=1
+                self.sim.vpu_loop_busy={v+1 if v>=self.sim.cycle else v for v in self.sim.vpu_loop_busy}
+                self.sim.resources.add('vpu_frozen')
+        if 'vpu_frozen' in self.sim.resources:
+            self.cmd.stalls['vpu_pipeline_frozen']+=1
+            return False
         if not self.begun:
             if self.sim.cycle < self.cmd.start+2: return False
             prior=[c.task for c in self.sim.window if c.unit==self.cmd.unit and c.start is not None
                    and c.start < self.cmd.start and c.task is not None]
             if any(not t.begun or not t.issue_finished for t in prior): return False
+            prior.sort(key=lambda t:t.cmd.start)
             live=[t for t in prior if t.payload_done is None or t.payload_done>=self.sim.cycle]
             if any(t.function in I.REDUCE for t in live): return False
             if live and (self.function in I.REDUCE or self.slots < live[-1].slots): return False
-            self.begun=True
-        # With WBUF=0 the TMEM grant freezes the entire VPU, not just its output.
-        # DMA and COLL have already reserved banks in the slice's fixed priority order.
-        if self.outputs and self.outputs[0][0]<=self.sim.cycle and not self.sim.banks.grant(writes=self.outputs[0][1],probe=True):
-            for c in self.sim.window:
-                if c.unit!=self.cmd.unit or c.task is None: continue
-                other=c.task
-                other.outputs=deque((due+1,xs) for due,xs in other.outputs)
-                for co in other.coroutines:
-                    if co.action is not None and co.action.until is not None: co.action.until+=1
-            self.sim.vpu_loop_busy={v+1 if v>=self.sim.cycle else v for v in self.sim.vpu_loop_busy}
-            self.sim.resources.add('vpu_frozen')
-            self.cmd.stalls['vpu_pipeline_frozen']+=1
-            return False
-        if 'vpu_frozen' in self.sim.resources: return False
+            self.begun=True; self.begin_cycle=self.sim.cycle
         drained=super().tick()
-        if drained and self.payload_done is None: self.payload_done=self.sim.cycle
+        # cw_en precedes the registered TMEM tw_en by one cycle. ew_n clears at
+        # the arithmetic tail; sequencer completion still waits through the output register.
+        if self.payload_done is None and all(co.done for co in self.coroutines) and (not self.outputs or self.outputs[-1][0]<=self.sim.cycle+1):
+            self.payload_done=self.sim.cycle
         return self.payload_done is not None and self.sim.cycle>=self.payload_done+2
 
 
@@ -332,14 +342,14 @@ def vector(t):
                 writes=range(w[0]+r*drs,w[0]+r*drs+(2 if f==I.V_ARGMAX else 1)) if chunk==count-1 and not buffered else ()
             if c8 and composite:
                 yield predicate(lambda:t.sim.cycle not in t.sim.vpu_loop_busy,'composite_recirculation')
-            yield banks(reads,writes,latency)
+            yield banks(reads,writes,latency+1)  # registered tw_en after the arithmetic tail
             issued=t.sim.cycle-1
             if c8 and composite:
                 for p in range(1,passes): t.sim.vpu_loop_busy.add(issued+25*p)
             t.cmd.work['elements']+=width
             if buffered and r==rows-1 and chunk==count-1:
                 for k,xs in enumerate(chunks(w[0],rows,cfg.LANES)):
-                    t.outputs.append((issued+latency+1+k,xs))
+                    t.outputs.append((issued+latency+2+k,xs))
     t.issue_finished=True
 
 
@@ -386,53 +396,63 @@ class QuantActTask(Task):
         yield pause(9)  # coroutine resumes one cycle after the final pop
 
 
-def quant(t):
-    w, fl, cfg, a = t.cmd.w, t.cmd.ins.flags, t.sim.cfg, t.sim.arch
-    isact=t.cmd.ins.op==I.QACT
-    rows,kb=(w[1]&255,w[1]>>16) if isact else (w[3]&65535,w[3]>>16)
-    stride=w[2] if isact else w[4]
-    if isact and (rows*(2 if fl&I.F_DUP else 1)>cfg.act_rows or ((w[1]>>8)&255)+kb>cfg.ACT_BLOCKS):
-        raise Unsupported('QACT exceeds ACT RAM capacity')
-    n=kb*cfg.D
-    if (n+cfg.LANES-1)//cfg.LANES > a.quant_row_buffer_chunks:
-        raise Unsupported('quantizer row exceeds configured XD buffer; reread path not implemented')
-    tickets=[]
-    for r in range(rows):
-        for offset in range(0,n,cfg.LANES):
-            reads=list(range(w[0]+r*stride+offset,w[0]+r*stride+min(n,offset+cfg.LANES)))
-            if isact and fl&I.F_CSCALE:
-                reads+=list(range(w[3]+offset,w[3]+min(n,offset+cfg.LANES)))
-            if isact and fl&I.F_RSCALE:
-                reads.append(w[4]+r)
-            yield banks(reads=reads)
-        # Two Newton reciprocal steps and correction: 2*(LM+LA+LM)+2*(LM+LA)+LM = 30.
-        yield pause(30+5+a.tmem_read_latency)
-        if isact:
-            for _ in range((n+cfg.LANES-1)//cfg.LANES):
-                yield banks()  # buffered second pass, quantize/pack into ACT RAM
-            t.cmd.work['packed_activation_bytes'] += n*(2 if fl&I.F_DUP else 1)
-        else:
-            nw=n//2 if fl&I.F_HALF else n
-            # Port SW byte stores; coalescing is deliberately absent, worst-case RMW adapter.
-            for c in range(nw):
-                ticket=yield mem(w[1]+r*w[5]+c*w[6],1,True,'SW')
-                tickets.append(ticket)
-                if len(tickets)>=a.result_queue:
-                    yield wait(tickets.pop(0))
-            sb=4 if fl&I.F_ROW else 4*(1+(kb+3)//4)
-            for off in range(0,sb,4):
-                ticket=yield mem(w[2]+r*sb+off,4,True,'SW')
-                tickets.append(ticket)
-    for ticket in tickets:
-        yield wait(ticket)
+class QuantStoreTask(Task):
+    """Unbuffered two-pass QST: scale writes precede the second TMEM read pass."""
+    def __init__(self,cmd):
+        super().__init__(cmd)
+        self.writes=deque(); self.produced=False; self.tickets=[]; self.ack_cycle=None
+        self.coroutines=[Coroutine(self,self.scan())]
+
+    def accepts_next(self):
+        return self.ack_cycle is not None and self.sim.cycle>self.ack_cycle
+
+    def scan(self):
+        w,fl,cfg=self.cmd.w,self.cmd.ins.flags,self.sim.cfg
+        rows,kb=w[3]&65535,w[3]>>16; n=kb*cfg.D
+        sw=4 if fl&I.F_ROW else 4*(1+(kb+3)//4)
+        yield pause(2)
+        for row in range(rows):
+            src=w[0]+row*w[4]; dst=w[1]+row*w[5]
+            for xs in chunks(src,n,cfg.LANES): yield banks(reads=xs)
+            # Last pass-0 read -> read2 + QL5 + max2 + qscale32 + scale phase1.
+            yield pause(41)  # coroutine resumes one cycle after the last read
+            for off in range(0,sw,4):
+                ticket=yield mem(w[2]+row*sw+off,4,True,'SW'); self.tickets.append(ticket)
+            nw=n//2 if fl&I.F_ROW and fl&I.F_HALF else n
+            width=4 if w[6]==1 and dst%4==0 else 1
+            for off in range(0,nw,width):
+                yield banks(reads=range(src+off,src+off+min(width,nw-off)))
+                # Unbuffered writer: read2 + QL5 + selection1 + multiply2 + q8two.
+                self.writes.append((self.sim.cycle-1+12,dst+off*w[6],min(width,nw-off)))
+        self.produced=True
+
+    def tick(self):
+        if self.writes and self.writes[0][0]<=self.sim.cycle:
+            _,addr,size=self.writes[0]
+            if not self.sim.memory.can_request(addr,size,True,'SW'):
+                # otpu_quant en/gnt freezes reader, scale and writer pipelines together.
+                self.writes=deque((due+1,a,n) for due,a,n in self.writes)
+                for co in self.coroutines:
+                    if co.action is not None and co.action.until is not None:co.action.until+=1
+                self.cmd.stalls['quant_output_frozen']+=1
+                return False
+            ticket=self.sim.memory.request(addr,size,True,'SW',self.cmd.id)
+            assert ticket is not None
+            self.tickets.append(ticket);self.writes.popleft()
+        for co in self.coroutines:co.tick()
+        self.cmd.work['peak_qst_pipeline']=max(self.cmd.work['peak_qst_pipeline'],len(self.writes))
+        if self.produced and not self.writes and all(t.done for t in self.tickets) and self.sim.memory.write_idle:
+            if self.ack_cycle is None:self.ack_cycle=self.sim.cycle
+        return self.ack_cycle is not None and self.sim.cycle>=self.ack_cycle+2
 
 
 def collective(t):
     if t.cmd.ins.op==I.RLD:
+        yield pause(2)  # command capture and rl_pend/rl_pq before TMEM read
         yield banks(reads=[t.cmd.w[0]])
         yield pause(t.sim.arch.tmem_read_latency+3)
     else:
-        yield pause(1)
+        yield pause(3)  # coll_req register, singleton acknowledge, sequencer observation
 
 
 @dataclass
@@ -442,8 +462,8 @@ class Row:
     tickets: list = field(default_factory=list)
     issued: bool = False
 
-    def ready(self):
-        return self.issued and all(t.done for t in self.tickets)
+    def ready(self,cycle):
+        return self.issued and all(t.done and cycle>=t.complete_cycle+delay for t,delay in self.tickets)
 
 
 class MatrixTask(Task):
@@ -457,13 +477,31 @@ class MatrixTask(Task):
             raise Unsupported('PAIR requires packed weights and 2*M <= MCOLS')
         self.rows=deque()
         self.used=0
-        self.results=deque(); self.compute_done=False; self.prefetch_done=False
+        self.results=deque(); self.compute_done=False; self.prefetch_done=False; self.prefetch_end=None
         self.drained=None
         self.coroutines=[Coroutine(self,self.prefetch()),Coroutine(self,self.consume()),Coroutine(self,self.drain())]
 
+    def tick(self):
+        if getattr(self.sim,'capture_micro',False):
+            self.sim.micro_events.append({'cycle':self.sim.cycle,'id':self.cmd.id,'out':self.cmd.w[2],
+             'output':list(self.outputs[0]) if self.outputs else None,
+             'row_ready':bool(self.rows) and self.rows[0].ready(self.sim.memory_offset+self.sim.cycle),
+             'compute_action':self.coroutines[1].action.kind if self.coroutines[1].action else None,
+             'result':self.results[0] if self.results else None,
+             'drain_action':self.coroutines[2].action.kind if self.coroutines[2].action else None})
+        if self.outputs and self.outputs[0][0]<=self.sim.cycle and not self.sim.banks.grant(writes=self.outputs[0][1],probe=True):
+            # t_gnt freezes the epilogue and FIFO drain, while the array and issuer continue.
+            self.outputs=deque((due+1,xs) for due,xs in self.outputs)
+            co=self.coroutines[2]
+            if co.action is not None and co.action.until is not None:co.action.until+=1
+            self.cmd.stalls['mxu_epilogue_frozen']+=1
+            for co in self.coroutines[:2]:co.tick()
+            return False
+        return super().tick()
+
     def prefetch(self):
         w,fl,cfg=self.cmd.w,self.cmd.ins.flags,self.sim.cfg
-        yield pause(2)  # start latch followed by i_ini address setup
+        yield pause(3)  # sequencer start pulse -> command latch -> i_ini address setup
         sw_from_previous=False
         for n in range(self.n):
             packed=self.kb*cfg.D if self.wf==I.W8 else (self.kb*cfg.D+1)//2
@@ -474,7 +512,7 @@ class MatrixTask(Task):
             offset,sz=(4,1) if self.wf==I.W8 else (16,8) if self.wf==I.WNV else (8,4)
             first_scale=base+offset+self.k0*sz
             if not fl&I.F_UNIT and not fl&I.F_RSC and not sw_from_previous and base//32!=first_scale//32:
-                row.tickets.append((yield mem(base//32*32,32,False,'A')))
+                row.tickets.append(((yield mem(base//32*32,32,False,'A')),2 if self.sim.memcfg.native_ports else 1))
             for k in range(0,self.kb,2 if self.pair else 1):
                 need_b=self.wf==I.W8 or self.pair or k%2==0
                 requests=[]
@@ -484,11 +522,14 @@ class MatrixTask(Task):
                 scale=base if fl&I.F_RSC else base+offset+(self.k0+k)*sz
                 if not fl&I.F_UNIT and (not fl&I.F_RSC or need_b):
                     requests.append((scale//32*32,32,False,'A'))
-                if requests: row.tickets.extend((yield Action('memory_pair',value=requests)))
+                if requests:
+                    tickets=yield Action('memory_pair',value=requests)
+                    # B response -> FIFO count; A additionally registers line/tag before scale count.
+                    row.tickets.extend((ticket,2 if request[3]=='A' and self.sim.memcfg.native_ports else 1) for ticket,request in zip(tickets,requests))
                 else: yield pause(1)
             sw_from_previous=scale//32==(base+w[6])//32
             row.issued=True
-        self.prefetch_done=True
+        self.prefetch_done=True; self.prefetch_end=self.sim.cycle
 
     def consume(self):
         cfg,a,w,fl=self.sim.cfg,self.sim.arch,self.cmd.w,self.cmd.ins.flags
@@ -499,8 +540,12 @@ class MatrixTask(Task):
         el=a.mxu_epilogue_lanes or max(1,cfg.MCOLS//2)
         yield predicate(lambda:self.cmd.release is not None,'activation_dependency')
         yield pause(2)  # release register and active-head/ACT read setup
+        older=[c.task for c in self.sim.window if c.unit==self.cmd.unit and c.id<self.cmd.id and c.task is not None]
+        if older:
+            yield predicate(lambda:all(t.compute_done for t in older),'mxu_pop_head')
+            yield pause(1)  # c_left==0 -> pn/pop_q register before the next command advances
         for n in range(self.n):
-            yield predicate(lambda:bool(self.rows) and self.rows[0].ready(),'mxu_weight_starvation')
+            yield predicate(lambda:bool(self.rows) and self.rows[0].ready(self.sim.memory_offset+self.sim.cycle),'mxu_weight_starvation')
             yield predicate(lambda:len(self.results)<a.mxu_result_rows,'mxu_result_full')
             for rg in range(replay):
                 useful=min(cfg.MCOLS,self.m-rg*cfg.MCOLS)
@@ -515,6 +560,8 @@ class MatrixTask(Task):
     def drain(self):
         cfg,a,w,fl=self.sim.cfg,self.sim.arch,self.cmd.w,self.cmd.ins.flags
         ors=w[5]&65535; el=a.mxu_epilogue_lanes or max(1,cfg.MCOLS//2)
+        older=[c for c in self.sim.window if c.unit==self.cmd.unit and c.id<self.cmd.id]
+        yield predicate(lambda:all(c.end is not None for c in older),'mxu_drain_head')
         while not self.compute_done or self.results:
             yield predicate(lambda:self.compute_done and not self.results or bool(self.results) and self.results[0][0]<=self.sim.cycle,'mxu_array_fill')
             if not self.results: break
@@ -527,7 +574,7 @@ class MatrixTask(Task):
                     yield banks(reads,group,9+(9 if fl&I.F_ACC else 0))
         yield predicate(lambda:not self.outputs,'mxu_epilogue_drain')
         if fl&I.F_RMAX:
-            yield pause(4)
+            yield pause(2)  # registered rx compare followed by mx_q
             for group in scattered([w[2]+self.m*ors+r for r in range(self.m)],cfg.LANES):
                 yield banks(writes=group)
         yield pause(2)  # c_drained -> done -> sequencer completion
@@ -538,9 +585,11 @@ def make_task(cmd):
         return DMATask(cmd)
     if cmd.ins.op==I.QACT:
         return QuantActTask(cmd)
+    if cmd.ins.op==I.QST:
+        return QuantStoreTask(cmd)
     if cmd.ins.op==I.MM:
         return MatrixTask(cmd)
     if cmd.ins.op==I.VOP:
         return VectorTask(cmd)
-    generators={I.VOP:vector,I.QACT:quant,I.QST:quant,I.RLD:collective,I.BAR:collective}
+    generators={I.RLD:collective,I.BAR:collective}
     return SequentialTask(cmd,generators[cmd.ins.op])

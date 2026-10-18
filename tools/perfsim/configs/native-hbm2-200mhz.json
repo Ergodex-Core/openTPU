@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "native-hbm2-200mhz",
+  "description": "Shared native A/B/SW port controller profile for independent RTL and simulator comparison; core clock is assumed, not achieved Fmax.",
+  "architecture": {
+    "core_period_ps": 5000
+  },
+  "memory": {
+    "backend": "ramulator",
+    "controller_period_ps": 1000,
+    "memory_period_ps": 1000,
+    "transaction_bytes": 16,
+    "outstanding": 64,
+    "ramulator_config": "hbm2.yaml",
+    "bridge": "../../../build/perfsim/bridge/libopentpu_ramulator.dylib",
+    "native_ports": true
+  }
+}

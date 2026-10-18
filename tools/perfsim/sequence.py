@@ -9,7 +9,7 @@ ROOT=Path(__file__).resolve().parents[2]
 sys.path.insert(0,str(ROOT))
 import numpy as np
 from opentpu.perfsim import Simulator,Architecture,MemoryConfig
-from opentpu.perfsim.memory import MemorySystem
+from opentpu.perfsim.ports import make_memory
 from opentpu.perfsim.io import load_bundle,manifest,state_hash,write_json,digest
 from opentpu.isasim import Machine
 
@@ -28,7 +28,7 @@ def main():
     for k in ('bridge','ramulator_config'):
         if mc.get(k): mc[k]=str((path.parent/mc[k]).resolve())
     if a.bridge: mc['bridge']=str(Path(a.bridge).resolve())
-    arch=Architecture(**profile.get('architecture',{})); mem=MemorySystem(MemoryConfig(**mc))
+    arch=Architecture(**profile.get('architecture',{})); mem=make_memory(MemoryConfig(**mc))
     base=Path(a.bundles); seq=json.loads((base/'sequence.json').read_text())
     inputs=[path,base/'sequence.json']
     stages=[]; previous=None; golden_previous=None
@@ -39,7 +39,7 @@ def main():
             if previous is not None:
                 seed=previous.copy()
                 for addr,n in md['host_inputs']: seed[addr:addr+n]=image[addr:addr+n]
-            sim=Simulator(cfg,prog,seed,architecture=arch,memory_system=mem,args=obj.get('args'))
+            sim=Simulator(cfg,prog,seed,architecture=arch,memory_system=mem,args=obj.get('args'),labels=obj.get('labels'))
             result=sim.run()
             golden=Machine(cfg,[prog],[seed],obj.get('args')).run().slices[0]
             exact=state_hash(sim.state)==state_hash(golden)

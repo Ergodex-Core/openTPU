@@ -10,7 +10,7 @@ import time
 from .. import isa as I, waits as W
 from ..isasim import Slice
 from .config import Architecture, MemoryConfig, Unsupported
-from .memory import MemorySystem
+from .ports import make_memory
 
 
 class Banks:
@@ -46,7 +46,12 @@ class Command:
         self.stalls, self.work = Counter(), Counter()
         self.task = None
         self.deps, self.dram_deps = [], []
+        self.loop_context=[{'start_pc':lo,'end_pc':hi,'iteration':sim.loop_counts[lo]-remaining}
+                           for lo,hi,remaining in sim.state.stack]
         self.label = sim.labels.get(pc, ins.comment or I.OPNAMES[ins.op])
+        if '{iteration}' in self.label:
+            if not self.loop_context:raise Unsupported('iteration label requires an enclosing LOOP')
+            self.label=self.label.replace('{iteration}',str(self.loop_context[-1]['iteration']))
 
     def complete(self):
         sl = self.sim.state
@@ -61,7 +66,7 @@ class Command:
         self.end = self.sim.cycle
 
     def record(self):
-        return dict(id=self.id, pc=self.pc, opcode=I.OPNAMES[self.ins.op], unit=self.unit,
+        return dict(id=self.id, pc=self.pc, loop_context=self.loop_context, opcode=I.OPNAMES[self.ins.op], unit=self.unit,
                     label=self.label, dispatch=self.dispatch, start=self.start,
                     release=self.release, end=self.end,
                     cycles=self.end - self.dispatch if self.end is not None else None,
@@ -78,7 +83,8 @@ class Simulator:
         if self.memcfg.backend=='rtl_fixed' and self.memcfg.transaction_bytes!=cfg.D:
             raise Unsupported('rtl_fixed port B transaction_bytes must equal D')
         self.program = program
-        self.labels = labels or {}
+        self.labels = {int(k):v for k,v in (labels or {}).items()}
+        self.loop_counts = {}
         if len(program)*8 > cfg.IMEM_WORDS:
             raise ValueError('program exceeds IMEM')
         self._validate_program()
@@ -87,7 +93,7 @@ class Simulator:
             if n >= 8:
                 raise ValueError('at most eight runtime arguments')
             self.state.R[n+8] = I.u32(v)
-        self.memory = memory_system or MemorySystem(self.memcfg)
+        self.memory = memory_system or make_memory(self.memcfg)
         self.owns_memory = memory_system is None
         self.memory_offset = self.memory.cycle+1
         self.owner_base = self.memory.next_owner
@@ -144,7 +150,7 @@ class Simulator:
                 self.stalls['window_full'] += 1
         if self.halt_seen or self.cycle < self.next_dispatch:
             return
-        if self.rld_pending is not None and self.rld_pending.end is None:
+        if self.rld_pending is not None and (self.rld_pending.end is None or self.rld_pending.end>=self.cycle):
             self.stalls['scalar_dependency'] += 1
             return
         if len(self.pipeline)>=4:
@@ -158,6 +164,7 @@ class Simulator:
         if ins.op==I.HALT:
             self.halt_seen=True; self.halt_cycle=self.cycle
         elif ins.op in (I.NOP,I.LI,I.ADDI,I.LOOP):
+            if ins.op==I.LOOP:self.loop_counts[sl.pc+1]=(sl.reg(ins.ra)+ins.w[1])&0xffffffff
             sl.step()
             if ins.op==I.LOOP: self.next_dispatch+=1  # loop count/stack setup has two R cycles
         else:
@@ -176,7 +183,7 @@ class Simulator:
                 self.banks.reset()
                 self.resources.clear()
                 self.retired_this_cycle=0
-                for cmd in sorted(self.window,key=lambda c:({W.U_DMA:0,W.U_COLL:1,W.U_VPU:2,W.U_MXU:3,W.U_Q:4}[c.unit], c.id)):
+                for cmd in sorted(self.window,key=lambda c:({W.U_DMA:0,W.U_COLL:1,W.U_VPU:2,W.U_MXU:3,W.U_Q:4}[c.unit], (0,c.start) if c.unit==W.U_VPU and c.task is not None else (1,c.id))):
                     ready = all((cmd.unit==W.U_MXU and d.unit==cmd.unit and d.task is not None) or (d.end is not None and d.end < self.cycle) for d in cmd.deps)
                     if ready and cmd.release is None:
                         cmd.release = self.cycle
@@ -189,11 +196,13 @@ class Simulator:
                         # In-order units cannot pass an older unstarted command; VPU oldest ready can.
                         if cmd.unit==W.U_DMA:
                             active=[x for x in active if not x.task.accepts_next()]
-                        if cmd.unit==W.U_MXU and any(not x.task.prefetch_done for x in active):
+                        if cmd.unit==W.U_Q:
+                            active=[x for x in active if not (hasattr(x.task,'accepts_next') and x.task.accepts_next())]
+                        if cmd.unit==W.U_MXU and any(x.task.prefetch_end is None or x.task.prefetch_end>self.cycle for x in active):
                             cmd.stalls['mxu_issuer_busy']+=1
                             continue
                         if cmd.unit == W.U_VPU:
-                            active=[x for x in active if not x.task.begun]
+                            active=[x for x in active if x.task.begin_cycle is None or x.task.begin_cycle>=self.cycle]
                             capacity=2  # actual cq[2], distinct from in-flight arithmetic
                         if self.cycle < self.last_start.get(cmd.unit,-2)+2 or len(active) >= capacity or (cmd.unit in (W.U_MXU,W.U_COLL) and any(x.task is None for x in older_unit)):
                             cmd.stalls['unit_queue'] += 1

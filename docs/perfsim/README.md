@@ -8,7 +8,7 @@ ISA golden model, FPGA workloads, `tools/hwloop/lpn` and its validation registry
 
 This implementation is a starting point toward the requested fully validated simulator.
 It does **not** establish pretrained full-model timing accuracy, hardware Fmax or physical fit.
-See [architecture and limitations](architecture.md) and [current validation](validation-round2.md) and [preserved initial evidence](validation.md).
+See [architecture and limitations](architecture.md) and [current validation](validation-round3.md) and [round-two history](validation-round2.md) and [preserved initial evidence](validation.md).
 
 ## Quick start
 
@@ -73,9 +73,7 @@ architecture fields (including wide-model-only `PORTB`, `ROWLANES` or `T2`) are 
 The implementation targets this branch's actual RTL/Config, not an invented wide-port target.
 
 Optional `labels` maps static PCs to layer/region names. Without it, compiler comments name
-regions. Repeated loop visits are aggregated by that name: to distinguish repeated model layers,
-provide a suitably unrolled program or extend label mapping with dynamic loop context. Reported
-region spans are not a claim that source comments identify every semantic layer automatically.
+regions. A label containing `{iteration}` expands to the innermost LOOP iteration (zero based); every command also records its loop context. The bounded Qwen example labels its two decoder layers separately from the final norm/head. Region spans can overlap because the sequencer overlaps layers; they are not additive wall time.
 
 The boundary starts with the program resident and the core beginning the run; it ends after
 HALT, outstanding commands and writes have drained. It excludes loading weights/programs,
@@ -114,6 +112,36 @@ python tools/perfsim/timing_suite.py --executable /path/to/Vtb_top \
   --memory rtl_fixed --compiled
 ```
 
-This writes raw RTL traces, actual input bundles, output hashes, simulator metrics, per-instruction comparisons and content-addressed manifests. Exit 2 means the exact trace/cycle gate failed; it is expected for the current tiny-model cases. Exit 1 means a numeric or execution failure. The ±5% aggregate-cycle check is recorded separately and cannot override the exact gate. Golden RTL, its counters and measurement boundaries are unchanged. Frozen RTL observations in `tests/perfsim/fixtures` are replayed by ordinary pytest; they do not run Verilator and are not new RTL measurements.
+This writes raw RTL traces, actual input bundles, output hashes, simulator metrics, per-instruction comparisons and content-addressed manifests. Exit 2 means the exact trace/cycle gate failed; all 112 current fixed-memory cases pass. Exit 1 means a numeric or execution failure. The ±5% aggregate-cycle check is recorded separately and cannot override the exact gate. Golden RTL, its counters and measurement boundaries are unchanged. Frozen RTL observations in `tests/perfsim/fixtures` are replayed by ordinary pytest; they do not run Verilator and are not new RTL measurements.
 
 On hosts with file-provider stalls in synced Documents folders, use a disposable **non-synced** directory for both the pinned Ramulator checkout and build, for example `--source /tmp/opentpu-ramulator --build /tmp/opentpu-bridge`. Upstream Ramulator places its library in its source tree, so moving only the build directory is insufficient. Populate all pinned dependencies (or explicitly use `--fetch`), then run the same build command. The round-two receipt records a successful offline build and repeat build on macOS ARM64, followed by tests against that exact library. No system installation is needed.
+
+## Closed-loop RTL / Ramulator validation
+
+The isolated harness derives a new top and testbench in its build directory. It preserves
+original compute RTL, instruction traces, counter/reset/dump boundaries and golden files.
+Only the external-memory boundary is replaced by a DPI adapter to the **same** Python
+native-port controller and pinned Ramulator bridge used by the simulator. Each run generates
+its own requests; no trace replay, arrival forcing or average-channel-rate calibration occurs.
+These results validate the documented shared controller contract, not the FPGA AXI shell.
+
+```sh
+python tools/perfsim/build_rtl_ramulator.py --bundle build/perfsim/bundles/compute \
+  --out /tmp/opentpu-rtl-native
+python tools/perfsim/compare_native.py --bundle build/perfsim/bundles/tiny_qwen_0 \
+  --profile tools/perfsim/configs/native-hbm2-200mhz.json \
+  --bridge /path/to/libopentpu_ramulator.dylib \
+  --executable /tmp/opentpu-rtl-native/obj/Vtb_perfsim --out /tmp/opentpu-native-check
+```
+
+`native-ddr4-200mhz.json` selects DDR4; `native-hbm2-stress-1ghz.json` limits outstanding
+transactions to eight at a hypothetical 1 GHz core. `--micro-trace` records diagnostic unit
+signals from the derived top. The strict gate checks every D/S/E event, total cycles, per-port
+accepted-address/size/write sequence and acceptance/completion cycle, plus physical traffic.
+Numerical checks have a separate verdict; available independent NumPy logits must pass too.
+The harness explicitly rejects non-contiguous native masks and supports S=1, D<=128.
+
+A standalone stage starts with a cold Ramulator controller. `sequence.py` instead preserves
+controller and KV state across launches. Its persistent sequence timing remains a prediction
+until compared with a correspondingly persistent RTL harness; summing cold-stage RTL times
+is not a substitute. Use the native profiles explicitly for this registered-port contract.

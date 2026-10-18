@@ -34,12 +34,12 @@ cover arithmetic. Sharing ISA arithmetic is explicitly **not** an independent nu
 | Unit | Implemented behaviour | RTL reference and remaining approximation |
 |---|---|---|
 | Issue | finite window; control/register/loop handling; range conflicts; separate MM stream dependencies; 2-entry MXU queue | `rtl/seq/otpu_seq.sv`, `opentpu/waits.py`. Four-stage footprint pipeline, registered unit starts and drained HALT boundary; alternate WAITC issue is unsupported |
-| MXU | actual D-byte block stream, row-gated consumption, finite prefetch FIFO, scale-line requests, ACT row replay, int8/int4/fp4/nvfp4 packing, PAIR, partial M/N and KB; result FIFO/drain, ACC/ASCALE/RMAX | `rtl/mxu/otpu_mxu.sv`: CLS=min(D/8,CL), LROW=CLS+MCOLS+5, epilogue lanes default MCOLS/2. Independent prefetch, array advance and result drain pipelines; LROW followed by S0/row/FIFO stages, nine-cycle conversion/scaling epilogue. Coupled A/B requests are atomic, A is fetched on each scale advance, and an active issuer blocks the next command. Row-gated response readiness, result-credit lifetime, overlapping commands and ACC/ASCALE/RMAX remain approximations |
+| MXU | actual D-byte block stream, row-gated consumption, finite prefetch FIFO, scale-line requests, ACT row replay, int8/int4/fp4/nvfp4 packing, PAIR, partial M/N and KB; result FIFO/drain, ACC/ASCALE/RMAX | `rtl/mxu/otpu_mxu.sv`: CLS=min(D/8,CL), LROW=CLS+MCOLS+5, epilogue lanes default MCOLS/2. Independent prefetch, array advance and result drain pipelines; LROW followed by S0/row/FIFO stages, nine-cycle conversion/scaling epilogue. Coupled A/B requests are atomic, A is fetched on each scale advance, and an active issuer blocks the next command. B response FIFO visibility takes one additional core edge; native A line/tag plus scale-count visibility takes two. Next-head pop and serialized drain, including epilogue freeze, are explicit. PAIR/alternate scaling variants and other geometries remain incompletely validated |
 | VPU | all current arithmetic/copy/fill/nonlinear/reduction/OUTER functions, broadcast addressing, masked partial lanes, 64-partial reduction tail, buffered pipeline writes | `rtl/vpu/otpu_vpu.sv`: LM=2, LA=4, SL=7; ADD/MUL/OUTER 1 slot, EXP2/EXP2SUB 9, RECIP 6, RSQRT/LOG2 10. Default C8 composite path uses eight lanes and 25-cycle recirculation passes (HAS_DSTEP defaults on even without DSTEP opcodes). Two-entry command queue, arithmetic latency ordering, padded reduction streams, RTL folding-tree latency and pipeline freeze on denied output writes. Cross-command read arbitration and non-C8 configurations lack matched timing coverage |
-| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. QACT overlaps four row banks with finite chunk credits, scale readiness and ACT packing. Overflow reread path is rejected. QST still uses a serial row/byte-store approximation and is a known compiled-model timing gap |
+| Quantizer | row-buffer capacity, max/prescale read pass, reciprocal/Newton latency, second ACT pack pass, QACT DUP/ROW/CSCALE/RSCALE; QST ROW/HALF/strided bytes and scale writes | `rtl/vpu/otpu_quant.sv`: LM=2, LA=4, QL=5, reciprocal tail=30. QACT overlaps four row banks with finite chunk credits, scale readiness and ACT packing. Overflow reread path is rejected. QST is an unbuffered two-pass path: full-row max reads, scale records first, a second TMEM read pass, then four-byte writes only for aligned ES=1 (otherwise byte writes). A denied SW write freezes its finite 12-stage reader/writer pipeline. QST readiness may precede sequencer completion |
 | DMA | D-chunk boundaries, lane gathering/scattering, finite gathered chunk, port-B sharing and read/write completion | `rtl/dma/otpu_dma.sv`. Independent request/gather and completion/drain paths, 128-chunk buffer, store run threshold 32 and pipeline stages; tested aligned/unaligned transfers, partial chunks and long runs |
 | TMEM | modulo banking, independent configurable read/write capacity, address-specific contention, pipeline drain stalls | `rtl/mem/otpu_tmem.sv`. Abstract bank model; replicated-port guests, subbank/hash/pump and WBUF variants are not implemented; only the tested default topology is validated |
-| Memory adapter | real addresses/transactions, finite occupancy, per-line RMW ordering, callback completion, explicit clocks | Deliberately a documented abstract adapter, not cycle-exact `otpu_native_dram`/F2 shell. QST byte writes currently incur individual RMW traffic rather than the hardware's possible write combining; results can be pessimistic |
+| Memory adapter | real addresses/transactions, finite occupancy, per-line RMW ordering, callback completion, explicit clocks | Deliberately a documented abstract adapter, not cycle-exact `otpu_native_dram`/F2 shell. Partial QST writes incur explicit per-request RMW rather than undocumented shell combining; this adapter contract is identical on both sides of native RTL comparisons |
 
 MXU counters count actual useful `M*N*KB*D` work and packed weight traffic; zero values do not
 change those counts. K is block-granular in the ISA: compiler zero padding remains real work.
@@ -64,7 +64,7 @@ The supplied HBM2 profile selects upstream `HBM2_8Gb`, 8 channels, `channel_widt
 **This pinned upstream HBM2 implementation reports 16 bytes/transaction** (prefetch=2,
 channel width=64); the bridge reads and checks this value. Do not reinterpret its bandwidth
 as a measured JEDEC device/F2 subsystem. DDR4 selects two channels of `DDR4_8Gb_x8`, one rank,
-`DDR4_2400R`, tCK=833 ps, 64 bytes/transaction. Only these supplied presets have smoke tests.
+`DDR4_2400R`, tCK=833 ps, 64 bytes/transaction. Only these supplied presets have matched closed-loop RTL tests.
 Other Ramulator standards are not claimed supported merely because upstream contains them.
 
 The upstream Generic controller lacks write callbacks. `prepare.py` adds a callback on write
@@ -93,3 +93,26 @@ additive wall-time buckets. Region `span_cycles` includes waits and can overlap 
 `rtl_fixed` models the existing `otpu_dram` AXI=0 contract for identical RTL-program comparisons. It must be explicitly selected; it is never substituted for Ramulator. Core/controller/memory periods must agree, `transaction_bytes` must equal D, and `rmw` must be false. B uses D-byte physical transfers, A reads 32-byte scale lines, and SW writes four physical bytes with native masks. Local requests are registered before the DRAM edge; read tickets become unit-visible at local-request cycle + DRAM_LAT + 2, writes at +2. Each port accepts at most once per core cycle. This behavioral memory has no controller queue or channel-contention model. Its pending response pipeline follows DRAM_LAT, not the generic adapter's outstanding setting. It does not model DDR/HBM or the FPGA shell.
 
 The matching receipts use D=32, LANES=8, MCOLS=4, RPB=32, WPB=1, WIN=16 and DRAM_LAT=8. Exact results for this subset do not establish all supported parameter combinations. The legacy `vpu_slots` field accepts only its default (10); arithmetic paths are fixed and the actual command queue depth is two. Non-default C8 lane widths and TMEM read latencies are rejected. `dma_buffer_chunks` and `dma_store_run` are explicit capacities; overrides are design experiments until compared against corresponding RTL parameters.
+
+## Registered native-port contract (`memory.native_ports=true`)
+
+`ports.py` adds one elastic request register per A/B/SW port and one input register for
+B read responses. `PortController` accepts B, A, then SW subject to finite adapter capacity,
+returns reads in per-port acceptance order (at most one response per port per core edge),
+and drains write completions into global write-idle. The same class runs inside the RTL DPI
+driver. Scale addresses align to 32-byte lines. Native accepted byte masks must be contiguous.
+No outstanding capacity or backend rejection is bypassed; the deterministic simple backend
+uses the same controller when selected explicitly. `native_ports=false` retains the original
+abstract core-facing adapter for historical receipts and experiments.
+
+VPU and DMA bank writes include their registered TMEM outputs. VPU arithmetic-tail readiness
+is distinct from physical write and sequencer completion; a denied output freezes all active
+VPU arithmetic and pending done state. DMA store-run lengths snapshot the registered buffer
+occupancy before the next producer update. BAR takes the singleton request/ack sequence;
+RLD includes pending-read, conversion, multiply and scalar writeback stages. These details are
+necessary even when total cycles accidentally agree without them.
+
+Memory timestamps are global across launches; unit-local comparisons add the launch offset.
+A dedicated persistent-launch regression guards against comparing local core cycles with
+absolute memory completion cycles. Persistent-controller sequence timing is not yet measured
+against a persistent RTL process.

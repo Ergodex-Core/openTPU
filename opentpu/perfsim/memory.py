@@ -126,6 +126,16 @@ class MemorySystem:
         if self.cfg.record_trace:
             self.trace.append(event)
 
+    def can_request(self,addr,size,write,port):
+        if port in self.ports:return False
+        if self.cfg.backend=='rtl_fixed':return True
+        tx=self.cfg.transaction_bytes;count=(addr%tx+size+tx-1)//tx
+        return len(self.queue)+len(self.inflight)+count<=self.cfg.outstanding
+
+    @property
+    def write_idle(self):
+        return not any(r[5] for r in self.fixed_pending) and not any(t.write or t.rmw_write for t in [*self.queue,*self.inflight.values()])
+
     def request_many(self, requests, owner):
         """Atomically accept the coupled A/B ports of one MXU advance."""
         if any(size<=0 or addr<0 for addr,size,write,port in requests):

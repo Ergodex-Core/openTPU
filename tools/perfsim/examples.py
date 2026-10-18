@@ -70,7 +70,11 @@ def main():
             data=np.ascontiguousarray(value,np.float32).view(np.uint8).ravel()
             dram[img.io[key]:img.io[key]+len(data)]=data
         progs=img.compile_step(pos)
-        labels={pc:'decoder' if ins.op!=I.HALT else 'halt' for pc,ins in enumerate(progs[0])}
+        loops=[(pc,pc+ins.w[0]) for pc,ins in enumerate(progs[0]) if ins.op==I.LOOP]
+        assert len(loops)==1 and progs[0][loops[0][0]].w[1]==spec.layers
+        lo,hi=loops[0]
+        labels={pc:('decoder.layer_{iteration}' if lo<pc<=hi else 'final_norm_head' if pc>hi else 'input')
+                for pc,ins in enumerate(progs[0])}
         save_bundle(out/f'tiny_qwen_{pos}',cfg,progs[0],dram,labels=labels,
                     metadata={'case':'tiny random full Qwen3 topology','spec':asdict(spec),'seed':20261019,
                               'position':pos,'token':tok,'phase':'prefill' if pos<2 else 'decode',

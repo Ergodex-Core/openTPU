@@ -70,12 +70,13 @@ class MemoryConfig:
     ramulator_config: str = ''
     rmw: bool = True
     record_trace: bool = False
+    native_ports: bool = False
 
     def validate(self):
         if self.backend not in ('simple', 'ramulator', 'rtl_fixed'):
             raise Unsupported(f'unknown memory backend {self.backend}')
         for k, v in asdict(self).items():
-            if k in ('backend', 'bridge', 'ramulator_config', 'rmw', 'record_trace'):
+            if k in ('backend', 'bridge', 'ramulator_config', 'rmw', 'record_trace', 'native_ports'):
                 continue
             if not isinstance(v, int) or v <= 0:
                 raise ValueError(f'{k} must be a positive integer')
