@@ -37,6 +37,7 @@ Rules of the loop (the user's):
 | ISA cost model / profile of a run | `opentpu/profile.py` (`Profile`, `parse`, `ddr3_plusargs`) | main; the per-unit busy, phases, MXU gaps |
 | RTL timing run of one decode token with real weights, the board's memory path | `tools/perf_qwen.py` (`--json`, `--plus +nat_trace=FILE`, `--check` against the ISA simulator) | branches f2-hbm / wide-port / ternary-bonsai (not on main) |
 | Verilator build / run | `opentpu/rtlsim.py` (`MEMORY`: `OTPU_LAT`, `OTPU_NCH`, `OTPU_STALL`, `OTPU_BW`, `OTPU_LDC`) | main (NCH on the F2 branches) |
+| ArcSim build / run (Ergodex's arcilator-based simulator; the same testbench and memory models, a second tier beside Verilator) | `opentpu/rtlsim.py` under `OTPU_SIM=arcsim` (`build/arcsim/`, `tools/arcsim_model.py`, `docs/arcsim.md`) | branch arcsim (from wide-port): bit-exact on the behavioural-DRAM tests, the f2-hbm board model's adapter check open, builds 20-70 min a configuration |
 | The RTL testbench's inputs | `opentpu/rtlsim.py` writes `prog_<slice>.hex`, `dram_<slice>.bin` (and reads back `dram_out_<slice>.bin`, `tmem_<slice>.hex`) | main; the same files the LPN model reads |
 | Board memory model with a command trace | `sim/verilator/otpu_native_mem.sv` (`+nat_trace`, `+axi_lat`, `+axi_dram=1` bank model) | main |
 | Card trace records | `opentpu/hwtrace.py` (`rtl/shell/otpu_trace.sv`) | f2-hbm and later |
