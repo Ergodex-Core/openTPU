@@ -24,6 +24,16 @@ Rules of the loop (the user's):
 2. **Verilator before synthesis.** Every RTL change is bit-exact against the ISA simulator in
    Verilator and gets its cycle receipt there. That receipt is also what re-calibrates the
    models: a model's number is "projected" until the Verilator run of the same change lands.
+2b. **Lens before Vivado.** A candidate that passed the bit-exact gates gets its Lens profile
+   (docs/lens.md: `tools/perf_qwen.py ... --dump` -> `lens.save` -> `python -m opentpu.lens
+   summary --json` / `html`; the VLA phases via `tools/pi05_rtl.py --profile`) on the same
+   Verilator run as its receipt: the port B roofline fraction, the idle-cycle attribution (DRAM
+   not ready / MXU starved / TMEM arbitration / VPU, QUANT, COLL, DMA waits), unit utilization,
+   the per-instruction-class busy / nominal / wait table and the top source lines. That profile
+   is the performance model of record for the change (user, 2026-10-18): a synthesis or place
+   and route on the build host is launched only for a candidate whose profile shows the gain
+   its hypothesis predicted, and the profile goes beside the receipt and the LPN number in the
+   track's doc (docs/wide_port.md "Lens profile of the int8 decode token").
 3. **Vivado only in the nightly.** Nothing in `tools/hwloop/` launches an instance, programs the
    card, submits an AFI or starts a schedule.
 4. **Branches and PRs per track.** Each track (wide-port, ternary-bonsai, vla, vla-pack, hwloop)
@@ -38,6 +48,7 @@ Rules of the loop (the user's):
 | RTL timing run of one decode token with real weights, the board's memory path | `tools/perf_qwen.py` (`--json`, `--plus +nat_trace=FILE`, `--check` against the ISA simulator) | branches f2-hbm / wide-port / ternary-bonsai (not on main) |
 | Verilator build / run | `opentpu/rtlsim.py` (`MEMORY`: `OTPU_LAT`, `OTPU_NCH`, `OTPU_STALL`, `OTPU_BW`, `OTPU_LDC`) | main (NCH on the F2 branches) |
 | ArcSim build / run (Ergodex's arcilator-based simulator; the same testbench and memory models, a second tier beside Verilator) | `opentpu/rtlsim.py` under `OTPU_SIM=arcsim` (`build/arcsim/`, `tools/arcsim_model.py`, `docs/arcsim.md`) | branch arcsim (from wide-port): bit-exact on the behavioural-DRAM tests, the f2-hbm board model's adapter check open, builds 20-70 min a configuration |
+| Lens profile of a run (the profiler's .otpuprof: idle attribution, utilization, per-class table, source lines) | `opentpu/lens.py` (`python -m opentpu.lens summary/html/info`), `tools/perf_qwen.py --dump` for a Gemma / Qwen decode token, `opentpu.profile` + `lens.to_data` from Python | main (docs/lens.md); the stage before any Vivado run (rule 2b) |
 | The RTL testbench's inputs | `opentpu/rtlsim.py` writes `prog_<slice>.hex`, `dram_<slice>.bin` (and reads back `dram_out_<slice>.bin`, `tmem_<slice>.hex`) | main; the same files the LPN model reads |
 | Board memory model with a command trace | `sim/verilator/otpu_native_mem.sv` (`+nat_trace`, `+axi_lat`, `+axi_dram=1` bank model) | main |
 | Card trace records | `opentpu/hwtrace.py` (`rtl/shell/otpu_trace.sv`) | f2-hbm and later |
