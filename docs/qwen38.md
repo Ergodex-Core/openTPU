@@ -249,18 +249,33 @@ the MLP and projections at MCOLS=4) exceeds port B's, and the analytic MM time c
 B's chunks only; the RTL would show the real overlap. Record with `--axi` on the RTL for a
 measurement (not run: Verilator was off limits on the shared host).
 
-**The 64-layer token, extrapolated** (the head once, 16 units of four layers instead of 2;
-every unit is the same instruction stream, lfm2.plan's hardware loop): cycles 2,491,600 (head
-and its DMA) + 16 x 1,830,218 (a unit: 3,660,435 for two) = **31.8 M cycles per token per
-slice = 159 ms at 200 MHz (6.3 tok/s), 238 ms at 133.33 MHz (4.2 tok/s)**; port B 318 MB +
-16 x 211.8 MB = 3.71 GB of weights streamed per slice per token (the int4 image's layers and
-the int8 head: 14.8 GB over the four slices); ~36,000 instructions per slice. The 64-layer
-image's own profile was not recorded (the second 16 GiB run on this host: the memory above).
+**The 64-layer token, measured** (`lens record model --isa --board --slices 4 --mhz 200
+--wformat int4 --head-format int8 -o build/lens/qwen38-27b-int4-isa.otpuprof`, 6,765 s with
+the 516-s build and the 62-token prefill, 18 GiB resident; the step at position 62, `'\n'
+-> 'We'`); every slice's counts are identical:
+
+| per slice, 64-layer token | measured |
+|---|---|
+| cycles | **31,673,756 = 158.4 ms at 200 MHz (6.31 tok/s), 237.6 ms at 133.33 MHz (4.21 tok/s)** |
+| instructions | 35,731 (7,576 MM, 4,754 QACT, 14,275 VOP, 1,232 GATHER, 949 LD, 576 DSTEP, ST the rest) |
+| DRAM port B (weights streamed) | 28,946,599 chunks = 3,705 MB (MM 28,263,168; DSTEP 589,824; LD 70,883); 14.82 GB over the four slices |
+| DRAM port A (activations) | 54,000,960 chunks |
+| DRAM bound (max of the ports) | 54,000,960 cycles; roofline as reported 170.5% (port A, as above) |
+| unit busy | MXU 89.2% (28,263,168), DMA 4.9%, VPU 3.2%, QUANT 1.6%, COLL 1.0% |
+
+MXU cycles by kernel (slice 0): MLP gate/up 11,141,120 (2,176 MMs), DeltaNet projections
+5,898,240 (624), MLP down 5,570,560 (4,352), the LM head 2,483,200 (8), attention 1,638,400
+(80), DeltaNet flush 1,474,560 (192); DSTEP 1,179,648 (576 DMA). The extrapolation from the
+8-layer profile (head + 16 x a unit's 1,830,218 = 31.78 M cycles, 3.71 GB per slice) was
+within 0.3% of it: the units are one instruction stream in a hardware loop. The MXU
+streams its int4 weights at the port's one chunk a cycle (28.26 M of the 31.67 M cycles):
+the token is weight-bandwidth bound, the int8 head 7.8% of it, DeltaNet (projections, flush,
+DSTEP) 27%, the MLP 53%, attention 5%.
 
 ## Open points
 
-- The 64-layer Lens profile (its text and per-token time are above): needs ~20 GB of
-  resident memory for the four images for a few hours of one core.
+- Both 64-layer runs need ~18 GB of resident memory for the four images and an hour or two
+  of one core each (the ISA simulator's exact float64 MMs): run them on a quiet host.
 - The prompt-run programs of the 8-layer truncation do not fit (`_probe`), the 64-layer
   ones do; `--no-prompt-runs` for the truncated model.
 - A compressed-tensors checkpoint with `actorder` "group" (g_idx), zero points, or a
