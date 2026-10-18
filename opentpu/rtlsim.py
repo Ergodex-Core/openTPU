@@ -1,13 +1,15 @@
-"""Build and run the SystemVerilog RTL with Verilator."""
+"""Build and run the SystemVerilog RTL with Verilator, or with ArcSim (OTPU_SIM=arcsim)."""
 from __future__ import annotations
 
 import fcntl
 import hashlib
+import json
 import os
 import re as _re
 import shutil
 import subprocess
 import tempfile
+import time
 from pathlib import Path
 
 import numpy as np
@@ -31,10 +33,55 @@ RTL_SOURCES = [
 ]
 
 
-# Verilator's flags (in the build cache's key, with its version and the sources' names)
+# Verilator's flags (in the build cache's key, with its version and the sources' names).
+# OTPU_VL_THREADS=N: a multi-threaded model (--threads N; the benchmarks of docs/arcsim.md)
 VFLAGS = ["--binary", "-j", "0", "-Wno-fatal", "-Wno-WIDTHEXPAND", "-Wno-WIDTHTRUNC",
           "-Wno-UNUSEDSIGNAL", "-Wno-UNUSEDPARAM", "-O3", "--x-assign", "0", "--x-initial", "0"]
+if os.environ.get("OTPU_VL_THREADS"):
+    VFLAGS += ["--threads", str(int(os.environ["OTPU_VL_THREADS"]))]
 _VERSION: str | None = None
+
+# The simulator: Verilator (the default), or ArcSim (OTPU_SIM=arcsim; docs/arcsim.md), Ergodex's
+# cycle-accurate simulator on CIRCT's arcilator. ArcSim compiles the same SystemVerilog -- the
+# design, the testbench and the memory models -- into a self-driven native model whose generated
+# driver runs the testbench to its $finish, so a build is the same executable contract as
+# Verilator's: the same +plusargs, files, output lines and exit status, and every tool and test
+# runs unchanged. Under -DOTPU_ARCSIM the memory model keeps its DRAM image and its random draws
+# in the harness (sim/arcsim/otpu_arcsim.cpp: the image behind DPI-C, the draws Verilator's
+# stream), so a run's results and cycle count are Verilator's. Builds are cached like Verilator's,
+# in build/arcsim/<top>_<hash>/A<top>.
+SIM = os.environ.get("OTPU_SIM", "verilator")
+if SIM not in ("verilator", "arcsim"):
+    raise ValueError("OTPU_SIM: verilator (default) or arcsim")
+ABUILD = ROOT / "build" / "arcsim"
+ARCSIM_HARNESS = ROOT / "sim" / "arcsim" / "otpu_arcsim.cpp"
+ARCSIM_BUNDLE = "arcsim-coral-matrix-baseline-20261013"     # the developer bundle's directory
+# ArcSim's flags (in the build cache's key): circt-verilog's (--Osim, as the Coral flow's
+# rules/arcsim.bzl; the allowances are for idioms Verilator accepts: a variable an initial block
+# sets and an always_ff drives, a name used before its declaration), arcilator's
+# (--giant-value-bits=0: otpu_seq's initial block fills the WAITC table, a 1 Mbit memory the
+# lowering carries by value, and the default budget refuses it; --partition-eval=N: the model's
+# eval in partition functions of about N operations instead of one function of 500,000 lines
+# of IR, which opt and llc take tens of minutes over -- OTPU_ARCSIM_PARTITION=N, 0 for the
+# monolithic eval; OTPU_ARCSIM_ARGS adds more, e.g. the bundle's experimental --arc-* passes),
+# opt's and llc's (OTPU_ARCSIM_CPU: -mcpu, default native: the model runs on this machine only;
+# x86-64 for a portable one)
+AFLAGS = {"frontend": ["--Osim", "--ir-hw", "--single-unit", "--timescale=1ns/1ps",
+                       "--allow-dup-initial-drivers", "-Wno-multiple-always-assigns",
+                       "--allow-use-before-declare", "-DOTPU_ARCSIM"],
+          "arc": ["--Osim", "--giant-value-bits=0"],
+          "opt": ["-O3", "-vectorize-slp=true"],
+          "llc": ["-O3", "-filetype=obj", "-relocation-model=pic"]}
+# OTPU_ARCSIM_TASKS=N: multi-threaded evaluation -- the model's eval split into a dependency graph
+# of task functions of at most N operations each, run by the runtime's scheduler on ARC_THREADS
+# threads (the run's environment; docs/arcsim.md "Threads"); else the single-threaded partitions
+if os.environ.get("OTPU_ARCSIM_TASKS"):
+    AFLAGS["arc"].append(f"--partition-eval-tasks={int(os.environ['OTPU_ARCSIM_TASKS'])}")
+elif int(os.environ.get("OTPU_ARCSIM_PARTITION", "5000")):
+    AFLAGS["arc"].append(f"--partition-eval={int(os.environ.get('OTPU_ARCSIM_PARTITION', '5000'))}")
+AFLAGS["arc"] += [x for x in os.environ.get("OTPU_ARCSIM_ARGS", "").split() if x]
+ARCSIM_CPU = os.environ.get("OTPU_ARCSIM_CPU", "native")
+_AVERSION: str | None = None
 
 
 def verilator_version() -> str:
@@ -49,57 +96,166 @@ def verilator_version() -> str:
     return _VERSION
 
 
+def arcsim_home() -> Path | None:
+    """The ArcSim toolchain's root (circt-verilog, arcsim, opt, llc under toolchain/bin or bin,
+    the runtime under lib): $ARCSIM_HOME, else the developer bundle under ~/.cache/arcsim
+    (setup_arcsim.sh bundle), else the release package's /usr/lib/ergodex."""
+    for p in (os.environ.get("ARCSIM_HOME"), Path.home() / ".cache" / "arcsim" / ARCSIM_BUNDLE,
+              "/usr/lib/ergodex"):
+        if p and any((Path(p) / d / "arcsim").exists() for d in ("toolchain/bin", "bin")):
+            return Path(p)
+    return None
+
+
+def arcsim_bin(name: str) -> Path:
+    home = arcsim_home()
+    if home is None:
+        raise RuntimeError("ArcSim: no toolchain (ARCSIM_HOME, ~/.cache/arcsim/<bundle>, "
+                           "/usr/lib/ergodex): docs/arcsim.md")
+    for d in ("toolchain/bin", "bin"):
+        if (home / d / name).exists():
+            return home / d / name
+    raise RuntimeError(f"ArcSim: no {name} under {home}")
+
+
+def arcsim_version() -> str:
+    """The toolchain's directory and `arcsim --version` (once per process); "" without one."""
+    global _AVERSION
+    if _AVERSION is None:
+        home = arcsim_home()
+        if home is None:
+            _AVERSION = ""
+        else:
+            r = subprocess.run([str(arcsim_bin("arcsim")), "--version"], capture_output=True,
+                               text=True)
+            _AVERSION = f"{home.name}: {' '.join(r.stdout.split())}"
+    return _AVERSION
+
+
+def available() -> bool:
+    """The selected simulator (SIM) is installed."""
+    return bool(verilator_version() if SIM == "verilator" else arcsim_version())
+
+
 def build_dir(top: str, sources: list[Path], params: dict | None = None) -> Path:
     """The build's directory: keyed on the sources' names (in the tree: OTPU_REMOTE_BUILD shares
-    build/ between trees) and contents, the parameters, VFLAGS and Verilator's version."""
+    build/ between trees) and contents, the parameters, and the simulator's flags and version
+    (VFLAGS and Verilator's; AFLAGS, the harness, the CPU and ArcSim's)."""
     h = hashlib.sha1()
     for s in sources:
         s = Path(s).resolve()
         name = s.relative_to(ROOT).as_posix() if s.is_relative_to(ROOT) else str(s)
         h.update(name.encode() + b"\0" + s.read_bytes() + b"\0")
     h.update(repr(sorted((params or {}).items())).encode())
+    if SIM == "arcsim":
+        h.update(ARCSIM_HARNESS.read_bytes() + b"\0" + repr(AFLAGS).encode() + b"\0")
+        h.update(ARCSIM_CPU.encode() + b"\0" + arcsim_version().encode())
+        return ABUILD / f"{top}_{h.hexdigest()[:12]}"
     h.update(repr(VFLAGS).encode() + b"\0" + verilator_version().encode())
     return BUILD / f"{top}_{h.hexdigest()[:12]}"
 
 
+def exe_name(top: str) -> str:
+    """The executable in a build's directory: V<top> (Verilator), A<top> (ArcSim)."""
+    return f"{'A' if SIM == 'arcsim' else 'V'}{top}"
+
+
 def build(top: str, sources: list[Path], params: dict | None = None) -> Path:
-    """Compile `top` with Verilator (--binary); cached (build_dir). The build runs in a
-    temporary directory, renamed into place once linked, under a lock per build: a concurrent
-    build of the same waits for it instead of running a half-linked executable, and a build
-    killed or failed leaves no executable for the next to take."""
+    """Compile `top` with the simulator (Verilator --binary, or ArcSim's pipeline); cached
+    (build_dir). The build runs in a temporary directory, renamed into place once linked, under
+    a lock per build: a concurrent build of the same waits for it instead of running a
+    half-linked executable, and a build killed or failed leaves no executable for the next to
+    take."""
     params = params or {}
     out = build_dir(top, sources, params)
-    exe = out / f"V{top}"
+    exe = out / exe_name(top)
     if exe.exists():
         return exe
-    BUILD.mkdir(parents=True, exist_ok=True)
-    with open(BUILD / f".{out.name}.lock", "w") as lock:
+    bdir = out.parent
+    bdir.mkdir(parents=True, exist_ok=True)
+    with open(bdir / f".{out.name}.lock", "w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX)
         if exe.exists():                        # built while this one waited
             return exe
-        for d in BUILD.glob(f".{out.name}.*"):  # a killed build's (none runs: the lock)
+        for d in bdir.glob(f".{out.name}.*"):   # a killed build's (none runs: the lock)
             if d.is_dir():
                 shutil.rmtree(d, ignore_errors=True)
-        tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=BUILD))
+        tmp = Path(tempfile.mkdtemp(prefix=f".{out.name}.", dir=bdir))
         try:
-            cmd = ["verilator", *VFLAGS, "--top-module", top, "-Mdir", str(tmp)]
-            cmd += [f"-G{k}={v}" for k, v in params.items()]
-            cmd += [str(s) for s in sources]
-            r = subprocess.run(cmd, capture_output=True, text=True)
-            if r.returncode != 0 and "linker command failed" in r.stdout + r.stderr:
-                # the parallel make occasionally archives a stale object: rebuild the archive once
-                for f in tmp.glob("*__ALL.a"):
-                    f.unlink()
-                r = subprocess.run(["make", "-C", str(tmp), "-f", f"V{top}.mk", "-j", "8"],
-                                   capture_output=True, text=True)
-            if r.returncode != 0 or not (tmp / f"V{top}").exists():
-                raise RuntimeError(f"verilator failed:\n{r.stdout[-4000:]}\n{r.stderr[-4000:]}")
+            if SIM == "arcsim":
+                _compile_arcsim(top, sources, params, tmp)
+            else:
+                _compile_verilator(top, sources, params, tmp)
             if out.exists():                    # an unfinished build's (no executable)
                 shutil.rmtree(out)
             tmp.rename(out)
         finally:
             shutil.rmtree(tmp, ignore_errors=True)
     return exe
+
+
+def _compile_verilator(top: str, sources: list[Path], params: dict, tmp: Path) -> None:
+    cmd = ["verilator", *VFLAGS, "--top-module", top, "-Mdir", str(tmp)]
+    cmd += [f"-G{k}={v}" for k, v in params.items()]
+    cmd += [str(s) for s in sources]
+    r = subprocess.run(cmd, capture_output=True, text=True)
+    if r.returncode != 0 and "linker command failed" in r.stdout + r.stderr:
+        # the parallel make occasionally archives a stale object: rebuild the archive once
+        for f in tmp.glob("*__ALL.a"):
+            f.unlink()
+        r = subprocess.run(["make", "-C", str(tmp), "-f", f"V{top}.mk", "-j", "8"],
+                           capture_output=True, text=True)
+    if r.returncode != 0 or not (tmp / f"V{top}").exists():
+        raise RuntimeError(f"verilator failed:\n{r.stdout[-4000:]}\n{r.stderr[-4000:]}")
+
+
+def _cxx() -> str:
+    """The C++ compiler that links an ArcSim model with its harness: OTPU_CXX, else clang++
+    (the toolchain's LLVM runtime was built with it), else g++."""
+    for c in (os.environ.get("OTPU_CXX"), "clang++", "clang++-20", "/usr/lib/llvm-20/bin/clang++",
+              "g++"):
+        if c and (shutil.which(c) or Path(c).exists()):
+            return c
+    raise RuntimeError("ArcSim: no C++ compiler (OTPU_CXX, clang++, g++)")
+
+
+def _compile_arcsim(top: str, sources: list[Path], params: dict, tmp: Path) -> None:
+    """ArcSim's pipeline (the Coral flow's rules/arcsim.bzl, docs/arcsim.md): circt-verilog
+    (SystemVerilog -> HW MLIR) -> arcsim (the arcilator: -> the model's LLVM IR, its driver
+    <top>_main and the state layout) -> opt -> llc -> the harness linked with the model and the
+    runtime. Each stage's command and output go to <stage>.log in the build's directory, the
+    stages' seconds to build_times.json."""
+    times: dict[str, float] = {}
+
+    def stage(name: str, cmd: list) -> None:
+        t = time.time()
+        cmd = [str(x) for x in cmd]
+        r = subprocess.run(cmd, capture_output=True, text=True, cwd=tmp)
+        times[name] = round(time.time() - t, 1)
+        (tmp / f"{name}.log").write_text(" ".join(cmd) + "\n" + r.stdout + r.stderr)
+        if r.returncode != 0:
+            raise RuntimeError(f"arcsim {name} failed:\n{(r.stdout + r.stderr)[-4000:]}")
+
+    stage("frontend", [arcsim_bin("circt-verilog"), *AFLAGS["frontend"], f"--top={top}",
+                       *[f"-G{k}={v}" for k, v in params.items()], *sources,
+                       "-o", tmp / "design.mlir"])
+    stage("lower", [arcsim_bin("arcsim"), tmp / "design.mlir", "--emit-llvm",
+                    f"--state-file={tmp / 'state.json'}", *AFLAGS["arc"], "-o", tmp / "model.ll"])
+    target = ["-mtriple=x86_64-unknown-linux-gnu", f"-mcpu={ARCSIM_CPU}"]
+    stage("opt", [arcsim_bin("opt"), *target, *AFLAGS["opt"], tmp / "model.ll",
+                  "-o", tmp / "model.bc"])
+    stage("llc", [arcsim_bin("llc"), *target, *AFLAGS["llc"], tmp / "model.bc",
+                  "-o", tmp / "model.o"])
+    lib = arcsim_home() / "lib"
+    stage("link", [_cxx(), "-std=c++17", "-O2", f"-DOTPU_ARCSIM_MAIN={top}_main", ARCSIM_HARNESS,
+                   tmp / "model.o", lib / "runtime.o", "-Wl,--start-group",
+                   lib / "libCIRCTArcRuntime.a", lib / "libCIRCTSupport.a",
+                   lib / "libLLVMSupport.a", lib / "libLLVMDemangle.a", "-Wl,--end-group",
+                   "-latomic", "-l:libz.so.1", "-l:libzstd.so.1", "-l:libtinfo.so.6", "-pthread",
+                   "-ldl", "-lm", "-o", tmp / f"A{top}"])
+    (tmp / "build_times.json").write_text(json.dumps(times) + "\n")
+    for f in ("model.ll", "model.bc", "model.o"):        # ~100 MB each; the logs stay
+        (tmp / f).unlink(missing_ok=True)
 
 
 # A simulator whose Python parent dies (killed, or os._exit) would run on under launchd for

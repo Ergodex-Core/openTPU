@@ -180,7 +180,7 @@ Everything except the card runs on a laptop.
 ```sh
 pip install -e .
 pip install pytest torch transformers
-python3 -m pytest -q          # RTL tests also need Verilator 5
+python3 -m pytest -q          # RTL tests also need Verilator 5 (or ArcSim: OTPU_SIM=arcsim, docs/arcsim.md)
 
 hf download LiquidAI/LFM2.5-230M --local-dir models/LFM2.5-230M
 otpu-chat --model lfm2 --backend isa    # chat on the simulator
@@ -205,7 +205,8 @@ checkpoint in Hugging Face transformers, fp32 on the CPU, with openTPU's quantiz
 golden's weights are the values the matrix unit multiplies (the model image's own quantizer,
 in the formats you pick), and its activations are rounded to int8 per 128 values wherever the
 device's quantizer rounds them: every matmul input, and in attention the query, K, V and the
-softmax weights. The device is the ISA simulator, the RTL (Verilator) or the card, and
+softmax weights. The device is the ISA simulator, the RTL (Verilator, or ArcSim with
+`OTPU_SIM=arcsim`: [docs/arcsim.md](docs/arcsim.md)) or the card, and
 `--against` adds a second device that must give the same tokens and bit-identical logits. It
 is measured on Qwen3-0.6B, LFM2.5-230M, Qwen3.5-0.8B and Gemma 4 E2B (base and instruct); the
 MoE models are not supported.

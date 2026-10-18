@@ -45,7 +45,22 @@ module otpu_dram #(
   localparam int CW = D / 4;
   localparam int LWW = $clog2(ALINE / 4);     // the word index in a port-A line
 
+`ifdef OTPU_ARCSIM
+  // ArcSim (docs/arcsim.md): the image is the harness's (sim/arcsim/otpu_arcsim.cpp), behind
+  // DPI-C, as otpu_native_mem's -- circt-verilog's $fread takes memories of up to 1024 elements,
+  // and the array in the model's state would be a value of the image's size to its compiler
+  import "DPI-C" function int otpu_mem_rd(input int sid, input longint i);
+  import "DPI-C" function void otpu_mem_wr(input int sid, input longint i, input int v);
+  import "DPI-C" function void otpu_mem_wrm(input int sid, input longint i, input int mask,
+                                            input int v);
+  import "DPI-C" function void otpu_mem_init(input int sid, input longint words);
+  import "DPI-C" function void otpu_mem_dump(input int sid);
+  function automatic logic [31:0] rdw(input logic [AW-1:0] i);
+    return otpu_mem_rd(SID, longint'(i));
+  endfunction
+`else
   logic [31:0] mem [WORDS];
+`endif
 
   logic [LAT-1:0]    av, bv, bt;
   logic [8*ALINE-1:0] ad [LAT];
@@ -62,6 +77,28 @@ module otpu_dram #(
   longint      pk_cyc = 0;
 `endif
   always_ff @(posedge clk) begin
+`ifdef OTPU_ARCSIM
+    // the reads first: they sample the words as they were before this cycle's writes, as the
+    // array's non-blocking writes let them below; the harness's writes land at once, in the
+    // same order (the last to a word wins, as the last non-blocking write does)
+    av[0] <= a_req && !a_we;
+    for (int w = 0; w < ALINE / 4; w++) ad[0][32*w +: 32] <= rdw({a_addr[AW-1:LWW], LWW'(w)});
+    bv[0] <= b_req && !b_we;
+    bt[0] <= b_tag;
+    for (int w = 0; w < PORTB * CW; w++)
+      bd[0][32*w +: 32] <= (PORTB == 1 || w / CW <= int'(b_n)) ? rdw(AW'(b_addr + w)) : '0;
+    for (int c = 0; c < PORTB; c++) bm[0][c] <= PORTB == 1 || c <= int'(b_n);
+    pk_cyc <= pk_cyc + 1;
+    if (pk_i < pk_n && pk_cyc >= pk_c[pk_i]) begin
+      otpu_mem_wr(SID, longint'(pk_a[pk_i][AW-1:0]), int'(pk_v[pk_i]));
+      pk_i <= pk_i + 1;
+    end
+    if (a_req && a_we) otpu_mem_wrm(SID, longint'(a_addr[AW-1:0]), int'(a_be), int'(a_wdata));
+    if (sw_req) otpu_mem_wrm(SID, longint'(sw_addr[AW-1:0]), int'(sw_be), int'(sw_wdata));
+    if (b_req && b_we)
+      for (int w = 0; w < CW; w++)
+        if (b_wmask[w]) otpu_mem_wr(SID, longint'(AW'(b_addr + w)), int'(b_wdata[32*w +: 32]));
+`else
 `ifndef SYNTHESIS
     pk_cyc <= pk_cyc + 1;
     if (pk_i < pk_n && pk_cyc >= pk_c[pk_i]) begin
@@ -86,6 +123,7 @@ module otpu_dram #(
     for (int c = 0; c < PORTB; c++) bm[0][c] <= PORTB == 1 || c <= int'(b_n);
     if (b_req && b_we)
       for (int w = 0; w < CW; w++) if (b_wmask[w]) mem[AW'(b_addr + w)] <= b_wdata[32*w +: 32];
+`endif
     for (int k = 1; k < LAT; k++) begin
       av[k] <= av[k-1];
       ad[k] <= ad[k-1];
@@ -113,13 +151,19 @@ module otpu_dram #(
     av = '0;
     bv = '0;
     bt = '0;
+`ifdef OTPU_ARCSIM
+    otpu_mem_init(SID, longint'(WORDS));        // (zeros, then the harness's dram_<SID>.bin)
+`else
     for (int i = 0; i < WORDS; i++) mem[i] = '0;
+`endif
     if ($value$plusargs("dir=%s", dir)) begin
+`ifndef OTPU_ARCSIM
       fd = $fopen($sformatf("%s/dram_%0d.bin", dir, SID), "rb");
       if (fd != 0) begin
         nread = $fread(mem, fd);
         $fclose(fd);
       end
+`endif
       fd = $fopen($sformatf("%s/poke_%0d.txt", dir, SID), "r");
       if (fd != 0) begin
         while (pk_n < NPOKE && $fscanf(fd, "%h %h %h", pk_c[pk_n], pk_a[pk_n], pk_v[pk_n]) == 3)
@@ -129,9 +173,13 @@ module otpu_dram #(
     end
   end
   always @(posedge clk) if (dump) begin
+`ifdef OTPU_ARCSIM
+    otpu_mem_dump(SID);
+`else
     fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
     for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", mem[i]);
     $fclose(fd);
+`endif
   end
 `endif
 endmodule

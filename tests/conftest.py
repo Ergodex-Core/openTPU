@@ -215,9 +215,10 @@ def poison_past_cap(eng) -> int:
 
 @pytest.fixture(scope="session")
 def have_verilator():
-    import shutil
-    if shutil.which("verilator") is None:
-        pytest.skip("verilator not installed")
+    """The RTL simulator rtlsim selects is installed: Verilator, or ArcSim under OTPU_SIM=arcsim
+    (docs/arcsim.md); the tests build and run the same testbenches on either."""
+    if not rtlsim.available():
+        pytest.skip(f"{rtlsim.SIM} not installed")
     return True
 
 

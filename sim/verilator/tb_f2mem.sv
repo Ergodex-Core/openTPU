@@ -168,19 +168,23 @@ module tb_f2mem;
       if (d_bvalid && d_bready) void'(bq.pop_front());
       if (d_rvalid && d_rready) void'(rq.pop_front());
     end
+    // the response channels from the queues as this edge leaves them: what a continuous
+    // assignment from the queues shows until the next edge, written here (registered) because
+    // combinational logic over a queue's size and head is not re-evaluated on every mutation
+    // by every simulator (ArcSim: docs/arcsim.md)
+    d_bvalid <= bq.size() > 0;
+    d_bid    <= bq.size() ? bq[0] : '0;
+    d_rvalid <= rq.size() > 0;
+    d_rid    <= rq.size() ? rq[0].id : '0;
+    d_rdata  <= rq.size() ? rq[0].d : '0;
+    d_rlast  <= rq.size() ? rq[0].last : 1'b0;
   end
   always_ff @(posedge aclk) begin
     d_awready <= $urandom % 4 != 0;
     d_wready  <= $urandom % 4 != 0;
     d_arready <= $urandom % 4 != 0;
   end
-  assign d_bvalid = bq.size() > 0;
-  assign d_bid    = bq.size() ? bq[0] : '0;
   assign d_bresp  = inject_error ? 2'b10 : 2'b00;
-  assign d_rvalid = rq.size() > 0;
-  assign d_rid    = rq.size() ? rq[0].id : '0;
-  assign d_rdata  = rq.size() ? rq[0].d : '0;
-  assign d_rlast  = rq.size() ? rq[0].last : 1'b0;
   assign d_rresp  = inject_error ? 2'b10 : 2'b00;
 
   // ---------------------------------------------------------------- the native masters (clk)

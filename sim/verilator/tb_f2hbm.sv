@@ -115,8 +115,9 @@ module tb_f2hbm;
     logic [5:0]   bq[$];
     rb_t          rq [2][$];                 // read beats due, per ID bit (the two masters)
     longint       now = 0;
-    logic         rsel;
+    logic         rsel, rsel_n;
     always_ff @(posedge hclk) begin
+      rsel_n = rsel;
       now <= now + 1;
       m_awready[p] <= $urandom % 4 != 0;
       m_wready[p] <= $urandom % 4 != 0;
@@ -180,19 +181,21 @@ module tb_f2hbm;
         end
         if (m_bvalid[p] && m_bready[p]) void'(bq.pop_front());
         if (m_rvalid[p] && m_rready[p]) void'(rq[rsel].pop_front());
-        // the next beat from either ID's queue (beat-level interleaving)
+        // the next beat from either ID's queue (beat-level interleaving; rsel picks a queue only
+        // once its head is shown: the beat stays until taken)
         if (!(m_rvalid[p] && !m_rready[p]))
-          rsel <= (rq[0].size() && rq[1].size()) ? 1'($urandom) : rq[1].size() != 0;
+          rsel_n = (rq[0].size() && rq[1].size()) ? 1'($urandom) : rq[1].size() != 0;
       end
+      rsel <= rsel_n;
+      // the response channels from the queues as this edge leaves them (see tb_f2mem)
+      m_bvalid[p] <= bq.size() > 0;
+      m_bid[p]    <= bq.size() ? bq[0] : '0;
+      m_rvalid[p] <= rq[rsel_n].size() > 0;
+      m_rid[p]    <= rq[rsel_n].size() ? rq[rsel_n][0].id : '0;
+      m_rdata[p]  <= rq[rsel_n].size() ? rq[rsel_n][0].d : '0;
+      m_rlast[p]  <= rq[rsel_n].size() ? rq[rsel_n][0].last : 1'b0;
     end
-    assign m_bvalid[p] = bq.size() > 0;
-    assign m_bid[p] = bq.size() ? bq[0] : '0;
     assign m_bresp[p] = 2'b00;
-    // (rsel picks a queue only once its head is shown: the beat stays until taken)
-    assign m_rvalid[p] = rq[rsel].size() > 0;
-    assign m_rid[p] = rq[rsel].size() ? rq[rsel][0].id : '0;
-    assign m_rdata[p] = rq[rsel].size() ? rq[rsel][0].d : '0;
-    assign m_rlast[p] = rq[rsel].size() ? rq[rsel][0].last : 1'b0;
     assign m_rresp[p] = 2'b00;
   end
 

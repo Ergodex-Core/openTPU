@@ -59,6 +59,28 @@ module otpu_native_mem #(
   // the image's words: word i is mem_lo[i] below H, else mem_hi[i - H] (two arrays, as Verilator
   // takes at most 2^28 entries in one: 1 GiB each); a beat (16 words) is in one of them
   localparam int H = WORDS / 2;
+`ifdef OTPU_ARCSIM
+  // ArcSim (docs/arcsim.md): the image is the harness's (sim/arcsim/otpu_arcsim.cpp), behind
+  // DPI-C -- circt-verilog's $fread takes memories of up to 1024 elements, and a 4 GiB array in
+  // the model's state is a 4 GiB value to its compiler. The harness loads dram_<SID>.bin at
+  // otpu_mem_init (from its own +dir) and writes dram_out_<SID>.bin at otpu_mem_dump; rdw / wrw
+  // keep their contract (a word read sees the writes before it in the same cycle, as the
+  // blocking wrw does; the channels' byte-masked writes land a cycle before any read of the beat
+  // can be performed: a beat is one channel's, one command a cycle). PHYS needs Verilator.
+  import "DPI-C" function int otpu_mem_rd(input int sid, input longint i);
+  import "DPI-C" function void otpu_mem_wr(input int sid, input longint i, input int v);
+  import "DPI-C" function void otpu_mem_wrm(input int sid, input longint i, input int mask,
+                                            input int v);
+  import "DPI-C" function void otpu_mem_init(input int sid, input longint words);
+  import "DPI-C" function void otpu_mem_dump(input int sid);
+  function automatic logic [31:0] rdw(input int i);
+    return otpu_mem_rd(SID, longint'(i));
+  endfunction
+  task automatic wrw(input int i, input logic [31:0] v);
+    otpu_mem_wr(SID, longint'(i), int'(v));
+  endtask
+  initial if (PHYS != 0) $fatal(1, "otpu_native_mem: PHYS (the channels' own files) needs Verilator");
+`else
   logic [31:0] mem_lo [H];
   logic [31:0] mem_hi [WORDS - H];
   function automatic logic [31:0] rdw(input int i);
@@ -68,6 +90,7 @@ module otpu_native_mem #(
     if (i < H) mem_lo[i] = v;
     else mem_hi[i - H] = v;
   endtask
+`endif
   int stall = 0;
   int bw = 100;
   int lat = LAT;
@@ -96,8 +119,22 @@ module otpu_native_mem #(
     m = u * (NCH / 2) + ((32'(c / 2) ^ f) & 32'(NCH / 2 - 1));
     return int'(m * 2 + (32'(c % 2) ^ 32'(CHASH && ^m)));
   endfunction
+`ifdef OTPU_ARCSIM
+  // ArcSim: the model's random draws are Verilator's (sim/arcsim/otpu_arcsim.cpp otpu_urandom:
+  // its xoroshiro128** stream, $urandom(seed)'s reseeding included), so a simulation's stalls
+  // and jitter -- and so its cycle count -- are the same in both simulators
+  import "DPI-C" function int unsigned otpu_urandom();
+  import "DPI-C" function void otpu_urandom_seed(input int seed);
+  function automatic logic [31:0] urand();
+    return otpu_urandom();
+  endfunction
+`else
+  function automatic logic [31:0] urand();
+    return $urandom;
+  endfunction
+`endif
   function automatic bit rnd_stall();
-    return ($urandom % 100) < stall;
+    return (urand() % 100) < stall;
   endfunction
 
   // the controller's per-channel state: the data bus's next free tick, the last direction, the
@@ -156,12 +193,27 @@ module otpu_native_mem #(
 
   always_ff @(posedge clk) cyc <= cyc + 1;
 
+  int          epoch = 0;                // runs ended
+  logic        rr_q = 1'b1;
+`ifdef OTPU_ARCSIM
+  // the poke tables are the harness's too (read from <dir>/poke_<SID>.txt and pokeb_<SID>.txt at
+  // otpu_mem_init): six 4096-entry arrays in this process would ride in its frame by value,
+  // copied every cycle
+  import "DPI-C" function void otpu_mem_poke(input int sid, input longint cyc);
+  import "DPI-C" function void otpu_mem_pokeb(input int sid, input int epoch);
+  always @(posedge clk) begin
+    otpu_mem_poke(SID, cyc);             // the writes due by this cycle, in order
+    if (run_rst && !rr_q) begin          // a run ended: the host's writes before the next
+      epoch++;
+      otpu_mem_pokeb(SID, epoch);
+    end
+    rr_q = run_rst;
+  end
+`else
   localparam int NPOKE = 4096;
   longint      pk_c [NPOKE];
   logic [31:0] pk_a [NPOKE], pk_v [NPOKE], pb_r [NPOKE], pb_a [NPOKE], pb_v [NPOKE];
   int          pk_n = 0, pk_i = 0, pb_n = 0;
-  int          epoch = 0;                // runs ended
-  logic        rr_q = 1'b1;
   always @(posedge clk) begin
     while (pk_i < pk_n && cyc >= pk_c[pk_i]) begin
       wrw(int'(pk_a[pk_i]), pk_v[pk_i]);
@@ -173,26 +225,37 @@ module otpu_native_mem #(
     end
     rr_q = run_rst;
   end
+`endif
 
+  // Per channel: the readies' stall (crr, wrr), the read data (rv, rd), the write count (wdone),
+  // the bandwidth credit (cr), the last read's data time and the last write's count time
+  logic         crr [NCH], wrr [NCH], rv [NCH];
+  logic [511:0] rd [NCH];
+  logic [15:0]  wdone [NCH];
+  int           cr [NCH] = '{default: 0};
+  longint       rlast [NCH] = '{default: 0}, wlast [NCH] = '{default: 0};
   for (genvar c = 0; c < NCH; c++) begin : g_ch
-    logic crr, wrr, rv;
-    logic [511:0] rd;
-    logic [15:0] wdone;
-    int cr = 0;                          // bandwidth credit (100 = one command)
-    longint rlast = 0, wlast = 0;        // the last read's data time, write's count time
-    always_ff @(posedge clk) begin
-      crr <= !rnd_stall();
-      wrr <= !rnd_stall();
+    assign n_cready[c] = crr[c] && cq[c].size() < cqd;
+    assign n_wready[c] = wrr[c] && wq_d[c].size() < wqd;
+    assign n_rvalid[c] = rv[c];
+    assign n_rdata[c] = rd[c];
+    assign n_wdone[c] = wdone[c];
+  end
+  // One process for all the channels, its draws in a fixed order -- every channel's two ready
+  // stalls, then channel by channel the command performed (its write-count or read-data jitter),
+  // the read return's stall and the write count's stall -- so the random sequence lands on the
+  // same decisions in every simulator: this is the order Verilator ran the per-channel processes
+  // in, and the cycle counts of docs/wide_port.md's receipts stand on it (ArcSim runs the same
+  // process: docs/arcsim.md).
+  always_ff @(posedge clk) begin
+    for (int c = 0; c < NCH; c++) begin
+      crr[c] <= !rnd_stall();
+      wrr[c] <= !rnd_stall();
     end
-    assign n_cready[c] = crr && cq[c].size() < cqd;
-    assign n_wready[c] = wrr && wq_d[c].size() < wqd;
-    assign n_rvalid[c] = rv;
-    assign n_rdata[c] = rd;
-    assign n_wdone[c] = wdone;
-    always_ff @(posedge clk) begin
+    for (int c = 0; c < NCH; c++) begin
       if (rst) begin
         cq[c].delete(); wq_d[c].delete(); wq_m[c].delete(); rq[c].delete(); wd[c].delete();
-        rv <= 1'b0; wdone <= '0; cr = 0; rlast = 0; wlast = 0;
+        rv[c] <= 1'b0; wdone[c] <= '0; cr[c] = 0; rlast[c] = 0; wlast[c] = 0;
         bus[c] = 0; nref[c] = trefi * tpu; wdir[c] = 1'b0;
         for (int k = 0; k < 8; k++) begin orow[c][k] = -1; tact[c][k] = -1000; tcol[c][k] = -1000; end
       end else begin
@@ -206,39 +269,45 @@ module otpu_native_mem #(
           wq_d[c].push_back(n_wdata[c]);
           wq_m[c].push_back(n_wmask[c]);
         end
-        cr = (dram != 0) ? 200 : (cr + bw > 200) ? 200 : cr + bw;
+        cr[c] = (dram != 0) ? 200 : (cr[c] + bw > 200) ? 200 : cr[c] + bw;
         // perform the oldest command (taken in an earlier cycle): a write once its data is in
-        if (cq[c].size() != 0 && cq[c][0].t < cyc && cr >= 100 &&
+        if (cq[c].size() != 0 && cq[c][0].t < cyc && cr[c] >= 100 &&
             (!cq[c][0].we || wq_d[c].size() != 0) &&
             (dram == 0 || bus[c] <= (cyc + longint'(ahead)) * tpc)) begin
           int b;
           longint t;
-          cr = cr - 100;
+          cr[c] = cr[c] - 100;
           b = lbeat(32'(cq[c][0].m), c) * 16;
           if (cq[c][0].we) begin
             logic [63:0] s;
             s = wq_m[c][0];
+`ifdef OTPU_ARCSIM
+            for (int k = 0; k < 16; k++)
+              if (s[4 * k +: 4] != '0)
+                otpu_mem_wrm(SID, longint'(b + k), int'(s[4 * k +: 4]), int'(wq_d[c][0][32 * k +: 32]));
+`else
             for (int k = 0; k < 64; k++)
               if (s[k] && b < H) mem_lo[b + k / 4][8 * (k % 4) +: 8] <= wq_d[c][0][8 * k +: 8];
               else if (s[k]) mem_hi[b - H + k / 4][8 * (k % 4) +: 8] <= wq_d[c][0][8 * k +: 8];
+`endif
             t = cyc;
             if (dram != 0) begin
               if (s != '1) t = dram_slot(c, cq[c][0].m, 1'b0, cyc) + trmw;
               t = dram_slot(c, cq[c][0].m, 1'b1, t);
             end
             if (s != '1) n_rmw[c]++;
-            t = t + wdl + ($urandom % 8);
-            if (t < wlast) t = wlast;
-            wlast = t;
+            t = t + wdl + (urand() % 8);
+            if (t < wlast[c]) t = wlast[c];
+            wlast[c] = t;
             wd[c].push_back(t);
             void'(wq_d[c].pop_front()); void'(wq_m[c].pop_front());
             n_wr[c]++;
           end else begin
             logic [511:0] d;
             for (int k = 0; k < 16; k++) d[32 * k +: 32] = rdw(b + k);
-            t = (dram != 0 ? dram_slot(c, cq[c][0].m, 1'b0, cyc) : cyc) + lat + ($urandom % 8);
-            if (t < rlast) t = rlast;
-            rlast = t;
+            t = (dram != 0 ? dram_slot(c, cq[c][0].m, 1'b0, cyc) : cyc) + lat + (urand() % 8);
+            if (t < rlast[c]) t = rlast[c];
+            rlast[c] = t;
             rq[c].push_back('{t, d});
             n_rd[c]++;
           end
@@ -246,20 +315,20 @@ module otpu_native_mem #(
         end
         // next cycle's read data (no backpressure) and write count
         if (rq[c].size() != 0 && rq[c][0].t <= cyc && !rnd_stall()) begin
-          rv <= 1'b1;
-          rd <= rq[c][0].d;
+          rv[c] <= 1'b1;
+          rd[c] <= rq[c][0].d;
           void'(rq[c].pop_front());
         end else begin
-          rv <= 1'b0;
+          rv[c] <= 1'b0;
         end
         if (!rnd_stall()) begin
           logic [15:0] n;
-          n = wdone;
+          n = wdone[c];
           while (wd[c].size() != 0 && wd[c][0] <= cyc) begin
             n = n + 1'b1;
             void'(wd[c].pop_front());
           end
-          wdone <= n;
+          wdone[c] <= n;
         end
       end
     end
@@ -267,7 +336,9 @@ module otpu_native_mem #(
 
   string dir;
   integer fd, nread;
+`ifndef OTPU_ARCSIM
   logic [31:0] chm [WORDS / NCH];
+`endif
   initial begin
     void'($value$plusargs("axi_stall=%d", stall));
     void'($value$plusargs("axi_bw=%d", bw));
@@ -292,12 +363,21 @@ module otpu_native_mem #(
     for (int c = 0; c < NCH; c++) begin n_rd[c] = 0; n_wr[c] = 0; n_miss[c] = 0; n_rmw[c] = 0; end
     begin
       int seed;
+`ifdef OTPU_ARCSIM
+      if ($value$plusargs("axi_seed=%d", seed)) otpu_urandom_seed(seed);
+`else
       if ($value$plusargs("axi_seed=%d", seed)) void'($urandom(seed));
+`endif
     end
+`ifdef OTPU_ARCSIM
+    otpu_mem_init(SID, longint'(WORDS));        // (zeros, then the harness's dram_<SID>.bin)
+`else
     for (int i = 0; i < H; i++) mem_lo[i] = '0;
     for (int i = 0; i < WORDS - H; i++) mem_hi[i] = '0;
+`endif
     if ($value$plusargs("dir=%s", dir)) begin
       if (PHYS == 0) begin
+`ifndef OTPU_ARCSIM
         fd = $fopen($sformatf("%s/dram_%0d.bin", dir, SID), "rb");
         if (fd != 0) begin
           nread = $fread(mem_lo, fd);  // the second continues where the first stopped
@@ -316,7 +396,9 @@ module otpu_native_mem #(
             pb_n++;
           $fclose(fd);
         end
+`endif
       end else begin
+`ifndef OTPU_ARCSIM
         // channel c word j (beat j / 16) is logical beat lbeat(j / 16, c)
         for (int c = 0; c < NCH; c++) begin
           for (int i = 0; i < WORDS / NCH; i++) chm[i] = '0;
@@ -327,6 +409,7 @@ module otpu_native_mem #(
           end
           for (int j = 0; j < WORDS / NCH; j++) wrw(lbeat(j / 16, c) * 16 + j % 16, chm[j]);
         end
+`endif
       end
     end
   end
@@ -341,6 +424,9 @@ module otpu_native_mem #(
       $display("MEM ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", c, n_rd[c], n_wr[c], n_miss[c],
                n_rmw[c]);
     end
+`ifdef OTPU_ARCSIM
+    otpu_mem_dump(SID);
+`else
     if (PHYS == 0) begin
       fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
       for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", rdw(i));
@@ -352,5 +438,6 @@ module otpu_native_mem #(
         $fclose(fd);
       end
     end
+`endif
   end
 endmodule
