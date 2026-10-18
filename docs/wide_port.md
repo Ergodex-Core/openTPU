@@ -1344,6 +1344,27 @@ attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 168 
 tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests/test_f2_build.py
 87 passed. Receipts (as above): int8 949,497 (unchanged: the register mirrors the select), int4 565,678 (unchanged).
 
+**Round 6 placed (788a91c0 = the round-6 RTL cd3cf74a + pb_otpu_xs, host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-788a91c0): WNS -2.234 ns** after place_design (round 5
+-2.303); six pblocks applied, the leaf-pin multicycles asserted at implementation (5.000 ns into
+both BRAM ports for read requests, 2.500 for the write path). By clock (place_rpt/):
+
+| clock | round 5 | round 6 | worst path, what it says |
+|---|---|---|---|
+| clk_raw 200 MHz | -1.43 (7,653) | **-2.17** (26,253) | the adapter `u_board/u_mem/qw_n_reg[6]` -> the ACT RAM's `u_act/we_i_reg[*]/D`, 3 levels and **6.8 of 7.1 ns route** inside SLR2: with the TMEM and VPU boxed (pb_otpu_tmem) the ACT RAM landed away from the adapter; fix 10's cone is gone and this unregistered adapter -> ACT RAM enable is the next |
+| hclk_raw 450 MHz | -2.25 (28,415) | **-2.19** | `g_port[1].u_nch/wf_n_reg[5]` -> `k_a_reg[*]/CE`, 3 levels, 3.8 of 4.0 ns route: untouched by choice (D19) |
+| clk_raw -> clk_f_raw | -2.04 (3,767) | **-2.23** (3,840 = every endpoint) | `u_quant/t_raddr_reg[0][0]` -> `g_pc[2].u_pb/.../ADDRARDADDR[5]`, 7 levels, a 4.2 ns path failing by 2.2: the asserted multicycle is `-through` the ra / rb / rena / renb nets' leaf loads, and this path reaches the same address pins through the piece's bank / piece select logic on other nets, so it stays single-cycle; the constraint must be anchored on every clk-domain input of the pieces (or those inputs registered at the piece boundary), not on selected nets |
+| clk_main_a0 250 MHz | -2.28 (2,964) | **-1.88** | `u_host/u_pcis_aw/r1_v_reg` (SLR1) -> `u_host/arq_reg[*]/CE` (SLR0), 4.8 of 5.2 ns route: the AW -> AR ordering gate reads the skid's valid directly, bypassing round 6's link stage |
+| clk_f_raw intra | +0.70 | -0.73 (6) | |
+
+Round 7's list: (13) the pump pieces' clk -> clk_f coverage by construction: register every clk-domain
+input of a piece (address, enables, sub-bank / piece select) at the piece boundary on clk and
+set the multicycle `-from` those registers `-to` the piece's RAM pins, asserting the count of
+boundary registers and the requirement on the worst path into each RAM port; (14) the AW -> AR
+ordering through the link (the decision on the SLR1 side, or the valid carried in the link's
+word), so no u_pcis_* signal reaches u_host's queues outside u_xs_*; (15) the adapter -> ACT RAM
+write enable registered at the slice's port A boundary (or u_act in a box beside the adapter).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
