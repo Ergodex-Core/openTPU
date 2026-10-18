@@ -171,6 +171,15 @@ drain) and measure it on the Gemma 3 trace, since every estimate hinges on it. C
 checks run after each implementation milestone, before any F2 synthesis. The work is carried
 out by AI coding agents in separate worktrees off this branch.
 
+**Milestone 0 is done** ([m0-gating-split.md](m0-gating-split.md)): of the 18.2%, 97% is rows
+whose chunks had not all arrived with the chunk FIFO under one row deep (the memory model
+delivering 0.76 chunks a cycle to a port that requests one: the card's DDR3, not the MXU's
+gating), 2.6% scale entries behind their chunks, 0.1% result-FIFO credits. With the memory at
+the port's rate (`--stall 0`) the token is 8.22 M cycles (95.5% of the roofline, 1% under the
+ISA model) and the item is 2.1%: 0.8% scales, 1.2% rows late at the DDR3 model's hiccups, 0.07%
+credits. The proposals' result-FIFO credit changes are not a performance item for Gemma 3; the
+scale-line prefetch and the per-row fixed costs at C chunks a cycle are.
+
 ### The original ask
 
 Pick one candidate for the F2 synthesis. The implementation is to be carried out by AI

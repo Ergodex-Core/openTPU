@@ -65,10 +65,12 @@ module otpu_mxu
   output logic                  done,
   output logic                  computing,   // a chunk is consumed this cycle (profiling)
   // profiling: this cycle's stream state (the FIFO level; work but no chunk / chunks but no
-  // consumption) and, a cycle after a command ends, its counters {deny, frz, bp, starve}
+  // consumption, and the one cause of that: {other, scales, row, credits}, below) and, a cycle
+  // after a command ends, its counters {deny, frz, bp, starve}
   output logic [$clog2(DEPTH):0] pf_level,
   output logic                  pf_starve,
   output logic                  pf_block,
+  output logic [3:0]            pf_bcause,
   output logic                  pf_u,
   output logic [3:0][31:0]      pf_uv,
   // ACT RAM read
@@ -396,6 +398,41 @@ module otpu_mxu
   assign pf_level  = f_count;
   assign pf_starve = more && f_count == 0;
   assign pf_block  = more && f_count != 0 && !pop;
+  // Why a blocked cycle (chunks in the FIFO, no pop) did not pop: one cause a cycle, the first
+  // of these in order (a fixed priority; otpu_slice counts them in its Q windows as mbc / mbr /
+  // mbs / mbo next to mb, and in run totals, docs/lens.md "Bucketed counters"):
+  //   credits  the result FIFO has no row credit (rows_live + rows_p >= RF): the drain side,
+  //            rows popped but not yet written to TMEM (the lanes, or a lost TMEM grant)
+  //   row      not all of the row's chunks are in the chunk FIFO (port B still streaming them)
+  //   scales   the row's chunks are in, not all of its scale entries (port A)
+  //   other    the remainder (none today: a blocked cycle is at a row's first advance, which
+  //            the three above cover; a stalled advance is the $fatal above)
+  // Credits come first: with no credit nothing could pop whatever the FIFOs hold, and a full
+  // result FIFO soon fills the chunk FIFO (the issuer stops at DEPTH), so the port's idle cycles
+  // are the drain's. The row and scale tests are row_in's two halves (cg != 0: a later replay
+  // group finds the whole row). In a blocked cycle f_av holds (f_count != 0), so !pop is
+  // exactly one of these.
+  wire blk_nocr  = !((RFW+2)'(rows_live) + (RFW+2)'(rows_p) < (RFW+2)'(RF));
+  wire blk_norow = cg == 0 && 32'(f_count) < 32'(c_rch);
+  wire blk_nosc  = !c_unit && (!s_av || (cg == 0 && 32'(s_count) < 32'(c_rch)));
+  assign pf_bcause[0] = pf_block && blk_nocr;
+  assign pf_bcause[1] = pf_block && !blk_nocr && blk_norow;
+  assign pf_bcause[2] = pf_block && !blk_nocr && !blk_norow && blk_nosc;
+  assign pf_bcause[3] = pf_block && !blk_nocr && !blk_norow && !blk_nosc;
+`ifndef SYNTHESIS
+  // run totals of the blocked cycles and their causes (otpu_slice prints them at the dump:
+  // rtlsim's stats["mxu_block"]); the causes sum to the blocked cycles by construction
+  longint unsigned xb_n, xb_c, xb_r, xb_s, xb_o;
+  initial begin xb_n = 0; xb_c = 0; xb_r = 0; xb_s = 0; xb_o = 0; end
+  always @(posedge clk)
+    if (!rst && pf_block) begin
+      xb_n++;
+      if (pf_bcause[0]) xb_c++;
+      if (pf_bcause[1]) xb_r++;
+      if (pf_bcause[2]) xb_s++;
+      if (pf_bcause[3]) xb_o++;
+    end
+`endif
   assign b_req  = go_iss && need_b;
   // not gated with b_req: the address (and the slice's parity of it) does not wait for b_gnt
   assign b_addr = chunk_addr >> 2;

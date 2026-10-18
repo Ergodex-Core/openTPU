@@ -13,7 +13,8 @@ A <profile> is one run of one workload (see to_data for every field):
     instrs     per dynamic instruction: [slice, idx, pc, unit, name, detail, dispatch, ready,
                release, start, end, source id, unit counters, nominal work, port-B, port-A]
     slices     per slice: DRAM port totals, unit busy cycles, TMEM-arbitration losses and the
-               bucketed counters (P and Q trace lines: see profile.py)
+               bucketed counters (P and Q trace lines: see profile.py; mbc / mbr / mbs / mbo
+               split the MXU's blocked cycles mb by cause: blocked_split)
     roofline   DRAM-bound minimum cycles and the achieved fraction
     sources    kernel source lines the instructions came from
     board      counter snapshot from the card (kind "board")
@@ -129,6 +130,30 @@ def notes(p: Profile) -> list[dict]:
         n = sum(bk.get(key, []))
         if n > 0.02 * cyc:
             out.append({"level": "warn", "text": f"For {n} cycles ({_pct(n / cyc)}) {what}."})
+    bs = blocked_split(bk)
+    if bs and bs["mb"] > 0.02 * cyc:
+        why = ", ".join(f"{BLOCKED_SHORT[k]} {_pct(bs[k] / bs['mb'])}" for k in BLOCKED_KEYS
+                        if bs[k])
+        out.append({"level": "warn", "text":
+                    f"For {bs['mb']} cycles ({_pct(bs['mb'] / cyc)}) the MXU had chunks but did "
+                    f"not consume them: {why}."})
+        if bs["mbr"] > bs["mb"] / 2:
+            # rows arriving late with the FIFO near empty: the memory delivers fewer chunks a
+            # cycle than the MXU consumes (its rate under the port's load, the port's requests
+            # capped by the chunks in flight); with the FIFO well stocked it is the arrivals'
+            # irregularity at the row starts. The level in the windows with late rows, weighted
+            # by their late cycles.
+            lvl = fifo_level_at(bk, "mbr")
+            out.append({"level": "info", "text":
+                        f"The chunk FIFO held {lvl:.0f} chunks on average while rows were "
+                        f"incomplete: " + (
+                            "the stream delivered fewer chunks a cycle than the MXU consumes, so "
+                            "every row completed late (the memory's rate, which no row-gating "
+                            "change in the MXU recovers; a faster memory does)."
+                            if lvl < 16 else
+                            "the stream is ahead on average but irregular at the row starts; a "
+                            "row lead in the MXU (pop a row while the next streams) or steadier "
+                            "arrivals recover it.")})
     busy = p.unit_busy(0)
     if busy.get("VPU", 0) > 0.85 * cyc and eff < 0.95:
         out.append({"level": "bad", "text":
@@ -146,6 +171,38 @@ def _loc(ins) -> str:
         return "(compiler)"
     f, line, fn = ins.src[0]
     return f"{os.path.basename(f)}:{line} in {fn}"
+
+
+# The blocked MXU cycles (mb: chunks in its FIFO, no pop) by their one cause each, in the RTL's
+# priority order (otpu_mxu pf_bcause): mbc no result-FIFO credit (the drain side), mbr the row's
+# chunks not all in the chunk FIFO (the stream irregular, or behind), mbs its scale entries not
+# all in (port A), mbo other. Profiles recorded before the split have mb alone.
+BLOCKED_KEYS = ("mbc", "mbr", "mbs", "mbo")
+BLOCKED_SHORT = {"mbc": "no result-FIFO credit (drain)", "mbr": "row's chunks not all in",
+                 "mbs": "row's scales not all in", "mbo": "other"}
+BLOCKED_SUB = ("blocked_credits", "blocked_row", "blocked_scales", "blocked_other")
+
+
+def fifo_level_at(B: dict, key: str = "mbr", k0: int = 0, k1: int | None = None) -> float:
+    """The MXU chunk FIFO's mean level (ff / n per window) over buckets k0 .. k1 - 1, weighted
+    by the windows' `key` counter (mbr: the level while rows were incomplete): near empty, the
+    memory delivers fewer chunks a cycle than the MXU consumes; well stocked, the arrivals are
+    irregular at the row starts."""
+    w = (B.get(key) or [])[k0:k1]
+    ff = (B.get("ff") or [])[k0:k1]
+    n = (B.get("n") or [])[k0:k1]
+    tot = sum(w)
+    if not tot:
+        return 0.0
+    return sum(wk * fk / nk for wk, fk, nk in zip(w, ff, n) if nk) / tot
+
+
+def blocked_split(B: dict, k0: int = 0, k1: int | None = None) -> dict | None:
+    """Totals of mb and its causes over buckets k0 .. k1 - 1 (all by default), or None when
+    the buckets have no split (a profile recorded before it, or the card's)."""
+    if not B or not all(k in B for k in BLOCKED_KEYS):
+        return None
+    return {k: int(sum((B.get(k) or [])[k0:k1])) for k in ("mb",) + BLOCKED_KEYS}
 
 
 def _losses(p: Profile, s: int) -> dict:
@@ -756,7 +813,11 @@ CAUSES = [
     ("busy", "DRAM port B streaming"),
     ("dram", "DRAM not ready (backpressure)"),
     ("starve", "MXU starved: chunk FIFO empty (latency)"),
-    ("blocked", "MXU not consuming (drain / row credits)"),
+    ("blocked", "MXU not consuming (drain / row credits)"),      # profiles without the split
+    ("blocked_credits", "MXU not consuming: no result-FIFO credit (drain)"),
+    ("blocked_row", "MXU not consuming: row's chunks not all in the FIFO"),
+    ("blocked_scales", "MXU not consuming: row's scales not all in"),
+    ("blocked_other", "MXU not consuming: other"),
     ("arb", "TMEM bank arbitration"),
     ("mxu", "MXU computing, not streaming"),
     ("w3", "waiting on VPU work"),
@@ -869,7 +930,15 @@ def _bucket_causes(B: dict, cov, k: int) -> dict:
 
     take("dram", g("bs"))
     take("starve", g("ms"))
-    take("blocked", g("mb"))
+    # the blocked cycles by cause when the profile has the split (in the proportions of the
+    # window's counters, which sum to mb), else the one "blocked" cause
+    mb = g("mb")
+    if all(k in B for k in BLOCKED_KEYS):
+        t = max(0.0, min(r, float(mb)))
+        for key, sub in zip(BLOCKED_SUB, BLOCKED_KEYS):
+            take(key, t * g(sub) / mb if mb else 0.0)
+    else:
+        take("blocked", mb)
     take("arb", g("fm"))
     if r > 0 and cov is not None and len(cov) > 1:
         take("mxu", cov[1][k] - busy)
@@ -932,6 +1001,7 @@ def summary_data(d: dict, s: int = 0) -> dict:
         "peak_macs": d.get("peak_macs") or 0, "bytes": d.get("bytes") or 0,
         "slice": s, "busy": busy, "lose": sl.get("lose") or {},
         "causes": port_b_causes(d, s), "classes": class_rows(d, s),
+        "blocked": blocked_split(sl.get("buckets") or {}),
         "notes": d.get("notes") or [], "board": d.get("board"),
         "n_instr": sum(1 for r in (d.get("instrs") or []) if r[0] == s),
     }
@@ -979,6 +1049,13 @@ def render_summary(d: dict, s: int = 0) -> str:
             lab = dict(CAUSES)
             bits = ", ".join(f"{lab[k]} ({_pct(v / cyc)})" for k, v in top)
             lines.append(f"  Biggest losses: {bits}.")
+    bs = m["blocked"]
+    if bs and bs["mb"]:
+        lines.append(f"MXU not consuming with chunks in its FIFO: {_fmt_n(bs['mb'])} cycles "
+                     f"({_pct(bs['mb'] / cyc)}), by cause")
+        for k in BLOCKED_KEYS:
+            lines.append(f"  {_bar(bs[k] / bs['mb'], 12)} {_pct(bs[k] / bs['mb']):>6}  "
+                         f"{BLOCKED_SHORT[k]}")
     units = d.get("units") or UNITS
     busy = m["busy"]
     if busy:

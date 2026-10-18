@@ -12,9 +12,12 @@ Trace events (printed by the RTL with +trace, one line each):
     T<s> P c=<cyc> n=<cycles> bm bd am aq mx fm fq fv fc         activity of the last n cycles:
          DRAM port B (MXU/DMA), port A (MXU/QST), MXU compute, and cycles the MXU drain, QUANT,
          VPU and collective lost to TMEM bank arbitration
-    T<s> Q c=<cyc> n=<cycles> bs as ms mb ff ld                   memory-side stalls of the same
-         window: port B / A requests waiting for the memory, MXU starved (chunk FIFO empty) or
-         blocked (chunks but no consumption), summed MXU FIFO level, loader traffic
+    T<s> Q c=<cyc> n=<cycles> bs as ms mb ff ld [mbc mbr mbs mbo]  memory-side stalls of the
+         same window: port B / A requests waiting for the memory, MXU starved (chunk FIFO empty)
+         or blocked (chunks but no consumption), summed MXU FIFO level, loader traffic; from the
+         simulation only (not the board's trace buffer) the blocked cycles by their one cause
+         each: no result-FIFO credit, the row's chunks not all in, its scales not all in, other
+         (they sum to mb; otpu_mxu pf_bcause, in that priority)
 
 The slice prints the lines a cycle after the fact, in a fixed order within a cycle (G, E, S, D,
 U, H, P, Q), from the same signals the board's hardware trace records (opentpu/hwtrace.py
@@ -373,4 +376,5 @@ def profile(kernel, cfg, name: str = "", dram_lat: int = 8, uarch: dict | None =
                           **(run_kw or {}))
     p = parse(st["trace"], cfg, comp.programs, name or kernel.__name__)
     p.cycles = st["cycles"]
+    p.stats = {k: v for k, v in st.items() if k != "trace"}   # the run's counters (rtlsim.run)
     return p
