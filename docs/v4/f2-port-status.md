@@ -137,6 +137,11 @@ stacks, 450 MHz ports, the switch on), snapshots the CL (`RUN/cl_opentpu`), and 
 `otpu-diag --mem`, then `tools/fpga_inference_check.py --model gemma3 --backend board --dev f2:0
 --compare-isa`).
 
+The first routed build of this CL (61d07199) failed timing on the host path's write bus at
+450 MHz, the bridges' write count into the slice at 200 MHz and the DMA's TMEM request into
+the pumped banks: the paths, the register stages and attributes that fix them, and what the
+next build should take are in [f2-timing.md](f2-timing.md) (branch `v4-f2-timing`).
+
 What could run here, without Vivado or the HDK: the snapshot step `build.py prepare()` for
 `f2-hbm` with a stub HDK shell directory (a `build_all.tcl`) and a stub `cl_mem_hbm_wrapper.sv`,
 as `tests/test_f2_build.py`'s HBM snapshot test runs it (the command line's `--prepare-only`
