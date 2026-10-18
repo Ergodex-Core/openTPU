@@ -633,7 +633,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
             cells.setdefault(pb, []).append(cell)
     hbm, mid, pcis, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem'))
     # the PCIS registers (round 4) beside the shell's DMA column, SLR1, apart from u_host (SLR0)
-    assert sorted(pcis) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in ('ar', 'aw', 'b', 'r', 'w')]
+    assert sorted(pcis) == sorted(f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
+                                  ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx'))
     assert all(c.startswith('WRAPPER/CL/u_sys/') for pb in cells.values() for c in pb)
     assert len([c for c in hbm if '.u_nch' in c]) == 4 and 'WRAPPER/CL/u_sys/u_mem/u_host' in hbm
     assert 'WRAPPER/CL/u_sys/u_board' in board and 'WRAPPER/CL/u_sys/u_ocl' in hbm

@@ -63,7 +63,8 @@ def test_f2_ocl_crossing(have_verilator, core_half, axi_half, nxr):
 
 
 # ---------------------------------------------------------------- the HBM build (f2-hbm)
-HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "shell/otpu_skid.sv", "boards/f2/otpu_f2_hbm_nch.sv",
+HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "shell/otpu_skid.sv", "shell/otpu_link.sv",
+              "boards/f2/otpu_f2_hbm_nch.sv",
               "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
               "boards/f2/otpu_f2_hbm_mem.sv"]
 

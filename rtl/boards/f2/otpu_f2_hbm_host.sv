@@ -103,6 +103,15 @@ module otpu_f2_hbm_host #(
   // "Placement, round 3") ran the shell's PCIS register in SLR1 into this block's ready LUTs in
   // SLR0 and back into the shell's register at -5.01 ns on the 4 ns clock: two SLR hops in a
   // cycle. The instances are named u_pcis_* so a floorplan can hold them beside the shell.
+  // Round 6 (docs/wide_port.md "Round 6 RTL"): between those registers, placed beside the shell
+  // (SLR1), and the queues here (SLR0) runs an otpu_link per channel (rtl/shell/otpu_link.sv:
+  // the sender's take and beat registered, the receiver's stage registered again, a credit
+  // back as a registered pulse), so every net across the boundary is a flip-flop to a
+  // flip-flop in both directions; round 5 placed u_pcis_r <-> u_rt's pointer over 5.4 ns of
+  // route. The link's SLR1 halves are u_pcis_*_tx (AW, W, AR) and u_pcis_*_rx (B, R), its
+  // SLR0 halves u_xs_* (the stage a floorplan puts at the boundary). A beat crosses in two
+  // cycles each way (tx, the stage) over round 5's one: +2 aclk cycles on a host write's or
+  // read's way in, +2 on its response's way out, none on the token.
   typedef struct packed { logic [15:0] id; logic [27:0] a; } aw_t;
   typedef struct packed { logic [15:0] id; logic [27:0] a; logic [7:0] len; } ar_t;
   aw_t          aw_i;                   // the AW shown to the logic below
@@ -112,26 +121,69 @@ module otpu_f2_hbm_host #(
   logic [63:0]  w_s;
   ar_t          ar_i;
   logic         ar_v, ar_r;
-  logic         aw_any, w_any;          // a beat in either slot of the buffer
-  logic         bo_v, bo_r;             // B: into its output register
+  logic         aw_any, w_any;          // a beat in either slot of the skid buffer
+  logic         aw_busy, w_busy;        // a beat in the link or its queue (the credits' view)
+  logic         bo_v, bo_r;             // B: into its link
   logic [15:0]  bo_id;
-  logic         ro_v, ro_r, ro_l;       // R: into its output register
+  logic         ro_v, ro_r, ro_l;       // R: into its link
   logic [15:0]  ro_id;
   logic [511:0] ro_d;
+  // the skid buffers' outputs into the links (SLR1), the links' outputs here (SLR0)
+  aw_t          aw_s, aw_x;
+  logic         aw_sv, aw_sr, aw_xv, aw_pop;
+  logic         w_sv, w_sr, w_xv, w_pop;
+  logic [576:0] w_s_, w_x;
+  ar_t          ar_s, ar_x;
+  logic         ar_sv, ar_sr, ar_xv, ar_pop;
+  // the responses: here into the links (SLR0), out of them into the output registers (SLR1)
+  logic         b_xv, b_pop, bl_v, bl_r;
+  logic [15:0]  b_x, bl_d;
+  logic         r_xv, r_pop, rl_v, rl_r;
+  logic [528:0] r_x, rl_d;
   otpu_skid #(.W($bits(aw_t))) u_pcis_aw (
     .clk(aclk), .rst(arst_q), .i_v(h_awvalid), .i_r(h_awready),
-    .i_d({h_awid, h_awaddr[33:6]}), .o_v(aw_v), .o_r(aw_r), .o_d(aw_i), .any(aw_any));
+    .i_d({h_awid, h_awaddr[33:6]}), .o_v(aw_sv), .o_r(aw_sr), .o_d(aw_s), .any(aw_any));
+  otpu_link_tx #(.W($bits(aw_t))) u_pcis_aw_tx (
+    .clk(aclk), .rst(arst_q), .i_v(aw_sv), .i_r(aw_sr), .i_d(aw_s), .o_v(aw_xv), .o_d(aw_x),
+    .i_pop(aw_pop), .busy(aw_busy));
+  otpu_link_rx #(.W($bits(aw_t))) u_xs_aw (
+    .clk(aclk), .rst(arst_q), .i_v(aw_xv), .i_d(aw_x), .o_pop(aw_pop),
+    .o_v(aw_v), .o_r(aw_r), .o_d(aw_i));
   otpu_skid #(.W(1 + 64 + 512)) u_pcis_w (
     .clk(aclk), .rst(arst_q), .i_v(h_wvalid), .i_r(h_wready), .i_d({h_wlast, h_wstrb, h_wdata}),
-    .o_v(w_v), .o_r(w_r), .o_d({w_l, w_s, w_d}), .any(w_any));
+    .o_v(w_sv), .o_r(w_sr), .o_d(w_s_), .any(w_any));
+  otpu_link_tx #(.W(1 + 64 + 512)) u_pcis_w_tx (
+    .clk(aclk), .rst(arst_q), .i_v(w_sv), .i_r(w_sr), .i_d(w_s_), .o_v(w_xv), .o_d(w_x),
+    .i_pop(w_pop), .busy(w_busy));
+  otpu_link_rx #(.W(1 + 64 + 512)) u_xs_w (
+    .clk(aclk), .rst(arst_q), .i_v(w_xv), .i_d(w_x), .o_pop(w_pop),
+    .o_v(w_v), .o_r(w_r), .o_d({w_l, w_s, w_d}));
   otpu_skid #(.W($bits(ar_t))) u_pcis_ar (
     .clk(aclk), .rst(arst_q), .i_v(h_arvalid), .i_r(h_arready),
-    .i_d({h_arid, h_araddr[33:6], h_arlen}), .o_v(ar_v), .o_r(ar_r), .o_d(ar_i), .any());
+    .i_d({h_arid, h_araddr[33:6], h_arlen}), .o_v(ar_sv), .o_r(ar_sr), .o_d(ar_s), .any());
+  otpu_link_tx #(.W($bits(ar_t))) u_pcis_ar_tx (
+    .clk(aclk), .rst(arst_q), .i_v(ar_sv), .i_r(ar_sr), .i_d(ar_s), .o_v(ar_xv), .o_d(ar_x),
+    .i_pop(ar_pop), .busy());
+  otpu_link_rx #(.W($bits(ar_t))) u_xs_ar (
+    .clk(aclk), .rst(arst_q), .i_v(ar_xv), .i_d(ar_x), .o_pop(ar_pop),
+    .o_v(ar_v), .o_r(ar_r), .o_d(ar_i));
+  otpu_link_tx #(.W(16)) u_xs_b (
+    .clk(aclk), .rst(arst_q), .i_v(bo_v), .i_r(bo_r), .i_d(bo_id), .o_v(b_xv), .o_d(b_x),
+    .i_pop(b_pop), .busy());
+  otpu_link_rx #(.W(16)) u_pcis_b_rx (
+    .clk(aclk), .rst(arst_q), .i_v(b_xv), .i_d(b_x), .o_pop(b_pop),
+    .o_v(bl_v), .o_r(bl_r), .o_d(bl_d));
   otpu_f2_hbm_oreg #(.W(16)) u_pcis_b (
-    .clk(aclk), .rst(arst_q), .i_v(bo_v), .i_r(bo_r), .i_d(bo_id),
+    .clk(aclk), .rst(arst_q), .i_v(bl_v), .i_r(bl_r), .i_d(bl_d),
     .o_v(h_bvalid), .o_r(h_bready), .o_d(h_bid));
+  otpu_link_tx #(.W(1 + 16 + 512)) u_xs_r (
+    .clk(aclk), .rst(arst_q), .i_v(ro_v), .i_r(ro_r), .i_d({ro_l, ro_id, ro_d}), .o_v(r_xv),
+    .o_d(r_x), .i_pop(r_pop), .busy());
+  otpu_link_rx #(.W(1 + 16 + 512)) u_pcis_r_rx (
+    .clk(aclk), .rst(arst_q), .i_v(r_xv), .i_d(r_x), .o_pop(r_pop),
+    .o_v(rl_v), .o_r(rl_r), .o_d(rl_d));
   otpu_f2_hbm_oreg #(.W(1 + 16 + 512)) u_pcis_r (
-    .clk(aclk), .rst(arst_q), .i_v(ro_v), .i_r(ro_r), .i_d({ro_l, ro_id, ro_d}),
+    .clk(aclk), .rst(arst_q), .i_v(rl_v), .i_r(rl_r), .i_d(rl_d),
     .o_v(h_rvalid), .o_r(h_rready), .o_d({h_rlast, h_rid, h_rdata}));
 
   // ================================================================== aclk: writes
@@ -160,7 +212,9 @@ module otpu_f2_hbm_host #(
   // it into u_ocl's awready and back to the shell, two SLR hops; a write shown is taken into
   // its buffer in that cycle (the buffer's ready is high whenever its second slot is free, and
   // the OCL side's take is a cycle later now, otpu_axil_cdc), so the hold still comes first)
-  assign pcis_wbusy = aw_n != 0 || b_n != 0 || aw_any || w_any;
+  // (round 6: and in the links, until their credits are back, which is after the queue here
+  // took the beat)
+  assign pcis_wbusy = aw_n != 0 || b_n != 0 || aw_any || w_any || aw_busy || w_busy;
   always_ff @(posedge aclk) begin
     if (aw_tk) awq[HW'(aw_h + aw_n)] <= aw_i;
     if (w_tk && w_l) bq[HW'(b_h + b_n)] <= '{id: awq[aw_h].id, cum: wpushed + 1'b1};
