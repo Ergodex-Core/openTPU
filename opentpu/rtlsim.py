@@ -453,6 +453,12 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
     stats["act_reads"] = [dict(zip(("cyc", "rd", "pop", "use", "cols", "any"), map(int, m)))
                           for m in re.findall(r"MXACT s\d+ cyc=(\d+) rd=(\d+) pop=(\d+) "
                                               r"use=(\d+) cols=(\d+) any=(\d+)", out)]
+    # per slice, the MXU's blocked cycles (chunks in its FIFO, no pop; the trace's mb) and their
+    # one cause each (otpu_mxu xb_*): no result-FIFO credit, the row's chunks not all in, its
+    # scales not all in, other -- they sum to mb
+    stats["mxu_block"] = [dict(zip(("mb", "mbc", "mbr", "mbs", "mbo"), map(int, m)))
+                          for m in re.findall(r"MXBLOCK s\d+ mb=(\d+) mbc=(\d+) mbr=(\d+) "
+                                              r"mbs=(\d+) mbo=(\d+)", out)]
     if error_ok:
         stats["error"] = bool(err)
     if axi:

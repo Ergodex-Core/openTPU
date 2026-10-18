@@ -451,6 +451,7 @@ module otpu_slice
   localparam int FW = $clog2(FIFO_DEPTH) + 1;
   logic [FW-1:0] mxu_level;
   logic mxu_starve, mxu_block, mxu_u, q_u, v_u;
+  logic [3:0] mxu_bcause;            // the one cause of a blocked MXU cycle (simulation counters)
   logic [3:0][31:0] mxu_uv;
   logic [31:0] q_frz, v_frz;
 
@@ -498,6 +499,7 @@ module otpu_slice
              .CL(MXU_CL), .E(MXU_E), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
+    .pf_bcause(mxu_bcause),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
     .act_blk(act_rblk), .act_blk2(act_rblk2), .act_hi(act_rhi), .act_grp(act_rgrp), .act_ren, .act_data(act_rdata), .act_scale(act_rscale),
     .a_req(mxu_areq), .a_addr(mxu_aaddr), .a_gnt(mxu_agnt), .a_rvalid, .a_rdata,
@@ -1227,8 +1229,26 @@ module otpu_slice
   end
 
 `ifndef SYNTHESIS
+  // ---- the blocked MXU cycles by cause (otpu_mxu pf_bcause: credits, row, scales, other), the
+  // same windows as the Q line's mb, which they sum to; simulation only (the board's trace
+  // buffer records NQ counters, otpu_trace.sv) -- the Q line's mbc mbr mbs mbo
+  logic [3:0]       bc_r;
+  logic [3:0][31:0] sbc, w_bc;
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      bc_r <= '0; sbc <= '0;
+    end else begin
+      bc_r <= h_d ? '0 : mxu_bcause;
+      for (int k = 0; k < 4; k++) sbc[k] <= we_r ? '0 : sbc[k] + 32'(bc_r[k]);
+    end
+  end
+  always_comb for (int k = 0; k < 4; k++) w_bc[k] = sbc[k] + 32'(bc_r[k]);
+  always @(posedge clk)
+    if (dump) $display("MXBLOCK s%0d mb=%0d mbc=%0d mbr=%0d mbs=%0d mbo=%0d", SID, u_mxu.xb_n,
+                       u_mxu.xb_c, u_mxu.xb_r, u_mxu.xb_s, u_mxu.xb_o);
   // ---- +trace: the trace lines (opentpu/profile.py), from the events above -- exactly what the
-  // board's trace buffer records (otpu_trace.sv, opentpu/hwtrace.py)
+  // board's trace buffer records (otpu_trace.sv, opentpu/hwtrace.py), the Q line's four extra
+  // counters apart
   bit trace;
   initial trace = $test$plusargs("trace");
   // the MXU's scale reads (otpu_mxu xs_*; rtlsim stats["mxu_scale"]): port A line requests, and
@@ -1265,8 +1285,9 @@ module otpu_slice
         $display("T%0d P c=%0d n=%0d bm=%0d bd=%0d am=%0d aq=%0d mx=%0d fm=%0d fq=%0d fv=%0d fc=%0d",
                  SID, pf.sq.cyc, pf.w_n, pf.w_p[0], pf.w_p[1], pf.w_p[2], pf.w_p[3], pf.w_p[4],
                  pf.w_p[5], pf.w_p[6], pf.w_p[7], pf.w_p[8]);
-        $display("T%0d Q c=%0d n=%0d bs=%0d as=%0d ms=%0d mb=%0d ff=%0d ld=%0d", SID, pf.sq.cyc,
-                 pf.w_n, pf.w_q[0], pf.w_q[1], pf.w_q[2], pf.w_q[3], pf.w_q[4], pf.w_q[5]);
+        $display("T%0d Q c=%0d n=%0d bs=%0d as=%0d ms=%0d mb=%0d ff=%0d ld=%0d mbc=%0d mbr=%0d mbs=%0d mbo=%0d",
+                 SID, pf.sq.cyc, pf.w_n, pf.w_q[0], pf.w_q[1], pf.w_q[2], pf.w_q[3], pf.w_q[4],
+                 pf.w_q[5], w_bc[0], w_bc[1], w_bc[2], w_bc[3]);
       end
     end
 `endif
