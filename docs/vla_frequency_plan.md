@@ -493,6 +493,38 @@ decision: at LANES 32 the pblocks are the wide-port file's with pb_otpu_board as
 above and a new pb_otpu_mxu (SLR1, the columns, u_act and the FIFOs by cell name) once the
 MXU's internal crossings are registered.
 
+### 6f. Third synthesis of f2-vla (measured, 2026-10-18: fits, and meets timing post-synthesis)
+
+SynthCL on the F2 host (Vivado 2025.2, vla c2598e54 = 6e's RTL, run dir
+/home/ubuntu/opt/hwloop-nightly/vla-c2598e54/synth, 0 errors, no overutilization):
+
+| resource | 6d | **6f** | of the part |
+|---|---|---|---|
+| CLB LUTs | 931,960 (71.5%) | **718,265** | **55.1%** |
+| RAMB36 | 1,353 | 1,353 | 67% |
+| URAM | 384 | 384 | 40% |
+| DSP48E2 | 5,876 | 5,876 | 65% |
+
+By hierarchy (LUTs): `u_slice` 642,912 (was 846,205); `u_tmem` **124,593** (was 297,991: the
+read data path as a barrel rotator, 6e); `u_mxu` 233,490 (was 260,691: the mk fix); `u_vpu`
+205,531; `u_quant` 56,268; `u_act` 2,361 + 1,088 RAMB36.
+
+Timing estimate (post-synthesis, no placement), every clock positive: clk_raw 200 MHz
+**+0.110 ns** (was -0.739: the mk path), clk_f_raw 400 MHz +0.788, hclk_raw 450 MHz +0.154,
+clk_main_a0 +2.489; the clk_raw -> clk_f_raw table has no violation (was -0.390: the
+collective port's address); one -0.003 ns clk_f_raw -> clk_raw path (a pumped bank's URAM
+clock to an MXU DSP input) and the usual pre-placement hold nits. So the VLA variant fits the
+VU47P with margin and starts placement with positive synthesis slack on every domain.
+
+What placement needs (6e's verdict stands): the slice is 643K LUTs against SLR2's ~435K of CL
+area, so it cannot sit in one SLR as the wide-port branch's floorplan puts its 226K slice;
+the register-clean cut found at 64 lanes is the MXU's array (~100K) against the rest (~540K,
+still above one SLR). The options: LANES 32 at MCOLS 32 packed (TMEM / VPU / quant halve, the
+rest ~340K = 78% of SLR2; LPN 1.549 s = 0.65 Hz against 0.68), or registering the TMEM's
+grant / lost / frz interfaces to the VPU, quant and DMA (a protocol change) so the slice can
+span two SLRs at 64 lanes. A free placement across SLRs (the wide-port branch's rounds 1-2,
+-4.6 to -4.9 ns) is the measured outcome of neither.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
