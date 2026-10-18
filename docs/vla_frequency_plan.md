@@ -341,6 +341,43 @@ Repeating the estimate's inputs: the hierarchy numbers above are
 /home/ubuntu/opt/hwloop-nightly/vla-22ade69b/synth's utilization report (6b); the structure
 counts are otpu_tmem's at LANES 64, IW 15 (24,576 words a bank), NSB 2, NRP 8, NWP 4.
 
+### 6d. Second synthesis of f2-vla (measured, 2026-10-18: it fits)
+
+SynthCL on the F2 host (Vivado 2025.2, vla 92197967 = 6c's RTL, run dir
+/home/ubuntu/opt/hwloop-nightly/vla-92197967/synth, synth_design 1 h 40 min, 0 errors, no
+"BRAM overutilized"). Against 6b and 6c's estimate:
+
+| resource | 6b (first synthesis) | 6c estimate | **6d measured** | of the part |
+|---|---|---|---|---|
+| CLB LUTs | 2,253,192 (173%) | ~830K | **931,960** | **71.5%** |
+| registers | 555,937 | | 540,250 | 20.7% |
+| RAMB36 | 2,297 (114%) | 1,337 | **1,353** | 67% |
+| URAM | 0 | 384 | **384** (the 128 pumped banks, 3 cascaded each) | 40% |
+| DSP48E2 | 5,876 | 5,876 | 5,876 | 65% |
+
+By hierarchy (LUTs / logic / LUTRAM / SRL / FF / RAMB36 / URAM / DSP): `u_slice` 846,205 /
+756,424 / 15,446 / 74,335 / 480,640 / 1,316 / 384 / 5,876; `u_tmem` **297,991** (all logic; 6c
+estimated ~140K: the ten rotators, the IMPL 3 arbitration and the two MXROT rotator ports cost
+more than the structure count said; still 127K less than 6b's 425K), `u_mxu` 260,691 (was
+299,960), `u_vpu` 206,140, `u_quant` 60,467, `u_act` 2,533 + 1,088 RAMB36 (was 1,149,727 LUTs),
+`u_seq` 10,262, `u_dma` 7,671; the adapter `u_mem` 38,101, the HBM memory path 28,606, the host
+path 1,963, control 813.
+
+Timing estimate (post-synthesis, no placement): clk_raw 200 MHz **-0.739 ns** (2,777 endpoints),
+the worst path `u_mxu/rx_reg[nv][0][30]` -> `u_mxu/mk_reg[24][0]/CE`, 23 levels (2 CARRY8, 10
+LUT6): the MXU's mk / mkr family that round 1 of the wide-port branch's F2 build hit (docs/wide_port.md
+"Placement": `mx_have -> mkr`, fixed there in fb42c14e, not on this branch); clk_raw ->
+clk_f_raw **-0.390** (1,808): `g_coll.u_coll/asel_reg[0]` -> the pumped bank's
+`mem_reg_uram_2/CAS_IN_ADDR_B[13]`, 18 levels through the URAM cascade under the 2-fast-period
+multicycle (otpu_clk2x.tcl matched all 128 pumped RAMs here: 3,840 request pins); clk_f_raw
+intra +0.79, hclk_raw +0.15, clk_main_a0 +2.49. Hold violations are the pre-placement kind
+(-0.1 ns, 0-1 levels). Next: port the wide-port branch's mkr fix (a deliberate cross-merge,
+the one exception to the branch rule), pipeline the collective port's address into the
+pumped banks (or start it a cycle earlier), then one placement round (the floorplan from the
+wide-port branch's cl_pnr_user_hbm.tcl, with pb_otpu_board at ~70% of SLR2 not 50%: the slice
+is 846K LUTs against SLR2's ~435K, so the f2-vla floorplan must span two SLRs; phase 2's
+sketch).
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
