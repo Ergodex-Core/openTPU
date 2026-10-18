@@ -28,7 +28,7 @@
 // across ports), so the data comes back in the host's order. A read past NPORT returns zeros.
 //
 // PCIS side (aclk): every output is a flip-flop (AW, W, AR behind two-entry skid buffers whose
-// ready is a register, otpu_skid; B and R from output registers, otpu_f2_hbm_oreg below), so no
+// ready is a register, otpu_skidbuf; B and R from output registers, otpu_f2_hbm_oreg below), so no
 // path runs from a shell register through this block and back in the 4 ns cycle (round 3's
 // placement, docs/wide_port.md "Round 4 RTL": the shell's register in SLR1 into the readies'
 // LUTs in SLR0 and back, -5.01 ns).
@@ -97,7 +97,7 @@ module otpu_f2_hbm_host #(
   // ================================================================== aclk: the PCIS registers
   // Every PCIS output is a flip-flop, and nothing the shell drives reaches a shell input's
   // logic and goes back in the cycle: AW, W and AR enter two-entry skid buffers whose ready is
-  // a register (otpu_skid, rtl/shell: the beat the logic here sees comes from the buffer's
+  // a register (otpu_skidbuf, rtl/shell: the beat the logic here sees comes from the buffer's
   // output register), B and R leave through output registers (otpu_f2_hbm_oreg: valid and data
   // loaded when the host took the last or holds none). Round 3's placement (docs/wide_port.md
   // "Placement, round 3") ran the shell's PCIS register in SLR1 into this block's ready LUTs in
@@ -123,6 +123,8 @@ module otpu_f2_hbm_host #(
   logic         ar_v, ar_r;
   logic         aw_any, w_any;          // a beat in either slot of the skid buffer
   logic         aw_busy, w_busy;        // a beat in the link or its queue (the credits' view)
+  logic         wb_s, wb_x;             // writes pending on the registers' side: registered
+                                        //   there (u_pcis_wb), then here (u_xs_wb)
   logic         bo_v, bo_r;             // B: into its link
   logic [15:0]  bo_id;
   logic         ro_v, ro_r, ro_l;       // R: into its link
@@ -140,7 +142,7 @@ module otpu_f2_hbm_host #(
   logic [15:0]  b_x, bl_d;
   logic         r_xv, r_pop, rl_v, rl_r;
   logic [528:0] r_x, rl_d;
-  otpu_skid #(.W($bits(aw_t))) u_pcis_aw (
+  otpu_skidbuf #(.W($bits(aw_t))) u_pcis_aw (
     .clk(aclk), .rst(arst_q), .i_v(h_awvalid), .i_r(h_awready),
     .i_d({h_awid, h_awaddr[33:6]}), .o_v(aw_sv), .o_r(aw_sr), .o_d(aw_s), .any(aw_any));
   otpu_link_tx #(.W($bits(aw_t))) u_pcis_aw_tx (
@@ -149,7 +151,7 @@ module otpu_f2_hbm_host #(
   otpu_link_rx #(.W($bits(aw_t))) u_xs_aw (
     .clk(aclk), .rst(arst_q), .i_v(aw_xv), .i_d(aw_x), .o_pop(aw_pop),
     .o_v(aw_v), .o_r(aw_r), .o_d(aw_i));
-  otpu_skid #(.W(1 + 64 + 512)) u_pcis_w (
+  otpu_skidbuf #(.W(1 + 64 + 512)) u_pcis_w (
     .clk(aclk), .rst(arst_q), .i_v(h_wvalid), .i_r(h_wready), .i_d({h_wlast, h_wstrb, h_wdata}),
     .o_v(w_sv), .o_r(w_sr), .o_d(w_s_), .any(w_any));
   otpu_link_tx #(.W(1 + 64 + 512)) u_pcis_w_tx (
@@ -158,7 +160,7 @@ module otpu_f2_hbm_host #(
   otpu_link_rx #(.W(1 + 64 + 512)) u_xs_w (
     .clk(aclk), .rst(arst_q), .i_v(w_xv), .i_d(w_x), .o_pop(w_pop),
     .o_v(w_v), .o_r(w_r), .o_d({w_l, w_s, w_d}));
-  otpu_skid #(.W($bits(ar_t))) u_pcis_ar (
+  otpu_skidbuf #(.W($bits(ar_t))) u_pcis_ar (
     .clk(aclk), .rst(arst_q), .i_v(h_arvalid), .i_r(h_arready),
     .i_d({h_arid, h_araddr[33:6], h_arlen}), .o_v(ar_sv), .o_r(ar_sr), .o_d(ar_s), .any());
   otpu_link_tx #(.W($bits(ar_t))) u_pcis_ar_tx (
@@ -185,6 +187,16 @@ module otpu_f2_hbm_host #(
   otpu_f2_hbm_oreg #(.W(1 + 16 + 512)) u_pcis_r (
     .clk(aclk), .rst(arst_q), .i_v(rl_v), .i_r(rl_r), .i_d(rl_d),
     .o_v(h_rvalid), .o_r(h_rready), .o_d({h_rlast, h_rid, h_rdata}));
+  // Round 7 (docs/wide_port.md "Round 7 RTL"): the write-pending bit the order rule needs from
+  // the registers' side (a write in a skid buffer or in its link) is registered there and
+  // crosses as one more flip-flop -> flip-flop net into u_xs_wb; nothing of u_pcis_* reaches
+  // the queues' logic directly (round 6 placed u_pcis_aw's valid into arq's enables over 4.8
+  // ns). The bit is two cycles older than the skids' state; a write's beat reaches the queue
+  // here two cycles later still (the link), and a read's AR as late, so the rule holds
+  // (tb_f2hbm's read-after-write), and the OCL side starts a write only from a beat two
+  // cycles old (otpu_axil_cdc), so a PCIS write shown with it is counted first
+  otpu_xr #(.W(1)) u_pcis_wb (.clk(aclk), .rst(1'b0), .d(aw_any || w_any || aw_busy || w_busy), .q(wb_s));
+  otpu_xr #(.W(1)) u_xs_wb (.clk(aclk), .rst(1'b0), .d(wb_s), .q(wb_x));
 
   // ================================================================== aclk: writes
   aw_t          awq [HQ];
@@ -213,8 +225,8 @@ module otpu_f2_hbm_host #(
   // its buffer in that cycle (the buffer's ready is high whenever its second slot is free, and
   // the OCL side's take is a cycle later now, otpu_axil_cdc), so the hold still comes first)
   // (round 6: and in the links, until their credits are back, which is after the queue here
-  // took the beat)
-  assign pcis_wbusy = aw_n != 0 || b_n != 0 || aw_any || w_any || aw_busy || w_busy;
+  // took the beat; round 7: through the registers' side's wb bit, two cycles old)
+  assign pcis_wbusy = aw_n != 0 || b_n != 0 || wb_x;
   always_ff @(posedge aclk) begin
     if (aw_tk) awq[HW'(aw_h + aw_n)] <= aw_i;
     if (w_tk && w_l) bq[HW'(b_h + b_n)] <= '{id: awq[aw_h].id, cum: wpushed + 1'b1};

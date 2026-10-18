@@ -50,7 +50,7 @@ def test_f2_memory_detects_missing_hazards(have_verilator):
 def test_f2_ocl_crossing(have_verilator, core_half, axi_half, nxr):
     """Control accesses cross once, preserve data/errors, obey hold and ignore other windows;
     nxr 3: through the HBM build's SLR crossing stages (otpu_axil_xr) as well."""
-    exe = rtlsim.build("tb_f2axil", [rtlsim.RTL / "shell/otpu_skid.sv",
+    exe = rtlsim.build("tb_f2axil", [rtlsim.RTL / "shell/otpu_skidbuf.sv",
                                     rtlsim.RTL / "boards/f2/otpu_axil_cdc.sv",
                                     rtlsim.RTL / "shell/otpu_xr.sv",
                                     rtlsim.RTL / "boards/f2/otpu_axil_xr.sv",
@@ -63,7 +63,7 @@ def test_f2_ocl_crossing(have_verilator, core_half, axi_half, nxr):
 
 
 # ---------------------------------------------------------------- the HBM build (f2-hbm)
-HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "shell/otpu_skid.sv", "shell/otpu_link.sv",
+HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "shell/otpu_skidbuf.sv", "shell/otpu_link.sv",
               "boards/f2/otpu_f2_hbm_nch.sv",
               "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
               "boards/f2/otpu_f2_hbm_mem.sv"]
@@ -100,3 +100,42 @@ def test_f2_hbm_fabric_detects_missing_hazards(have_verilator):
     r = subprocess.run([str(exe), "+seed=1", "+nb=1", "+cycles=4000"],
                        capture_output=True, text=True, timeout=600)
     assert "FAIL" in r.stdout and "stale or wrong data" in r.stdout, r.stdout[-3000:]
+
+
+def test_pcis_registers_only_drive_the_link_stage():
+    """Structural (the RTL source): every signal driven by an output of a u_pcis_* instance of
+    otpu_f2_hbm_host is read only by u_pcis_* / u_xs_* instances or assigned to the block's PCIS
+    output ports, so the registers beside the shell (pb_otpu_pcis, SLR1) reach u_host's logic
+    (SLR0) through the link stages alone (round 7, docs/wide_port.md "Round 7 RTL")."""
+    import re
+    src = (rtlsim.RTL / "boards/f2/otpu_f2_hbm_host.sv").read_text()
+    body = src[:src.index("endmodule")]
+    outs = {"otpu_skidbuf": {"i_r", "o_v", "o_d", "any"}, "otpu_link_tx": {"i_r", "o_v", "o_d", "busy"},
+            "otpu_link_rx": {"o_pop", "o_v", "o_d"}, "otpu_f2_hbm_oreg": {"i_r", "o_v", "o_d"},
+            "otpu_xr": {"q"}}
+    insts = re.findall(r"\n\s+(\w+)\s*(?:#\((?:[^()]|\([^()]*\))*\))?\s+(u_\w+)\s*\((.*?)\);", body, re.S)
+    assert any(n.startswith("u_pcis_") for _, n, _ in insts) and any(n.startswith("u_xs_") for _, n, _ in insts)
+    sig = lambda e: re.sub(r"\[.*?\]|\{|\}|\s", "", e.split("||")[0]) if "||" not in e else e
+    driven, readers = {}, {}
+    for mod, name, pins in insts:
+        for port, expr in re.findall(r"\.(\w+)\(([^()]*(?:\([^()]*\))?[^()]*)\)", pins):
+            names = set(re.findall(r"\b[a-z]\w*\b", expr)) - {"clk", "rst"}
+            for n in names:
+                (driven if port in outs.get(mod, set()) else readers).setdefault(n, set()).add(name)
+    pcis_nets = {n for n, d in driven.items() if any(i.startswith("u_pcis_") for i in d)}
+    assert pcis_nets, "no u_pcis_* outputs found"
+    ports = set(re.findall(r"output\s+logic\s*(?:\[[^\]]*\])?\s*(h_\w+)", src))
+    bad = {}
+    for n in pcis_nets:
+        if n in ports:
+            continue
+        for i in readers.get(n, set()):
+            if not (i.startswith("u_pcis_") or i.startswith("u_xs_")):
+                bad.setdefault(n, set()).add(i)
+        # a continuous assignment or an always block of the host reading it
+        for m in re.finditer(r"^(?!\s*//)(.*)$", body, re.M):
+            line = m.group(1)
+            if re.search(rf"\b{n}\b", line) and "u_pcis_" not in line and "u_xs_" not in line \
+                    and not re.search(rf"\blogic\b.*\b{n}\b", line) and not line.strip().startswith("."):
+                bad.setdefault(n, set()).add(line.strip()[:60])
+    assert not bad, f"u_pcis_* outputs read outside the link stages: {bad}"
