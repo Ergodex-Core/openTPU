@@ -165,6 +165,25 @@ hide the dependent chains between matmuls (about 3,000 chunks, 3x today's, an RT
 Together: 1.14-1.29x per candidate, in the table. A one-line cycle model in that document
 reproduces today's token to 0.7%.
 
+## F2 status (2026-10-18, on hold by decision)
+
+The F2 flow exists in the sibling tree `ergodex-03/openTPU-vla-rhino` (same base commit as
+this branch): targets `f2` (DDR, 100 MHz, the only AFI built from that tree), `f2-hbm`
+(one slice on 8 HBM pseudo-channels at 200 MHz, its own adapter `otpu_f2_hbm_*`; synthesized,
+never routed), `f2-hbm:s4` (four slices on all 32: P4's hardware), `f2-hbm16`; the host
+transport `opentpu/host/f2.py` (BAR0 / BAR4 over the small shell, no XDMA), the build flow
+`boards/f2/build.py` (aws-fpga HDK 2.3.0, Vivado 2025.2, recipes A1 B2 C0 H2) run on the F2
+instance over SSM, and `wide-port` (a PORTB 1 / 2 / 4 port through that adapter: P1's and
+P2's bandwidth, its PORTB 4 / MCOLS 8 build failing timing at WNS -2.3 ns, round 6 running).
+The two 200 MHz AFIs in the account (agfi-0fb51b57637d7fac0, agfi-0d06cb48544a02106
+"burst200") are a separate CL with a SmartConnect, no source in either tree; Gemma 3 1B ran
+on them bit-exact to the ISA simulator at 6.1 tok/s (the stream at 32 B/cycle through the
+SmartConnect) and 22.3 tok/s on burst200. The branch to port is `f2-hbm` (ef33566c, 11 commits,
+no core-RTL conflicts with this branch); P1's adapter rewrite must not be adopted (it drops the
+host's channel map); P2's lane ports are tied off at the board top and need the adapter's
+per-lane queues. Build host when resumed: `fpga-dev-f2` (i-00a83cab3c81ac10f, idle).
+**Decision: hold everything on F2 for now; the proposals continue in simulation.**
+
 ## Decision (taken 2026-10-18)
 
 Try **P1** (the wide port), **P2** (four lock-step chunk lanes) and **P4** (four
