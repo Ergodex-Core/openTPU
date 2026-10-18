@@ -656,6 +656,82 @@ at 64 lanes additionally the TMEM's grant / lost / frz interfaces to the VPU, qu
 registered so those units can leave SLR2. LANES 32 alone buys nothing: it costs the measured
 phases 6-46% (6g) and still needs the split.
 
+### 6i. The array split for the f2-vla32 placement (2026-10-19; the user's D20 A: the MXU's array side in SLR1, the rest in SLR2)
+
+**The cut.** Not through the MXU's control (6e: the issuer and the drain share the command
+entries, `rows_live`, `rf_n`, `c_left` and the pop head with the slice's grant in the same
+cycle), but through its compute pipeline: everything between otpu_mxu's S0 registers (the
+popped chunk from the FIFO's read register, the scale entries, the per-command constants) and
+the result FIFO is now `otpu_mxu_arr` (rtl/mxu/otpu_mxu_arr.sv: the chunk's decode, the
+shifts, the weight skews and hops, the 4,096 PEs, the column ends and deskews, the result
+row's assembly and composition), instantiated as `u_mxu/u_arr`. With `ARR` (otpu_slice
+`MXU_ARR`, a uarch key, f2-vla32 1; every other target 0, the pipeline it was) every net that
+crosses the hierarchy is a flip-flop or a block RAM pin at both ends:
+
+| crossing | direction | what, how wide | the ends | cycles added |
+|---|---|---|---|---|
+| the S0 bundle | SLR2 -> SLR1 | the popped chunk's flags (m0, 9 bits), the chunk and PACK's pair chunk (2 x 1,024: from the chunk FIFO's read registers, which sit in SLR1 with the array), the scale entries (96 + 64 + 40, the scale FIFO's read registers, SLR1 too), the per-command constants (cu0 .. sel0, ~100) | otpu_mxu's S0 registers -> u_arr's two input stages (NX 2) | 2 |
+| the ACT RAM's read request | SLR2 -> SLR1 | act_blk / blk2 / hi / grp / ren (~70) | otpu_mxu's act_* output registers (ARR) -> otpu_actram's RREG input stage, then its block address mux and the 1,088 RAMB36 | 2 (the data meets the delayed bundle at the act skews, as before) |
+| the ACT RAM's data and scale records | within SLR1 | 32 x 1,024 + 32 x 64 bits | u_act's registered read -> u_arr's act skews | 0 |
+| the chunk FIFO's and scale FIFO's writes | SLR2 -> SLR1 | port B's chunk (1,024) and port A's entries with their slot addresses | the slice's port registers / otpu_mxu's queue-slot and read-address registers -> the RAMs' pins | 0 |
+| the result row and its push | SLR1 -> SLR2 | rowp (32 x 80 + 33 = 2,593 bits), rv, rvb, push_n | u_arr's output registers -> the result FIFO's three LUT-RAM copies (their write-enable replicas from push_n) | 1 |
+| the quantizer's ACT RAM writes | SLR2 -> SLR1 | 32 bytes, a scale record, the row and index | the quantizer's registers -> otpu_actram's we_i / we_h (the two-register hop it always had) | 0 |
+| the adapter's port interfaces (u_mem in SLR1 with the array) | both | port A / B / SW requests and addresses (slice -> adapter), the readies, valids and data (adapter -> slice) | the slice's port registers both ways; the adapter's a_* and b_rvalid are registers, its b_rdy and b_rdata (the 1,024-bit mux of two queue heads) a LUT level or two before the slice's registers | 0 |
+| the HBM fabric <-> the adapter | SLR0 <-> SLR1 | the native ports | the three-stage otpu_xr chains (stage 2 in SLR2 now one hop past the adapter) | 0 |
+
+So three cycles more from a pop to the result FIFO (LROW + 3) and nothing else: the drain, the
+TMEM, the sequencer's handshake and the DRAM ports do not cross. The adapter's two readies are
+the one exception to flip-flop-to-flip-flop (a hop with at most two LUT levels, the slice's
+side registered); without the adapter in SLR1, pb_otpu_board is at ~100% of SLR2 (below).
+Bit-exact: tests/test_rtl.py mlp, fuzz_mm_replay, attention_decode (RMAX, ACC) with ARR and
+MXROT forced, tests/test_mxu_pack_rtl.py at MCOLS 4 (PACK's pair rows through the registered
+push); the f2-vla32 suites on the m7a: tests/test_rtl.py, test_vops.py, test_mxu_pack_rtl.py, test_quant_rtl.py,
+test_pi05.py **322 passed**, 6 skipped, and **281 passed** with MXROT forced on every Config
+(the 13 pre-existing failures of 6c's run, unchanged). The LPN's chunk at f2-vla32 with the MM
+latency constant +3 (--lmm 75): 1.547 s against 1.549 (no rate moves).
+
+**The phases** (tools/pi05_rtl.py on the m7a, f2-vla32 with MXU_ARR against 6g's f2-vla32):
+
+| phase | 6g (f2-vla32) | **with the split** | delta |
+|---|---|---|---|
+| v_out, MCOLS 32 E 32 | 913,551 | **913,707** | +156 (+0.02%) |
+| p_qkv | 929,476 | **929,516** | +40 |
+| e_step | 556,512 | **556,630** | +118 (+0.02%) |
+| p_attend | 957,878 | **958,228** | +350 (+0.04%: 96 MMs, ~3.6 cycles each) |
+| v_qkv | 627,270 | **627,542** | +272 (+0.04%) |
+| v_out, MCOLS 16 E 16 | 1,143,378 | **1,143,378** | 0 |
+| e_step, MCOLS 16 E 16 | 673,748 | **673,748** | 0 |
+
+The LPN carries it as the MM latency constant (l_mm 72 -> 75, no rate moves): the chunk
+moves 1.549 -> 1.547 s (0.65 Hz either way).
+
+**The floorplan** (boards/f2/build/constraints/cl_pnr_user_mxu.tcl, appended by build.py
+after cl_pnr_user_hbm.tcl for a target whose uarch states MXU_ARR; the six pblocks of the
+wide-port file at 788a91c0, pb_otpu_xs cherry-picked with round 6's credit link, as they are):
+
+| pblock | region | cells | LUTs (6h's count) | fill |
+|---|---|---|---|---|
+| pb_otpu_mxu (new) | SLR1 X0Y4:X3Y7, 16 clock regions, ~217K | u_slice/u_mxu/u_arr (~105K: the OOC column's 2,642 x 32 = 85K, the shifts ~13K, the decode and the row assembly), the chunk and scale FIFO RAMs (62 RAMB36), u_slice/u_act (2.4K, 1,088 RAMB36), u_board/u_mem (38K) | ~146K | **~67%** (and pb_otpu_mid's ~18K flip-flops in the same box) |
+| pb_otpu_board | SLR2 X0Y8:X7Y11, 32 regions, ~435K | u_board less the above: the MXU's issuer and drain (~120K), the TMEM (58K), the VPU (164K), the quantizer (33K), the DMA, sequencer, control and trace (~20K) | ~395K | **~91%** |
+| pb_otpu_tmem (child) | X2Y9:X5Y10, 8 regions, ~109K | u_tmem (58K, 384 URAM) | 58K | 53% |
+| pb_otpu_hbm / mid / pcis / xs | SLR0 / SLR1 / SLR1 / SLR0 | the fabric, the chain stages, the PCIS registers and link ends | ~30K + flip-flops | as on wide-port |
+
+91% of SLR2 is above the wide-port file's own "72%: too full for 200 MHz routing" line: the
+VPU's 164K (its 16 composite lanes do not shrink with the lanes) is what fills it; VPU_CL 8
+would take ~48K out (6g: 0.60 Hz on the LPN against 0.65). The 6h clk_f -> clk_raw path
+(-0.402 ns, the pumped bank's URAM clock to the fmadd's DSP B input): the ACC path's `xo` /
+`alr` registers are kept as fabric registers now (`keep`), so the TMEM's half-period read
+return ends at a flip-flop, not at the DSP's input register Vivado had folded it into.
+
+**Can the synthesis + P&R be launched?** Yes, as the first placed VLA build: the mechanism
+(the unmanaged Tcl, the chains, the pblocks) is the wide-port branch's at its round-6 state, the
+split's crossings are registered, and the three fills are 67 / 91 / 53%. What to read first in
+its reports: pb_otpu_board's utilization after place_design (the 91% is a count, the placer's
+answer is the measurement), the clk_raw paths across the SLR1 / SLR2 boundary (expected none
+with logic but the adapter's readies), and otpu_clk2x.tcl's cell cross-check on the 128 pumped
+RAMs. If SLR2 is the problem, the next moves are VPU_CL 8 or the quantizer's row buffer and
+transposer RAMs to SLR1 (block RAM, not logic: no LUT relief).
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
