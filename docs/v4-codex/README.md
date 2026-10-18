@@ -1,9 +1,10 @@
 # Codex alternatives for openTPU v4 on F2
 
-Status: **proposal review only; implementation awaits explicit user approval**.
+Status: **user approved parallel implementation of C1-C3; C2 reference milestone complete**.
+The user requires openTPU Lens for performance measurement and visualization.
 Date: 2026-10-18. Base: `016e953ad70e9dd78f1b10d8a9cc07318bee66dd` on `tpubench`.
 These C1-C3 designs are new alternatives to Claude's P1-P4 in [docs/v4](../v4/README.md).
-The approval recorded in Claude's documents does not approve these alternatives.
+This is a new user approval for these alternatives, separate from Claude's recorded approval.
 
 | Candidate | Architectural change | Branch | Worktree directory |
 |---|---|---|---|
@@ -12,9 +13,10 @@ The approval recorded in Claude's documents does not approve these alternatives.
 | C3 | Dedicated vocabulary projection and exact greedy reduction alongside the existing layer datapath | `codex/v4-c3-vocab-engine` | `opentpu-v4-c3-vocab-engine` |
 
 This branch's design is in [PROPOSAL.md](PROPOSAL.md). All worktrees are siblings under
-`/Users/rachittibrewal/ergodex-04`. Each starts from the same committed baseline and contains
-only its own proposal and this comparison. Generated profiles and the untracked `formal/`
-directory remain in the original worktree.
+`/Users/rachittibrewal/ergodex-04`. Each starts from the same committed baseline. This branch
+contains only C2 work; its generated Lens profiles live in `build/lens/c2/`.
+The original worktree's generated profiles and untracked `formal/` directory remain there.
+See [C2 validation evidence and reproduction](VALIDATION.md).
 
 ## Recommendation and evidence
 
@@ -52,12 +54,13 @@ vector work, tails, command transitions, response latency, drain credits and fal
 Keep int8 weights and existing quantization as the common comparison; mixed precision,
 speculation, extra users and software row folding are separate experiments.
 
-## Approval boundary
+## Approval and current boundary
 
-Prepared now: design documents and isolated branches/worktrees.
-No implementation, instrumentation changes, new simulator, RTL edits, synthesis or cloud
-runs have been started for C1-C3.
+The user approved fan-out implementation of all three proposals. This branch completes
+C2's first validation milestone: an executable packed reference with exact arithmetic,
+canonical fallback, and Lens event profiles. It does not report the other worktrees' status.
 
-After approval, begin with the chosen proposal's first validation milestone. Compare it
-against the existing ISA and a same-clock baseline before committing to full F2 integration.
-The user may approve any subset; setup of a branch is not approval to implement it.
+Next are RTL operand routing and metadata, followed by measured cycle traces in Lens.
+No C2 RTL, synthesis, deployment or cloud execution has been performed. The current Lens
+microbenchmarks measure executed functional work and traffic; their arithmetic-slot axis
+is a model, not a measured FPGA clock timeline or a Gemma throughput forecast.
