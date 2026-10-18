@@ -1,0 +1,55 @@
+[target]
+name = "f2-hbm200"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2 VU47P: Small Shell, HBM, preserved openTPU m4 compute"
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+[uarch]
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+[tech]
+family = "xilinxus"
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+[platform]
+board = "f2"
+core_mhz = 200.0
+mem = "hbm"
+mem_ctrl = "amd_hbm"
+hostcal = false
+channels_per_slice = 2
+channel_bytes = 2147483648
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 8

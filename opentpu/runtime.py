@@ -46,8 +46,8 @@ class Weight:
             raise ValueError("Weight must be 2-D [N, K]")
         if shard not in (None, 0, 1):
             raise ValueError("Weight shard must be None, 0 (rows) or 1 (columns)")
-        if fmt not in Q.MXU_FORMATS:
-            raise ValueError(f"Weight fmt must be one of {Q.MXU_FORMATS}")
+        if fmt not in Q.WEIGHT_FORMATS:
+            raise ValueError(f"Weight fmt must be one of {Q.WEIGHT_FORMATS}")
         self.array, self.shard, self.fmt = a, shard, fmt
 
 

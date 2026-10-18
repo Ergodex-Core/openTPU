@@ -26,6 +26,7 @@ PAIR = true
 DSTEP = true
 STREAM = true
 SEQ_WC = true                   # the sequencer's wait entries (WAITC v2, docs/seq_vpu.md; the
+T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
 #                                 card's since r2): the host loads them with every program
 
 [uarch]

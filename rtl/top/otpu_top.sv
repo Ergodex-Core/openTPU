@@ -42,8 +42,9 @@ module otpu_top
   parameter int TMEM_PRK   = 0,       // TMEM_IMPL 3: the read ports' ranks (otpu_slice)
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (otpu_slice)
-  parameter bit COLL_GATHER = 1'b1    // 0 (S = 1 only): the collective unit runs BAR alone
+  parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
+  parameter int NCH        = 2        // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -92,12 +93,12 @@ module otpu_top
         .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_rvalid, .b_rtag, .b_rdata, .rd_idle,
         .dump);
     end else begin : g_native
-      logic [1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
-      logic [1:0][24:0] caddr;
-      logic [1:0][511:0] wdata, rdata;
-      logic [1:0][63:0] wmask;
-      logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D)) u_adapt (
+      logic [NCH-1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
+      logic [NCH-1:0][24:0] caddr;
+      logic [NCH-1:0][511:0] wdata, rdata;
+      logic [NCH-1:0][63:0] wmask;
+      logic [NCH-1:0][15:0] wdone;
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -107,6 +108,7 @@ module otpu_top
         .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
         .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
         .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone));
+      initial if (AXI == 2 && NCH != 2) $fatal(1, "otpu_top: the LiteDRAM channels (AXI = 2) are two");
       if (AXI == 2) begin : g_ldc
         otpu_ldc_mem #(.WORDS(DRAM_WORDS), .SID(s)) u_mem (
           .clk, .rst(sys_rst),
@@ -114,7 +116,7 @@ module otpu_top
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
       end else begin : g_model
-        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s)) u_mem (
+        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(NCH)) u_mem (
           .clk, .rst(sys_rst), .run_rst(rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
@@ -122,7 +124,7 @@ module otpu_top
       end
       // the adapter's counters (rtlsim: A runs and fill reads, the partial writes by source)
       always @(posedge clk) if (dump)
-        for (int c = 0; c < 2; c++) begin
+        for (int c = 0; c < NCH; c++) begin
           $write("NATIVE ch%0d a_runs=%0d a_rd=%0d b_rd=%0d sw_rd=%0d ", c, u_adapt.st_arun[c],
                  u_adapt.st_ard[c], u_adapt.st_brd[c], u_adapt.st_srd[c]);
           $display("b_wr=%0d a_wr=%0d sw_wr=%0d part_b=%0d part_a=%0d part_sw=%0d",

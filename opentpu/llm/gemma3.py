@@ -30,6 +30,9 @@ from pathlib import Path
 import numpy as np
 
 from . import formats as FM
+# the references and kernels are Gemma 4's: the F2 tools (tools/fpga_inference_check.py,
+# tools/gemma3_check.py) take them from here with a folded gemma4.Weights (load_weights)
+from .gemma4 import emulated_logits, reference_logits  # noqa: F401
 
 MODEL_TYPES = ("gemma3_text", "gemma3")
 
