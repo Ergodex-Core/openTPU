@@ -130,7 +130,34 @@ commits (2b763946, 7d3da502: the MXU's entry and the ACT block a register later)
 moved by 23 cycles there, not here -- the memory-model rewrite above reproduces both seeds to
 the cycle on Verilator.
 
-ARCSIM_RECEIPT_PLACEHOLDER
+**ArcSim and the f2-hbm board model: open.** The receipt's model builds (70 minutes, below) and
+runs, and stops at reset in the design's own replicated-register check:
+
+```
+Fatal: otpu_native_dram: channel 4 B tail copy 0 is 1, the tail 0
+```
+
+(`rtl/mem/otpu_native_dram.sv`: every copy of the B FIFO's tail, `rb_tq[c][k]`, must equal the
+tail `rb_t[c]`; both are reset and incremented by adjacent statements of one `always_ff`). The
+same executable says channel 2 under the Gemma receipt and channel 4 under a HALT program,
+deterministically, so it is the lowering of the register, not an uninitialized state: arcilator
+reports `rb_tq` as an "array register not converted to a memory: element type is not a signless
+integer (nested arrays ...)" (`array<8 x array<8 x i6>>`, kept as one value updated through
+inject chains), and its non-blocking element writes in nested loops come out wrong. The
+Verilator model of the same configuration runs the HALT program in 3 cycles. Five lowering
+variants on a shrunken configuration (small TMEM / IMEM / ACT / FIFO, the same adapter; a HALT
+program) all stop at the same check with the same values: `OTPU_ARCSIM_ARGS` of
+`--shadow-nba-writes=false`, `--queue-unobserved-nba=false`, `--infer-array-memories`,
+`--arc-scalarize-small-array-values --arc-factor-array-updates`, and the default. A flat
+`rb_tq [NCH * RBP]` in the RTL (sidestepping the nested array; an experiment on a copy of
+otpu_native_dram.sv, not in the tree) was the next probe when this was written -- see the
+report; if it passes, the next replicated-register or nested-array check is the next question.
+Until the board model runs, the ArcSim backend is validated on the behavioural-DRAM
+configurations (below), not on the board's memory path, and the receipt's ArcSim cycle count,
+cycles/s and thread scaling are not available. This is the first thing to take to Ergodex: a
+reproducer is `tools/arcsim_model.py` for any f2-hbm configuration plus a HALT program, and
+`build/arcsim/<model>/lower.log` names the register.
+
 
 `tests/test_f2_rtl.py` (the F2 fabric's own testbenches, `rtlsim.build` of `tb_f2nch_protocol`,
 `tb_f2mem`, `tb_f2axil`, `tb_f2hbm`): Verilator 16 / 16; ArcSim 10 / 16 -- `tb_f2nch_protocol`
@@ -145,7 +172,15 @@ the queues -- the same values at every clock edge (Verilator: 16 / 16 before and
 tb_f2mem passes on ArcSim. tb_f2hbm (three clock domains, two read queues selected by `rsel`)
 still diverges; not analysed further here.
 
-ARCSIM_TESTS_PLACEHOLDER
+`tests/test_rtl.py -k "replay or act_reads or attention"` (26 tests, the behavioural DRAM, no
+board memory path): Verilator 25 passed, 1 skipped (5 min). ArcSim: **22 passed, 1 skipped, 3 failed** in 1 h 29 min (the three are `test_fuzz_mm_replay`
+at MCOLS 2, whose lowering fails before any simulation: "failed to legalize unresolved
+materialization from ('!hw.array<1xi32>') to ('i32')", a one-element array the arcilator does
+not handle; the attention decode / layer, the one-copy replay and act_reads cases all pass) -- each
+distinct `tb_top` parameter set is its own 20-70 minute build (see "Build times"), so this is a
+run of hours, with `-n 6`. Where a test passed, the RTL's DRAM and TMEM after the run are
+bit-identical to the ISA simulator's, as the tests assert (`assert_same_state`): ArcSim's
+model of the design is the design.
 
 ## Benchmarks
 
@@ -175,7 +210,28 @@ into pieces for several `llc`s, as Verilator's make -j does) would, but the box'
 signature) and the bundle has no `llvm-split`; a splitter of our own over the textual IR is the
 next step if ArcSim stays in the loop.
 
-ARCSIM_BENCH_PLACEHOLDER
+### The Gemma receipt: cycles/s
+
+The receipt (949,497 cycles) on the m7a.16xlarge, each run pinned to idle cores with `taskset`
+(4 cores for a single-threaded model, N for N threads), the model built beforehand (the seconds
+are `tools/perf_qwen.py`'s own "sim" time: the simulator process alone), the box's 1-minute load
+in the column (64 cores; the other agents' Verilator matrices and this work's builds):
+
+| simulator | threads | cycles | sim time | cycles/s | load |
+|---|---|---|---|---|---|
+| Verilator 5.048 (`--binary -O3`) | 1 | 949,497 | 251 s | 3,783 | 17-20 |
+| Verilator `--threads 4` (`OTPU_VL_THREADS=4`) | 4 | 949,497 | 137 s | 6,930 | 17-20 |
+| Verilator `--threads 8` | 8 | **949,568** | 136 s | 6,982 | 17-30 |
+| ArcSim (`--partition-eval=5000`) | 1 | -- (stops at reset, above) | -- | -- | |
+| ArcSim task mode (`OTPU_ARCSIM_TASKS=5000`, `ARC_THREADS=2 / 4 / 8`) | 2 / 4 / 8 | -- (the same model) | -- | -- | |
+
+Verilator's 8-thread model is not cycle-exact with its own single-threaded one: the memory
+model's `always_ff` is split over threads and Verilator's `$urandom` is per thread (a
+thread-local stream reseeded from the same seed), so the draws land on other decisions; at 4
+threads the block stayed on one thread. 8 threads buy nothing over 4 on this design (the eval
+is one slice's logic with a serial memory model), and 4 threads 1.83x. Verilator's builds: 3-4
+minutes (`-j 0`, 64 cores).
+
 
 ## Limits
 
