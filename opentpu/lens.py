@@ -273,12 +273,20 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
     m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
-        orig = sl.execute
+        orig, orig_step = sl.execute, sl.step
 
         def execute(ins, _orig=orig, _s=s, _sl=sl):
             seqs[_s].append(_sl.pc)
             return _orig(ins)
-        sl.execute = execute
+
+        def step(_orig=orig_step, _s=s, _sl=sl):
+            # a collective is not executed by the slice (Machine resolves it once every slice
+            # waits on it): counted as it is reached, once
+            if _sl.waiting is None and 0 <= _sl.pc < len(_sl.prog) and \
+                    _sl.prog[_sl.pc].op == I.GATHER:
+                seqs[_s].append(_sl.pc)
+            return _orig()
+        sl.execute, sl.step = execute, step
     m.run()
     src = _Sources()
     unit_of = {I.LD: 0, I.ST: 0, I.DSTEP: 0, I.STREAM: 0, I.MM: 1, I.QACT: 2, I.QST: 2, I.VOP: 3,
@@ -526,7 +534,7 @@ class _Capture:
 def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
                 prompt: str, resident: bool = True, wformat: str = "auto",
                 head_format: str | None = None, candidate: dict | None = None,
-                mhz: float | None = None) -> dict:
+                mhz: float | None = None, slices: int | None = None) -> dict:
     """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
     on its real weights: the prompt (a user turn of the chat template; plain text without
     one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
@@ -534,7 +542,9 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     runs traced on the RTL (board model of the card's configuration where the model takes one
     slice, as Gemma 3 / Gemma 4, or with --board), or on the ISA simulator with analytic
     timing (`isa`). resident: the resident decode program (the token's rows gathered on the
-    device), as otpu-chat runs."""
+    device), as otpu-chat runs. slices: the board configuration with that many slices (Gemma
+    3 / Gemma 4's tensor-parallel split, docs/gemma4.md "Slices": a program per slice, the
+    ISA simulator's analytic timing per slice)."""
     import numpy as np
     from .host.board import sim_config
     from .isasim import board_config, design_config
@@ -547,10 +557,10 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     wformat = FM.auto(spec, wformat)
     try:
         spec.check(design_config())
-        maps = True
+        maps = not getattr(spec, "one_slice_default", False)
     except ValueError:
         maps = False                            # one slice: the card's configuration
-    board = board or not maps
+    board = board or not maps or bool(slices)
     uarch = dict(rtlsim.BOARD_UARCH) if board else uarch
     import transformers
     tok = transformers.AutoTokenizer.from_pretrained(path)
@@ -566,7 +576,8 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
         raise SystemExit(f"--pos {pos}: the prompt ends at position {len(ids) - 1}")
     cap = max(256, -(-(pos + 2) // 256) * 256)
     if board:
-        cfg = sim_config(spec, cap, board_config(PAIR=True, DSTEP=True, STREAM=True),
+        cfg = sim_config(spec, cap, board_config(PAIR=True, DSTEP=True, STREAM=True,
+                                                 **({"S": int(slices)} if slices else {})),
                          lookup=resident, wformat=wformat, head_format=head_format)
     else:
         cfg = device_config(spec, cap, lookup=resident, wformat=wformat,
@@ -593,8 +604,9 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     if candidate:
         tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
                                         for k, v in cand.items()) + "]"
-    name = (f"{path.name} token at pos {pos}" + (" (board config)" if board else "") +
-            (" [ISA]" if isa else "") + tag +
+    name = (f"{path.name} token at pos {pos}" +
+            ((f" (board config, {cfg.S} slices)" if cfg.S > 1 else " (board config)")
+             if board else "") + (" [ISA]" if isa else "") + tag +
             f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
     if isa:
         programs, args, drams = holder["b"].last
@@ -709,10 +721,12 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
            bucket: int = 64, axi: bool | None = None, stall: int | None = None,
            model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
            resident: bool = True, wformat: str = "auto", head_format: str | None = None,
-           candidate: str | None = None, mhz: float | None = None) -> dict:
+           candidate: str | None = None, mhz: float | None = None,
+           slices: int | None = None) -> dict:
     """Run one workload and return its profile dict; `workload` "model" with `model` a
     checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
-    re-times it on a wider machine (parse_candidate), `mhz` labels the clock."""
+    re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `slices` runs
+    the board configuration with that many slices (the model's tensor-parallel split)."""
     from .profile import profile
     uarch = dict(rtlsim.BOARD_UARCH) if board else None
     run_kw = {"plusargs": [f"+bucket={bucket}"]}
@@ -724,7 +738,7 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         if model is None:
             raise SystemExit("workload model: --model NAME|DIR")
         return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
-                           wformat, head_format, parse_candidate(candidate), mhz)
+                           wformat, head_format, parse_candidate(candidate), mhz, slices)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -1066,6 +1080,9 @@ def main(argv=None) -> None:
                    help="workload model with --isa: re-time the token on a candidate machine "
                         "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
     r.add_argument("--mhz", type=float, help="workload model: the clock the times are at")
+    r.add_argument("--slices", type=int, help="workload model: the board configuration with "
+                   "this many slices (Gemma 3 / Gemma 4's tensor-parallel split; implies "
+                   "--board)")
     r.add_argument("--bucket", type=int, default=64, help="cycles per counter bucket")
     r.add_argument("--open", action="store_true", help="open the app afterwards")
     o = sub.add_parser("open", help="open a profile file in the app")
@@ -1095,7 +1112,7 @@ def main(argv=None) -> None:
                        axi=True if a.axi else None, stall=a.stall, model=a.model,
                        prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
                        wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
-                       mhz=a.mhz)
+                       mhz=a.mhz, slices=a.slices)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)

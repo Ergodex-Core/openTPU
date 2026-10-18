@@ -15,7 +15,12 @@ python3 -m pytest -q tests/test_gemma3.py                               # tiny r
 python3 tools/compare_hf.py --model gemma3 --chat --cfg board --resident --tokens 12
 python3 -m opentpu.lens record model --model gemma3 --isa -o g3.otpuprof   # one decode token
 python3 -m opentpu.lens record model --model gemma3 --axi -o g3-rtl.otpuprof   # on the RTL
+python3 tools/compare_hf.py --model gemma3 --chat --cfg board --slices 4 --resident --tokens 12
+python3 -m opentpu.lens record model --model gemma3 --isa --slices 4 -o g3-s4.otpuprof
 ```
+
+The last two run the model split over four slices ([gemma4.md](gemma4.md) "Slices", the v4
+plan's proposal P4: [v4/p4-status.md](v4/p4-status.md)) on the ISA simulator.
 
 ## The model
 

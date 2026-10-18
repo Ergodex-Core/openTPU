@@ -953,8 +953,11 @@ def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
 
 def _maps_on_design(spec) -> bool:
     """The model maps onto the design's configuration (two slices), the simulators' default; a
-    model that takes one slice (Gemma 4: one KV head) runs in the card's instead."""
+    model that takes one slice, or whose default is one (Gemma 3 / Gemma 4: one KV head, the
+    tensor-parallel split on request, Spec.one_slice_default), runs in the card's instead."""
     from opentpu.isasim import design_config
+    if getattr(spec, "one_slice_default", False):
+        return False
     try:
         spec.check(design_config())
     except ValueError:

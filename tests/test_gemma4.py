@@ -134,6 +134,22 @@ def test_tiny_matches_hf_and_emulation(tiny):
     assert _cos(dev[:12], emu).min() > 0.99
 
 
+def test_two_slices_match_one(tiny):
+    """The tensor-parallel split on two slices (docs/gemma4.md "Slices"; the PLE projection,
+    gate and projection split by rows too, their inputs gathered a layer at a time): the
+    per-position and the resident logits bit-exact to one slice's."""
+    _, W, spec = tiny
+    toks = [int(t) for t in np.random.default_rng(7).integers(0, 1000, 12)]
+    ref = Engine(spec, W, cap=1024, cfg=_cfg())
+    one = np.array([ref.step(t) for t in toks])
+    cfg = board_config(DRAM_BYTES=1 << 26, S=2)
+    two = Engine(spec, W, cap=1024, cfg=cfg)
+    np.testing.assert_array_equal(np.array([two.step(t) for t in toks]), one)
+    res = Engine(spec, W, cap=1024, cfg=cfg, resident=True)
+    assert res.resident and res.image.v_loc == spec.vocab // 2
+    np.testing.assert_array_equal(np.array([res.step(t) for t in toks]), one)
+
+
 def checkpoint(d: Path, **kw) -> Path:
     """The tiny model (_model) saved by Hugging Face in d, with a word-level tokenizer ("t17" is
     token 17) and a chat template (the messages' text one after another)."""
