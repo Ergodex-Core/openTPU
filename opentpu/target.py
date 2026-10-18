@@ -224,6 +224,24 @@ def load(name: str | None = None) -> Target:
     if a["DRAM_BYTES"] > 1 << 32:
         raise TargetError(f"{path}: DRAM_BYTES over 4 GiB: DRAM addresses are 32 bits per slice "
                           f"(more slices, or the reserved window register: docs/targets.md)")
+    # the keys the RTL derives nothing for, checked against the arch (fail closed: f2-vla's first
+    # synthesis elaborated otpu_tmem on its default TMEM_SBP 3, LANES 8's, and stopped)
+    u = raw["uarch"]
+    lanes = a["LANES"]
+    if u["TMEM_IMPL"] == 3 and int(u.get("TMEM_SBP", 3)) < lanes.bit_length() - 1:
+        raise TargetError(f"{path}: TMEM_SBP {u.get('TMEM_SBP', '(the RTL default 3, LANES 8)')} "
+                          f"below log2 LANES ({lanes.bit_length() - 1}): otpu_tmem's sub-bank "
+                          f"field sits above the bank bits; state it in [uarch]")
+    if u["ULANES"] > lanes:
+        raise TargetError(f"{path}: ULANES {u['ULANES']} above LANES {lanes}")
+    if u.get("MXU_E", 0) > lanes:
+        raise TargetError(f"{path}: MXU_E {u['MXU_E']} above LANES {lanes} (otpu_mxu: the drain's "
+                          f"lanes are TMEM lanes)")
+    if u["VPU_CL"] > lanes:
+        raise TargetError(f"{path}: VPU_CL {u['VPU_CL']} above LANES {lanes}")
+    if a["D"] % lanes:
+        raise TargetError(f"{path}: LANES {lanes} does not divide D {a['D']} (the ACT RAM's and the "
+                          f"quantizer's lanes)")
     return Target(name=path.stem, kind=t["kind"], platform_id=int(t.get("platform_id", 0)),
                   description=t.get("description", ""), arch=dict(a), uarch=dict(raw["uarch"]),
                   tech=dict(raw["tech"]), platform=dict(raw["platform"]), path=path,

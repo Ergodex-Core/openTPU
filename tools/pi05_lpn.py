@@ -1196,6 +1196,8 @@ def main() -> None:
     ap.add_argument("--lld", type=int, default=Knobs.l_ld)
     ap.add_argument("--lmm", type=int, default=Knobs.l_mm)
     ap.add_argument("--lq", type=int, default=Knobs.l_q)
+    ap.add_argument("--vpu-cl", type=int, default=0,
+                    help="VPU_CL, the composites' lanes (default the target's uarch, else 16)")
     ap.add_argument("--q-row", type=int, default=Knobs.q_row,
                     help="the quantizer's cycles a row past the scale unit (0: the two-stage max of 5.4's RTL)")
     ap.add_argument("--qst-wc", type=float, default=Knobs.qst_wc)
@@ -1214,8 +1216,10 @@ def main() -> None:
         import lpnlang_mlir  # noqa: F401
     from opentpu.isasim import board_config
     from opentpu.llm import pi05 as P
+    from opentpu import target as TG
+    vpu_cl = a.vpu_cl or int(TG.current().uarch.get("VPU_CL", Knobs.vpu_cl))
     kn = Knobs(l_st=a.lst, l_wq=a.lwq, l_ld=a.lld, l_mm=a.lmm, l_q=a.lq, q_row=a.q_row, qst_wc=a.qst_wc, warb=a.warb,
-               dma_lookahead=not a.no_lookahead)
+               vpu_cl=vpu_cl, dma_lookahead=not a.no_lookahead)
     cfg = board_config()
     E = target_E(cfg)
     R, RP, RE = (int(x) for x in a.rows.split(","))

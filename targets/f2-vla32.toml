@@ -1,0 +1,108 @@
+# The placement point of the VLA variant (docs/vla_frequency_plan.md 6g, the user's D18): f2-vla's
+# arch and memory path with 32 lanes instead of 64, so that the TMEM, the VPU and the quantizer
+# halve and the slice can be floorplanned in one SLR of the VU47P (6e / 6f: at 64 lanes the slice
+# is 643K LUTs against SLR2's ~435K of CL area, and the cut through it that breaks no same-cycle
+# loop, the MXU's array against the rest, is not registered inside otpu_mxu). Everything else is
+# f2-vla's: MCOLS 32 packed (64 logical columns), ACT_ROWS 255, TMEM 1.5M words in URAM, the ACT
+# RAM in block RAM, the MXU's rotator TMEM ports (MXROT), the drain at E 32 (= LANES: a packed
+# pass's two rows in two steps), the BAR-only collective unit. At 32 lanes the VPU's elementwise
+# VOPs, RMAX and the quantizer run at 32 a cycle (the sums on the 16-lane sub-datapath and the
+# composites at VPU_CL 16 as at 64), the LPN puts the chunk at +5% over f2-vla's (6g). f2-vla stays
+# the 64-lane point (its measured sections 6b-6f and docs/pi05.md 5.4 / 5.5 are at 64 lanes, and
+# the >= 1 Hz plan's slice is the 64-lane one once the TMEM's unit interfaces are registered);
+# this target's programs and CFG_HASH are its own (LANES is in the hash).
+#
+# Derived keys stated here, not left to the RTL's defaults: TMEM_SBP 5 (the sub-bank field's
+# word-address bit, log2 LANES; opentpu.target checks it against LANES), ULANES 32, MXU_E 32.
+
+[target]
+name = "f2-vla32"
+kind = "fpga"
+platform_id = 8
+description = "AWS F2 VLA, the one-SLR placement point: xcvu47p (small shell), one slice x 8 HBM pseudo-channels, MXU 32 columns x 255 rows, 32 lanes, TMEM 1.5M words, 200 MHz core"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 32                      # physical columns (docs/mxu_packing.md: 64 logical, packed)
+ACT_BLOCKS = 128
+ACT_ROWS = 255                  # the ISA's most (MM's 8-bit M); 8 groups of 32 (otpu_actram)
+TMEM_WORDS = 1572864            # 3 << 19: the prefix's 255-row group (plan L2); 6 MB of URAM
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: what its 32-bit DRAM byte addresses reach
+LANES = 32                      # the VPU, QACT, QST at 32 a cycle (f2-vla: 64; plan 6g)
+PAIR = true
+DSTEP = false                   # no streams (DeltaNet's; otpu_dma needs LANES <= D / 4)
+STREAM = false
+SEQ_WC = true
+T2 = false                      # no t2 weights / QUAD (four ACT RAM blocks a cycle)
+PORTB = 1                       # one D-byte chunk a cycle (plan L7: PORTB 2 later)
+PACK = true                     # two int8 weight rows a DSP: 64 logical columns (docs/mxu_packing.md; CAPS2 bit6). Verilator-exact at MCOLS 4 / 8; MCOLS 32 PACK builds and the OOC fmax are phase 3 / 1 open items
+MXROT = true                    # the MXU's TMEM ports as rotators, no lane crossbar: the drain writes its lanes at output row strides = 1 mod LANES, the compiler's layout rule (otpu_slice MXROT; CAPS2 bit7; docs/vla_frequency_plan.md 6c)
+
+[uarch]                         # f2-hbm's, with the MXU's epilogue lanes MCOLS (plan L5,
+                                # measured on the RTL, docs/pi05.md 5.4): a packed pass yields
+                                # two result rows of MCOLS columns, so E = MCOLS / 2 (16) drains
+                                # one in four steps and the drain's cycles alone are 1.13x the
+                                # MXU's pops on v_out at MCOLS 32, 2.15x on p_attend; E = MCOLS
+                                # (32 lanes a step, a pass in two steps, within the 64 TMEM
+                                # lanes) halves that (0.57x, 1.11x)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 32                      # = LANES: a packed pass in two steps (otpu_mxu: E <= LANES)
+VPU_CL = 16
+ULANES = 32                     # the MXU drain and the quantizer on every TMEM lane
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_SBP = 5                    # the sub-bank field's word-address bit: log2 LANES (otpu_tmem: SBP >= log2
+                                # LANES; f2-vla's 6 at 64 lanes); stated, and checked by opentpu.target
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+ACT_RAM = 1                     # the ACT RAM (4 MB: 255 rows x 128 blocks x 32 columns) in block RAM, 1,024
+                                # RAMB36 for the pieces and 64 for the scale records (otpu_actram STYLE
+                                # "block"; "auto" spilled it into 131 K LUT RAM cells after Vivado's
+                                # URAM announcement hit the block RAM limit, plan 6b / 6c)
+TMEM_RAM = 2                    # the pumped TMEM banks in URAM (otpu_pump_bank STYLE "ultra"): 64 banks
+                                # x 2 sub-banks x 12288 words x 32 bits = 384 URAM288 (3 a sub-bank,
+                                # cascaded), where block RAM took 2,048 RAMB36 of the part's 2,016 (6b)
+COLL_GATHER = 0                 # the one-slice collective unit without GATHER (otpu_coll_bar, as the
+                                # simulations and the YPCB flow build it): the collective's TMEM port
+                                # is RLD's one word, so its lanes and its write port go (plan 6e)
+TMEM_WARB = 2                   # the MXU drain's writes before the VPU's (otpu_slice; plan L5,
+                                # measured: p_out at MCOLS 16 -17% against the VPU-first order
+                                # and -1% under round-robin; the VPU-bound phases at 16 lanes
+                                # lose 1-3% to it, at 64 lanes v_out does not; decode's targets
+                                # keep 0)
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]                      # f2-hbm's: the HBM CL (cl_opentpu_hbm) and its host path
+board = "f2"
+core_mhz = 200.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 6 (TMEM: / 3)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0             # the AXI ports' clock (an MMCM from clk_hbm_ref: 900 MHz / 2)
+hostcal = false
+channels_per_slice = 8
+channel_bytes = 536870912       # a pseudo-channel: slice s's channel c at HBM byte (NCH s + c) x 512 MiB
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"
