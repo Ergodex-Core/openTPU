@@ -615,8 +615,10 @@ class EmbedHost:
         if not self.embed_host:
             return None
         lk = self.lookup
-        return RowServer(BackendDram(backend), RowLayout(lk["mbox"], lk["embed_q"][0],
-                                                         lk["rec"]),
+        # every slice's slot and mailbox (the slices post one request in lockstep, each
+        # waits on its own served word: Qwen3.8-27B on 4 slices, docs/qwen38.md)
+        return RowServer(BackendDram(backend, slices=range(self.cfg.S)),
+                         RowLayout(lk["mbox"], lk["embed_q"][0], lk["rec"]),
                          lambda t: lk["store"][t])
 
 
