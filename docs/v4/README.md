@@ -230,7 +230,12 @@ the DMA-to-TMEM address at 400 MHz; [f2-timing.md](f2-timing.md)) and was stoppe
 (registers per port on the host master, a write-done stage, fan-out replication of the TMEM
 address sources, CDC bounds) are merged (a2af0904, all F2 Verilator suites and the Gemma 3
 token bit-exact) and **build 2** runs with `--place-directive Default` (unit
-`otpu-f2hbm-build2`, output `/home/ubuntu/rachit/f2hbm-run2`).
+`otpu-f2hbm-build2`, output `/home/ubuntu/rachit/f2hbm-run2`). Build 2 after placement and phys_opt: WNS -2.19 ns, TNS -25,900 (from
+-3.66 / -68,500): the host read-return FIFO's write enable at 450 MHz (-2.6), the bridge's
+queue write enable at 200 MHz (-2.4, 8 logic levels), the DMA-to-TMEM address at the pumped
+clock (-1.4), a shell-side path (-1.0), the HBM reset pipe into 32 ports (-0.9); round 3 (block
+RAM FIFOs / registered write enables, a pipelined bridge, pblocks for the slice and the
+host side, a replicated reset pipe) is in progress on `v4-f2-timing`.
 
 ## Decision (taken 2026-10-18)
 
