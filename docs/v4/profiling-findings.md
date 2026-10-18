@@ -136,10 +136,23 @@ Opportunities, in order of payoff:
 
 ## 6. Long context
 
-(Position 1,208 after a 1,208-token prompt; the measurement is running: the sliding layers'
-K / V rings and the global layers' KV reads are the only per-position memory traffic, and the
-flash-attention entries over 5 blocks of 256 at the global layers are the only per-position
-compute. This section is filled in when the two runs, at 0% and 20% stalls, complete.)
+The same token at position 1,208 after a 1,208-token prompt (120 repetitions of a sentence;
+`build/lens/v4/today-rtl-pos1208-stall0.otpuprof`, no stalls, `OTPU_LAT=30`): 8.54 M
+cycles, 92.6% of its 7.91 M bound (42.7 ms, 23.4 tok/s at 200 MHz), 3.9% more than at
+position 14. The extra work is the attention over the sliding rings and the global layers'
+KV: 1,042 MMs (120 more: the QK^T and PV of 5 blocks of 256), 172 exp2sub VOPs (the softmax),
+321 LDs; 61 k chunks more streamed (the K / V rows).
+
+The one new loss is **"row's scales not all in" at 4.0%** (348 k cycles, 76% of the 455 k
+blocked cycles, 83% of them in the layers): the K cache rows carry their block scales after
+their data, so at every attention block the MXU waits for a scale line per K row on port A
+while port B has the row. With 5 blocks a layer at the global layers and 3 at the sliding
+ones, that is the scale-line prefetch item (section 4, no. 4) multiplied by the context: at
+2,048 tokens it would be ~7%, and at C lanes C times more. The chains between matmuls are the
+same 1.5% + 1.0% (105 gaps, 136 k cycles); the MXU drain's TMEM arbitration loss grows to
+2.8% (243 k, still hidden); credits appear at 2.8% of the blocked cycles (12.6 k cycles).
+Opportunity 4 (port A scale-line prefetch, or K rows stored with their scales ahead of the
+data) is therefore the first memory-side item for long contexts, before any lane work.
 
 ## 7. Ranked summary
 

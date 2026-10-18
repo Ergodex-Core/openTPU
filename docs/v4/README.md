@@ -84,6 +84,9 @@ Two conclusions drive v4:
 | Model / compiler work | none (ISA unchanged) | none (lanes are a uarch key; fallback: lane-striped image) | laned image layout, MM LANE flag, laned K cache | Gemma split over 4 slices in gemma4.py (cfg.S == 1 is baked in today) |
 | Main risk | the row-gating bubble at 2 chunks/cycle (37% if unfixed) | 16-lane TMEM arbiter and the 200 MHz chunk network | packed-DSP column timing (167 MHz OOC at 4 columns), the 1 KiB datapath across SLRs | the collective hub (1 beat / 7 cycles today), P&R of 2 slices per SLR, the model split |
 | Effort (proposal's estimate) | ~4-5 months | ~5-6 months | ~4-5 months | ~3-4 months |
+| **Implemented and measured on the RTL** (no stalls, HBM-like; `*-status.md`) | **4.64 M cycles, 91.6% of its 4.25 M bound: 43.1 tok/s** | **2.29 M cycles, 85.6% of 1.96 M: 87.3 tok/s** | not started | M1 on the ISA simulator: 2.25 M analytic cycles a slice, 89 tok/s (the RTL top not built) |
+| Measured at the DDR3 model's 20% stalls | 5.41 M (78.6%): 37 tok/s | 3.01 M (65.1%): 66 tok/s | | |
+| What the measured run says | half pairs on odd KB rows raise the bound 8%; VPU + quantizer waits 3.0% | VPU + quantizer waits 4.1%, turnarounds 1.3%: the chains, as predicted (VPU16 is M3) | | the collective and the per-slice VPU share are the open items |
 | + software (card loop, row folding, overlap; [software-optimizations.md](software-optimizations.md)) | 40-48 tok/s | 90-100 tok/s | 178-197 tok/s | 88-98 tok/s |
 | + fp4 layers, int8 head (bound; accuracy caveat) | 68 | 144 | 283 | 140 |
 | Batched, 4 rows a weight pass (aggregate) | 142 | 298 | 583 | 256 |
