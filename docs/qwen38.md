@@ -181,7 +181,16 @@ other agents' memory the process went into swap). The prefill of the 23-token pr
 the template with `enable_thinking=False`) then ran swap-bound: 41 CPU-minutes over 2 h 12
 min of wall time (6 .. 50% of one core, the process in uninterruptible page-fault waits, its
 resident set 0.1 .. 2 GB of the 16 GiB of images), no token out. It was paused (SIGSTOP) to
-run the truncated model below, then resumed; if it completes, its text and timing go here.
+run the truncated model below, then resumed once the host was quiet: the prefill's first
+token came out ("The") and the device-side decode loop then hung at its first step,
+`slice 1: WAITW at pc 19 never holds`. That was a bug of the embedding table on the host on
+more than one slice: the Engine's row server (`qwen3.Image.row_server`, `offload.RowServer`
+on a `BackendDram`) wrote the requested row and the served word into slice 0 only, while
+every slice of a tensor-parallel decode posts the request in lockstep and waits on its own
+served word (the MoE models that use it run on one slice). `BackendDram(slices=...)` now
+writes every slice; `tests/test_qwen38.py` runs a 2-slice tiny Qwen3.5 with the table on
+the host through `generate_card` and fails the same way without the fix. The run was
+started again with it (its numbers below when it completes).
 A 64-layer decode token costs the simulator about 6x the 8-layer one below (24.3 of 25.6
 GMAC), i.e. ~3 .. 4 min of CPU per token when its images stay resident.
 
