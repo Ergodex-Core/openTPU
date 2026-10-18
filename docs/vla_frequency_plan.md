@@ -378,6 +378,121 @@ wide-port branch's cl_pnr_user_hbm.tcl, with pb_otpu_board at ~70% of SLR2 not 5
 is 846K LUTs against SLR2's ~435K, so the f2-vla floorplan must span two SLRs; phase 2's
 sketch).
 
+### 6e. After 6d: the two timing paths, the TMEM's 298K, the floorplan (2026-10-19; the RTL changes measured in Verilator, the LUT and level counts estimated from the structure)
+
+**The RMAX column update** (6d's clk_raw -0.739 ns: `u_mxu/rx_reg[nv][0][30] -> mk_reg[24][0]/CE`,
+23 levels, 2 CARRY8 + 21 LUTs). What the path was: per column j every drain lane k compared its
+key against `mk[j]` and the 32 results (and 32 more for the ACC path's `ry`) were OR-ed into
+`mk[j]`'s enable: a 32-bit magnitude compare (4 CARRY8) behind the lane's hit decode, then a
+64-input OR. The wide-port branch met the same family on its RL word `mkr` (33 levels, 14
+CARRY8) and made it a running max in two register stages (c5af9505); vla has no RL word, so
+that commit does not apply and the form was re-implemented for `mk`: the cycle's candidate per
+column is selected by the hits alone into a register (`mc_k`, `mc_v`: the hit decode `rx.col ==
+j` 1 level, the AND with the key bit 1, the OR over 64 hit terms 2-3: ~5 LUT levels), and the
+next cycle one compare per column makes the enable (`mk <= max(mk, mc_k)`: one 32-bit compare,
+4 CARRY8, then `!mx_have` and `mc_v`: ~7 levels). Counted from the RTL: 23 -> ~7 on the deepest
+of the two stages. Two hits on a column in consecutive granted cycles are the drain's normal
+case and compare the second against the mk the first wrote. The cost: `mk` is final a cycle
+later, so `c_drained` waits for `mc_v` and the RMAX writes of an MM start one cycle later (MMs
+with RMAX: the attention's QK^T, 96 a p_attend run). **Measured** (tools/pi05_rtl.py on the
+m7a, the 5.4 configuration, this section's RTL against 6c's): p_attend 722,238 cycles (722,232:
++6), e_step 467,218 (unchanged), v_out 627,705 (unchanged), v_qkv 592,802 (unchanged); the
+suites at the f2-vla sizes 322 passed + 281 with MXROT forced on every Config (the 13
+pre-existing failures of 6c's run, unchanged). No LPN constant moves.
+
+The next deepest clk_raw cones counted from the RTL (no synthesis number yet): the slice's TMEM
+grant, from the units' registered requests through otpu_tmem's conflict compares (`cp`: a 15-bit
+row compare per asker pair and bank, 2 levels, OR-ed over 64 banks, 2-3) to `blk_x`, the
+group's grant and the units' enables (~12-14 levels; r2.1's m8 had it at 14 on 8 lanes, +0.003
+ns); the quantizer's offset `dval` (a 9-bit exponent subtract, a 23-bit mantissa compare and the
+saturation, ~8) and its group-max fold `gnew` / `nmax` (one 31-bit compare and a select, ~6);
+the drain's lane pick `dx_l[k] = rfh_i[dj + k]` (a 32:1 of 48 bits a lane, 3 LUT6 levels after
+the head select, ~5). None is at 23; the grant cone is the one to watch at 64 lanes.
+
+**The collective port's address into the pumped banks** (6d's clk_raw -> clk_f_raw -0.390 ns:
+`u_coll/asel_reg[0] -> ... mem_reg_uram_2/CAS_IN_ADDR_B[13]`, 18 levels under the two-fast-period
+multicycle). The port is a guest of the DMA's (GST): its request is `av && asel && am` (1
+level) from otpu_coll's registers, then the 64-lane OR for the guests' take chain (2), the
+enables' rotation (3-6), the host's `qe` select (1), the replay mux `ae` (1), the rank and the
+RAM's address AND-OR (3-4) and the URAM cascade (2). At S = 1 the collective reads one word
+(RLD's, lane 0) and never writes (no GATHER on one slice: the host refuses one, the board builds
+the BAR-only unit), so under MXROT with `COLL_GATHER 0` the port is a one-word port (otpu_tmem
+`ONE_R`: lane 0's bank decoded, 1 level, no 64-wide OR, no rotation; its data one lane) and its
+write port is tied off (`NUL_W`); the quantizer's row-factor port (Q3) is one word on every
+MXROT build. Counted from the RTL: 18 -> ~11 (the decode, the take chain's two ANDs on single
+bits, qe, ae, the rank and AND-OR, the cascade); no latency change (the collective port still
+reads the cycle after). The next port on that path is a full rotator's (the DMA's, the VPU's
+two, the quantizer's two): the rotation (3 levels as 4:1 pairs, 6 as 2:1) and, on the non-ROW
+ports, the bank row's `+ (b < rot)` incrementer (2 CARRY8) before the same tail: ~13-15 levels
+by the count, so the second synthesis's -0.39 should become a small positive or a small
+negative on a VPU or DMA address; if negative, the next step is the bank row's incrementer
+(carry the rows per lane as the ROW ports do: +15 bits through the rotator, no adder).
+`COLL_GATHER` is now a slice parameter (from otpu_top / otpu_board; the F2 sys tops take it as
+an optional uarch key, f2-vla 0, so the bitstream builds the BAR-only unit the simulations
+always built for one-slice FPGA targets).
+
+**u_tmem's 297,991 LUTs against 6c's ~140K.** The count assumed each rotator port's read data
+is a barrel (6 stages of 2:1 on 64 lanes x 32 bits, 3 LUT6 per lane and bit as 4:1 pairs: ~6K
+a port). It was written as an indexed select per lane, `lq[l] = qb[(l + rq[l]) % LANES]`, with
+the rotation copied per lane (`rot_q[l]`, the card's fan-out fix), which Vivado builds as a
+64:1 multiplexer per lane and bit: 16 LUT6 (the F7/F8/F9 muxes free) x 2,048 = ~33K a port,
+~262K for the eight read ports; with the write rotators (~22K: three ports of 33 bits as 4:1
+pairs, the MXU's 48), the IMPL 3 arbitration and the sub-bank selects (~20K), the enables' and
+rows' rotation (~10K) that is the 298K. At 8 lanes an 8:1 select is 2 LUTs a bit, which is why
+f2-hbm16's 10.3K TMEM did not show it. The fix is the barrel (lane l's stage k takes lane l + 2^k
+on its own copy's bit k; the same words), ~6K a port: u_tmem **~90-100K** by the count (49K of
+read data, 22K writes, 20K arbitration, 10K enables / rows, -8K from the one-word collective
+port's rotator, data and write port). The ten rotators' widths are the lanes' (64 x 32 bits:
+every port reads its unit's full width each cycle) and the arbitration's per-port cost is the
+4-asker AND-OR per RAM side: neither has a cheap cut left of the size the data path had; the
+next LUT block is the VPU's 206K.
+
+**The floorplan** (phase 2's sketch; the HDK's CL area is SLR2 X0Y8:X7Y11 all 32 clock
+regions ~435K LUTs, SLR1 X0Y4:X3Y7 + X5Y1:X5Y7 ~313K, SLR0 X0Y0:X3Y3 + X4Y0:X7Y0 ~272K with the
+HBM stacks below it; the wide-port branch's pblocks, boards/f2/build/constraints/cl_pnr_user_hbm.tcl
+read unmanaged by its build_level_1_cl.tcl inside the HDK's opt_design, put the whole
+226K-LUT slice in SLR2 (pb_otpu_board) with the TMEM + VPU in a child box, the HBM fabric in
+SLR0 and three-stage otpu_xr chains on every net between them). f2-vla's slice is 846K LUTs in
+6d, ~640K after the TMEM's barrel: it has to span two SLRs, and the only cut through the slice
+that does not break a same-cycle loop is **the MXU's array against the rest**:
+
+| side | what | LUTs (6d; after the barrel) | RAM / DSP |
+|---|---|---|---|
+| SLR1 (+ SLR0 below it for the HBM fabric, 30K, and the adapter, 38K) | the 32 packed columns (otpu_mxu_pk_col), the ACT RAM beside them, the chunk and scale FIFOs, the issuer (port A / B streams) | ~100K (the columns 32 x 2,642 = 85K, u_act 2.5K, the FIFOs and the issuer) | 1,088 + 62 RAMB36, 4,672 DSP |
+| SLR2 | the TMEM and its arbiter, the VPU, the quantizer, the DMA, the sequencer and control, and the MXU's drain side (the result FIFO, the 32 epilogue lanes, the ACC read-modify-write, RMAX, the TMEM requests) | 298 + 206 + 60 + 18 + ~160 = **~740K (170%); after the barrel ~530K (122%)** | 384 URAM, 117 + ~70 RAMB36, ~1,200 DSP |
+
+The buses across that cut and whether the RTL registers them today: the quantizer's ACT RAM
+writes, registered twice in otpu_actram for exactly this hop (**yes**); port B's chunks and port
+A's scale lines from the adapter into the MXU's FIFOs, through the slice's port registers
+(**yes**); the sequencer's command and start (registers in otpu_seq) and the MXU's done (a
+register) (**yes**), its `rdy` (`!i_act && !i_ini && q_n < 2`, one level into the sequencer's
+can_start: **no**, a few bits); the array's result rows into the result FIFO (the chain ends'
+accumulators to the three LUT-RAM copies' write, `rowp`, 2.6K bits a row at a time; the write
+enable is a register, the data a select of two registered rows: **marginal**, one level and the
+crossing); and inside otpu_mxu the issuer and the drain share the head command's entries and
+the counters `rf_n`, `rows_live`, `c_left` with the drain's pop `d_pop = t_gnt && drain_row_done`
+coming from the slice's grant the same cycle (**no**: an unregistered few-bit loop between the
+two sides and the arbiter). So the split is not available as the RTL stands: the MXU would need
+its issuer / drain handshake and the result FIFO's push registered (one or two cycles of drain
+latency a row, hidden by the 64-row FIFO), and with that SLR2 still holds ~530K against 435K.
+What makes SLR2 fit is a smaller VPU / TMEM, not a better cut: at **LANES 32** (MCOLS 32 packed
+kept) the TMEM, VPU and quantizer halve (~45 + 103 + 30K) and SLR2 is ~340K (78%) with the MXU
+split above, and the LPN (tools/pi05_lpn.py --full, lpnlang, OTPU_LANES=32) puts the chunk at
+**1.549 s, 0.65 Hz** against 1.477 s / 0.68 Hz at LANES 64 (the VPU's elementwise VOPs and QACT
+at 32 a cycle: +4.9%); the fallback B, MCOLS 16 / LANES 32, is 2.429 s, 0.41 Hz (the MXU
+halved: +64%). The other direction, registering the VPU's, quantizer's and DMA's TMEM
+interfaces so they can sit in SLR1 (the data return lands in registers in all three, `xa <=
+ta_data`, `x1 <= t_rdata`, the DMA's two-stage read; the grant, `lost` and `frz` do not: a unit
+would have to issue a cycle ahead and undo), is the bigger change. Recommendation: no placement
+round at LANES 64 (it would place Vivado's own split with thousands of unregistered crossings,
+as the wide-port rounds 1-2 did at -4.6 ns, and tell us nothing the count above does not); the
+next synthesis with this section's RTL (the barrel, the two paths), then the decision between
+LANES 32 (+5% on the LPN, the slice ~500K, the SLR2 box ~340K) and the registered-interface
+work. The cl_pnr_user_hbm.tcl variant and the build mechanism's cross-merge wait for that
+decision: at LANES 32 the pblocks are the wide-port file's with pb_otpu_board as the SLR2 side
+above and a new pb_otpu_mxu (SLR1, the columns, u_act and the FIFOs by cell name) once the
+MXU's internal crossings are registered.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
