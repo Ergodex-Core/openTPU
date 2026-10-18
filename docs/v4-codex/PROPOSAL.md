@@ -1,6 +1,8 @@
 # C1: independent HBM row engines
 
-**Draft; awaiting user approval before implementation.** New Codex proposal, 2026-10-18.
+**Approved for implementation; first reference-validation milestone complete.** New Codex
+proposal, 2026-10-18. The user explicitly approved parallel work on C1-C3 and required openTPU
+Lens for performance measurement/visualization. See [validation evidence](C1-VALIDATION.md).
 Branch: `codex/v4-c1-hbm-row-engines`. Base: `016e953a`.
 See [comparison and approval boundary](README.md).
 
@@ -112,7 +114,7 @@ engines may trade an easier local weight path for expensive activation fanout an
 Principal failure modes: activation barriers dominate short MMs; slow-PC head-of-line blocking;
 scale/header request overhead; central TMEM drain saturation; and insufficient usable CL area.
 
-## First milestones, only after approval
+## Approved milestones
 
 1. Implement descriptor packing and an executable arithmetic model. Verify exact bytes/scales
    and outputs for tails, k0 subranges, KB=1/6/9/54, ACC and unsupported-case fallback.
@@ -124,4 +126,7 @@ scale/header request overhead; central TMEM drain saturation; and insufficient u
 4. Integrate the selected F2 shell/DMA, measure actual PC traffic, and synthesize/place before
    deciding whether 32 engines or a wider VPU is justified.
 
-No implementation, simulation or synthesis of C1 has been performed.
+Milestone 1 now has a versioned byte-preserving sidecar, an independent executable arithmetic
+reference and tests against canonical ISA execution. An initial Lens event-policy experiment
+helps inspect independent progress, bounded row credits and delayed PCs; it is not the full
+milestone 2 memory model. No C1 RTL, compiler dispatch, F2 integration or synthesis exists yet.
