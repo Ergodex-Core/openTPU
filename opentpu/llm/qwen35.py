@@ -182,6 +182,16 @@ class Spec:
                     or 4 * c["vocab_size"] * c["hidden_size"] > EMBED_F32_MAX else "f32",
                     mix=FM.mix_for(c))
 
+    def truncated(self, layers: int) -> "Spec":
+        """A model of the checkpoint's first `layers` layers (the embedding, final norm and
+        head as they are): a quick end-to-end run of a model too slow to simulate whole
+        (Qwen3.8-27B's 64 layers on the ISA simulator, docs/qwen38.md); its text is not the
+        model's."""
+        from dataclasses import replace
+        if not 0 < layers <= self.layers:
+            raise ValueError(f"{layers} layers of {self.layers}")
+        return replace(self, kinds=self.kinds[:layers])
+
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
         need = [(self.head_dim % D == 0, f"head_dim {self.head_dim} % D"),
@@ -198,7 +208,9 @@ class Spec:
                 (self.n_kv % S == 0, f"n_kv {self.n_kv} % S"),
                 (self.n_q % self.n_kv == 0, "n_q % n_kv"),
                 (self.vocab % S == 0, f"vocab {self.vocab} % S"),
-                (max(self.ffn, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
+                # (the MLP's slice holds ffn / S columns and runs its down projection in
+                # chunks of them, kernels/mlp.py: Qwen3.8-27B's 17408 on 4 slices, docs/qwen38.md)
+                (max(self.ffn // S, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
                  "an inner dimension exceeds ACT RAM")]
         if self.mtp:
             need += [(S == 1, "MTP decoding runs on one slice")]

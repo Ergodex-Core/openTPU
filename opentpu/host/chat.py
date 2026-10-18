@@ -1014,6 +1014,15 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
     ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
+    ap.add_argument("--slices", type=int, metavar="S",
+                    help="--backend isa: the board configuration with S slices (the model's "
+                         "tensor-parallel split, a program per slice, as lens record model "
+                         "--slices; Qwen3.8-27B: 4, docs/qwen38.md). Default: the design's two "
+                         "slices where the model maps onto them, else the card's one")
+    ap.add_argument("--layers", type=int, metavar="N",
+                    help="a model of the checkpoint's first N layers (Spec.truncated: a quick "
+                         "end-to-end run of one too slow to simulate whole; its text is not "
+                         "the model's)")
     ap.add_argument("--dev", default=None,
                     help="board device (default: OTPU_DEVICE or /dev/xdma0; f2:0 for F2 slot 0)")
     ap.add_argument("--clock-mhz", type=float,
@@ -1110,6 +1119,12 @@ def main(argv=None):
                          f"feed the turns' text as is")
     tokenizer = load_tokenizer(path)        # (on a thread, while the model loads)
     spec = load_spec(path)
+    if a.layers:
+        if not hasattr(spec, "truncated"):
+            raise SystemExit("otpu-chat: --layers takes a Qwen3.5 model")
+        spec = spec.truncated(a.layers)
+        print(f"otpu-chat: the first {a.layers} layers only (--layers): the text is not the "
+              f"model's", flush=True)
     wformat = FM.auto(spec, a.wformat)
     streams = ST.streams(spec)          # a MoE: its experts streamed (opentpu/host/streamed.py)
     if streams:
@@ -1130,6 +1145,12 @@ def main(argv=None):
         raise SystemExit(f"otpu-chat: {e}") from None
     if a.mtp and (not hasattr(spec, "mtp") or a.per_position):
         raise SystemExit("otpu-chat: --mtp takes a Qwen3.5 model and resident decode")
+    if a.slices and cfg is None and not streams and not a.mtp:    # the board configuration
+        from opentpu.host.board import sim_config                  # with S slices
+        from opentpu.isasim import board_config
+        cfg = sim_config(spec, a.cap, board_config(PAIR=True, DSTEP=True, STREAM=True,
+                                                   S=a.slices),
+                         lookup=not a.per_position, wformat=wformat, head_format=a.head_format)
     if cfg is None and not streams and not a.mtp and not _maps_on_design(spec):
         from opentpu.host.board import sim_config     # Gemma 4 (one KV head): the card's
         from opentpu.isasim import board_config

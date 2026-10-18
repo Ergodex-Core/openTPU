@@ -313,21 +313,24 @@ CANDIDATE_KEYS = ("C", "LANES", "MHZ", "TMEM_WORDS", "FIFO_DEPTH", "WIN", "S", "
 
 
 def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None,
-             args=None, candidate: dict | None = None) -> dict:
+             args=None, candidate: dict | None = None, adopt: bool = False) -> dict:
     """An ISA-simulator run: the executed instruction stream (with loops unrolled) and an
     analytic timing -- every instruction issued back to back for its nominal work, no overlap
     (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run. args:
     the run's arguments (R8..R15: a resident decode program's position and token).
     candidate (parse_candidate): the same instruction stream timed on a wider machine, C
     chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
-    model for comparing architecture candidates (docs/v4/), not a measurement."""
+    model for comparing architecture candidates (docs/v4/), not a measurement. adopt: the
+    images (each a slice's whole DRAM) are the run's DRAM, not copied, and are left as the
+    run leaves them (a 4-slice 27B model: four 4 GiB images; _Capture's traced ISA step)."""
     from dataclasses import replace
 
     from .isasim import Machine
     cand = dict(candidate or {})
     C = int(cand.get("C", 1))
     dcfg = replace(cfg, LANES=int(cand["LANES"])) if "LANES" in cand else cfg
-    m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
+    m = Machine(cfg, programs, list(images) if adopt else
+                [None if i is None else i.copy() for i in images], args, adopt=adopt)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
         orig, orig_step = sl.execute, sl.step
@@ -562,9 +565,10 @@ class _Capture:
     def __init__(self, cfg, images, uarch, run_kw, isa: bool = False):
         from .llm.qwen3 import IsaBackend
         self.cfg, self.uarch, self.run_kw, self.isa_mode = cfg, uarch, run_kw, isa
-        self.isa = IsaBackend(cfg, images)
+        self.isa = IsaBackend(cfg, images, adopt=True)     # (the images held once)
         self.traced = False
         self.last = None
+        self.cand = None                # isa: the candidate (parse_candidate) and MHZ
 
     def write(self, s, addr, data):
         self.isa.write(s, addr, data)
@@ -576,8 +580,13 @@ class _Capture:
         if not self.traced:
             return self.isa.run(programs, args)
         if self.isa_mode:
-            self.last = (programs, args, [sl.dram.copy() for sl in self.isa.machine.slices])
-            return self.isa.run(programs, args)
+            # the traced step runs timed, on the live DRAM (adopted, no copy: a 4-slice 27B
+            # model's images are four 4 GiB arrays) and leaves it as the step would (the
+            # same simulator); its name is the caller's to fill in (_model_step)
+            self.last = isa_data("", self.cfg, programs,
+                                 [sl.dram for sl in self.isa.machine.slices], self.uarch,
+                                 args, self.cand, adopt=True)
+            return {"instructions": [0] * self.cfg.S}
         n = [len(sl.dram) for sl in self.isa.machine.slices]
         drams, _, st = rtlsim.run(self.cfg, programs, [sl.dram for sl in self.isa.machine.slices],
                                   max_cycles=1 << 40, trace=True, uarch=self.uarch, args=args,
@@ -591,7 +600,8 @@ class _Capture:
 def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
                 prompt: str, resident: bool = True, wformat: str = "auto",
                 head_format: str | None = None, candidate: dict | None = None,
-                mhz: float | None = None, slices: int | None = None) -> dict:
+                mhz: float | None = None, slices: int | None = None,
+                layers: int | None = None) -> dict:
     """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
     on its real weights: the prompt (a user turn of the chat template; plain text without
     one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
@@ -611,6 +621,8 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     from .profile import parse
     path = model_dir(model)
     spec = load_spec(path)
+    if layers:                      # the checkpoint's first layers (Spec.truncated)
+        spec = spec.truncated(layers)
     wformat = FM.auto(spec, wformat)
     try:
         spec.check(design_config())
@@ -651,23 +663,26 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     for _ in range(pos - (len(ids) - 1)):           # greedy decode up to the traced step
         logits = eng.step(t)
         t = int(np.argmax(logits))
-    holder["b"].traced = True
-    logits = eng.step(t)
-    nxt = int(np.argmax(logits))
     cand = dict(candidate or {})
     if mhz:
         cand["MHZ"] = mhz
+    holder["b"].cand = cand or None
+    holder["b"].traced = True
+    logits = eng.step(t)
+    nxt = int(np.argmax(logits))
     tag = ""
     if candidate:
         tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
                                         for k, v in cand.items()) + "]"
-    name = (f"{path.name} token at pos {pos}" +
+    name = (f"{path.name}" + (f" (first {layers} layers)" if layers else "") +
+            f" token at pos {pos}" +
             ((f" (board config, {cfg.S} slices)" if cfg.S > 1 else " (board config)")
              if board else "") + (" [ISA]" if isa else "") + tag +
             f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
     if isa:
-        programs, args, drams = holder["b"].last
-        return isa_data(name, cfg, programs, drams, uarch, args, cand or None)
+        d = holder["b"].last            # (timed as it ran, on the live DRAM)
+        d["name"] = name
+        return d
     if candidate:
         raise SystemExit("--candidate is an ISA model: add --isa")
     programs, st = holder["b"].last
@@ -779,7 +794,7 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
            model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
            resident: bool = True, wformat: str = "auto", head_format: str | None = None,
            candidate: str | None = None, mhz: float | None = None,
-           slices: int | None = None) -> dict:
+           slices: int | None = None, layers: int | None = None) -> dict:
     """Run one workload and return its profile dict; `workload` "model" with `model` a
     checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
     re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `slices` runs
@@ -795,7 +810,8 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         if model is None:
             raise SystemExit("workload model: --model NAME|DIR")
         return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
-                           wformat, head_format, parse_candidate(candidate), mhz, slices)
+                           wformat, head_format, parse_candidate(candidate), mhz, slices,
+                           layers)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -1153,6 +1169,9 @@ def main(argv=None) -> None:
                    help="workload model: per-position programs instead of the resident decode")
     r.add_argument("--wformat", default="auto", help="workload model: the weights' format")
     r.add_argument("--head-format", help="workload model: the LM head's format")
+    r.add_argument("--layers", type=int, metavar="N",
+                   help="workload model: the checkpoint's first N layers only (Spec.truncated; "
+                        "a model too slow to simulate whole, docs/qwen38.md)")
     r.add_argument("--candidate", metavar="C=n,LANES=n,MHZ=f",
                    help="workload model with --isa: re-time the token on a candidate machine "
                         "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
@@ -1189,7 +1208,7 @@ def main(argv=None) -> None:
                        axi=True if a.axi else None, stall=a.stall, model=a.model,
                        prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
                        wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
-                       mhz=a.mhz, slices=a.slices)
+                       mhz=a.mhz, slices=a.slices, layers=a.layers)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)

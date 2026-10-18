@@ -86,12 +86,17 @@ class SimError(RuntimeError):
 
 
 class Slice:
-    def __init__(self, cfg: Config, sid: int, program: list[I.Instr], dram: np.ndarray | None):
+    def __init__(self, cfg: Config, sid: int, program: list[I.Instr], dram: np.ndarray | None,
+                 adopt: bool = False):
         self.cfg, self.sid = cfg, sid
         self.prog = program
-        self.dram = np.zeros(cfg.DRAM_BYTES, dtype=np.uint8)
-        if dram is not None:
-            self.dram[: len(dram)] = dram
+        if adopt and isinstance(dram, np.ndarray) and dram.dtype == np.uint8 and \
+                dram.ndim == 1 and len(dram) == cfg.DRAM_BYTES:
+            self.dram = dram            # the caller's array is the slice's DRAM (no copy:
+        else:                           # four 4 GiB images, lens's traced ISA step)
+            self.dram = np.zeros(cfg.DRAM_BYTES, dtype=np.uint8)
+            if dram is not None:
+                self.dram[: len(dram)] = dram
         self.tmem = np.zeros(cfg.TMEM_WORDS, dtype=np.uint32)
         self.act = np.zeros((cfg.act_rows, cfg.ACT_BLOCKS * cfg.D), dtype=np.int8)
         # the scale record of each (row, block): the row's Sa and the sub-blocks' offsets da
@@ -762,11 +767,11 @@ class Machine:
     """args: the run's arguments (up to 8 words): R8..R15 start with them (0 without)."""
 
     def __init__(self, cfg: Config, programs: list[list[I.Instr]], drams: list[np.ndarray | None],
-                 args=None):
+                 args=None, adopt: bool = False):
         assert len(programs) == cfg.S and len(drams) == cfg.S
         _fit_imem(cfg, programs)
         self.cfg = cfg
-        self.slices = [Slice(cfg, s, programs[s], drams[s]) for s in range(cfg.S)]
+        self.slices = [Slice(cfg, s, programs[s], drams[s], adopt) for s in range(cfg.S)]
         self.args = args
         self.chains = 0                  # HALT CHAIN restarts so far
         self.host = None                 # WAITW's host: host(machine) when every slice waits

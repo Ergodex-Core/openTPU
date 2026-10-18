@@ -1512,8 +1512,17 @@ def sim_config(spec, cap: int, base=None, rows: int | None = None, lookup: bool 
     try:
         probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, **kw)
     except MemoryError:
-        probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
-                           head_format=head_format, **kw)
+        try:
+            probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
+                               head_format=head_format, **kw)
+        except MemoryError:
+            # the int8 embedding table of its own on the host (the Engine's fallback when the
+            # image does not fit otherwise: Qwen3.8-27B-INT4 on 4 slices, docs/qwen38.md)
+            from opentpu.llm.qwen3 import has_embed_host
+            if not (kw.get("lookup") and has_embed_host(spec)):
+                raise
+            probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
+                               head_format=head_format, embed_host=True, **kw)
     need = -(-probe.nbytes // 4096) * 4096 + 4 * base.IMEM_WORDS
     return replace(base, DRAM_BYTES=1 << max(22, (need - 1).bit_length()))
 
