@@ -313,21 +313,24 @@ CANDIDATE_KEYS = ("C", "LANES", "MHZ", "TMEM_WORDS", "FIFO_DEPTH", "WIN", "S", "
 
 
 def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None,
-             args=None, candidate: dict | None = None) -> dict:
+             args=None, candidate: dict | None = None, adopt: bool = False) -> dict:
     """An ISA-simulator run: the executed instruction stream (with loops unrolled) and an
     analytic timing -- every instruction issued back to back for its nominal work, no overlap
     (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run. args:
     the run's arguments (R8..R15: a resident decode program's position and token).
     candidate (parse_candidate): the same instruction stream timed on a wider machine, C
     chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
-    model for comparing architecture candidates (docs/v4/), not a measurement."""
+    model for comparing architecture candidates (docs/v4/), not a measurement. adopt: the
+    images (each a slice's whole DRAM) are the run's DRAM, not copied, and are left as the
+    run leaves them (a 4-slice 27B model: four 4 GiB images; _Capture's traced ISA step)."""
     from dataclasses import replace
 
     from .isasim import Machine
     cand = dict(candidate or {})
     C = int(cand.get("C", 1))
     dcfg = replace(cfg, LANES=int(cand["LANES"])) if "LANES" in cand else cfg
-    m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
+    m = Machine(cfg, programs, list(images) if adopt else
+                [None if i is None else i.copy() for i in images], args, adopt=adopt)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
         orig, orig_step = sl.execute, sl.step
@@ -562,9 +565,10 @@ class _Capture:
     def __init__(self, cfg, images, uarch, run_kw, isa: bool = False):
         from .llm.qwen3 import IsaBackend
         self.cfg, self.uarch, self.run_kw, self.isa_mode = cfg, uarch, run_kw, isa
-        self.isa = IsaBackend(cfg, images)
+        self.isa = IsaBackend(cfg, images, adopt=True)     # (the images held once)
         self.traced = False
         self.last = None
+        self.cand = None                # isa: the candidate (parse_candidate) and MHZ
 
     def write(self, s, addr, data):
         self.isa.write(s, addr, data)
@@ -576,8 +580,13 @@ class _Capture:
         if not self.traced:
             return self.isa.run(programs, args)
         if self.isa_mode:
-            self.last = (programs, args, [sl.dram.copy() for sl in self.isa.machine.slices])
-            return self.isa.run(programs, args)
+            # the traced step runs timed, on the live DRAM (adopted, no copy: a 4-slice 27B
+            # model's images are four 4 GiB arrays) and leaves it as the step would (the
+            # same simulator); its name is the caller's to fill in (_model_step)
+            self.last = isa_data("", self.cfg, programs,
+                                 [sl.dram for sl in self.isa.machine.slices], self.uarch,
+                                 args, self.cand, adopt=True)
+            return {"instructions": [0] * self.cfg.S}
         n = [len(sl.dram) for sl in self.isa.machine.slices]
         drams, _, st = rtlsim.run(self.cfg, programs, [sl.dram for sl in self.isa.machine.slices],
                                   max_cycles=1 << 40, trace=True, uarch=self.uarch, args=args,
@@ -651,12 +660,13 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
     for _ in range(pos - (len(ids) - 1)):           # greedy decode up to the traced step
         logits = eng.step(t)
         t = int(np.argmax(logits))
-    holder["b"].traced = True
-    logits = eng.step(t)
-    nxt = int(np.argmax(logits))
     cand = dict(candidate or {})
     if mhz:
         cand["MHZ"] = mhz
+    holder["b"].cand = cand or None
+    holder["b"].traced = True
+    logits = eng.step(t)
+    nxt = int(np.argmax(logits))
     tag = ""
     if candidate:
         tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
@@ -666,8 +676,9 @@ def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dic
              if board else "") + (" [ISA]" if isa else "") + tag +
             f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
     if isa:
-        programs, args, drams = holder["b"].last
-        return isa_data(name, cfg, programs, drams, uarch, args, cand or None)
+        d = holder["b"].last            # (timed as it ran, on the live DRAM)
+        d["name"] = name
+        return d
     if candidate:
         raise SystemExit("--candidate is an ISA model: add --isa")
     programs, st = holder["b"].last

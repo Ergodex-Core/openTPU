@@ -198,7 +198,9 @@ class Spec:
                 (self.n_kv % S == 0, f"n_kv {self.n_kv} % S"),
                 (self.n_q % self.n_kv == 0, "n_q % n_kv"),
                 (self.vocab % S == 0, f"vocab {self.vocab} % S"),
-                (max(self.ffn, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
+                # (the MLP's slice holds ffn / S columns and runs its down projection in
+                # chunks of them, kernels/mlp.py: Qwen3.8-27B's 17408 on 4 slices, docs/qwen38.md)
+                (max(self.ffn // S, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
                  "an inner dimension exceeds ACT RAM")]
         if self.mtp:
             need += [(S == 1, "MTP decoding runs on one slice")]

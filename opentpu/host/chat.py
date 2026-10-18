@@ -1008,6 +1008,11 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
     ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
+    ap.add_argument("--slices", type=int, metavar="S",
+                    help="--backend isa: the board configuration with S slices (the model's "
+                         "tensor-parallel split, a program per slice, as lens record model "
+                         "--slices; Qwen3.8-27B: 4, docs/qwen38.md). Default: the design's two "
+                         "slices where the model maps onto them, else the card's one")
     ap.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix (--backend board)")
     ap.add_argument("--clock-mhz", type=float,
                     help="core clock, to turn device cycles into tokens/s (default: the "
@@ -1123,6 +1128,12 @@ def main(argv=None):
         raise SystemExit(f"otpu-chat: {e}") from None
     if a.mtp and (not hasattr(spec, "mtp") or a.per_position):
         raise SystemExit("otpu-chat: --mtp takes a Qwen3.5 model and resident decode")
+    if a.slices and cfg is None and not streams and not a.mtp:    # the board configuration
+        from opentpu.host.board import sim_config                  # with S slices
+        from opentpu.isasim import board_config
+        cfg = sim_config(spec, a.cap, board_config(PAIR=True, DSTEP=True, STREAM=True,
+                                                   S=a.slices),
+                         lookup=not a.per_position, wformat=wformat, head_format=a.head_format)
     if cfg is None and not streams and not a.mtp and not _maps_on_design(spec):
         from opentpu.host.board import sim_config     # Gemma 4 (one KV head): the card's
         from opentpu.isasim import board_config

@@ -40,6 +40,7 @@ from .. import waits as WC
 from .. import language as ol
 from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, Tensor, arg_words,
                         Words, current, k_scale_bytes, trace_fit)
+from . import ctensors as CT
 from . import formats as FM
 from . import generate as G
 from . import rope_parameters
@@ -136,6 +137,26 @@ class Spec:
                      formats)
 
 
+F32_CHUNK = 256 << 20       # bytes of fp32 a chunk when a checkpoint tensor is converted by rows
+
+
+def _f32_tensor(h, k: str) -> np.ndarray:
+    """Checkpoint tensor k of the safetensors handle h as fp32: whole when small, else by
+    rows into one fp32 array (a 248K x 5120 bf16 table is 2.5 GB; converted whole it and its
+    fp32 copy are both held at once: 7.5 GB at the peak of an image build)."""
+    import torch
+    sl = h.get_slice(k)
+    shape = tuple(sl.get_shape())
+    n = int(np.prod(shape)) if shape else 1
+    if not shape or 4 * n <= F32_CHUNK:
+        return h.get_tensor(k).to(torch.float32).numpy()
+    out = np.empty(shape, np.float32)
+    rows = max(1, F32_CHUNK // (4 * n // shape[0]))
+    for a in range(0, shape[0], rows):
+        out[a:a + rows] = sl[a:a + rows].to(torch.float32).numpy()
+    return out
+
+
 def finite(v: np.ndarray, name: str) -> np.ndarray:
     """v, a tensor converted from a checkpoint, or a ValueError naming it when it holds a NaN or
     an infinity (a corrupt or mis-converted checkpoint): the quantizers would turn its block
@@ -177,6 +198,11 @@ class Weights(Mapping):
                     continue
                 self._where[k.replace("model.language_model.", "model.", 1)] = (h, k, None)
         self._split_fused(Path(model_dir))
+        # a compressed-tensors pack-quantized checkpoint (opentpu/llm/ctensors.py): every
+        # packed X.weight_packed / X.weight_scale is also "X.weight", dequantized when read
+        self._ct = CT.scheme(model_dir)
+        for n, t in (CT.names(self._where) if self._ct else {}).items():
+            self._where[n] = (None, t, CT.PACKED)
         self._small: dict = {}
         self._big: tuple | None = None
 
@@ -211,13 +237,24 @@ class Weights(Mapping):
             return self._big[1]
         import torch
         h, k, rows = self._where[name]
-        t = h.get_tensor(k) if rows is None else h.get_slice(k)[rows[0]:rows[1]]
-        v = finite(t.to(torch.float32).numpy(), name)
+        if rows == CT.PACKED:               # (k: the packed, scale and shape names)
+            v = finite(CT.dequantized(lambda n: self._where[n][0].get_tensor(self._where[n][1]),
+                                      k, self._ct), name)
+        elif rows is None:
+            v = finite(_f32_tensor(h, k), name)
+        else:
+            t = h.get_slice(k)[rows[0]:rows[1]]
+            v = finite(t.to(torch.float32).numpy(), name)
         if v.nbytes <= self.CACHE:
             self._small[name] = v
         else:
             self._big = (name, v)
         return v
+
+    def uncache(self) -> None:
+        """Drop the large cached tensor (an Engine whose image holds the embedding rows, once
+        it is built: a 248K x 5120 table is 5 GB in fp32; a later read converts it again)."""
+        self._big = None
 
     def __iter__(self):
         return iter(self._where)
@@ -273,6 +310,12 @@ class LazyWeights(dict):
                 self._at.update((k, (str(f), k)) for k in keys)
         if mtp and not any(k.startswith("mtp.") for k in self._at):
             raise ValueError(f"{mtp_from or model_dir}: no mtp.* tensors (the MTP drafter)")
+        # a compressed-tensors pack-quantized checkpoint (opentpu/llm/ctensors.py): every
+        # packed X.weight_packed / X.weight_scale is also "X.weight", dequantized when read
+        self._ct = CT.scheme(model_dir)
+        self._ctn = CT.names(self._at) if self._ct else {}
+        for n, (kp, _, _) in self._ctn.items():
+            self._at[n] = self._at[kp]
 
     def _open(self, k):
         from safetensors import safe_open
@@ -283,8 +326,11 @@ class LazyWeights(dict):
 
     def __getitem__(self, k):
         import torch
+        if k in self._ctn:
+            return finite(CT.dequantized(lambda n: self._open(n)[0].get_tensor(self._open(n)[1]),
+                                         self._ctn[k], self._ct), k)
         h, name = self._open(k)
-        return finite(h.get_tensor(name).to(torch.float32).numpy(), k)
+        return finite(_f32_tensor(h, name), k)
 
     def part(self, k, i):
         """Tensor k's i-th entry along its first axis (one expert of a fused expert tensor),
@@ -2286,6 +2332,8 @@ class Engine:
                                                getattr(W, "mtp_from", None)),
                                   extra=(getattr(self.image, "pool_extra", None) or (0,))[0])
         images = IC.build(self.image, W, self.layout)     # (opentpu/imgcache.py)
+        if self.device_inputs and hasattr(W, "uncache"):  # (the host never reads the table)
+            W.uncache()
         # rollback's snapshots of the state the KV caches do not hold (snapshot.py)
         self.stateful = SN.stateful(self.image)
         self._snaps = None
