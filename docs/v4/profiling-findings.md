@@ -154,6 +154,10 @@ same 1.5% + 1.0% (105 gaps, 136 k cycles); the MXU drain's TMEM arbitration loss
 Opportunity 4 (port A scale-line prefetch, or K rows stored with their scales ahead of the
 data) is therefore the first memory-side item for long contexts, before any lane work.
 
+(The same token at the DDR3 model's 20% stalls was not recorded: the run's DRAM dump was cut
+short by a full disk on the build host; it is the one missing cell, to be rerun when space
+allows.)
+
 ## 7. Ranked summary
 
 | # | Opportunity | Where | Gain at C=1 | Gain at C=4 | Effort |
