@@ -538,13 +538,34 @@ have their own CFG_HASH (LANES is in it) and programs (the compiler's row groups
 128 / 255 / 64 as at 64 lanes: the TMEM is the same).
 
 **Regression and the phases** (the m7a, Verilator 5.048, OTPU_TARGET=f2-vla32 OTPU_MCOLS=32
-OTPU_LANES=32 OTPU_PACK=1): MEASURED_6G_TESTS
+OTPU_LANES=32 OTPU_PACK=1): tests/test_rtl.py, test_vops.py, test_mxu_pack_rtl.py, test_quant_rtl.py, test_pi05.py
+**320 passed**, 6 skipped, and **279 passed** with MXROT forced on every Config, the 13
+pre-existing failures of 6c's run (the test_axi_* and additive-mask tests at the f2-vla
+environment) and two more that the fix after them removes (test_vops at a 64-lane Config on the
+32-lane target: rtlsim now raises TMEM_SBP to the simulated lanes', cb78ea0c; both pass). The
+seven measured phases, the same tool and configuration as 5.4 (tools/pi05_rtl.py, the m7a):
 
 | phase (Np 558, rows 128 / 255 / 64) | LANES 64 (5.4, 6e's RTL) | **LANES 32** | the LPN at 32 (lpnlang) |
 |---|---|---|---|
-MEASURED_6G_TABLE
+| v_out, MCOLS 32 E 32 | 627,705 (MXU 56.5%) | **913,551 (38.8%; +45.5%)**: the VPU busy 85%, the MXU 93% of its cycles waiting on it, the arbitration losses as at 64 (`fv` 179K against 174K, `fm` 4) | 726,600 (+20.7%) |
+| p_qkv | 838,610 (44.0%) | **929,476 (39.7%; +10.8%)** | 878,166 (+11.7%) |
+| e_step | 467,218 (33.2%) | **556,512 (27.9%; +19.1%)** | 488,929 (+8.0%) |
+| p_attend | 722,238 (24.0%) | **957,878 (18.0%; +32.6%)**: the quantizer's losses `fq` 66.9K against 10.2K, the VPU's 194K against 160K | 634,095 (-0.6%) |
+| v_qkv | 592,802 (21.0%) | **627,270 (19.8%; +5.8%)** (QST-bound: port A's word rate, not the lanes) | 650,095 (+5.3%) |
+| v_out, MCOLS 16 E 16 | 876,803 (80.9%) | **1,143,378 (62.1%; +30.4%)** | - |
+| e_step, MCOLS 16 E 16 | 600,209 (51.7%) | **673,748 (46.0%; +12.3%)** | - |
 
-**The LPN** (tools/pi05_lpn.py --full, the real model, 200 MHz): MEASURED_6G_LPN tools/pi05_cost.py
+**The LPN** (tools/pi05_lpn.py --full, the real model, 200 MHz): lpnlang **1.549 s = 0.65 Hz** (309.7 M cycles; vision 0.439, prefix
+0.816, expert 0.293 s), the dialect **1.532 s = 0.65 Hz** (306.3 M), against 1.477 / 1.414 s
+at 64 lanes: +4.9% / +8.3%; the tally's bound 0.951 s (the MXU's: unchanged) and serial 2.356
+s (2.003 at 64). The measured phases say more: the LPN has the 32-lane v_out at +21% where the
+RTL has +46%, e_step +8% against +19%, p_attend -1% against +33% (its VPU model carries the
+elementwise VOPs at the lanes and the composites at VPU_CL, but not the VPU's own pipeline at
+half the width under the same instruction stream, nor the quantizer's and VPU's extra TMEM
+losses on the attention phase). Weighting 5.5's chunk by the measured ratios (v_out's for the
+tower's MLP phases, p_qkv's for the prefix MLP p_out, which the 32-lane model did not run,
+p_attend's and e_step's for theirs): **~1.75 s, ~0.57 Hz** at 200 MHz, the number to carry
+until p_out is measured at 32 lanes. tools/pi05_cost.py
 --target f2-vla32 (its "today" row groups 16 / 8 / 8, the card's shape, not the plan's) reads
 port B 6.647 s bound / 10.8 s serial: the 255-row group is what makes the plan's tally (the LPN
 prints it at 128 / 255 / 64).
@@ -568,7 +589,8 @@ So the slice does **not** land at ~340K: that number (6e) was the SLR2 side of t
 the-rest split, with the MXU's 85K of columns and the ACT RAM in SLR1; the whole slice in one
 SLR at LANES 32 is ~465-515K, over SLR2's CL area before the adapter, because the MXU (233K)
 and the VPU's composite lanes (~96K) do not shrink with the lanes. VPU_CL 8 takes ~48K off at
-MEASURED_6G_CL8 on the LPN. RAM is 6f's (the ACT RAM 1,088 RAMB36, the TMEM 384 URAM: the
+1.667 s = 0.60 Hz (lpnlang --vpu-cl 8, +7.6% over VPU_CL 16; the
+measured VPU-bound phases would lose more) on the LPN. RAM is 6f's (the ACT RAM 1,088 RAMB36, the TMEM 384 URAM: the
 banks are 32 x 2 x 24,576 words, 6 URAM a sub-bank, the same 384), DSP 6f's.
 
 **The build mechanism** (the second deliberate cross-merge, from the wide-port branch at
@@ -601,7 +623,8 @@ measured slice comes in under ~330K the pblocks apply as they are. What brings i
 array-against-the-rest split (6e: the MXU's internal issuer / drain handshake and the result
 FIFO's push registered, then pb_otpu_mxu in SLR1 for the columns and the ACT RAM: ~100K out of
 SLR2, the rest ~365-415K = 84-95%, still above the 72% line without VPU_CL 8), or the
-registered TMEM interfaces at 64 lanes. The plan's numbers to carry: f2-vla32 at MEASURED_6G_HZ.
+registered TMEM interfaces at 64 lanes. The plan's numbers to carry: f2-vla32 at ~0.57 Hz by the measured phases (0.65 on the LPN) against f2-vla's ~0.65-0.68,
+with its slice ~465-515K LUTs by the estimate..
 
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
