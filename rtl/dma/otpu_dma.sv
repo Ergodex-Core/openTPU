@@ -582,9 +582,9 @@ module otpu_dma
   // read request has, docs/v4/f2-timing.md)
   logic [LANES-1:0]       t_ren_c, t_rv;
   (* max_fanout = 16 *) logic [LANES-1:0]       t_re_q;
-  (* max_fanout = 16 *) logic [LANES-1:0][31:0] t_rq;
+  (* max_fanout = 16 *) logic [LANES-1:0][31:0] t_ra_q;
   logic [LANES-1:0][31:0] t_raddr_c;
-  assign t_raddr = t_rq;
+  assign t_raddr = t_ra_q;
   // st_pend, pl and oc_nf move in the ST branch of the process below (st_pend and pl with adv,
   // occ with the push and the issue); a start clears st_pend; elsewhere st_pend is low, so adv
   // stays up
@@ -600,7 +600,7 @@ module otpu_dma
   always_ff @(posedge clk)
     if (rst) begin t_rv <= '0; t_re_q <= '0; end
     else begin
-      if (adv) begin t_rv <= t_ren_c; t_rq <= t_raddr_c; end
+      if (adv) begin t_rv <= t_ren_c; t_ra_q <= t_raddr_c; end
       t_re_q <= adv_nx ? (adv ? t_ren_c : t_rv) : '0;
     end
   assign t_ren = t_re_q;
