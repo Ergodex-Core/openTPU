@@ -6,12 +6,17 @@ create_project -in_memory -part $DEVICE_TYPE -force
 # The HDK reads ${SHELL_MODE}_cl_pnr_user.xdc as a managed XDC (every Tcl command that is not a
 # constraint dropped with a CRITICAL WARNING), so openTPU's placement Tcl (cl_pnr_user.tcl: the
 # linked reset exception, the HBM floorplan) is read unmanaged at the one point of the HDK's
-# sequence after its constraints and before implementation: its opt_design call, wrapped once.
+# sequence after its constraints and before implementation: its opt_design call, wrapped once
+# (otpu_clk2x.tcl, the pumped TMEM's multicycles, with it).
 rename opt_design otpu_hdk_opt_design
 proc opt_design {args} {
   rename opt_design {}
   rename otpu_hdk_opt_design opt_design
   read_xdc -unmanaged ${::constraints_dir}/cl_pnr_user.tcl
+  # the pumped TMEM's multicycles again, on the linked design (read after synthesis too, where
+  # they check the netlist; the ones in the out-of-context checkpoint did not survive the link:
+  # round 4 placed the TMEM's read requests at the fast period). The file fails closed.
+  read_xdc -unmanaged ${::constraints_dir}/otpu_clk2x.tcl
   opt_design {*}$args
 }
 source ${HDK_SHELL_DIR}/build/scripts/build_level_1_cl.tcl
