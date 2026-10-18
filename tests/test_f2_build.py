@@ -638,7 +638,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
                 assert f'WRAPPER/CL/u_sys/{chain}.g_x[{k}].{d}' in pb
         assert f'WRAPPER/CL/u_sys/g_rs[{k}].u_x' in pb
     assert 'WRAPPER/CL/u_sys/u_cx/g_xr.u_m' in hbm and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
-    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/u_slice/u_tmem', 'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']
+    # the TMEM alone in the child box (the vla branch: f2-vla32's VPU would not fit beside it)
+    assert tmem == ['WRAPPER/CL/u_sys/u_board/u_slice/u_tmem']
     assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
     assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}

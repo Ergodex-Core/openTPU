@@ -27,9 +27,21 @@
 #                 banks' addresses never cross an SLR. (SLR1's 23 clock regions, ~313K LUTs,
 #                 would hold it at 72%: too full for 200 MHz routing.)
 #   pb_otpu_tmem  (a child of pb_otpu_board, X2Y9:X5Y10, 8 clock regions, ~109K LUTs): the TMEM
-#                 and the VPU together (48K LUTs, 68 RAMB36): the pumped banks' address paths
-#                 (clk -> clk_f, one core period: otpu_clk2x.tcl) come from the VPU's ta_addr
-#                 and the MXU's t_raddr; the MXU (97K) wraps around the box.
+#                 (f2-hbm's 12K LUTs and 64 RAMB36; f2-vla32's ~63K and 384 URAM, the URAM
+#                 columns of those regions): the pumped banks' address paths (clk -> clk_f, one
+#                 core period: otpu_clk2x.tcl) come from the VPU's ta_addr and the MXU's
+#                 t_raddr, which place around the box. The wide-port branch's file held the VPU
+#                 in the box too (48K for the pair on f2-hbm); on the vla branch the VPU is out
+#                 of it: at 32 lanes with its 16 composite lanes it is ~160K LUTs by the
+#                 estimate (docs/vla_frequency_plan.md 6g), which with the TMEM is twice the
+#                 box, and an over-full child pblock stops opt_design (a fail-closed outcome
+#                 the count should not have to find).
+#
+# The vla branch's f2-vla32 (docs/vla_frequency_plan.md 6g): the slice is ~465-515K LUTs by
+# the estimate from the third f2-vla synthesis (the MXU's 233K and the VPU's 16 composite lanes
+# do not shrink with the lanes), so pb_otpu_board at SLR2's ~435K of CL area is over-full
+# before the adapter and the control block; this file is the mechanism, read by build.py for
+# every HBM target, and the one-SLR placement needs the measured count under ~330K first.
 # Every net between SLR0 and SLR2 is a chain of three otpu_xr stages, one per SLR (the native
 # ports in otpu_f2_hbm_mem g_xr.g_x[k], the control path in otpu_axil_xr u_cx, the reset and HBM
 # ready in g_rs[k]), so each SLR crossing runs from a flip-flop to a flip-flop (TX_REG / RX_REG
@@ -117,13 +129,12 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 
 ########################################
-# pb_otpu_tmem: the TMEM beside the VPU, within the slice
+# pb_otpu_tmem: the TMEM within the slice (the VPU around it: see the top)
 ########################################
 create_pblock pb_otpu_tmem
 set_property PARENT pb_otpu_board [get_pblocks pb_otpu_tmem]
 resize_pblock pb_otpu_tmem -add {CLOCKREGION_X2Y9:CLOCKREGION_X5Y10}
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_tmem}]
-add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
 
 ########################################
 # Parameters and containment
