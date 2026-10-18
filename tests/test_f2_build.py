@@ -551,8 +551,9 @@ set props {}
 # the sites of a range; pblock_CL's own ranges are the HDK's site ranges (P0 P1 P2 here)
 set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_X7Y0 {s0b}
            CLOCKREGION_X0Y4:CLOCKREGION_X3Y7 {s1a} CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
+           CLOCKREGION_X4Y3:CLOCKREGION_X4Y3 {s0c}
            CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
-           CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b} P1 {s1a s1b} P2 {s2a s2b}}
+           CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b s0c} P1 {s1a s1b} P2 {s2a s2b}}
 set ranges {{pblock_CL P0} {pblock_CL P1} {pblock_CL P2}}
 proc create_pblock {name} { lappend ::pblocks $name }
 proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
@@ -613,8 +614,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         return
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=5' in out
-    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem' in out
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=6' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem' in out
     ranges = {}
     for line in out.splitlines():
         if line.startswith('RANGE ') and not line.startswith('RANGE pblock_CL'):
@@ -625,6 +626,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         'pb_otpu_hbm': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y3', 'CLOCKREGION_X4Y0:CLOCKREGION_X7Y0'],
         'pb_otpu_mid': ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'],
         'pb_otpu_pcis': ['CLOCKREGION_X5Y5:CLOCKREGION_X5Y6'],
+        'pb_otpu_xs': ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3'],
         'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
         'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10']}
     cells = {}
@@ -632,7 +634,10 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         if line.startswith('CELL '):
             _, pb, cell = line.split(' ', 2)
             cells.setdefault(pb, []).append(cell)
-    hbm, mid, pcis, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem'))
+    hbm, mid, pcis, xs, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_xs', 'pb_otpu_board', 'pb_otpu_tmem'))
+    # the SLR0 ends of the PCIS link stages (round 6) in SLR0's top corner, apart from the SLR1 ends
+    assert sorted(xs) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_xs_{k}' for k in ('ar', 'aw', 'b', 'r', 'w')]
+    assert not (set(xs) & set(pcis))
     # the PCIS registers (round 4) beside the shell's DMA column, SLR1, apart from u_host (SLR0)
     assert sorted(pcis) == sorted(f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
                                   ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx'))
@@ -650,7 +655,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
     assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
-    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem'):
+    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_xs', 'pb_otpu_board', 'pb_otpu_tmem'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
         assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
         assert props[(pb, 'PARENT')] == ('pb_otpu_board' if pb == 'pb_otpu_tmem' else 'pblock_CL')
@@ -658,7 +663,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board)
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
     assert removed == [['pb_otpu_board', 'shell']]
-    assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=6 removed=1' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=7 removed=1' in out
     assert 'OTPU_FLOORPLAN pb_otpu_tmem parent=pb_otpu_board held=2 removed=0' in out
 
 

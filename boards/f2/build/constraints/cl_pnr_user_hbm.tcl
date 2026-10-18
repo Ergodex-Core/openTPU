@@ -20,6 +20,8 @@
 #                 flip-flops, no logic).
 #   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS column): u_host's PCIS skid and output
 #                 registers (round 4; ~1.2K flip-flops).
+#   pb_otpu_xs    (SLR0, X4Y3, the top corner under the shell's column): the SLR0 ends of the
+#                 PCIS link stages (round 6, u_xs_*).
 #   pb_otpu_board (SLR2, all 32 clock regions, ~435K LUTs): u_sys/u_board, the slice with its
 #                 adapter, the control block and the trace (226K LUTs, 52%; 416 of the SLR's 672
 #                 RAMB36, 1,275 of 3,008 DSPs), and the SLR2 side of the chains. One SLR, so the
@@ -111,6 +113,25 @@ add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pc
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r_rx}]
 
 ########################################
+# pb_otpu_xs: the SLR0 side of the PCIS link stages, the top corner of SLR0 under the shell's column
+########################################
+# Round 5 placed the PCIS registers' link to u_host (SLR0) at -2.3 ns: one SLR hop of 5.4 ns
+# route from pb_otpu_pcis. Round 6's otpu_link (rtl/shell/otpu_link.sv) makes every crossing
+# net flip-flop to flip-flop: the SLR1 ends (u_pcis_*_tx / _rx) stay in pb_otpu_pcis, the SLR0
+# ends (u_xs_aw / _w / _ar receive, u_xs_b / _r send) sit here in X4Y3, the CL's clock region
+# at the top of SLR0 nearest the shell's column (round 3 and 4 put u_host's logic there by
+# itself: SLICE_X116Y2xx), so the hop is laguna-register eligible and the stage -> u_host
+# queues path stays inside SLR0.
+create_pblock pb_otpu_xs
+set_property PARENT pblock_CL [get_pblocks pb_otpu_xs]
+resize_pblock pb_otpu_xs -add {CLOCKREGION_X4Y3:CLOCKREGION_X4Y3}
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_aw}]
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_w}]
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_ar}]
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_b}]
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_r}]
+
+########################################
 # pb_otpu_board: the slice side, SLR2
 ########################################
 create_pblock pb_otpu_board
@@ -147,10 +168,10 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem} {
+foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem} {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=5"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=6"
