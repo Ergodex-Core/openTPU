@@ -120,15 +120,20 @@ channel alone at the core's full rate (12.8 GB/s) would need ~80.
 ### The host path (otpu_f2_hbm_host)
 
 PCIS side (aclk, 250 MHz): every output to the shell is a flip-flop. AW, W and AR enter
-two-entry skid buffers (`otpu_f2_hbm_skid`: the ready a register, the beat the logic sees from
+two-entry skid buffers (`otpu_skid`: the ready a register, the beat the logic sees from
 the buffer's output register), B and R leave through output registers (`otpu_f2_hbm_oreg`:
 valid and data loaded when the shell took the last beat or none is held), so no path runs from
 a shell register through the block and back in the 4 ns cycle (round 3's placement ran the
 shell's PCIS register in SLR1 into the readies' LUTs in SLR0 and back at -5.01 ns,
 docs/wide_port.md "Round 4 RTL"). An AR leaves its buffer for the read queue only while no
 write is in flight (`pcis_wbusy`, below, counts the buffers' beats): the order rule as before,
-its gate moved from the shell handshake to the buffer's exit. The instances are `u_pcis_*`, so
-a floorplan can hold them beside the shell.
+its gate moved from the shell handshake to the buffer's exit. The instances are `u_pcis_*`, held
+beside the shell by the floorplan's pb_otpu_pcis (SLR1). Since round 5 `pcis_wbusy` is registers
+only (the buffers' occupancy, the queue, the unanswered B's; not the shell's live valids), and
+the OCL side (otpu_axil_cdc) takes its AW, W and AR through skid buffers of its own, its state
+machine starting a write only while `!hold`: the OCL-after-PCIS order holds a cycle later than
+before, with no CL output on clk_main_a0 a function of a CL input (docs/wide_port.md "Round 5
+RTL").
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
 written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
@@ -141,8 +146,8 @@ same way), so every net between the host block and a port is a register's cycle 
 first placed build, docs/wide_port.md "Placement", ran the head's data and its half select into
 every port's W register over 6.9 ns of route at 450 MHz). The host's B for a burst goes back when the
 host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
-`pcis_wbusy` (an AW / W shown or taken, a B not given back) holds the host's reads and the OCL's
-writes (a RUN after data finds the data in the HBM) as on the DDR build. PCIS reads: a beat at a
+`pcis_wbusy` (an AW / W in a buffer or taken, a B not given back) holds the host's reads and the
+OCL's writes (a RUN after data finds the data in the HBM) as on the DDR build. PCIS reads: a beat at a
 time crosses as a two-beat read on its port, RQ = 16 in flight, one port at a time (a read to
 another port waits for the last port's reads: one ID's reads come back in order on a port, not
 across ports), so the data returns in PCIS order. Addresses past the last used port: writes

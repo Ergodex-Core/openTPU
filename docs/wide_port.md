@@ -1027,7 +1027,7 @@ list, each bit-exact on the RTL tests and the decode receipt, in four commits:
    against 565,739 (-61, -0.011%).
 4. **clk_main_a0, the host's PCIS side** (rtl/boards/f2/otpu_f2_hbm_host.sv; not in round 3's
    list, the one regression): every PCIS output is a flip-flop. AW, W and AR enter two-entry
-   skid buffers (`otpu_f2_hbm_skid`, `u_pcis_aw / _w / _ar`: the ready a register, the second
+   skid buffers (`otpu_skid`, `u_pcis_aw / _w / _ar`: the ready a register, the second
    slot free; the beat the logic sees from the first slot's registers), B and R leave through
    output registers (`otpu_f2_hbm_oreg`, `u_pcis_b / _r`). The order rule (`pcis_wbusy` holds
    the reads) moved from the AR handshake to the AR's exit from its buffer, and `pcis_wbusy`
@@ -1043,6 +1043,103 @@ Tests (the m7a box, Verilator 5.048, `-n 16`): tests/test_f2_rtl.py 16 passed, t
 alone (c4c6e23a, 1f8dccca, 7d3da502) int8 949,474 cycles, the baseline's 949,474 exactly; with fix 3
 int8 949,497 (+23 cycles, +0.002%), int4 565,678 (-61, -0.011%). LPN (tools/wideport_lpn.py, the same
 model, nothing refitted) against the new receipt: int8 988,141 estimated against 949,497 measured (+4.07%; head +5.4%, MLP 224,931 vs 222,512 +1.1%, attention 39,344 vs 40,158 -2.0%; mean |error| 2.8%), int4 599,271 against 565,678 (+5.9%; head 439,818 vs 406,616 +8.2%, MLP 130,408 vs 128,593 +1.4%, attention 29,045 vs 30,467 -4.7%; mean 4.7%): the model is unchanged (nothing in it moves with the MXU's stage), the RTL numbers moved by 0.002% / 0.011%, so the calibration table above stands to its last digit for int8 and gains an int4 per-phase line.
+
+**Round 4 placed (d37b6b53 = the round-4 RTL 1ea47dc1 + pb_otpu_pcis, host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-d37b6b53): WNS -4.546 ns** after place_design (round 3
+-5.567), the five pblocks applied (pb_otpu_pcis: 1,399 LUTs, 1,909 flip-flops). By clock after
+place_design (before phys_opt; round 3's table above is after phys_opt), place_rpt/ in the run
+dir:
+
+| clock | round 3 (post phys_opt) | round 4 (post place) | worst path, what it says |
+|---|---|---|---|
+| clk_raw 200 MHz | -1.42 | **-1.62** (7,712 endpoints) | `u_mxu/lg0_reg[0]_rep__7` -> `wc_reg[2][96][59]_srl3/D`, 6 levels, 5.4 of 6.0 ns route: the replicated lane-group enable into the weight-chunk SRLs (fix 3's mx_gq path is gone; the next fan-out in the same unit) |
+| hclk_raw 450 MHz | -1.98 (30,870) | **-2.04** (25,160) | `g_port[7].u_nch/wf_n_reg[1]` -> `wf_n_reg[4]/D`, 6 LUT levels + 3.5 ns route: the bridge's write-FIFO state logic itself (fix 1 removed the k_d enable path) |
+| clk_raw -> clk_f_raw | -1.34 | **-1.97** (3,751) | `u_dma/t_re_q_reg[2]` -> `u_tmem/...g_pmp.g_pc[3].u_pb/.../ADDRBWRADDR[10]`, 8 levels, a 4.6 ns path failing by 2 ns: **the pump's multicycle (otpu_clk2x.tcl) is not applied to it**; the Tcl matched 64 pump cells in round 4 (1,408 request pins) and 16 in round 3 against 64 x 2 x 12 pieces / 128 banks in the design, so most banks were timed single-cycle in every round (round 3's 1.4 ns pk_a path failing by 1.34 says the same) |
+| clk_main_a0 250 MHz | -5.01 | **-4.55** (1,218) | the shell's `sh_cl_dma_pcis_wvalid` (SLR1) -> `u_host/cl_ocl_awready_INST_0_i_1` (SLR0's top corner) -> `u_ocl/pcis_wbusy` -> `cl_ocl_awready` -> the shell, 8.0 of 8.3 ns route: the OCL AXI-Lite's awready gated combinationally on "a PCIS write in flight", and that busy still includes the live PCIS wvalid; the PCIS registers (fix 4) are out of the path |
+
+Round 5's list: (5) `pcis_wbusy` from registered state only and the OCL's readies / B / R behind
+registers (no CL output on clk_main_a0 a function of a CL input); (6) `lg0` replicated per SRL
+group; (7) the bridge's wf_n next-state cone to <= 3 levels, or the honest alternative, hclk
+300 MHz with NCH 16 (16 x 256 bit x 300 MHz = 153 GB/s raw, above port B's 102 GB/s at PORTB 4);
+(8) otpu_clk2x.tcl matching every pump-bank piece and failing closed on the count.
+
+**Round 5 RTL (2026-10-18; Verilator only).** Round 4 placed (d37b6b53) at WNS -4.546 (round 3
+-5.567); its worst paths after place_design and the fixes, each bit-exact on the tests and the
+receipt:
+
+5. **clk_main_a0 -4.546, the OCL's ordering gate** (1197a113; rtl/boards/f2/otpu_axil_cdc.sv,
+   otpu_f2_hbm_host.sv, the new rtl/shell/otpu_skid.sv): the shell's `sh_cl_dma_pcis_wvalid`
+   (SLR1) ran through `pcis_wbusy` into `u_ocl`'s `awready` and back to the shell (8.0 of 8.3 ns
+   of route). Now `pcis_wbusy` is registers only (the PCIS skid buffers' occupancy, the write
+   queue, the unanswered B's; the shell's live valids left out: a write shown enters its buffer
+   in the cycle, the buffers' ready being high whenever their second slot is free), and the OCL
+   side's AW, W and AR enter two-entry skid buffers of their own (`u_skid_aw / _w / _ar`,
+   `otpu_skid`, the module round 4's `otpu_f2_hbm_skid` became, shared by both blocks), the
+   state machine taking an access from the buffers' registers, the AW and W exits waiting for
+   `!hold`; B and R were registers already. So the OCL-after-PCIS order holds a cycle later: a
+   PCIS write and an OCL write shown in the same cycle both enter their buffers, the PCIS one
+   raises `pcis_wbusy` the next cycle, and the OCL write's start (its request toggle) waits
+   for it (tb_f2axil checks the start, not the handshake, against the hold now). No CL output
+   on clk_main_a0 is a function of a CL input in the cycle.
+6. **clk_raw -1.618, the MXU's lane-group select into the weight hops** (31c8d5bb; rtl/mxu/otpu_mxu.sv):
+   `lg0_reg[0]_rep__7 -> wc_reg[2][96][59]_srl3/D`, 6 levels, 5.4 of 6.0 ns route: Vivado's
+   own 8 replicas of `lg0` each reaching ~1K of the decode's LUTs, and `wd` absorbed as the
+   first stage of the hops' SRLs (the decode's six levels into an SRL's D). Now the S0 records
+   the decode selects by, `lg0`, `rl0`, `wf0`, `t20` and `m0`, are `(* max_fanout = 64 *)` (a
+   copy per 64 of the ~8K loads, each beside them) and `wd` is `(* shreg_extract = "no" *)` (a
+   flip-flop stage at the decode's end; the skew and the hops behind it may still be SRLs).
+   The six levels are the decode itself (the lane / chunk pick by `lg0`, `dec4` / `wt2`, the
+   RL / wide-port select): no write-enable cone (`wc` has none) and no retime short of a
+   second decode stage; left at the replication. No cycle change.
+7. **hclk_raw -2.039, the bridge's W count** (9c5eb07b; rtl/boards/f2/otpu_f2_hbm_nch.sv):
+   `wf_n_reg[1] -> wf_n_reg[4]`, 6 levels at 2.2 ns: `wf_n != 0` into the W valid, the take,
+   the pop and the count. Now (a) `k_pop`'s short form: with the head held, "the open burst
+   closes now" is `o_v && q_room && (full || !cont)` and `cont` implies not full, so
+   `(cont || !o_v || close)` is `(cont || !o_v || q_room)`: two LUT levels from the registers
+   (`cont` and `q_room`, then the pop), four before; the simulation checks the two forms
+   agree every cycle; (b) `wf_nz`, a register kept alongside the count (`wf_n != 0`, from the
+   count's upper bits and the same push / pop), is the W valid's flag, so `m_wvalid` is one LUT
+   of registers and the pop `w_tk && w_cnt[0]` one level; (c) the count moves by one addend
+   (`+1 / -1 / 0` as `{{WDW{pop && !push}}, push ^ pop}`: one LUT level behind the carry
+   chain). The next-state cone is 3 LUT levels (push 2, the addend LUT 1) plus the chain. No
+   FIFO depth or latency change; the adapter sees the same readies and beats. Measured:
+   949,497 / 565,678 cycles against 949,497 / 565,678.
+   *Can the bridge make 2.2 ns?* Its deepest remaining cones, from the structure: the head's
+   `k_nx` at load (`x_a == k_a + 1` / `== o_nx + 1` / `== o_nx`, 25-bit compares behind
+   incrementers and the late select: 4-5 levels; shallower with `k_a + 1` and `o_nx + 1` kept
+   as registers, then 3), the open burst's `o_len / o_nx / o_age / o_v` updates (`k_pop` 2 +
+   the 4-bit and 25-bit incrementers' select: 3-4), the AR / AW queue push on `close` (`close`
+   2-3 + the 2-entry index: 4), the W data `m_wdata` (the W FIFO's LUT RAM read, the half
+   select, then otpu_f2_hbm_port's two-master select into the HBM's pins: 3 + the route), the
+   issue side's `x_pop` into the crossing's pointer (2-3). Every one of them can be brought to
+   3 levels (precomputed next addresses, one-hot queue indices, the W half held in a register),
+   so 450 MHz is reachable for this module with that round of work and a tight placement (3
+   levels at ~0.45 ns a hop leave ~0.6 ns of route a path); what the round-4 report shows is
+   that each cone must be done by hand. The alternative is hclk at 300 MHz (3.3 ns: the 5-6
+   level cones fit with 1.5 ns of route) on f2-hbm16's 16 pseudo-channels (16 x 256 bits x
+   300 MHz = 153 GB/s raw, above port B's 102 GB/s at PORTB 4): the honest fallback if round 5
+   leaves hclk_raw negative.
+8. **The pumped TMEM's multicycles were not in effect** (5f8a940f; boards/ypcb-00338/constraints/
+   otpu_clk2x.tcl, boards/f2/build/scripts/build_level_1_cl.tcl, tests/test_f2_build.py):
+   `u_dma/t_re_q_reg[2] -> g_pmp.g_pc[3].u_pb/g_b.mem_reg_bram_0/ADDRBWRADDR[10]`, a 4.6 ns path
+   failing by 2 ns at the single fast period. The F2 build read the Tcl once, after
+   `synth_design` (out of context), where its cell query did match everything: 64 cells is
+   LANES 8 x NSB 2 x 4 pieces (round 3's 16 the 16 RAMs of one piece each; the round-4 list's
+   "64 x 2 x 12" is not a count of the design), 1,408 pins = 64 x (10 + 10 + 2) — but the
+   exceptions in the out-of-context checkpoint did not survive the link into the shell (as the
+   reset exception did not, round 3). Now the link wrapper reads the file again, unmanaged,
+   after cl_pnr_user.tcl inside its opt_design call (the mock test checks the order), and the
+   file fails closed: the cells by module (`otpu_pump_bank`) must equal the cells by name
+   (`*g_pmp*u_pb`) and the parents of the block RAM primitives named under them (the error
+   names the three counts), and after the four `set_multicycle_path`s the worst read-request
+   path (`get_timing_paths -from clk -through the ra / rb / rena / renb pins -to clk_f`) must
+   report a `REQUIREMENT` of two fast periods, else `error` with the path and the value; its
+   message prints the counts and the requirement for the log.
+
+Tests (the m7a box): tests/test_f2_rtl.py 16 passed, tests/test_rtl.py `-k "replay or act_reads
+or attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 168 passed,
+tests/test_observability.py 18 passed, tests/test_f2_build.py 87 passed (Tcl mock). Receipts
+(as above): int8 949,497 (unchanged from round 4), int4 565,678 (unchanged).
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
