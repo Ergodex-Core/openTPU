@@ -933,10 +933,10 @@ def _bucket_causes(B: dict, cov, k: int) -> dict:
     # the blocked cycles by cause when the profile has the split (in the proportions of the
     # window's counters, which sum to mb), else the one "blocked" cause
     mb = g("mb")
-    if mb > 0 and all(k in B for k in BLOCKED_KEYS):
+    if all(k in B for k in BLOCKED_KEYS):
         t = max(0.0, min(r, float(mb)))
         for key, sub in zip(BLOCKED_SUB, BLOCKED_KEYS):
-            take(key, t * g(sub) / mb)
+            take(key, t * g(sub) / mb if mb else 0.0)
     else:
         take("blocked", mb)
     take("arb", g("fm"))

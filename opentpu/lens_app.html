@@ -367,9 +367,9 @@ function bucketCauses(m, k) {
   take("starve", g("ms"));
   // the blocked cycles by cause when the profile has the split (the window's mbc mbr mbs mbo sum to mb), else as one
   const mb = g("mb");
-  if (mb > 0 && BLOCKED_KEYS.every(x => m.pre[x])) {
+  if (BLOCKED_KEYS.every(x => m.pre[x])) {
     const t = Math.max(0, Math.min(r, mb));
-    BLOCKED_SUB.forEach((key, i) => take(key, t * g(BLOCKED_KEYS[i]) / mb));
+    BLOCKED_SUB.forEach((key, i) => take(key, mb ? t * g(BLOCKED_KEYS[i]) / mb : 0));
   } else take("blocked", mb);
   take("arb", g("fm"));
   if (r > 0) take("mxu", m.cov[1][k] - busy);
