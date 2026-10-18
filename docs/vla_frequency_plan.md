@@ -626,6 +626,36 @@ SLR2, the rest ~365-415K = 84-95%, still above the 72% line without VPU_CL 8), o
 registered TMEM interfaces at 64 lanes. The plan's numbers to carry: f2-vla32 at ~0.57 Hz by the measured phases (0.65 on the LPN) against f2-vla's ~0.65-0.68,
 with its slice ~465-515K LUTs by the estimate..
 
+### 6h. Synthesis of f2-vla32 (measured, 2026-10-18: LANES 32 does not fit one SLR either)
+
+SynthCL on the F2 host (vla b746b90a, target f2-vla32, run dir
+/home/ubuntu/opt/hwloop-nightly/vla32-b746b90a/synth, 0 errors, no overutilization):
+
+| resource | f2-vla (6f, 64 lanes) | **f2-vla32** | of the part |
+|---|---|---|---|
+| CLB LUTs | 718,265 (55.1%) | **574,183** | **44.0%** |
+| RAMB36 | 1,353 | 1,324.5 | 66% |
+| URAM | 384 | 384 | 40% |
+| DSP48E2 | 5,876 | 5,556 | 62% |
+
+By hierarchy (LUTs): `u_slice` **500,230** (was 642,912); `u_vpu` 164,083 (was 205,531: the 16
+composite lanes do not scale with LANES, as 6g estimated), `u_tmem` 57,662 (was 124,593),
+`u_quant` 32,637 (was 56,268), `u_mxu` 225,678 (was 233,490). Timing estimate
+(post-synthesis): clk_raw +0.652, clk_f_raw +0.288, hclk_raw +0.359, clk_main_a0 +2.481; one
+clk_f_raw -> clk_raw path at -0.402 (a pumped bank's URAM clock to an MXU DSP input,
+`fp_mul_s1` B port: the read data's half-period return, -0.003 at 64 lanes) and the
+pre-placement hold nits.
+
+So the 32-lane slice is 500K LUTs against SLR2's ~435K of CL area (115%): 6g's estimate (515K)
+was right and the one-SLR floorplan of the wide-port branch does not apply at either lane
+count. What does fit, by the numbers: the MXU's array side (~100K: columns, ACT RAM, weight
+FIFOs, issuer) in SLR1 with the rest in SLR2 (400K = 92% of SLR2 at 32 lanes; 540K = 124% at
+64 lanes, where the VPU or the quantizer would have to move too), which needs the issuer /
+drain handshake and the result FIFO's push registered across the boundary (6e's analysis), or
+at 64 lanes additionally the TMEM's grant / lost / frz interfaces to the VPU, quant and DMA
+registered so those units can leave SLR2. LANES 32 alone buys nothing: it costs the measured
+phases 6-46% (6g) and still needs the split.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
