@@ -53,20 +53,49 @@ if {[llength $c2x_pb]} {
   } else {
     set c2x_rp [get_pins -quiet -of_objects $c2x_pb -filter {REF_PIN_NAME =~ ra[*] || REF_PIN_NAME =~ rb[*] || REF_PIN_NAME == rena || REF_PIN_NAME == renb}]
     set c2x_qp [get_pins -quiet -of_objects $c2x_pb -filter {REF_PIN_NAME =~ qa[*] || REF_PIN_NAME =~ qb[*]}]
+    # The read requests' leaf loads inside the pieces (ra / rena: port A's select LUTs, which
+    # the write shares; rb / renb: the RAM's port B pins and its enable LUT): leaf pins are
+    # timing nodes whatever the linked netlist makes of a hierarchical pin (round 5 placed the
+    # pieces' port B requests at the single fast period while this file's hierarchical-pin form
+    # asserted 5.000 ns on a port A path, docs/wide_port.md "Round 6 RTL"); the exceptions are
+    # set through both. The write's leaf loads (wv / wa / wd: the registered write stage's,
+    # half a core period before the odd edge) are kept out and checked to stay at one period.
+    set c2x_rl [get_pins -quiet -leaf -of_objects [get_nets -quiet -segments -of_objects $c2x_rp] -filter {DIRECTION == IN}]
+    set c2x_wp [get_pins -quiet -of_objects $c2x_pb -filter {REF_PIN_NAME =~ wa[*] || REF_PIN_NAME =~ wd[*] || REF_PIN_NAME == wv}]
+    set c2x_wl [get_pins -quiet -leaf -of_objects [get_nets -quiet -segments -of_objects $c2x_wp] -filter {DIRECTION == IN}]
+    if {![llength $c2x_rp] || ![llength $c2x_rl] || ![llength $c2x_wp] || ![llength $c2x_wl]} {
+      error "\[otpu_clk2x.tcl\] the pumped RAMs' request pins: [llength $c2x_rp] read-request pins with [llength $c2x_rl] leaf loads, [llength $c2x_wp] write pins with [llength $c2x_wl] leaf loads: all four must be found"
+    }
     set_multicycle_path 2 -setup -end -from $c2x_cs -through $c2x_rp -to $c2x_cf
     set_multicycle_path 1 -hold -end -from $c2x_cs -through $c2x_rp -to $c2x_cf
+    set_multicycle_path 2 -setup -end -from $c2x_cs -through $c2x_rl -to $c2x_cf
+    set_multicycle_path 1 -hold -end -from $c2x_cs -through $c2x_rl -to $c2x_cf
     set_multicycle_path 2 -setup -start -from $c2x_cf -through $c2x_qp -to $c2x_cs
     set_multicycle_path 1 -hold -start -from $c2x_cf -through $c2x_qp -to $c2x_cs
-    # the check: the worst read-request path reports two fast periods
-    set c2x_chk [get_timing_paths -quiet -setup -max_paths 1 -from $c2x_cs -through $c2x_rp -to $c2x_cf]
+    # the checks, on the design: per RAM port the worst read-request path into its pins (through
+    # the read leaf loads) requires two fast periods; the worst write path (through the write
+    # leaf loads) one. A port with no read path is an error too (both ports read)
+    set c2x_req_a ""; set c2x_req_b ""; set c2x_req_w ""
+    foreach {c2x_port c2x_apat c2x_epin c2x_var} {A ADDRARDADDR[*] ENARDEN c2x_req_a B ADDRBWRADDR[*] ENBWREN c2x_req_b} {
+      set c2x_pp [get_pins -quiet -of_objects $c2x_br -filter "REF_PIN_NAME =~ $c2x_apat || REF_PIN_NAME == $c2x_epin"]
+      set c2x_chk [get_timing_paths -quiet -setup -max_paths 1 -from $c2x_cs -through $c2x_rl -to $c2x_pp]
+      if {![llength $c2x_pp] || ![llength $c2x_chk]} {
+        error "\[otpu_clk2x.tcl\] no read-request path from [get_property NAME $c2x_cs] through the [llength $c2x_rl] read leaf loads into the pieces' RAM port $c2x_port ([llength $c2x_pp] pins): the exceptions reach nothing there"
+      }
+      set $c2x_var [get_property -quiet REQUIREMENT $c2x_chk]
+      if {[set $c2x_var] eq "" || abs([set $c2x_var] - 2.0 * $c2x_tf) > 0.01} {
+        error "\[otpu_clk2x.tcl\] RAM port $c2x_port's read-request path [get_property STARTPOINT_PIN $c2x_chk] -> [get_property ENDPOINT_PIN $c2x_chk] reports a requirement of '[set $c2x_var]' ns, expected [expr {2.0 * $c2x_tf}] (two fast periods): the multicycle is not in effect on that port"
+      }
+    }
+    set c2x_chk [get_timing_paths -quiet -setup -max_paths 1 -from $c2x_cs -through $c2x_wl -to $c2x_cf]
     if {![llength $c2x_chk]} {
-      error "\[otpu_clk2x.tcl\] no timing path from [get_property NAME $c2x_cs] through the [llength $c2x_rp] read-request pins to [get_property NAME $c2x_cf]: the exceptions reach nothing"
+      error "\[otpu_clk2x.tcl\] no write path from [get_property NAME $c2x_cs] through the [llength $c2x_wl] write leaf loads to [get_property NAME $c2x_cf]"
     }
-    set c2x_req [get_property -quiet REQUIREMENT $c2x_chk]
-    if {$c2x_req eq "" || abs($c2x_req - 2.0 * $c2x_tf) > 0.01} {
-      error "\[otpu_clk2x.tcl\] the read-request path [get_property STARTPOINT_PIN $c2x_chk] -> [get_property ENDPOINT_PIN $c2x_chk] reports a requirement of '$c2x_req' ns, expected [expr {2.0 * $c2x_tf}] (two fast periods): the multicycle is not in effect"
+    set c2x_req_w [get_property -quiet REQUIREMENT $c2x_chk]
+    if {$c2x_req_w eq "" || abs($c2x_req_w - $c2x_tf) > 0.01} {
+      error "\[otpu_clk2x.tcl\] the write path [get_property STARTPOINT_PIN $c2x_chk] -> [get_property ENDPOINT_PIN $c2x_chk] reports a requirement of '$c2x_req_w' ns, expected $c2x_tf (one fast period): the read exception leaked onto the write"
     }
-    puts "otpu_clk2x.tcl: [llength $c2x_pb] pumped TMEM RAMs ([get_property NAME $c2x_cs] $c2x_ts ns, [get_property NAME $c2x_cf] $c2x_tf ns), [llength $c2x_rp] read-request pins, [llength $c2x_qp] word pins, [llength $c2x_br] block RAM primitives; the worst read-request path requires $c2x_req ns"
+    puts "otpu_clk2x.tcl: [llength $c2x_pb] pumped TMEM RAMs ([get_property NAME $c2x_cs] $c2x_ts ns, [get_property NAME $c2x_cf] $c2x_tf ns), [llength $c2x_rp] read-request pins ([llength $c2x_rl] leaf loads), [llength $c2x_wp] write pins ([llength $c2x_wl] leaf loads), [llength $c2x_qp] word pins, [llength $c2x_br] block RAM primitives; the worst read-request path requires $c2x_req_a ns into port A, $c2x_req_b ns into port B; the worst write path $c2x_req_w ns"
   }
 } else {
   puts "otpu_clk2x.tcl: no pumped TMEM RAMs (otpu_pump_bank)"
