@@ -64,6 +64,7 @@ MM_CASES = [
                                            # advance too (row 24's: 24 x 36 % 32 == 0)
     (I.W8, 5, 27, False, False, 2, 2),     # straddles mid-row (c 0), the half pair after
     (I.W8, 9, 0, False, True, 4, 4),       # RSC: Sw alone, pairs
+    (I.W8, 2, 27, False, True, 4, 2),      # RSC at the "straddling" offsets: no second request
     (I.W8, 4, 1, False, False, 12, 4),     # replay over three groups of 4 rows
     (I.W8, 9, 0, False, False, 16, 4),     # replay, half pairs, the FIFO's rows
     (I.W4I, 3, 1, False, False, 4, 2),     # 4-bit: one chunk an advance

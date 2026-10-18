@@ -394,7 +394,8 @@ module otpu_mxu
   // pair's second block byte after when it is in the next line (i_sx: the same).
   wire adv_b    = !i_w4 || i_pair || !i_k[0];
   wire i_half   = i_w2 && i_klast && i_kbo;              // the advance is a half pair
-  wire i_strad  = i_w2 && !i_half && scale_addr[4:0] == 5'd31;   // its bytes straddle a line
+  // its two block bytes straddle a line (UNIT and RSC read no block bytes)
+  wire i_strad  = i_w2 && !i_half && !i_unit && !i_rsc && scale_addr[4:0] == 5'd31;
   wire need_b   = !i_sws && !i_sx && adv_b;
   wire need_a   = !i_unit && (i_sws || i_sx || !i_rsc || adv_b);
   wire want_iss = i_act && (!need_b || occ < (PW+1)'(DEPTH)) && (!need_a || !tg_n[TDW]);
