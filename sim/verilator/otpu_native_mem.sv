@@ -34,7 +34,8 @@
 // +runs).
 // Lane ports (NL > 1: the MXU's chunk lanes 1 .. NL-1, otpu_mxu_lanes, docs/v4/
 // proposal-2-four-lanes.md; [0] unused): per lane a chunk read (lb_*, 128 B) and a scale-line
-// read (la_*, 32 B) a cycle, taken when offered unless withheld at random (+axi_stall, as a
+// read (la_*, 32 B) a cycle, up to +nat_lq=128 in flight a lane (the adapter's), taken when
+// offered unless withheld at random (+axi_stall, as a
 // channel's commands), performed at the request (the slice orders its reads after the writes
 // they depend on through wr_idle, which counts performed writes), the data back in order LAT
 // (+axi_lat) cycles later plus 0..7 cycles of jitter and random bubbles. A stand-in for an
@@ -92,6 +93,8 @@ module otpu_native_mem #(
   int bw = 100;
   int lat = LAT;
   int cqd = 16, wqd = 16;                // command / write-data FIFO entries
+  int lqd = 128;                         // lane-port reads in flight a lane (+nat_lq; the adapter
+                                         // keeps 128 chunk requests in flight a lane, proposal 2)
   int wdl = 4;                           // n_wdone lag, cycles (+ 0..7)
   int ahead = 16;                        // DDR3 model: data-bus backlog, controller cycles
   longint n_rd [2], n_wr [2], n_miss [2], n_rmw [2];
@@ -294,8 +297,8 @@ module otpu_native_mem #(
       brr <= !rnd_stall();
       arr <= !rnd_stall();
     end
-    assign lb_rdy[l] = (l != 0) && brr && lbq[l].size() < cqd;
-    assign la_rdy[l] = (l != 0) && arr && laq[l].size() < cqd;
+    assign lb_rdy[l] = (l != 0) && brr && lbq[l].size() < lqd;
+    assign la_rdy[l] = (l != 0) && arr && laq[l].size() < lqd;
     assign lb_rvalid[l] = brv;
     assign lb_rdata[l] = brd;
     assign la_rvalid[l] = arv;
@@ -367,6 +370,7 @@ module otpu_native_mem #(
     void'($value$plusargs("axi_tpc=%d", tpc));
     void'($value$plusargs("axi_tpu=%d", tpu));
     void'($value$plusargs("nat_cq=%d", cqd));
+    void'($value$plusargs("nat_lq=%d", lqd));
     void'($value$plusargs("nat_wq=%d", wqd));
     void'($value$plusargs("nat_wdl=%d", wdl));
     void'($value$plusargs("nat_ahead=%d", ahead));
