@@ -146,6 +146,20 @@ arbitration (MXU drain, quantizer, VPU, collective), `bs`/`as` port B / A reques
 the memory, `ms` MXU starved, `mb` MXU not consuming although chunks are there, `ff` summed MXU
 FIFO level, `ld` program-loader traffic.
 
+From a simulation (not the card's trace buffer, whose records hold the six Q counters) the Q
+line also splits `mb` by the one cause the RTL assigns each blocked cycle (`otpu_mxu`
+`pf_bcause`, in this priority): `mbc` no result-FIFO credit (`rows_live + rows_p >= RF`: rows
+popped but not yet written to TMEM, the drain side), `mbr` the row's chunks not all in the chunk
+FIFO (a row pops only once whole: the stream is irregular or behind), `mbs` its chunks in but
+not all of its scale entries (port A), `mbo` the remainder. They sum to `mb` in every bucket.
+The app and `lens summary` show the four as `blocked_credits` / `blocked_row` /
+`blocked_scales` / `blocked_other` in "Where the cycles went" (the window's idle cycles
+attributed to `mb` are split in the counters' proportions), in the MXU card's stall rows and in
+the roofline gap's "held back by"; a profile without them (recorded before the split, or on the
+card) shows the one `blocked` cause as before. `lens.blocked_split(buckets, k0, k1)` totals
+them over a bucket range (`docs/v4/m0-gating-split.md` measures Gemma 3 1B with it). The run's
+totals are also printed at the dump (`MXBLOCK`, `rtlsim` stats `mxu_block`).
+
 **ISA profiles** (`--isa`) come from the ISA simulator, which has no cycle model: every executed
 instruction is placed back to back for its nominal work (no overlap between units). The
 timeline is an upper bound; use it for instruction mix and DRAM traffic, the RTL for timing.

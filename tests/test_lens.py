@@ -286,3 +286,53 @@ def test_summary_json_default_uses_item_or_typeerror():
     with pytest.raises(TypeError, match="not JSON serializable"):
         json.dumps({"a": np.arange(2)}, default=lens._json_default)
     assert json.loads(json.dumps({"a": np.float64(1.9)}, default=lens._json_default))["a"] == 1.9
+
+
+def test_blocked_split_in_causes(tmp_path, capsys):
+    """With the Q line's mbc / mbr / mbs / mbo the blocked cycles are attributed by cause, in
+    the window's proportions and summing to what the one "blocked" cause took; a profile
+    without them (recorded before the split, or the card's) keeps the one cause."""
+    d = _bucket_prof(mb=8)
+    old = lens.port_b_causes(d)
+    assert old["blocked"] == 8 and lens.blocked_split(d["slices"][0]["buckets"]) is None
+    assert lens.summary_data(d)["blocked"] is None
+    b = d["slices"][0]["buckets"]
+    b.update({"mbc": [2], "mbr": [5], "mbs": [1], "mbo": [0]})
+    new = lens.port_b_causes(d)
+    assert "blocked" not in new
+    assert sum(new[k] for k in lens.BLOCKED_SUB) == pytest.approx(old["blocked"])
+    assert new["blocked_row"] == pytest.approx(8 * 5 / 8)
+    assert new["blocked_credits"] == pytest.approx(2) and new["blocked_other"] == 0
+    assert abs(sum(new.values()) - sum(b["n"])) < 1e-6
+    assert lens.blocked_split(b) == {"mb": 8, "mbc": 2, "mbr": 5, "mbs": 1, "mbo": 0}
+    assert lens.blocked_split(b, 0, 0) == {"mb": 0, "mbc": 0, "mbr": 0, "mbs": 0, "mbo": 0}
+    assert lens.summary_data(d)["blocked"]["mbr"] == 5
+    f = lens.save([d], tmp_path / "rtl.otpuprof")
+    lens.main(["summary", str(f)])
+    out = capsys.readouterr().out
+    assert "by cause" in out and "row's chunks not all in" in out
+    assert "MXU not consuming: row's chunks not all in the FIFO" in out
+    assert "MXU not consuming (drain / row credits)" not in out
+
+
+def test_rtl_blocked_cycles_sum_their_causes(have_verilator):
+    """On the board model's memory path (random stalls) the MLP decode has blocked MXU cycles
+    (chunks in its FIFO, no pop); in every bucket mb is the sum of its four causes, the run's
+    totals (otpu_mxu xb_*, rtlsim's mxu_block) are the buckets' sums, and the summary
+    attributes port B's idle cycles to the causes, not to the one "blocked"."""
+    from opentpu import rtlsim
+    from opentpu.profile import profile
+    kernel, cfg, a, name = lens._kernel_workloads()["mlp"](True)
+    p = profile(kernel, cfg, name, uarch=dict(rtlsim.BOARD_UARCH),
+                run_kw={"axi": True, "plusargs": ["+bucket=64"]}, **a)
+    b = p.buckets[0]
+    assert sum(b["mb"]) > 0
+    for k in range(len(b["c"])):
+        assert b["mb"][k] == b["mbc"][k] + b["mbr"][k] + b["mbs"][k] + b["mbo"][k]
+    tot = p.stats["mxu_block"][0]
+    assert tot["mb"] == tot["mbc"] + tot["mbr"] + tot["mbs"] + tot["mbo"]
+    assert tot == lens.blocked_split(b)
+    d = lens.to_data(p)
+    causes = lens.port_b_causes(d)
+    assert "blocked" not in causes and sum(causes[k] for k in lens.BLOCKED_SUB) > 0
+    assert any("did not consume them" in n["text"] for n in d["notes"])
