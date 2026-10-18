@@ -1289,6 +1289,61 @@ moved its worst path (k_d enables -> wf_n state -> the host R FIFO) without movi
 of failing endpoints (30.9K / 25.2K / 28.4K), which argues for hclk 300 MHz with NCH 16
 (16 x 256 bit x 300 MHz = 153 GB/s raw) over a fourth round at 2.2 ns.
 
+**Round 6 RTL (2026-10-18; Verilator only; decision D19 = A: hclk stays at 450 MHz / NCH 8).**
+Round 5 placed (2b08ae69) at WNS -2.303; its list's three fixes, each bit-exact on the tests and
+the receipt (the h300 / NCH 16 variant was not started):
+
+9. **clk_main_a0 -2.281, the PCIS registers' link with u_host** (98aa0368; rtl/shell/otpu_link.sv,
+   rtl/boards/f2/otpu_f2_hbm_host.sv, cl_pnr_user_hbm.tcl): `u_pcis_r` (SLR1) <-> `u_rt`'s
+   pointer (SLR0) over 5.4 of 5.6 ns of route. Now each PCIS channel crosses through an
+   `otpu_link`: the sender (`otpu_link_tx`) takes a beat while it holds a credit and registers
+   it with its take bit, the receiver (`otpu_link_rx`) registers them again (the stage), queues
+   the beat (DEPTH 4, the credits) and returns a registered pop pulse, which the sender
+   registers once more before counting it back, so every net across the boundary is a
+   flip-flop to a flip-flop in both directions (otpu_xr's rule with a handshake). AW, W, AR:
+   skid -> `u_pcis_*_tx` (SLR1, with the skids in pb_otpu_pcis) -> `u_xs_*` (SLR0, the stage
+   for the floorplan to place at the boundary) -> the queues; B, R: the queues -> `u_xs_b / _r`
+   (SLR0) -> `u_pcis_b_rx / _r_rx` (SLR1) -> the output registers. `pcis_wbusy` counts the
+   links' beats until their credits are back (after the queue took them). Cost: a beat crosses
+   in two cycles (the take register, the stage) over round 5's one, so +2 aclk cycles (8 ns) on
+   a host write's or read's way in and +2 on its response's way out (+16 ns on a PCIS read's
+   round trip); the link carries DEPTH beats per six-cycle credit round trip, 4 / 6 of a beat a
+   cycle = 10.7 GB/s on W, above BAR4's ~2 GB/s. Nothing on the token.
+10. **clk_raw -1.434, the adapter's bucket hash into the write-address enables**
+   (a1efd022; rtl/mem/otpu_native_dram.sv): `wh_r_reg -> wadr_r_reg/CE`, 10 levels (MUXF7 / F8) + 5.5 of
+   6.1 ns route: the fill read's hazard check `w_blk = wnz[wh_r]` (a 64:1 select by the read
+   point's bucket) in front of the command select, the take, `h_inc` and the read point's
+   enables. Now `w_blk` is a register kept equal to `wnz[c][wh_r[c]]` (the simulation checks it
+   every cycle): its next value is wnz's next at the next read point, whose bucket is one of
+   three (the tail's hash, the next slot's, the same), so three candidate live bits are selected
+   from `wnz` early, with the bucket compares and the decrement's outcome, all from registers,
+   and the late `tw / h_inc / h_dec` only pick among them in the last level (`wnz_nx`). The
+   enable cone is `w_blk` (a flip-flop) -> `e_wr` and the source select -> the take -> `h_inc`
+   -> the enables, the 64:1 select gone (three levels of it). Measured (the receipt below):
+   int8 949,497 (unchanged: the register mirrors the select), int4 565,678 (unchanged).
+11. **clk_raw -> clk_f_raw -2.042, the pumped pieces' port B** (d643ec15; boards/ypcb-00338/constraints/
+   otpu_clk2x.tcl): `rpv_reg -> g_pc[3].u_pb/.../ENBWREN`, 6 levels, a 4.6 ns path at the single
+   fast period. It is not the write side: the piece's port B is read-only (`en_b = ev && renb`,
+   `rb` straight to the RAM's address pins), and the write (`wv / wa / wd`, the registered stage
+   `pk_*` half a core period before the odd edge, one LUT) is single-cycle by the pump's design
+   and must stay so; a 6-level path from the replay valid is a read request through `renb`,
+   which the hierarchical-pin `-through` covered on paper while round 5's assertion measured
+   5.000 ns on a port A path. Now the exceptions are set through the requests' **leaf loads**
+   too (`get_pins -leaf -of_objects [get_nets -segments -of_objects <the ra / rb / rena / renb
+   pins>]`: port A's select LUT inputs, port B's RAM pins and enable LUT, timing nodes whatever
+   the linked netlist makes of a hierarchical pin), and the file asserts, per RAM port, that the
+   worst read-request path into its pins (`ADDRARDADDR / ENARDEN`, `ADDRBWRADDR / ENBWREN`,
+   through the read leaf loads) reports two fast periods, and that the worst path through the
+   write leaf loads (`wv / wa / wd`) still reports one; the puts line prints all three. If
+   round 6's log shows port B at 5.000 ns the path closes with ~0.4 ns to spare (4.6 of 5);
+   if the RAM's physical ports are the other way round (the write on the primitive's B), the
+   write check fails closed and says so.
+
+Tests (the m7a box): tests/test_f2_rtl.py 16 passed, tests/test_rtl.py `-k "replay or act_reads or
+attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 168 passed,
+tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests/test_f2_build.py
+87 passed. Receipts (as above): int8 949,497 (unchanged: the register mirrors the select), int4 565,678 (unchanged).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

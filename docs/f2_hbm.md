@@ -133,7 +133,10 @@ only (the buffers' occupancy, the queue, the unanswered B's; not the shell's liv
 the OCL side (otpu_axil_cdc) takes its AW, W and AR through skid buffers of its own, its state
 machine starting a write only while `!hold`: the OCL-after-PCIS order holds a cycle later than
 before, with no CL output on clk_main_a0 a function of a CL input (docs/wide_port.md "Round 5
-RTL").
+RTL"). Since round 6 the PCIS registers and u_host's queues are joined by `otpu_link`s
+(rtl/shell/otpu_link.sv: a credit link whose every crossing net is a flip-flop to a flip-flop
+both ways; `u_pcis_*_tx / _rx` on the registers' side, `u_xs_*` the stage on u_host's), two
+aclk cycles a beat each way, 4 beats in flight a channel (docs/wide_port.md "Round 6 RTL").
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
 written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
