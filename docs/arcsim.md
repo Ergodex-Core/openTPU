@@ -239,6 +239,39 @@ is one slice's logic with a serial memory model), and 4 threads 1.83x. Verilator
 minutes (`-j 0`, 64 cores).
 
 
+## Known arcilator issues (the reproducer for Ergodex)
+
+Bundle `arcsim-coral-matrix-baseline-20261013`: `arcsim --version` and `circt-verilog --version`
+both say `LLVM version 23.0.0git, CIRCT 00f6937` (the manifest's `source_commit`
+382b5c12030ad8eb74ab8deafb2529301faeab16 is the Coral RTL's, not the compiler's). Flags as
+`rtlsim.AFLAGS` (`--Osim --giant-value-bits=0 --partition-eval=5000` on the lowering).
+
+1. **A register that is an unpacked array of unpacked arrays loses non-blocking element writes.**
+   `otpu_native_dram.sv` (before b43c37e2): `logic [RW-1:0] rb_tq [NCH][RBP];` reset by
+   `for (c) for (k) rb_tq[c][k] <= '0;` and advanced by `for (k) rb_tq[c][k] <= rb_tq[c][k] + 1;`
+   beside the scalar `rb_t[c] <= rb_t[c] + 1;` in one `always_ff`. The design's own check
+   (`rb_tq[c][k] != rb_t[c]`, after reset) fires at the first cycles after reset:
+   `Fatal: otpu_native_dram: channel 4 B tail copy 0 is 1, the tail 0` (channel 2 under another
+   program: deterministic per program, so a lowering of the register, not an initial value). The
+   lowering log says `array register not converted to a memory: element type is not a signless
+   integer (nested arrays ...)` for it. Unchanged by `--shadow-nba-writes=false`,
+   `--queue-unobserved-nba=false`, `--infer-array-memories`,
+   `--arc-scalarize-small-array-values --arc-factor-array-updates`. Fixed by declaring the
+   register flat (`rb_tq [NCH * RBP]`).
+2. **A register that is an unpacked array of packed vectors, shifted whole, misses writes.**
+   `otpu_mxu.sv` (before this branch): `logic [D-1:0][WS-1:0] wc [MCOLS];` with column 0's
+   slices driven by D `otpu_skew` instances (`.q(wc[0][i])`) and `for (j) wc[j] <= wc[j-1];` in an
+   `always_ff`. The PE's weight copy, loaded from `wc[j-1][i]`, differs from `wc[j][i]` a cycle
+   later: `Fatal: otpu_mxu: PE 1.0's weights are not wc` at cycle 153 of the Gemma receipt (the
+   first MM's weights). Sidestepped by one packed vector `logic [MCOLS-1:0][D-1:0][WS-1:0] wc;`.
+
+Reproducer: `OTPU_SIM=arcsim OTPU_TARGET=f2-hbm OTPU_NCH=8 python tools/arcsim_model.py` on the
+RTL before each fix (any f2-hbm configuration; small `--dram-bytes` and the shrunken parameters
+of the box's `arcsim-work/mini2_build.py` build in 50 min) and a HALT program through
+`rtlsim.run(..., keep=<dir>)` (issue 1 fires on the boot loader's traffic alone; issue 2 needs an
+MM: the receipt). Verilator 5.048 (`--x-initial 0`) runs both forms identically (949,497
+cycles before and after each change), and both are plain register arrays for synthesis.
+
 ## Limits
 
 - The Coral bundle's frontend is strict where Verilator is lenient: a variable an `initial`

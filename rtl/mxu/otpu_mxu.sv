@@ -1192,7 +1192,9 @@ module otpu_mxu
         for (int k = 0; k < NS; k++) st[k] = wrl(w0x, i, k, lg0, wf0, t20);
       wd[i] <= st;
     end
-  logic [D-1:0][WS-1:0] wc [MCOLS];                  // the streams at column j
+  // the streams at column j: one packed vector, as wd (rather than an unpacked array of them:
+  // ArcSim's lowering miscounts the non-blocking writes of a nested-array register, docs/arcsim.md)
+  logic [MCOLS-1:0][D-1:0][WS-1:0] wc;
   for (genvar i = 0; i < D; i++) begin : g_wsk
     otpu_skew #(.W(WS), .N(i % CLS)) u_w (.clk, .en(1'b1), .d(wd[i]), .q(wc[0][i]));
   end
