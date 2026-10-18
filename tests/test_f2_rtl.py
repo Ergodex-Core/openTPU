@@ -50,7 +50,8 @@ def test_f2_memory_detects_missing_hazards(have_verilator):
 def test_f2_ocl_crossing(have_verilator, core_half, axi_half, nxr):
     """Control accesses cross once, preserve data/errors, obey hold and ignore other windows;
     nxr 3: through the HBM build's SLR crossing stages (otpu_axil_xr) as well."""
-    exe = rtlsim.build("tb_f2axil", [rtlsim.RTL / "boards/f2/otpu_axil_cdc.sv",
+    exe = rtlsim.build("tb_f2axil", [rtlsim.RTL / "shell/otpu_skid.sv",
+                                    rtlsim.RTL / "boards/f2/otpu_axil_cdc.sv",
                                     rtlsim.RTL / "shell/otpu_xr.sv",
                                     rtlsim.RTL / "boards/f2/otpu_axil_xr.sv",
                                     rtlsim.TB / "tb_f2axil.sv"],
@@ -62,7 +63,7 @@ def test_f2_ocl_crossing(have_verilator, core_half, axi_half, nxr):
 
 
 # ---------------------------------------------------------------- the HBM build (f2-hbm)
-HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "boards/f2/otpu_f2_hbm_nch.sv",
+HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_xr.sv", "shell/otpu_skid.sv", "boards/f2/otpu_f2_hbm_nch.sv",
               "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
               "boards/f2/otpu_f2_hbm_mem.sv"]
 
