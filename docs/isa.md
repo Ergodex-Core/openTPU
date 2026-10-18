@@ -185,7 +185,12 @@ Fields: `sa = R[ra]+w1` (streamed rows, bytes), `ssa = R[rb]+w2` (the weights' s
 bytes), `out = R[rc]+w3` (TMEM words), `N = w4[15:0]`, `KB = w4[23:16]`, `k0 = w4[31:24]` (the
 first block of the MM within the scale rows), `rs = w5` (row stride, bytes), `ors = w6[15:0]`
 (output row stride, words), `M = w6[23:16]`, `ab = w6[31:24]` (first ACT RAM block),
-`srs = w7` (scale row stride, bytes). Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
+`srs = w7` (scale row stride, bytes). `ors` is a layout choice with a rate behind it: the MXU
+drains a streamed row's M results, `ors` words apart, at as many a cycle as land in distinct
+TMEM banks (an odd stride: all of them; on a build with `MXROT`, Config.MXROT / CAPS2 bit7,
+whose MXU ports are rotators rather than a lane crossbar, only a stride `= 1 mod LANES` drains
+at full width and any other one result a cycle; the compiler lays fresh outputs out so, the
+results are the same either way; docs/vla_frequency_plan.md 6c). Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
 `dw = 0` and `m = 1`; nothing is read at `ssa`), bit1 `ACC` (accumulate into `out`), bit2 `RMAX`
 (also write each output row's maximum: `T[out + M*ors + j] = fold(max, y[j][0..N-1])`, folded
 from `n = 0` like the `RMAX` VOP; the softmax row max comes for free from the MXU epilogue), bit3

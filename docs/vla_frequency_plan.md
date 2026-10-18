@@ -217,8 +217,129 @@ asks for (`STYLE "auto"` on the ACT RAM, `"block"` on the pump banks), and even 
 in URAM / BRAM the **logic alone is 79% of the part's LUTs** (the TMEM crossbar 425K, the MXU
 300K, the VPU 206K): MCOLS 32 packed x LANES 64 x 8 TMEM ports does not fit one VU47P with
 the HDK shell, before timing. The OOC packed column (docs/mxu_packing.md 9) still holds for the
-column itself. Options are in the status section below; the decision is the user's. The
+column itself. The options and the cut taken are 6c; the decision was the user's (D14 A: cut
+at MCOLS 32 before the fallback B, MCOLS 16 / LANES 32). The
 f2-hbm16 (MCOLS 4) run for comparison: 241K LUTs, 182K FF, 261 RAMB36, 727 DSP, clk_raw +1.10.
+
+### 6c. The cuts for MCOLS 32 (2026-10-18; estimates for the second synthesis to confirm)
+
+**The memory mapping** (otpu_slice `ACT_RAM` / `TMEM_RAM`, target uarch keys; the other
+targets state nothing and keep today's "auto" / "block"):
+
+| memory | geometry | 6b (measured) | 6c (estimated from the geometry) |
+|---|---|---|---|
+| ACT RAM (u_act), `ACT_RAM 1` | 32 columns x 4 pieces of 1,024 words x 256 bits with byte enables, + 32 scale records of 1,024 x 64 | 131,088 RAM256X1D (1,086,464 LUT RAM) + ~63K LUTs of decode, 0 RAMB36 | **1,024 RAMB36** (8 of 1K x 36 a piece) **+ 64** (2 a column), ~10K LUTs (the 64-lane byte placement, the per-piece address copies; f2-hbm16's u_act is 718 at MCOLS 4) |
+| TMEM pumped banks (u_tmem), `TMEM_RAM 2` | 64 banks x 2 sub-banks x 12,288 words x 32 bits, true dual-port on clk_f 400 MHz | 2,048 RAMB36 (16 a sub-bank: Vivado rounds 12,288 to 16K) | **384 URAM288** (3 of 4K x 72 a sub-bank, cascaded, 32 of the 72 bits used), 0 RAMB36 |
+| the rest (u_mxu 62, u_quant 117, IMEM / trace / FIFOs / shell ~70) | | 249 RAMB36 | 249 RAMB36 |
+| **total** | | RAMB36 2,297 (114%), URAM 0, LUT RAM 1,140K (190% of the 601K LUT-RAM sites) | **RAMB36 1,337 (66%), URAM 384 (40%), LUT RAM ~54K (9%)** |
+
+The URAM's read timing: otpu_pump_bank's reads are issued at the even fast edge and their
+words must hold through the next core cycle, a two-fast-period multicycle both ways
+(boards/ypcb-00338/constraints/otpu_clk2x.tcl: `ra / rena / rb / renb` into clk_f, `qa / qb`
+out of it, 5.0 ns each); the URAM without its output register (OREG off, what `if (en) q <=
+mem[a]` infers) reads in one clock like the block RAM, with a longer clock-to-out (~1.5-2 ns
+against the RAMB36's ~1 ns) and a 3-deep cascade's mux in the same 5 ns window: no extra cycle,
+the TMEM latency contract (a read's word the cycle after) holds. The write lands at the odd
+fast edge from the bank's own `pk_*` registers, one fast period as before. A URAM cannot be
+initialised (the simulation's `initial` is under `ifndef SYNTHESIS`), and Vivado's URAM
+inference wants each port read-or-write a cycle with the output held on a write, which is the
+bank's NO_CHANGE form. What synthesis has to confirm: that Vivado infers the 128 TDP RAMs as
+URAM (the log's URAM count 384; a fall-back to block RAM would read 2,048 RAMB36 again) and the
+ACT RAM's byte-enable pieces as 8 RAMB36 each (1,088 in u_act).
+
+**The TMEM crossbar.** The slice's 8 read ports and 4 write ports (otpu_slice P_* / W_*; all
+64 lanes x 32 bits): the MXU (read: ACC's old values, ASCALE's factors, write: the drain's
+results, E = 32 lanes a step, and RMAX's maxima), the DMA (LD writes / ST reads, 32 words a
+cycle), the quantizer's three (QACT / QST's rows at 64 a cycle, the second operand, the
+one-word row factor), the VPU's two operands and its write, the collective's pair (RLD's one
+word at S = 1). Only the MXU's two were general crossbars (`GEN_R` / `GEN_W`: its drain writes
+the M results of a streamed row `ors` words apart, scattered over the banks); the other ten are
+barrel rotators (a contiguous run of words, LANES x log2 LANES multiplexers). The structure's
+LUTs at 64 lanes, calibrated on f2-hbm16's whole TMEM (10.3K measured against 12.3K by the same
+count at 8 lanes): a 64-lane rotator port ~6K (6 stages x 64 x 32 bits, two 2:1s a LUT6) + 2K
+for the fresh / held select; a general read port ~43K of 64:1 lane selects + ~25K of 64 x 64
+bank-row AND-OR; a general write port ~70K (64 banks x 64 lanes x 47 bits of AND-OR); the IMPL
+3 arbitration, the sub-bank data selects and the write merge ~35K. That puts the ten rotator
+ports and the arbitration at ~120K and the MXU's pair at ~140K by the count, which the measured
+424,760 says Vivado builds nearer 300K (the 64 x 64 compare-and-OR trees and the 2,048 64:1
+selects are what grows 64x from the 8-lane TMEM). The options, by that count:
+
+| option | the MXU's pair (LUTs, est.) | the rate |
+|---|---|---|
+| as synthesized (two 64 x 64 crossbars) | ~300K (measured, by difference) | the drain's 32 lanes a step at any odd stride |
+| A: lane-group ports (a port touches one 16-lane group a cycle: four 16 x 16 crossbars) | ~75K | the drain's 32 lanes span two groups: two steps a row, the drain (already 0.57x the pops on v_out) at 1.14x, the MXU-bound phases -20..-30% |
+| B: fewer full-width ports (the MXU's reads as the DMA's guest; the write crossbar stays) | ~150K | ACC / ASCALE / RMAX reads behind the DMA's LDs; the drain's rate kept |
+| C: a two-level crossbar (4:1 group select x 16:1 within the group, both ports) | ~100K | any permutation, the rate kept |
+| **D (taken): rotators whose lanes carry their rows** (otpu_tmem `ROW_R` / `ROW_W`) | **~20K** (the rotator moves {enable, row} to the banks and the data back: 6 stages x 64 x (15 + 33) bits) | the drain's 32 lanes a step at output row strides = 1 mod LANES, which every π0.5 MM already had at the widths that are multiples of 64 (257, 513, 1153, 2049: the compiler's odd-stride rule gave N + 1); the compiler's rule under `MXROT` is the first stride >= N that is 1 mod LANES (an attention's 558 keys: 577, was 559; the expert's 608: 641); any other stride drains one lane a step (bit-exact, slower) |
+
+D works because the drain's lane k writes word `a0 + k x ors`, whose bank is `(a0 + k) mod
+LANES` exactly when `ors = 1 mod LANES`: the rotation pattern of a contiguous run, with the
+rows differing per lane. The TMEM takes the rows along the rotator instead of computing them
+from a0; the MXU's `drain_run` is its NL lanes at such strides and 1 otherwise (otpu_mxu
+MXROT); RMAX, ASCALE and ACC's lanes were contiguous already. It is an arch flag (Config.MXROT,
+CAPS2 bit7, in the CFG_HASH when on: the programs' layout differs, every result is the same;
+targets/f2-vla.toml alone sets it) so that f2 / f2-hbm's programs and netlists do not change.
+Bit-exact against the ISA simulator: tests/test_rtl.py's random MMs at strides N and N + 1
+with MXROT forced on every Config (the rotation pattern and the one-lane fallback), the
+f2-vla-size suites on the m7a (the step-2 commit's numbers). The LPN (tools/pi05_lpn.py, the
+same programs under the new rule: v_out 602,200 cycles against 602,164 before, p_attend
+637,861 against 637,878 at the 577 stride, e_step 452,718 against 452,618) sees no rate
+change from the strides. **Measured** (tools/pi05_rtl.py on the m7a, the 5.4 configuration,
+docs/pi05.md 5.4 "after the 6c cuts"): v_out 627,705 cycles against 627,586 (+0.02%), v_qkv
+592,802 against 587,037 (+1.0%, the quantizer's cycle a row), p_attend 722,232 against 718,667
+(+0.5%), e_step 467,218 against 466,936 (+0.06%). The first RTL (step 1) had p_attend +10.4%
+and e_step +5.2%: the attention's last key block (46 keys at Np 558) came from the language's
+empty / zeros / full at stride 47, not 1 mod 64, and its 16 MMs drained one result a step;
+compiler.mm_stride (step 2) is now the one rule for every tile the MXU drains into.
+
+**The quantizer's tree** (clk_raw -0.298 ns in 6b: `u_quant/ca_reg -> cmax_reg`, 20 logic
+levels, the 64-lane max in two registered stages of 1 + 5 compare-and-select levels): three
+stages now (pairs; eights; the rest, 3 levels at 64 lanes), the group maxes taken at the level
+that completes them and carried, 12 logic levels at most on that path. A row's scale, and so
+its pass 1, comes a cycle later: a QST's rows run one after the other (+1 cycle a row), a
+QACT's pipeline through the row buffer (+1 once). In the LPN (`q_row 1`, the new knob) the
+chunk is +0.08% (v_qkv, the QST-bound phase, +0.6%: 617,491 against 613,633 cycles; the other
+phases within 0.1%).
+
+**The LPN before / after** (tools/pi05_lpn.py --full, the real model, 200 MHz; before =
+`OTPU_MXROT=0 --q-row 0`, which reproduces 5.5's numbers): lpnlang 1.476 -> 1.477 s a chunk
+(0.68 Hz, 295.2 -> 295.5 M cycles), the dialect 1.413 -> 1.414 s (0.71 Hz, 282.5 -> 282.8 M);
+the tally's bound 0.951 s and serial 2.003 s unchanged (no unit's rate moved: the drain's lanes,
+the VPU's, QST's word rate are what they were). So the cuts cost nothing the model sees; the
+f2-vla Hz stays ~0.65-0.7 at 200 MHz, ~0.8 at 250 (docs/pi05.md 5.5).
+
+**The pre-synthesis estimate** (CLB LUTs per hierarchy as Vivado reports them in 6b, logic +
+LUT RAM + SRL; the part 1,303,680 LUTs, 600,960 of them LUT-RAM capable, 2,016 RAMB36, 960
+URAM, 9,024 DSP):
+
+| hierarchy | 6b (measured) | 6c (estimated) | what changed |
+|---|---:|---:|---|
+| u_act | 1,149,727 (1,086,464 LUT RAM) | **~10K** (6-15K) | the RAM in 1,088 RAMB36, the RAM256X1D decode gone |
+| u_tmem | 424,760 | **~140K** (120-165K) | the MXU's pair ~300K -> ~20K (D); the ten rotators, the arbitration, the sub-bank selects stay (~120K by the count, x0.85-1.2 for Vivado) |
+| u_mxu | 299,960 (9,508 LUT RAM) | 300K | unchanged (the packed columns 32 x 2,642 = 85K, the drain's lane picks, RMAX, the FIFOs) |
+| u_vpu | 205,815 (5,046 LUT RAM) | 206K | unchanged |
+| u_quant | 60,104 | 60K | a register stage, no LUTs to speak of |
+| the rest (DMA, sequencer, control, the HBM adapter, the shell's CL side) | 112,826 (by difference) | 113K | unchanged |
+| **CLB LUTs** | 2,253,192 (173%) | **~830K (64%; 810-855K, 62-66%)** | |
+| of them logic | 1,035,402 (79%) | **~735K (56%; 54-58%)** | the LUT RAM ~54K + SRL 77.5K are the rest |
+| registers | 555,937 (21%) | 556K (21%) | +~1.3K in the quantizer |
+| RAMB36 | 2,297 (114%) | **1,337 (66%)** | the ACT RAM in, the TMEM out |
+| URAM | 0 | **384 (40%)** | the TMEM's banks |
+| DSP48E2 | 5,876 (65%) | 5,876 (65%) | |
+| clk_raw 200 MHz (post-synthesis) | -0.298 ns (the quantizer's tree) | the tree at 12 levels: expected positive; the next worst paths of 6b were not reported | clk_f_raw +1.10, hclk +0.15 as before; the URAM's clock-to-out sits in a 5 ns multicycle |
+
+So MCOLS 32 packed reaches the goal on the estimate (logic ~56% of the part, memories in URAM /
+BRAM at 40% / 66%): no fallback to B needed before the synthesis. What the synthesis has to
+confirm, in order of doubt: u_tmem's LUTs after the cut (the 120-165K spread is Vivado's
+handling of the rotators and the IMPL 3 arbitration at 64 lanes; above ~200K the next cut is
+the ten rotators' fresh / held selects and the guest ports' lanes, Q3 and COLL use one word),
+the URAM inference of the pumped banks, the ACT RAM's RAMB36 count, and clk_raw's next worst
+path. The place-and-route questions of section 8 (the MXU's 32 columns and their 1,088 RAMB36
+across three SLRs) are untouched by this section.
+
+Repeating the estimate's inputs: the hierarchy numbers above are
+/home/ubuntu/opt/hwloop-nightly/vla-22ade69b/synth's utilization report (6b); the structure
+counts are otpu_tmem's at LANES 64, IW 15 (24,576 words a bank), NSB 2, NRP 8, NWP 4.
 
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
@@ -226,7 +347,7 @@ f2-hbm16 (MCOLS 4) run for comparison: 241K LUTs, 182K FF, 261 RAMB36, 727 DSP, 
 |---|---|---|
 | 0 | π0.5 port: **done** (docs/pi05.md: ISA-exact numerics, the tally, int8 error). RhinoVLA's shape-only tally: **done** (tools/rhinovla_shape.py, the paper's Table 8: ViT 24 x 1024 at 256 patches a view merged to 64 tokens, 3 views; the 2B 28 x 2048, MLP 6144, 16 / 8 heads of 128; the expert 18 x 1024, MLP 3072, 31 rows; 0.66 T MAC a chunk, 45% of π0.5's; MXU 0.90 s at MCOLS 32, 0.53 s at 64, port B 0.25 s). Left: QST's DRAM rate confirmed on the RTL (L11) | the budget per phase; RhinoVLA's seconds a chunk at each point |
 | 1 | **the packing's feasibility** (L1): **done** in Verilator (bit-exact, docs/mxu_packing.md); the columns out of context on the F2 host (Vivado 2025.2, xcvu47p, 2026-10-17): **done, the gate passed**: the packed column WNS +1.986 ns at 5.0 ns and +1.010 at 4.0 (146 DSP48E2, 2,642 LUT, 6,692 FF a column), the unpacked +2.021 / +0.986 (137 DSP, 1,738 LUT, 4,372 FF); the worst path is the column end's DSP cascade in both (~330 MHz), so packing costs +904 LUT and +2,320 FF a column and no clock. ACT_ROWS 255 in the tally (done: needs TMEM 1.5M words, L2) and the RTL (**done**: otpu_actram's groups, the replay tests at 255 rows). QST: the K stores confirmed a word a cycle on the RTL; the V stores **QST T, done** (L11: -42% on the tower's QKV phase at MCOLS 16) | **MCOLS 64 packed or MCOLS 32 unpacked**: the fmax a column; the tally at ACT_ROWS 255; QST off the vision tower's critical path (at MCOLS 32 it is still on it: the port A word rate) |
-| 2 | the ACT RAM at the chosen MCOLS: BRAM / pumped / URAM from the width math; a floorplan sketch per SLR (columns, the result FIFO, the drain) | the BRAM budget; the SLR plan |
+| 2 | the ACT RAM at the chosen MCOLS: BRAM / pumped / URAM from the width math (**done, 6c**: the ACT RAM's 1,024 + 64 RAMB36 by its geometry, the TMEM's 384 URAM; the first synthesis, 6b, had the ACT RAM spilled into LUT RAM and the TMEM in 2,048 RAMB36); a floorplan sketch per SLR (columns, the result FIFO, the drain): open | the BRAM budget (6c: RAMB36 66%, URAM 40%, estimated); the SLR plan |
 | 3 | L1 MXU columns: MCOLS 8 -> 16 -> 32 (-> 64) (the RTL parameter exists: MCOLS 4 / 8 builds today) with ACT_ROWS 255. **The packing is in the array** (`otpu_mxu PACK`, merged from vla-pack, docs/mxu_packing.md 7: bit-exact at MCOLS 4 / 8 physical = 8 / 16 logical, ACT_ROWS to 64, tests/test_mxu_pack_rtl.py 36 passed; left: MCOLS 16 / 32 physical PACK builds and the OOC fmax). **Measured (unpacked, docs/pi05.md 5.3)**: MCOLS 16 and 32 build and run bit-exact at ACT_ROWS 255 (tests/test_rtl.py); the RTL timing of the cut phases at Np 558 (p_out at 128) gives the MXU 81% of the cycles on the prefix's MLP at MCOLS 16 (60% at 32) and 32-66% on the other phases, and names the loss: the MXU drain denied the TMEM grant while the VPU runs (the result FIFO then fills; the loss follows the VPU's share of the time), the dependency gaps on QACT, and the 16-lane VPU (L4) | bit-exact at each MCOLS (**done** for 16 and 32); RTL timing on the **real prefix shape** (558-968 rows, the 16384-wide MLPs, the 2048-wide projections; a cut model hides the drain's and result FIFO's losses): MAC/cycle ~MCOLS x 128 at >= 75% (**met by p_out at MCOLS 16, 81%; not by the rest**: 52-66% at MCOLS 16, 32-60% at 32; phase 4's two items are what stands in the way) |
 | 4 | L4 / L5 / L6: LANES 64 (the VPU's partial loop past 16 lanes: **done**, the sums on a 16-lane sub-datapath, bit-exact at 32 / 64), TMEM 1.5M words (**builds and runs**), QACT / QST at LANES a cycle (**done**: the quantizer bit-exact at 64 lanes); **and the MXU drain's TMEM arbitration** (**done**: TMEM_WARB 2 in the target, p_out at MCOLS 16 -17%; and its rate, MXU_E 32: a packed pass in two steps) | VPU / QACT tests (**passed** at 32 / 64; the regression after the changes: tests/test_rtl.py replay / act_reads / attention / lane_count / arbitration 52 passed, 5 skipped; tests/test_mxu_pack_rtl.py (MCOLS 4 / 8 / 16 / 32) + test_vops.py (LANES 4 to 64) + test_quant_rtl.py 130 passed, 1 skipped); bank-conflict counters in the RTL timing (TMEMSTAT, the pair's wv / wm / wc / wcm / wcv); VPU + QACT + QST < 15% of the serial sum: **met by p_out alone** (13% by the tally at the target; v_out 28%, p_qkv 23%, e_step 27%); the MXU >= 75% of the cycles on v_out / p_qkv / p_out at MCOLS 32: **not met at MCOLS 32 packed** (v_out 56.5%, p_qkv 44.0% measured at 64 lanes; p_out at the target not measured: at Np 32, the run the 64-lane model's speed allows, it is port-bound by the tally), **met at MCOLS 16 packed** (v_out 80.9%: the same logical width as MCOLS 32 unpacked, where 5.3 had 36%). Next: the drain at one step a packed pass, VPU_CL 64 or the fused unit (L3) for the composites, the sums' four-row interleave |
 | 5 | L3 fused activation unit, sized on phase 4's remainder: ISA op + RTL + tests | bit-exact; the GELU's share gone |
@@ -242,7 +363,9 @@ f2-hbm16 (MCOLS 4) run for comparison: 241K LUTs, 182K FF, 261 RAMB36, 727 DSP, 
   fallback is **MCOLS 32 x 1 slice unpacked** (4,480 DSP), which keeps every argument of
   section 4 and lands RhinoVLA near 1 Hz with no margin. MCOLS 32 x 2 slices is not the fallback: it
   brings back the collectives and the sharding of π0.5's single KV head that section 4 avoids.
-* A 32-64-column MXU, 64 VPU lanes and a 64-way TMEM crossbar in one slice: wiring across SLRs
+* A 32-64-column MXU, 64 VPU lanes and a 64-way TMEM crossbar in one slice (6b measured the
+  crossbar at 425K LUTs; 6c cuts the MXU's two general ports to rotators, ~140K estimated for
+  the TMEM): wiring across SLRs
   is the main risk (pblocks for the MXU's column chain, pipelined weight and ACT-RAM paths), and
   the ACT RAM's 512-1,024 RAMB36 have to sit beside their DSP columns. Hence 200 MHz committed
   and 250 as upside (a 0.6-0.8M LUT design across three SLRs closing 250 MHz on its first

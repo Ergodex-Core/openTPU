@@ -23,8 +23,8 @@ at E 4, 64K TMEM words) and m8 (8 at E 8, 128K words).
 
 | Section | What | Who depends on it |
 |---|---|---|
-| `[arch]` | the `opentpu.isasim.Config` fields: S, D, MCOLS, ACT_BLOCKS, ACT_ROWS, TMEM / IMEM words, DRAM bytes per slice, LANES, PAIR / DSTEP / STREAM, SEQ_WC (EXPERIMENTAL: the sequencer's wait entries, which the host loads with every program; docs/isa.md "Wait counts") | the compiler and the programs. Two targets with the same arch run the same programs |
-| `[uarch]` | timing-only RTL parameters: MXU_IMPL, MXU_E (optional), VPU_CL, ULANES, TMEM_IMPL, RPB / WPB, WIN, FIFO_DEPTH, the trace buffer | the RTL, the co-simulation |
+| `[arch]` | the `opentpu.isasim.Config` fields: S, D, MCOLS, ACT_BLOCKS, ACT_ROWS, TMEM / IMEM words, DRAM bytes per slice, LANES, PAIR / DSTEP / STREAM, SEQ_WC (EXPERIMENTAL: the sequencer's wait entries, which the host loads with every program; docs/isa.md "Wait counts"), T2, PACK, MXROT (the MXU's TMEM ports as rotators: the compiler's MM output strides, docs/vla_frequency_plan.md 6c) | the compiler and the programs. Two targets with the same arch run the same programs |
+| `[uarch]` | timing-only RTL parameters: MXU_IMPL, MXU_E (optional), VPU_CL, ULANES, TMEM_IMPL, RPB / WPB, WIN, FIFO_DEPTH, the trace buffer; optional: TMEM_IMPL 3's knobs, TMEM_WARB, and the memories' RAM styles ACT_RAM (0 auto, 1 block, 2 ultra) / TMEM_RAM (2 ultra), absent on every target but f2-vla | the RTL, the co-simulation |
 | `[tech]` | the cell family (`rtl/tech/<family>`: generic, xilinx7, xilinxus, asic), the part or the PDK | the RTL file list |
 | `[platform]` | the board: memory type and rate, channels per slice, bytes a slice addresses per channel, the host link, the core clock | the board flow, the host runtime |
 
