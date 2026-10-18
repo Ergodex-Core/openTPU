@@ -496,7 +496,10 @@ module otpu_native_dram #(
   // rbm WADR, fanout 577, 0 levels, 6.9 ns of route, +0.195 ns); each copy now its piece's.
   // rb_t stays as the copies' reference (the simulation check)
   localparam int RBP = 8;
-  (* keep = "true" *) logic [RW-1:0] rb_tq [NCH][RBP];
+  // (one flat array, channel c's copy k at c * RBP + k, rather than [NCH][RBP]: the same registers;
+  // ArcSim's lowering miscounts the non-blocking element writes of a nested-array register,
+  // docs/arcsim.md)
+  (* keep = "true" *) logic [RW-1:0] rb_tq [NCH * RBP];
   logic [AW_:0] ra_n [NCH], ra_res [NCH];
   logic [AW_-1:0] ra_h [NCH], ra_t [NCH];
 
@@ -605,7 +608,7 @@ module otpu_native_dram #(
       localparam int PB = 512 / RBP;
       logic [PB-1:0] rbm [RD];
       always_ff @(posedge clk)
-        if (n_rvalid[c] && tgh[c].k == K_B) rbm[rb_tq[c][k]] <= n_rdata[c][PB * k +: PB];
+        if (n_rvalid[c] && tgh[c].k == K_B) rbm[rb_tq[c * RBP + k]] <= n_rdata[c][PB * k +: PB];
       assign rb_head[c][PB * k +: PB] = rbm[rb_h[c]];
     end
     always_ff @(posedge clk)
@@ -785,7 +788,7 @@ module otpu_native_dram #(
         qw_n[c] <= '0; qw_f[c] <= '0; qw_r[c] <= '0; qw_rn[c] <= '0; wnz[c] <= '0;
         tg_n[c] <= '0; tg_h[c] <= '0;
         rb_n[c] <= '0; rb_res[c] <= '0; rb_h[c] <= '0; rb_t[c] <= '0;
-        for (int k = 0; k < RBP; k++) rb_tq[c][k] <= '0;
+        for (int k = 0; k < RBP; k++) rb_tq[c * RBP + k] <= '0;
         ra_n[c] <= '0; ra_res[c] <= '0; ra_h[c] <= '0; ra_t[c] <= '0;
         iss_w[c] <= n_wdone[c];
       end
@@ -854,7 +857,7 @@ module otpu_native_dram #(
           case (tgh[c].k)
             K_B: begin
               rb_t[c] <= rb_t[c] + 1; rbn = rbn + 1;
-              for (int k = 0; k < RBP; k++) rb_tq[c][k] <= rb_tq[c][k] + 1;
+              for (int k = 0; k < RBP; k++) rb_tq[c * RBP + k] <= rb_tq[c * RBP + k] + 1;
             end
             K_A: begin ra_t[c] <= ra_t[c] + 1; ran = ran + 1; end
             default: wgot[c][tgh[c].slot] <= 1'b1;   // the SW fill read: its slot has the data
@@ -1039,9 +1042,9 @@ module otpu_native_dram #(
     if (!rst && rst_seen)
       for (int c = 0; c < NCH; c++)
         for (int k = 0; k < RBP; k++)
-          if (rb_tq[c][k] != rb_t[c])
+          if (rb_tq[c * RBP + k] != rb_t[c])
             $fatal(1, "otpu_native_dram: channel %0d B tail copy %0d is %0d, the tail %0d", c, k,
-                   rb_tq[c][k], rb_t[c]);
+                   rb_tq[c * RBP + k], rb_t[c]);
   end
 
   // gb and, a cycle later, gd are, while valid, what a buffer merging each write as it is taken

@@ -148,15 +148,21 @@ Verilator model of the same configuration runs the HALT program in 3 cycles. Fiv
 variants on a shrunken configuration (small TMEM / IMEM / ACT / FIFO, the same adapter; a HALT
 program) all stop at the same check with the same values: `OTPU_ARCSIM_ARGS` of
 `--shadow-nba-writes=false`, `--queue-unobserved-nba=false`, `--infer-array-memories`,
-`--arc-scalarize-small-array-values --arc-factor-array-updates`, and the default. A flat
-`rb_tq [NCH * RBP]` in the RTL (sidestepping the nested array; an experiment on a copy of
-otpu_native_dram.sv, not in the tree) was the next probe when this was written -- see the
-report; if it passes, the next replicated-register or nested-array check is the next question.
-Until the board model runs, the ArcSim backend is validated on the behavioural-DRAM
-configurations (below), not on the board's memory path, and the receipt's ArcSim cycle count,
-cycles/s and thread scaling are not available. This is the first thing to take to Ergodex: a
-reproducer is `tools/arcsim_model.py` for any f2-hbm configuration plus a HALT program, and
-`build/arcsim/<model>/lower.log` names the register.
+`--arc-scalarize-small-array-values --arc-factor-array-updates`, and the default. **A flat
+`rb_tq [NCH * RBP]` in the RTL fixes it**: with the copies declared as one array (channel c's
+copy k at `c * RBP + k`; the same registers, `(* keep *)` kept, Verilator unchanged) the ArcSim
+model of the shrunken configuration runs the HALT program to `RESULT cycles=3 halted=1 error=0`
+as Verilator does, so this branch's `otpu_native_dram.sv` declares it flat (its only RTL
+change). The receipt's model with that RTL was rebuilding when this was written (70 min), its
+run chained after it: `tools/perf_qwen.py` under `OTPU_SIM=arcsim` writes
+`~/opt/arcsim-work/runs/gemma_arcsim_st2.log` on the box, the task-mode build and its runs at
+4, 2 and 8 threads (`ARC_THREADS`) `gemma_arcsim_t{4,2,8}.log`; the cycle count there against
+949,497 is the receipt's bit-exactness, the "sim" seconds its cycles/s. Whether a further
+nested-array register trips the same lowering is what that run tells (the adapter has more:
+`whb [NCH][NH]`, `orow / tact / tcol [NCH][8]` in the memory model; the checkers after this one
+cover the hazard counts and the merge buffers). This is the first thing to take to Ergodex: a
+reproducer is `tools/arcsim_model.py` for any f2-hbm configuration on the RTL before this fix
+plus a HALT program, and `build/arcsim/<model>/lower.log` names the register.
 
 
 `tests/test_f2_rtl.py` (the F2 fabric's own testbenches, `rtlsim.build` of `tb_f2nch_protocol`,
