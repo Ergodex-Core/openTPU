@@ -137,6 +137,23 @@ def notes(p: Profile) -> list[dict]:
         out.append({"level": "warn", "text":
                     f"For {bs['mb']} cycles ({_pct(bs['mb'] / cyc)}) the MXU had chunks but did "
                     f"not consume them: {why}."})
+        if bs["mbr"] > bs["mb"] / 2:
+            # rows arriving late with the FIFO near empty: the memory delivers fewer chunks a
+            # cycle than the MXU consumes (its rate under the port's load, the port's requests
+            # capped by the chunks in flight); with the FIFO well stocked it is the arrivals'
+            # irregularity at the row starts. The level in the windows with late rows, weighted
+            # by their late cycles.
+            lvl = fifo_level_at(bk, "mbr")
+            out.append({"level": "info", "text":
+                        f"The chunk FIFO held {lvl:.0f} chunks on average while rows were "
+                        f"incomplete: " + (
+                            "the stream delivered fewer chunks a cycle than the MXU consumes, so "
+                            "every row completed late (the memory's rate, which no row-gating "
+                            "change in the MXU recovers; a faster memory does)."
+                            if lvl < 16 else
+                            "the stream is ahead on average but irregular at the row starts; a "
+                            "row lead in the MXU (pop a row while the next streams) or steadier "
+                            "arrivals recover it.")})
     busy = p.unit_busy(0)
     if busy.get("VPU", 0) > 0.85 * cyc and eff < 0.95:
         out.append({"level": "bad", "text":
@@ -164,6 +181,20 @@ BLOCKED_KEYS = ("mbc", "mbr", "mbs", "mbo")
 BLOCKED_SHORT = {"mbc": "no result-FIFO credit (drain)", "mbr": "row's chunks not all in",
                  "mbs": "row's scales not all in", "mbo": "other"}
 BLOCKED_SUB = ("blocked_credits", "blocked_row", "blocked_scales", "blocked_other")
+
+
+def fifo_level_at(B: dict, key: str = "mbr", k0: int = 0, k1: int | None = None) -> float:
+    """The MXU chunk FIFO's mean level (ff / n per window) over buckets k0 .. k1 - 1, weighted
+    by the windows' `key` counter (mbr: the level while rows were incomplete): near empty, the
+    memory delivers fewer chunks a cycle than the MXU consumes; well stocked, the arrivals are
+    irregular at the row starts."""
+    w = (B.get(key) or [])[k0:k1]
+    ff = (B.get("ff") or [])[k0:k1]
+    n = (B.get("n") or [])[k0:k1]
+    tot = sum(w)
+    if not tot:
+        return 0.0
+    return sum(wk * fk / nk for wk, fk, nk in zip(w, ff, n) if nk) / tot
 
 
 def blocked_split(B: dict, k0: int = 0, k1: int | None = None) -> dict | None:
