@@ -1150,7 +1150,7 @@ list, each bit-exact on the RTL tests and the decode receipt, in four commits:
    against 565,739 (-61, -0.011%).
 4. **clk_main_a0, the host's PCIS side** (rtl/boards/f2/otpu_f2_hbm_host.sv; not in round 3's
    list, the one regression): every PCIS output is a flip-flop. AW, W and AR enter two-entry
-   skid buffers (`otpu_skid`, `u_pcis_aw / _w / _ar`: the ready a register, the second
+   skid buffers (`otpu_skidbuf`, `u_pcis_aw / _w / _ar`: the ready a register, the second
    slot free; the beat the logic sees from the first slot's registers), B and R leave through
    output registers (`otpu_f2_hbm_oreg`, `u_pcis_b / _r`). The order rule (`pcis_wbusy` holds
    the reads) moved from the AR handshake to the AR's exit from its buffer, and `pcis_wbusy`
@@ -1191,13 +1191,13 @@ group; (7) the bridge's wf_n next-state cone to <= 3 levels, or the honest alter
 receipt:
 
 5. **clk_main_a0 -4.546, the OCL's ordering gate** (1197a113; rtl/boards/f2/otpu_axil_cdc.sv,
-   otpu_f2_hbm_host.sv, the new rtl/shell/otpu_skid.sv): the shell's `sh_cl_dma_pcis_wvalid`
+   otpu_f2_hbm_host.sv, the new rtl/shell/otpu_skidbuf.sv): the shell's `sh_cl_dma_pcis_wvalid`
    (SLR1) ran through `pcis_wbusy` into `u_ocl`'s `awready` and back to the shell (8.0 of 8.3 ns
    of route). Now `pcis_wbusy` is registers only (the PCIS skid buffers' occupancy, the write
    queue, the unanswered B's; the shell's live valids left out: a write shown enters its buffer
    in the cycle, the buffers' ready being high whenever their second slot is free), and the OCL
    side's AW, W and AR enter two-entry skid buffers of their own (`u_skid_aw / _w / _ar`,
-   `otpu_skid`, the module round 4's `otpu_f2_hbm_skid` became, shared by both blocks), the
+   `otpu_skidbuf`, the module round 4's `otpu_f2_hbm_skid` became, shared by both blocks), the
    state machine taking an access from the buffers' registers, the AW and W exits waiting for
    `!hold`; B and R were registers already. So the OCL-after-PCIS order holds a cycle later: a
    PCIS write and an OCL write shown in the same cycle both enter their buffers, the PCIS one
@@ -1364,6 +1364,66 @@ boundary registers and the requirement on the worst path into each RAM port; (14
 ordering through the link (the decision on the SLR1 side, or the valid carried in the link's
 word), so no u_pcis_* signal reaches u_host's queues outside u_xs_*; (15) the adapter -> ACT RAM
 write enable registered at the slice's port A boundary (or u_act in a box beside the adapter).
+
+**Round 7 RTL (2026-10-19; Verilator only).** Round 6 placed (788a91c0) at WNS -2.234; its
+list's three fixes, each bit-exact on the tests and the receipt:
+
+13. **clk_raw -> clk_f_raw -2.234, the pump pieces covered by construction** (bb0eaa3b; boards/ypcb-00338/
+   constraints/otpu_clk2x.tcl): `u_quant/t_raddr_reg -> g_pc[2].u_pb/.../ADDRARDADDR[5]`, 7
+   levels, a 4.2 ns path at the single fast period while the leaf-load assertion held at 5.000
+   ns on another path into the same port. Rounds 4-6 anchored the read exception on the pieces'
+   request pins, then on their leaf loads, and each time a request reached the address pins
+   another way. Boundary registers (the round's first option) were not taken: a piece's read
+   request is combinational from the units' request registers (the TMEM's lane rotation, bank
+   compares and sub-bank select) and the RAM samples it at the even edge one core period after
+   them, so a clk register at the piece would move the RAM's sampling to the next even edge, a
+   core cycle on every TMEM read for every unit (the lanes take the word the cycle after the
+   grant); registering and reading at the odd edge instead would leave the data path (the
+   RAM's clock-to-out, the piece select and the lanes' muxes) half a core period. Instead the
+   exceptions are anchored on the one object every such path shares: **`-from clk -to` every
+   data / address / enable input pin of the pieces' RAM primitives** gets two fast periods, and
+   **`-from` the pieces' write-stage registers** (`g_pc[*].pk_v / pk_a / pk_d`, kept) `-to` the
+   same pins one, by the more specific exception (cells outrank a clock), so a read request
+   has two periods whatever logic it comes through and the write keeps its half core period
+   whichever physical port Vivado gave it. Fail closed: the write-stage registers are counted
+   (one pk_v, PRW pk_a, 32 pk_d a piece), and after the exceptions the worst 4 x (pins) core
+   -> RAM-pin paths are read back (`get_timing_paths -from clk -to <the pins>`): every one must
+   report two fast periods unless it starts at a write-stage register, which must report one;
+   both kinds must appear; the puts line gives the counts and both requirements. No RTL
+   change, no cycle change.
+14. **clk_main_a0 -1.877, the ordering gate reading the skid** (a865f540; rtl/boards/f2/otpu_f2_hbm_host.sv,
+   otpu_axil_cdc.sv, tests/test_f2_rtl.py): `u_pcis_aw/r1_v_reg` (SLR1) -> `arq_reg/CE` (SLR0),
+   4.8 of 5.2 ns route: `pcis_wbusy` took the skids' occupancy and the links' busy bits
+   straight from the SLR1 side. Now the write-pending bit is formed on the registers' side and
+   registered there (`u_pcis_wb`, an otpu_xr of one bit), crosses as one more flip-flop ->
+   flip-flop net into `u_xs_wb`, and `pcis_wbusy = aw_n != 0 || b_n != 0 || wb_x`; the bit is
+   two cycles older than the skids, a write's AW reaches the queue two cycles later still
+   (the link) and a read's AR as late, so the read-after-write rule holds, and the OCL side
+   starts a write only from an AW / W two cycles old in its buffer (`aw_age / w_age`,
+   otpu_axil_cdc), so a PCIS write shown with an OCL write is counted before the OCL's starts.
+   `test_pcis_registers_only_drive_the_link_stage` reads otpu_f2_hbm_host.sv's instances and
+   asserts that every signal an output of a `u_pcis_*` instance drives is read only by
+   `u_pcis_*` / `u_xs_*` instances or assigned to the block's PCIS ports (a structural check on
+   the source; Verilator's own netlist is not needed for it). Not on the token.
+15. **clk_raw -2.172, the adapter's queue count into the ACT RAM's write enables**
+   (5b31a81d; rtl/top/otpu_slice.sv, rtl/shell/otpu_skidbuf.sv in the core list): `u_mem/qw_n_reg[6] ->
+   u_act/we_i_reg/D`, 3 levels and 6.8 of 7.1 ns route: the adapter's `sw_rdy` (its SW queue's
+   room) into the slice's arbiters (`q_awant && !sw_rdy_i`: a QST write the DRAM cannot take
+   withholds the quantizer's grant) and on into the quantizer's ACT RAM write. Now the SW port's
+   output register is a two-entry skid buffer (`u_sw`, otpu_skidbuf): what the arbiters see is its
+   second slot being free, a flip-flop of the slice's own, and the DRAM's `sw_rdy` moves only the
+   buffer's exit (its take, beside the buffer). The quantizer is withheld when both slots hold a
+   write (before: when the one register held one the DRAM did not take that cycle), so the port
+   is the same or more permissive; `wr_idle` counts both slots. The adapter's protocol is
+   unchanged (tb_native_nch); a pblock would not have shortened the path's logic, only its
+   route, so the register was the choice. Measured (the receipt below): int8 949,497
+   (unchanged), int4 565,678 (unchanged).
+
+Tests (the m7a box): tests/test_f2_rtl.py 17 passed (with the structural test), tests/test_rtl.py `-k "replay or act_reads or
+attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 168 passed,
+tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests/test_f2_build.py
+87 passed, tests/test_target.py 25 passed. Receipts (as above): int8 949,497 (unchanged), int4
+565,678 (unchanged).
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 

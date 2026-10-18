@@ -120,7 +120,7 @@ channel alone at the core's full rate (12.8 GB/s) would need ~80.
 ### The host path (otpu_f2_hbm_host)
 
 PCIS side (aclk, 250 MHz): every output to the shell is a flip-flop. AW, W and AR enter
-two-entry skid buffers (`otpu_skid`: the ready a register, the beat the logic sees from
+two-entry skid buffers (`otpu_skidbuf`: the ready a register, the beat the logic sees from
 the buffer's output register), B and R leave through output registers (`otpu_f2_hbm_oreg`:
 valid and data loaded when the shell took the last beat or none is held), so no path runs from
 a shell register through the block and back in the 4 ns cycle (round 3's placement ran the
@@ -136,7 +136,13 @@ before, with no CL output on clk_main_a0 a function of a CL input (docs/wide_por
 RTL"). Since round 6 the PCIS registers and u_host's queues are joined by `otpu_link`s
 (rtl/shell/otpu_link.sv: a credit link whose every crossing net is a flip-flop to a flip-flop
 both ways; `u_pcis_*_tx / _rx` on the registers' side, `u_xs_*` the stage on u_host's), two
-aclk cycles a beat each way, 4 beats in flight a channel (docs/wide_port.md "Round 6 RTL").
+aclk cycles a beat each way, 4 beats in flight a channel (docs/wide_port.md "Round 6 RTL"). Round 7 moves the order rule's write-pending bit onto the same footing: formed and
+registered on the registers' side (`u_pcis_wb`), one more flip-flop -> flip-flop net into
+`u_xs_wb`, so nothing of `u_pcis_*` reaches the queues' logic directly; it is two cycles older
+than the skids, a write's AW reaches the queue two cycles later still and a read's AR as late,
+and the OCL side starts a write only from an AW / W two cycles old in its buffer
+(otpu_axil_cdc `aw_age / w_age`), so a PCIS write shown with an OCL write is still counted
+first (docs/wide_port.md "Round 7 RTL").
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
 written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
