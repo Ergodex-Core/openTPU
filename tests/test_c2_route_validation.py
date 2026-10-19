@@ -17,13 +17,59 @@ SUPPORT = ROOT / "boards/c2_f2/support/boards/f2/build/scripts"
 # Vivado 2025.2 post-opt report structure: Id/Position, wrapped source and sink
 # lists, then a separate numeric line. Cell lists shortened from the captured
 # 4f750912 report; this is a parser fixture, not timing or coverage evidence.
-SKEW_ROW = r'''@ID@   @POSITION@        [get_cells [list {@SCOPE@/wgray_reg[0]} \
-          {@SCOPE@/wgray_reg[1]} \
-          {@SCOPE@/wbin_reg[0]} \
-          {@SCOPE@/wbin_reg[1]}]]
-                                              [get_cells [list {@SCOPE@/wgray_r1_reg[0]} \
-          {@SCOPE@/wgray_r1_reg[1]}]]
+SKEW_ROW = r'''@ID@   @POSITION@        [get_cells [list @FROM@]]
+                                              [get_cells [list @TO@]]
                                                                               Fast              2.222      -0.294      2.516'''
+
+
+def skew_report(scenario):
+    """Synthetic parser fixture; names and widths follow the pinned host RTL."""
+    rows = []
+    groups = [(f, d) for f in ('u_rt', 'u_xr', 'u_xw') for d in ('w', 'r')]
+    groups.append(('', 'b'))
+    for idx, (fifo, direction) in enumerate(groups, 1):
+        scope = 'WRAPPER/CL/u_sys/u_mem/u_host' + ('/' + fifo if fifo else '')
+        stems = (direction + 'gray', direction + 'bin') if fifo else ('bgray', 'bcnt')
+        sink = ('wgray_r1' if direction == 'w' else 'rgray_w1') if fifo else 'bg1'
+        width = 5 if fifo else 16
+        source = [f'{scope}/{stem}_reg[{bit}]' for stem in stems for bit in range(width)]
+        dest = [f'{scope}/{sink}_reg[{bit}]' for bit in range(width)]
+        if scenario == 'missing_bit' and idx == 1:
+            dest.pop()
+        if scenario == 'wrong_sink' and idx == 1:
+            dest[0] = dest[0].replace('wgray_r1', 'rgray_w1')
+        if scenario == 'wrong_fifo' and idx == 1:
+            source = [n.replace('u_rt/', 'u_other/') for n in source]
+        if scenario == 'duplicate_cell' and idx == 1:
+            source.append(source[0])
+        if scenario == 'source_replicas' and idx == 1:
+            source.append(source[5] + '_rep')
+        row = SKEW_ROW.replace('@ID@', str(idx)).replace('@POSITION@', str(77 + idx))
+        row = row.replace('@FROM@', ' \\\n          '.join('{' + n + '}' for n in source))
+        row = row.replace('@TO@', ' '.join('{' + n + '}' for n in dest))
+        rows.append(row)
+    if scenario == 'missing_gray':
+        rows.pop()
+    if scenario == 'duplicate_gray':
+        rows[-1] = rows[-1].replace('7   84', '6   84')
+    if scenario == 'duplicate_bus':
+        rows[-1] = rows[0].replace('1   78', '7   84')
+    if scenario == 'malformed_gray':
+        rows[-1] = rows[-1].replace('7   84', 'wrapped   84')
+    if scenario == 'incomplete_gray':
+        rows[-1] = rows[-1].rsplit('\n', 1)[0]
+    if scenario in ('old_host_only_gray', 'old_native_gray', 'extra_gray'):
+        rows.append(rows[0].replace('1   78', '8   85').replace('/u_host/u_rt/', '/g_port[0].u_nch/u_cq/'))
+    if scenario == 'negative_gray_slack':
+        rows[0] = rows[0].replace('2.516', '-0.001')
+    if scenario == 'wrong_gray_bound':
+        rows[0] = rows[0].replace('2.222', '5.000')
+    underline = '' if scenario == 'missing_section_underline' else '--------------------------\n'
+    return ('Table of Contents\n-----------------\n1. Bus Skew Report Summary\n'
+            '2. Bus Skew Report Per Constraint\n\n1. Bus Skew Report Summary\n' + underline +
+            'Id Position From To Corner Requirement(ns) Actual(ns) Slack(ns)\n' + '\n'.join(rows) +
+            '\n2. Bus Skew Report Per Constraint\n-------------------------------\n'
+            '1 WRAPPER/CL/u_sys/u_mem/ignored_detail\n')
 
 MOCK = r'''
 lassign $argv validator root scenario
@@ -121,31 +167,9 @@ proc get_drc_violations {} {
 }
 proc report_bus_skew {args} {
   if {$::scenario eq "skew_warning"} {incr ::criticals}
-  set f [open $::root/skew_row.txt r]; set row_template [read $f]; close $f
+  set f [open $::root/skew_report.txt r]; set text [read $f]; close $f
   set f [open [lindex $args [expr {[lsearch -exact $args -file]+1}]] w]
-  puts $f "Table of Contents\n-----------------"
-  puts $f "1. Bus Skew Report Summary\n2. Bus Skew Report Per Constraint\n"
-  puts $f "1. Bus Skew Report Summary"
-  if {$::scenario ne "missing_section_underline"} {puts $f "--------------------------"}
-  puts $f "Id Position From To Corner Requirement(ns) Actual(ns) Slack(ns)"
-  # Shell constraints do not contribute to the owned HBM fabric inventory.
-  puts $f [string map [list @ID@ 0 @POSITION@ 77 @SCOPE@ WRAPPER/SHELL/gray] $row_template]
-  set count [expr {$::scenario eq "missing_gray" ? 46 : 47}]
-  if {$::scenario eq "old_host_only_gray"} {set count 39}
-  for {set i 1} {$i<=$count} {incr i} {
-    set id [expr {$::scenario eq "duplicate_gray" && $i==47 ? 46 : $i}]
-    if {$::scenario eq "malformed_gray" && $i==47} {set id wrapped}
-    set row [string map [list @ID@ $id @POSITION@ [expr {77+$i}] @SCOPE@ WRAPPER/CL/u_sys/u_mem/fifo${i}] $row_template]
-    if {$::scenario eq "incomplete_gray" && $i==47} {set row [join [lrange [split $row \n] 0 end-1] \n]}
-    puts $f $row
-  }
-  if {$::scenario eq "extra_gray"} {
-    puts $f [string map [list @ID@ 48 @POSITION@ 125 @SCOPE@ WRAPPER/CL/u_sys/u_mem/extra] $row_template]
-  }
-  puts $f "2. Bus Skew Report Per Constraint"
-  puts $f "-------------------------------"
-  # Detail may repeat paths or be limited, and must not affect the count.
-  puts $f "1 WRAPPER/CL/u_sys/u_mem/fifo1/wgray_reg duplicate_detail"
+  puts -nonewline $f $text
   close $f
 }
 if {$scenario eq "existing_marker"} {
@@ -166,6 +190,11 @@ def run_mock(tmp_path, scenario):
     scripts.mkdir()
     shutil.copy2(SUPPORT / "check_rule_severity.tcl", scripts)
     (scripts / "classify_methodology.tcl").write_text(r'''
+namespace eval ::otpu_scoped {}
+proc ::otpu_scoped::r5_structure {audit} {
+  if {$::scenario eq "vendor_structure_error"} {error "vendor structure rejected"}
+  return [dict create vendor_smartconnects 8 custom_hclk_registers 0]
+}
 proc otpu_qualify_methodology {shell prefix audit} {
   if {$::scenario eq "methodology_schema_error"} {error "unreviewed scoped-clock findings"}
   set bad [expr {$::scenario eq "methodology_violation" ? "bad_methodology" : ""}]
@@ -174,16 +203,19 @@ proc otpu_qualify_methodology {shell prefix audit} {
 ''')
     driver = tmp_path / "mock.tcl"
     driver.write_text(MOCK)
-    (tmp_path / "skew_row.txt").write_text(SKEW_ROW)
+    (tmp_path / "skew_report.txt").write_text(skew_report(scenario))
     return subprocess.run([tclsh, str(driver), str(VALIDATOR), str(tmp_path), scenario],
                           text=True, capture_output=True)
 
 
-def test_hbm_route_checks_six_crossings_and_all_gray_constraints(tmp_path):
-    result = run_mock(tmp_path, "pass")
+@pytest.mark.parametrize('scenario', ['pass', 'source_replicas'])
+def test_hbm_route_checks_six_crossings_and_exact_host_gray_constraints(tmp_path, scenario):
+    result = run_mock(tmp_path, scenario)
     assert result.returncode == 0, result.stderr
     summary = (tmp_path / "reports/cl_opentpu.deadbeef.route_validation.txt").read_text()
-    assert "gray_bus_constraints=47" in summary
+    assert "gray_bus_constraints=7" in summary
+    assert "vendor_smartconnects=8" in summary
+    assert "custom_hclk_registers=0" in summary
     assert "cdc_crossing_witnesses=6" in summary
     marker = tmp_path / "checkpoints/cl_opentpu.deadbeef.route_validation.passed"
     assert marker.read_text().strip() == "OTPU_STAGE_ROUTE_VALIDATION_PASSED"
@@ -194,9 +226,12 @@ def test_hbm_route_checks_six_crossings_and_all_gray_constraints(tmp_path):
     "wrong_bound", "wrong_requirement", "wrong_witness_clock", "missing_gray",
     "missing_datapath_flag", "unknown_exception_flag", "old_host_only_gray",
     "missing_section_underline", "incomplete_gray",
+    "missing_bit", "wrong_sink", "wrong_fifo", "duplicate_bus", "duplicate_cell",
+    "old_native_gray", "negative_gray_slack", "wrong_gray_bound",
     "duplicate_gray", "malformed_gray", "extra_gray", "skew_warning", "timing_warning",
     "setup_violation", "hold_violation", "unrouted", "drc_violation",
     "unknown_severity", "methodology_violation", "methodology_schema_error",
+    "vendor_structure_error",
 ])
 def test_hbm_route_rejects_incomplete_or_failing_evidence(tmp_path, scenario):
     result = run_mock(tmp_path, scenario)

@@ -5,6 +5,77 @@ import subprocess
 import pytest
 
 SCRIPT = Path(__file__).resolve().parents[1] / "boards/c2_f2/check_scoped_clocks.tcl"
+
+
+@pytest.mark.parametrize('fault', [
+    'none', 'missing_port', 'extra_port', 'missing_core_side', 'missing_hbm_side',
+    'custom_hclk', 'wrong_reset', 'missing_reset', 'missing_wrapper', 'lookalike_vendor',
+])
+def test_round5_structure_is_exact_and_is_not_cdc_approval(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl unavailable')
+    script = f'source {{{SCRIPT}}}\nset fault {fault}\n' + r'''
+set roots {}; set members [dict create clk_raw {} hclk_raw {}]
+for {set p 0} {$p < 8} {incr p} {
+    set root [format {WRAPPER/CL/g_sc[%d].u_sc} $p]
+    lappend roots $root
+    foreach clock {clk_raw hclk_raw} {dict lappend members $clock $root/smartconnect_0/cdc_reg}
+}
+dict lappend members hclk_raw WRAPPER/CL/u_hbm/vendor_reset_reg
+foreach bit {0 1 2} {dict lappend members hclk_raw [format {WRAPPER/CL/hbm_reset_n_reg[%d]} $bit]}
+switch $fault {
+    missing_port {set roots [lrange $roots 1 end]}
+    extra_port {lappend roots {WRAPPER/CL/g_sc[8].u_sc}}
+    missing_core_side {dict set members clk_raw [lrange [dict get $members clk_raw] 1 end]}
+    missing_hbm_side {dict set members hclk_raw [lrange [dict get $members hclk_raw] 1 end]}
+    custom_hclk {dict lappend members hclk_raw WRAPPER/CL/u_sys/u_mem/custom_reg}
+    wrong_reset {dict lappend members hclk_raw {WRAPPER/CL/hbm_reset_n_reg[3]}}
+    missing_reset {dict set members hclk_raw [lrange [dict get $members hclk_raw] 0 end-1]}
+    missing_wrapper {dict set members hclk_raw [lreplace [dict get $members hclk_raw] 8 8]}
+    lookalike_vendor {dict lappend members hclk_raw {WRAPPER/CL/g_sc[0].u_sc_extra/custom_reg}}
+}
+proc ::otpu_scoped::names {objects} {return $objects}
+proc ::otpu_scoped::resolve {kind selected} {
+    if {$kind ne "clock"} {error "unexpected fixture query"}
+    return $selected
+}
+proc get_cells {args} {return $::roots}
+proc all_registers {args} {return [dict get $::members [lindex $args 1]]}
+if {[catch {::otpu_scoped::r5_structure stdout} result]} {puts stderr $result;exit 1}
+puts "STRUCTURE_CHECK_PASSED $result"
+'''
+    driver = tmp_path / 'structure.tcl'
+    driver.write_text(script)
+    result = subprocess.run([tclsh, str(driver)], text=True, capture_output=True, timeout=10)
+    if fault == 'none':
+        assert result.returncode == 0, result.stderr
+        assert 'vendor_smartconnects 8 custom_hclk_registers 0' in result.stdout
+        assert 'vendor_cdc_passed' not in result.stdout
+    else:
+        assert result.returncode != 0
+        assert 'C2 R5:' in result.stderr
+
+
+@pytest.mark.parametrize('name,owner', [
+    ('WRAPPER/CL/g_sc[7].u_sc/cl_axi_sc_1x1_i/smartconnect_0/inst/src_gray_ff_reg[5]', '7'),
+    ('WRAPPER/CL/g_sc[0].u_sc/vendor/register', '0'),
+    ('WRAPPER/CL/g_sc[8].u_sc/vendor/register', 'unknown'),
+    ('WRAPPER/CL/g_sc[0].u_sc_extra/register', 'unknown'),
+    ('WRAPPER/CL/u_hbm/vendor/register', 'hbm'),
+    ('WRAPPER/CL/u_hbm_extra/register', 'unknown'),
+    ('WRAPPER/CL/hbm_reset_n_reg[2]', 'reset2'),
+    ('WRAPPER/CL/hbm_reset_n_reg[2]_replica', 'unknown'),
+])
+def test_round5_actual_generated_names_are_not_tcl_globs(name, owner):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl unavailable')
+    result = subprocess.run([tclsh], input=f'source {{{SCRIPT}}}\nputs [::otpu_scoped::r5_owner {{{name}}}]\n',
+                            text=True, capture_output=True, check=True)
+    assert result.stdout.strip() == owner
+
+
 # Vivado export framing: repeated generated ID0 and multiline commands are data.
 EXPORT_PREAMBLE = r"""
 # id:0

@@ -7,6 +7,51 @@
 # This is context evidence, not a routed timing or CDC signoff.
 namespace eval ::otpu_scoped {}
 
+proc ::otpu_scoped::r5_owner {name} {
+    # Tcl glob character classes do not quote generated-instance brackets.
+    # Anchored regexes match the actual Vivado hierarchy without admitting a
+    # ninth port, an adjacent similarly named block, or arbitrary custom RTL.
+    if {[regexp {^WRAPPER/CL/g_sc\[([0-7])\]\.u_sc/} $name -> port]} {return $port}
+    if {[regexp {^WRAPPER/CL/u_hbm/} $name]} {return hbm}
+    if {[regexp {^WRAPPER/CL/hbm_reset_n_reg\[([0-2])\]$} $name -> bit]} {return reset$bit}
+    return unknown
+}
+
+proc ::otpu_scoped::r5_structure {audit} {
+    # Structural ownership is necessary, not proof of vendor CDC coverage.
+    # Effective vendor exceptions and path endpoints require separate checks.
+    set expected {}
+    for {set p 0} {$p < 8} {incr p} {lappend expected [format {WRAPPER/CL/g_sc[%d].u_sc} $p]}
+    set roots [names [get_cells -quiet -hierarchical -regexp {^WRAPPER/CL/g_sc\[[0-9]+\]\.u_sc$}]]
+    if {[lsort $roots] ne [lsort $expected]} {error "C2 R5: expected exact eight SmartConnect roots"}
+    set inventory {}; set resets {}; set wrapper 0
+    foreach clock {clk_raw hclk_raw} {
+        set members [names [all_registers -clock [resolve clock $clock] -cells]]
+        foreach name $members {
+            set owner [r5_owner $name]
+            if {[string is integer -strict $owner]} {dict incr inventory $clock/$owner}
+            if {$clock ne "hclk_raw"} {continue}
+            if {$owner eq "unknown"} {error "C2 R5: custom or unreviewed HBM-clock register: $name"}
+            if {$owner eq "hbm"} {incr wrapper}
+            if {[string match reset* $owner]} {lappend resets $name}
+        }
+    }
+    foreach clock {clk_raw hclk_raw} {
+        for {set p 0} {$p < 8} {incr p} {
+            if {![dict exists $inventory $clock/$p] || [dict get $inventory $clock/$p] == 0} {
+                error "C2 R5: SmartConnect $p missing registers on $clock"
+            }
+            puts $audit [list vendor_clock_membership port $p clock $clock registers [dict get $inventory $clock/$p]]
+        }
+    }
+    set expected_resets {}
+    foreach bit {0 1 2} {lappend expected_resets [format {WRAPPER/CL/hbm_reset_n_reg[%d]} $bit]}
+    if {[lsort $resets] ne $expected_resets || !$wrapper} {error "C2 R5: HBM wrapper/reset register inventory changed"}
+    puts $audit [list vendor_structure smartconnects 8 custom_hclk_registers 0 wrapper_registers $wrapper]
+    flush $audit
+    return [dict create vendor_smartconnects 8 custom_hclk_registers 0]
+}
+
 proc ::otpu_scoped::property {object key} {
     if {$key ni [list_property $object]} {error "scoped clocks: missing $key on $object"}
     return [format %s [get_property $key $object]]
