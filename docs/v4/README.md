@@ -258,7 +258,15 @@ checkpoint symlinked at `models/gemma-3-1b-it`): unit `otpu-f2hbm-build4`, scrip
 `/home/ubuntu/rachit/f2hbm-build4.sh`, log `/home/ubuntu/rachit/logs/f2hbm-build4.log`, output
 `/home/ubuntu/rachit/f2hbm-run4`, `--place-directive Default`, alongside two unrelated Vivado
 jobs on the box (24 vCPUs, 249 GB). Round 5 (Alex's scheme: every openTPU block at 200 MHz
-behind the HDK's SmartConnect) is being implemented on `v4-f2-round5` and builds there next.
+behind the HDK's SmartConnect) is merged (4423a24a, [f2-round5.md](f2-round5.md): every
+openTPU block of the HBM fabric at the core clock, Alex's `otpu_native_axi` coalescer per
+channel, one HDK `cl_axi_sc_1x1` SmartConnect per port for the 450 MHz side, a fail-closed
+gate that no openTPU register is on hclk; 14 + 11 + 183 tests, Gemma 3 bit-exact at the same
+8,029,592 cycles) and **build 5** runs on opentpu-f2 (unit `otpu-f2hbm-build5`, script
+`/home/ubuntu/rachit/f2hbm-build5.sh`, log `/home/ubuntu/rachit/logs/f2hbm-build5.log`, output
+`/home/ubuntu/rachit/f2hbm-run5`, `--recommended --floorplan five`: Alex's run-63 recipe,
+ExtraNetDelay_high / AggressiveExplore / Explore / retime). Build 4 keeps running beside it for
+round 4's routed number.
 
 **Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
 DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
