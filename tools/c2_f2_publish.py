@@ -37,6 +37,13 @@ ZERO_FIELDS = ('setup_failed', 'hold_failed', 'timing_failed', 'bus_skew_failed'
 HASH_FIELDS = ('inputs_sha256', 'outputs_sha256', 'qualified_marker_sha256',
                'validation_report_sha256', 'package_sha256', 'dcp_sha256',
                'packaging_sha256', 'invocation_sha256')
+QUALIFICATION_SOURCES = {
+    'validate_route.tcl': 'boards/c2_f2/validate_hbm_route.tcl',
+    'classify_methodology.tcl': 'boards/c2_f2/classify_methodology.tcl',
+    'check_scoped_clocks.tcl': 'boards/c2_f2/check_scoped_clocks.tcl',
+    'check_shell_baseline.tcl': 'boards/c2_f2/support/boards/f2/build/scripts/check_shell_baseline.tcl',
+    'shell_baseline_2025_2.tcl': 'boards/c2_f2/support/boards/f2/build/scripts/shell_baseline_2025_2.tcl',
+}
 
 
 def sha(path):
@@ -78,13 +85,15 @@ def verify(run):
             inputs.get('support_commit') == read_json(support/'manifest.json')['commit'], 'Frozen support provenance mismatch')
     cl = run/'cl_opentpu'
     required = {'design/rtl/c2/otpu_c2_hbm_kernel.sv', 'design/rtl/mxu/otpu_c2_mxu.sv',
-                'design/rtl/boards/f2/otpu_f2_hbm_mem.sv', 'build/scripts/validate_route.tcl',
+                'design/rtl/boards/f2/otpu_f2_hbm_mem.sv',
                 'design/cl_id_defines.vh', 'design/opentpu_params.vh', 'design/otpu_f2_c2_sys.sv'}
+    required.update('build/scripts/'+name for name in QUALIFICATION_SOURCES)
     require(required <= inputs.get('sources', {}).keys(), 'Frozen source inventory incomplete')
     for name, digest in inputs['sources'].items():
         require(sha(relative(cl, name)) == digest, f'Frozen source changed: {name}')
-    require(sha(cl/'build/scripts/validate_route.tcl') == sha(ROOT/'boards/c2_f2/validate_hbm_route.tcl'),
-            'Route qualifier differs from reviewed qualifier')
+    for name, reviewed in QUALIFICATION_SOURCES.items():
+        require(sha(cl/'build/scripts'/name) == sha(ROOT/reviewed),
+                f'Qualification source differs from reviewed source: {name}')
     require(f".BUILD_ID(32'h{bid}), .CORE_KHZ(200000)" in (cl/'design/opentpu_params.vh').read_text(),
             'Compiled build identity mismatch')
     invocation = read_json(run/'invocation.json')

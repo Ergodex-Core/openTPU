@@ -82,6 +82,37 @@ def test_qualified_fixture_bound_to_all_artifacts(qualified):
     # constant: a newly committed builder automatically becomes the required one.
     inputs=P.read_json(qualified['run']/'inputs.json')
     assert inputs['builder_sha256']==P.sha(P.ROOT/'boards/c2_f2/build.py')
+    for name, reviewed in P.QUALIFICATION_SOURCES.items():
+        assert inputs['sources']['build/scripts/'+name]==P.sha(P.ROOT/reviewed)
+
+
+@pytest.mark.parametrize('name', list(P.QUALIFICATION_SOURCES))
+def test_qualification_helper_cannot_be_rebound_by_rehashing_snapshot(qualified,tmp_path,name):
+    q=qualified
+    helper=q['cl']/'build/scripts'/name
+    helper.write_text('# altered qualification policy\n')
+    inputs=P.read_json(q['run']/'inputs.json')
+    inputs['sources']['build/scripts/'+name]=P.sha(helper)
+    write_json(q['run']/'inputs.json',inputs)
+    outputs=P.read_json(q['run']/'outputs.json');outputs['inputs_sha256']=P.sha(q['run']/'inputs.json')
+    write_json(q['run']/'outputs.json',outputs)
+    packaging=P.read_json(q['packaging']);packaging['inputs_sha256']=P.sha(q['run']/'inputs.json')
+    write_json(q['packaging'],packaging)
+    calls=[]
+    with pytest.raises(RuntimeError,match='Qualification source differs from reviewed source: '+name):
+        P.publish(q['run'],tmp_path/'record.json',cli=lambda *a:calls.append(a))
+    assert calls==[] and not (tmp_path/'record.json').exists()
+
+
+def test_methodology_helper_must_be_in_frozen_inventory(qualified):
+    q=qualified
+    inputs=P.read_json(q['run']/'inputs.json')
+    del inputs['sources']['build/scripts/check_scoped_clocks.tcl']
+    write_json(q['run']/'inputs.json',inputs)
+    outputs=P.read_json(q['run']/'outputs.json');outputs['inputs_sha256']=P.sha(q['run']/'inputs.json')
+    write_json(q['run']/'outputs.json',outputs)
+    with pytest.raises(RuntimeError,match='Frozen source inventory incomplete'):
+        P.verify(q['run'])
 
 
 @pytest.mark.parametrize('change,match',[
