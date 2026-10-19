@@ -83,6 +83,17 @@ reference they name), and dataflow organized so pipeline stages stay inside one 
 | MID (SLR1) | OCL, PCIM, SDA |
 | MID / BOTTOM (SLR1 / SLR0) | HBM monitor APB |
 
+The Shell Floorplan page's figure ([ref/aws_small_shell_fp.png](ref/aws_small_shell_fp.png),
+AWS's `small_shell_fp.png`) shows the die: the SMALL_SHELL block occupies the right two
+columns of clock regions in SLR1 (X6-X7, Y4-Y7; DDR_STAT at its top, then PCIS, PCIM, and
+OCL / SDA at its bottom edge near Y4), which is exactly what `pblock_CL_SLR1`'s ranges
+(X0Y4:X3Y7, X5Y4:X5Y7, X4Y6:X4Y7, X4Y4) leave out; SH_DDR sits at the top of SLR2 (X0-X3,
+Y10-Y11); the two **High Bandwidth Memory** stacks are the bottom edge of SLR0 (the left
+stack under X0-X3, rack 0 = AXI ports 0-15; the right stack under X4-X7, rack 1 = ports
+16-31), so every HBM port is reached from SLR0's bottom row, and `pblock_CL_SLR0` spans the
+whole die width at Y0 for that reason (X4Y0:X7Y0 in its ranges). The CL's `pblock_CL` is the
+union; the shell's `pblock_WRAPPER` wraps it.
+
 Consequences for our designs:
 
 - **The PCIS enters in SLR1 on the SMALL_SHELL.** The spec's table is the generic one
