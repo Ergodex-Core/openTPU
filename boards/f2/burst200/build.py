@@ -44,7 +44,7 @@ def main():
     if (hdk / 'common/shell_stable/shell_version.txt').read_text().strip() != 'small_shell=0x10212415':
         ap.error('Expected AWS small_shell=0x10212415')
     version = subprocess.check_output([a.vivado, '-version'], text=True)
-    if 'Vivado v2025.2' not in version:
+    if 'vivado v2025.2' not in version.lower():
         ap.error('Vivado 2025.2 is required for this flow')
     output.mkdir(parents=True)
     (output / 'vivado_version.txt').write_text(version)
