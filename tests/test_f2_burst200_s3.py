@@ -358,3 +358,47 @@ def test_tiny_gemma3_three_slices_on_board_model(have_verilator, tmp_path):
     n = isa.image.nbytes
     for s in range(3):
         assert np.array_equal(brd.backend.read(s, 0, n), isa.backend.machine.slices[s].dram[:n])
+
+
+REAL = Path(__file__).resolve().parents[1] / 'models/gemma-3-1b-it'
+
+
+@pytest.mark.skipif(not REAL.exists(), reason='models/gemma-3-1b-it not downloaded')
+def test_gemma3_1b_token_on_three_slice_rtl_is_bit_exact(have_verilator):
+    """The one-token gate of the real model at S = 3 (test_qwen3's pattern on the three-slice
+    RTL): the chat prompt's tokens but the last on the ISA simulator, then the last step on the
+    Verilator RTL (otpu_top S = 3, the native memory model never withholding a handshake,
+    30 cycles of latency: the HBM-like reference) and on the ISA simulator from the same DRAM
+    state: logits and every slice's DRAM equal bit for bit. Slow (about a quarter of an hour)."""
+    from opentpu import rtlsim
+    from opentpu.host.board import sim_config
+    from opentpu.isasim import board_config
+    from opentpu.llm import load_spec
+    from opentpu.llm.qwen3 import Engine, load_weights
+    from opentpu.llm.rtl_backend import RtlBackend
+    spec = load_spec(REAL)
+    cfg = sim_config(spec, 256, board_config(PAIR=True, DSTEP=True, STREAM=True, S=3),
+                     lookup=True, wformat='int8')
+    assert cfg.S == 3
+    eng = Engine(spec, load_weights(REAL), cap=256, cfg=cfg, wformat='int8', resident=True)
+    tok = transformers.AutoTokenizer.from_pretrained(REAL)
+    ids = tok.apply_chat_template([{'role': 'user', 'content': 'Why is the sky blue?'}],
+                                  add_generation_prompt=True, tokenize=True)
+    ids = list(ids['input_ids'] if hasattr(ids, 'keys') else ids)
+    for t in ids[:-1]:
+        eng.step(t)
+    n = eng.image.nbytes
+    rtlsim.MEMORY['LAT'] = 30
+    rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in eng.backend.machine.slices],
+                     uarch=dict(rtlsim.BOARD_UARCH), axi=True, stall=0)
+    isa = eng.backend
+    want = eng.step(ids[-1])
+    eng.backend, eng.pos = rtl, eng.pos - 1
+    got = eng.step(ids[-1])
+    st = eng.stats[-1]
+    print(f"S = 3 RTL token at pos {len(ids) - 1}: {st['cycles']} cycles, next token "
+          f"{int(np.argmax(got))} ({tok.decode([int(np.argmax(got))])!r})")
+    assert np.array_equal(want.view(np.uint32), got.view(np.uint32))
+    assert int(np.argmax(want)) == int(np.argmax(got))
+    for s in range(3):
+        assert np.array_equal(isa.machine.slices[s].dram[:n], rtl.drams[s][:n])

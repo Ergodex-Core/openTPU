@@ -67,23 +67,35 @@ latency or skew):
 | analytic cycles a token (the slowest slice) | 8,281,554 | 4,278,354 | **2,991,906** | 2,248,050 |
 | of its DRAM bound | 94.8% | 92.1% | 89.2% | 88.4% |
 | ms at 200 MHz, tok/s (ISA model) | 41.4, 24.2 | 21.4, 46.7 | **15.0, 66.8** | 11.2, 89.0 |
-| RTL board model, measured (HBM-like memory, `--stall 0`, `OTPU_LAT=30`) | 8,029,592 (24.9 tok/s) | | see below | |
+| RTL, measured (Verilator, the native memory model never withholding a handshake, `--stall 0`, `OTPU_LAT=30`) | 8,029,592 (97.8% of the bound; 24.9 tok/s) | | **2,993,389** (89.2%; 15.0 ms, 66.8 tok/s; 12 min of Verilator) | |
 | hardware, measured (build 6, two ports at 89% utilization) | 9.00 M (22.2 tok/s) | | | |
-| **hardware prediction** (the S = 1 hardware / ISA ratio 1.087 on the stream, below) | 22.2 | 43 | **58-62** | 78-82 |
+| **hardware prediction** (the stream at the fabric's 86-89% port utilization, the rest as the RTL has it; below) | 22.2 | 42-43 | **58-60** | 77-80 |
 
 Reading it. The ISA model's S = 3 token is 2.77x shorter than S = 1's (not 3x: the uneven
-split's padded rows, the replicated norms / attention / quantizer work, 156 gathers). On
-hardware the one-slice token takes 1.087x the ISA model (9.00 M against 8.28 M: the fabric
-streams 89% of the port rate, the RTL's overlap gains ~3%). Applying the same factor to the
-S = 3 stream gives 3.25 M cycles = 16.3 ms = **61.5 tok/s**; the collective adds what the ISA
-model does not see: the board's `otpu_coll_hub` moves one beat per ~7-cycle round trip
-(docs/bcu1525.md 10; the pipelined hub of P4 section 2 is not built), i.e. up to 7 x 36,192 =
-253 K cycles a token if every gather is exposed (the MXU's 1024-chunk FIFO prefetches the
-next matrix across a gather whose consumer is the next MM, so part of it hides): 3.25-3.50 M
-cycles, **57-62 tok/s**, 2.6-2.8x the one-slice image. S = 4 by the same method: 78-82
-tok/s (its hardware would be P4's four port groups, 2 slices in one SLR). The three slices
-run free between GATHERs (156 rendezvous a token); identical row counts keep their skew to
-the HBM's jitter.
+split's padded rows, the replicated norms / attention / quantizer work, 156 gathers). **The
+same token on the Verilator RTL** (`OTPU_LAT=30 lens record model --model gemma3 --slices 3
+--axi --stall 0 --mhz 200`, `build/lens/s3-gemma3-rtl.otpuprof`: otpu_top with three slices,
+the collective hub and a port per slice as the board has them, two native channels a slice
+through the AXI adapter and a memory that never withholds a handshake) takes **2,993,389
+cycles**, 0.05% over the ISA model and 89.2% of its bound, and picks the same next token
+('Okay'); its Lens trace: port B streaming 89.2%, "MXU not consuming: row's scales not all in"
+3.0%, MXU computing not streaming 2.4%, waiting on VPU work 2.0%, on the quantizer 2.0%, TMEM
+arbitration 0.5%, **waiting on collectives 0.4%** (12 K cycles: the hub's one beat per ~7-cycle
+round trip, docs/bcu1525.md 10, mostly hidden behind the MXU's 1024-chunk prefetch; the
+pipelined hub of P4 section 2 is not needed for this split). So the RTL's overlap gains (3%
+at S = 1) are spent on the collective and the replicated vector work at S = 3, and the ISA
+model is the RTL's number here.
+
+On hardware the one-slice token takes 9.00 M cycles against the RTL's 8.03 M: the two-port
+fabric streams 89% of the port rate (build 6's Lens counters), so the streaming part of the
+token (the bound, 7.85 M) takes 7.85 / 0.89 = 8.82 M and the rest (0.18 M) stays. The same
+on S = 3: 2.669 M / 0.89 = 3.00 M + (2.993 - 2.669 = 0.324 M) = **3.32 M cycles = 16.6 ms =
+60 tok/s**; at the fabric's measured low of 86% port utilization 3.43 M = **58 tok/s**:
+**2.6-2.7x the one-slice image's 22.2 tok/s**, with three slices' skew (the sequencers run free
+between the 156 rendezvous; identical row counts keep it to the HBM's jitter) and the native
+register slices' latency (two hops for slice 2, covered by the chunk FIFO) as the unmodelled
+rest. S = 4 by the same method: 77-80 tok/s (its hardware would be P4's four port groups, two
+slices in one SLR).
 
 Also recorded: `tools/compare_hf.py --model gemma3 --chat --cfg board --resident --tokens 12
 --slices 3` gives the S = 1 run's tokens on both prompts ("Okay, let's break down why the sky
@@ -227,9 +239,15 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   --timing`, BURST 16, OUT 32, seeds 1 / 42 / 2026 / 4700): PASS, 297 reads and 267 masked
   writes each; his `simulate.py` under Icarus: PASS, 16 trials.
 - The tiny Gemma 3 at S = 3 on `tb_board` (otpu_board S = 3, the native memory model, target
-  f2-burst200-s3, platform 3): logits bit-identical to the ISA simulator over three tokens,
-  every slice's DRAM the ISA simulator's (`test_tiny_gemma3_three_slices_on_board_model`;
-  `pytest tests/test_f2_burst200_s3.py -q`: 10 passed).
+  f2-burst200-s3, platform 3): logits bit-identical to the ISA simulator over three tokens
+  (29,469 / 29,475 / 29,442 cycles, 268 instructions a slice), every slice's DRAM the ISA
+  simulator's (`test_tiny_gemma3_three_slices_on_board_model`; `pytest
+  tests/test_f2_burst200_s3.py -q`: 10 passed).
+- Gemma 3 1B's token at S = 3 on the Verilator RTL: 2,993,389 cycles, the ISA simulator's next
+  token (the Lens run above); the bit-exact gate
+  (`test_gemma3_1b_token_on_three_slice_rtl_is_bit_exact`: the prompt on the ISA simulator,
+  the last step on the RTL and on the ISA simulator from the same DRAM, logits and every
+  slice's DRAM compared) is recorded below.
 - Gemma 3 1B at S = 3 on the ISA simulator: S = 1's tokens and HF statistics (above).
 
 ## Risks
@@ -251,9 +269,11 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   register slices and four native pipes add ~40K: ~175K LUTs of SLR0's 272K in `pblock_CL`
   (~64%), against build 6's 34%. Tight but placeable; if it fails, slice 0's TMEM box of the
   round-3 floorplan (pb_otpu_tmem) is the next lever.
-- **The collective links**: the hub's one beat per ~7 cycles is 8% of the token if every
-  gather is exposed (above); Lens's "waiting on collective" line on the hardware trace will
-  say; the pipelined hub (P4 section 2) is the fix if it shows.
+- **The collective links**: the hub's one beat per ~7 cycles would be 8% of the token if
+  every gather were exposed; the RTL trace says 0.4% (above), the rest hidden behind the
+  MXU's prefetch. On hardware the two `otpu_xr` stages per crossing are the same cycles as in
+  the RTL; Lens's "waiting on collectives" line on the hardware trace will say; the pipelined
+  hub (P4 section 2) is the fix if it shows.
 - **The port-to-channel pairing** is the IP's address map; verified only by the ip stage's
   `report_property` on the instance (functionally any distinct ports work through the switch).
 - **Slice skew**: the three sequencers run free; the uneven head (682 / 683 / 683 blocks) and

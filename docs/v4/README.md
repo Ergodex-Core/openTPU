@@ -353,8 +353,9 @@ over the three (the heads, K / V rows and vocabulary unevenly: `gemma4.split_row
 `split_ranges`; bit-exact to one slice on the tiny model and the real one on the ISA
 simulator). Lens on the ISA simulator: 2,991,906 analytic cycles a slice-token (89.2% of its
 bound), 15.0 ms = 66.8 tok/s at 200 MHz, against 8,281,554 at S = 1 and 2,248,050 at S = 4;
-with build 6's hardware / ISA ratio on the stream and the collective hub's cost, **57-62
-tok/s** predicted on hardware (2.6-2.8x the one-slice image). Build:
+the same token on the Verilator RTL (three slices, the collective hub, `--stall 0`) 2,993,389
+cycles with the collective 0.4% of it; with build 6's fabric (86-89% port utilization) on the
+stream, **58-60 tok/s** predicted on hardware (2.6-2.7x the one-slice image). Build:
 `python boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target
 targets/f2-burst200-s3.toml --output /home/ubuntu/rachit/f2burst200-s3-run1`.
 
