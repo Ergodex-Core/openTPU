@@ -210,7 +210,8 @@ module otpu_f2_hbm_nch #(
   // ================================================================== HBM side
   // ---- the crossing's head, registered (its LUT RAM read stays off the burst compare)
   logic        k_v, k_we;
-  logic [24:0] k_a;
+  logic [24:0] k_a, k_a1;              // the held beat, and the beat after it (a register, round
+                                       //   8: no incrementer in the join compares)
   // whether the held command is the open burst's next beat, and not at a BMAX boundary, decided
   // as it loads (the 6fac2d06 synthesis: the 25-bit compare against o_nx ran into the pop's 600
   // enables at -0.19 ns, 450 MHz). While it is held, o_nx does not move (a burst opens or grows
@@ -232,9 +233,11 @@ module otpu_f2_hbm_nch #(
     else if (k_ld) begin
       k_v <= x_v;
       if (x_v) begin
-        k_we <= x_we; k_a <= x_a;
-        // (the three candidates compared in parallel, the late select last)
-        k_nx <= k_open ? x_a == k_a + 1'b1 : k_join ? x_a == o_nx + 1'b1 : x_a == o_nx;
+        k_we <= x_we; k_a <= x_a; k_a1 <= x_a + 1'b1;
+        // (the three candidates compared in parallel against registers, the late select last:
+        // round 7's placement ran these compares' incrementers into k_nx at 450 MHz,
+        // docs/wide_port.md "Round 8 RTL")
+        k_nx <= k_open ? x_a == k_a1 : k_join ? x_a == o_nx1 : x_a == o_nx;
         k_bnd <= BW == 0 ? 1'b1 : (x_a % BMAX) == 0;
       end
     end
@@ -242,7 +245,8 @@ module otpu_f2_hbm_nch #(
 
   // ---- the open burst; the AR / AW queues (2 bursts each), the W FIFO (beats of queued bursts)
   logic        o_v, o_we;
-  logic [24:0] o_a, o_nx;               // its first beat; the beat that would continue it
+  logic [24:0] o_a, o_nx, o_nx1;        // its first beat; the beat that would continue it, and
+                                        //   the one after (a register kept alongside)
   logic [BW:0] o_len;                   // native beats
   logic [3:0]  o_age;
   typedef struct packed { logic [24:0] a; logic [BW:0] len; } bq_t;
@@ -324,10 +328,10 @@ module otpu_f2_hbm_nch #(
         else      arq[1'(arq_h + arq_n[0])] <= '{a: o_a, len: o_len};
       end
       if (k_open) begin
-        o_v <= 1'b1; o_we <= k_we; o_a <= k_a; o_nx <= k_a + 1'b1; o_len <= (BW + 1)'(1);
-        o_age <= '0;
+        o_v <= 1'b1; o_we <= k_we; o_a <= k_a; o_nx <= k_a1; o_nx1 <= k_a1 + 1'b1;
+        o_len <= (BW + 1)'(1); o_age <= '0;
       end else if (k_join) begin
-        o_nx <= o_nx + 1'b1; o_len <= o_len + 1'b1; o_age <= '0;
+        o_nx <= o_nx1; o_nx1 <= o_nx1 + 1'b1; o_len <= o_len + 1'b1; o_age <= '0;
       end else begin
         if (close) o_v <= 1'b0;
         if (o_age != '1) o_age <= o_age + 1'b1;
@@ -403,6 +407,8 @@ module otpu_f2_hbm_nch #(
     if (b_tk && bb_n == 0) $fatal(1, "otpu_f2_hbm_nch: B with no write in flight");
     if (k_pop && k_we && !w_room) $fatal(1, "otpu_f2_hbm_nch: W FIFO overflow");
     if (wf_nz != (wf_n != 0)) $fatal(1, "otpu_f2_hbm_nch: wf_nz %0d, wf_n %0d", wf_nz, wf_n);
+    if (k_v && k_a1 != k_a + 1'b1) $fatal(1, "otpu_f2_hbm_nch: k_a1 is not k_a + 1");
+    if (o_v && o_nx1 != o_nx + 1'b1) $fatal(1, "otpu_f2_hbm_nch: o_nx1 is not o_nx + 1");
   end
   always_ff @(posedge clk) if (!rst_q) begin
     if (n_rvalid && rn == 0) $fatal(1, "otpu_f2_hbm_nch: read data with no read in flight");

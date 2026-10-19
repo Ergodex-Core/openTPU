@@ -66,7 +66,7 @@ module otpu_f2_hbm_port (
   logic hrst_q;
   always_ff @(posedge hclk) hrst_q <= hrst;
   // ---- AW, then the granted master's W to WLAST
-  logic aw_o, w_o, wbusy, wsel, aw_last;
+  logic aw_o, wbusy, wsel, aw_last;
   logic [1:0] aw_gnt;
   always_comb begin
     aw_gnt = '0;
@@ -79,25 +79,30 @@ module otpu_f2_hbm_port (
   assign m_awvalid = aw_o;
   // the W readies from the arbiter's state alone (AXI lets ready wait for no valid): a master's
   // pop does not run through the other master's valid (the 89bbb6bc synthesis: a bridge's W
-  // FIFO count into the host's state through the W select, -0.31 ns at 450 MHz)
-  wire w_room = wbusy && (!w_o || m_wready);
+  // FIFO count into the host's state through the W select, -0.31 ns at 450 MHz), and since
+  // round 8 not through the HBM's wready either: the W beat goes to the HBM through a two-entry
+  // skid buffer (otpu_skidbuf, u_wsk: its ready a flip-flop, the beat shown to the HBM from its
+  // registers), so the HBM's wready moves only the buffer's exit (round 7's placement ran the
+  // IP's wready through this ready and the bridge's take into its W count, 5 levels and 3.9 ns
+  // of route, docs/wide_port.md "Round 8 RTL")
+  logic wsk_r;
+  wire w_room = wbusy && wsk_r;
   assign s_wready = {w_room && wsel, w_room && !wsel};
   wire w_take = w_room && s_wvalid[wsel];
-  assign m_wvalid = w_o;
+  otpu_skidbuf #(.W(1 + 32 + 256)) u_wsk (
+    .clk(hclk), .rst(hrst_q), .i_v(w_take), .i_r(wsk_r),
+    .i_d({s_wlast[wsel], s_wstrb[wsel], s_wdata[wsel]}),
+    .o_v(m_wvalid), .o_r(m_wready), .o_d({m_wlast, m_wstrb, m_wdata}), .any());
   always_ff @(posedge hclk) begin
     if (aw_gnt != '0) begin
       m_awid <= {5'd0, aw_gnt[1]};
       m_awaddr <= s_awaddr[aw_gnt[1]];
       m_awlen <= s_awlen[aw_gnt[1]];
     end
-    if (w_take) begin
-      m_wdata <= s_wdata[wsel]; m_wstrb <= s_wstrb[wsel]; m_wlast <= s_wlast[wsel];
-    end
     if (hrst_q) begin
-      aw_o <= 1'b0; w_o <= 1'b0; wbusy <= 1'b0; wsel <= 1'b0; aw_last <= 1'b1;
+      aw_o <= 1'b0; wbusy <= 1'b0; wsel <= 1'b0; aw_last <= 1'b1;
     end else begin
       aw_o <= (aw_gnt != '0) || (aw_o && !m_awready);
-      w_o <= w_take || (w_o && !m_wready);
       if (aw_gnt != '0) begin
         aw_last <= aw_gnt[1]; wsel <= aw_gnt[1]; wbusy <= 1'b1;
       end else if (w_take && s_wlast[wsel]) wbusy <= 1'b0;
