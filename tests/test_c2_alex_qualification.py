@@ -316,6 +316,45 @@ def test_unknown_rule_severity_is_not_treated_as_advisory(tmp_path):
     assert 'unknown severity' in result.stderr
 
 
+@pytest.mark.parametrize(('finding_severity', 'rule_severity', 'expected', 'fails'), [
+    (' Warning ', 'Error', 'drc/WARNING 1', False),
+    ('ABSENT', 'Error', 'blockers drc:DRC_RULE', False),
+    ('unexpected', 'Error', 'unknown severity UNEXPECTED', True),
+    ('', 'Error', 'unknown severity', True),
+    ('ABSENT', 'ABSENT', 'missing severity for DRC_RULE', True),
+])
+def test_finding_severity_uses_captured_properties_with_strict_fallback(
+        tmp_path, finding_severity, rule_severity, expected, fails):
+    script = r'''
+source [lindex $argv 0]
+set objects [dict create DRC_RULE [dict create NAME DRC_RULE] METH_RULE [dict create NAME METH_RULE SEVERITY Warning] finding [dict create NAME finding CHECK DRC_RULE]]
+if {[lindex $argv 2] ne {ABSENT}} {dict set objects finding SEVERITY [lindex $argv 2]}
+if {[lindex $argv 3] ne {ABSENT}} {dict set objects DRC_RULE SEVERITY [lindex $argv 3]}
+proc get_drc_checks {args} {return DRC_RULE}
+proc get_methodology_checks {args} {return METH_RULE}
+proc get_drc_violations {args} {return finding}
+proc get_methodology_violations {args} {return {}}
+proc list_property {object} {return [dict keys [dict get $::objects $object]]}
+proc get_property {key object} {return [dict get $::objects $object $key]}
+rename ::c2_alex_route::prop ::c2_alex_route::original_prop
+proc ::c2_alex_route::prop {object key} {
+    # Severity is valid in the initial property snapshots; re-querying a
+    # separately selected owner is not valid for the opaque Vivado finding.
+    if {$key eq {SEVERITY}} {error {severity must use the captured object properties}}
+    return [original_prop $object $key]
+}
+set f [open [lindex $argv 1] w]
+set code [catch {::c2_alex_route::findings $f} result];close $f
+if {$code} {puts stderr $result;exit 1}
+puts $result
+'''
+    result = tcl(tmp_path, script, tmp_path / 'findings.tcldata', finding_severity, rule_severity)
+    assert bool(result.returncode) is fails, result.stdout + result.stderr
+    assert expected in (result.stderr if fails else result.stdout)
+    if not fails and finding_severity != 'ABSENT':
+        assert 'blockers {}' in result.stdout
+
+
 def test_disabled_rule_configuration_cannot_hide_in_empty_finding_list(tmp_path):
     result = run_mock(tmp_path, fault='disabled_rule')
     assert result.returncode == 0, result.stderr

@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:29 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:33 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -246,3 +246,14 @@ the build-artifact bucket awaits explicit destination approval following automat
 approval review; no upload has occurred. This does not block local build analysis.
 The authorized Codex trace snapshot at 20:20:15 UTC was uploaded and verified at
 20:22:04 UTC under `s3://opentpu-agent-traces/codex/snapshots/20261019T202015.774257Z/`.
+
+The `b59899c4` diagnostic confirmed the native selector correction, then failed
+at 20:30:24 UTC in `findings`: an `expr` ternary converted a Vivado finding
+handle into a string before its severity query (`RTSTAT-1#1`). The earlier
+property snapshot had already read that severity successfully. The correction
+uses the captured finding severity, falling back to the captured rule severity
+only when absent, and rejects missing, empty or unknown values. Qualifier SHA256
+`c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d`
+passes 99 qualification tests. A fresh bounded diagnostic is running against
+the same unchanged linked checkpoint; neither diagnostic changes hardware inputs
+or upgrades the failed formal link receipt.

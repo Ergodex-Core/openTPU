@@ -490,8 +490,14 @@ proc ::c2_alex_route::findings {audit} {
             set check [$checks_command $rule]
             if {[names $check] ne [list $rule]} {error "C2 Alex route: ambiguous rule identity $rule"}
             set rule_data {};foreach key [list_property $check] {dict set rule_data $key [get_property $key $check]}
-            set owner [expr {"SEVERITY" in [list_property $violation] ? $violation : $check}]
-            set severity [string toupper [string trim [prop $owner SEVERITY]]]
+            # Use properties already read from the original typed objects.
+            # Selecting an object through expr can discard its Vivado type.
+            if {[dict exists $data SEVERITY]} {
+                set severity [dict get $data SEVERITY]
+            } elseif {[dict exists $rule_data SEVERITY]} {
+                set severity [dict get $rule_data SEVERITY]
+            } else {error "C2 Alex route: missing severity for $rule"}
+            set severity [string toupper [string trim $severity]]
             if {$severity ni {FATAL ERROR {CRITICAL WARNING} WARNING ADVISORY INFO}} {error "C2 Alex route: unknown severity $severity"}
             dict incr counts $kind/$severity
             puts $audit [list finding $kind properties $data rule_properties $rule_data review pending]
