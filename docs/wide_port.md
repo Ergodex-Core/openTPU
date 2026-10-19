@@ -1529,6 +1529,70 @@ tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests
 87 passed (the floorplan mock knows the clock group and the OCL's box), tests/test_target.py 25
 passed. Receipts (as above, run locally): int8 949,550 (+53 cycles, +0.006%), int4 565,721 (+43, +0.008%).
 
+### Alex's shell (2026-10-19/20; branch wide-port-alexshell, Verilator only)
+
+Rounds 3-8 held our own 450 MHz domain (the bridges, port arbiters and host path: 117K
+endpoints) at -2.2 ns for four rounds. Alex's burst200 design (ergodex-openTPU `alex-burst200`,
+commit 06c169cb), which closed on the F2 at WNS +0.032 ns with the same clocks, keeps only
+SmartConnect and the HDK wrapper at 450 MHz: per channel his native-to-AXI adapter
+(otpu_native_axi) at the core clock into a SmartConnect for the clock and width conversion. It
+is now the f2-hbm memory path at 8 channels (docs/f2_hbm.md "The memory path"): the native
+ports' SLR chain as before, u_naxi per channel in SLR0, a SmartConnect per channel (the channel
+@200 and the host's branch @250 onto HBM port c @450), the host's PCIS through a register gate
+and a 1 x 8 SmartConnect. The slice (PORTB 4, row lanes, ALINE 64, MCOLS 8, NCH 8), the adapter
+and the address map are unchanged. Commits cf49e17f (the path, the IP Tcl, the tests) and
+cd16e195 (READ_WAIT 0, chosen on the receipts below).
+
+**The receipts** (tools/perf_qwen.py `--model gemma3 --layers 4 --wformat int8 --head-format
+int8 --mhz 200 --portb 4 --rowlanes --mcols 8 --aline 64`, OTPU_TARGET=f2-hbm OTPU_NCH=8; the
+4-layer + head token in cycles, the whole model as "Measured on the RTL" extrapolates it:
+the head whole, the layers' phases x 26 / 4). The native model's --lat is the port's read
+latency without the SLR chain (both paths have its 6 cycles; the reference never modelled
+them); the new path's estimate is +9 cycles at the native port (u_naxi's queue and AR register,
+3 cycles for an isolated read, and SmartConnect's clock and width conversion, ~17, against the
+deleted bridges' ~10: estimated from Xilinx's documented structure, PG247's register slices
+and PG085's asynchronous converters of 5+ destination cycles, not from Alex's numbers, which
+bound his round trip only below ~690 ns at his 128 reads in flight). OTPU_NAXI=1 runs the
+build's otpu_native_axi itself in front of the native model (sim/verilator/otpu_naxi_mem.sv;
+LAT 65 = the same 69-cycle idle round trip with u_naxi's 3 and the shim's 1), OTPU_NAXI_XR=3
+the SLR chain too.
+
+| memory model | 4 layers + head | vs reference | whole model (int8 tok/s at 200 MHz) |
+|---|---|---|---|
+| native, --lat 60 (the reference, 5d0a5f9a) | 949,550 | | 83.5 |
+| native, --lat 69 (the new path's estimate) | 1,049,617 | +10.5% | 76.2 |
+| u_naxi in the loop (burst 4, READ_WAIT 0), LAT 65 | 1,066,263 | +12.3% | 75.1 |
+| the same, burst 1 / burst 16 (no wait) | 1,064,695 / 1,069,424 | +12.1% / +12.6% | |
+| the same, Alex's waiting bursts (burst 4, idle 1) | 1,100,116 | +15.9% | |
+| u_naxi + the SLR chain (XR 3), the build: burst 4, no wait | 1,133,177 | +19.3% | 71.2 |
+| the same, Alex's waiting bursts: burst 4 / idle 1, burst 16 / idle 4 (LAT 65) | 1,167,578 / 1,312,539 | +23.0% / +38.2% | |
+
+The decode token is latency-bound at 64 reads in flight a channel: every cycle on the round
+trip is ~1.1% of it (the rounds' --lat 66, 1,015,899, the old path with its SLR chain, is the
+row the XR 3 line compares with: +11.5%). A waiting burst holds its first beat's credit until
+its last is taken, so Alex's 16-beat bursts (his design carried 128 reads a channel on two
+channels) cost +38%; READ_WAIT 0 takes only what is queued: in the token the channels see a
+beat at a time (channel 0: 806,549 single-beat bursts of 808,478, 1,770 of four), so
+coalescing costs nothing and u_naxi costs 1.6% over the native model at the same latency (its
+direction barriers and queue). Levers, not taken here: more reads in flight a channel (otpu_board
+NRD 64 at NCH > 2: 96 or 128 would take the round trip's cost back, at the adapter's tag RAM),
+the AR straight from the queue's head (a cycle), two SLR stages a direction instead of three.
+
+**LPN next to the RTL** (tools/wideport_lpn.py, the same flags, `--measured` the receipt):
+
+| point | LPN (estimate) | RTL (measured) | error | mean phase error |
+|---|---|---|---|---|
+| --lat 60 vs the reference | 988,141 | 949,550 | +4.1% | 2.9% |
+| --lat 69 vs the native model at 69 | 1,100,906 | 1,049,617 | +4.9% | 3.8% |
+| --lat 69 vs u_naxi in the loop (XR 0) | 1,100,906 | 1,066,263 | +3.2% | 5.8% (attention -10.2%) |
+| --lat 75 (69 + the chain's 6) vs u_naxi + XR 3 | 1,176,101 | 1,133,177 | +3.8% | 4.1% |
+
+Tests (Verilator 5.048, on the Mac: the m7a could not be written from this session):
+tests/test_f2_rtl.py 33 (test_native_axi 9 configurations, Alex's tb ported; test_f2_hbm_axi 6,
+the 8-channel fabric on a SmartConnect + HBM model; the missing-order check; the rounds-1-8
+tests kept), tests/test_f2_build.py 94 (the floorplan, the IP Tcl under a Vivado mock, the
+instance generator), the rest of the matrix in docs/f2_hbm.md's commit.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
