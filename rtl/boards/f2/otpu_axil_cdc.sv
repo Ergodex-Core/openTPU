@@ -81,21 +81,26 @@ module otpu_axil_cdc (
                                 .o_d({k_wstrb, k_wdata}), .any());
   otpu_skidbuf #(.W(32)) u_skid_ar (.clk(sclk), .rst(srst), .i_v(s_arvalid), .i_r(s_arready),
                                  .i_d(s_araddr), .o_v(k_arv), .o_r(k_arr), .o_d(k_araddr), .any());
-  // a write starts only from an AW / W two cycles old in its buffer (k_aw2 / k_w2: the beat's
-  // age; round 7, docs/wide_port.md "Round 7 RTL"): hold, the host's write-pending bit, is
-  // registered twice on its way here, so a PCIS write shown with the OCL's is counted before
-  // the OCL's starts
+  // a write starts only from an AW / W three cycles old in its buffer (k_aw2 / k_w2: the beat's
+  // age; rounds 7 and 8, docs/wide_port.md): hold, the host's write-pending bit, is registered
+  // twice on its way here and once more here, so a PCIS write shown with the OCL's is counted
+  // before the OCL's starts
+  // (round 8: hold is registered here too, hold_q, so this block has no combinational input
+  // from the host path and can sit beside the shell's AXI-Lite master, SLR1; the beat's age
+  // before a write starts is three cycles for it)
+  logic hold_q;
   logic [1:0] aw_age, w_age;
-  wire k_aw2 = aw_age[1];
-  wire k_w2 = w_age[1];
+  wire k_aw2 = aw_age == 2'd3;
+  wire k_w2 = w_age == 2'd3;
   always_ff @(posedge sclk) begin
+    hold_q <= hold;
     if (srst || !k_awv || (k_awr && k_awv)) aw_age <= 2'd0;
-    else if (!aw_age[1]) aw_age <= aw_age + 2'd1;
+    else if (aw_age != 2'd3) aw_age <= aw_age + 2'd1;
     if (srst || !k_wv || (k_wr && k_wv)) w_age <= 2'd0;
-    else if (!w_age[1]) w_age <= w_age + 2'd1;
+    else if (w_age != 2'd3) w_age <= w_age + 2'd1;
   end
-  assign k_awr = ss == S_IDLE && !have_aw && !hold && k_aw2 && !k_arvalid_pri();
-  assign k_wr  = ss == S_IDLE && !have_w && !hold && k_w2 && !k_arvalid_pri();
+  assign k_awr = ss == S_IDLE && !have_aw && !hold_q && k_aw2 && !k_arvalid_pri();
+  assign k_wr  = ss == S_IDLE && !have_w && !hold_q && k_w2 && !k_arvalid_pri();
   assign k_arr = ss == S_IDLE && !have_aw && !have_w;
   // a read waiting takes the turn when no write has started
   function automatic logic k_arvalid_pri();

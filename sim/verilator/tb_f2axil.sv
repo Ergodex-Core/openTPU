@@ -107,6 +107,7 @@ module tb_f2axil;
     s_awaddr = a; s_wdata = d; s_wstrb = mask;
     for (int t = 0; t < 1000; t++) begin
       automatic logic req_was = dut.x_req;
+      automatic logic hold_was = hold;    // (the DUT takes hold through a register: last cycle's)
       hold = t < 4 || $urandom % 5 == 0;
       s_awvalid = !awdone && t >= awdelay;
       s_wvalid = !wdone && t >= wdelay;
@@ -120,8 +121,9 @@ module tb_f2axil;
       end
       @(negedge sclk);
       // (the AW and W may enter their skid buffers during the hold; the write must not start:
-      // its request toggle, with x_wr, waits for a cycle without hold)
-      if (hold && dut.x_req != req_was && dut.x_wr) $fatal(1, "write started during PCIS hold");
+      // its request toggle, with x_wr, waits for a cycle whose previous cycle's hold was low:
+      // the DUT registers hold, round 8)
+      if (hold_was && dut.x_req != req_was && dut.x_wr) $fatal(1, "write started during PCIS hold");
       if (done) break;
     end
     if (!done) $fatal(1, "write timed out");
