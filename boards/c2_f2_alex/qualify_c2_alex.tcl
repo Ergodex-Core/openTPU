@@ -2,7 +2,7 @@
 # The executor must freshly open the hash-bound checkpoint before qualify and
 # bind these reports, frozen inputs/generated BD, and current vendor simulation.
 source [file join [file dirname [info script]] audit_c2_alex.tcl]
-namespace eval ::c2_alex_route {variable cl WRAPPER/CL}
+namespace eval ::c2_alex_route {variable cl WRAPPER/CL;variable capture_cell_section standalone}
 proc ::c2_alex_route::prop {object key} {return [::c2_alex::property $object $key]}
 proc ::c2_alex_route::names {objects} {return [::c2_alex::names $objects]}
 proc ::c2_alex_route::read_text {path} {set f [open $path r];set text [read $f];close $f;return $text}
@@ -190,7 +190,7 @@ proc ::c2_alex_route::capture_properties {audit kind object keys} {
     return $data
 }
 proc ::c2_alex_route::capture_cells {audit label objects} {
-    variable captured_cells
+    variable captured_cells;variable capture_cell_section
     set selected [names $objects];set captured 0;set cached 0;set skipped 0
     foreach name $selected {
         if {[dict exists $captured_cells $name]} {incr cached;continue}
@@ -199,7 +199,7 @@ proc ::c2_alex_route::capture_cells {audit label objects} {
         set cell [get_cells -quiet [list $name]]
         capture_properties $audit [list $label cell $name] $cell {NAME REF_NAME ORIG_REF_NAME IS_SEQUENTIAL ASYNC_REG LOC BEL}
     }
-    puts $audit [list cell_detail_coverage $label selected [llength $selected] captured $captured cached $cached skipped $skipped per_call_cap 256 global_cap 4096]
+    puts $audit [list cell_detail_coverage $label selected [llength $selected] captured $captured cached $cached skipped $skipped per_call_cap 256 section_cap 4096 section $capture_cell_section]
     if {$skipped} {capture_missing $audit $label cell_detail_cap_reached}
 }
 proc ::c2_alex_route::capture_pin {audit label name {fanin 0} {require_clock 0}} {
@@ -269,8 +269,10 @@ proc ::c2_alex_route::capture_data_driver {audit label pin} {
     if {[llength $drivers]!=1} {capture_missing $audit $label missing_or_multiple_data_drivers}
 }
 proc ::c2_alex_route::capture_gray {groups audit} {
-    # Each bit gets its own bounded query, so one worst path cannot hide another
-    # bit. Four paths cover typical edge variants; reaching that cap is pending.
+    # Actual linked evidence returned four normal paths for every bit at the old
+    # cap of four. A larger bounded query distinguishes those variants from an
+    # incomplete result; reaching the new cap still leaves coverage pending.
+    set path_limit 16;set path_sample_taken 0
     set all_stages [capture $audit gray_destination_stage_inventory [list get_cells -quiet -hierarchical -filter {NAME =~ WRAPPER/CL/u_mem/f2_mem_i/memory_sc/*dest_graysync_ff_reg*}]]
     set stages {}
     if {[dict get $all_stages ok]} {
@@ -308,17 +310,44 @@ proc ::c2_alex_route::capture_gray {groups audit} {
             }
             foreach ignored {0 1} {
                 if {![llength $q] || ![llength $d]} {capture_missing $audit [list $label timing $ignored] missing_timing_pin_selection;continue}
-                set command [list get_timing_paths -quiet -setup -from $q -to $d -max_paths 4 -nworst 4]
+                set command [list get_timing_paths -quiet -setup -from $q -to $d -max_paths $path_limit -nworst $path_limit]
                 if {$ignored} {lappend command -user_ignored}
                 set result [capture $audit [list $label timing user_ignored $ignored] $command]
                 if {![dict get $result ok]} {continue}
                 set paths [dict get $result value];set count [llength $paths]
                 puts $audit [list gray_bit_timing $label user_ignored $ignored expected_source $source/Q expected_destination $destination/D \
-                    max_paths 4 nworst 4 returned $count capped [expr {$count>=4}] normal_path_observed [expr {!$ignored && $count>0}] review pending_effective_exception_and_vendor_bound]
-                if {$count>=4 || (!$ignored && !$count)} {capture_missing $audit [list $label timing $ignored] capped_or_missing_normal_paths}
+                    expected_source_clock_pin $source/C max_paths $path_limit nworst $path_limit returned $count capped [expr {$count>=$path_limit}] normal_path_observed [expr {!$ignored && $count>0}] review pending_effective_exception_and_vendor_bound]
+                if {$count>=$path_limit || (!$ignored && !$count)} {capture_missing $audit [list $label timing $ignored] capped_or_missing_normal_paths}
+                set sample_this_query [expr {!$path_sample_taken && $count>0}];set path_index 0;set sample_keys {}
                 foreach path $paths {
-                    capture_properties $audit [list $label path user_ignored $ignored] $path {STARTPOINT_PIN ENDPOINT_PIN STARTPOINT_CLOCK ENDPOINT_CLOCK REQUIREMENT EXCEPTION DATAPATH_DELAY SLACK}
+                    set path_label [list $label path user_ignored $ignored index $path_index]
+                    set properties [capture_properties $audit $path_label $path {STARTPOINT_PIN ENDPOINT_PIN STARTPOINT_CLOCK ENDPOINT_CLOCK REQUIREMENT EXCEPTION DATAPATH_DELAY SLACK}]
+                    if {[dict get $properties STARTPOINT_PIN ok] && [dict get $properties ENDPOINT_PIN ok]} {
+                        set actual_start [dict get $properties STARTPOINT_PIN value];set actual_end [dict get $properties ENDPOINT_PIN value]
+                        set relation other
+                        if {$actual_start eq "$source/C"} {set relation source_register_clock_pin}
+                        if {$actual_start eq "$source/Q"} {set relation source_register_data_pin}
+                        # Vivado reports the launch C pin for observed Q->D
+                        # queries. Preserve both identities, not a rewritten Q.
+                        puts $audit [list gray_path_endpoint_relation $path_label observed_startpoint $actual_start observed_endpoint $actual_end \
+                            data_driver_query $source/Q source_clock_query $source/C destination_query $destination/D \
+                            startpoint_relation $relation endpoint_matches_query [expr {$actual_end eq "$destination/D"}] review pending_topology_and_effective_exception]
+                    }
+                    if {$sample_this_query} {
+                        if {$path_index==0} {
+                            set keys [capture $audit [list $path_label supported_property_names] [list list_property $path]]
+                            if {[dict get $keys ok]} {
+                                foreach key [dict get $keys value] {
+                                    if {[regexp -nocase {CORNER|EDGE|RISE|FALL|POLARITY|PATH_TYPE|DELAY_TYPE} $key]} {lappend sample_keys $key}
+                                }
+                            }
+                            puts $audit [list gray_path_variant_sample $label user_ignored $ignored paths $count limit $path_limit properties $sample_keys review pending_not_exhaustive_design_inventory]
+                        }
+                        if {[llength $sample_keys]} {capture_properties $audit [list $path_label optional_variant_properties] $path $sample_keys}
+                    }
+                    incr path_index
                 }
+                if {$sample_this_query} {set path_sample_taken 1}
             }
         }
     }
@@ -343,11 +372,37 @@ proc ::c2_alex_route::capture_waivers {audit} {
         }
     }
 }
+proc ::c2_alex_route::capture_pulse {audit} {
+    # These flags are documented by the actual installed Vivado 2025.2 help
+    # retained in the c072 linked diagnostic. Never use -quiet (hides errors)
+    # or -all_violators (would omit positive-slack protected-shell witnesses).
+    if {![llength [info commands report_pulse_width]]} {capture_missing $audit pulse unsupported_pulse_report;return}
+    set limit 128
+    foreach scope {whole_design custom_logic} {
+        set command [list report_pulse_width -return_string -limit $limit]
+        if {$scope eq "custom_logic"} {
+            set cells [capture $audit pulse_custom_logic_selection {get_cells -quiet WRAPPER/CL}]
+            if {![dict get $cells ok] || [names [dict get $cells value]] ne {WRAPPER/CL}} {
+                capture_missing $audit pulse missing_or_ambiguous_custom_logic;continue
+            }
+            lappend command -cells [dict get $cells value]
+        }
+        set report [capture $audit [list pulse_report $scope] $command]
+        if {[dict get $report ok] && [string trim [dict get $report value]] eq ""} {capture_missing $audit [list pulse_report $scope] empty_pulse_report}
+        puts $audit [list pulse_report_coverage $scope limit_per_check_type_per_clock $limit checks default_all \
+            complete not_asserted review pending_hidden_endpoints_and_report_limit]
+    }
+}
 proc ::c2_alex_route::supplemental {directory groups} {
-    variable capture_queries 0;variable capture_pending 0;variable captured_cells {}
+    variable capture_queries 0;variable capture_pending 0;variable captured_cells {};variable capture_cell_section
     set audit [open $directory/supplemental.tcldata {WRONLY CREAT EXCL}]
     puts $audit [list schema 1 kind current_checkpoint_supplemental_evidence route_qualified 0 review pending]
-    foreach {label command} [list findings [list capture_findings $audit] gray [list capture_gray $groups $audit] waivers [list capture_waivers $audit]] {
+    # Separate bounded caches let findings neither consume gray's detail budget
+    # nor silently reuse incomplete gray captures. The two cell-collecting
+    # sections together visit at most 8192 cells, with explicit cap diagnostics.
+    foreach {label command} [list gray [list capture_gray $groups $audit] findings [list capture_findings $audit] waivers [list capture_waivers $audit] pulse [list capture_pulse $audit]] {
+        set captured_cells {};set capture_cell_section $label
+        puts $audit [list cell_detail_budget section $label per_call_cap 256 section_cap 4096]
         # A collector/API defect must remain visible without discarding all the
         # other independent evidence or implying structural/physical acceptance.
         capture $audit [list collector $label] $command

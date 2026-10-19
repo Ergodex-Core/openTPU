@@ -1,8 +1,37 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:33 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:50 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
+
+Current stage: **placement and routing is running** on `opentpu-f2` only.
+Formal shell link completed successfully at 20:48:46 UTC from executor
+`cec9b011bf5f66e43bfd876ce6fade63f9c0863a`. Its retained unit exited zero;
+receipt SHA256 is `5c79489ceb14949b1d7c5051787e44fe959a8402882d38ade93c32f6f1db7ec6`
+and linked checkpoint SHA256 is
+`b8f10ea1a56aa145b9cbfa8f42246e858282dc69a307a32e0b8ed1582095922c`.
+The structural audit passes; this does not qualify physical timing.
+Implementation started at 20:49:25 UTC in
+`/home/ubuntu/rachit/codex-c2/alex-executor-cec9b011/implement`, unit
+`otpu-c2-alex-cec9b011-implement-65f84275.service`, invocation
+`90d0d11102904245834319b1788e3806`, bounded to four CPUs, 64 GiB and three hours.
+It consumes the exact successful synthesis/link receipts, with no RTL changes,
+IP regeneration, automatic continuation, or FPGA loading.
+
+A separate corrected linked diagnostic completed at 20:39:31 UTC. All 768 gray
+bits have normal paths; its 1,119 incomplete markers are 768 four-path caps and
+351 cell-detail budget caps, with zero API errors. The collect-only helper now
+uses a sixteen-path bound, separate bounded gray/finding cell budgets, actual
+launch-C/data-Q identity, and documented pulse reports. Its 106 qualification
+tests pass; caps and hidden evidence remain pending, never accepted. Actual
+replay of helper `f594a7a423cc06e469eb641d1849837c2292a0eaf68077800a7ca4ecefeb4cc9`
+started at 20:48:11 UTC against the unchanged earlier linked checkpoint. The
+running formal implementation retains its clean cec9 executor.
+
+The earlier failed-link 85 KB diagnostic archive remains on the instance.
+Its proposed S3 upload was rejected by automatic approval review pending
+explicit payload/destination approval; no upload occurred. This does not block
+implementation or the separately authorized Codex trace snapshots.
 
 The supplied baseline is
 `s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu-alex/alex-burst200-branch.tar`,

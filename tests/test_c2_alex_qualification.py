@@ -423,7 +423,7 @@ proc get_property {key objects} {
    WAVEFORM {lappend result {0 2.5}}
    MASTER_CLOCK - SOURCE_PINS {lappend result source_clock}
    LOC - BEL {lappend result {}}
-   STARTPOINT_PIN {lappend result $::last_from}
+   STARTPOINT_PIN {lappend result [file dirname $::last_from]/C}
    ENDPOINT_PIN {lappend result $::last_to}
    STARTPOINT_CLOCK {lappend result source_clock}
    ENDPOINT_CLOCK {lappend result destination_clock}
@@ -431,22 +431,28 @@ proc get_property {key objects} {
    EXCEPTION {lappend result {MaxDelay Path 5.000ns -datapath_only}}
    DATAPATH_DELAY {lappend result 1.0}
    SLACK {lappend result 4.0}
+   CORNER {lappend result [expr {[string match *0 $object] || [string match *1 $object] ? {Slow} : {Fast}}]}
+   STARTPOINT_RISE_FALL {lappend result [expr {[string match *0 $object] || [string match *2 $object] ? {RISE} : {FALL}}]}
    default {error "unexpected property $key"}
   }
  }
  return [expr {[llength $objects]==1 ? [lindex $result 0] : $result}]
 }
-proc list_property {args} {error {cell property enumeration forbidden}}
+proc list_property {object} {
+ if {![string match path* $object]} {error {cell property enumeration forbidden}}
+ if {$::fault eq {unsupported_path_properties}} {error {mock unsupported timing property inventory}}
+ return {STARTPOINT_PIN ENDPOINT_PIN SLACK CORNER STARTPOINT_RISE_FALL}
+}
 proc get_timing_paths {args} {
  incr ::timing_queries
- if {[lindex $args [expr {[lsearch -exact $args -max_paths]+1}]]!=4} {error {timing query not bounded}}
+ if {[lindex $args [expr {[lsearch -exact $args -max_paths]+1}]]!=16 || [lindex $args [expr {[lsearch -exact $args -nworst]+1}]]!=16} {error {timing query not bounded}}
  set ::last_from [lindex [lindex $args [expr {[lsearch -exact $args -from]+1}]] 0]
  set ::last_to [lindex [lindex $args [expr {[lsearch -exact $args -to]+1}]] 0]
  if {$::fault eq {unsupported_paths}} {error {mock unsupported timing API}}
  if {"-user_ignored" in $args} {return {}}
  if {$::fault eq {missing_normal} && [regexp {\[1\]/D$} $::last_to]} {return {}}
- if {$::fault eq {capped}} {return {path0 path1 path2 path3}}
- return path0
+ if {$::fault eq {capped}} {return [lrepeat 16 path0]}
+ return {path0 path1 path2 path3}
 }
 set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0;set ::c2_alex_route::captured_cells {}
 set f [open $out w]
@@ -461,6 +467,7 @@ close $f
     ('missing_normal', 'capped_or_missing_normal_paths'),
     ('capped', 'capped 1'),
     ('unsupported_paths', 'mock unsupported timing API'),
+    ('unsupported_path_properties', 'mock unsupported timing property inventory'),
     ('empty_nets', 'missing_data_nets'),
     ('empty_leaves', 'missing_data_leaf_pins'),
     ('missing_clock', 'missing_required_clock'),
@@ -483,6 +490,13 @@ def test_gray_supplement_preserves_each_bit_and_truthful_incompleteness(tmp_path
         assert raw.count('user_ignored 1 expected_source') == 2
         assert 'data_driver ' in raw and 'driver_count 1' in raw
         assert raw.count('gray_stage_inventory ') == 2
+        assert 'max_paths 16 nworst 16 returned 4 capped 0 normal_path_observed 1' in raw
+        assert raw.count('gray_path_endpoint_relation ') == 8
+        assert 'startpoint_relation source_register_clock_pin' in raw
+        assert 'data_driver_query ' in raw and re.search(r'/Q\}? source_clock_query ', raw)
+        assert raw.count('gray_path_variant_sample ') == 1
+        assert len(re.findall(r'^object_properties .* optional_variant_properties\}', raw, re.M)) == 4
+        assert 'CORNER {ok 1 value Slow}' in raw and 'CORNER {ok 1 value Fast}' in raw
     else:
         assert not re.search(r'test_summary .*pending 0 ', raw)
 
@@ -599,3 +613,73 @@ puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close
     assert f'selected {count} captured {captured} cached 0 skipped {skipped}' in raw
     assert 'cell_detail_cap_reached' in raw
     assert 'pending 1 route_qualified 0' in raw
+
+
+def test_gray_and_finding_cell_detail_budgets_are_independent(tmp_path):
+    script = r'''
+source [lindex $argv 0]
+proc get_property {key objects} {return [expr {$key eq {NAME} ? $objects : {FDRE}}]}
+proc get_cells {args} {return [lindex $args end]}
+proc ::c2_alex_route::capture_gray {groups audit} {
+ variable captured_cells
+ for {set i 0} {$i<4096} {incr i} {dict set captured_cells gray$i 1}
+ capture_cells $audit exhausted_gray {extra_gray}
+}
+proc ::c2_alex_route::capture_findings {audit} {
+ capture_cells $audit fresh_finding {new_finding_cell}
+}
+proc ::c2_alex_route::capture_waivers {audit} {}
+proc ::c2_alex_route::capture_pulse {audit} {}
+puts [::c2_alex_route::supplemental [lindex $argv 1] {}]
+'''
+    result = tcl(tmp_path, script, tmp_path)
+    assert result.returncode == 0, result.stderr
+    raw = (tmp_path / 'supplemental.tcldata').read_text()
+    assert raw.index('cell_detail_budget section gray') < raw.index('cell_detail_budget section findings')
+    assert 'cell_detail_coverage exhausted_gray selected 1 captured 0 cached 0 skipped 1' in raw
+    assert 'cell_detail_coverage fresh_finding selected 1 captured 1 cached 0 skipped 0' in raw
+    assert 'section_cap 4096 section gray' in raw and 'section_cap 4096 section findings' in raw
+    assert 'incomplete_or_error 1' in result.stdout
+
+
+@pytest.mark.parametrize(('fault', 'pending', 'required'), [
+    ('none', 0, 'complete not_asserted'),
+    ('unsupported', 1, 'unsupported_pulse_report'),
+    ('api_error', 2, 'mock pulse API failure'),
+    ('empty', 2, 'empty_pulse_report'),
+    ('wrong_scope', 1, 'missing_or_ambiguous_custom_logic'),
+])
+def test_pulse_reports_use_observed_documented_flags_and_keep_limits_pending(tmp_path, fault, pending, required):
+    report = tmp_path / 'pulse.tcldata'
+    script = r'''
+source [lindex $argv 0]
+set fault [lindex $argv 2];set calls {}
+proc get_cells {args} {
+ if {$::fault eq {wrong_scope}} {return WRAPPER/OTHER}
+ return WRAPPER/CL
+}
+proc get_property {key object} {if {$key ne {NAME}} {error {unexpected property}};return $object}
+if {$fault ne {unsupported}} {
+ proc report_pulse_width {args} {
+  if {[lrange $args 0 2] ne {-return_string -limit 128}} {error {unexpected pulse query}}
+  if {[llength $args]!=3 && $args ne {-return_string -limit 128 -cells WRAPPER/CL}} {error {unexpected pulse selection}}
+  lappend ::calls $args
+  if {$::fault eq {api_error}} {error {mock pulse API failure}}
+  if {$::fault eq {empty}} {return {}}
+  return {SYNTHETIC pulse report NOT FPGA EVIDENCE}
+ }
+}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_pulse $f
+puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close $f
+puts [list calls $calls]
+'''
+    result = tcl(tmp_path, script, report, fault)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert required in raw
+    assert f'pending {pending} route_qualified 0' in raw
+    if fault == 'none':
+        assert 'pulse_report whole_design' in raw and 'pulse_report custom_logic' in raw
+        assert raw.count('limit_per_check_type_per_clock 128 checks default_all complete not_asserted') == 2
+        assert '-return_string -limit 128 -cells WRAPPER/CL' in result.stdout
