@@ -1425,6 +1425,40 @@ tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests
 87 passed, tests/test_target.py 25 passed. Receipts (as above): int8 949,497 (unchanged), int4
 565,678 (unchanged).
 
+**Round 7 placed (3e370651 = the round-7 RTL 68c3d0b6 + the synthesis script's check aligned to
+the new Tcl; the first launch stopped on that stale check; host dir
+/home/ubuntu/opt/hwloop-nightly/p4rl8-3e370651): WNS -2.224 ns** after place_design (round 6
+-2.234). The pump multicycles applied by construction this time (the build's own
+post_place_timing.rpt shows `Requirement: 5.000ns` on the pump paths), six pblocks, the link
+stages in their boxes. By clock, from the in-session report (the checkpoint reports of
+rounds 3-6 carried the same constraints; their clk -> clk_f rows were real):
+
+| clock | round 6 | round 7 | worst path, what it says |
+|---|---|---|---|
+| hclk_raw 450 MHz | -2.19 | **-2.22** (26,254 endpoints) | `g_port[7].u_nch/k_nx_reg` -> `k_we_reg/CE`, `k_bnd_reg` -> `k_nx_reg/CE`: the bridge's next-address compares, the cones fix 7 left; the HBM IP's AXI output -> `wf_n_reg` is the next |
+| clk_raw -> clk_f_raw | -2.23 | **-2.16** (3,756) | `u_vpu/g_wbuf.en_r_reg_rep` -> `g_pc[1].u_pb/.../ADDRARDADDR`, 6 levels, 4.3 ns route, **requirement 5.000 ns**, and 1.4 ns of clock skew against it (source clock delay 5.70 ns on the core tree of 942K endpoints, destination 4.32 ns on the 400 MHz tree): the multicycle is right; the route and the two MMCM outputs' trees are not |
+| clk_raw 200 MHz | -2.17 | **-2.00** (7,922) | `u_mem/g_xr.g_x[2].u_up/r_reg[3734]` -> `u_slice/w_n_reg[0]/R`, 8 levels, 6.7 ns route: the SLR chain's up stage (the HBM side's ready / reset) into the slice's synchronous reset fan-in; fix 15's adapter -> ACT RAM path is gone |
+| clk_main_a0 250 MHz | -1.88 | **-1.00** (220) | `u_ocl/u_skid_aw/r1_v_reg` -> the shell's AXI-Lite master, 4.1 ns route: fix 14 took the PCIS bypass out; the OCL's own skid sits in SLR0 far from the shell's master |
+| clk_f_raw intra | -0.73 | +0.59 | |
+
+The reading after seven rounds: -4.9 -> -4.6 -> -5.6 -> -4.5 -> -2.3 -> -2.2 -> -2.2 ns. The
+constraint-coverage defects are closed (every exception applied and asserted), the SLR split is
+closed (every crossing a register chain), and what remains in all four domains is route length
+and clock skew: 4-7 ns wires on a 50%-full SLR2 and 2.2 ns of logic + 3.9 ns of route in the
+bridges at 450 MHz, each round's fix surfacing the next wire. Alex's burst200 image closes the
+identical clock set (HBM AXI 450, core 200, pump 400, shell 250) on this shell at +0.03 ns with
+2 HBM ports: 23K endpoints in the HBM domain against our 117K, 506K in the core domain against
+our 942K. The routes toward a bitstream: (a) more rounds at 200 / 450 on the bridge cones, the
+pump request's placement (the arbiter beside the pieces, or the request registered at the
+piece at +1 cycle of TMEM read latency) and the clock trees (the pump clock from the same
+BUFG structure as the core clock), with no closure date; (b) a bitstream-first variant with the
+core at 150 MHz, the pump at 300 and the HBM AXI at 300 (every domain gains 33% of period: the
+-2.2 ns at 2.22 passes with 0.9 ns to spare, the -2.0 at 5.0 passes with 1.7): int8 decode at
+~0.75 x 83.5 = ~60 tok/s port-bound on the board (the HBM's 8 x 32 B x 300 MHz = 76.8 GB/s
+equals port B's 512 B x 150 MHz), 2.7x the 22.3 baseline, measured; (c) hclk 300 with NCH 16
+at the core's 200 MHz, the bridges at 3.3 ns, port B kept at 102 GB/s, the first placement of
+the 16-bridge fabric unmeasured.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
