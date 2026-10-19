@@ -97,7 +97,10 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           # Alex's burst200 flow (boards/f2/burst200; targets/f2-burst200.toml names it by the
           # platform's rtl_board): its build_f2.tcl reads its own top and adapters from
           # rtl/boards/f2/burst200, so it takes only the core and the shell from this list
-          "f2-burst200": []}
+          "f2-burst200": [],
+          # three slices on his fabric (targets/f2-burst200-s3.toml, docs/v4/f2-burst200-s3.md):
+          # its top in rtl/boards/f2/burst200-s3, the adapters his
+          "f2-burst200-s3": []}
 
 
 class TargetError(ValueError):

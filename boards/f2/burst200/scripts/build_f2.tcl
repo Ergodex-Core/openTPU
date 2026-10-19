@@ -38,9 +38,20 @@ foreach ip {f2_core_clk f2_hbm_clk} {
   read_ip $clockrun/ip_project/clocks.srcs/sources_1/ip/$ip/$ip.xci
 }
 read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_pcis_pipe/f2_pcis_pipe.xci
-set bd $iprun/ip_project/f2_ip.srcs/sources_1/bd/f2_mem/f2_mem.bd
-add_files $bd
-read_verilog $iprun/ip_project/f2_ip.gen/sources_1/bd/f2_mem/hdl/f2_mem_wrapper.v
+# the geometry's block designs (create_f2_ip.tcl): f2_mem at one slice; f2_mem_s<s> per slice
+# and the host crossbar f2_host at more, with the native register slice (create_pcis_ip.tcl)
+if {[file exists $run/geometry.tcl]} {source $run/geometry.tcl} else {set otpu_S 1}
+set bds f2_mem
+if {$otpu_S > 1} {
+  read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_native_pipe/f2_native_pipe.xci
+  set bds {}
+  for {set s 0} {$s < $otpu_S} {incr s} {lappend bds f2_mem_s$s}
+  lappend bds f2_host
+}
+foreach name $bds {
+  add_files $iprun/ip_project/f2_ip.srcs/sources_1/bd/$name/$name.bd
+  read_verilog $iprun/ip_project/f2_ip.gen/sources_1/bd/$name/hdl/${name}_wrapper.v
+}
 read_xdc $shell/build/constraints/cl_pins.xdc
 set fp [open $run/ooc_clocks.xdc w]
 puts $fp {create_clock -name clk_main_a0 -period 4.000 [get_ports clk_main_a0]}

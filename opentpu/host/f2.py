@@ -157,13 +157,16 @@ class F2Transport:
             channel_shift, channels, total_shift = (dram >> 16) & 255, (dram >> 8) & 255, dram & 255
             # the DDR build: one slice, two 2 GiB windows of the DIMM; the HBM build
             # (docs/f2_hbm.md): S slices of NCH 512 MiB pseudo-channels, S x NCH <= 32, slice s's
-            # channel c at BAR4 offset (NCH s + c) x 512 MiB (= its HBM address)
+            # channel c at BAR4 offset (NCH s + c) x 512 MiB (= its HBM address); the burst200
+            # builds (docs/v4/f2-burst200-s3.md): S slices of two 2 GiB windows each, window
+            # j = 2 s + c at BAR4 offset j x 2 GiB, up to the HBM's 16 GiB (S <= 4)
             slices = self.reg_read(R.R_CFG_SLICES)
             nch_log2 = channels.bit_length() - 1
             if (not 1 <= slices <= 32 or channels < 2 or channels & (channels - 1)
                     or slices * channels > 32 or not 6 <= channel_shift <= 31
                     or total_shift > channel_shift + nch_log2
-                    or (channels == 2 and (slices != 1 or total_shift != channel_shift + 1))
+                    or (channels == 2 and (total_shift != channel_shift + 1
+                                           or slices << (channel_shift + 1) > 1 << 34))
                     or (channels > 2 and channel_shift > 29)):
                 raise RuntimeError(f"{self.dev}: unsupported F2 memory geometry {dram:#x} "
                                    f"({slices} slices)")
