@@ -732,6 +732,37 @@ with logic but the adapter's readies), and otpu_clk2x.tcl's cell cross-check on 
 RAMs. If SLR2 is the problem, the next moves are VPU_CL 8 or the quantizer's row buffer and
 transposer RAMs to SLR1 (block RAM, not logic: no LUT relief).
 
+### 6j. The first f2-vla32 place-and-route (2026-10-19): the die budgets, and the pause
+
+BuildAll of vla 6b49297b (f2-vla32 with the MXU array split, run dir
+/home/ubuntu/opt/hwloop-nightly/vla32-6b49297b) synthesized (575,054 LUTs) and linked with all
+seven pblocks, then place_design stopped on resource DRCs (UTLZ-1). `report_utilization
+-pblocks` on the post-opt checkpoint, used / available:
+
+| pblock | LUTs | RAMB36 | URAM288 | DSP48E2 |
+|---|---|---|---|---|
+| pb_otpu_mxu (SLR1 X0Y4:X3Y7) | 135,242 / 216,960 (62%) | **1,151 / 384** | 0 / 128 | **4,672 / 1,536** |
+| pb_otpu_board (SLR2) | 396,175 / 429,688 (92%) | 169 / 672 | **384 / 320** | 884 / 3,072 |
+
+The CL's capacity per SLR on the xcvu47p under the HDK shell: DSP48E2 2,880 (SLR0) / 3,072
+/ 3,072, RAMB36 672 each, **URAM288 320 each** (the shell takes a column; 24 RAMB36 and 12 URAM
+a clock region). So at MCOLS 32 packed the design exceeds one SLR in every memory resource and
+in DSPs: the array's 4,672 DSP48E2 against 3,072; the ACT RAM's 1,088 RAMB36 against 672 (in
+URAM it would need 480 by read width, 544 with the scale records: 6i's analysis); the pumped
+TMEM's 384 URAM against 320 (two words a 72-bit URAM row would make it 256). No floorplan fixes
+that: the variant as sized is a two-to-three-die design by every resource, which means a
+column-split MXU (the chain and the row assembly registered across the boundary) plus
+ACT_ROWS 128 and the two-words-a-row pump bank before any placement, or MCOLS 16 packed with
+the same two memory changes (fits the split as built; ~0.4 Hz by the LPN).
+
+**Decision (user, 2026-10-19, D22): the VLA FPGA target is paused.** The VLA work stays on the
+ISA simulator, Verilator and the LPN (0.65-0.68 Hz at 64 lanes / MCOLS 32 in the model); the
+host's Vivado seat goes to the LLM track. What the VLA track has established on hardware
+evidence: the packed column closes 200 / 250 MHz (6a), the slice synthesizes within the part
+with URAM memories (6f, 6h), every clock is positive post-synthesis, the array split and the
+build mechanism are in the tree, and the per-die budgets above are the sizing constraints for
+the next design round.
+
 ## 7. Phases (each ends in ISA / Verilator results; the nightly synthesizes the best point)
 
 | phase | work | exit criterion |
