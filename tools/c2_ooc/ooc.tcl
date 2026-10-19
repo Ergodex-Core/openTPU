@@ -33,7 +33,7 @@ proc reports {root stage} {
     report_clock_interaction -file $out/clock_interaction.rpt
     report_drc -file $out/drc.rpt
     report_methodology -file $out/methodology.rpt
-    redirect -file $out/check_timing.rpt { check_timing -verbose }
+    check_timing -verbose -file $out/check_timing.rpt
     set setup [path_slack max]
     set hold [path_slack min]
     set rsetup [path_slack max -from $q -to $d]
