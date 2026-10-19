@@ -165,10 +165,21 @@ as his wrapper has them; `tests/test_f2_burst200_s3.py::test_one_slice_wrapper_r
   SmartConnect as Alex's do.
 - **Host path**: the PCIS enters in SLR1 (the small shell's PCIS is there) through Alex's
   `f2_pcis_pipe`, fans out in the `f2_host` SmartConnect crossbar (1 SI x 3 MI on the host
-  clock alone, master s at HBM address [4 s GiB, 4 (s + 1) GiB), full 16-bit IDs and 64-bit
-  addresses, the grandchild pblock away from the shell) and reaches each slice's SmartConnect
-  in SLR0 through another `f2_pcis_pipe` (`u_host_pipe<s>`). The crossbar is the HDK example's
-  pattern (`cl_axi_sc_2x2_wrapper` in `cl_dma_pcis_slv.sv`), not a 7 x 6 SmartConnect.
+  clock alone, master s at HBM address [4 s GiB, 4 (s + 1) GiB), the PCIS's 16-bit IDs and
+  64-bit addresses on its slave side, the grandchild pblock away from the shell) and reaches
+  each slice's SmartConnect in SLR0 through another `f2_pcis_pipe` (`u_host_pipe<s>`). The
+  crossbar is the HDK example's pattern (`cl_axi_sc_2x2_wrapper` in `cl_dma_pcis_slv.sv`),
+  not a 7 x 6 SmartConnect. Its generated master ports carry no ID signals (SmartConnect's
+  downstream ports are one ordered thread, as Alex noted for `f2_mem`'s M_H*; build 7 failed
+  elaboration on `M_S0_arid`): the host pipes take `awid` / `arid` 16'd0 and their response
+  IDs go nowhere, so each slice's `S_HOST` (16-bit IDs, Alex's `f2_mem` unchanged) sees one
+  thread. Transactions to one slice stay ordered through the crossbar; the host's accesses to
+  different slices are independent windows.
+- **Parameter literals**: a parameter value of 2^31 or more is emitted as a sized 32-bit
+  literal (`.ARCH_HASH(32'd2167823793)`): Vivado reads an unsized decimal as a signed 32-bit
+  integer and truncates it (Synth 8-11057 in build 7), which would have left the image with a
+  wrong CFG_HASH; the one-slice top's values are all below 2^31, so it is unchanged
+  (`test_no_unsized_literal_from_2_31_up`).
 - **Resets per SLR**: SLR1 keeps Alex's `core_rst_n` / `rst_main_n_sync` (the control block,
   the OCL converter, the PCIS pipe, the crossbar); SLR0 and SLR2 get their own
   `xpm_cdc_async_rst` and `lib_pipe #(.WIDTH(1), .STAGES(4))` in each clock they use

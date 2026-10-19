@@ -109,10 +109,38 @@ def test_three_slice_top_wiring():
         assert f"assign h_arvalid[{port}] = '0;" not in text
     for port in (1, 2, 3, 5, 19):
         assert f"assign h_arvalid[{port}] = '0;" in text
+    # the host crossbar's master ports carry no IDs (SmartConnect's downstream ports, as M_H*):
+    # none connected, the slices' host pipes take ID 0 and drop the response IDs
+    for s in range(3):
+        for k in ('arid', 'awid', 'rid', 'bid'):
+            assert f'.M_S{s}_{k}(' not in text and f'hx{s}_{k}' not in text
+        assert f'.S_HOST_awid(hp{s}_awid)' in text and f'.S_HOST_bid(hp{s}_bid)' in text
+    assert text.count(".s_axi_awid(16'd0)") == 3 and text.count(".s_axi_arid(16'd0)") == 3
+    # (the 3 host pipes, and the 4 native pipes at a slice's adapter: the adapter takes no
+    # response IDs either)
+    assert text.count('.s_axi_rid()') == 7 and text.count('.s_axi_bid()') == 7
+    for port in (0, 4, 8, 12, 16, 20):
+        assert f'.M_H{port}_arid(' not in text
     # the native masters of slices 1 and 2 reach their SmartConnect through the pipes
     assert '.S_N0_awaddr(np2_slr0_awaddr)' in text and '.S_N1_awaddr(np5_slr0_awaddr)' in text
     assert '.s_axi_awaddr(np4_slr1_awaddr)' in text          # slice 2's second hop
     assert '.S_N0_awaddr(n0_awaddr)' in text                   # slice 0's straight in
+
+
+@pytest.mark.parametrize('top', [TOP1, TOP3])
+def test_no_unsized_literal_from_2_31_up(top):
+    """Vivado reads an unsized decimal literal as a signed 32-bit integer (Synth 8-11057,
+    build 7: ARCH_HASH 2167823793 became -2127143503): every parameter value of 2^31 or more
+    is a sized literal; the one-slice top's values are all below 2^31 (byte-identical)."""
+    text = top.read_text()
+    big = [m for m in re.findall(r'\((\d+)\)', text) if int(m) >= 1 << 31]
+    assert not big, big
+    sized = re.findall(r"32'd(\d+)", text)
+    if top is TOP3:
+        assert sized == [str(T.rtl_params(T.load(str(S3)))['ARCH_HASH'])]
+        assert ".ARCH_HASH(32'd2167823793)" in text
+    else:
+        assert sized == []
 
 
 def test_floorplan_names_every_cell_of_the_top():
@@ -248,10 +276,14 @@ def _stubs(S: int, ports: list) -> str:
     else:
         for s in range(S):
             out.append(mem_bd(f'f2_mem_s{s}_wrapper', ports[2 * s], ports[2 * s + 1]))
+        # the real f2_host_wrapper (build 7's f2_ip.gen/.../f2_host_wrapper.v): S_PCIS with
+        # 16-bit IDs, the master ports M_S<s> with no ID signals at all (one ordered thread),
+        # none with region
         p = {'host_clk': ('input', 1), 'aresetn': ('input', 1)}
         p.update(axi_ports('S_PCIS_', sc_host, True))
+        sc_mi = {k: v for k, v in sc_host.items() if k not in ('arid', 'awid', 'rid', 'bid')}
         for s in range(S):
-            p.update(axi_ports(f'M_S{s}_', sc_host, False))
+            p.update(axi_ports(f'M_S{s}_', sc_mi, False))
         out.append(_stub('f2_host_wrapper', p))
     # the HBM wrapper: arrays of NUM_OF_AXI_PORTS, the APB pairs, the stat interface
     hbm_out = {'arready', 'awready', 'rdata', 'rid', 'rlast', 'rresp', 'rvalid', 'wready',
