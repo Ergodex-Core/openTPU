@@ -102,8 +102,11 @@ ROW/KB bounds. Every completed result is checked against canonical ISA fp32 bits
 and independent signed integer accumulation. The harness checks response stability,
 auto-increment, invalid configuration/access rejection, exact accepted/returned
 traffic, command/commit counts, native writes remaining zero, and frozen cycles.
-Abort, native error, and an unsolicited PC7 response while PC0 is delayed all drain
-and then replay without reset. The trace reconciles handshake counts with CSRs.
+Abort, a transient one-cycle native error, and an unsolicited PC7 response while
+PC0 is delayed all drain and then replay without reset in the harness. The frozen
+F2 native bridge instead latches its error until whole-fabric reset: START correctly
+rejects that persistent error, so hardware error recovery requires fabric reset
+after draining rather than the harness's no-reset replay. The trace reconciles handshake counts with CSRs.
 
 These tests do not replace shell CDC validation, physical memory-interface tests,
 post-route timing/hold checks, resource limits, or bit-exact board runs. The F2
