@@ -1459,6 +1459,76 @@ equals port B's 512 B x 150 MHz), 2.7x the 22.3 baseline, measured; (c) hclk 300
 at the core's 200 MHz, the bridges at 3.3 ns, port B kept at 102 GB/s, the first placement of
 the 16-bridge fabric unmeasured.
 
+**Round 8 RTL (2026-10-19; Verilator only; D23 = A: 200 / 450).** Round 7 placed (3e370651) at
+WNS -2.224; its list's five fixes, each bit-exact on the tests and the receipt:
+
+16. **hclk_raw -2.220, the bridge's next-address compares and the HBM's wready into its W
+   count** (rtl/boards/f2/otpu_f2_hbm_nch.sv, otpu_f2_hbm_port.sv): `k_nx` took `x_a == k_a + 1`
+   and `x_a == o_nx + 1` with the incrementers in the compare; now `k_a1` (= `k_a + 1`, loaded
+   with the head) and `o_nx1` (= `o_nx + 1`, kept with the open burst: `k_a1 + 1` on an open,
+   `o_nx1 + 1` on a join, both incrementers from registers in parallel with the two-level
+   select) are registers and the three candidates are equalities against registers (the
+   simulation checks both every cycle). The HBM IP's `wready` ran through otpu_f2_hbm_port's
+   `w_room` and the bridge's W take into `wf_n` (5 levels, 3.9 ns of route from the IP): the
+   port's W beat now goes to the HBM through a two-entry skid buffer (`u_wsk`, otpu_skidbuf:
+   its ready a flip-flop, the beat shown to the HBM from registers), so `s_wready` is one LUT of
+   the port's own flip-flops and the IP's `wready` moves only the buffer's exit. The bridge's
+   cones from the registers are now: `cont` 1, `k_pop` 2, the head's load enable 3 (with the
+   crossing's valid), `k_nx` 3-4 (the LUT RAM read, the compare, the select), the open burst's
+   updates 3, the queue push 3, the W count 3, `m_wdata` 2 + the port's select. Not in the
+   Verilator receipt (the native model stands in for the HBM fabric): cycle-neutral by
+   construction; tests/test_f2_rtl.py's fabric and OCL tests 17 passed.
+17. **clk_raw -> clk_f_raw -2.157, the pump request path**: not changed in RTL. Registering the
+   request at the piece on clk is not a knob: the TMEM's read latency (the lanes take the word
+   the cycle after the grant) is built into every unit's pipeline, so it is a refactor of the
+   VPU, MXU, QUANT and DMA, not a round's fix; nothing to measure yet. The path's source
+   (`u_vpu/g_wbuf.en_r_reg_rep*`) and its logic (`u_tmem`'s lane rotation, bank compares,
+   `rpv`) are already inside pb_otpu_tmem with the pieces; its 4.27 ns of route is the box's
+   eight clock regions, and 1.4 ns of its 2.16 is the two clock trees' skew, fix 18's. If a
+   box is still wanted after round 8: `WRAPPER/CL/u_sys/u_board/u_slice/u_tmem` alone in the
+   regions holding its 64 RAMB36 columns, `u_vpu` beside it (the VPU's `ta_q / tb_q` and
+   `g_wbuf.en_r` copies are the requests' sources, the MXU's `t_rq` the others).
+18. **The two clock trees** (boards/f2/build/constraints/cl_pnr_user_hbm.tcl): clk (200 MHz,
+   ~940K endpoints over three SLRs) and clk_f (400 MHz, the TMEM's 3.7K) are the CL's own MMCM's
+   outputs (CLKOUT0 / 6, CLKOUT1 / 3, phase aligned) through two BUFGs, so the HDK wrapper
+   allows any of the options; round 7 placed their insertion delays 5.70 and 4.32 ns, 1.4 ns
+   against every pump path. Taken: `set_property CLOCK_DELAY_GROUP otpu_core_pump` on the two
+   buffers' nets (`WRAPPER/CL/u_clk/O`, `u_clk_f/O`; fail closed on the count), the UltraScale
+   way to have the placer put the two roots together and match the trees' delays; no RTL
+   change (a BUFGCE_DIV from one 400 MHz output would give the same two trees, and still need
+   the group). If round 8's report shows the skew remaining, the next step is `USER_CLOCK_ROOT`
+   on both nets to the TMEM's region.
+19. **clk_raw -2.005, the write-done count into the slice's halt** (rtl/mem/otpu_native_dram.sv):
+   the chain's up-stage bit was not a reset or ready bit: `g_xr.g_x[2].u_up/r_reg[3734]` is
+   channel 7's `n_wdone[9]` (the bridges' write count), and the 8 levels were the adapter's
+   `iss_all` (every channel's issued writes == its count) into `wr_idle`, the slice's `halted`
+   (a WAITW's end) and its trace counter's synchronous reset. Now `iss_all` is a register:
+   next cycle's issued counts (`iss_w + wiss`) against the counts as they are; exact, or a
+   cycle late on its rise when a count arrives that cycle, never high with a write uncounted
+   (`n_wdone` cannot pass the issued count, so equal now means nothing more arrives). The
+   slice's reset tree is untouched (its `rst` is otpu_board's `core_rst` register already).
+   Not cycle-identical any more to the two-channel adapter the NCH generalization was proved
+   against (tests/test_native_nch.py's equivalence, 4e9616a4): its wr_idle check now asserts
+   "never high where the reference's is low, at most a cycle late on a rise", every other
+   output still identical every cycle. An exact form would keep the compare combinational from
+   the chain's register (the count arrives in that cycle), so the register was the choice.
+   Measured (the receipt below): int8 949,550 (+53 cycles, +0.006%), int4 565,721 (+43, +0.008%).
+20. **clk_main_a0 -0.998, the OCL skid beside the shell's master** (rtl/boards/f2/otpu_axil_cdc.sv,
+   cl_pnr_user_hbm.tcl): `hold` (u_host's `pcis_wbusy`, SLR0) is registered inside the CDC
+   (`hold_q`) and a write starts from an AW / W three cycles old in its buffer (one more than
+   round 7's two, for the added register), so the block has no combinational input from the
+   host path and the whole of `WRAPPER/CL/u_sys/u_ocl` is boxed into pb_otpu_pcis beside the
+   shell's AXI-Lite master (its core-clock side reaches `u_cx` in SLR0 under the CDC's
+   datapath-only bounds, 5 ns a crossing). Round 7's `u_pcis_wb` / `u_xs_wb` registers join
+   pb_otpu_pcis / pb_otpu_xs. The link form was not needed: the CDC is one access at a time.
+
+Tests (the spot m7a was evicted at the round's start; locally on the Mac, Verilator 5.048, except
+the wide-port set): tests/test_f2_rtl.py 17 passed, tests/test_rtl.py `-k "replay or act_reads or
+attention or lane_count"` 27 passed, 1 skipped, tests/test_wide_port_rtl.py 168 passed (on the replacement m7a, i-04de034eb59850cf8, -n 32),
+tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests/test_f2_build.py
+87 passed (the floorplan mock knows the clock group and the OCL's box), tests/test_target.py 25
+passed. Receipts (as above, run locally): int8 949,550 (+53 cycles, +0.006%), int4 565,721 (+43, +0.008%).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

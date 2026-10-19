@@ -142,7 +142,11 @@ registered on the registers' side (`u_pcis_wb`), one more flip-flop -> flip-flop
 than the skids, a write's AW reaches the queue two cycles later still and a read's AR as late,
 and the OCL side starts a write only from an AW / W two cycles old in its buffer
 (otpu_axil_cdc `aw_age / w_age`), so a PCIS write shown with an OCL write is still counted
-first (docs/wide_port.md "Round 7 RTL").
+first (docs/wide_port.md "Round 7 RTL"). Round 8 registers `hold` inside the CDC too (`hold_q`; the age becomes
+three cycles), so the whole OCL crossing sits beside the shell's AXI-Lite master (pb_otpu_pcis,
+SLR1) with no combinational input from the host path, and puts each port's W beat to the HBM
+through a two-entry skid buffer (otpu_f2_hbm_port `u_wsk`), so the HBM's `wready` moves only that
+buffer's exit, not the bridges' W counts (docs/wide_port.md "Round 8 RTL").
 
 PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk; the crossing
 written as the bridges', `RWR`, `WT`) and goes to the port of its address (`addr[33:29]`) as one
