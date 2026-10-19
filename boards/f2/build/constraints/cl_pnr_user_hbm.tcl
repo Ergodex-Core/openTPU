@@ -68,7 +68,6 @@ add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_ocl}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_dn}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_up}]
@@ -111,6 +110,12 @@ add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pc
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_ar_tx}]
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_b_rx}]
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r_rx}]
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_wb}]
+# round 8: the OCL's crossing (otpu_axil_cdc: the shell-facing skid buffers and the aclk state
+# machine, its hold registered inside) beside the shell's AXI-Lite master; its core-clock side
+# reaches u_cx in SLR0 under the CDC's datapath-only bounds (round 7 placed u_ocl/u_skid_aw ->
+# the shell's master over 4.1 ns of route from SLR0)
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_ocl}]
 
 ########################################
 # pb_otpu_xs: the SLR0 side of the PCIS link stages, the top corner of SLR0 under the shell's column
@@ -130,6 +135,7 @@ add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_w
 add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_ar}]
 add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_b}]
 add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_r}]
+add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_wb}]
 
 ########################################
 # pb_otpu_board: the slice side, SLR2
@@ -175,3 +181,21 @@ foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otp
   otpu_contain $pb
 }
 puts "OTPU_FLOORPLAN_APPLIED pblocks=6"
+
+########################################
+# the core clock and the pump clock on one insertion delay (round 8)
+########################################
+# The TMEM's pumped RAMs take their read requests from clk (200 MHz, the whole design's tree:
+# ~940K endpoints over the three SLRs) into clk_f (400 MHz, the TMEM's 3.7K) with two fast
+# periods (otpu_clk2x.tcl). Round 7 placed the two trees 1.4 ns apart (source clock delay 5.70
+# ns, destination 4.32) against those paths. Both clocks are the CL's own MMCM's outputs (u_mmcm
+# CLKOUT0 / 6 and CLKOUT1 / 3, phase aligned) through two BUFGs (u_clk, u_clk_f): a clock delay
+# group makes the placer put their roots together and match the trees' insertion delays
+# (UltraScale clocking: CLOCK_DELAY_GROUP on the nets of buffers in one clock region). Fail
+# closed: both nets must be found.
+set otpu_ck_nets [get_nets -quiet -of_objects [get_pins -quiet {WRAPPER/CL/u_clk/O WRAPPER/CL/u_clk_f/O}]]
+if {[llength $otpu_ck_nets] != 2} {
+  error "openTPU floorplan: the core and pump clock nets (u_clk/O, u_clk_f/O): [llength $otpu_ck_nets] found, expected 2"
+}
+set_property CLOCK_DELAY_GROUP otpu_core_pump $otpu_ck_nets
+puts "OTPU_FLOORPLAN clock delay group otpu_core_pump on $otpu_ck_nets"

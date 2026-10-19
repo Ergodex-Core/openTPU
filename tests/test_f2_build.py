@@ -589,6 +589,8 @@ proc add_cells_to_pblock {name cl} {
   foreach c $cl { lappend ::cells [list $name $c] }
 }
 proc set_property {prop value name} { lappend ::props [list $name $prop $value] }
+proc get_pins {args} { return [lindex $args end] }
+proc get_nets {args} { set out {}; foreach p [lindex $args end] { lappend out net_of_$p }; return $out }
 '''
 
 
@@ -636,14 +638,19 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
             cells.setdefault(pb, []).append(cell)
     hbm, mid, pcis, xs, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_xs', 'pb_otpu_board', 'pb_otpu_tmem'))
     # the SLR0 ends of the PCIS link stages (round 6) in SLR0's top corner, apart from the SLR1 ends
-    assert sorted(xs) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_xs_{k}' for k in ('ar', 'aw', 'b', 'r', 'w')]
+    assert sorted(xs) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_xs_{k}' for k in ('ar', 'aw', 'b', 'r', 'w', 'wb')]
     assert not (set(xs) & set(pcis))
     # the PCIS registers (round 4) beside the shell's DMA column, SLR1, apart from u_host (SLR0)
-    assert sorted(pcis) == sorted(f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
-                                  ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx'))
+    # (round 7's write-pending registers with them; round 8: the OCL's crossing too)
+    assert sorted(pcis) == sorted([f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
+                                   ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx', 'wb')]
+                                  + ['WRAPPER/CL/u_sys/u_ocl'])
+    assert 'WRAPPER/CL/u_sys/u_ocl' not in hbm
+    # the core and pump clock nets in one delay group (round 8)
+    assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
     assert all(c.startswith('WRAPPER/CL/u_sys/') for pb in cells.values() for c in pb)
     assert len([c for c in hbm if '.u_nch' in c]) == 4 and 'WRAPPER/CL/u_sys/u_mem/u_host' in hbm
-    assert 'WRAPPER/CL/u_sys/u_board' in board and 'WRAPPER/CL/u_sys/u_ocl' in hbm
+    assert 'WRAPPER/CL/u_sys/u_board' in board
     # the crossing chains: stage k in SLR k, the control path's two sides with their SLRs
     for k, pb in enumerate((hbm, mid, board)):
         for chain in ('u_mem/g_xr', 'u_cx/g_xr'):
