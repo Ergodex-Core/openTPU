@@ -346,6 +346,18 @@ int8 weight stream at 89% of 128 B a cycle, which is exactly the two-channel fab
 device tok/s, 6.43 Mcycles a token** (1.4x, not 2x: the head, the attention and the
 inter-matmul gaps do not shrink), 21.3 / 23.4 wall tok/s, coherent text.
 
+**Three slices on Alex's fabric (2026-10-20, branch `v4-f2-alex-s3`,
+[f2-burst200-s3.md](f2-burst200-s3.md)).** Target `f2-burst200-s3`: one slice per SLR, each
+on its own `f2_mem` SmartConnect and two HBM ports (0 / 4, 8 / 12, 16 / 20), Gemma 3 1B split
+over the three (the heads, K / V rows and vocabulary unevenly: `gemma4.split_rows` /
+`split_ranges`; bit-exact to one slice on the tiny model and the real one on the ISA
+simulator). Lens on the ISA simulator: 2,991,906 analytic cycles a slice-token (89.2% of its
+bound), 15.0 ms = 66.8 tok/s at 200 MHz, against 8,281,554 at S = 1 and 2,248,050 at S = 4;
+with build 6's hardware / ISA ratio on the stream and the collective hub's cost, **57-62
+tok/s** predicted on hardware (2.6-2.8x the one-slice image). Build:
+`python boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target
+targets/f2-burst200-s3.toml --output /home/ubuntu/rachit/f2burst200-s3-run1`.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round

@@ -141,9 +141,14 @@ while that disk is at its floor, as only an explicit `--wformat int8` E2B pays i
 
 ## Slices
 
-Gemma 3 and Gemma 4 run on S = 1, 2 or 4 slices (`Spec.check`; `SLICES`), the tensor-parallel
+Gemma 3 and Gemma 4 run on S = 1, 2, 3 or 4 slices (`Spec.check`; `SLICES`), the tensor-parallel
 split of the v4 plan's proposal P4 ([v4/proposal-4-four-slices.md](v4/proposal-4-four-slices.md),
-section 3; status in [v4/p4-status.md](v4/p4-status.md)). One slice is today's: the image and
+section 3; status in [v4/p4-status.md](v4/p4-status.md)). S must divide the hidden size, the
+MLP widths and ple_dim; the query heads, the K / V rows and the vocabulary may split unevenly
+(S = 3 on Gemma 3 1B: `split_rows` pads a gathered matrix's rows to whole blocks, the last
+slice's zero, and cuts the gathered tile; when S does not divide n_q every slice attends every
+head on the gathered q; `split_ranges` gives the LM head per-slice row ranges, `v_off`:
+[v4/f2-burst200-s3.md](v4/f2-burst200-s3.md)). One slice is today's: the image and
 every program (per-position rows, the resident decode, the generate loop, the prompt runs) are
 byte-identical to the one-slice code's. The simulators' default for these models stays the
 card's one slice (`Spec.one_slice_default`: otpu-chat and Lens do not pick the design's two
