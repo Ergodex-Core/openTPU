@@ -22,6 +22,7 @@ module otpu_board #(
   parameter int S          = 1,         // slices, each on NCH memory channels
   parameter int NCH        = 2,         // memory channels per slice (a power of two: the DDR
                                         //   boards' 2, the F2 HBM build's 8; otpu_native_dram)
+  parameter bit WDQ        = 1'b0,      // the adapter's write-done compare a register (otpu_native_dram)
   parameter int CH_LOG2    = 31,        // log2 bytes a slice addresses per channel (CFG_DRAM)
   parameter int DRAM_LOG2  = 32,        // log2 DRAM bytes per slice (CFG_DRAM). The adapter and
                                         //   the channels take up to 34 (the word address's 16
@@ -369,7 +370,7 @@ module otpu_board #(
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
-  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD)) u_mem (
+  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .WDQ(WDQ)) u_mem (
     .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
     .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -415,7 +416,7 @@ module otpu_board #(
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
 
-    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD)) u_mem (
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .WDQ(WDQ)) u_mem (
       .clk, .rst(x_srst[s]), .a_flush(x_rst[s] || x_ld_start[s] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
           .a_be_x(a_be), .a_rvalid, .a_rdata,

@@ -1,8 +1,9 @@
 // The F2 HBM build's memory fabric (otpu_f2_hbm_sys; docs/f2_hbm.md): NPORT channels' native
 // ports (core clock), each through its bridge (otpu_f2_hbm_nch, BASE p x 512 MiB) onto HBM AXI
-// port p, shared there with the host's PCIS (otpu_f2_hbm_host, one master per port, registered
-// at the port by an otpu_f2_hbm_hreg, below) by an otpu_f2_hbm_port. tb_f2hbm tests it on an
-// HBM model (tests/test_f2_rtl.py).
+// port p, shared there with the host's PCIS (otpu_f2_hbm_host, one master per port, through a
+// link of HNS register stages per channel into a register at the port, otpu_f2_hbm_hlink and
+// otpu_f2_hbm_hreg below) by an otpu_f2_hbm_port. tb_f2hbm tests it on an HBM model
+// (tests/test_f2_rtl.py).
 //
 // Toward the slice (docs/v4/f2-timing.md): the bridges' write counts and error bits go to the
 // adapter through a register stage here (n_wdone, n_err), so the count's flip-flops, which the
@@ -13,7 +14,9 @@
 module otpu_f2_hbm_mem #(
   parameter int NPORT = 8,              // HBM ports used: slice s's channel c on port NCH s + c
   parameter bit HAZ   = 1'b1,           // the bridges' same-beat order (0: tests only)
-  parameter int GATHER = 4              // the bridges' burst gather (hclk cycles)
+  parameter int GATHER = 4,             // the bridges' burst gather (hclk cycles)
+  parameter int HNS   = 2               // register stages between the host path and a port's
+                                        //   register, each way (0: the link's own two)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -121,9 +124,8 @@ module otpu_f2_hbm_mem #(
   logic [NPORT-1:0] hp_awvalid, hp_awready, hp_wvalid, hp_wready, hp_bvalid, hp_arvalid;
   logic [NPORT-1:0] hp_arready, hp_rvalid;
   logic [33:0]      hp_awaddr, hp_araddr;
-  logic [255:0]     hp_wdata;
-  logic [31:0]      hp_wstrb;
-  logic             hp_wlast;
+  logic [511:0]     hp_wdata;
+  logic [63:0]      hp_wstrb;
   logic [NPORT-1:0][255:0] hp_rdata;
   for (genvar p = 0; p < NPORT; p++) begin : g_port
     otpu_f2_hbm_nch #(.BASE(34'(p) << 29), .HAZ(HAZ), .GATHER(GATHER)) u_nch (
@@ -140,18 +142,47 @@ module otpu_f2_hbm_mem #(
       .m_arvalid(s_arvalid[p][0]), .m_arready(s_arready[p][0]), .m_araddr(s_araddr[p][0]),
       .m_arlen(s_arlen[p][0]), .m_rvalid(s_rvalid[p][0]), .m_rready(s_rready[p][0]),
       .m_rdata(s_rdata[p]), .m_rresp(s_rresp[p]), .m_rlast(s_rlast[p]));
-    // the host's master on this port, registered here: two-beat bursts, ready for its responses
+    // the host's master on this port: two-beat bursts, ready for its responses. Its AW, W and
+    // AR come from the host block through a link each (otpu_f2_hbm_hlink: the take registered
+    // with its beat, HNS stages, the queue; the credit back the same way), its B and R go back
+    // through HNS stages (u_rb, u_rr): the 8b2fd3a0 placement ran the host block's W register
+    // into this register over 3.4 ns of bare wire at 450 MHz (the host block sits at SLR0's
+    // top by its PCIS link stages, the ports along the HBM below; docs/v4/f2-timing.md), so
+    // every hclk hop between them is now a stage's wire
     assign s_awlen[p][1] = 4'd1;
     assign s_arlen[p][1] = 4'd1;
     assign s_bready[p][1] = 1'b1;
     assign s_rready[p][1] = 1'b1;
+    logic         l_awv, l_awr, l_wv, l_wr, l_arv, l_arr, l_bv, l_rv;
+    logic [33:0]  l_awaddr, l_araddr;
+    logic [511:0] l_wdata;
+    logic [63:0]  l_wstrb;
+    logic [255:0] l_rdata;
+    otpu_f2_hbm_hlink #(.W(34), .NS(HNS)) u_lk_aw (
+      .hclk, .hrst(hrst_q), .i_v(hp_awvalid[p]), .i_r(hp_awready[p]), .i_d(hp_awaddr),
+      .o_v(l_awv), .o_r(l_awr), .o_d(l_awaddr));
+    otpu_f2_hbm_hlink #(.W(576), .NS(HNS)) u_lk_w (
+      .hclk, .hrst(hrst_q), .i_v(hp_wvalid[p]), .i_r(hp_wready[p]), .i_d({hp_wstrb, hp_wdata}),
+      .o_v(l_wv), .o_r(l_wr), .o_d({l_wstrb, l_wdata}));
+    otpu_f2_hbm_hlink #(.W(34), .NS(HNS)) u_lk_ar (
+      .hclk, .hrst(hrst_q), .i_v(hp_arvalid[p]), .i_r(hp_arready[p]), .i_d(hp_araddr),
+      .o_v(l_arv), .o_r(l_arr), .o_d(l_araddr));
+    logic [HNS:0]        rb;
+    logic [HNS:0][256:0] rr;
+    assign rb[0] = l_bv;
+    assign rr[0] = {l_rv, l_rdata};
+    for (genvar k = 0; k < HNS; k++) begin : g_rs
+      otpu_f2_hbm_xr #(.W(1)) u_rb (.clk(hclk), .rst(hrst_q), .d(rb[k]), .q(rb[k + 1]));
+      otpu_f2_hbm_xr #(.W(257)) u_rr (.clk(hclk), .rst(hrst_q), .d(rr[k]), .q(rr[k + 1]));
+    end
+    assign hp_bvalid[p] = rb[HNS];
+    assign {hp_rvalid[p], hp_rdata[p]} = rr[HNS];
     otpu_f2_hbm_hreg u_hreg (
       .hclk, .hrst(hrst_q),
-      .h_awvalid(hp_awvalid[p]), .h_awready(hp_awready[p]), .h_awaddr(hp_awaddr),
-      .h_wvalid(hp_wvalid[p]), .h_wready(hp_wready[p]), .h_wdata(hp_wdata), .h_wstrb(hp_wstrb),
-      .h_wlast(hp_wlast), .h_bvalid(hp_bvalid[p]),
-      .h_arvalid(hp_arvalid[p]), .h_arready(hp_arready[p]), .h_araddr(hp_araddr),
-      .h_rvalid(hp_rvalid[p]), .h_rdata(hp_rdata[p]),
+      .h_awvalid(l_awv), .h_awready(l_awr), .h_awaddr(l_awaddr),
+      .h_wvalid(l_wv), .h_wready(l_wr), .h_wdata(l_wdata), .h_wstrb(l_wstrb), .h_bvalid(l_bv),
+      .h_arvalid(l_arv), .h_arready(l_arr), .h_araddr(l_araddr),
+      .h_rvalid(l_rv), .h_rdata(l_rdata),
       .m_awvalid(s_awvalid[p][1]), .m_awready(s_awready[p][1]), .m_awaddr(s_awaddr[p][1]),
       .m_wvalid(s_wvalid[p][1]), .m_wready(s_wready[p][1]), .m_wdata(s_wdata[p][1]),
       .m_wstrb(s_wstrb[p][1]), .m_wlast(s_wlast[p][1]), .m_bvalid(s_bvalid[p][1]),
@@ -190,36 +221,31 @@ module otpu_f2_hbm_mem #(
     .hclk, .hrst(hrst_q),
     .p_awvalid(hp_awvalid), .p_awready(hp_awready), .p_awaddr(hp_awaddr),
     .p_wvalid(hp_wvalid), .p_wready(hp_wready), .p_wdata(hp_wdata), .p_wstrb(hp_wstrb),
-    .p_wlast(hp_wlast), .p_bvalid(hp_bvalid), .p_arvalid(hp_arvalid), .p_arready(hp_arready),
+    .p_bvalid(hp_bvalid), .p_arvalid(hp_arvalid), .p_arready(hp_arready),
     .p_araddr(hp_araddr), .p_rvalid(hp_rvalid), .p_rdata(hp_rdata));
 
 endmodule
 
-// The host's master on one port, registered at the port (otpu_f2_hbm_mem g_port u_hreg). The
-// host path (otpu_f2_hbm_host) shows its head beat's AW, W and AR to every port on shared buses
-// (34 + 290 + 34 bits, a valid per port) and takes the ports' R data (256 bits each) and B back:
-// with 8 ports along the HBM, the 61d07199 placement ran the head's data and strobe registers
-// and the replicas of its W-half select into every arbiter's W register over 6.0 ns of route
-// (docs/v4/f2-timing.md). Here each channel is a one-entry register: AW, W and AR taken from
-// the host when empty (the ready is the register's own emptiness, a flip-flop: no path from the
-// arbiter's or the HBM's readies back to the host in the cycle; at most a beat every other
-// cycle, and the host sends one per ~7), shown to the arbiter until taken; the port's R and B
-// registered the same way back to the host (a cycle late; R needs no ready: the host's return
-// FIFO has room for every read in flight, its count moves on the registered beat). So every
-// net between the host block and a port starts and ends at a flip-flop, with the cycle for
-// the route. The reset through a register of its own, as the port's.
+// The host's master on one port, registered at the port (otpu_f2_hbm_mem g_port u_hreg), behind
+// the links from the host block (otpu_f2_hbm_hlink). A one-entry register per channel: AW, W
+// and AR taken from the link's queue when empty (the ready is the register's own emptiness, a
+// flip-flop: no path from the arbiter's or the HBM's readies back toward the host in the cycle),
+// shown to the arbiter until taken; the W is the host's whole 64-byte beat, sent as its two AXI
+// beats (the low half first, w_hi the second: one LUT of select into the arbiter's register
+// beside it); the port's R and B registered back (a cycle late; R needs no ready: the host's
+// return FIFO has room for every read in flight, its count moves on the registered beat). The
+// reset through a register of its own, as the port's.
 module otpu_f2_hbm_hreg (
   input  logic          hclk,
   input  logic          hrst,
-  // ---- the host (otpu_f2_hbm_host p_*: this port's valids, the shared buses)
+  // ---- from the links (otpu_f2_hbm_host p_*, staged)
   input  logic          h_awvalid,
   output logic          h_awready,
   input  logic [33:0]   h_awaddr,
   input  logic          h_wvalid,
   output logic          h_wready,
-  input  logic [255:0]  h_wdata,
-  input  logic [31:0]   h_wstrb,
-  input  logic          h_wlast,
+  input  logic [511:0]  h_wdata,
+  input  logic [63:0]   h_wstrb,
   output logic          h_bvalid,
   input  logic          h_arvalid,
   output logic          h_arready,
@@ -245,27 +271,65 @@ module otpu_f2_hbm_hreg (
   logic hrst_q;
   always_ff @(posedge hclk) hrst_q <= hrst;
   // the registers load whenever empty (their enables are their own valids, not the host's
-  // decode), so each holds the host's beat of the cycle its valid rose
+  // decode), so each holds the beat of the cycle its valid rose
   (* max_fanout = 64 *) logic aw_v, w_v, ar_v;
+  logic         w_hi;                   // the W's second AXI beat is on the bus
+  logic [511:0] hd;
+  logic [63:0]  hs;
   assign h_awready = !aw_v;
   assign h_wready  = !w_v;
   assign h_arready = !ar_v;
   assign m_awvalid = aw_v;
   assign m_wvalid  = w_v;
   assign m_arvalid = ar_v;
+  assign m_wdata = w_hi ? hd[511:256] : hd[255:0];
+  assign m_wstrb = w_hi ? hs[63:32] : hs[31:0];
+  assign m_wlast = w_hi;
   always_ff @(posedge hclk) begin
     if (!aw_v) m_awaddr <= h_awaddr;
-    if (!w_v) begin m_wdata <= h_wdata; m_wstrb <= h_wstrb; m_wlast <= h_wlast; end
+    if (!w_v) begin hd <= h_wdata; hs <= h_wstrb; end
     if (!ar_v) m_araddr <= h_araddr;
     h_rdata <= m_rdata;
     if (hrst_q) begin
-      aw_v <= 1'b0; w_v <= 1'b0; ar_v <= 1'b0; h_rvalid <= 1'b0; h_bvalid <= 1'b0;
+      aw_v <= 1'b0; w_v <= 1'b0; w_hi <= 1'b0; ar_v <= 1'b0; h_rvalid <= 1'b0; h_bvalid <= 1'b0;
     end else begin
       aw_v <= aw_v ? !m_awready : h_awvalid;
-      w_v  <= w_v ? !m_wready : h_wvalid;
+      w_v  <= w_v ? !(m_wready && w_hi) : h_wvalid;
+      if (w_v && m_wready) w_hi <= !w_hi;
       ar_v <= ar_v ? !m_arready : h_arvalid;
       h_rvalid <= m_rvalid;
       h_bvalid <= m_bvalid;
     end
   end
+endmodule
+
+// A link from the host block to a port's register (otpu_f2_hbm_mem g_port u_lk_*): otpu_link's
+// sender (the take and the beat registered, a credit per queue entry) at the host block, NS
+// register stages each way (the beat forward, the pop pulse back: otpu_f2_hbm_xr, placed by
+// the router along the way), otpu_link's receiver (the stage and the queue) at the port. A beat
+// crosses in NS + 2 cycles, its credit comes back NS + 2 later; DEPTH beats per round trip.
+module otpu_f2_hbm_hlink #(
+  parameter int W     = 1,
+  parameter int NS    = 2,
+  parameter int DEPTH = 4
+) (
+  input  logic         hclk,
+  input  logic         hrst,
+  input  logic         i_v,
+  output logic         i_r,
+  input  logic [W-1:0] i_d,
+  output logic         o_v,
+  input  logic         o_r,
+  output logic [W-1:0] o_d
+);
+  logic [NS:0]        fv, bp;
+  logic [NS:0][W-1:0] fd;
+  otpu_link_tx #(.W(W), .DEPTH(DEPTH)) u_tx (
+    .clk(hclk), .rst(hrst), .i_v, .i_r, .i_d, .o_v(fv[0]), .o_d(fd[0]), .i_pop(bp[NS]), .busy());
+  for (genvar k = 0; k < NS; k++) begin : g_s
+    otpu_f2_hbm_xr #(.W(W + 1)) u_f (.clk(hclk), .rst(hrst), .d({fv[k], fd[k]}), .q({fv[k + 1], fd[k + 1]}));
+    otpu_f2_hbm_xr #(.W(1)) u_b (.clk(hclk), .rst(hrst), .d(bp[k]), .q(bp[k + 1]));
+  end
+  otpu_link_rx #(.W(W), .DEPTH(DEPTH)) u_rx (
+    .clk(hclk), .rst(hrst), .i_v(fv[NS]), .i_d(fd[NS]), .o_pop(bp[0]), .o_v, .o_r, .o_d);
 endmodule

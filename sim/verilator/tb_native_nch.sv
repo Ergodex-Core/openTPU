@@ -19,7 +19,8 @@ module tb_native_nch;
   parameter bit REF = 1'b0;
   parameter bit CHASH = 1'b1;
   parameter bit MAPBUG = 1'b0;
-  parameter bit HIGH = 1'b0;         // port B's region above 4 GiB (NCH >= 4: a slice past 4 GiB)       // 1: this file's map leaves the pair's fold out (must FAIL)
+  parameter bit HIGH = 1'b0;
+  parameter bit WDQ = 1'b0;          // the write-done compare a register (the F2 HBM board's)         // port B's region above 4 GiB (NCH >= 4: a slice past 4 GiB)       // 1: this file's map leaves the pair's fold out (must FAIL)
   localparam int CW = $clog2(NCH), PIB = CW - 1, NP = NCH / 2;
   // regions, in words: A reads [0, RO), B [RO, 2 RO), SW writes [2 RO, 3 RO), A writes [3 RO, 4 RO)
   localparam int RO = 1 << 14;
@@ -74,7 +75,7 @@ module tb_native_nch;
   logic [NCH-1:0][511:0] n_wdata, n_rdata;
   logic [NCH-1:0][63:0] n_wmask;
   logic [NCH-1:0][15:0] n_wdone;
-  otpu_native_dram #(.NCH(NCH), .CHASH(CHASH)) u_dut (
+  otpu_native_dram #(.NCH(NCH), .CHASH(CHASH), .WDQ(WDQ)) u_dut (
     .clk, .rst, .a_flush, .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr),
     .a_wdata_x(a_wdata), .a_be_x(a_be), .a_rvalid, .a_rdata, .sw_rdy, .sw_req, .sw_addr,
     .sw_wdata, .sw_be, .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par,
