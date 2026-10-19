@@ -29,7 +29,7 @@ if {[get_msg_config -count -severity {CRITICAL WARNING}] > $otpu_constraint_crit
     [get_msg_config -count -severity WARNING] > $otpu_constraint_warnings} {
   error "openTPU timing constraints produced a warning"
 }
-if {![llength $c2x_pb] || ![info exists c2x_rp] || ![llength $c2x_rp] ||
+if {![llength $c2x_pb] || ![info exists c2x_ip] || ![llength $c2x_ip] ||
     ![info exists c2x_qp] || ![llength $c2x_qp]} {
   error "openTPU pumped TMEM timing constraints were not applied"
 }
