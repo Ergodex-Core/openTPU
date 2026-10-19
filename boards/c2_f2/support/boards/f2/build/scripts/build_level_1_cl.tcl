@@ -1,0 +1,31 @@
+# Preserve the pinned HDK implementation sequence, then qualify its checkpoint.
+# Unlike standalone synthesis recovery, linking consumes the firmware image
+# already stored in post_synth.dcp and never calls refresh_meminit.
+set_param general.maxThreads 8
+create_project -in_memory -part $DEVICE_TYPE -force
+# The HDK reads ${SHELL_MODE}_cl_pnr_user.xdc as a managed XDC (every Tcl command that is not a
+# constraint dropped with a CRITICAL WARNING), so openTPU's placement Tcl (cl_pnr_user.tcl: the
+# linked reset exception, the HBM floorplan) is read unmanaged at the one point of the HDK's
+# sequence after its constraints and before implementation: its opt_design call, wrapped once
+# (otpu_clk2x.tcl, the pumped TMEM's multicycles, with it: read after synthesis too, where they
+# check the netlist; read again here so they are on the linked design whatever the checkpoint
+# carried. docs/v4/f2-timing.md).
+rename opt_design otpu_hdk_opt_design
+proc opt_design {args} {
+  rename opt_design {}
+  rename otpu_hdk_opt_design opt_design
+  read_xdc -unmanaged ${::constraints_dir}/cl_pnr_user.tcl
+  read_xdc -unmanaged ${::constraints_dir}/otpu_clk2x.tcl
+  opt_design {*}$args
+}
+source ${HDK_SHELL_DIR}/build/scripts/build_level_1_cl.tcl
+if {[info commands otpu_hdk_opt_design] ne ""} { error "openTPU: the HDK sequence ran no opt_design" }
+set otpu_routed ${checkpoints_dir}/${CL}.${TAG}.post_route.dcp
+if {![file exists $otpu_routed]} {
+  set otpu_routed ${checkpoints_dir}/${CL}.${TAG}.post_route.VIOLATED.dcp
+}
+if {![file exists $otpu_routed]} { error "openTPU: implementation produced no routed checkpoint" }
+close_project
+open_checkpoint $otpu_routed
+source ${scripts_dir}/validate_route.tcl
+close_design
