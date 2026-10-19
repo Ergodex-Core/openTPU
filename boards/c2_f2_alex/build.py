@@ -285,7 +285,14 @@ def quantity(value):
 
 def validate_memory_bd(path):
     """Inspect the generated BD, including effective decode rather than Tcl intent."""
-    d = json.loads(Path(path).read_text())['design']
+    def unique_object(pairs):
+        result = {}
+        for key, value in pairs:
+            if key in result:
+                raise RuntimeError(f'Generated C2 SmartConnect mismatch: duplicate JSON key {key}')
+            result[key] = value
+        return result
+    d = json.loads(Path(path).read_text(), object_pairs_hook=unique_object)['design']
     def require(ok, detail):
         if not ok:
             raise RuntimeError(f'Generated C2 SmartConnect mismatch: {detail}')
@@ -332,9 +339,26 @@ def validate_memory_bd(path):
     for source, space in spaces.items():
         targets = range(8) if source == 'S_HOST' else [int(source[3:])]
         want = {(f'/M_H{p}/Reg', p * 2**29, 2**29) for p in targets}
-        segments = space['segments'].values()
-        actual = {(seg['address_block'], quantity(seg['offset']), quantity(seg['range'])) for seg in segments}
-        require(len(space['segments']) == len(want) and actual == want, f'{source} decode windows')
+        active, excluded, destinations = [], [], []
+        for seg in space['segments'].values():
+            destination = seg['address_block']
+            destinations.append(destination)
+            if 'is_excluded' in seg:
+                # Vivado 2025.2 retains all excluded crosspoints as records,
+                # with a canonical TRUE flag and an inert 0/1 placeholder.
+                require(seg['is_excluded'] == 'TRUE', f'{source} noncanonical exclusion flag')
+                require(quantity(seg['offset']) == 0 and quantity(seg['range']) == 1,
+                        f'{source} excluded-segment placeholder')
+                excluded.append(destination)
+            else:
+                active.append((destination, quantity(seg['offset']), quantity(seg['range'])))
+        all_destinations = {f'/M_H{p}/Reg' for p in range(8)}
+        want_excluded = all_destinations - {entry[0] for entry in want}
+        require(len(destinations) == 8 and len(set(destinations)) == 8 and
+                set(destinations) == all_destinations, f'{source} destination inventory')
+        require(len(active) == len(want) and set(active) == want, f'{source} decode windows')
+        require(len(excluded) == len(want_excluded) and set(excluded) == want_excluded,
+                f'{source} excluded destinations')
     return {'interfaces': len(expected), 'slave_interfaces': 9, 'master_interfaces': 8,
             'clocks_mhz': [200, 250, 450], 'channel_bytes': 2**29,
             'bd_sha256': sha(path), 'qualification': 'configuration-only-not-timing'}

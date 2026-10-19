@@ -234,8 +234,11 @@ def generated_bd():
     d['nets']['aresetn'] = {'ports': ['aresetn', 'memory_sc/aresetn']}
     for source in ['S_HOST', *(f'S_N{p}' for p in range(8))]:
         targets = range(8) if source == 'S_HOST' else [int(source[3:])]
-        d['addressing']['/']['address_spaces'][source] = {'segments': {
-            f'SEG_M_H{p}_Reg': {'address_block': f'/M_H{p}/Reg', 'offset': hex(p * 2**29), 'range': '512M'} for p in targets}}
+        segments = {}
+        for p in range(8):
+            segments[f'SEG_M_H{p}_Reg'] = ({'address_block': f'/M_H{p}/Reg', 'offset': hex(p * 2**29), 'range': '512M'}
+                if p in targets else {'address_block': f'/M_H{p}/Reg', 'offset': '0x000000000', 'range': '1', 'is_excluded': 'TRUE'})
+        d['addressing']['/']['address_spaces'][source] = {'segments': segments}
     return {'design': d}
 
 
@@ -345,3 +348,61 @@ def test_run_stage_refuses_changed_prepared_script(tmp_path, monkeypatch):
     monkeypatch.setattr(b.subprocess, 'run', lambda *a, **k: pytest.fail('must not launch'))
     with pytest.raises(RuntimeError, match='Prepared build input changed'):
         b.run_stage(tmp_path, 'ip', [], 'vivado', tmp_path, {})
+
+
+@pytest.mark.parametrize('flag', ['true', 'True', 'FALSE', 'false', '', True, False, 1, None])
+def test_bd_rejects_noncanonical_exclusion_flags(tmp_path, flag):
+    data = generated_bd()
+    data['design']['addressing']['/']['address_spaces']['S_N0']['segments']['SEG_M_H1_Reg']['is_excluded'] = flag
+    path = tmp_path / 'f2_mem.bd'; b.write_json(path, data)
+    with pytest.raises(RuntimeError, match='noncanonical exclusion flag'):
+        b.validate_memory_bd(path)
+
+
+@pytest.mark.parametrize('change', ['missing_exclusion', 'duplicate_destination', 'unknown_destination',
+                                   'own_excluded', 'host_excluded', 'enabled_crosswindow', 'excluded_offset', 'excluded_range'])
+def test_bd_rejects_excluded_decode_mutations(tmp_path, change):
+    data = generated_bd()
+    spaces = data['design']['addressing']['/']['address_spaces']
+    segs = spaces['S_N0']['segments']
+    if change == 'missing_exclusion':
+        segs.pop('SEG_M_H1_Reg')
+    elif change == 'duplicate_destination':
+        segs['SEG_M_H1_Reg']['address_block'] = '/M_H2/Reg'
+    elif change == 'unknown_destination':
+        segs['SEG_M_H1_Reg']['address_block'] = '/M_H8/Reg'
+    elif change == 'own_excluded':
+        segs['SEG_M_H0_Reg'] = {'address_block': '/M_H0/Reg', 'offset': '0', 'range': '1', 'is_excluded': 'TRUE'}
+    elif change == 'host_excluded':
+        spaces['S_HOST']['segments']['SEG_M_H1_Reg'] = {'address_block': '/M_H1/Reg', 'offset': '0', 'range': '1', 'is_excluded': 'TRUE'}
+    elif change == 'enabled_crosswindow':
+        segs['SEG_M_H1_Reg'] = {'address_block': '/M_H1/Reg', 'offset': '0x20000000', 'range': '512M'}
+    elif change == 'excluded_offset':
+        segs['SEG_M_H1_Reg']['offset'] = '0x20000000'
+    else:
+        segs['SEG_M_H1_Reg']['range'] = '512M'
+    path = tmp_path / 'f2_mem.bd'; b.write_json(path, data)
+    with pytest.raises(RuntimeError, match='SmartConnect mismatch'):
+        b.validate_memory_bd(path)
+
+
+def test_bd_rejects_duplicate_json_members(tmp_path):
+    text = json.dumps(generated_bd()).replace('"S_N0":', '"S_N0": {}, "S_N0":', 1)
+    path = tmp_path / 'f2_mem.bd'; path.write_text(text)
+    with pytest.raises(RuntimeError, match='duplicate JSON key S_N0'):
+        b.validate_memory_bd(path)
+
+
+def test_bd_actual_vivado_exclusion_schema(tmp_path):
+    # Literal observed schema from read-bd-aa7a23ed-001 (2026-10-19), not a
+    # claimed fresh hardware result. All remaining interfaces use synthetic data.
+    data = generated_bd()
+    spaces = data['design']['addressing']['/']['address_spaces']
+    for p in range(8):
+        segs = spaces[f'S_N{p}']['segments']
+        for q in range(8):
+            segs[f'SEG_M_H{q}_Reg'] = ({'address_block': f'/M_H{q}/Reg',
+                'offset': f'0x{p * 2**29:09X}', 'range': '512M'} if p == q else
+                {'address_block': f'/M_H{q}/Reg', 'offset': '0x000000000', 'range': '1', 'is_excluded': 'TRUE'})
+    path = tmp_path / 'f2_mem.bd'; b.write_json(path, data)
+    assert b.validate_memory_bd(path)['master_interfaces'] == 8
