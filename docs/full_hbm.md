@@ -79,9 +79,39 @@ composite functions pipelined), not the port. The 4-layer + head point at S = 4:
 `tools/perf_qwen.py --slices S` on the engine model and on the native model, with the v4
 numbers 949,550 / 2,394,257 beside them.)
 
-## Utilization (estimated per SLR)
+## Utilization (estimated per SLR; tools/v5_utilization.py)
 
-(The table from the spec's section 6, refined.)
+Block RAMs and DSPs counted from the RTL's parameters, LUTs and flip-flops scaled from the
+modules Vivado measured on the v4 builds (the script reproduces the v4 board: 222K LUT against
+the measured 226K, 1,275 DSP exactly, 359 RAMB36 against 416). Budgets: SLR0 272K LUT (the HBM
+fabric's SLR), SLR1 230K, SLR2 435K; 672 RAMB36, 3,008 DSP, 320 URAM each; 23K SLLs a
+boundary assumed (the brief's figure: verify on a placed checkpoint). Nothing over 80%, nothing
+far under it.
+
+| | LUT | FF | RAMB36 | DSP | URAM |
+|---|---|---|---|---|---|
+| a v5 slice (MCOLS 4, PORTB 4, RL 4, FIFO_DEPTH 256, ACT_ROWS 8, TRACE 4096, NRD 128) | 170K (u_mxu 41K, u_vpu 36K, u_tmem 12K, quant / seq / dma 28K, the adapter 51K) | 79K | 236 (chunk FIFO 57, scale FIFOs 7, TMEM 64, ACT RAM 29, IMEM 29, trace 8, the rest 42) | 727 (512 PEs, 36 column ends, 26 epilogue, 153 VPU / quantizer) | 0 |
+| an engine (otpu_hbm_ch) x 32 | 38K | 45K | 256 (the 512 b x 256 read FIFOs, 512 x 72 mode) | 0 | 0 |
+| the host chain + mux2 | 7K | 15K | 0 | 0 | 0 |
+| the hub, ctrl, trace; the chain stages | 7K | 8K + 16K a boundary | 8 | 0 | 0 |
+
+| SLR (`f2-hbm:v5`) | contents | LUT | FF | RAMB36 | DSP |
+|---|---|---|---|---|---|
+| SLR0 | slice 0, 32 engines, the host chain, mux2 | **215K (79%)** | 154K | 492 (73%) | 727 (24%) |
+| SLR1 | slice 1, the hub, ctrl, trace, the OCL / PCIS crossings | **177K (77%)** | 103K | 244 (36%) | 727 (24%) |
+| SLR2 | slices 2 and 3 | **340K (78%)** | 157K | 472 (70%) | 1,454 (48%) |
+
+`f2-hbm:v5s3`: SLR0 205K (75%), SLR1 177K (77%), SLR2 170K (39%); RAMB36 428 / 244 / 236.
+
+SLR crossings (bits, both directions, every one a 3-stage otpu_xr chain): per slice's memory
+8 channels x (27 down + 517 up) + the 580-bit shared write bus = 4,932 (8,960 without the bus);
+the collective's links ~1.3K a slice; the control path 0.15K. With the hub in SLR1: **SLR0-SLR1
+16.2K (71%), SLR1-SLR2 12.6K (55%)** at S = 4; 11.3K (49%) / 6.3K (28%) at S = 3.
+
+The levers if a synthesis lands over the line: ACT_ROWS 4 (-12 RAMB36 a slice; prefill
+streams 4 rows a pass), TRACE_DEPTH 1024 (-6), the TMEM's 64 RAMB36 into 8 URAM288 a slice
+(the pumped bank in URAM: a design change to otpu_tmem, docs/tmem_pump.md's contract), RD 96 on
+slice 0 (-2K LUT in SLR0).
 
 ## What still blocks an FPGA build
 
