@@ -69,6 +69,8 @@ switch $fault {
     pruned_pin_unknown_source {dict unset pins u_core_clk/clk_out2;dict set clocks unused400 SOURCE_PINS unrelated/clock}
     pruned_pin_no_source {dict unset pins u_core_clk/clk_out2;dict unset clocks unused400 SOURCE_PINS}
     wrong_kernel {dict set cells u_board ORIG_REF_NAME otpu_board}
+    missing_ref_property {dict unset cells u_board REF_NAME}
+    missing_blackbox_property {dict unset cells u_board IS_BLACKBOX}
     opaque_kernel {dict set cells u_board IS_BLACKBOX 1}
     opaque_mxu {dict set cells u_board/u_mxu IS_BLACKBOX 1}
     missing_native {dict unset cells u_native7}
@@ -100,12 +102,40 @@ switch $fault {
     }
     extra_interface {lappend mem_pins u_mem/S_N8_arvalid;dict set pins u_mem/S_N8_arvalid {NAME u_mem/S_N8_arvalid}}
     missing_handshake {set at [lsearch -exact $mem_pins u_mem/M_H7_rready];set mem_pins [lreplace $mem_pins $at $at]}
+    indexed_handshakes {
+        set updated {}
+        foreach name $mem_pins {
+            if {[regexp {_(awvalid|awready|wvalid|wready|bvalid|bready|arvalid|arready|rvalid|rready)$} $name]} {
+                set name [format {%s[0]} $name]
+                dict set pins $name [dict create NAME $name]
+            }
+            lappend updated $name
+        }
+        set mem_pins $updated
+    }
+    duplicate_handshake {lappend mem_pins u_mem/S_HOST_awvalid}
+    mixed_handshake {lappend mem_pins {u_mem/S_HOST_awvalid[0]}}
+    duplicate_handshake_bit - handshake_extra_bit - handshake_nonzero_bit {
+        set at [lsearch -exact $mem_pins u_mem/S_HOST_awvalid]
+        set mem_pins [lreplace $mem_pins $at $at]
+        if {$fault eq "duplicate_handshake_bit"} {
+            lappend mem_pins {u_mem/S_HOST_awvalid[0]} {u_mem/S_HOST_awvalid[0]}
+        } elseif {$fault eq "handshake_extra_bit"} {
+            lappend mem_pins {u_mem/S_HOST_awvalid[0]} {u_mem/S_HOST_awvalid[1]}
+        } else {lappend mem_pins {u_mem/S_HOST_awvalid[1]}}
+    }
     wrong_width {set at [lsearch -exact $mem_pins {u_mem/S_N7_awaddr[33]}];set mem_pins [lreplace $mem_pins $at $at]}
     duplicate_bit {lappend mem_pins {u_mem/M_H0_wdata[0]}}
+    vector_scalar_duplicate {lappend mem_pins u_mem/S_HOST_awaddr}
 }
 proc version {args} {return [expr {$::fault eq "version" ? "2025.1" : "2025.2"}]}
 proc current_instance {} {return [expr {$::fault eq "scope" ? "WRAPPER/CL" : ""}]}
 proc list_property {object} {
+    if {$::fault eq "cell_property_inventory_once" && [dict exists $::cells $object]} {
+        if {![info exists ::property_queries]} {set ::property_queries {}}
+        if {[dict exists $::property_queries $object]} {error "repeated cell property inventory $object"}
+        dict set ::property_queries $object 1
+    }
     foreach table {cells clocks pins} {if {[dict exists [set ::$table] $object]} {return [dict keys [dict get [set ::$table] $object]]}}
     if {[string match */* $object]} {return NAME}
     error "unknown fixture object $object"
@@ -155,6 +185,11 @@ proc get_clocks {args} {
     return [expr {[dict exists $::clocks $name] ? $name : ""}]
 }
 proc all_registers {args} {return [dict get $::members [lindex $args 1]]}
+proc write_checkpoint {path} {
+    if {$::fault eq "checkpoint_error"} {error "mock checkpoint write failure"}
+    set f [open $path {WRONLY CREAT EXCL}]
+    puts $f {MOCK_DIAGNOSTIC_NOT_QUALIFIED_NOT_FPGA_CONTENT};close $f
+}
 proc write_xdc {args} {
     set f [open [lindex $args end] w]
     puts $f {# mock export; never physical constraint evidence}
@@ -178,6 +213,10 @@ foreach command {report_timing_summary report_drc report_cdc report_bus_skew rep
 proc get_drc_violations {args} {return {}}
 proc get_methodology_violations {args} {return {}}
 if {$fault eq "existing_directory"} {file mkdir [file join $run synth_audit]}
+if {$fault eq "existing_checkpoint"} {
+    set f [open [file join $run pre_audit.NOT_QUALIFIED.dcp] w]
+    puts $f {PREEXISTING};close $f
+}
 if {[catch {::c2_alex::audit_synthesis $run} result]} {puts stderr $result;exit 1}
 puts [list SUMMARY $result]
 '''
@@ -195,7 +234,7 @@ def run_audit(tmp_path, fault):
 
 @pytest.mark.parametrize('fault', ['none', 'vendor_opaque', 'opaque_clock', 'vendor_multicycle',
                                  'ref_without_orig', 'ref_empty_orig', 'pruned_unused_pin',
-                                 'retained_unused_clock'])
+                                 'retained_unused_clock', 'indexed_handshakes', 'cell_property_inventory_once'])
 def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_path, fault):
     result = run_audit(tmp_path, fault)
     assert result.returncode == 0, result.stderr
@@ -208,6 +247,10 @@ def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_pat
     assert 'full_shell_link_and_complete_clock_CDC_audit' in summary
     assert 'generated_BD_required' in summary
     assert len(list(directory.iterdir())) == 14
+    assert 'memory_interface_pins ' in (directory / 'objects.tcldata').read_text()
+    assert (tmp_path / 'pre_audit.NOT_QUALIFIED.dcp').is_file()
+    assert not list(tmp_path.rglob('*post_synth*.dcp'))
+    assert 'qualification NOT_QUALIFIED' in (directory / 'objects.tcldata').read_text()
     assert not list(tmp_path.rglob('*.passed'))
     checklist = (directory / 'REQUIRED_NEXT_STEPS.txt').read_text()
     for required in ('CURRENT nine-SI/eight-MI', 'narrow byte strobes', 'independent IDs',
@@ -235,6 +278,10 @@ def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_pat
     'tmem_exception', 'custom_multicycle', 'incomplete_export', 'missing_report',
     'report_error', 'existing_directory',
     'pruned_pin_used_400', 'pruned_pin_unknown_source', 'pruned_pin_no_source',
+    'missing_ref_property', 'missing_blackbox_property', 'duplicate_handshake',
+    'mixed_handshake', 'duplicate_handshake_bit', 'handshake_extra_bit',
+    'handshake_nonzero_bit', 'vector_scalar_duplicate',
+    'existing_checkpoint', 'checkpoint_error',
 ])
 def test_synthesis_audit_rejects_wrong_or_incomplete_evidence(tmp_path, fault):
     result = run_audit(tmp_path, fault)
@@ -243,3 +290,9 @@ def test_synthesis_audit_rejects_wrong_or_incomplete_evidence(tmp_path, fault):
     assert 'C2_ALEX_SYNTH_AUDIT_RECORDED' not in result.stdout
     assert not (tmp_path / 'synth_audit/summary.tcldata').exists()
     assert not list(tmp_path.rglob('*.passed'))
+    assert not list(tmp_path.rglob('*post_synth*.dcp'))
+    diagnostic = tmp_path / 'pre_audit.NOT_QUALIFIED.dcp'
+    if fault == 'existing_checkpoint':
+        assert diagnostic.read_text().strip() == 'PREEXISTING'
+    elif fault not in ('version', 'scope', 'existing_directory', 'checkpoint_error'):
+        assert diagnostic.read_text().strip() == 'MOCK_DIAGNOSTIC_NOT_QUALIFIED_NOT_FPGA_CONTENT'

@@ -18,12 +18,18 @@ proc ::c2_alex::names {objects} {
 proc ::c2_alex::cell {name expected_ref concrete} {
     set object [get_cells -quiet $name]
     if {[names $object] ne [list $name]} {error "C2 Alex audit: missing/ambiguous cell $name"}
-    set ref [property $object REF_NAME]
-    if {"ORIG_REF_NAME" in [list_property $object] && [get_property ORIG_REF_NAME $object] ne ""} {
+    # Enumerating properties on large hierarchical cells is expensive in
+    # Vivado. Read the inventory once; retain the same missing-property gates.
+    set properties [list_property $object]
+    foreach key {REF_NAME IS_BLACKBOX} {
+        if {$key ni $properties} {error "C2 Alex audit: missing $key on $object"}
+    }
+    set ref [get_property REF_NAME $object]
+    if {"ORIG_REF_NAME" in $properties && [get_property ORIG_REF_NAME $object] ne ""} {
         set ref [get_property ORIG_REF_NAME $object]
     }
     if {$ref ne $expected_ref} {error "C2 Alex audit: $name has unexpected reference $ref"}
-    set opaque [property $object IS_BLACKBOX]
+    set opaque [get_property IS_BLACKBOX $object]
     if {![string is boolean -strict $opaque] || ($concrete && $opaque)} {
         error "C2 Alex audit: $name is unresolved or has unknown black-box state"
     }
@@ -62,15 +68,21 @@ proc ::c2_alex::interfaces {pins} {
     if {[lsort [dict keys $interfaces]] ne [lsort $expected]} {error "C2 Alex audit: expected nine SI/eight MI interfaces"}
     foreach iface $expected {
         foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {
-            if {![dict exists $seen $iface/$signal] || [dict get $seen $iface/$signal] != 1} {
-                error "C2 Alex audit: missing/duplicate scalar $iface/$signal"
+            # Vivado may expose a one-bit boundary as either name or name[0].
+            # Accept exactly one spelling, never both, repeated or wider bits.
+            set key $iface/$signal
+            set scalars [expr {[dict exists $seen $key] ? [dict get $seen $key] : 0}]
+            set indexed [expr {[dict exists $bits $key] ? [dict get $bits $key] : {}}]
+            if {!(($scalars == 1 && [llength $indexed] == 0) ||
+                  ($scalars == 0 && $indexed eq "0"))} {
+                error "C2 Alex audit: missing/duplicate/wrong-width scalar $key"
             }
         }
         set host [expr {$iface eq "S_HOST"}]; set master [string match M_H* $iface]
         set address_width [expr {$host ? 64 : 34}]
         set data_width [expr {$master ? 256 : 512}]
         foreach {signal width} [list awaddr $address_width araddr $address_width wdata $data_width rdata $data_width wstrb [expr {$data_width/8}]] {
-            if {![dict exists $bits $iface/$signal]} {error "C2 Alex audit: missing vector $iface/$signal"}
+            if {[dict exists $seen $iface/$signal] || ![dict exists $bits $iface/$signal]} {error "C2 Alex audit: missing/mixed scalar vector $iface/$signal"}
             set actual [lsort -integer [dict get $bits $iface/$signal]]
             set wanted {}; for {set bit 0} {$bit < $width} {incr bit} {lappend wanted $bit}
             if {$actual ne $wanted} {error "C2 Alex audit: wrong width/duplicate bit for $iface/$signal"}
@@ -150,10 +162,18 @@ proc ::c2_alex::audit_synthesis {run} {
     if {[current_instance] ne ""} {error "C2 Alex audit: requires top-level synthesis scope"}
     set directory [file join $run synth_audit]
     if {[file exists $directory]} {error "C2 Alex audit: refusing existing evidence directory"}
+    set diagnostic [file join $run pre_audit.NOT_QUALIFIED.dcp]
+    if {[file exists $diagnostic]} {error "C2 Alex audit: refusing existing diagnostic checkpoint"}
     file mkdir $directory
     set audit [open [file join $directory objects.tcldata] {WRONLY CREAT EXCL}]
     set status [catch {
         puts $audit [list evidence kind synthesis_only route_qualified 0 hardware_measured 0 tool [version -short]]
+        # Preserve the actual optimized netlist for diagnosing an audit failure.
+        # This is never the builder's post_synth checkpoint or qualified input.
+        write_checkpoint $diagnostic
+        if {![file isfile $diagnostic] || [file size $diagnostic] == 0} {error "C2 Alex audit: missing/empty diagnostic checkpoint"}
+        puts $audit [list diagnostic_checkpoint $diagnostic qualification NOT_QUALIFIED]
+        flush $audit
         cell u_board otpu_c2_hbm_kernel 1
         cell u_board/u_mxu otpu_c2_mxu 1
         set natives [names [get_cells -quiet -regexp {^u_native[0-9]+$}]]
@@ -165,7 +185,10 @@ proc ::c2_alex::audit_synthesis {run} {
         if {[llength [get_cells -quiet -hierarchical -filter {REF_NAME =~ otpu_tmem* || ORIG_REF_NAME =~ otpu_tmem*}]]} {
             error "C2 Alex audit: unexpected TMEM implementation"
         }
-        set topology [interfaces [names [get_pins -quiet -of_objects [get_cells u_mem]]]]
+        set interface_pins [names [get_pins -quiet -of_objects [get_cells u_mem]]]
+        puts $audit [list memory_interface_pins $interface_pins]
+        flush $audit
+        set topology [interfaces $interface_pins]
         puts $audit [list interface_topology $topology address_map_evidence generated_BD_required]
         set opaque [opaque_roots $audit]
         foreach {name period} {clk_main_a0 4.000 clk_hbm_ref 10.000} {
