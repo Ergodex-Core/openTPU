@@ -72,7 +72,7 @@ read_ip $iprun/{PCIS}
 add_files -fileset sim_1 [glob $run/rtl/*.sv]
 set_property top tb_f2_mem_c2 [get_filesets sim_1]
 set_property xsim.simulate.runtime {{all}} [get_filesets sim_1]
-set_property xsim.simulate.xsim.more_options {{-testplusarg SEED={seed} -testplusarg PHASE={phase}}} [get_filesets sim_1]
+set_property -name xsim.simulate.xsim.more_options -value {{-testplusarg SEED={seed} -testplusarg PHASE={phase}}} -objects [get_filesets sim_1]
 launch_simulation -simset sim_1 -mode behavioral
 close_sim
 close_project

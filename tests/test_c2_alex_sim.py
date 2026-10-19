@@ -311,3 +311,23 @@ def test_complete_receipt_binds_all_scenarios_and_dependencies(tmp_path,monkeypa
             name=f'seed-{seed}-phase-{phase}/console.log'
             assert receipt['evidence'][name]['sha256']==s.build.sha(out/name)
         assert receipt['hardware_actions'] is False
+
+
+def test_xsim_negative_options_use_named_property_value(tmp_path):
+    # Vivado Common17-170 rejects the old positional value beginning with '-'.
+    # Exercise Tcl tokenization and require its explicit named-argument form.
+    script=s.simulation_tcl(tmp_path,tmp_path/'private-ip',17,1)
+    line=next(line for line in script.splitlines() if 'xsim.simulate.xsim.more_options' in line)
+    shim="""
+proc get_filesets {args} {return sim_1}
+proc set_property {args} {
+ if {[lindex $args 0] ne "-name" || [lindex $args 1] ne "xsim.simulate.xsim.more_options" ||
+     [lindex $args 2] ne "-value" || [lindex $args 4] ne "-objects" ||
+     [lindex $args 5] ne "sim_1" || [llength $args] != 6} {error "unsafe positional property invocation"}
+ if {[lindex $args 3] ne "-testplusarg SEED=17 -testplusarg PHASE=1"} {error "plusargs changed"}
+ puts NAMED_PROPERTY_VALUE_PASS
+}
+"""
+    path=tmp_path/'property.tcl';path.write_text(shim+line+'\n')
+    result=subprocess.run(['tclsh',str(path)],capture_output=True,text=True)
+    assert result.returncode==0 and 'NAMED_PROPERTY_VALUE_PASS' in result.stdout,result.stdout+result.stderr
