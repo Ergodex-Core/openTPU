@@ -87,6 +87,23 @@ The probe also established that Vivado's exception property includes
 must parse these actual report forms. Probe evidence is preserved in
 `build/c2-fpga/counter-evidence/` and the S3 `full-4f750912/` prefix.
 
+A second read-only probe found 35 inherited shell methodology findings and four
+`TIMING-54` scoped-clock findings. The unchanged shell classifier passed all 35;
+the inherited DDR/100 MHz context classifier rejected this HBM/200 MHz design.
+All core and HBM clock registers are inside `WRAPPER/CL`. Across the six clock
+directions, exhaustive boundary queries found only the existing shell-reset
+entries to the three core and three HBM synchronizer CLR pins, with no top-level
+I/O paths. Vivado returns those exact false paths in cell-source queries both
+with and without `-user_ignored`; this is recorded explicitly rather than
+interpreted as a timed data crossing. The C2 checker must audit all six exported
+destination-period bounds and map the four findings to their actual constraint
+IDs. No severity or timing exception is relaxed.
+
+This probe's complete reports, exported constraints, object properties and logs
+are in `build/c2-fpga/methodology-evidence/` and S3
+`full-4f750912/methodology-evidence.tar.gz`, with SHA256
+`c7da174694ff9e07d4f6f1f929fad8481d0bf4ec3f7f90083f9bc64c96fb2125`.
+
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
 unless those gates pass. The planned execution host is the dedicated
