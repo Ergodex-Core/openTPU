@@ -12,16 +12,14 @@
 # 91,118 in SLR1 and 21 in SLR2, with 7,693 SLR0 <-> SLR1 crossings, 2 of them registered, and
 # failed at -4.6 ns: the host path 6.1 ns of route from the eight ports' registers, the slice's
 # grant and address paths 8 ns across the split. Here:
-#   pb_otpu_hbm   (SLR0, the CL's 20 clock regions there, ~272K LUTs): the HBM fabric u_sys/u_mem
-#                 (8 bridges, host registers and arbiters, the host path: ~30K LUTs, the 450 MHz
-#                 domain) by the HBM's AXI ports, the OCL's crossing and the SLR0 side of every
-#                 crossing register chain.
+#   pb_otpu_hbm   (SLR0, the CL's 20 clock regions there + X4Y3): the channels' otpu_native_axi
+#                 (u_sys/u_mem/g_port[*].u_naxi) and the SmartConnect fabric (u_sc) by the HBM's
+#                 AXI ports, and the SLR0 side of every crossing register chain (rounds 1-8: the
+#                 bridges, arbiters and host path, ~30K LUTs at 450 MHz).
 #   pb_otpu_mid   (SLR1, X0Y4:X3Y7, 16 clock regions): the middle stage of every chain (~18K
 #                 flip-flops, no logic).
-#   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS column): u_host's PCIS skid and output
-#                 registers (round 4; ~1.2K flip-flops).
-#   pb_otpu_xs    (SLR0, X4Y3, the top corner under the shell's column): the SLR0 ends of the
-#                 PCIS link stages (round 6, u_xs_*).
+#   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS column): the PCIS gate's skid buffers
+#                 (u_mem/u_pcis) and the OCL's crossing (u_ocl; rounds 4-8: u_host's registers).
 #   pb_otpu_board (SLR2, all 32 clock regions, ~435K LUTs): u_sys/u_board, the slice with its
 #                 adapter, the control block and the trace (226K LUTs, 52%; 416 of the SLR's 672
 #                 RAMB36, 1,275 of 3,008 DSPs), and the SLR2 side of the chains. One SLR, so the

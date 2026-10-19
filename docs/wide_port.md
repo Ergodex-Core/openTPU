@@ -1587,11 +1587,14 @@ the AR straight from the queue's head (a cycle), two SLR stages a direction inst
 | --lat 69 vs u_naxi in the loop (XR 0) | 1,100,906 | 1,066,263 | +3.2% | 5.8% (attention -10.2%) |
 | --lat 75 (69 + the chain's 6) vs u_naxi + XR 3 | 1,176,101 | 1,133,177 | +3.8% | 4.1% |
 
-Tests (Verilator 5.048, on the Mac: the m7a could not be written from this session):
-tests/test_f2_rtl.py 33 (test_native_axi 9 configurations, Alex's tb ported; test_f2_hbm_axi 6,
-the 8-channel fabric on a SmartConnect + HBM model; the missing-order check; the rounds-1-8
-tests kept), tests/test_f2_build.py 94 (the floorplan, the IP Tcl under a Vivado mock, the
-instance generator), the rest of the matrix in docs/f2_hbm.md's commit.
+Tests (Verilator 5.048, all on the Mac: the m7a could not be written from this session):
+tests/test_f2_rtl.py 33 passed (test_native_axi 9 configurations, Alex's tb ported;
+test_f2_hbm_axi 6, the 8-channel fabric on a SmartConnect + HBM model; the missing-order check;
+the rounds-1-8 tests kept), tests/test_f2_build.py 94 (the floorplan, the IP Tcl under a Vivado
+mock, the instance generator), tests/test_native_nch.py 10, tests/test_target.py 25,
+tests/test_rtl.py `-k "replay or act_reads or attention or lane_count"` (OTPU_TARGET=f2-hbm
+OTPU_NCH=8) 27 passed, 1 skipped, tests/test_observability.py 18, tests/test_wide_port_rtl.py
+168 (63 minutes, no xdist).
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
