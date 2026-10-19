@@ -138,6 +138,17 @@ Local launch and stop receipts are in `build/c2-fpga/remote/` under
 `launch-dedicated-full-7028e35e-*`,
 `relaunch-dedicated-full-7028e35e-venv-*` and `stop-old-host-user-request-*`.
 
+At 15:10:20 UTC the dedicated build passed synthesis, with all 19 FIFO crossings
+and nine write-counter crossings present. It wrote the linked checkpoint at
+15:12:17 UTC and entered optimization at 15:15:49 UTC. The 12-endpoint linked
+reset check passed and the eight-port floorplan is active. No new error appeared;
+the 21 recorded HDK shell/context critical warnings remain subject to final
+qualification. Pre-route slack is +0.387 ns setup and −0.095 ns hold, which does
+not establish routed timing closure.
+The post-opt checkpoint was written at 15:19:50 UTC, and placement started at
+15:20:35 UTC with zero errors. The corrected build has advanced beyond the
+previous clock-configuration failure; routed closure remains pending.
+
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
 unless those gates pass. The planned execution host is the dedicated
@@ -170,3 +181,16 @@ grant image writes or access in another region, and a live query from the host
 passed. The existing SSM policy and trust policy were left unchanged. Local
 receipts are in `build/c2-fpga/remote/session-stage-7028e35e/retry1/` and
 `session-image-read-policy-receipt.json`.
+
+Root software preflight also passed with exact tool hashes, a clean frozen
+checkout, NumPy 2.5.4 and process-scoped Git trust for `session-tools`. The
+physical launcher is staged but has not executed. Its own retained systemd unit
+will allow one hour for the session and five minutes for cancellation/restoration.
+
+The separate inline policy `OpenTpuC2DedicatedEvidence` permits Get/Put for
+exactly the three dedicated build-evidence objects under
+`opentpu/c2/2026-10-19/full-7028e35e-opentpu-f2/`, and Put for the single planned
+`results-7028e35e-opentpu-f2/session-01.tar.gz` archive. All 20 resource/action
+simulation decisions were checked and the applied document read back exactly.
+It adds no deletion, ACL or bucket-listing access. The local receipt is
+`build/c2-fpga/remote/c2-dedicated-evidence-policy-receipt.json`.
