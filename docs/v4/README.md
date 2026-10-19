@@ -285,7 +285,16 @@ testbenches and `boards/f2/README.md`. It is being integrated as target **`f2-bu
 (branch `v4-f2-alex`: his flow under `boards/f2/burst200/`, his RTL under
 `rtl/boards/f2/burst200/`, path edits only) so it can be built on opentpu-f2 with the current
 compute RTL (`otpu_board` gained `NCH`/`WDQ`/`CH_LOG2`/`DRAM_LOG2` since 7e42a626, defaults
-matching his 2-channel wiring) as the known-closing baseline beside round 5.
+matching his 2-channel wiring) as the known-closing baseline beside round 5. Merged (bcab657e,
+[f2-burst200.md](f2-burst200.md): path edits only, plus `T2 = false` in the toml and a
+`rtl_board` key so `target.sources()` gives his flow the plain core + shell list; his
+`tb_native_axi` passes under Verilator and Icarus; 183 F2 tests unchanged) and **build 6**
+runs on opentpu-f2 with his own driver (unit `otpu-f2burst200-build1`, script
+`/home/ubuntu/rachit/f2burst200-build1.sh`, log `/home/ubuntu/rachit/logs/f2burst200-build1.log`,
+output `/home/ubuntu/rachit/f2burst200-run1/{ip,pcis,clocks,synth_link,implement,refine,audit}`,
+each stage's `console.log`; started 18:12 UTC after one fix, f85ac03c: his Vivado version check
+is case-sensitive and this box prints `vivado v2025.2`). His refine stage is a hard gate: the
+driver exits non-zero unless the routed checkpoint has setup and hold slack >= 0.
 
 **Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
 DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
