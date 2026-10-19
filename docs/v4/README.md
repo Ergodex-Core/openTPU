@@ -250,6 +250,23 @@ in the adapter, a registered TMEM priority mask, a bridge pblock on the HBM port
 MXU's request registers in the TMEM pblock; cycle-exact and bit-exact in Verilator) and
 **build 4** runs (unit `otpu-f2hbm-build4`, output `/home/ubuntu/rachit/f2hbm-run4`).
 
+**Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
+DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
+fpga-dev-f2, `/home/ubuntu/Desktop/Ariane-Ibex-Scratch/alex/openTPU/runs/` (the lineage
+`20261014_48_burst_fabric` -> `50_burst_link` (rtl/cl_opentpu.sv, otpu_native_axi.sv,
+otpu_hbm_geometry.sv; floorplan.tcl, core_timing.tcl, platform_constraints.tcl, config.tcl)
+-> `55_burst_impl` -> `63_burst_retime` -> `68_burst_package` -> `69_burst_afi`), snapshotted
+to `s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu-alex/sources-snapshot-20261019.tar.gz`.
+His design is the structural answer to our shell's timing: every openTPU-side block runs at
+200 MHz (two native channels, each through `otpu_native_axi`, a read coalescer into 16-beat
+512-bit AXI4 bursts), and the HDK's `cl_mem_hbm_wrapper` with its SmartConnect does the
+clock crossing and 256-bit / 450 MHz side; a single SLR0 pblock with explicit ranges; place
+`ExtraNetDelay_high`, phys_opt `AggressiveExplore`, route `Explore`, retiming (his retime run
+-0.033 ns, the shipped AFI +0.032). Its limit is bandwidth (2 channels through the
+SmartConnect: 32 B/cycle in the first image, ~20 GB/s in burst200), which is what our 8-channel
+fabric fixes. Round 5 should merge the two: our 8 bridges at 200 MHz feeding vendor clock /
+width converters per port instead of our own 450 MHz logic.
+
 ## Decision (taken 2026-10-18)
 
 Try **P1** (the wide port), **P2** (four lock-step chunk lanes) and **P4** (four
