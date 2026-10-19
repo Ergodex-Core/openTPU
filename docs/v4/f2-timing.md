@@ -343,6 +343,73 @@ the request is near its RAM, which the box is for). The WHS -0.75 after phys_opt
 detailed in the report; the pump's write stage (`pk_*`, one fast period) and the LUT RAM
 crossings are the usual sources, and the route stage's hold fixing is what to read first.
 
+## Round 4: build 3 (8b2fd3a0, the floorplan applied) and its fixes
+
+Build 3 routed at WNS -1.398 / TNS -29,031, WHS +0.001, every constraint applied
+(`OTPU_LINKED_RESET_EXCEPTION_PASSED endpoints=12`, `OTPU_FLOORPLAN_APPLIED pblocks=4`), and
+failed qualification on timing. The post-route report's worst paths (40 endpoints):
+
+| group | worst path | slack | data path | what it is |
+|---|---|---|---|---|
+| hclk_raw | `u_host/pv_w_reg[6]_replica` -> `u_host/hw_wd_reg[30]/CE` | -1.40 | 3.484: logic 0.361 (5 levels), route 3.123 | the shown-half register's enable: the W take (8 ports' AND-OR) and the half select into 288 clock enables |
+| hclk_raw | `u_host/hw_wd_reg[31]` -> `g_port[0].u_hreg/m_wdata_reg[31]/D` | -1.39 | 3.507: logic 0.081 (0 levels), route 3.426 | a bare wire: the host block sits at SLR0's top by its PCIS link stages (pb_otpu_xs), the ports' registers along the HBM below |
+| clk_raw | `u_mem/n_wdone_reg[7][10]` -> `u_slice/c_n_reg[24]/CE` | -0.99 | 5.557: 0.758 (9 levels), route 4.799 | the write-count stage through the adapter's compare, wr_idle and the slice's halted into a counter's enable |
+| clk_raw | `g_port[6].u_nch/h_a0_reg[16]` -> `u_nch/ra_reg[56][12]/CE` | -0.99 | 5.610: 0.702 (7), route 4.908 | inside a bridge: the head's address through the hazard compares and the issue into the read-address array's enables, the bridge's core side stretched over the SLR0 box |
+| clk_raw | `u_board/u_mem/wh_r_reg[4][3]` -> `u_mem/whb_reg[4][36][2]/CE` | -0.98 | 5.752: 0.582 (7), route 5.170 | the adapter's SW-queue bucket hash into the hazard counters' enables |
+| clk_raw -> clk_f_raw | `u_mxu/t_rq_reg[1][2]` -> bank 6's `ADDRBWRADDR[13]`; `u_tmem/g_one.rpv_reg[6]_inv` -> bank 1's `ADDRBWRADDR[12]`; siblings | -0.47 .. -0.39 | 4.72-4.80: 0.67-0.78 (6-7), route 4.0 | the MXU's request registers (and Vivado's replicas) outside the TMEM box; the replay valid through the priority select |
+
+**RTL** (bit-exact; cycle-exact except where said):
+
+1. **The host sends the whole 64-byte beat as one 512-bit W** (otpu_f2_hbm_host; the port's
+   register `otpu_f2_hbm_hreg` sends it as its two AXI beats, `w_hi` the second, one LUT of
+   select into the arbiter's register beside it). The beat's registers (`hw_d`, `hw_s`) load
+   on the head's load alone (`hw_ld = xw_v && !hw_v`, replicated per 64 enables): the shown
+   half, its select and the 5-level enable cone are gone; the state machine is AW then W.
+2. **A link of `HNS` register stages per port and channel** (`otpu_f2_hbm_hlink` in
+   otpu_f2_hbm_mem: `otpu_link`'s sender at the host block, HNS = 2 stages forward for the
+   beat and back for the pop pulse (`otpu_f2_hbm_xr`, placed along the way), `otpu_link`'s
+   receiver with its queue at the port; B and R back through HNS stages), so the 3.4 ns of
+   wire from the host block to a port is three wires of a cycle each; a beat crosses in HNS +
+   2 cycles, DEPTH = 4 beats per credit round trip (the host sends one per ~7). The host's
+   readies are the senders' credit flip-flops beside it. Not on the token.
+3. **The adapter's write-done compare a register** (`otpu_native_dram` `WDQ`, set by
+   otpu_f2_hbm_sys through otpu_board; 0 elsewhere, so the DDR boards, tb_top and the
+   two-channel equivalence test are untouched): `iss_all_q` compares each channel's count after
+   this cycle's issue with the channel's count as it is now, so it is the combinational
+   compare one cycle later and never earlier (a write accepted later is covered by `wq_n /
+   wacc_q` until its issue, its issue by the count's lag), and `wr_idle` is one LUT level from
+   registers. The 9-level path becomes the stage -> a local compare -> a flip-flop, then the
+   flip-flop -> wr_idle -> the slice. tb_native_nch runs it at NCH 8 (`WDQ 1`); on the card
+   every wr_idle the slice waits for comes one more core cycle later.
+4. **The adapter's fill-read hazard check as a register** (rhino's a1efd022, cherry-picked
+   clean): `w_blk` kept equal to `wnz[c][wh_r[c]]` from three candidate live bits selected early,
+   so the bucket hash no longer runs a 64:1 select in front of the take and the counters'
+   enables (the `wh_r -> whb` family); cycle-exact (the register mirrors the select, checked
+   every cycle in simulation; the NCH 2 equivalence test passes).
+5. **The TMEM's priority mask a register** (otpu_tmem `bf`): computed a cycle early from the
+   replay valids' next values (`rpv <= lost`) and the age's next value (`age_nx`), so the rank
+   multiplexer into the pumped banks' addresses (`win = rq && !(rq & bf)`) starts from a
+   flip-flop instead of `rpv` through the four-way select (the `rpv_reg_inv` path loses that
+   level and Vivado's inverter). Cycle-exact: a simulation assertion compares the register
+   with the select every cycle; the slice suites that exercise replays pass.
+
+**Constraints only (no RTL)**:
+
+6. **`pb_otpu_fab`** (a child of pb_otpu_slr0, X0Y0:X3Y0, SLR0's bottom row by the HBM's AXI
+   ports): the 8 bridges, the host registers, the port arbiters and the links' receiving ends
+   (30K LUTs, 56%), each bridge compact beside its port: the 4.9 ns inside a bridge and the 4.8
+   ns from the write count's stage come from the bridges' core sides stretched up toward the
+   adapter. The adapter (39K, LUT RAM heavy) is not boxed: the placer puts it between the
+   bridges below and the slice above; the host block stays free by its PCIS stages (the links
+   carry the distance).
+7. **The MXU's request registers in the TMEM box** (`u_mxu/t_rq_reg*`, `t_ren_reg*`: the leaf
+   cells and Vivado's `_rep` replicas, not the MXU), beside the banks they address: the -0.47
+   family. Their D inputs come from the MXU's request logic over a full core period.
+8. **Post-route recovery**: yes, run boards/f2/route_opt.py (phys_opt AggressiveExplore on the
+   routed checkpoint) on build 4 if its WNS is within ~-0.5 ns: the clk -> clk_f family is
+   route-bound at that scale and the recovery passes move exactly such paths; it is not worth
+   it below -1 ns, where a floorplan or RTL change is needed.
+
 ## Verification
 
 Verilator 5.048, one run at a time, from the worktree root (the tree's `.venv`):
@@ -371,6 +438,15 @@ passed, tests/test_f2_build.py + test_f2_scoped_clocks.py + test_target.py 177 p
 floorplan and the link wrapper under Tcl mocks); the Gate 4 token bit-exact again: token
 19058 `Okay`, logits identical, DRAM identical, 8,029,592 cycles (the board model's sources
 are unchanged: the WT mode is off on otpu_mem_ch's FIFOs, the fabric is not in tb_top).
+
+Round 4 (566a30f8 the RTL, d61ffcee the floorplan): tests/test_f2_rtl.py 14 passed,
+tests/test_native_nch.py 11 passed (NCH 2 cycle-identical to the two-channel adapter at WDQ 0,
+NCH 8 at WDQ 1), tests/test_rtl.py -k "replay or act_reads or attention or lane_count" 27
+passed, 1 skipped (the replays through the registered priority mask, its assertion every
+cycle), tests/test_f2_build.py + test_f2_scoped_clocks.py + test_target.py 177 passed; the Gate 4
+token bit-exact: token 19058 `Okay`, logits identical, DRAM identical, 8,029,592 cycles
+(cycle-exact: the mask and the hazard registers mirror their selects, WDQ is the HBM board's
+only, the fabric is not in tb_top).
 
 The commits: 45ec6579 (the fabric: host, mem, port, nch), ea4ac41e and 3686f79e (the units'
 request registers; the DMA's is `t_ra_q`, `t_rq` being its port-B request register), 9ef46073

@@ -117,9 +117,11 @@ PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk) 
 port of its address (`addr[33:29]`) as one two-beat AXI3 burst, one at a time (~7 hclk cycles a
 beat through the ports' registers: 4 GB/s, above BAR4 write combining's ~2 GB/s). The host's
 master at every port is registered there (`otpu_f2_hbm_hreg` in otpu_f2_hbm_mem: a one-entry
-register for AW, W and AR whose ready is its own emptiness, R and B registered back), and the
-host block shows its AW / W valids and the W beat from flip-flops, so no hclk net between the
-host block and a port carries logic across the die ([v4/f2-timing.md](v4/f2-timing.md)). The
+register for AW, W and AR whose ready is its own emptiness, the W the host's whole 64-byte beat
+sent as its two AXI beats, R and B registered back), reached through a link of register stages
+per channel (`otpu_f2_hbm_hlink`, `HNS` = 2 each way), and the host block shows its AW / W valids
+and the beat from flip-flops, so every hclk net between the host block and a port is a stage's
+wire ([v4/f2-timing.md](v4/f2-timing.md)). The
 host's B for a burst goes back when the
 host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
 `pcis_wbusy` (an AW / W in its skid buffer, link or queue, a B not given back: registers only)
