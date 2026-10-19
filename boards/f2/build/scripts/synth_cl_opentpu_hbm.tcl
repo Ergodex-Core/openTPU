@@ -2,14 +2,24 @@
 # place of synth_cl_opentpu.tcl). Sources and target parameters are frozen by build.py in a fresh
 # CL directory before Vivado starts; the HDK's cl_mem_hbm_wrapper is copied next to them, and the
 # cl_hbm IP (both stacks, 32 AXI ports at 450 MHz, the global address switch on) is the HDK's
-# generated one (hdk/common/ip, read here as cl_mem_perf reads it). docs/f2_hbm.md.
+# generated one (hdk/common/ip, read here as cl_mem_perf reads it). The SmartConnect fabric (the
+# memory path, Alex's burst200 design at NPORT channels) is the block design build.py generated
+# before this run (create_hbm_sc.tcl into ${CL_DIR}/ip: its .bd with its out-of-context
+# checkpoints, its wrapper, and otpu_hbm_sc_inst.vh, the CL's instance of it). docs/f2_hbm.md.
 set_param general.maxThreads 6
 source ${HDK_SHELL_DIR}/build/scripts/synth_cl_header.tcl
 set_property verilog_define {SYNTHESIS XSDB_SLV_DIS} [current_fileset]
-set_property include_dirs [list ${CL_DIR}/design ${HDK_SHELL_DESIGN_DIR}/interfaces] [current_fileset]
+set otpu_ip ${CL_DIR}/ip
+if {![file exists ${otpu_ip}/ip_done.txt] || ![file exists ${otpu_ip}/otpu_hbm_sc_inst.vh]} {
+  error "openTPU: the SmartConnect fabric was not generated (${otpu_ip}: create_hbm_sc.tcl)"
+}
+set_property include_dirs [list ${CL_DIR}/design ${otpu_ip} ${HDK_SHELL_DESIGN_DIR}/interfaces] [current_fileset]
 source ${CL_DIR}/design/sources.tcl
 foreach f $otpu_sources { read_verilog -sv ${CL_DIR}/design/$f }
 read_verilog -sv ${CL_DIR}/design/cl_mem_hbm_wrapper.sv
+# the SmartConnect fabric (as Alex's build_f2.tcl reads his f2_mem block design)
+add_files ${otpu_ip}/project/otpu_hbm_sc.srcs/sources_1/bd/otpu_hbm_sc/otpu_hbm_sc.bd
+read_verilog ${otpu_ip}/otpu_hbm_sc_wrapper.v
 read_verilog -sv ${CL_DIR}/design/cl_opentpu_hbm.sv
 # the HBM controller; sh_ddr (pins only here) keeps the converter pair the DDR build reads
 read_ip [list \

@@ -32,6 +32,15 @@
 #                 and the VPU together (48K LUTs, 68 RAMB36): the pumped banks' address paths
 #                 (clk -> clk_f, one core period: otpu_clk2x.tcl) come from the VPU's ta_addr
 #                 and the MXU's t_raddr; the MXU (97K) wraps around the box.
+# Since the alex-shell rework (Alex's burst200 memory path, ergodex-openTPU 06c169cb, at 8
+# channels; docs/f2_hbm.md): pb_otpu_hbm holds the eight otpu_native_axi (u_mem/g_port[*].u_naxi)
+# and the SmartConnect fabric (WRAPPER/CL/u_sc: the eight channel SmartConnects and the host's
+# demux) by the HBM's ports; pb_otpu_pcis the PCIS gate (u_mem/u_pcis: its skid buffers, Alex's
+# f2_pcis_pipe register slice's place in his pblock_CL_SLR1) with the OCL crossing; pb_otpu_xs
+# (round 6's link stages) is gone with otpu_f2_hbm_host and its clock region X4Y3 joins
+# pb_otpu_hbm (Alex's pblock_CL_SLR0 holds it too; his partial regions X5Y1:X5Y3, X6Y1 and the
+# column ranges beside the shell are not taken: the HBM side's logic is ~a tenth of the rounds'
+# 30K LUTs). No logic of ours runs at 450 MHz.
 # Every net between SLR0 and SLR2 is a chain of three otpu_xr stages, one per SLR (the native
 # ports in otpu_f2_hbm_mem g_xr.g_x[k], the control path in otpu_axil_xr u_cx, the reset and HBM
 # ready in g_rs[k]), so each SLR crossing runs from a flip-flop to a flip-flop (TX_REG / RX_REG
@@ -52,7 +61,7 @@ proc otpu_cells {pattern} {
   if {![llength $cells]} { error "openTPU floorplan: no cells match $pattern" }
   return $cells
 }
-set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]]
+set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]]
 puts "OTPU_FLOORPLAN ports=$otpu_nport"
 
 ########################################
@@ -62,10 +71,9 @@ create_pblock pb_otpu_hbm
 set_property PARENT pblock_CL [get_pblocks pb_otpu_hbm]
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3}
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X4Y0:CLOCKREGION_X7Y0}
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_hreg}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_port}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host}]
+resize_pblock pb_otpu_hbm -add {CLOCKREGION_X4Y3:CLOCKREGION_X4Y3}
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sc}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
@@ -97,45 +105,15 @@ add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/g_rs[1].u_x}]
 create_pblock pb_otpu_pcis
 set_property PARENT pblock_CL [get_pblocks pb_otpu_pcis]
 resize_pblock pb_otpu_pcis -add {CLOCKREGION_X5Y5:CLOCKREGION_X5Y6}
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_aw}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_w}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_ar}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_b}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r}]
-# round 6: the links' SLR1 halves (otpu_link_tx after the skids, otpu_link_rx before the output
-# registers) sit with them; their SLR0 halves (u_host/u_xs_*) stay with u_host, the stage the
-# placer puts at the boundary (or a pblock of their own)
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_aw_tx}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_w_tx}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_ar_tx}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_b_rx}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_r_rx}]
-add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_wb}]
+# (alex-shell: the PCIS gate, otpu_f2_pcis_gate: AW / W / AR / B / R skid buffers and the
+# write-pending count, every output a register; its master side meets the SmartConnect fabric's
+# host demux in SLR0, as Alex's f2_pcis_pipe in his SLR1 pblock met his memory_sc in SLR0)
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_pcis}]
 # round 8: the OCL's crossing (otpu_axil_cdc: the shell-facing skid buffers and the aclk state
 # machine, its hold registered inside) beside the shell's AXI-Lite master; its core-clock side
 # reaches u_cx in SLR0 under the CDC's datapath-only bounds (round 7 placed u_ocl/u_skid_aw ->
 # the shell's master over 4.1 ns of route from SLR0)
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_ocl}]
-
-########################################
-# pb_otpu_xs: the SLR0 side of the PCIS link stages, the top corner of SLR0 under the shell's column
-########################################
-# Round 5 placed the PCIS registers' link to u_host (SLR0) at -2.3 ns: one SLR hop of 5.4 ns
-# route from pb_otpu_pcis. Round 6's otpu_link (rtl/shell/otpu_link.sv) makes every crossing
-# net flip-flop to flip-flop: the SLR1 ends (u_pcis_*_tx / _rx) stay in pb_otpu_pcis, the SLR0
-# ends (u_xs_aw / _w / _ar receive, u_xs_b / _r send) sit here in X4Y3, the CL's clock region
-# at the top of SLR0 nearest the shell's column (round 3 and 4 put u_host's logic there by
-# itself: SLICE_X116Y2xx), so the hop is laguna-register eligible and the stage -> u_host
-# queues path stays inside SLR0.
-create_pblock pb_otpu_xs
-set_property PARENT pblock_CL [get_pblocks pb_otpu_xs]
-resize_pblock pb_otpu_xs -add {CLOCKREGION_X4Y3:CLOCKREGION_X4Y3}
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_aw}]
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_w}]
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_ar}]
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_b}]
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_r}]
-add_cells_to_pblock pb_otpu_xs [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host/u_xs_wb}]
 
 ########################################
 # pb_otpu_board: the slice side, SLR2
@@ -174,13 +152,13 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem} {
+foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem} {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=6"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=5"
 
 ########################################
 # the core clock and the pump clock on one insertion delay (round 8)

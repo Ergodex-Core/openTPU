@@ -8,8 +8,18 @@
 // /6 = 200 MHz core clock (clk), /3 = 400 MHz (clk_f, the pumped TMEM's: TMEM_PMP 1, phase
 // aligned with clk from the one VCO). clk_hbm_ref (100 MHz, the shell's HBM reference) is the
 // HBM's reference and APB clock and drives u_hmmcm: VCO 900 MHz, /2 = 450 MHz (hclk, the HBM's
-// AXI ports). The three groups meet only through otpu_afifo crossings, gray counters, held words
-// and synchronized levels (cl_timing_user_hbm.tcl bounds them).
+// AXI ports). The core and clk_main_a0 meet in openTPU's logic only through otpu_axil_cdc's held
+// words and synchronized levels (cl_timing_user_hbm.tcl bounds them); the HBM clock meets the
+// others only inside the SmartConnect fabric (u_sc: its own CDC constraints) and the HDK's HBM
+// wrapper (its XPM crossings).
+//
+// The memory path (docs/f2_hbm.md; Alex's burst200 design, ergodex-openTPU 06c169cb, at S x NCH
+// channels): u_sys's channel p is an AXI4 512-bit master at the core clock (otpu_native_axi,
+// ch_*[p]) into u_sc, a block design generated on the build host (boards/f2/build/scripts/
+// create_hbm_sc.tcl: per channel a SmartConnect with that master @200 and the host's branch
+// @250 onto M_H<p>, AXI3 256 bits @450 MHz; a 1 x NPORT SmartConnect demuxes the host's PCIS
+// by address), its instance generated from the BD wrapper's own ports (otpu_hbm_sc_inst.vh);
+// M_H<p> -> otpu_hbm_geometry (32-byte aligned addresses) -> HBM AXI port p.
 // Resets: the shell's rst_main_n and the MMCMs' lock, synchronized into each clock; the HBM
 // wrapper's own (its 250 MHz reset, then its APB / AXI resets) from the same. The HBM is ready
 // (its two stacks' APB init complete: cl_mem_hbm_wrapper o_hbm_ready) before the core may run:
@@ -77,21 +87,28 @@ module cl_opentpu (
     led_s2 <= led_s1;
   end
 
-  // ---- the accelerator and its memory fabric
-  logic [NPORT-1:0][5:0]   hbm_awid, hbm_arid, hbm_bid, hbm_rid;
-  logic [NPORT-1:0][33:0]  hbm_awaddr, hbm_araddr;
-  logic [NPORT-1:0][3:0]   hbm_awlen, hbm_arlen;
-  logic [NPORT-1:0]        hbm_awvalid, hbm_awready, hbm_wlast, hbm_wvalid, hbm_wready;
-  logic [NPORT-1:0]        hbm_bvalid, hbm_bready, hbm_arvalid, hbm_arready;
-  logic [NPORT-1:0]        hbm_rlast, hbm_rvalid, hbm_rready;
-  logic [NPORT-1:0][255:0] hbm_wdata, hbm_rdata;
-  logic [NPORT-1:0][31:0]  hbm_wstrb;
-  logic [NPORT-1:0][1:0]   hbm_bresp, hbm_rresp;
+  // ---- the accelerator and its channels' masters
+  logic [15:0]  h_awid, h_arid, h_bid, h_rid;
+  logic [63:0]  h_awaddr, h_araddr;
+  logic [7:0]   h_awlen, h_arlen;
+  logic [2:0]   h_awsize, h_arsize;
+  logic [1:0]   h_awburst, h_arburst, h_bresp, h_rresp;
+  logic         h_awvalid, h_awready, h_wlast, h_wvalid, h_wready, h_bvalid, h_bready;
+  logic         h_arvalid, h_arready, h_rlast, h_rvalid, h_rready;
+  logic [511:0] h_wdata, h_rdata;
+  logic [63:0]  h_wstrb;
+  logic [NPORT-1:0][33:0]  ch_awaddr, ch_araddr;
+  logic [NPORT-1:0][7:0]   ch_arlen;
+  logic [NPORT-1:0]        ch_awvalid, ch_awready, ch_wvalid, ch_wready, ch_bvalid, ch_bready;
+  logic [NPORT-1:0]        ch_arvalid, ch_arready, ch_rvalid, ch_rlast, ch_rready;
+  logic [NPORT-1:0][511:0] ch_wdata, ch_rdata;
+  logic [NPORT-1:0][63:0]  ch_wstrb;
+  logic [NPORT-1:0][1:0]   ch_bresp, ch_rresp;
 
   otpu_f2_hbm_sys #(
     `include "opentpu_params.vh"
   ) u_sys (
-    .clk, .clk_f, .rst, .aclk(clk_main_a0), .arst, .hclk, .hrst, .hbm_ready, .led(board_led),
+    .clk, .clk_f, .rst, .aclk(clk_main_a0), .arst, .hbm_ready, .led(board_led),
     .ocl_awaddr(ocl_cl_awaddr), .ocl_awvalid(ocl_cl_awvalid), .ocl_awready(cl_ocl_awready),
     .ocl_wdata(ocl_cl_wdata), .ocl_wstrb(ocl_cl_wstrb), .ocl_wvalid(ocl_cl_wvalid),
     .ocl_wready(cl_ocl_wready), .ocl_bresp(cl_ocl_bresp), .ocl_bvalid(cl_ocl_bvalid),
@@ -113,41 +130,42 @@ module cl_opentpu (
     .pcis_rdata(cl_sh_dma_pcis_rdata), .pcis_rresp(cl_sh_dma_pcis_rresp),
     .pcis_rlast(cl_sh_dma_pcis_rlast), .pcis_rvalid(cl_sh_dma_pcis_rvalid),
     .pcis_rready(sh_cl_dma_pcis_rready),
-    .hbm_awid, .hbm_awaddr, .hbm_awlen, .hbm_awvalid, .hbm_awready, .hbm_wdata, .hbm_wstrb,
-    .hbm_wlast, .hbm_wvalid, .hbm_wready, .hbm_bid, .hbm_bresp, .hbm_bvalid, .hbm_bready,
-    .hbm_arid, .hbm_araddr, .hbm_arlen, .hbm_arvalid, .hbm_arready, .hbm_rid, .hbm_rdata,
-    .hbm_rresp, .hbm_rlast, .hbm_rvalid, .hbm_rready);
+    .h_awid, .h_awaddr, .h_awlen, .h_awsize, .h_awburst, .h_awvalid, .h_awready, .h_wdata,
+    .h_wstrb, .h_wlast, .h_wvalid, .h_wready, .h_bid, .h_bresp, .h_bvalid, .h_bready, .h_arid,
+    .h_araddr, .h_arlen, .h_arsize, .h_arburst, .h_arvalid, .h_arready, .h_rid, .h_rdata,
+    .h_rresp, .h_rlast, .h_rvalid, .h_rready,
+    .ch_awaddr, .ch_awvalid, .ch_awready, .ch_wdata, .ch_wstrb, .ch_wvalid, .ch_wready, .ch_bvalid,
+    .ch_bresp, .ch_bready, .ch_araddr, .ch_arlen, .ch_arvalid, .ch_arready, .ch_rdata, .ch_rvalid,
+    .ch_rlast, .ch_rresp, .ch_rready);
 
-  // ---- the HBM: the HDK's wrapper (cl_hbm, both stacks; ports past NPORT tied off there)
+  // ---- the SmartConnect fabric (u_sc): its masters M_H<p> (x_*, hclk), the instance generated
+  // from the block design's wrapper (create_hbm_sc.tcl writes otpu_hbm_sc_inst.vh: every
+  // wrapper port mapped to these signals, the unused inputs tied, an HBM-side ID the wrapper
+  // lacks tied to 0). Its reset (aresetn, associated with core_clk): the core synchronizer's,
+  // registered
+  logic [33:0]  x_araddr [0:NPORT-1], x_awaddr [0:NPORT-1];
+  logic [1:0]   x_arburst [0:NPORT-1], x_awburst [0:NPORT-1];
+  logic [5:0]   x_arid [0:NPORT-1], x_awid [0:NPORT-1], x_rid [0:NPORT-1], x_bid [0:NPORT-1];
+  logic [3:0]   x_arlen [0:NPORT-1], x_awlen [0:NPORT-1];
+  logic [2:0]   x_arsize [0:NPORT-1], x_awsize [0:NPORT-1];
+  logic         x_arvalid [0:NPORT-1], x_awvalid [0:NPORT-1], x_rready [0:NPORT-1];
+  logic         x_bready [0:NPORT-1], x_wlast [0:NPORT-1], x_wvalid [0:NPORT-1];
+  logic         x_arready [0:NPORT-1], x_awready [0:NPORT-1], x_rlast [0:NPORT-1];
+  logic         x_rvalid [0:NPORT-1], x_wready [0:NPORT-1], x_bvalid [0:NPORT-1];
+  logic [255:0] x_wdata [0:NPORT-1], x_rdata [0:NPORT-1];
+  logic [31:0]  x_wstrb [0:NPORT-1];
+  logic [1:0]   x_rresp [0:NPORT-1], x_bresp [0:NPORT-1];
+  logic         sc_aresetn, sc_host_aresetn;
+  always_ff @(posedge clk) sc_aresetn <= core_reset_n[2];
+  always_ff @(posedge clk_main_a0) sc_host_aresetn <= bridge_reset_n[2];   // the host's SmartConnect
+  `include "otpu_hbm_sc_inst.vh"
+
+  // ---- the HBM: the HDK's wrapper (cl_hbm, both stacks; ports past NPORT tied off there),
+  // port p behind M_H<p> with its addresses 32-byte aligned (otpu_hbm_geometry, Alex's)
   logic [33:0]  w_araddr [0:NPORT-1], w_awaddr [0:NPORT-1];
-  logic [1:0]   w_arburst [0:NPORT-1], w_awburst [0:NPORT-1];
-  logic [5:0]   w_arid [0:NPORT-1], w_awid [0:NPORT-1], w_rid [0:NPORT-1], w_bid [0:NPORT-1];
-  logic [3:0]   w_arlen [0:NPORT-1], w_awlen [0:NPORT-1];
-  logic [2:0]   w_arsize [0:NPORT-1], w_awsize [0:NPORT-1];
-  logic         w_arvalid [0:NPORT-1], w_awvalid [0:NPORT-1], w_rready [0:NPORT-1];
-  logic         w_bready [0:NPORT-1], w_wlast [0:NPORT-1], w_wvalid [0:NPORT-1];
-  logic         w_arready [0:NPORT-1], w_awready [0:NPORT-1], w_rlast [0:NPORT-1];
-  logic         w_rvalid [0:NPORT-1], w_wready [0:NPORT-1], w_bvalid [0:NPORT-1];
-  logic [255:0] w_wdata [0:NPORT-1], w_rdata [0:NPORT-1];
-  logic [31:0]  w_wstrb [0:NPORT-1];
-  logic [1:0]   w_rresp [0:NPORT-1], w_bresp [0:NPORT-1];
   for (genvar p = 0; p < NPORT; p++) begin : g_hbm
-    assign w_awid[p] = hbm_awid[p];       assign w_awaddr[p] = hbm_awaddr[p];
-    assign w_awlen[p] = hbm_awlen[p];     assign w_awsize[p] = 3'd5;
-    assign w_awburst[p] = 2'b01;          assign w_awvalid[p] = hbm_awvalid[p];
-    assign hbm_awready[p] = w_awready[p];
-    assign w_wdata[p] = hbm_wdata[p];     assign w_wstrb[p] = hbm_wstrb[p];
-    assign w_wlast[p] = hbm_wlast[p];     assign w_wvalid[p] = hbm_wvalid[p];
-    assign hbm_wready[p] = w_wready[p];
-    assign hbm_bid[p] = w_bid[p];         assign hbm_bresp[p] = w_bresp[p];
-    assign hbm_bvalid[p] = w_bvalid[p];   assign w_bready[p] = hbm_bready[p];
-    assign w_arid[p] = hbm_arid[p];       assign w_araddr[p] = hbm_araddr[p];
-    assign w_arlen[p] = hbm_arlen[p];     assign w_arsize[p] = 3'd5;
-    assign w_arburst[p] = 2'b01;          assign w_arvalid[p] = hbm_arvalid[p];
-    assign hbm_arready[p] = w_arready[p];
-    assign hbm_rid[p] = w_rid[p];         assign hbm_rdata[p] = w_rdata[p];
-    assign hbm_rresp[p] = w_rresp[p];     assign hbm_rlast[p] = w_rlast[p];
-    assign hbm_rvalid[p] = w_rvalid[p];   assign w_rready[p] = hbm_rready[p];
+    otpu_hbm_geometry u_geo (.s_awaddr(x_awaddr[p]), .s_araddr(x_araddr[p]),
+                             .m_awaddr(w_awaddr[p]), .m_araddr(w_araddr[p]));
   end
   // the wrapper's stats bus (its soft reset, its ready bits): idle; ready comes out directly
   cfg_bus_t hbm_stat_bus();
@@ -159,15 +177,15 @@ module cl_opentpu (
   cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NPORT), .AXI4_INTERFACE(0)) u_hbm (
     .apb_clk(clk_hbm_ref), .i_clk_250m(clk_main_a0), .i_rst_250m_n(main_reset_n[2]),
     .i_clk_450m(hclk), .i_rst_450m_n(!hrst),
-    .i_axi_araddr(w_araddr), .i_axi_arburst(w_arburst), .i_axi_arid(w_arid),
-    .i_axi_arlen(w_arlen), .i_axi_arsize(w_arsize), .i_axi_arvalid(w_arvalid),
-    .i_axi_awaddr(w_awaddr), .i_axi_awburst(w_awburst), .i_axi_awid(w_awid),
-    .i_axi_awlen(w_awlen), .i_axi_awsize(w_awsize), .i_axi_awvalid(w_awvalid),
-    .i_axi_rready(w_rready), .i_axi_bready(w_bready), .i_axi_wdata(w_wdata),
-    .i_axi_wlast(w_wlast), .i_axi_wstrb(w_wstrb), .i_axi_wvalid(w_wvalid),
-    .o_axi_arready(w_arready), .o_axi_awready(w_awready), .o_axi_rdata(w_rdata),
-    .o_axi_rid(w_rid), .o_axi_rlast(w_rlast), .o_axi_rresp(w_rresp), .o_axi_rvalid(w_rvalid),
-    .o_axi_wready(w_wready), .o_axi_bid(w_bid), .o_axi_bresp(w_bresp), .o_axi_bvalid(w_bvalid),
+    .i_axi_araddr(w_araddr), .i_axi_arburst(x_arburst), .i_axi_arid(x_arid),
+    .i_axi_arlen(x_arlen), .i_axi_arsize(x_arsize), .i_axi_arvalid(x_arvalid),
+    .i_axi_awaddr(w_awaddr), .i_axi_awburst(x_awburst), .i_axi_awid(x_awid),
+    .i_axi_awlen(x_awlen), .i_axi_awsize(x_awsize), .i_axi_awvalid(x_awvalid),
+    .i_axi_rready(x_rready), .i_axi_bready(x_bready), .i_axi_wdata(x_wdata),
+    .i_axi_wlast(x_wlast), .i_axi_wstrb(x_wstrb), .i_axi_wvalid(x_wvalid),
+    .o_axi_arready(x_arready), .o_axi_awready(x_awready), .o_axi_rdata(x_rdata),
+    .o_axi_rid(x_rid), .o_axi_rlast(x_rlast), .o_axi_rresp(x_rresp), .o_axi_rvalid(x_rvalid),
+    .o_axi_wready(x_wready), .o_axi_bid(x_bid), .o_axi_bresp(x_bresp), .o_axi_bvalid(x_bvalid),
     .i_hbm_apb_preset_n_1(hbm_apb_preset_n_1), .o_hbm_apb_paddr_1(hbm_apb_paddr_1),
     .o_hbm_apb_pprot_1(hbm_apb_pprot_1), .o_hbm_apb_psel_1(hbm_apb_psel_1),
     .o_hbm_apb_penable_1(hbm_apb_penable_1), .o_hbm_apb_pwrite_1(hbm_apb_pwrite_1),

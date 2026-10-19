@@ -90,9 +90,11 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                  "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
           # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
           # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
-          "f2-hbm": ["shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
-                     "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
-                     "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
+          # (since the alex-shell rework: Alex's burst200 memory path, otpu_native_axi per channel
+          # into SmartConnect; otpu_f2_hbm_nch / _port / _host / _mem are no longer built)
+          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+                     "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_pcis_gate.sv",
+                     "boards/f2/otpu_f2_hbm_axi.sv", "boards/f2/otpu_hbm_geometry.sv",
                      "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 

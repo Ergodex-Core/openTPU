@@ -3,8 +3,9 @@
 
 --target f2 (the default) builds the DDR4 CL (one slice on the slot's DIMM, sh_ddr); a target
 whose platform mem is "hbm" (targets/f2-hbm*.toml) builds the HBM CL: S slices of NCH channels,
-each channel on its own HBM pseudo-channel (cl_opentpu_hbm.sv as cl_opentpu, otpu_f2_hbm_sys, the
-HDK's cl_mem_hbm_wrapper and cl_hbm IP; docs/f2_hbm.md)."""
+each channel on its own HBM pseudo-channel (cl_opentpu_hbm.sv as cl_opentpu, otpu_f2_hbm_sys, a
+SmartConnect fabric generated first by build/scripts/create_hbm_sc.tcl, the HDK's
+cl_mem_hbm_wrapper and cl_hbm IP; docs/f2_hbm.md)."""
 from __future__ import annotations
 
 import argparse
@@ -157,6 +158,8 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
         (cons / 'cl_pnr_user_hbm.tcl').unlink()
+        (scripts / 'create_hbm_sc.tcl').unlink()
+        (scripts / 'hbm_sc_inst.tcl').unlink()
     files = target.sources(t)
     for name in files:
         dest = cl / 'design/rtl' / name
@@ -194,6 +197,16 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         'sources': {str(p.relative_to(cl)): sha(p) for p in sorted(cl.rglob('*')) if p.is_file()}}
     (out / 'inputs.json').write_text(json.dumps(provenance, indent=2) + '\n')
     return cl
+
+
+def hbm_sc_command(cl: Path, t: target.Target, log: Path) -> list[str]:
+    """The SmartConnect fabric's generation (an HBM target, before synthesis): Vivado batch on
+    create_hbm_sc.tcl into cl/ip (the block design, its OOC checkpoints, its wrapper and the
+    CL's instance of it, otpu_hbm_sc_inst.vh; docs/f2_hbm.md "The memory path")."""
+    nport = t.arch['S'] * t.platform['channels_per_slice']
+    return ['vivado', '-mode', 'batch', '-source', str(cl / 'build/scripts/create_hbm_sc.tcl'),
+            '-log', str(log), '-journal', str(log.with_suffix('.jou')),
+            '-tclargs', str(cl / 'ip'), str(nport), t.tech['part']]
 
 
 def load_synthesis(run: Path, expected_sha: str) -> tuple[dict, Path, str]:
@@ -415,7 +428,9 @@ def main() -> None:
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
-    (out / 'invocation.json').write_text(json.dumps({'command': cmd,
+    ip_cmd = (hbm_sc_command(cl, t, out / 'hbm_sc.log')
+              if is_hbm(t) and a.flow != 'ImplCL' else None)
+    (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),
         'environment': {k: env[k] for k in env if k.startswith('HDK_') or
             k in ('CL_DIR', 'CL', 'SHELL_MODE', 'BUILD_FLOW', 'BUILD_TAG', 'ENCRYPT', 'VIVADO_TOOL_VERSION')}}, indent=2) + '\n')
@@ -424,6 +439,11 @@ def main() -> None:
         return
     version = command('vivado', '-version')
     check_vivado_version(version, t.platform['vivado'])
+    if ip_cmd:                          # the SmartConnect fabric first (an HBM target)
+        with (out / 'hbm_sc_console.log').open('w') as log:
+            r = subprocess.run(ip_cmd, cwd=out, stdout=log, stderr=subprocess.STDOUT)
+        if r.returncode or not (cl / 'ip/ip_done.txt').is_file():
+            raise RuntimeError(f'SmartConnect generation failed; see {out / "hbm_sc_console.log"}')
     with (out / 'console.log').open('w') as log:
         result = subprocess.run(cmd, cwd=cl / 'build/scripts', env=env, stdout=log,
                                 stderr=subprocess.STDOUT)
