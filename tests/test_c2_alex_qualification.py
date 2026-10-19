@@ -620,6 +620,7 @@ def test_gray_and_finding_cell_detail_budgets_are_independent(tmp_path):
 source [lindex $argv 0]
 proc get_property {key objects} {return [expr {$key eq {NAME} ? $objects : {FDRE}}]}
 proc get_cells {args} {return [lindex $args end]}
+proc ::c2_alex_route::capture_gray_ancestors {groups audit} {}
 proc ::c2_alex_route::capture_gray {groups audit} {
  variable captured_cells
  for {set i 0} {$i<4096} {incr i} {dict set captured_cells gray$i 1}
@@ -640,6 +641,67 @@ puts [::c2_alex_route::supplemental [lindex $argv 1] {}]
     assert 'cell_detail_coverage fresh_finding selected 1 captured 1 cached 0 skipped 0' in raw
     assert 'section_cap 4096 section gray' in raw and 'section_cap 4096 section findings' in raw
     assert 'incomplete_or_error 1' in result.stdout
+
+
+@pytest.mark.parametrize(('fault', 'required'), [
+    ('none', 'selected 4 attempted 4 skipped 0 cap 1024'),
+    ('missing_fifo', 'missing_or_ambiguous_ancestor'),
+    ('wrong_identity', 'missing_or_ambiguous_ancestor'),
+    ('unknown_ancestry', 'unrecognized_xpm_ancestor_path'),
+    ('capped', 'selected 1052 attempted 1024 skipped 28 cap 1024'),
+])
+def test_gray_ancestor_capture_is_exact_deduplicated_bounded_and_not_acceptance(tmp_path, fault, required):
+    report = tmp_path / 'ancestors.tcldata'
+    script = r'''
+source [lindex $argv 0]
+set fault [lindex $argv 2]
+set prefix WRAPPER/CL/u_mem/f2_mem_i/memory_sc
+set fifo $prefix/inst/fifo/gen_xpm_memory_fifo.inst_fifo
+set groups {};set count 2
+if {$fault eq {capped}} {set count 1050}
+for {set i 0} {$i<$count} {incr i} {
+ set root $fifo/gen_async_clocks.inst_cdc_gray_$i
+ if {$fault eq {unknown_ancestry}} {set root $prefix/other_$i}
+ dict set groups $root source 0 $root/src_gray_ff_reg0
+ dict set groups $root destination 0 $root/dest_graysync_ff_reg0
+}
+proc get_cells {args} {
+ set name [lindex [lindex $args end] 0]
+ if {$name eq $::fifo} {
+  if {$::fault eq {missing_fifo}} {return {}}
+  if {$::fault eq {wrong_identity}} {return WRONG_CELL}
+ }
+ return [list $name]
+}
+proc get_property {key objects} {
+ set object [lindex $objects 0]
+ switch $key {
+  NAME {return $object}
+  REF_NAME - ORIG_REF_NAME {
+   if {$object eq $::fifo} {return xpm_fifo_async}
+   if {$object eq $::prefix} {return f2_mem_memory_sc_0}
+   return xpm_cdc_gray
+  }
+  IS_BLACKBOX {return 0}
+  default {error {unsupported property}}
+ }
+}
+proc list_property {args} {error {hierarchical property enumeration forbidden}}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_gray_ancestors $groups $f
+puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close $f
+'''
+    result = tcl(tmp_path, script, report, fault)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert required in raw and 'route_qualified 0' in raw
+    if fault == 'none':
+        assert raw.count('gray_ancestor_relation ') == 2
+        assert len(re.findall(r'^object_properties .*roles xpm_fifo', raw, re.M)) == 1
+        assert 'xpm_fifo_async' in raw and 'xpm_cdc_gray' in raw
+        assert 'pending 0 route_qualified 0' in raw
+    else:
+        assert 'pending 0 route_qualified 0' not in raw
 
 
 @pytest.mark.parametrize(('fault', 'pending', 'required'), [

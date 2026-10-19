@@ -443,7 +443,8 @@ def synthetic_historical_link(root,monkeypatch):
     """Model an older LINK helper without treating current bytes as history."""
     name='boards/c2_f2_alex/qualify_c2_alex.tcl'
     assert e.REVIEWED_HISTORICAL['link',name]=={
-        '6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c'}
+        '6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c',
+        'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'}
     # The entire bundle is parser-only synthetic evidence. Give its LINK
     # bytes a test-local historical role; never widen the production pins or
     # add a QUALIFY exception. This works after the current helper changes.
@@ -593,3 +594,27 @@ def test_historical_ip_audit_pin_does_not_apply_to_hardware(bundle,monkeypatch):
     x.source('ip',m['source_snapshots']['ip']['revision'],{name:row},current={name})
     with pytest.raises(ValueError,match='hardware'):
         x.source('hardware',m['source_snapshots']['hardware']['revision'],{name:row},current={name})
+
+
+@pytest.mark.parametrize('fault', ['none', 'oversized', 'invalid_utf8', 'truncated_utf8', 'mutated'])
+def test_large_supplemental_stream_keeps_size_encoding_and_hash_bounds(bundle, monkeypatch, fault):
+    root,m,_=bundle
+    path=root/'runs/qualify/qualification/supplemental.tcldata'
+    # Cross the stream chunk boundary inside a multibyte character. Keep this
+    # fixture small by lowering the small-report limit only for this unit test.
+    raw=b'x'*((1<<20)-1)+'\u20ac'.encode()+b'\nSYNTHETIC report only\n'
+    if fault=='invalid_utf8':raw+=b'\xff'
+    if fault=='truncated_utf8':raw+=b'\xe2\x82'
+    path.write_bytes(raw)
+    trusted=update_last_receipt(root,m)
+    x=e.Bundle(root,trusted)
+    monkeypatch.setattr(e,'MAX_MANIFEST',1<<20)
+    if fault=='oversized':monkeypatch.setattr(e,'MAX_SUPPLEMENTAL_TEXT',len(raw)-1)
+    if fault=='mutated':path.write_bytes(raw[:-1]+b'!')
+    with pytest.raises(ValueError,match='oversized raw evidence'):
+        x.text('qualify','qualification/supplemental.tcldata')
+    if fault=='none':
+        x.supplemental_text()
+    else:
+        with pytest.raises((ValueError,UnicodeDecodeError)):
+            x.supplemental_text()

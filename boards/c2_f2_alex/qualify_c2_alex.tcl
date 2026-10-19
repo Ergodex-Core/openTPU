@@ -268,6 +268,42 @@ proc ::c2_alex_route::capture_data_driver {audit label pin} {
     puts $audit [list data_driver $label drivers $drivers driver_count [llength $drivers] review pending_exact_bit_and_stage_pairing]
     if {[llength $drivers]!=1} {capture_missing $audit $label missing_or_multiple_data_drivers}
 }
+proc ::c2_alex_route::capture_gray_ancestors {groups audit} {
+    # Names locate candidates; the actual reference properties are independent
+    # review evidence. Neither an XPM-looking path nor a reference alone grants
+    # CDC acceptance or establishes the vendor constraint's numeric intent.
+    set ancestors {};set prefix WRAPPER/CL/u_mem/f2_mem_i/memory_sc
+    set marker /gen_xpm_memory_fifo.inst_fifo/;set limit 1024
+    if {![dict size $groups]} {capture_missing $audit gray_ancestors empty_gray_inventory;return}
+    dict set ancestors $prefix smartconnect 1
+    dict for {root group} $groups {
+        dict set ancestors $root gray_cdc 1
+        set position [string last $marker $root]
+        if {[string first "$prefix/" $root]!=0 || $position<0} {
+            capture_missing $audit [list gray_ancestor $root] unrecognized_xpm_ancestor_path
+            continue
+        }
+        set fifo [string range $root 0 [expr {$position+[string length $marker]-2}]]
+        dict set ancestors $fifo xpm_fifo 1
+        puts $audit [list gray_ancestor_relation $root fifo_candidate $fifo smartconnect_candidate $prefix \
+            source_cells [dict get $group source] destination_cells [dict get $group destination] review pending_reference_and_vendor_source_match]
+    }
+    set selected [lsort [dict keys $ancestors]];set captured 0
+    puts $audit [list gray_ancestor_inventory selected [llength $selected] names $selected cap $limit review pending]
+    foreach name $selected {
+        if {$captured>=$limit} {continue}
+        incr captured
+        set label [list gray_ancestor $name roles [dict keys [dict get $ancestors $name]]]
+        set result [capture $audit [list $label selection] [list get_cells -quiet [list $name]]]
+        if {![dict get $result ok] || [names [dict get $result value]] ne [list $name]} {
+            capture_missing $audit $label missing_or_ambiguous_ancestor;continue
+        }
+        capture_properties $audit $label [dict get $result value] {NAME REF_NAME ORIG_REF_NAME IS_BLACKBOX}
+    }
+    set skipped [expr {[llength $selected]-$captured}]
+    puts $audit [list gray_ancestor_coverage selected [llength $selected] attempted $captured skipped $skipped cap $limit review pending]
+    if {$skipped} {capture_missing $audit gray_ancestors ancestor_detail_cap_reached}
+}
 proc ::c2_alex_route::capture_gray {groups audit} {
     # Actual linked evidence returned four normal paths for every bit at the old
     # cap of four. A larger bounded query distinguishes those variants from an
@@ -400,9 +436,9 @@ proc ::c2_alex_route::supplemental {directory groups} {
     # Separate bounded caches let findings neither consume gray's detail budget
     # nor silently reuse incomplete gray captures. The two cell-collecting
     # sections together visit at most 8192 cells, with explicit cap diagnostics.
-    foreach {label command} [list gray [list capture_gray $groups $audit] findings [list capture_findings $audit] waivers [list capture_waivers $audit] pulse [list capture_pulse $audit]] {
+    foreach {label command} [list gray_ancestors [list capture_gray_ancestors $groups $audit] gray [list capture_gray $groups $audit] findings [list capture_findings $audit] waivers [list capture_waivers $audit] pulse [list capture_pulse $audit]] {
         set captured_cells {};set capture_cell_section $label
-        puts $audit [list cell_detail_budget section $label per_call_cap 256 section_cap 4096]
+        if {$label in {gray findings}} {puts $audit [list cell_detail_budget section $label per_call_cap 256 section_cap 4096]}
         # A collector/API defect must remain visible without discarding all the
         # other independent evidence or implying structural/physical acceptance.
         capture $audit [list collector $label] $command

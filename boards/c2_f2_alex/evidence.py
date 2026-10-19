@@ -22,6 +22,7 @@ an unknown submitter's assertions. Archive preflight never grants qualification.
 from __future__ import annotations
 
 import argparse
+import codecs
 import datetime
 import hashlib
 import importlib.util
@@ -39,6 +40,7 @@ ROOT = HERE.parents[1]
 MANIFEST = 'bundle-manifest.json'
 INSTANCE = 'i-0c78de2253f66519d'
 MAX_FILES, MAX_TOTAL, MAX_FILE, MAX_MANIFEST = 100000, 64 << 30, 16 << 30, 64 << 20
+MAX_SUPPLEMENTAL_TEXT = 256 << 20
 ROLES = ('ip', 'synth', 'link', 'implement', 'refine', 'qualify', 'simulation', 'simulation_private', 'installed', 'dependencies')
 SOURCE_ROLES = ('hardware', 'ip', 'link', 'implement', 'refine', 'qualify', 'simulation')
 RECEIPTS = {'ip': 'ip-complete.json', 'synth': 'synth-complete.json',
@@ -49,12 +51,14 @@ OBSERVER_SHA256 = 'e243c6f260187a26dbea41811c0d5c068a265401f4fa8fd821425bfdd56b4
 SYNCHRONOUS_WRAPPER_SHA256 = '006e3feacbf3e15c16e92187fe0e4ce1fca9e749bc445f1ae7a71d9a302f0cbb'
 REUSED_IP_RECEIPT_SHA256 = 'c21aae37ad72606811b17c9b212aa26d0ef6f8b31196494057c86eb16bd39799'
 # LINK is a structural gate, deliberately not route acceptance. Preserve the
-# reviewed pending-only helper from 8af52428/1639daac when a later final-route
-# classifier is reviewed. The original IP receipt also retains its old audit
+# reviewed pending-only helpers from 8af52428/1639daac and successful cec9b011
+# LINK (receipt 5c79489ceb14949b1d7c5051787e44fe959a8402882d38ade93c32f6f1db7ec6)
+# when a later final-route classifier is reviewed. The original IP receipt retains its old audit
 # input, which did not synthesize the retry hardware. Final QUALIFY, hardware
 # audit, and all other inputs still require current reviewed bytes.
 REVIEWED_HISTORICAL = {('link', 'boards/c2_f2_alex/qualify_c2_alex.tcl'):
-                      {'6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c'},
+                      {'6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c',
+                       'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'},
                       ('ip', 'boards/c2_f2_alex/audit_c2_alex.tcl'):
                       {'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e'}}
 DEPENDENCY_TREES = tuple(f'{stage}/ip_project/{project}.{suffix}'
@@ -229,6 +233,26 @@ class Bundle:
     def text(self, role, name):
         require(0 < self.record(role, name)['bytes'] <= MAX_MANIFEST, 'Empty/oversized raw evidence: ' + name)
         return self.path(role, name).read_text()
+
+    def supplemental_text(self):
+        # Actual per-bit linked evidence exceeds the 64 MiB JSON/small-report
+        # limit. Validate this one bounded report incrementally; never raise the
+        # manifest/JSON parsing limit or materialize its entire text in memory.
+        role, name = 'qualify', 'qualification/supplemental.tcldata'
+        row = self.record(role, name)
+        require(0 < row['bytes'] <= MAX_SUPPLEMENTAL_TEXT, 'Empty/oversized supplemental evidence')
+        decoder = codecs.getincrementaldecoder('utf-8')('strict')
+        digest_value = hashlib.sha256()
+        total = 0
+        with self.path(role, name).open('rb') as stream:
+            while chunk := stream.read(1 << 20):
+                total += len(chunk)
+                require(total <= MAX_SUPPLEMENTAL_TEXT, 'Supplemental evidence grew beyond limit')
+                decoder.decode(chunk, final=False)
+                digest_value.update(chunk)
+            decoder.decode(b'', final=True)
+        require(total == row['bytes'] and digest_value.hexdigest() == row['sha256'],
+                'Supplemental evidence changed during verification')
 
     def inventory(self, role, records, *, required=(), exact=None):
         require(isinstance(records, dict) and records and set(required) <= records.keys(), 'Incomplete bound file inventory')
@@ -516,7 +540,9 @@ def verify_bundle(root, manifest_sha256):
         stages[stage] = stage_inputs
     final_sha = x.record('refine', 'post_route.dcp')['sha256']
     require('qualification/NOT_QUALIFIED.txt' not in x.names('qualify'), 'Explicit NOT_QUALIFIED evidence present')
-    for name in FINAL_REPORTS: x.text('qualify', 'qualification/' + name)
+    for name in FINAL_REPORTS:
+        if name == 'supplemental.tcldata': x.supplemental_text()
+        else: x.text('qualify', 'qualification/' + name)
     summary = tcl_dict(x.text('qualify', 'qualification/summary.tcldata'))
     require(summary.get('schema') == '1' and summary.get('stage') == 'final_route' and summary.get('route_qualified') == '1' and summary.get('hardware_measured') == '0' and summary.get('checkpoint_sha256') == final_sha and summary.get('checkpoint') == x.original('refine', 'post_route.dcp') and summary.get('blockers') == '' and summary.get('pending_reviews') == '', 'Final raw qualification has blockers/pending review or mismatched DCP')
     simulation = x.receipt('simulation'); si = x.read('simulation', 'inputs.json', simulation['inputs_sha256'])

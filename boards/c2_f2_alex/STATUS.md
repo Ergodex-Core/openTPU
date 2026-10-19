@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:50 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:56 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -25,8 +25,20 @@ uses a sixteen-path bound, separate bounded gray/finding cell budgets, actual
 launch-C/data-Q identity, and documented pulse reports. Its 106 qualification
 tests pass; caps and hidden evidence remain pending, never accepted. Actual
 replay of helper `f594a7a423cc06e469eb641d1849837c2292a0eaf68077800a7ca4ecefeb4cc9`
-started at 20:48:11 UTC against the unchanged earlier linked checkpoint. The
-running formal implementation retains its clean cec9 executor.
+started at 20:48:11 UTC against the unchanged earlier linked checkpoint and
+completed at 20:54:46 UTC: 151,353 supplemental queries, zero API errors or
+incomplete markers. The 100,950,518-byte report still records pending semantic
+review; collection completeness is not physical acceptance. The running formal
+implementation retains its clean cec9 executor. A subsequent collect-only helper
+adds deduplicated XPM ancestor identities; 111 qualification tests pass.
+
+The original AWS shell diagnostic completed at 20:52:31 UTC, invocation
+`1d99a307be0b4a84b1c20b774dca7f53`, with the pinned original checkpoint unchanged.
+It generated methodology, DRC, CDC, timing and pulse reference reports. One
+incomplete supplemental query remains for explicit review. The latest Codex
+session snapshot is verified at
+`s3://opentpu-agent-traces/codex/snapshots/20261019T204927.807145Z/`,
+archive SHA256 `6c44071fc39fa845263a11d19c0baf7459cd48d92ba69b0e6593641467e56fde`.
 
 The earlier failed-link 85 KB diagnostic archive remains on the instance.
 Its proposed S3 upload was rejected by automatic approval review pending
