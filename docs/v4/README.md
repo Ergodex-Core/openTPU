@@ -296,6 +296,27 @@ each stage's `console.log`; started 18:12 UTC after one fix, f85ac03c: his Vivad
 is case-sensitive and this box prints `vivado v2025.2`). His refine stage is a hard gate: the
 driver exits non-zero unless the routed checkpoint has setup and hold slack >= 0.
 
+**Build 6 closed timing (2026-10-19 20:03 UTC, 1 h 51 min end to end).** Alex's flow on the
+tpubench compute RTL: the implement stage routed at **setup +0.035 ns, hold +0.010 ns**, TNS 0,
+0 failing endpoints of 559,918, pulse width met; the refine stage (phys_opt Explore + reroute)
+kept it; the audit stage: 0 nets with routing errors (271,602 fully routed), DRC 0 errors / 0
+critical / 791 warnings, bus skew 0 violated, 0 unconstrained internal endpoints, 35 no_clock
+pins all in the unchanged AWS shell (PCIe bufg_gt, HWICAP), CDC's 6 criticals (CDC-1, -7, 2 x
+-10, 2 x -13) all under False Path exceptions on the shell's hidden cells and the CL's
+xpm_cdc_async_rst synchronizers, as in Alex's reviewed image. The worst setup path is the
+SmartConnect's host entry into the PCIS pipe (250 MHz, +0.035); the worst core path the VPU's
+write-buffer enable into the tree (+0.037). Checkpoint
+`/home/ubuntu/rachit/f2burst200-run1/refine/post_route.dcp` (125,784,664 B, SHA-256
+09650083fa603a76ff538ca376354baefcb0b67111d966a813c948b33304a0b6); reports under
+`f2burst200-run1/audit/`. Packaging (`boards/f2/burst200/scripts/package_f2.py`) needs a
+review JSON attesting the six gates; that sign-off is the user's (see the session notes), then
+`create_fpga_image` and the slot-0 load (slot 0 holds Alex's agfi-0d06cb48544a02106 now).
+
+**Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
+partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
+fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
+4 is superseded by builds 5 and 6 and is not retried.
+
 **Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
 DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
 fpga-dev-f2, `/home/ubuntu/Desktop/Ariane-Ibex-Scratch/alex/openTPU/runs/` (the lineage
