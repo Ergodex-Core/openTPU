@@ -503,6 +503,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     # unmanaged at placement; the managed XDC the HDK reads stays Tcl-free
     floorplan = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm.tcl').read_text()
     assert pnr.endswith('\n' + floorplan) and pnr.index('hbm_reset_n}') < pnr.index('pb_otpu_slr0')
+    assert 'pb_otpu_fab' in pnr
     assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
     managed = (cl / 'build/constraints/small_shell_cl_pnr_user.xdc').read_text()
     assert all(line.startswith('#') for line in managed.splitlines() if line.strip())
@@ -546,7 +547,7 @@ set cells {}
 set props {}
 # the sites of a range; pblock_CL's own ranges are the HDK's site ranges (P0 P1 here)
 set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a s0t} CLOCKREGION_X4Y0:CLOCKREGION_X7Y0 {s0b}
-           CLOCKREGION_X0Y2:CLOCKREGION_X3Y3 {s0t shell}
+           CLOCKREGION_X0Y2:CLOCKREGION_X3Y3 {s0t shell} CLOCKREGION_X0Y0:CLOCKREGION_X3Y0 {s0a}
            CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
            CLOCKREGION_X4Y3:CLOCKREGION_X4Y3 {s0c}
            P0 {s0a s0t s0b s0c} P1 {s1a s1b}}
@@ -610,8 +611,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         return
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=4' in out
-    assert 'PBLOCKS pblock_CL pb_otpu_slr0 pb_otpu_tmem pb_otpu_pcis pb_otpu_xs' in out
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=5' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_slr0 pb_otpu_tmem pb_otpu_fab pb_otpu_pcis pb_otpu_xs' in out
     ranges = {}
     for line in out.splitlines():
         if line.startswith('RANGE ') and not line.startswith('RANGE pblock_CL'):
@@ -622,6 +623,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert ranges == {
         'pb_otpu_slr0': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y3', 'CLOCKREGION_X4Y0:CLOCKREGION_X7Y0'],
         'pb_otpu_tmem': ['CLOCKREGION_X0Y2:CLOCKREGION_X3Y3'],
+        'pb_otpu_fab': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y0'],
         'pb_otpu_pcis': ['CLOCKREGION_X5Y5:CLOCKREGION_X5Y6'],
         'pb_otpu_xs': ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3']}
     cells = {}
@@ -629,28 +631,35 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         if line.startswith('CELL '):
             _, pb, cell = line.split(' ', 2)
             cells.setdefault(pb, []).append(cell)
-    slr0, tmem, pcis, xs = (cells[k] for k in ('pb_otpu_slr0', 'pb_otpu_tmem', 'pb_otpu_pcis', 'pb_otpu_xs'))
+    slr0, tmem, fab, pcis, xs = (cells[k] for k in ('pb_otpu_slr0', 'pb_otpu_tmem', 'pb_otpu_fab', 'pb_otpu_pcis', 'pb_otpu_xs'))
     assert all(c.startswith('WRAPPER/CL/u_sys/') for pb in cells.values() for c in pb)
     assert 'WRAPPER/CL/u_sys/u_board' in slr0 and 'WRAPPER/CL/u_sys/u_mem/u_host' in slr0
     for k in ('u_nch', 'u_hreg', 'u_port'):
         assert len([c for c in slr0 if f'.{k}' in c]) == 4
-    assert sorted(tmem) == [f'WRAPPER/CL/u_sys/u_board/u_slice/{u}' for u in ('u_dma', 'u_quant', 'u_tmem', 'u_vpu')]
+    # the fabric's box: the bridges, host registers, arbiters and the links' receiving ends
+    # (not their sending ends, which stay with the host block)
+    for k in ('u_nch', 'u_hreg', 'u_port', 'u_lk_aw/u_rx', 'u_lk_w/u_rx', 'u_lk_ar/u_rx'):
+        assert len([c for c in fab if c.endswith(k) or f'.{k}' in c]) == 4, k
+    assert len(fab) == 24 and not any('u_tx' in c or 'u_host' in c for c in fab)
+    assert sorted(tmem) == [f'WRAPPER/CL/u_sys/u_board/u_slice/{u}' for u in
+                            ('u_dma', 'u_mxu/t_ren_reg*', 'u_mxu/t_rq_reg*', 'u_quant', 'u_tmem', 'u_vpu')]
     assert sorted(pcis) == sorted([f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
                                    ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx', 'wb')] +
                                   ['WRAPPER/CL/u_sys/u_ocl'])
     assert sorted(xs) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_xs_{k}' for k in ('ar', 'aw', 'b', 'r', 'w', 'wb')]
     assert not (set(pcis) & set(slr0)) and not (set(xs) & set(slr0)) and not (set(xs) & set(pcis))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
-    for pb in ('pb_otpu_slr0', 'pb_otpu_tmem', 'pb_otpu_pcis', 'pb_otpu_xs'):
+    for pb in ('pb_otpu_slr0', 'pb_otpu_tmem', 'pb_otpu_fab', 'pb_otpu_pcis', 'pb_otpu_xs'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
         assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
-        assert props[(pb, 'PARENT')] == ('pb_otpu_slr0' if pb == 'pb_otpu_tmem' else 'pblock_CL')
+        assert props[(pb, 'PARENT')] == ('pb_otpu_slr0' if pb in ('pb_otpu_tmem', 'pb_otpu_fab') else 'pblock_CL')
     # containment: the one site of the TMEM box's clock regions that the SLR0 pblock (hence
     # pblock_CL) does not hold leaves pb_otpu_tmem; nothing leaves the others
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
     assert removed == [['pb_otpu_tmem', 'shell']]
     assert 'OTPU_FLOORPLAN pb_otpu_slr0 parent=pblock_CL held=6 removed=0' in out
     assert 'OTPU_FLOORPLAN pb_otpu_tmem parent=pb_otpu_slr0 held=3 removed=1' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_fab parent=pb_otpu_slr0 held=3 removed=0' in out
     assert 'OTPU_FLOORPLAN pb_otpu_pcis parent=pblock_CL held=6 removed=0' in out
     assert 'OTPU_FLOORPLAN pb_otpu_xs parent=pblock_CL held=6 removed=0' in out
 

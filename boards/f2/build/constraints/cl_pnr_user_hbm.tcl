@@ -24,8 +24,21 @@
 #                 together, 61%: the pumped banks' read requests (clk -> clk_f, two fast periods
 #                 by otpu_clk2x.tcl) come from the DMA's t_re_q, the VPU's ta_addr / tb_addr,
 #                 the MXU's t_raddr and the quantizer's, and a2af0904 placed the DMA's over 4.4
-#                 ns of route to a bank's address pins. The MXU (the slice's rest, ~45K) wraps
-#                 around the box in SLR0's other 12 regions with the adapter and the bridges.
+#                 ns of route to a bank's address pins. The MXU's request registers (t_rq, t_ren
+#                 and their replicas: the leaf cells, not the MXU) are in the box too since
+#                 round 4: 8b2fd3a0 placed u_mxu/t_rq_reg and its _rep copies outside it, 4.1 ns
+#                 of route to a bank. The MXU (the slice's rest, ~45K) wraps around the box in
+#                 SLR0's other 12 regions with the adapter.
+#   pb_otpu_fab   (a child of pb_otpu_slr0, X0Y0:X3Y0, the bottom row, 4 clock regions, ~54K
+#                 LUTs): the 8 bridges, the host registers, the port arbiters and the host
+#                 links' receiving ends (30K, 56%) by the HBM's AXI ports under them, each
+#                 bridge compact beside its port: 8b2fd3a0 spread a bridge's core side over
+#                 4.9 ns of route (h_a -> the read-address array's enables) and the write
+#                 count's stage into the adapter over 4.8. The adapter (u_board/u_mem, 39K, LUT
+#                 RAM heavy) is not boxed: its loads are the bridges below and the slice above,
+#                 the placer puts it between. The host block (u_host: the links' sending ends,
+#                 the queues) stays free in SLR0 by its PCIS link stages (pb_otpu_xs); the links'
+#                 HNS stages carry the distance down to the ports a wire a cycle.
 #   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS / OCL column): the host path's
 #                 PCIS skid buffers, output registers and link ends (u_host/u_pcis_*, aclk only)
 #                 and the OCL crossing (u_ocl: its OCL side faces the shell, its core side holds
@@ -78,6 +91,21 @@ add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_dma}]
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_quant}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_mxu/t_rq_reg*}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_mxu/t_ren_reg*}]
+
+########################################
+# pb_otpu_fab: the bridges, the host registers and arbiters by the HBM's ports, SLR0's bottom row
+########################################
+create_pblock pb_otpu_fab
+set_property PARENT pb_otpu_slr0 [get_pblocks pb_otpu_fab]
+resize_pblock pb_otpu_fab -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y0}
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_hreg}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_port}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_aw/u_rx}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_w/u_rx}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_ar/u_rx}]
 
 ########################################
 # pb_otpu_pcis: the PCIS registers and the OCL crossing beside the shell's column, SLR1
@@ -125,10 +153,10 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb {pb_otpu_slr0 pb_otpu_tmem pb_otpu_pcis pb_otpu_xs} {
+foreach pb {pb_otpu_slr0 pb_otpu_tmem pb_otpu_fab pb_otpu_pcis pb_otpu_xs} {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=4"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=5"
