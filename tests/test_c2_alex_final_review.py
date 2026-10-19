@@ -308,3 +308,64 @@ def test_changed_protected_pulse_evidence_rejected(tmp_path,before,after):
 
 def test_exact_handshake_class_only_applies_to_cdc():
  assert r.CLASSES['reviewed-vendor-handshake-cdc']=={'cdc'}
+
+
+def single_bit_fixture():
+ records=[];clauses={}
+ for values in r.SINGLE_BIT_CDC_EXPECTED:
+  d=dict(zip(r.SINGLE_BIT_CDC_FIELDS,values));d.update(rule='CDC-3',severity='Info',description='1-bit synchronized with ASYNC_REG property',exception='False Path',waived='N')
+  records.append(dict(family='cdc',record=d));scope=d['to'].split('/syncstages_ff_reg')[0];array='/SYNC_HBM_INIT_TO_ACLK/' in d['to']
+  clauses[scope]=dict(scope=scope,source='xpm_cdc_array_single.tcl' if array else 'xpm_cdc_single.tcl',kind='set_false_path',command='set_false_path -to [get_cells {syncstages_ff_reg[0][*]}]' if array else 'set_false_path -to [get_cells {syncstages_ff_reg[0]}]')
+ return records,{'issues':[],'canonical_facts':{'exceptions':{'other_clauses':list(clauses.values())}}}
+
+
+def test_exact_single_bit_info_requires_scoped_first_stage_source():
+ records,prereq=single_bit_fixture();out=r.single_bit_cdc_context(records,prereq)
+ assert out['count']==17 and out['mtbf_asserted'] is False and out['word_coherence_asserted'] is False
+
+
+@pytest.mark.parametrize('field,value',[('rule','CDC-99'),('severity','Warning'),('waived','Y'),('depth','99'),('source_clock','other'),('destination_clock','other'),('cdc_type','other'),('from','WRAPPER/CL/other/C'),('to','WRAPPER/CL/other/D')])
+def test_single_bit_changed_record_cannot_claim_known_info(field,value):
+ records,prereq=single_bit_fixture();records[0]['record'][field]=value
+ with pytest.raises(ValueError):r.single_bit_cdc_context(records,prereq)
+
+
+@pytest.mark.parametrize('kind',['missing_record','duplicate_record','missing_clause','changed_scope','changed_source','changed_selector','failed_prerequisite'])
+def test_single_bit_missing_or_changed_proof_rejected(kind):
+ records,prereq=single_bit_fixture();clauses=prereq['canonical_facts']['exceptions']['other_clauses']
+ if kind=='missing_record':records.pop()
+ elif kind=='duplicate_record':records.append(copy.deepcopy(records[0]))
+ elif kind=='missing_clause':clauses.pop(0)
+ elif kind=='changed_scope':clauses[0]['scope']='WRAPPER/CL/other'
+ elif kind=='changed_source':clauses[0]['source']='custom.tcl'
+ elif kind=='changed_selector':clauses[0]['command']='set_false_path -to [get_cells *]'
+ else:prereq['issues']=[{'reason':'failed'}]
+ with pytest.raises(ValueError):r.single_bit_cdc_context(records,prereq)
+
+
+def protected_cdc_fixture(tmp_path,monkeypatch):
+ text='CDC-1 Critical 5 Synthetic\nSource Clock: shell_src\nDestination Clock: shell_dst\nCDC Type: User Ignored\n'
+ text+=''.join(f' {i} CDC-1 Critical Synthetic protected finding {i} False Path <hidden>/<hidden> <hidden>/<hidden> N\n' for i in range(5))
+ report=tmp_path/'shell_cdc';report.write_text(text);complete=tmp_path/'complete';complete.write_text(td({'kind':'original_shell_reference_captured','checkpoint_sha256':r.module('build').SHELL_SHA256}))
+ monkeypatch.setattr(r,'SHELL_CDC_RECORD',r.record(report))
+ rows=r.module('exception_review').parse_cdc_report(text)['rows']
+ return [dict(family='cdc',record=row) for row in rows],dict(shell_cdc=report,shell_complete=complete)
+
+
+def test_protected_cdc_requires_full_signature_multiplicity(tmp_path,monkeypatch):
+ records,aux=protected_cdc_fixture(tmp_path,monkeypatch);out=r.protected_cdc_context(g,records,aux)
+ assert out['count']==5 and out['hidden_endpoint_identity_asserted'] is False
+
+
+@pytest.mark.parametrize('kind',['depth','clock','waived','missing','duplicate','cl_endpoint','original_bytes','checkpoint'])
+def test_protected_cdc_mutations_rejected(tmp_path,monkeypatch,kind):
+ records,aux=protected_cdc_fixture(tmp_path,monkeypatch)
+ if kind=='depth':records[0]['record']['depth']='99'
+ elif kind=='clock':records[0]['record']['source_clock']='new'
+ elif kind=='waived':records[0]['record']['waived']='Y'
+ elif kind=='missing':records.pop()
+ elif kind=='duplicate':records.append(copy.deepcopy(records[0]))
+ elif kind=='cl_endpoint':records[0]['record']['to']='WRAPPER/CL/new/D'
+ elif kind=='original_bytes':aux['shell_cdc'].write_text(aux['shell_cdc'].read_text()+'\n')
+ else:aux['shell_complete'].write_text(td({'kind':'original_shell_reference_captured','checkpoint_sha256':'0'*64}))
+ with pytest.raises(ValueError):r.protected_cdc_context(g,records,aux)

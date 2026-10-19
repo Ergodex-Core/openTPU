@@ -613,7 +613,7 @@ def review_handshake_skew(rows,handshakes,gray_groups):
     return matched
 
 
-def current_cdc_inventory(text,object_rows):
+def parse_cdc_report(text):
     """Cross-check complete report summary/detail plus raw object serialization.
 
     This establishes full inventory, not acceptance of every CDC record. The
@@ -636,9 +636,14 @@ def current_cdc_inventory(text,object_rows):
             row=dict(source_clock=source,destination_clock=dest,cdc_type=kind,row=ident,rule=rule,severity=severity,description=description,depth=depth,exception=exception,**{'from':start,'to':end},waived=waived)
             rows.append(row);actual[rule]+=1
     require(expected and dict(actual)==expected,'CDC summary/detail mismatch')
-    fields=set(rows[0]);normalized=[{key:row[key] for key in fields} for row in object_rows]
-    require(Counter(digest(row) for row in rows)==Counter(digest(row) for row in normalized),'CDC report/object inventory mismatch')
     return {'rows':rows,'records_sha256':digest(rows),'counts':dict(actual),'acceptance':'requires exact artifact dispositions and independent active topology predicates'}
+
+
+def current_cdc_inventory(text,object_rows):
+    result=parse_cdc_report(text);rows=result['rows'];fields=set(rows[0])
+    normalized=[{key:row[key] for key in fields} for row in object_rows]
+    require(Counter(digest(row) for row in rows)==Counter(digest(row) for row in normalized),'CDC report/object inventory mismatch')
+    return result
 
 
 def unused_net_inventory(supplemental,findings):

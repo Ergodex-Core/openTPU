@@ -24,6 +24,7 @@ CLASSES = {
     'inherited-protected-shell': {'cdc', 'check_timing'},
     'reviewed-vendor-fifo-cdc': {'cdc'},
     'reviewed-vendor-handshake-cdc': {'cdc'},
+    'reviewed-vendor-single-bit-cdc': {'cdc'},
     'reviewed-reset-status-cdc': {'cdc'},
     'reviewed-reset-gate-warning': {'methodology'},
     'reviewed-memory-output-register-suggestion': {'methodology'},
@@ -204,6 +205,78 @@ def protected_pulse_context(*, reports, auxiliary, physical_result):
                 basis='exact_original_shell_visible_warning_and_clock_context_plus_complete_final_pulse_totals')
 
 
+SINGLE_BIT_CDC_FIELDS = ('source_clock', 'destination_clock', 'cdc_type', 'depth', 'from', 'to')
+SINGLE_BIT_CDC_EXPECTED = (
+    ('clk_hbm_ref', 'clk_main_a0', 'No Common Phase', '4', 'WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top/TWO_STACK_HBM.hbm_apb_mst_0/apb_switch_r_reg/C', 'WRAPPER/CL/u_hbm/SYNC_HBM_INIT_TO_ACLK/syncstages_ff_reg[0][0]/D'),
+    ('clk_hbm_ref', 'clk_main_a0', 'No Common Phase', '4', 'WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top/TWO_STACK_HBM.hbm_apb_mst_1/apb_switch_r_reg/C', 'WRAPPER/CL/u_hbm/SYNC_HBM_INIT_TO_ACLK/syncstages_ff_reg[0][1]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '5', 'WRAPPER/CL/u_rst_core/arststages_ff_reg[3]/C', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr_aclk1/U0/EXT_LPF/ACTIVE_LOW_AUX.ACT_LO_AUX/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '4', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr0/U0/ACTIVE_LOW_BSR_OUT_DFF[0].FDRE_BSR_N/C', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr_aclk1/U0/EXT_LPF/ACTIVE_LOW_EXT.ACT_LO_EXT/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_ar/dest_ack_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_ar/handshake/xpm_cdc_single_dest2src_inst/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_aw/dest_ack_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_aw/handshake/xpm_cdc_single_dest2src_inst/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_w/dest_ack_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_w/handshake/xpm_cdc_single_dest2src_inst/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_b/handshake/src_sendd_ff_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_b/handshake/xpm_cdc_single_src2dest_inst/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_main_a0', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_r/handshake/src_sendd_ff_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_r/handshake/xpm_cdc_single_src2dest_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_ar/handshake/src_sendd_ff_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_ar/handshake/xpm_cdc_single_src2dest_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_aw/handshake/src_sendd_ff_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_aw/handshake/xpm_cdc_single_src2dest_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_w/handshake/src_sendd_ff_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_fwd_w/handshake/xpm_cdc_single_src2dest_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_b/dest_ack_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_b/handshake/xpm_cdc_single_dest2src_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '3', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_r/dest_ack_reg/C', 'WRAPPER/CL/u_ocl_cdc/inst/gen_clock_conv.gen_async_lite_conv.clock_conv_lite_resp_r/handshake/xpm_cdc_single_dest2src_inst/syncstages_ff_reg[0]/D'),
+    ('clk_main_a0', 'clk_out1_f2_core_clk', 'Safely Timed', '4', 'WRAPPER/CL/u_hbm/o_hbm_ready_reg/C', 'WRAPPER/CL/u_ready_cdc/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_out1_f2_hbm_clk', 'No Common Phase', '5', 'WRAPPER/CL/u_rst_core/arststages_ff_reg[3]/C', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr_aclk2/U0/EXT_LPF/ACTIVE_LOW_AUX.ACT_LO_AUX/syncstages_ff_reg[0]/D'),
+    ('clk_out1_f2_core_clk', 'clk_out1_f2_hbm_clk', 'No Common Phase', '4', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr0/U0/ACTIVE_LOW_BSR_OUT_DFF[0].FDRE_BSR_N/C', 'WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/clk_map/psr_aclk2/U0/EXT_LPF/ACTIVE_LOW_EXT.ACT_LO_EXT/syncstages_ff_reg[0]/D'),
+)
+
+
+SHELL_CDC_RECORD = {'bytes':3764,'sha256':'ae239477bad8f6bd9df021f5ee42102013c1691a824b127ba2419c9c74e6a349'}
+
+
+def protected_cdc_context(g, records, auxiliary):
+    """Exact original-shell report context and multiplicity, not hidden identity."""
+    require({'shell_cdc','shell_complete'} <= set(auxiliary),'Missing original shell CDC witness')
+    require(record(auxiliary['shell_cdc']) == SHELL_CDC_RECORD,'Original shell CDC report differs from reviewed capture')
+    complete=g.td(Path(auxiliary['shell_complete']).read_text())
+    require(complete.get('kind')=='original_shell_reference_captured' and complete.get('checkpoint_sha256')==module('build').SHELL_SHA256,'Original shell checkpoint provenance differs')
+    original=module('exception_review').parse_cdc_report(Path(auxiliary['shell_cdc']).read_text())['rows']
+    current=[row['record'] for row in records if row['family']=='cdc' and all(not row['record'].get(k,'').startswith('WRAPPER/CL/') for k in ('from','to'))]
+    fields=('source_clock','destination_clock','cdc_type','rule','severity','description','depth','exception','from','to','waived')
+    normalize=lambda row:{key:row[key] for key in fields}
+    require(len(original)==5 and Counter(canonical(normalize(row)) for row in original)==Counter(canonical(normalize(row)) for row in current),'Protected shell CDC context/multiplicity changed')
+    require(all(row['waived']=='N' for row in current),'Protected shell CDC record is waived')
+    return dict(count=len(current),signatures=sorted(canonical(normalize(row)) for row in current),
+                current_records=[normalize(row) for row in current],shell_report=SHELL_CDC_RECORD,
+                shell_checkpoint_sha256=complete['checkpoint_sha256'],hidden_endpoint_identity_asserted=False)
+
+
+def single_bit_cdc_context(records, exception_result):
+    """Exact vendor-detected informational paths, not a generic Info waiver.
+
+    The source-reviewed artifact inventory pins full records. This additionally
+    rechecks observed signatures and scoped standard first-stage constraints.
+    It does not assert independently measured MTBF or coherent multi-bit data.
+    """
+    common=dict(rule='CDC-3',severity='Info',description='1-bit synchronized with ASYNC_REG property',exception='False Path',waived='N')
+    selected=[row for row in records if row['family']=='cdc' and row['record'].get('rule')=='CDC-3' and any(row['record'].get(k,'').startswith('WRAPPER/CL/') for k in ('from','to'))]
+    expected=set(SINGLE_BIT_CDC_EXPECTED);observed=[];facts=[]
+    require(exception_result.get('issues')==[], 'Single-bit CDC exception prerequisite unresolved')
+    clauses=exception_result['canonical_facts']['exceptions']['other_clauses']
+    for row in selected:
+        data=row['record'];signature=tuple(data.get(k) for k in SINGLE_BIT_CDC_FIELDS)
+        require(all(data.get(k)==v for k,v in common.items()) and signature in expected,'Unknown/changed vendor single-bit CDC record')
+        observed.append(signature)
+        match=re.fullmatch(r'(.+)/syncstages_ff_reg\[0\](\[[01]\])?/D',data['to'])
+        require(match is not None,'Unexpected first-stage endpoint')
+        scope=match[1];array=match[2] is not None
+        source='xpm_cdc_array_single.tcl' if array else 'xpm_cdc_single.tcl'
+        command='set_false_path -to [get_cells {syncstages_ff_reg[0][*]}]' if array else 'set_false_path -to [get_cells {syncstages_ff_reg[0]}]'
+        matches=[clause for clause in clauses if clause['scope']==scope and clause['source']==source and clause['command']==command and clause['kind']=='set_false_path']
+        require(len(matches)==1,'Missing/ambiguous source-bound first-stage exception')
+        facts.append({'record_sha256':canonical(row),'signature':list(signature),'source_clause':matches[0]})
+    require(len(observed)==len(expected) and set(observed)==expected,'Missing/duplicate vendor single-bit CDC record')
+    return dict(records=facts,records_sha256=canonical(facts),count=len(facts),
+                semantics='vendor_report_detected_single_bit_ASYNC_REG_synchronizers_with_exact_scoped_first_stage_exceptions',
+                mtbf_asserted=False,word_coherence_asserted=False,reset_event_pulse_width_asserted=False)
+
+
 def replay(*, reports, auxiliary, disposition_path, checkpoint, collection_receipt_sha256, linked_checkpoint_sha256=None):
     g = module('gray_review'); n = module('no_clock_review')
     policy = read_json(POLICY)
@@ -240,6 +313,8 @@ def replay(*, reports, auxiliary, disposition_path, checkpoint, collection_recei
         prerequisites={name: result[name] for name in ('gray', 'no_clock', 'reset_status')})
     require(isinstance(result['exceptions'],dict) and result['exceptions'].get('issues') == [] and 'canonical_facts' in result['exceptions'], 'Exception/methodology predicate unresolved/incomplete')
     rows = artifact_records(g, reports['objects.tcldata'], summary)
+    result['single_bit_cdc'] = single_bit_cdc_context(rows, result['exceptions'])
+    result['protected_cdc'] = protected_cdc_context(g, rows, auxiliary)
     result['dispositions'] = review_dispositions(read_json(disposition_path), checkpoint=checkpoint, receipt_sha=collection_receipt_sha256, records=rows, auxiliary={name:record(path)['sha256'] for name,path in auxiliary.items()})
     pending = set(g.tcl_list(summary['pending_reviews']))
     expected = {'current_vendor_CDC_and_gray_max_delay_scope','current_exception_coverage_and_ignored_paths','current_DRC_methodology_and_severity_configuration','exact_shell_inherited_witnesses','current_9SI_8MI_vendor_simulation_and_generated_IP_binding','current_routed_native_ready_equivalence'}
