@@ -377,7 +377,18 @@ cl_dram_hbm_dma pattern), per-SLR resets, `cl_mem_hbm_wrapper #(NUM_OF_AXI_PORTS
 Build 7 runs on opentpu-f2 with Alex's driver (unit `otpu-f2burst200-s3-build1`, log
 `/home/ubuntu/rachit/logs/f2burst200-s3-build1.log`, output `/home/ubuntu/rachit/f2burst200-s3-run1/`);
 build 5 was stopped to free the box (dead at -7 ns in routing). On silicon:
-`chat --backend board --dev f2:0 --model gemma3 --slices 3`.
+`chat --backend board --dev f2:0 --model gemma3 --slices 3`. **Build 7's first run failed in
+RTL elaboration (22:49 UTC)**: the ip and pcis stages passed (the four block designs and the
+two register slices generated and synthesized out of context), but the generated top
+connects `M_S<s>_arid/awid/rid/bid` on the host crossbar `f2_host`, and a SmartConnect's
+master interfaces carry no ID signals (one ordered thread per master; Alex noted it for his
+`M_H*` ports and tied the HBM-side IDs to 0 himself). Also caught in the same log: an
+unsized decimal literal above 2^31 at line 221 of the S = 3 top, which Vivado truncates to a
+signed 32-bit value (`[Synth 8-11057]`), so that parameter would have been wrong on silicon.
+Both go back to the agent: no ID connections on the crossbar's masters, each slice's
+`S_HOST` IDs tied to 0, sized literals in the generator, and the lint stubs made to match the
+real generated wrappers so this class is caught before Vivado. Build host from now on: an
+m7a.8xlarge cloned from opentpu-f2 (AMI `ami-0433c6064060ec312`, user's instruction).
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
