@@ -1,8 +1,10 @@
 # C2 FPGA build evidence — 2026-10-19
 
 **No C2 FPGA execution or physical HBM performance result is available yet.**
-The integrated F2 image is being built from frozen commit
-`4f7509123fdd2cf1eba5a2c88289a3e3c2709439`. RTL Lens results remain simulations.
+The first integrated build, from frozen commit
+`4f7509123fdd2cf1eba5a2c88289a3e3c2709439`, was stopped after a clock DRC failure.
+Clock and CDC qualification fixes are being prepared for a fresh isolated build.
+RTL Lens results remain simulations.
 
 ## Standalone core synthesis and route
 
@@ -50,9 +52,9 @@ Evidence and both checkpoints are preserved using AWS CLI at
 
 ## Integrated F2 build
 
-The isolated build runs on `i-00a83cab3c81ac10f` under systemd unit
+The first isolated build ran on `i-00a83cab3c81ac10f` under systemd unit
 `otpu-c2-full-4f750912`, with an eight-CPU quota, 96 GiB memory limit, six-hour
-runtime limit and four Vivado threads. Its directory is
+runtime limit and four Vivado threads. Its preserved directory is
 `/home/ubuntu/rachit/codex-c2/source-4f750912/full`. The source checkout is separate
 from existing TPU work; no FPGA slot has been changed.
 
@@ -60,11 +62,30 @@ The kernel, eight native HBM ports, PCIS preload and OCL control synthesized wit
 zero synthesis errors/critical warnings. The custom CDC constraints found 19
 crossing FIFOs and one host write counter, with core/main/HBM periods
 5.000/4.000/2.222 ns. Integrated synthesis estimated +0.387 ns setup and −0.095 ns
-hold slack; these are pre-route estimates. Shell linking additionally emits
-HDK constraint/context warnings that remain recorded and under review.
+hold slack; these are pre-route estimates based on the subsequently rejected
+clock setting. Shell linking additionally emits HDK constraint/context warnings
+that remain recorded and under review.
 The integrated synthesis utilization report lists 38,897 total LUTs (23,141 logic,
 6,642 LUTRAM, 9,114 SRL), 41,865 FFs, 172 RAMB36, 55 RAMB18 and 564 DSPs. This
 includes the CL's HBM/control fabric, before linking the static AWS shell.
+
+Vivado reported `AVAL-168`: the inherited MMCM multiplier `4.8` is not a legal
+0.125 increment. The build was stopped before placement; its source, reports,
+logs and four checkpoints were preserved in S3 under `full-4f750912/`.
+Commit `70bb2971` derives a legal multiplier/divider pair of 24/5, preserving
+the exact 200/400 MHz core clocks and 450 MHz HBM clock. The builder now checks
+legal clock attributes and exact frequencies before invoking Vivado.
+
+A separate read-only probe of the actual optimized checkpoint confirmed that
+all eight native write-counter Gray crossings survive optimization despite
+disabled kernel writes. Each retains 16 source and two stages of 16 destination
+registers, with a path into read issue gating. The corrected build must therefore
+constrain and validate **47** Gray groups: 38 FIFO pointer directions, eight
+native counters and one host counter. The old 39-group report is insufficient.
+The probe also established that Vivado's exception property includes
+`-datapath_only`, and that bus-skew report rows wrap across lines; qualification
+must parse these actual report forms. Probe evidence is preserved in
+`build/c2-fpga/counter-evidence/` and the S3 `full-4f750912/` prefix.
 
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
