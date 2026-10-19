@@ -4,7 +4,8 @@
 The first integrated build, from frozen commit
 `4f7509123fdd2cf1eba5a2c88289a3e3c2709439`, was stopped after a clock DRC failure.
 The corrected full build is running from frozen commit
-`7028e35e8720cb70d7b38d65010813dd23d88bcf`. RTL Lens results remain simulations.
+`7028e35e8720cb70d7b38d65010813dd23d88bcf` on **`opentpu-f2`
+(`i-0c78de2253f66519d`) only**. RTL Lens results remain simulations.
 
 ## Standalone core synthesis and route
 
@@ -114,12 +115,28 @@ Its exact source bytes match committed `7028e35e`; verification evidence is in
 The combined build, route, methodology, publisher, session and host suite passed
 **213 tests** before freezing this revision.
 
-The new full build started at approximately 14:36 UTC under
-`otpu-c2-full-7028e35e.service`, in
-`/home/ubuntu/rachit/codex-c2/source-7028e35e/full`. It uses the same bounded
-resources and separate source checkout as the first attempt. At 14:42 UTC it
-had finished technology mapping with no errors or critical warnings; placement,
-routing and final qualification were still pending.
+The corrected revision initially started at 14:36 UTC on `fpga-dev-f2`. At the
+user's instruction to use only `opentpu-f2`, its own unit was stopped and
+confirmed inactive at approximately 14:57 UTC. Other jobs and the FPGA image
+were untouched. No further work is assigned to `fpga-dev-f2`.
+
+A first dedicated-host launch at 14:58:24 UTC stopped before creating the output
+directory because system Python lacks NumPy. Its log and unit status are
+preserved as `failed-system-python.log` and `failed-system-python-unit.txt`.
+A **fresh full build** then started on `opentpu-f2` at 15:00:12 UTC using the
+verified `/home/ubuntu/opentpu-venv/bin/python3`, under
+`otpu-c2-full-7028e35e-r2.service`, with invocation ID
+`2a3393b4074647e3bd79ae47159f28c7`. Its separate checkout is
+`/home/ubuntu/rachit/codex-c2/source-7028e35e/src`, cloned from the verified
+dedicated-host `session-tools` checkout. Its new output directory is
+`/home/ubuntu/rachit/codex-c2/source-7028e35e/full`; no old-host checkpoints are
+reused. The launch verifies the exact instance through IMDSv2, frozen source
+revision, clean checkout, HDK/IP revisions, and available resources. It retains
+the eight-CPU quota, 96 GiB memory limit, six-hour runtime limit and four Vivado
+threads. Both compilation and eventual physical measurement use this instance.
+Local launch and stop receipts are in `build/c2-fpga/remote/` under
+`launch-dedicated-full-7028e35e-*`,
+`relaunch-dedicated-full-7028e35e-venv-*` and `stop-old-host-user-request-*`.
 
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
