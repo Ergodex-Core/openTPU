@@ -336,6 +336,10 @@ the card went from 0.052 (build 84989047, before K smoothing) to 0.012.
   UltraScale+ VU9P, four DDR4 DIMMs) being brought up, and ASICs, starting with NanGate45 and
   OpenROAD for area, clock and power numbers.
 
+The [AWS F2 burst200 port](boards/f2/README.md) adds a Small Shell/HBM build,
+200/400/450 MHz core/TMEM/HBM-AXI clocking, and an OCL/PCIS host transport.
+Its source-only flow requires an external AWS FPGA HDK and licensed Vivado 2025.2.
+
 ## Contributing
 
 Issues and pull requests are welcome, and most of the work needs only Python and Verilator, not
