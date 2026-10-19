@@ -389,7 +389,11 @@ def final_gray_checks(e,rows):
         sp=number(e.props[base+('source_clock','clock')]['PERIOD']);dp=number(e.props[base+('stage','0','clock','clock')]['PERIOD'])
         requirement=number(row['requirement']);actual=number(row['actual']);slack=number(row['slack'])
         if requirement<=0 or not rounded_match(row['requirement'],min(sp,dp)):issues.append(('final_bus_skew_vendor_bound',root))
-        if slack<0 or actual<0:issues.append(('final_bus_skew_physical_failure',root))
+        # Vivado reports signed relative-delay skew (including relative CRPR).
+        # A negative actual skew is valid when the reported slack is MET.
+        if slack<0 or actual>requirement:issues.append(('final_bus_skew_physical_failure',root))
+        if abs((requirement-actual)-slack)>Decimal('.001'):
+            issues.append(('final_bus_skew_slack_inconsistent',root))
         matches.append({'root':root,'id':ident,'row':row,'derived_bound_ns':str(min(sp,dp))})
     return {'issues':issues,'negative_path_count':len(negative),'negative_path_sha256':digest(negative),'matched_gray_bus_skew_rows':len(matches),
             'remaining_non_gray_bus_skew_rows':len(rows)-len(matches),'canonical_gray_bus_skew_sha256':digest(matches)}

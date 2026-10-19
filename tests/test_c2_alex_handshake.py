@@ -109,3 +109,21 @@ def test_physical_skew_uses_actual_handshake_endpoints_and_bound(tmp_path):
     with pytest.raises(ValueError,match='physical'):m.review_handshake_skew(wrong,witnesses,{})
     wrong=copy.deepcopy(rows);del wrong['0']
     with pytest.raises(ValueError,match='Incomplete'):m.review_handshake_skew(wrong,witnesses,{})
+
+
+def test_signed_handshake_skew_preserves_physical_checks(tmp_path):
+    witnesses=m.parse_handshake_witness(capture(tmp_path),'a'*64);rows={}
+    for index,(root,w) in enumerate(witnesses.items()):
+        bound=m.Decimal(w['destination_period'])*w['forward_sync_stages']
+        rows[str(index)]={'from':' '.join('{'+x+'}' for x in w['source_registers']),
+            'to':' '.join('{'+x+'}' for x in w['destination_registers']),
+            'requirement':str(bound),'actual':'-0.008','slack':str(bound+m.Decimal('.008'))}
+    assert set(m.review_handshake_skew(rows,witnesses,{}))==m.OCL_ROOTS
+    wrong=copy.deepcopy(rows);wrong['0']['slack']='-0.001'
+    with pytest.raises(ValueError,match='physical'):m.review_handshake_skew(wrong,witnesses,{})
+    wrong=copy.deepcopy(rows);wrong['0']['slack']='0.001'
+    with pytest.raises(ValueError,match='inconsistent'):m.review_handshake_skew(wrong,witnesses,{})
+    for field in ('actual','slack'):
+        for value in ('NaN','Infinity','-Infinity'):
+            wrong=copy.deepcopy(rows);wrong['0'][field]=value
+            with pytest.raises(ValueError,match='physical'):m.review_handshake_skew(wrong,witnesses,{})

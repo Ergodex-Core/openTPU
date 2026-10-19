@@ -543,7 +543,8 @@ def review_handshake_skew(rows,handshakes,gray_groups):
         witness=handshakes[root];expected=Decimal(witness['destination_period'])*witness['forward_sync_stages']
         requirement=Decimal(row['requirement']);actual=Decimal(row['actual']);slack=Decimal(row['slack'])
         require(requirement.is_finite() and requirement==expected,'Handshake physical bus-skew formula mismatch')
-        require(actual.is_finite() and slack.is_finite() and actual>=0 and slack>=0 and actual<=expected,'Handshake bus-skew physical failure')
+        # Actual skew is signed after relative clock-delay/CRPR adjustment.
+        require(actual.is_finite() and slack.is_finite() and slack>=0 and actual<=expected,'Handshake bus-skew physical failure')
         require(abs((expected-actual)-slack)<=Decimal('.001'),'Handshake bus-skew slack inconsistent')
         matched[root]={'id':ident,'row':row,'derived_bound_ns':str(expected)}
     require(set(matched)==set(handshakes) and gray_used==set(gray_groups),'Incomplete exact bus-skew inventory')

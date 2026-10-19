@@ -158,3 +158,23 @@ def test_objects_binding_and_embedded_ancestors(tmp_path):
     p=tmp_path/'objects';p.write_text('checkpoint /route.dcp sha256 '+('a'*64)+'\nvendor_gray_bus root {source {0 source} destination {0 destination}} review pending\nbus_skew 1 {from source to destination requirement 4.000 actual 0.100 slack 3.900} review pending\n')
     binding,r=m.read_objects(e,p,'a'*64);assert e.groups and e.coverage['ancestors']['skipped']=='0'
     with pytest.raises(ValueError):m.read_objects(e,p,'b'*64)
+
+
+def test_final_gray_signed_actual_skew_is_met():
+    e,ex,b=example();r=rows(b[1]);r['1'].update(actual='-0.008',slack='4.008')
+    assert not m.final_gray_checks(e,r)['issues']
+
+@pytest.mark.parametrize('change,reason',[
+    ({'actual':'-0.008','slack':'4.000'},'final_bus_skew_slack_inconsistent'),
+    ({'actual':'4.008','slack':'0.008'},'final_bus_skew_physical_failure'),
+    ({'actual':'-0.008','slack':'-0.001'},'final_bus_skew_physical_failure'),
+])
+def test_signed_skew_does_not_hide_failure_or_bad_arithmetic(change,reason):
+    e,ex,b=example();r=rows(b[1]);r['1'].update(change)
+    assert reason in [issue[0] for issue in m.final_gray_checks(e,r)['issues']]
+
+@pytest.mark.parametrize('field',['actual','slack','requirement'])
+@pytest.mark.parametrize('value',['NaN','Infinity','-Infinity'])
+def test_final_gray_nonfinite_skew_rejected(field,value):
+    e,ex,b=example();r=rows(b[1]);r['1'][field]=value
+    with pytest.raises(ValueError,match='Nonfinite'):m.final_gray_checks(e,r)
