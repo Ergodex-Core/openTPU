@@ -59,6 +59,7 @@ if {$resume} {
     if {$stage ne "route"} { error "only route can resume synthesis" }
     open_checkpoint $root/checkpoints/post_synth.dcp
 } else {
+    set critical_before [get_msg_config -count -severity {CRITICAL WARNING}]
     create_project -in_memory -part $part
     set_property source_mgmt_mode None [current_project]
     set sources [list rtl/vpu/otpu_fp.sv rtl/vpu/otpu_fpipe.sv rtl/top/otpu_pkg.sv \
@@ -73,6 +74,9 @@ if {$resume} {
     }
     if {[llength [get_clocks c2_clk]] != 1 || [get_property PERIOD [get_clocks c2_clk]] != 5.0} {
         error "missing or incorrect C2 200MHz constraint"
+    }
+    if {[get_msg_config -count -severity {CRITICAL WARNING}] > $critical_before} {
+        error "C2 synthesis or timing constraints produced a critical warning; checkpoint is not qualified"
     }
     write_checkpoint -force $root/checkpoints/post_synth.dcp
     reports $root synth
