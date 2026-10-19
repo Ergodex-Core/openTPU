@@ -169,3 +169,13 @@ passes 131 tests (27 RTL tests and 104 reference/ISA tests), using Verilator 5.0
 Read-only peer review of slot lifetime, generation reset, ordered retirement and the
 shared epilogue found no control defect; its suggested no-reset command-boundary test
 was added and passed.
+
+## Subsequent F2 microbenchmark integration (2026-10-20)
+
+The isolated board path is now in `boards/c1_f2_alex/README.md`. It preserves this
+E16/S4 kernel and supplies actual native memory transport over eight physical
+ports, with resident OCL-preloaded ACT/scales. It deliberately does not claim the
+full-token integration gate above. The original abstract-service profiles remain
+unchanged; new native-kernel profiles have distinct provenance. A Vivado OOC
+build of revision `de1f5ac5` was launched on opentpu-f2 before the user selected a
+dedicated m7a.8xlarge builder; subsequent shell builds target the m7a builder.
