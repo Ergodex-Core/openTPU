@@ -100,7 +100,9 @@ def verify(run):
     validation = cl/f'build/reports/cl_opentpu.{bid}.route_validation.txt'
     checks = dict(line.split('=', 1) for line in validation.read_text().splitlines() if '=' in line)
     require(all(checks.get(k) == '0' for k in ZERO_FIELDS), 'Route validation reports blocking failures')
-    require(checks.get('gray_bus_constraints') == '39' and checks.get('cdc_crossing_witnesses') == '6',
+    # Post-opt retains all eight native write-counter groups, despite read-only
+    # kernel traffic. Their skew bounds are required alongside the host counter.
+    require(checks.get('gray_bus_constraints') == '47' and checks.get('cdc_crossing_witnesses') == '6',
             'CDC/gray constraint inventory differs from qualified topology')
     artifacts = outputs.get('artifacts', {})
     for name, meta in artifacts.items():

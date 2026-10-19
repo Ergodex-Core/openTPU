@@ -44,7 +44,7 @@ def qualified(tmp_path):
     dcp=checkpoints/f'cl_opentpu.{bid}.post_route.dcp';dcp.write_bytes(b'qualified routed checkpoint')
     marker=checkpoints/f'cl_opentpu.{bid}.route_validation.passed';marker.write_text(P.MARKER+'\n')
     report=cl/f'build/reports/cl_opentpu.{bid}.route_validation.txt';report.parent.mkdir(exist_ok=True)
-    report.write_text(''.join(f'{k}=0\n' for k in P.ZERO_FIELDS)+'gray_bus_constraints=39\ncdc_crossing_witnesses=6\n')
+    report.write_text(''.join(f'{k}=0\n' for k in P.ZERO_FIELDS)+'gray_bus_constraints=47\ncdc_crossing_witnesses=6\n')
     tag='2026_10_19-120000';archive=checkpoints/f'{tag}.Developer_CL.tar'
     manifest=dict(manifest_format_version='2',date=tag,shell_version='0x10212415',hdk_version='2.3.0',
         tool_version='v2025.2',dcp_file_name=f'{tag}.SH_CL_routed.dcp',dcp_hash=P.sha(dcp),
@@ -78,22 +78,33 @@ def test_qualified_fixture_bound_to_all_artifacts(qualified):
     assert result['package_sha256']==P.sha(qualified['archive'])
     assert result['dcp_sha256']==P.sha(qualified['dcp'])
     assert all(len(result[k])==64 for k in P.HASH_FIELDS)
+    # The reviewed builder is pinned by its current bytes, never an old commit
+    # constant: a newly committed builder automatically becomes the required one.
+    inputs=P.read_json(qualified['run']/'inputs.json')
+    assert inputs['builder_sha256']==P.sha(P.ROOT/'boards/c2_f2/build.py')
 
 
 @pytest.mark.parametrize('change,match',[
     ('source','Frozen source changed'),('dcp','Output artifact changed'),('marker','marker invalid'),
-    ('timing','blocking failures'),('gray','topology'),('crossing','topology'),
-    ('synth_only','BuildAll'),('violated','Timing-violated'),('inputs','inputs hash mismatch')])
+    ('timing','blocking failures'),('gray','topology'),('legacy_gray39','topology'),('crossing','topology'),
+    ('synth_only','BuildAll'),('violated','Timing-violated'),('inputs','inputs hash mismatch'),
+    ('stale_builder','Build driver differs')])
 def test_unqualified_or_changed_run_never_reaches_aws(qualified,tmp_path,change,match):
     q=qualified
     if change=='source':(q['cl']/'design/rtl/c2/otpu_c2_hbm_kernel.sv').write_text('changed')
     elif change=='dcp':q['dcp'].write_bytes(b'changed')
     elif change=='marker':q['marker'].write_text('not passed')
     elif change=='timing':q['report'].write_text(q['report'].read_text().replace('hold_failed=0','hold_failed=1'))
-    elif change=='gray':q['report'].write_text(q['report'].read_text().replace('constraints=39','constraints=38'))
+    elif change=='gray':q['report'].write_text(q['report'].read_text().replace('constraints=47','constraints=46'))
+    elif change=='legacy_gray39':q['report'].write_text(q['report'].read_text().replace('constraints=47','constraints=39'))
     elif change=='crossing':q['report'].write_text(q['report'].read_text().replace('witnesses=6','witnesses=5'))
     elif change=='violated':q['dcp'].with_name('cl_opentpu.1234abcd.post_route.VIOLATED.dcp').write_bytes(b'bad')
     elif change=='inputs':(q['run']/'inputs.json').write_text((q['run']/'inputs.json').read_text()+'\n')
+    elif change=='stale_builder':
+        inputs=P.read_json(q['run']/'inputs.json');inputs['builder_sha256']='0'*64
+        write_json(q['run']/'inputs.json',inputs)
+        outputs=P.read_json(q['run']/'outputs.json');outputs['inputs_sha256']=P.sha(q['run']/'inputs.json')
+        write_json(q['run']/'outputs.json',outputs)
     else:
         outputs=P.read_json(q['run']/'outputs.json');outputs['flow']='SynthCL';write_json(q['run']/'outputs.json',outputs)
     calls=[]
