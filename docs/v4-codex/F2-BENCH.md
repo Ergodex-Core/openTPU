@@ -84,3 +84,92 @@ output bit, and expected byte counts before exporting openTPU Lens evidence.
 Counter-derived profiles must say that they contain measured aggregate counters,
 not an invented event timeline. Hardware evidence remains pending until the actual
 benchmark image is built, loaded, and run; no synthetic results are substituted.
+
+## Host invocation and evidence
+
+The host client is `opentpu/c2_f2.py`; the isolated Linux transport is
+`opentpu/host/c2_f2.py`. The transport locks the same canonical application-PF BDF
+as the production F2 transport before opening any BAR. It verifies vendor/device,
+benchmark ID, ABI and expected build ID before any write or BAR4 mapping. BAR4
+uses a native WC memcpy, MFENCE and uncached read completion. An additional full
+readback compares all uploaded HBM bytes before the measured run. This driver
+does not load images, unbind drivers or change PCI configuration.
+
+Generate inputs without accessing hardware:
+
+```sh
+PYTHONPATH=. python3 tools/c2_f2_bench.py prepare \
+  --fixture build/c2-f2/rows31-kb9.npz --rows 31 --kb 9 --seed 20261019
+```
+
+Once the separate benchmark build has passed its physical checks and the intended
+image is already loaded, use the actual application-PF BDF, `inputs.json` from
+that build, and its eight-digit hexadecimal build ID:
+
+```sh
+PYTHONPATH=. python3 tools/c2_f2_bench.py run \
+  --fixture build/c2-f2/rows31-kb9.npz \
+  --bdf 0000:34:00.0 --expected-build-id 0xBUILD_ID \
+  --build-manifest /path/to/qualified-build/inputs.json \
+  --out build/lens/c2/f2-rows31-kb9 --repeats 3
+```
+
+The BDF and `BUILD_ID` above are placeholders, not an instruction to target a
+particular running FPGA. Every run uses a new output directory. The script checks
+the manifest identity against the requested device build ID and records the full
+manifest and its hash; it does not establish that an AFI was correctly built or
+loaded. Root's build/deployment checks provide that separate evidence.
+
+Each repetition runs both modes, reversing order on alternating repetitions.
+It checks every fp32 result and signed48 integer diagnostic against canonical MM,
+all group counts and per-PC accepted/returned beat counts, the native credit
+bound, stable DONE state and no device error. Timeout requests ABORT and waits
+for native response drain before returning an error. A run at least 2^32 cycles
+is rejected because its 32-bit stall counters could wrap. Input bytes cannot be
+changed after preload. Failed checks never become Lens board profiles.
+
+Successful runs retain `result-<repeat>-<mode>.json`, host/build provenance,
+`c2-f2.otpuprof`, and standalone `c2-f2.html`. The profile's `board` field contains
+the full per-PC counters and exact result bits. The native-interface bandwidth
+floor uses maximum per-PC returned beats at at most one 64-byte beat per core
+cycle; it is not an HBM peak claim. Stall counters can overlap and cannot be
+summed to obtain a critical path. There is no fabricated instruction timeline.
+
+## CSR ABI 1
+
+All accesses are aligned 32-bit words with full write strobes. Unsupported accesses
+return SLVERR. MEM_ADDR increments only after an accepted MEM_WDATA write or
+successful MEM_RDATA read. Configuration and preload writes require idle state.
+
+| Byte offset | Register |
+| --- | --- |
+| 000 / 004 / 008 | ID `0x43324d42` / ABI `1` / BUILD_ID |
+| 00c | STATUS: busy, done, error, aborted, draining in bits 0..4 |
+| 010 | CTRL: START=1, ABORT=2, CLEAR=4 |
+| 014 / 018 / 01c / 020 | MODE 0 legacy M1 or 1 decode / KB / ROWS / BASE_BEAT |
+| 024 / 028 / 02c | MEM_ADDR word index / MEM_WDATA / MEM_RDATA |
+| 030 / 034 / 038 / 03c | ERROR / RESULT_COUNT / CYCLES low / high |
+| 040 / 044 / 048 / 04c | Accepted groups / committed groups / issued / returned native beats |
+| 050 / 054 / 058 / 05c / 060 / 064 | Core advances / native blocked / weight wait / scale wait / ACT wait / output wait cycles |
+| 068 / 06c / 070 / 074 / 078 / 07c | Peak outstanding / CORE_KHZ / MAX_ROWS / resident depth / credits per PC / HBM ready |
+| 100 + PC*20 | Per-PC block: issued, returned, peak outstanding, blocked cycles, pending-without-response cycles, credit-wait cycles at offsets 0,4,8,c,10,14 |
+
+Addresses in the table are hexadecimal. ERROR bits 0..3 mean invalid START config,
+native fabric error, unexpected response and internal reservation overflow. Native
+fabric errors can remain sticky; CLEAR is not a substitute for image recovery.
+Result data is indexed by global logical row, so completion grouping does not
+change host order. Counters freeze at DONE; cycles are 64-bit and other counters
+are 32-bit.
+
+MEM_ADDR write windows: ACT `0x00000 + block*32 + word` (32 packed int8x4 words per
+128-byte block), DA `0x10000 + block` (four original uint8 offsets), SA `0x11000`
+(original fp32 bits), DW `0x20000 + row*256 + block` (low byte), SW `0x40000 + row`
+(original fp32 bits). Read windows: RESULT `0x50000 + row`, signed48 integer low32
+`0x60000 + row`, high16 `0x70000 + row`. Preload windows are write-only; results
+are read-only. There is no requantization or numerical format conversion.
+
+Offline tests exercise packing including tails and KB 1/9/54/255, reference equality,
+fixture hashes, identity rejection, repeated mode changes, corrupted results and
+counters, timeout abort and counter-wrap rejection. These tests use an injected
+ABI fake and cannot be exported as hardware evidence. Actual F2 host execution,
+OCL/PCIS behavior and integrated throughput remain unverified until the FPGA run.
