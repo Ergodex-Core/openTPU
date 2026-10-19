@@ -67,6 +67,42 @@ negative result.
     internal endpoints, the no_clock pins all in the unchanged shell. A review JSON binding
     the checkpoint's SHA-256 to those conclusions is what `package_f2.py` takes.
 
+## The shell's own placement (AWS Shell Interface Specification, "Multi-SLR FPGA")
+
+The F2 docs (awsdocs-fpga-f2.readthedocs-hosted.com, HDK > AWS Shell Interface Specification,
+Implementation Tips > Multi-SLR FPGA) say where the small shell's interfaces land on the
+VU47P's three dies, and the rule that follows: "place logic that talks to the Shell in the
+same SLR as the Shell logic for that interface; if that is not possible, put the first flop or
+register slice in that SLR", flops on both sides of every SLR crossing or AXI register slices,
+one pblock per SLR with the logic assigned (the `cl_dram_hbm_dma` floorplan above is the
+reference they name), and dataflow organized so pipeline stages stay inside one SLR.
+
+| SLR | shell interfaces there |
+|---|---|
+| TOP (SLR2) | PCIS (the DMA data path), CL_SH_DDR, DDR stats |
+| MID (SLR1) | OCL, PCIM, SDA |
+| MID / BOTTOM (SLR1 / SLR0) | HBM monitor APB |
+
+Consequences for our designs:
+
+- **The PCIS's first register slice belongs in SLR2**, not SLR1. Alex's `f2_pcis_pipe` sits
+  in SLR1 and still closed, but build 6's worst setup path (+0.035 ns) is exactly the
+  SmartConnect's host entry into that pipe. The HDK example does it right: `AXI4_REG_SLC_PCIS_SLR2`
+  in SLR2, then `AXI4_REG_SLC_PCIS_SLR1` and the crossbar in SLR1, then one slice per
+  destination SLR. In a three-slice design the host path is a chain SLR2 -> SLR1 -> SLR0
+  with a register slice at each hop, and slice 2 (in SLR2) is the host's nearest window.
+- **OCL (our control registers) stays in SLR1**: Alex's `f2_ocl_cdc` is already there; the
+  one `otpu_board` control port is reached from SLR1, so the board's control fan-out to
+  slices in SLR0 and SLR2 needs a registered stage per hop (the board's control path is at
+  the core clock; check `otpu_board`'s `s_ctl_*` into each slice).
+- **HBM monitor APB**: `hbm_apb_preset_n_0/1` are asynchronous resets for the HBM IP and
+  must connect straight through to `MON_APB_0/1_PRESET_N` (no pipelining); the other APB
+  signals may take APB register slices; both racks' monitor interfaces must be connected
+  when their HBM is used (an unconnected monitor on a used rack fails AFI creation); an
+  unused rack may be left unconnected. Alex's wrapper instantiation connects both; keep it.
+- **Clocks**: `clk_hbm_ref` is 100 MHz and the HBM monitor is synchronous to it; our 450 MHz
+  HBM AXI clock is our own `clk_wiz` from it (rule 7).
+
 ## What this means for the candidates
 
 | target | slices x native width | ports | raw GB/s | fabric |
