@@ -23,10 +23,11 @@ multicycle exceptions were added.
 | Register-to-register hold slack, ns | −0.009 | +0.014 |
 | DSP48E2 | 564 | 564 |
 | RAMB36 / RAMB18 | 120 / 8 | 120 / 8 |
-| LUT / FF | 11,818 / 14,521 | 10,042 / 13,287 |
+| Logic LUT cells / FF | 11,818 / 14,521 | 10,042 / 13,287 |
 | Full timing target met | No | **No** |
 
-The routed OOC stage deliberately returned failure. Its worst hold path is
+The LUT-cell metric excludes SRL and LUTRAM primitives; it is not total slice-LUT
+occupancy. The routed OOC stage deliberately returned failure. Its worst hold path is
 `cmd_addr[0][18]` to `command_bank_reg[0][addr][0][18]/D`: 0.012 ns data delay
 minus 0.030 ns destination clock delay, 0.050 ns uncertainty and 0.062 ns FF hold
 requirement gives −0.130 ns. The standalone port has a zero minimum input delay
@@ -61,6 +62,9 @@ crossing FIFOs and one host write counter, with core/main/HBM periods
 5.000/4.000/2.222 ns. Integrated synthesis estimated +0.387 ns setup and −0.095 ns
 hold slack; these are pre-route estimates. Shell linking additionally emits
 HDK constraint/context warnings that remain recorded and under review.
+The integrated synthesis utilization report lists 38,897 total LUTs (23,141 logic,
+6,642 LUTRAM, 9,114 SRL), 41,865 FFs, 172 RAMB36, 55 RAMB18 and 564 DSPs. This
+includes the CL's HBM/control fabric, before linking the static AWS shell.
 
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
