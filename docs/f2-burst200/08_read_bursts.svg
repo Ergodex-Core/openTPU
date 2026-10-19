@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1480" height="950" viewBox="0 0 1480 950">
+<defs><marker id="a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10Z" fill="#344f68"/></marker></defs>
+<rect width="1480" height="950" fill="white"/>
+<style>text{font-family:DejaVu Sans,sans-serif;fill:#21364c}.title{font-size:28px;font-weight:700}.head{font-size:21px;font-weight:600}.body{font-size:18px}.small{font-size:16px}</style>
+<text x="55" y="48" class="title" text-anchor="start">HBM read bursts • preserve native ordering, reduce transaction overhead</text>
+<text x="55" y="82" class="body" text-anchor="start">Adapter per native channel · E47/E48 simulation, E64 timing and E71 hardware tests pass</text>
+<text x="55" y="111" class="small" text-anchor="start">200 MHz native side · 512-bit AXI4 → vendor CDC / width conversion → 450 MHz, 256-bit HBM AXI3</text>
+<rect x="55" y="190" width="230" height="170" rx="8" fill="#edf3f8" stroke="#526c82" stroke-width="1.7"/>
+<text x="170.0" y="221" class="head" text-anchor="middle">Command FIFO</text>
+<text x="170.0" y="253" class="body" text-anchor="middle">16 entries</text>
+<text x="170.0" y="279" class="body" text-anchor="middle">Read/write + address</text>
+<text x="170.0" y="305" class="body" text-anchor="middle">Ready/valid input</text>
+<rect x="355" y="190" width="380" height="210" rx="8" fill="#fff0d7" stroke="#526c82" stroke-width="1.7"/>
+<text x="545.0" y="221" class="head" text-anchor="middle">Read coalescer</text>
+<text x="545.0" y="253" class="body" text-anchor="middle">Collect contiguous 64-byte beats</text>
+<text x="545.0" y="279" class="body" text-anchor="middle">At most 16 beats / 1 KiB</text>
+<text x="545.0" y="305" class="body" text-anchor="middle">Split at 4 KiB or discontinuity</text>
+<text x="545.0" y="331" class="body" text-anchor="middle">Flush at direction/credit limit</text>
+<text x="545.0" y="357" class="body" text-anchor="middle">Flush after 4 idle cycles</text>
+<rect x="805" y="190" width="260" height="210" rx="8" fill="#fff0d7" stroke="#526c82" stroke-width="1.7"/>
+<text x="935.0" y="221" class="head" text-anchor="middle">Pending AXI request</text>
+<text x="935.0" y="253" class="body" text-anchor="middle">Address + length registers</text>
+<text x="935.0" y="279" class="body" text-anchor="middle">ARLEN = beat count − 1</text>
+<text x="935.0" y="305" class="body" text-anchor="middle">Hold stable until ARREADY</text>
+<text x="935.0" y="331" class="body" text-anchor="middle">One ordered AXI ID</text>
+<rect x="1135" y="190" width="290" height="210" rx="8" fill="#e3f4ee" stroke="#526c82" stroke-width="1.7"/>
+<text x="1280.0" y="221" class="head" text-anchor="middle">Memory fabric</text>
+<text x="1280.0" y="253" class="body" text-anchor="middle">Core / host arbitration</text>
+<text x="1280.0" y="279" class="body" text-anchor="middle">512 → 256-bit conversion</text>
+<text x="1280.0" y="305" class="body" text-anchor="middle">AXI3 burst splitting</text>
+<text x="1280.0" y="331" class="body" text-anchor="middle">HBM ports 0 / 4</text>
+<polyline points="285,265 355,265" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="320" y="246" class="small" text-anchor="middle">read</text>
+<polyline points="735,265 805,265" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="770" y="246" class="small" text-anchor="middle">1–16</text>
+<polyline points="1065,265 1135,265" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="1100" y="246" class="small" text-anchor="middle">AR</text>
+<rect x="55" y="475" width="290" height="135" rx="8" fill="#edf3f8" stroke="#526c82" stroke-width="1.7"/>
+<text x="200.0" y="506" class="head" text-anchor="middle">Read credit counter</text>
+<text x="200.0" y="538" class="body" text-anchor="middle">128 native beats maximum</text>
+<text x="200.0" y="564" class="body" text-anchor="middle">Collected + issued reads</text>
+<text x="200.0" y="590" class="body" text-anchor="middle">Return one credit per R beat</text>
+<rect x="420" y="475" width="315" height="135" rx="8" fill="#edf3f8" stroke="#526c82" stroke-width="1.7"/>
+<text x="577.5" y="506" class="head" text-anchor="middle">Response checker</text>
+<text x="577.5" y="538" class="body" text-anchor="middle">Ordered burst-length tracking</text>
+<text x="577.5" y="564" class="body" text-anchor="middle">Check RLAST and RRESP</text>
+<text x="577.5" y="590" class="body" text-anchor="middle">Latch protocol errors</text>
+<rect x="805" y="475" width="260" height="135" rx="8" fill="#edf3f8" stroke="#526c82" stroke-width="1.7"/>
+<text x="935.0" y="506" class="head" text-anchor="middle">Issued-length FIFO</text>
+<text x="935.0" y="538" class="body" text-anchor="middle">Enqueue on AR handshake</text>
+<text x="935.0" y="564" class="body" text-anchor="middle">1–16 native beats per burst</text>
+<text x="935.0" y="590" class="body" text-anchor="middle">Reset clears valid entries</text>
+<polyline points="935,400 935,475" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="950" y="443" class="small" text-anchor="start">AR accepted</text>
+<polyline points="805,540 735,540" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="770" y="526" class="small" text-anchor="middle">length</text>
+<polyline points="345,505 375,505 375,440 545,440 545,400" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<text x="390" y="430" class="small" text-anchor="start">available credits</text>
+<polyline points="1280,400 1280,680 55,680" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)"/>
+<text x="800" y="666" class="small" text-anchor="start">R channel → native response: 512-bit data, one valid pulse per beat</text>
+<text x="55" y="714" class="small" text-anchor="start">Native consumer reserves response storage; RREADY stays asserted outside reset.</text>
+<polyline points="575,680 575,610" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<polyline points="200,680 200,610" fill="none" stroke="#344f68" stroke-width="2" marker-end="url(#a)" stroke-dasharray="7 5"/>
+<rect x="55" y="760" width="1370" height="120" rx="8" fill="#f2eaff" stroke="#526c82" stroke-width="1.7"/>
+<text x="740.0" y="791" class="head" text-anchor="middle">Write path and direction barrier</text>
+<text x="740.0" y="823" class="body" text-anchor="middle">Write-data FIFO → independent AW / W handshakes → B response increments n_wdone.</text>
+<text x="740.0" y="849" class="body" text-anchor="middle">Reads begin only after older writes complete; writes begin only after all collected and issued reads return.</text>
+<text x="55" y="922" class="small" text-anchor="start">Unchanged compute RTL · E71 direct weight streams: 23.54–23.87 GB/s · Core / TMEM / HBM AXI: 200 / 400 / 450 MHz.</text>
+</svg>

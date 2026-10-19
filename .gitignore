@@ -12,3 +12,7 @@ tools/tourney/runs/_full/*.lock
 .venv/
 *.egg-info/
 .toolchain/
+
+# F2 burst200 local runtime and experiment outputs (boards/f2/burst200)
+/runs/
+/opentpu/host/libf2_mmio.so
