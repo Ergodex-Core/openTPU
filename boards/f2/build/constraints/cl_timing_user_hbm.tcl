@@ -61,7 +61,7 @@ set on_hclk [all_registers -clock $c_hbm]
 set otpu_on_hclk {}
 foreach c $on_hclk {
   set n [get_property NAME $c]
-  if {![string match {g_sc[[]*[]].u_sc/*} $n] && ![string match {u_hbm/*} $n] &&
+  if {![string match {g_sc\[*\].u_sc/*} $n] && ![string match {u_hbm/*} $n] &&
       ![string match {hbm_reset_n_reg*} $n]} { lappend otpu_on_hclk $n }
 }
 if {[llength $otpu_on_hclk]} {
