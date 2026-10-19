@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:20 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:29 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -221,3 +221,28 @@ private access, encryption and versioning verified. Its local receipt is
 `/Users/rachittibrewal/ergodex-04/codex-session-archives/s3-upload-receipt-20261019T195320.198905Z.json`.
 Earlier snapshots remain preserved. This is an individually timed snapshot of
 each file, not a globally atomic or continuously synchronized archive.
+
+The first shell-link invocation produced `post_link.dcp` (71,076,276 bytes,
+SHA256 `21aa0de424a557770012421774108dc908633a5051afe281ba9ea269f5c48918`),
+but its subsequent structural audit failed at 20:23:06 UTC. The failed stage
+receipt is `d3f532c8ad99c7122724a5dc349aba874dd875497536d0d050d118b8ec33a52c`.
+All eight exact native cell checks passed; the following inventory regexp omitted
+`-hierarchical`. A diagnostic on the unchanged linked checkpoint, launched at
+20:25:16 UTC under invocation `6f1aed3bf3544feba88eafce4db1d7cc`, confirms that
+the original selector returns no cells while the corrected selector returns exactly
+`WRAPPER/CL/u_native0` through `u_native7`. Its corrected full audit is still
+running, so there is no successful link receipt yet. Qualifier SHA256 is
+`b59899c472591c2c9cd435fe86dbf26ca5eb88936db41969711d8e6b0d7ebc6b`;
+the frozen synthesis audit and all hardware source inputs remain unchanged.
+The qualification suite passes 94 tests, including missing and extra native
+instances with realistic top-scope regexp behavior.
+
+The failed link's eleven textual evidence files are captured separately on
+`opentpu-f2` at `/home/ubuntu/rachit/codex-c2/alex-d75970db-link-failure-review`.
+The archive is 85,177 bytes, SHA256
+`ada265a6d973163d781f043f035e4361d016d07dad363d3c98ab7eadfd1cf236`;
+the checkpoint binary is excluded but its original hash is verified. Upload to
+the build-artifact bucket awaits explicit destination approval following automatic
+approval review; no upload has occurred. This does not block local build analysis.
+The authorized Codex trace snapshot at 20:20:15 UTC was uploaded and verified at
+20:22:04 UTC under `s3://opentpu-agent-traces/codex/snapshots/20261019T202015.774257Z/`.

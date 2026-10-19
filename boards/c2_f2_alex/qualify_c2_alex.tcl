@@ -47,7 +47,7 @@ proc ::c2_alex_route::structure {audit} {
     ::c2_alex::cell $cl/u_board/u_mxu otpu_c2_mxu 1
     set expected {}
     for {set p 0} {$p<8} {incr p} {lappend expected $cl/u_native$p;::c2_alex::cell $cl/u_native$p otpu_native_axi 1}
-    if {[lsort [names [get_cells -quiet -regexp {^WRAPPER/CL/u_native[0-9]+$}]]] ne $expected} {error "C2 Alex route: native topology changed"}
+    if {[lsort [names [get_cells -quiet -hierarchical -regexp {^WRAPPER/CL/u_native[0-9]+$}]]] ne $expected} {error "C2 Alex route: native topology changed"}
     foreach {name ref} {u_mem f2_mem_wrapper u_hbm cl_mem_hbm_wrapper u_ocl_cdc f2_ocl_cdc u_pcis_pipe f2_pcis_pipe u_core_clk f2_core_clk u_hbm_clk f2_hbm_clk} {::c2_alex::cell $cl/$name $ref 1}
     set opaque_shell {}
     foreach object [get_cells -quiet -hierarchical -filter {IS_BLACKBOX}] {

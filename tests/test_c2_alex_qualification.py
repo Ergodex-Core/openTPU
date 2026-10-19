@@ -181,7 +181,14 @@ proc get_cells {args} {
     if {"-filter" ni $args && "-regexp" ni $args && [llength $query]>1} {
         set result {};foreach name $query {if {[dict exists $::cells $name]} {lappend result $name}};return $result
     }
-    return [base_get_cells {*}$args]
+    set selected [base_get_cells {*}$args]
+    # At top scope a regexp search does not traverse WRAPPER/CL unless
+    # -hierarchical is requested. Exact hierarchical names still resolve.
+    if {"-regexp" in $args && "-hierarchical" ni $args} {
+        set direct {};foreach name $selected {if {[string first / $name]<0} {lappend direct $name}}
+        return $direct
+    }
+    return $selected
 }
 proc emit_report {args} {
     set path [lindex $args end];set source [file join $::run fixtures [file tail $path]]
@@ -231,6 +238,20 @@ def test_linked_structure_can_pass_without_route_approval(tmp_path):
     assert 'structural_pass 1 route_qualified 0' in result.stdout
     assert (tmp_path / 'linked_audit/summary.tcldata').is_file()
     assert not list(tmp_path.rglob('*.passed'))
+
+
+@pytest.mark.parametrize('action', ['link', 'qualify'])
+@pytest.mark.parametrize('fault', ['none', 'missing_native', 'extra_native'])
+def test_nested_native_inventory_is_complete_and_exact(tmp_path, action, fault):
+    result = run_mock(tmp_path, action=action, fault=fault)
+    if fault == 'none':
+        assert result.returncode == 0, result.stderr
+        assert 'route_qualified 0' in result.stdout
+    else:
+        assert result.returncode != 0
+        assert result.stderr.strip()
+        stage = 'linked_audit' if action == 'link' else 'qualification'
+        assert not (tmp_path / stage / 'summary.tcldata').exists()
 
 
 def test_complete_physical_reports_still_require_current_review(tmp_path):
