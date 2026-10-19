@@ -218,7 +218,7 @@ otpu_board #(
   .SEQ_WC(1),
   .DDR_MTS(0),
   .PLATFORM(3),
-  .ARCH_HASH(2167823793),
+  .ARCH_HASH(32'd2167823793),
   .HAS_I2C(0),
   .HOSTCAL(0),
   .CORE_KHZ(200000),
@@ -1217,13 +1217,11 @@ f2_pcis_pipe u_pcis_pipe (
 );
 logic [63:0] hx0_araddr;
 logic [1:0] hx0_arburst;
-logic [15:0] hx0_arid;
 logic [7:0] hx0_arlen;
 logic [2:0] hx0_arsize;
 logic hx0_arvalid;
 logic [63:0] hx0_awaddr;
 logic [1:0] hx0_awburst;
-logic [15:0] hx0_awid;
 logic [7:0] hx0_awlen;
 logic [2:0] hx0_awsize;
 logic hx0_awvalid;
@@ -1236,12 +1234,10 @@ logic hx0_wvalid;
 logic hx0_arready;
 logic hx0_awready;
 logic [511:0] hx0_rdata;
-logic [15:0] hx0_rid;
 logic hx0_rlast;
 logic [1:0] hx0_rresp;
 logic hx0_rvalid;
 logic hx0_wready;
-logic [15:0] hx0_bid;
 logic [1:0] hx0_bresp;
 logic hx0_bvalid;
 logic [3:0] hx0_awcache;
@@ -1254,13 +1250,11 @@ logic [2:0] hx0_arprot;
 logic [3:0] hx0_arqos;
 logic [63:0] hx1_araddr;
 logic [1:0] hx1_arburst;
-logic [15:0] hx1_arid;
 logic [7:0] hx1_arlen;
 logic [2:0] hx1_arsize;
 logic hx1_arvalid;
 logic [63:0] hx1_awaddr;
 logic [1:0] hx1_awburst;
-logic [15:0] hx1_awid;
 logic [7:0] hx1_awlen;
 logic [2:0] hx1_awsize;
 logic hx1_awvalid;
@@ -1273,12 +1267,10 @@ logic hx1_wvalid;
 logic hx1_arready;
 logic hx1_awready;
 logic [511:0] hx1_rdata;
-logic [15:0] hx1_rid;
 logic hx1_rlast;
 logic [1:0] hx1_rresp;
 logic hx1_rvalid;
 logic hx1_wready;
-logic [15:0] hx1_bid;
 logic [1:0] hx1_bresp;
 logic hx1_bvalid;
 logic [3:0] hx1_awcache;
@@ -1291,13 +1283,11 @@ logic [2:0] hx1_arprot;
 logic [3:0] hx1_arqos;
 logic [63:0] hx2_araddr;
 logic [1:0] hx2_arburst;
-logic [15:0] hx2_arid;
 logic [7:0] hx2_arlen;
 logic [2:0] hx2_arsize;
 logic hx2_arvalid;
 logic [63:0] hx2_awaddr;
 logic [1:0] hx2_awburst;
-logic [15:0] hx2_awid;
 logic [7:0] hx2_awlen;
 logic [2:0] hx2_awsize;
 logic hx2_awvalid;
@@ -1310,12 +1300,10 @@ logic hx2_wvalid;
 logic hx2_arready;
 logic hx2_awready;
 logic [511:0] hx2_rdata;
-logic [15:0] hx2_rid;
 logic hx2_rlast;
 logic [1:0] hx2_rresp;
 logic hx2_rvalid;
 logic hx2_wready;
-logic [15:0] hx2_bid;
 logic [1:0] hx2_bresp;
 logic hx2_bvalid;
 logic [3:0] hx2_awcache;
@@ -1368,13 +1356,11 @@ f2_host_wrapper u_host (
   .S_PCIS_arqos(pcis_arqos),
   .M_S0_araddr(hx0_araddr),
   .M_S0_arburst(hx0_arburst),
-  .M_S0_arid(hx0_arid),
   .M_S0_arlen(hx0_arlen),
   .M_S0_arsize(hx0_arsize),
   .M_S0_arvalid(hx0_arvalid),
   .M_S0_awaddr(hx0_awaddr),
   .M_S0_awburst(hx0_awburst),
-  .M_S0_awid(hx0_awid),
   .M_S0_awlen(hx0_awlen),
   .M_S0_awsize(hx0_awsize),
   .M_S0_awvalid(hx0_awvalid),
@@ -1387,12 +1373,10 @@ f2_host_wrapper u_host (
   .M_S0_arready(hx0_arready),
   .M_S0_awready(hx0_awready),
   .M_S0_rdata(hx0_rdata),
-  .M_S0_rid(hx0_rid),
   .M_S0_rlast(hx0_rlast),
   .M_S0_rresp(hx0_rresp),
   .M_S0_rvalid(hx0_rvalid),
   .M_S0_wready(hx0_wready),
-  .M_S0_bid(hx0_bid),
   .M_S0_bresp(hx0_bresp),
   .M_S0_bvalid(hx0_bvalid),
   .M_S0_awcache(hx0_awcache),
@@ -1405,13 +1389,11 @@ f2_host_wrapper u_host (
   .M_S0_arqos(hx0_arqos),
   .M_S1_araddr(hx1_araddr),
   .M_S1_arburst(hx1_arburst),
-  .M_S1_arid(hx1_arid),
   .M_S1_arlen(hx1_arlen),
   .M_S1_arsize(hx1_arsize),
   .M_S1_arvalid(hx1_arvalid),
   .M_S1_awaddr(hx1_awaddr),
   .M_S1_awburst(hx1_awburst),
-  .M_S1_awid(hx1_awid),
   .M_S1_awlen(hx1_awlen),
   .M_S1_awsize(hx1_awsize),
   .M_S1_awvalid(hx1_awvalid),
@@ -1424,12 +1406,10 @@ f2_host_wrapper u_host (
   .M_S1_arready(hx1_arready),
   .M_S1_awready(hx1_awready),
   .M_S1_rdata(hx1_rdata),
-  .M_S1_rid(hx1_rid),
   .M_S1_rlast(hx1_rlast),
   .M_S1_rresp(hx1_rresp),
   .M_S1_rvalid(hx1_rvalid),
   .M_S1_wready(hx1_wready),
-  .M_S1_bid(hx1_bid),
   .M_S1_bresp(hx1_bresp),
   .M_S1_bvalid(hx1_bvalid),
   .M_S1_awcache(hx1_awcache),
@@ -1442,13 +1422,11 @@ f2_host_wrapper u_host (
   .M_S1_arqos(hx1_arqos),
   .M_S2_araddr(hx2_araddr),
   .M_S2_arburst(hx2_arburst),
-  .M_S2_arid(hx2_arid),
   .M_S2_arlen(hx2_arlen),
   .M_S2_arsize(hx2_arsize),
   .M_S2_arvalid(hx2_arvalid),
   .M_S2_awaddr(hx2_awaddr),
   .M_S2_awburst(hx2_awburst),
-  .M_S2_awid(hx2_awid),
   .M_S2_awlen(hx2_awlen),
   .M_S2_awsize(hx2_awsize),
   .M_S2_awvalid(hx2_awvalid),
@@ -1461,12 +1439,10 @@ f2_host_wrapper u_host (
   .M_S2_arready(hx2_arready),
   .M_S2_awready(hx2_awready),
   .M_S2_rdata(hx2_rdata),
-  .M_S2_rid(hx2_rid),
   .M_S2_rlast(hx2_rlast),
   .M_S2_rresp(hx2_rresp),
   .M_S2_rvalid(hx2_rvalid),
   .M_S2_wready(hx2_wready),
-  .M_S2_bid(hx2_bid),
   .M_S2_bresp(hx2_bresp),
   .M_S2_bvalid(hx2_bvalid),
   .M_S2_awcache(hx2_awcache),
@@ -1526,7 +1502,7 @@ f2_pcis_pipe u_host_pipe0 (
   .m_axi_araddr(hp0_araddr),
   .s_axi_arburst(hx0_arburst),
   .m_axi_arburst(hp0_arburst),
-  .s_axi_arid(hx0_arid),
+  .s_axi_arid(16'd0),
   .m_axi_arid(hp0_arid),
   .s_axi_arlen(hx0_arlen),
   .m_axi_arlen(hp0_arlen),
@@ -1538,7 +1514,7 @@ f2_pcis_pipe u_host_pipe0 (
   .m_axi_awaddr(hp0_awaddr),
   .s_axi_awburst(hx0_awburst),
   .m_axi_awburst(hp0_awburst),
-  .s_axi_awid(hx0_awid),
+  .s_axi_awid(16'd0),
   .m_axi_awid(hp0_awid),
   .s_axi_awlen(hx0_awlen),
   .m_axi_awlen(hp0_awlen),
@@ -1564,7 +1540,7 @@ f2_pcis_pipe u_host_pipe0 (
   .m_axi_awready(hp0_awready),
   .s_axi_rdata(hx0_rdata),
   .m_axi_rdata(hp0_rdata),
-  .s_axi_rid(hx0_rid),
+  .s_axi_rid(),
   .m_axi_rid(hp0_rid),
   .s_axi_rlast(hx0_rlast),
   .m_axi_rlast(hp0_rlast),
@@ -1574,7 +1550,7 @@ f2_pcis_pipe u_host_pipe0 (
   .m_axi_rvalid(hp0_rvalid),
   .s_axi_wready(hx0_wready),
   .m_axi_wready(hp0_wready),
-  .s_axi_bid(hx0_bid),
+  .s_axi_bid(),
   .m_axi_bid(hp0_bid),
   .s_axi_bresp(hx0_bresp),
   .m_axi_bresp(hp0_bresp),
@@ -1832,7 +1808,7 @@ f2_pcis_pipe u_host_pipe1 (
   .m_axi_araddr(hp1_araddr),
   .s_axi_arburst(hx1_arburst),
   .m_axi_arburst(hp1_arburst),
-  .s_axi_arid(hx1_arid),
+  .s_axi_arid(16'd0),
   .m_axi_arid(hp1_arid),
   .s_axi_arlen(hx1_arlen),
   .m_axi_arlen(hp1_arlen),
@@ -1844,7 +1820,7 @@ f2_pcis_pipe u_host_pipe1 (
   .m_axi_awaddr(hp1_awaddr),
   .s_axi_awburst(hx1_awburst),
   .m_axi_awburst(hp1_awburst),
-  .s_axi_awid(hx1_awid),
+  .s_axi_awid(16'd0),
   .m_axi_awid(hp1_awid),
   .s_axi_awlen(hx1_awlen),
   .m_axi_awlen(hp1_awlen),
@@ -1870,7 +1846,7 @@ f2_pcis_pipe u_host_pipe1 (
   .m_axi_awready(hp1_awready),
   .s_axi_rdata(hx1_rdata),
   .m_axi_rdata(hp1_rdata),
-  .s_axi_rid(hx1_rid),
+  .s_axi_rid(),
   .m_axi_rid(hp1_rid),
   .s_axi_rlast(hx1_rlast),
   .m_axi_rlast(hp1_rlast),
@@ -1880,7 +1856,7 @@ f2_pcis_pipe u_host_pipe1 (
   .m_axi_rvalid(hp1_rvalid),
   .s_axi_wready(hx1_wready),
   .m_axi_wready(hp1_wready),
-  .s_axi_bid(hx1_bid),
+  .s_axi_bid(),
   .m_axi_bid(hp1_bid),
   .s_axi_bresp(hx1_bresp),
   .m_axi_bresp(hp1_bresp),
@@ -2376,7 +2352,7 @@ f2_pcis_pipe u_host_pipe2 (
   .m_axi_araddr(hp2_araddr),
   .s_axi_arburst(hx2_arburst),
   .m_axi_arburst(hp2_arburst),
-  .s_axi_arid(hx2_arid),
+  .s_axi_arid(16'd0),
   .m_axi_arid(hp2_arid),
   .s_axi_arlen(hx2_arlen),
   .m_axi_arlen(hp2_arlen),
@@ -2388,7 +2364,7 @@ f2_pcis_pipe u_host_pipe2 (
   .m_axi_awaddr(hp2_awaddr),
   .s_axi_awburst(hx2_awburst),
   .m_axi_awburst(hp2_awburst),
-  .s_axi_awid(hx2_awid),
+  .s_axi_awid(16'd0),
   .m_axi_awid(hp2_awid),
   .s_axi_awlen(hx2_awlen),
   .m_axi_awlen(hp2_awlen),
@@ -2414,7 +2390,7 @@ f2_pcis_pipe u_host_pipe2 (
   .m_axi_awready(hp2_awready),
   .s_axi_rdata(hx2_rdata),
   .m_axi_rdata(hp2_rdata),
-  .s_axi_rid(hx2_rid),
+  .s_axi_rid(),
   .m_axi_rid(hp2_rid),
   .s_axi_rlast(hx2_rlast),
   .m_axi_rlast(hp2_rlast),
@@ -2424,7 +2400,7 @@ f2_pcis_pipe u_host_pipe2 (
   .m_axi_rvalid(hp2_rvalid),
   .s_axi_wready(hx2_wready),
   .m_axi_wready(hp2_wready),
-  .s_axi_bid(hx2_bid),
+  .s_axi_bid(),
   .m_axi_bid(hp2_bid),
   .s_axi_bresp(hx2_bresp),
   .m_axi_bresp(hp2_bresp),
