@@ -56,22 +56,28 @@ proc ::c1_alex::opaque_roots {audit} {
 # unique active drivers, exact port identities, and real clock consumers.
 proc ::c1_alex::inside {name root} {return [expr {[string first "$root/" $name] == 0}]}
 proc ::c1_alex::relocated_native_loads {root p signal} {
-    # Exact additional input pins observed in the hash-bound d1c diagnostic.
-    # Rebuilt hierarchy moved native counters/error and kernel return logic
-    # under u_mem. These are optional loads, never alternative drivers or a
-    # blanket permission for another PC/SmartConnect port.
+    # Exact C1 inputs observed in the source-bound b2f45962 synthesized
+    # diagnostic (DCP SHA256 15c5975306a196a2ac484aa1b987eb1e1aff3991be2c1f0dbe156c4d9e87b310).
+    # Rebuilt hierarchy moves read bookkeeping/error and receive enables under
+    # u_mem. Only these input pins may cross the native/SmartConnect owners;
+    # the active driver still belongs to the exact corresponding SC channel.
     set suffix [expr {$p == 0 ? "" : "__[expr {$p-1}]"}]
     if {$signal eq "arready"} {
         return [list [format {%su_mem/pending_count[4]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_4${suffix}/I4]
     }
     if {$signal eq "rvalid"} {
-        set lut [lindex {13 19 13 17 13 17 13 18} $p]
-        return [list [format {%su_mem/g_return[%d].memory_reg_0_i_%d/I0} $root $p $lut] \
-            [format {%su_mem/pc_returned[%d][0]_i_2/I0} $root $p] \
+        set receive [lindex {
+            {ports[0].tr[0][5]_i_3/I0} {ports[1].tr[1][5]_i_3/I0}
+            {ports[2].tr[2][5]_i_4/I0} {ports[3].tr[3][5]_i_4/I0}
+            {engines[9].data_q_reg_0_i_9/I0} {ports[5].tr[5][5]_i_4/I0}
+            {ports[6].tr[6][5]_i_3/I0} {ports[7].tr[7][5]_i_3/I0}
+        } $p]
+        return [list ${root}u_mem/$receive \
             [format {%su_mem/reads[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_1${suffix}/I1]
     }
     if {$signal eq "bvalid"} {
-        return [list [format {%su_mem/writes[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_2${suffix}/I1]
+        set suffix [expr {$p == 7 ? "" : "__[expr {6-$p}]"}]
+        return [list ${root}u_mem/n_err_i_2${suffix}/I1]
     }
     return {}
 }
@@ -129,7 +135,6 @@ proc ::c1_alex::flow {prefix iface signal audit} {
         set si [format s%02d [expr {$p+1}]]
         set internal $sc/${si}_entry_pipeline/${si}_mmu/inst/${channel}_sreg
         set wanted ${root}n${p}_$signal
-        if {$signal eq "bvalid"} {set wanted ${root}u_mem/n${p}_bvalid}
         set anchor [get_nets -quiet [list $wanted]]
         if {[names $anchor] ne [list $wanted]} {error "C1 Alex audit: missing/ambiguous native net $wanted"}
         set mode net
@@ -313,6 +318,30 @@ proc ::c1_alex::native_shared_ready {prefix clocks audit {opaque {}}} {
         logical_connections 16 source_semantics {!core_rst}]
     return 16
 }
+proc ::c1_alex::native_disabled_writes {prefix audit} {
+    # C1 sends only read commands (kernel n_cwe/n_wvalid are tied low).
+    # Check the actual SmartConnect AW/W input pins, not optimized top-level
+    # aliases. Missing pins, VCC, active logic or multiple drivers all fail.
+    set root [expr {$prefix eq "" ? "" : "$prefix/"}]
+    set count 0
+    for {set p 0} {$p < 8} {incr p} {
+        set si [format s%02d [expr {$p+1}]]
+        foreach channel {aw w} {
+            set name ${root}u_mem/f2_mem_i/memory_sc/inst/${si}_entry_pipeline/${si}_mmu/inst/${channel}_sreg/s_axi_${channel}valid
+            set pin [exact_pin $name]
+            if {[get_property DIRECTION $pin] ne "IN"} {error "C1 Alex audit: disabled write input has wrong direction $name"}
+            set nets [get_nets -quiet -segments -of_objects $pin]
+            if {![llength $nets] || [llength [get_ports -quiet -of_objects $nets]]} {error "C1 Alex audit: disabled write input disconnected/escaped $name"}
+            set drivers [get_pins -quiet -leaf -filter {DIRECTION == OUT} -of_objects $nets]
+            if {[llength $drivers] != 1} {error "C1 Alex audit: disabled write input lacks unique constant driver $name"}
+            set cell [get_cells -quiet -of_objects $drivers]
+            if {[llength $cell] != 1 || [get_property REF_NAME $cell] ne "GND"} {error "C1 Alex audit: native write input is not tied low $name"}
+            puts $audit [list native_disabled_write $p channel $channel pin [names $pin] nets [names $nets] driver [names $drivers] primitive GND]
+            incr count
+        }
+    }
+    return $count
+}
 proc ::c1_alex::fabric_topology {prefix clocks opaque audit} {
     set counts [fabric_clocks $prefix $clocks $opaque $audit]
     if {[dict exists $opaque u_mem] || [dict exists $opaque u_hbm] || [dict exists $opaque u_pcis_pipe]} {
@@ -324,14 +353,15 @@ proc ::c1_alex::fabric_topology {prefix clocks opaque audit} {
         flow $prefix S_HOST $signal $audit; incr n
     }
     for {set p 0} {$p < 8} {incr p} {
-        foreach signal {awvalid awready wvalid wready bvalid arvalid arready rvalid} {flow $prefix S_N$p $signal $audit; incr n}
+        foreach signal {bvalid arvalid arready rvalid} {flow $prefix S_N$p $signal $audit; incr n}
         foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {flow $prefix M_H$p $signal $audit; incr n}
     }
+    set inactive [native_disabled_writes $prefix $audit]
     set shared [native_shared_ready $prefix $clocks $audit $opaque]
     set state observed
     foreach label {core hbm} {if {![llength [dict get $clocks $label]]} {set state observed_connections_deferred_clock}}
     return [dict create slave_interfaces 9 master_interfaces 8 active_handshake_witnesses $n \
-        shared_reset_ready_connections $shared state $state declared_width_authority generated_BD_required]
+        native_disabled_write_inputs $inactive shared_reset_ready_connections $shared state $state declared_width_authority generated_BD_required]
 }
 proc ::c1_alex::check_constraints {path} {
     # Treat exported XDC as text/list data, never execute it. Custom multicycles

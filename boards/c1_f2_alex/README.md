@@ -44,6 +44,12 @@ of `102.4 * 16 / 17 = 96.38 GB/s` before row tails, memory, credits or compute
 stalls. These are source-derived ceilings, not measured HBM bandwidth or
 complete-model token throughput.
 
+C1's native ports only read weights; host PCIS retains write access for preload.
+The structural audit therefore proves all 16 native AW/W valid inputs are tied
+to GND at the actual SmartConnect input slices, while checking live AR/R and
+B/error paths, the reset-gated B/R ready connections, and all host/HBM handshakes.
+It does not require the optimized-away native write aliases to remain active.
+
 The first ABI permits N=1..512, KB=1..128, and origin-zero plain output. ACT and
 scales are preloaded through OCL and retained on chip. Header/scale HBM traffic,
 TMEM, ACC, instruction dispatch and full-token execution are outside this

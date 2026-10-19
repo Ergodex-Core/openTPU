@@ -252,7 +252,6 @@ proc fabric_build {{prefix {}}} {
             } elseif {[regexp {S_N([0-7])} $iface -> p]} {
                 set ext ${root}u_native$p;set si [format s%02d [expr {$p+1}]];set node $sc/${si}_entry_pipeline/${si}_mmu/inst/${channel}_sreg
                 set net ${root}n${p}_$signal
-                if {$signal eq {bvalid}} {set net ${root}u_mem/n${p}_bvalid}
                 set anchor $net;set direction {}
             } else {
                 regexp {M_H([0-7])} $iface -> p
@@ -277,6 +276,20 @@ proc fabric_build {{prefix {}}} {
                 for {set bit 0} {$bit<8} {incr bit} {lappend endpoints [format {%su_native%d/writes_reg[%d]/CE} $root $p $bit]}
                 dict set ::fabric_b_endpoints $driver $endpoints
             }
+        }
+    }
+    set ground ${root}u_mem/f2_mem_i/GND
+    add_cell $ground GND;dict set ::cells $ground REF_NAME GND
+    fabric_add_pin $ground/G OUT
+    for {set p 1} {$p<=8} {incr p} {
+        set si [format s%02d $p]
+        foreach ch {aw w} {
+            set pin ${root}u_mem/f2_mem_i/memory_sc/inst/${si}_entry_pipeline/${si}_mmu/inst/${ch}_sreg/s_axi_${ch}valid
+            fabric_add_pin $pin IN
+            set net ${root}inactive_${si}_${ch}
+            dict set ::fabric_nets $net [dict create NAME $net]
+            dict set ::fabric_anchor $pin $net
+            dict set ::fabric_leaf $net [list $ground/G $pin]
         }
     }
     set ready ${root}n7_rready
@@ -317,6 +330,12 @@ switch $fault {
  disconnected_core {dict set members core {u_board/data_reg};for {set p 0} {$p<8} {incr p} {dict lappend members core u_native$p/data_reg}}
  disconnected_hbm {dict set members hbm {u_hbm/vendor_reg u_rst_hbm/sync_reg}}
  disconnected_host {dict set members clk_main_a0 {u_pcis_pipe/host_reg}}
+ write_active {dict set cells u_mem/f2_mem_i/GND REF_NAME LUT1}
+ write_vcc {dict set cells u_mem/f2_mem_i/GND REF_NAME VCC}
+ write_missing {dict unset pins u_mem/f2_mem_i/memory_sc/inst/s08_entry_pipeline/s08_mmu/inst/w_sreg/s_axi_wvalid}
+ write_disconnected {dict set fabric_anchor u_mem/f2_mem_i/memory_sc/inst/s01_entry_pipeline/s01_mmu/inst/aw_sreg/s_axi_awvalid {}}
+ write_wrong_direction {dict set pins u_mem/f2_mem_i/memory_sc/inst/s01_entry_pipeline/s01_mmu/inst/aw_sreg/s_axi_awvalid DIRECTION OUT}
+ write_multiple_drivers {fabric_add_pin extra_active/Q OUT;dict lappend fabric_leaf inactive_s01_aw extra_active/Q}
  ready_constant {dict set cells u_mem/u_status_cdc_i_2 INIT {2'h3}}
  ready_missing_channel {dict set fabric_leaf n7_rready [lrange [dict get $fabric_leaf n7_rready] 0 end-1]}
  ready_wrong_reset {fabric_add_pin u_board/other_reset/Q OUT;dict set fabric_leaf core_rst {u_board/other_reset/Q u_mem/u_status_cdc_i_2/I0}}
@@ -327,11 +346,11 @@ switch $fault {
   fabric_add_pin $new IN;dict set fabric_leaf n7_rready [lreplace $leaf 1 1 $new]
  }
  b_missing_error {
-  set driver [lindex [dict get $fabric_leaf u_mem/n0_bvalid] 0]
+  set driver [lindex [dict get $fabric_leaf n0_bvalid] 0]
   dict set fabric_b_endpoints $driver [lrange [dict get $fabric_b_endpoints $driver] 1 end]
  }
  b_wrong_native {
-  set driver [lindex [dict get $fabric_leaf u_mem/n0_bvalid] 0]
+  set driver [lindex [dict get $fabric_leaf n0_bvalid] 0]
   dict lappend fabric_b_endpoints $driver u_native1/n_err_reg/D
  }
  sc_clock_swap {
@@ -374,6 +393,10 @@ rename get_pins legacy_get_pins
 proc get_pins {args} {
  if {"-of_objects" in $args && "-leaf" in $args} {
   set result {};foreach net [lindex $args end] {if {[dict exists $::fabric_leaf $net]} {lappend result {*}[dict get $::fabric_leaf $net]}}
+  if {"-filter" in $args} {
+   set selected {};foreach pin $result {if {[dict get $::pins $pin DIRECTION] eq "OUT"} {lappend selected $pin}}
+   return $selected
+  }
   return $result
  }
  if {"-of_objects" ni $args} {
@@ -440,6 +463,7 @@ def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_pat
     assert 'inspected_state live_design_before_diagnostic_serialization' in summary
     assert 'diagnostic_capture_order after_live_audit_checks' in summary
     assert 'slave_interfaces 9 master_interfaces 8' in summary
+    if fault != 'vendor_opaque': assert 'native_disabled_write_inputs 16' in summary
     assert 'actual_9SI_8MI_vendor_simulation' in summary
     assert 'full_shell_link_and_complete_clock_CDC_audit' in summary
     assert 'generated_BD_required' in summary
@@ -478,7 +502,7 @@ def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_pat
     'empty_blackbox_property', 'invalid_blackbox_property', 'duplicate_handshake',
     'duplicate_handshake_bit', 'sc_clock_swap', 'ready_constant', 'ready_missing_channel',
     'ready_wrong_reset','ready_wrong_clock','ready_wrong_channel','b_missing_error','b_wrong_native',
-    'existing_checkpoint', 'checkpoint_error',
+    'existing_checkpoint', 'checkpoint_error', 'write_active','write_vcc','write_missing','write_disconnected','write_wrong_direction','write_multiple_drivers',
 ])
 def test_synthesis_audit_rejects_wrong_or_incomplete_evidence(tmp_path, fault):
     result = run_audit(tmp_path, fault)
@@ -504,7 +528,7 @@ set stream [open [file join $run flows.tcldata] w]
 if {[catch {
  foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {::c1_alex::flow {} S_HOST $signal $stream}
  for {set p 0} {$p<8} {incr p} {
-  foreach signal {awvalid awready wvalid wready arvalid arready rvalid} {::c1_alex::flow {} S_N$p $signal $stream}
+  foreach signal {arvalid arready rvalid} {::c1_alex::flow {} S_N$p $signal $stream}
   foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {::c1_alex::flow {} M_H$p $signal $stream}
  }
 } message]} {close $stream;puts stderr $message;exit 1}
@@ -513,7 +537,7 @@ close $stream
     path=tmp_path/'flows.tcl';path.write_text(text)
     result=subprocess.run([shutil.which('tclsh'),str(path),str(AUDIT),str(tmp_path),fault],capture_output=True,text=True,timeout=20)
     assert (result.returncode==0)==(fault=='none'),result.stderr
-    if fault=='none':assert len((tmp_path/'flows.tcldata').read_text().splitlines())==146
+    if fault=='none':assert len((tmp_path/'flows.tcldata').read_text().splitlines())==114
 
 
 @pytest.mark.parametrize('prefix',['','WRAPPER/CL'])
