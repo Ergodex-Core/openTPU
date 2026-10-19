@@ -8,10 +8,12 @@ questions before the new native/HBM adapter enters the shell build.
 This OOC stage is not shell-linked, routed, deployable, or a hardware performance
 measurement. It cannot create an AFI or access the FPGA. The host launch uses
 only `opentpu-f2` (`i-0c78de2253f66519d`), two CPU cores, 32 GiB memory, and a
-one-hour runtime bound. C2 has priority for actual hardware sessions.
+one-hour runtime bound. That OOC job started before the user selected the
+dedicated `m7a.8xlarge` CPU builder for subsequent builds. Only `opentpu-f2` is
+authorized for eventual FPGA execution. C2 has priority for hardware sessions.
 
-The following isolated integration will keep the C1 row-engine arithmetic and
-ordered retirement. Sixteen logical engines will share eight 64-byte native
+The isolated integration keeps the C1 row-engine arithmetic and ordered
+retirement. Sixteen logical engines share eight 64-byte native
 ports, preserving per-row response tags and bounded reservations. Alex's frozen
 burst200 adapter, HBM geometry and private vendor-IP generation provide the shell
 boundary. The first measurement is a matrix microbenchmark; full-token/ISA
@@ -29,6 +31,13 @@ commands when the other engine can progress. Each accepted command retains its
 row, slot, generation and group. Its reserved entry is released only after both
 32-byte halves reach that engine. Per-PC return order follows the frozen Alex
 ID-zero native bridge contract.
+
+Every 64-byte native read supplies two successive 32-byte groups from one row.
+No half is discarded or fetched again. Thus `0x48 * 64 == 0x4c * 64 ==
+0x40 * 32 == N * KB * 128` at successful completion. The raw native and useful
+weight ceilings are both `8 * 64 * 200 MHz = 102.4 GB/s`; the eight 32-byte HBM
+interfaces at 450 MHz total 115.2 GB/s before protocol losses. Neither ceiling
+is measured HBM bandwidth or complete-model token throughput.
 
 The first ABI permits N=1..512, KB=1..128, and origin-zero plain output. ACT and
 scales are preloaded through OCL and retained on chip. Header/scale HBM traffic,
@@ -72,3 +81,50 @@ output tree. It verifies the pinned Alex support, AWS HDK/IP revisions, shell
 checkpoint, generated address map, source bytes and private IP products. Shell
 linking, placement, routing and independent qualification remain separate gates.
 No builder function publishes or loads an image.
+
+## Checkpoint continuation and vendor simulation
+
+`implement.py` consumes explicit SHA-256 values for the completed synthesis and
+each previous stage receipt. It links the exact AWS shell, implements and
+refines in separate fresh directories, preserving failed attempts and negative
+timing candidates. The executor can be a later tooling-only revision; all
+synthesized RTL, generators, IP, installed inputs and baseline recipes must
+still match the original hashes. It never resynthesizes or accesses an FPGA.
+
+```bash
+python3 boards/c1_f2_alex/implement.py --stage link --hdk /path/to/aws-fpga \
+  --synth-run /path/to/c1/synthesis --synth-receipt-sha256 "$SYNTH_SHA256" \
+  --out /path/to/fresh/c1-link
+python3 boards/c1_f2_alex/simulate.py --ip-run /path/to/c1/private-ip \
+  --ip-receipt-sha256 "$IP_SHA256" --out /path/to/fresh/c1-simulation
+```
+
+The vendor simulation uses the current C1-generated 9SI/8MI SmartConnect and
+PCIS IP, copied before simulation. Four actual Vivado/XSim scenarios cover all
+eight native channels, narrow and sparse PCIS writes, burst boundaries, reset
+with outstanding reads, and response conservation. Its HBM model is functional,
+so this is protocol evidence rather than a memory-speed measurement. C1 kernel
+arithmetic is checked separately by the native RTL tests above.
+
+`--stage qualify` additionally requires the current vendor-simulation receipt
+and collects physical timing, CDC, exception, bus-skew, routing, methodology and
+DRC evidence. The collector deliberately retains `route_qualified=0` pending
+review of the actual C1 records. No historical Alex or C2 qualification result
+is transferred to C1. There is no packaging, publication or hardware loader in
+this continuation.
+
+## Recorded build milestones
+
+At 2026-10-19 22:51:43 UTC, the isolated E16/S4 synthesis from `de1f5ac5` completed:
+120,213 LUTs (73,043 logic, 46,848 LUTRAM and 322 SRLs), 23,994 FFs, six DSPs,
+and no BRAM/URAM. The internal pre-placement estimate at 200 MHz has +1.802 ns
+setup slack and +0.054 ns hold slack; its external ports lack I/O constraints,
+so this does not establish shell timing. The retained DCP SHA-256 is
+`d3e5679146b7e16600af1e7cc128b49aa50897dc03fde0ad9b52084d65f28a99`.
+
+At 22:59:59 UTC, source `b2f45962` began the private-IP/shell synthesis build on
+dedicated m7a builder `i-06cf8792fb8f15534`, unit
+`otpu-c1-alex-b2f45962-ip-synth.service`, invocation
+`57e2b5eb10fa481c8244496f85144404`. The bound is eight CPU cores, 80 GiB RAM and
+four hours, with one IP synthesis job and four Vivado threads. This entry
+records launch only; completion and FPGA results require later receipts.
