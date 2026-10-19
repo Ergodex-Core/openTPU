@@ -266,7 +266,26 @@ gate that no openTPU register is on hclk; 14 + 11 + 183 tests, Gemma 3 bit-exact
 `/home/ubuntu/rachit/f2hbm-build5.sh`, log `/home/ubuntu/rachit/logs/f2hbm-build5.log`, output
 `/home/ubuntu/rachit/f2hbm-run5`, `--recommended --floorplan five`: Alex's run-63 recipe,
 ExtraNetDelay_high / AggressiveExplore / Explore / retime). Build 4 keeps running beside it for
-round 4's routed number.
+round 4's routed number. Build 5's first run died at the constraint stage: the hclk gate's
+glob `g_sc[[]*[]].u_sc/*` matches nothing in Tcl (`[]` is an empty set, not a bracket), so it
+flagged all 18,944 SmartConnect cells; fixed to `g_sc\[*\].u_sc/*` (881bcedb) and restarted
+at 17:46 UTC (the failed run kept as `f2hbm-run5-failed-gate`; synthesis had passed).
+
+**Alex's burst200 branch (2026-10-19 17:30 UTC).** Alex shared his complete tree as
+`s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu-alex/alex-burst200-branch.tar`
+(a git repo: branch `alex-burst200`, one commit 06c169cb on 7e42a626, an ancestor of tpubench;
+fetched into this repo as local branch `alex-burst200`; extracted copy under
+`build/alex-branch/`). It holds everything the snapshot lacked: `boards/f2/scripts/create_f2_ip.tcl`
+(the `f2_mem` SmartConnect block design, 3 SI x 2 MI, 128 reads outstanding), `build_f2.tcl`
+(synthesis + link to the small shell DCP), `implement.tcl` (Explore / AggressiveExplore /
+Explore -tns_cleanup, the leaf-clock optimizer off, bank 74 Vref restored), `refine_route.tcl`
+(the post-route phys_opt + reroute that reached +0.032), `audit_route.tcl`, `package_f2.py`,
+`generate_f2_top.py`, the host transport `opentpu/host/f2_transport.py` + `f2_mmio.c`, his
+testbenches and `boards/f2/README.md`. It is being integrated as target **`f2-burst200`**
+(branch `v4-f2-alex`: his flow under `boards/f2/burst200/`, his RTL under
+`rtl/boards/f2/burst200/`, path edits only) so it can be built on opentpu-f2 with the current
+compute RTL (`otpu_board` gained `NCH`/`WDQ`/`CH_LOG2`/`DRAM_LOG2` since 7e42a626, defaults
+matching his 2-channel wiring) as the known-closing baseline beside round 5.
 
 **Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
 DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
