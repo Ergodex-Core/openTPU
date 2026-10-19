@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:04 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:20 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -125,8 +125,34 @@ All 154 individual handshake paths and all sixteen shared-ready connections pass
 The full report inventory was generated; there are no unresolved vendor roots,
 deferred clocks, or custom HBM-clock registers. The original checkpoint hash is
 unchanged. This successful diagnostic replay does not repair the earlier failed
-synthesis receipt or qualify routing. A fresh synthesis with synchronous
-dependency capture is next. The updated audit/qualification suite passes 192 tests.
+synthesis receipt or qualify routing. The successful 24-file diagnostic archive
+is preserved under the same prefix as `diagnostics/audit-1018bd310949.tar.gz`,
+SHA256 `ff9ebac1520d594dd4d2d3049e75081cf2c0e3aa301bd7be6bc337197a9f37ca`.
+Fresh synthesis with synchronous dependency capture started at 20:05:49 UTC from
+`d75970db0e1fc00c1ae9f9eeced3ebd2d4ea6786`, unit
+`otpu-c2-alex-d75970db-synth-retry.service`, invocation
+`3227447bcd034ef38ad8a26dc772b9f6`, directory
+`/home/ubuntu/rachit/codex-c2/alex-synth-d75970db`. It reuses the completed IP264
+receipt and unchanged synchronous wrapper. Its 245,440-byte source bundle has
+SHA256 `0415b39ca975fdfe74fe9a9153999dbf80f5cb601e1829c7571877dfa0acb876`.
+Fresh synthesis completed successfully at 20:18:57 UTC. Its synthesis receipt
+SHA256 is `6e1dc207d6fa59ccd284140294bea22987e19e2947da4a29c5c3d82ef0dcaa98`,
+and its synchronous dependency attestation is verified, SHA256
+`d7c3db148e10c42820fccc7146104c65c13490cf8b7e08aa3c504740d9021fad`.
+The full audit again passes all 154 handshake witnesses and sixteen shared-ready
+connections. The updated audit/qualification suite passes 192 tests.
+Shell linking started at 20:19:31 UTC on the same source and instance, unit
+`otpu-c2-alex-d75970db-link-ad580007.service`, invocation
+`96960de224d641829d5e9bf62d440ac7`, output directory
+`/home/ubuntu/rachit/codex-c2/alex-synth-d75970db/link`. It is bounded to four
+CPUs, 64 GiB and three hours, with no automatic continuation or hardware actions.
+The replay reports are pre-placement, out-of-context evidence: setup WNS is
++0.583 ns and hold WHS is -0.107 ns, with 271,900 failing hold endpoints. The
+worst reported core setup path is command-validation control from
+`cfg_rows_reg[4]` to `state_reg[0]/CE` (19 logic levels). These are routing risks,
+not timing closure. Disabled-DDR clock I/O standard findings must be rechecked
+after the frozen implementation constraints assign the exact M_CLK pair.
+The report review found no new proven reason to stop before shell linking.
 The collect-only linked/final qualifier adds bounded per-bit gray, synchronizer,
 finding and waiver evidence with explicit incomplete/unsupported states. The
 evidence verifier requires this supplemental report; 83 evidence tests and 127
