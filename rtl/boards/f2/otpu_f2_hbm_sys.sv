@@ -1,10 +1,13 @@
 // The accelerator on an AWS F2 slot with the HBM (cl_opentpu_hbm, boards/f2/design): otpu_board
 // with S slices of NCH channels each, channel c of slice s on HBM AXI port (and pseudo-channel)
-// p = NCH s + c through one otpu_f2_hbm_nch each (BASE p x 512 MiB), the host's PCIS onto every
+// p = NCH s + c through one otpu_native_axi each (BASE p x 512 MiB), the host's PCIS onto every
 // port through otpu_f2_hbm_host, the two masters of each port shared by an otpu_f2_hbm_port, and
 // the shell's OCL onto the control registers through otpu_axil_cdc (held while the host's PCIS
 // writes are in flight). Clocks: the core on clk (and clk_f, 2x, the pumped TMEM), the OCL and
-// PCIS on aclk (clk_main_a0, 250 MHz), the HBM's AXI ports on hclk (450 MHz). docs/f2_hbm.md.
+// PCIS on aclk (clk_main_a0, 250 MHz). Nothing here runs on the HBM's 450 MHz clock: the ports
+// leave this module as AXI4 masters of 512 bits at the core clock (m_*), and the CL top puts
+// the HDK's cl_axi_sc_1x1 SmartConnect (clock, width and protocol conversion) between each and
+// its HBM port (docs/f2_hbm.md, docs/v4/f2-round5.md).
 //   hbm_ready: cl_mem_hbm_wrapper's o_hbm_ready (aclk): every channel's STATUS CALIB bits.
 // The parameters are the target's (targets/f2-hbm.toml through opentpu.target rtl_params).
 module otpu_f2_hbm_sys #(
@@ -55,8 +58,6 @@ module otpu_f2_hbm_sys #(
   input  logic          rst,
   input  logic          aclk,
   input  logic          arst,
-  input  logic          hclk,
-  input  logic          hrst,
   input  logic          hbm_ready,
   output logic [2:0]    led,
   // ---- the shell's OCL (AppPF BAR0), aclk
@@ -107,32 +108,33 @@ module otpu_f2_hbm_sys #(
   output logic          pcis_rlast,
   output logic          pcis_rvalid,
   input  logic          pcis_rready,
-  // ---- the HBM's AXI3 ports 0 .. S NCH - 1 (hclk; cl_mem_hbm_wrapper, AXI4_INTERFACE 0)
-  output logic [S*NCH-1:0][5:0]   hbm_awid,
-  output logic [S*NCH-1:0][33:0]  hbm_awaddr,
-  output logic [S*NCH-1:0][3:0]   hbm_awlen,
-  output logic [S*NCH-1:0]        hbm_awvalid,
-  input  logic [S*NCH-1:0]        hbm_awready,
-  output logic [S*NCH-1:0][255:0] hbm_wdata,
-  output logic [S*NCH-1:0][31:0]  hbm_wstrb,
-  output logic [S*NCH-1:0]        hbm_wlast,
-  output logic [S*NCH-1:0]        hbm_wvalid,
-  input  logic [S*NCH-1:0]        hbm_wready,
-  input  logic [S*NCH-1:0][5:0]   hbm_bid,
-  input  logic [S*NCH-1:0][1:0]   hbm_bresp,
-  input  logic [S*NCH-1:0]        hbm_bvalid,
-  output logic [S*NCH-1:0]        hbm_bready,
-  output logic [S*NCH-1:0][5:0]   hbm_arid,
-  output logic [S*NCH-1:0][33:0]  hbm_araddr,
-  output logic [S*NCH-1:0][3:0]   hbm_arlen,
-  output logic [S*NCH-1:0]        hbm_arvalid,
-  input  logic [S*NCH-1:0]        hbm_arready,
-  input  logic [S*NCH-1:0][5:0]   hbm_rid,
-  input  logic [S*NCH-1:0][255:0] hbm_rdata,
-  input  logic [S*NCH-1:0][1:0]   hbm_rresp,
-  input  logic [S*NCH-1:0]        hbm_rlast,
-  input  logic [S*NCH-1:0]        hbm_rvalid,
-  output logic [S*NCH-1:0]        hbm_rready
+  // ---- the ports' AXI4 masters 0 .. S NCH - 1 (core clock; 512 bits, 34-bit addresses,
+  //      INCR bursts of 64-byte beats, IDs in bit 0): into the SmartConnects (the CL top)
+  output logic [S*NCH-1:0][15:0]  m_awid,
+  output logic [S*NCH-1:0][33:0]  m_awaddr,
+  output logic [S*NCH-1:0][7:0]   m_awlen,
+  output logic [S*NCH-1:0]        m_awvalid,
+  input  logic [S*NCH-1:0]        m_awready,
+  output logic [S*NCH-1:0][511:0] m_wdata,
+  output logic [S*NCH-1:0][63:0]  m_wstrb,
+  output logic [S*NCH-1:0]        m_wlast,
+  output logic [S*NCH-1:0]        m_wvalid,
+  input  logic [S*NCH-1:0]        m_wready,
+  input  logic [S*NCH-1:0][15:0]  m_bid,
+  input  logic [S*NCH-1:0][1:0]   m_bresp,
+  input  logic [S*NCH-1:0]        m_bvalid,
+  output logic [S*NCH-1:0]        m_bready,
+  output logic [S*NCH-1:0][15:0]  m_arid,
+  output logic [S*NCH-1:0][33:0]  m_araddr,
+  output logic [S*NCH-1:0][7:0]   m_arlen,
+  output logic [S*NCH-1:0]        m_arvalid,
+  input  logic [S*NCH-1:0]        m_arready,
+  input  logic [S*NCH-1:0][15:0]  m_rid,
+  input  logic [S*NCH-1:0][511:0] m_rdata,
+  input  logic [S*NCH-1:0][1:0]   m_rresp,
+  input  logic [S*NCH-1:0]        m_rlast,
+  input  logic [S*NCH-1:0]        m_rvalid,
+  output logic [S*NCH-1:0]        m_rready
 );
   localparam int NPORT = S * NCH;
   initial if (NPORT > 32 || CH_LOG2 != 29)
@@ -170,8 +172,8 @@ module otpu_f2_hbm_sys #(
   logic [NPORT-1:0][63:0]  n_wmask;
   logic [NPORT-1:0][15:0]  n_wdone;
   // the slices' channels, the host, the HBM ports
-  otpu_f2_hbm_mem #(.NPORT(NPORT)) u_mem (
-    .clk, .rst, .aclk, .arst, .hclk, .hrst,
+  otpu_f2_hbm_mem #(.NPORT(NPORT), .CH_LOG2(CH_LOG2)) u_mem (
+    .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
     .pcis_awid, .pcis_awaddr, .pcis_awlen, .pcis_awsize, .pcis_awburst, .pcis_awvalid,
@@ -179,10 +181,9 @@ module otpu_f2_hbm_sys #(
     .pcis_bresp, .pcis_bvalid, .pcis_bready, .pcis_arid, .pcis_araddr, .pcis_arlen, .pcis_arsize,
     .pcis_arburst, .pcis_arvalid, .pcis_arready, .pcis_rid, .pcis_rdata, .pcis_rresp,
     .pcis_rlast, .pcis_rvalid, .pcis_rready, .pcis_wbusy,
-    .hbm_awid, .hbm_awaddr, .hbm_awlen, .hbm_awvalid, .hbm_awready, .hbm_wdata, .hbm_wstrb,
-    .hbm_wlast, .hbm_wvalid, .hbm_wready, .hbm_bid, .hbm_bresp, .hbm_bvalid, .hbm_bready,
-    .hbm_arid, .hbm_araddr, .hbm_arlen, .hbm_arvalid, .hbm_arready, .hbm_rid, .hbm_rdata,
-    .hbm_rresp, .hbm_rlast, .hbm_rvalid, .hbm_rready);
+    .m_awid, .m_awaddr, .m_awlen, .m_awvalid, .m_awready, .m_wdata, .m_wstrb, .m_wlast,
+    .m_wvalid, .m_wready, .m_bid, .m_bresp, .m_bvalid, .m_bready, .m_arid, .m_araddr, .m_arlen,
+    .m_arvalid, .m_arready, .m_rid, .m_rdata, .m_rresp, .m_rlast, .m_rvalid, .m_rready);
 
   // ---- the accelerator (HAS_I2C 0: no I2C on the slot; temp 0: the shell owns the SYSMON)
   logic [3:0] i2c_lo;

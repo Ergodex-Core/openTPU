@@ -42,16 +42,65 @@ def check_vivado_version(output: str, expected: str) -> None:
 
 
 HBM_WRAPPER = 'hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv'
+# the HDK's SmartConnect block design the HBM CL puts in front of every HBM port (one AXI4
+# slave of 512 bits at the core clock onto one AXI3 master of 256 bits at 450 MHz: the clock,
+# width and protocol conversion; docs/v4/f2-round5.md), as cl_mem_perf's HBM path uses it
+HBM_SC_BD = 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd/cl_axi_sc_1x1/cl_axi_sc_1x1.bd'
+HBM_SC_WRAPPER = 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v'
+# the floorplans of the HBM CL (boards/f2/build/constraints): five pblocks (ours), Alex's one
+# SLR0 pblock with the shell-facing registers in SLR1, or none
+HBM_FLOORPLANS = {'five': 'cl_pnr_user_hbm.tcl', 'slr0': 'cl_pnr_user_hbm_slr0.tcl', 'none': None}
+# Alex's implementation settings, the ones that closed 200 MHz (runs/20261015_63_burst_retime
+# tuning.tcl; build.py's defaults stay the flow's earlier ones so nothing changes unasked)
+RECOMMENDED_TUNING = {'place_directive': 'ExtraNetDelay_high', 'phys_directive': 'AggressiveExplore',
+                      'route_directive': 'Explore', 'retime': True}
 
 
 def is_hbm(t: target.Target) -> bool:
     return t.platform.get('mem') == 'hbm'
 
 
+def check_hbm_sc(bd: Path, wrapper: Path) -> dict:
+    """The HDK's cl_axi_sc_1x1 block design as the HBM CL instantiates it (cl_opentpu_hbm.sv):
+    its AXI4 slave interface (512 bits, 64-bit addresses, 16-bit IDs: the PCIS format), its
+    AXI3 master (256 bits, no IDs: the HBM port's), its clock pins (aclk_250 for the slave side,
+    which the CL drives at the core clock, aclk_450 for the HBM side) and reset (aresetn_250),
+    with the generated wrapper beside it. Returns the two interfaces' parameters."""
+    if not bd.is_file():
+        raise RuntimeError(f'Missing HDK SmartConnect block design: {bd}; source hdk_setup.sh')
+    if not wrapper.is_file():
+        raise RuntimeError(f'Missing HDK SmartConnect wrapper: {wrapper}; source hdk_setup.sh')
+    d = json.loads(bd.read_text())['design']
+    ports = d.get('ports', {})
+    for name, kind in [('aclk_250', 'clk'), ('aclk_450', 'clk'), ('aresetn_250', 'rst')]:
+        if ports.get(name, {}).get('type') != kind:
+            raise RuntimeError(f'{bd}: expected a {kind} port {name}')
+    want = {'AXI4': ('Slave', 'AXI4', '512', '16'), 'AXI3': ('Master', 'AXI3', '256', '0')}
+    found = {}
+    for name, (mode, protocol, data, ids) in want.items():
+        i = d.get('interface_ports', {}).get(name)
+        if i is None or i.get('mode') != mode:
+            raise RuntimeError(f'{bd}: expected a {mode} interface {name}')
+        p = {k: v.get('value') for k, v in i.get('parameters', {}).items()}
+        got = (p.get('PROTOCOL'), p.get('DATA_WIDTH'), p.get('ID_WIDTH', '0'))
+        if got != (protocol, data, ids):
+            raise RuntimeError(f'{bd}: {name} is {got}, expected {(protocol, data, ids)}')
+        found[name] = p
+    text = wrapper.read_text()
+    if 'module cl_axi_sc_1x1_wrapper' not in text:
+        raise RuntimeError(f'{wrapper}: not the cl_axi_sc_1x1 wrapper')
+    for pin in ('aclk_250', 'aclk_450', 'aresetn_250', 'AXI4_awid', 'AXI4_rid', 'AXI3_awaddr',
+                'AXI3_rlast'):
+        if not re.search(rf'\b{pin}\b', text):
+            raise RuntimeError(f'{wrapper}: no pin {pin}')
+    return found
+
+
 def check_hbm_ip(hdk: Path) -> None:
     """The HDK's cl_hbm IP as the HBM CL assumes it: both stacks, 450 MHz AXI ports, the
     switch on (every port reaches all 16 GiB; the CL keeps each channel on its own port's
-    pseudo-channel, and the host on the port that owns its address), generated."""
+    pseudo-channel, and the host on the port that owns its address), generated; the
+    cl_axi_sc_1x1 SmartConnect block design and its wrapper (check_hbm_sc)."""
     ip = hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_hbm/cl_hbm.xci'
     if not ip.is_file():
         raise RuntimeError(f'Missing HBM IP: {ip}; source hdk_setup.sh')
@@ -66,6 +115,7 @@ def check_hbm_ip(hdk: Path) -> None:
         raise RuntimeError(f'Missing HBM generated product: {gen}')
     if not (hdk / HBM_WRAPPER).is_file():
         raise RuntimeError(f'Missing HDK HBM wrapper: {hdk / HBM_WRAPPER}')
+    check_hbm_sc(hdk / HBM_SC_BD, hdk / HBM_SC_WRAPPER)
 
 
 def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
@@ -111,11 +161,13 @@ def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
 
 
 def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
-            wrapper: Path | None = None) -> Path:
+            wrapper: Path | None = None, floorplan: str = 'five') -> Path:
     """The CL directory of `t`'s build. An HBM target takes the HDK's cl_mem_hbm_wrapper
-    (`wrapper`; default the HDK's beside `sh`)."""
+    (`wrapper`; default the HDK's beside `sh`) and one of HBM_FLOORPLANS."""
     if out.exists():
         raise RuntimeError(f'{out} already exists; choose a new run directory')
+    if floorplan not in HBM_FLOORPLANS:
+        raise RuntimeError(f'floorplan {floorplan!r}: one of {sorted(HBM_FLOORPLANS)}')
     hbm = is_hbm(t)
     p = t.platform
     if hbm:
@@ -136,16 +188,23 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (scripts / 'synth_cl_opentpu_hbm.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
         (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
         # the linked-reset exception covers the HBM clock's synchronizer too, and the HBM
-        # build's floorplan (its pblocks under the HDK's pblock_CL) follows it in the one file
-        # build_level_1_cl.tcl reads unmanaged at placement (docs/v4/f2-timing.md)
+        # build's floorplan (its pblocks under the HDK's pblock_CL; the chosen one of
+        # HBM_FLOORPLANS, the others dropped) follows it in the one file build_level_1_cl.tcl
+        # reads unmanaged at placement (docs/v4/f2-timing.md)
         pnr = cons / 'cl_pnr_user.tcl'
         old = 'foreach stem {main_reset_n bridge_reset_n core_reset_n}'
         if old not in pnr.read_text():
             raise RuntimeError(f'{pnr}: the reset synchronizer list moved')
-        floorplan = cons / 'cl_pnr_user_hbm.tcl'
-        pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' +
-                       floorplan.read_text())
-        floorplan.unlink()
+        chosen = HBM_FLOORPLANS[floorplan]
+        text = pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}')
+        if chosen:
+            text += '\n' + (cons / chosen).read_text()
+        else:
+            text += '\nputs "OTPU_FLOORPLAN_APPLIED pblocks=0"\n'
+        pnr.write_text(text)
+        for name in HBM_FLOORPLANS.values():
+            if name:
+                (cons / name).unlink()
         w = wrapper or sh.parents[2] / HBM_WRAPPER
         if not w.is_file():
             raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
@@ -156,7 +215,9 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (cl / 'design/cl_opentpu_hbm.sv').unlink()
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
-        (cons / 'cl_pnr_user_hbm.tcl').unlink()
+        for name in HBM_FLOORPLANS.values():
+            if name:
+                (cons / name).unlink()
         (cons / 'cl_synth_user_hbm.xdc').unlink()
     files = target.sources(t)
     for name in files:
@@ -369,8 +430,24 @@ def main() -> None:
     p.add_argument('--place-directive', default='SSI_SpreadLogic_high',
         help="place_design's directive, build_all.tcl's first tclarg (SSI_SpreadLogic_high: the "
              "flow's since its first run, which spreads one slice over the three SLRs on purpose; "
-             "Default or SSI_BalanceSLLs keep it together: docs/v4/f2-timing.md)")
+             "Default or SSI_BalanceSLLs keep it together: docs/v4/f2-timing.md; Alex's "
+             "ExtraNetDelay_high closed 200 MHz: docs/v4/f2-round5.md)")
+    p.add_argument('--phys-directive', default='AggressiveExplore',
+        help="phys_opt_design's directive after placement, build_all.tcl's second tclarg")
+    p.add_argument('--route-directive', default='AggressiveExplore',
+        help="route_design's directive, build_all.tcl's third tclarg (Alex's: Explore)")
+    p.add_argument('--retime', action='store_true',
+        help="run phys_opt_design -retime after the post-place phys_opt (Alex's "
+             "20261015_63_burst_retime; build_level_1_cl.tcl's hook, OTPU_RETIME=1)")
+    p.add_argument('--floorplan', choices=sorted(HBM_FLOORPLANS), default='five',
+        help="an HBM target's pblocks: five (ours, cl_pnr_user_hbm.tcl), slr0 (Alex's one "
+             "SLR0 pblock, cl_pnr_user_hbm_slr0.tcl) or none")
+    p.add_argument('--recommended', action='store_true',
+        help=f"Alex's settings that closed 200 MHz: {RECOMMENDED_TUNING}")
     a = p.parse_args()
+    if a.recommended:
+        for k, v in RECOMMENDED_TUNING.items():
+            setattr(a, k, v)
     t = target.load(a.target)
     if t.platform.get('board') != 'f2':
         p.error(f'{a.target} is not an F2 target')
@@ -403,7 +480,7 @@ def main() -> None:
         p.error('--build-id must match the inherited synthesis build ID')
     if not re.fullmatch(r'[0-9a-fA-F]{8}', build_id):
         p.error('--build-id must contain exactly eight hexadecimal digits')
-    cl = prepare(out, sh, t, build_id, hdk / HBM_WRAPPER if is_hbm(t) else None)
+    cl = prepare(out, sh, t, build_id, hdk / HBM_WRAPPER if is_hbm(t) else None, a.floorplan)
     if parent:
         inherit_synthesis(out, cl, a.from_synth.resolve(), *parent)
     env = dict(os.environ, CL_DIR=str(cl), CL='cl_opentpu', SHELL_MODE='small_shell',
@@ -413,13 +490,14 @@ def main() -> None:
         HDK_IP_SRC_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip'),
         HDK_BD_SRC_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd'),
         HDK_BD_GEN_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd'),
-        VIVADO_TOOL_VERSION=t.platform['vivado'])
+        VIVADO_TOOL_VERSION=t.platform['vivado'], OTPU_RETIME='1' if a.retime else '0',
+        OTPU_FLOORPLAN=a.floorplan)
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
-        'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
+        a.phys_directive, a.route_directive, 'A1', 'B2', 'C0', 'H2']
     (out / 'invocation.json').write_text(json.dumps({'command': cmd,
         'cwd': str(cl / 'build/scripts'),
-        'environment': {k: env[k] for k in env if k.startswith('HDK_') or
+        'environment': {k: env[k] for k in env if k.startswith('HDK_') or k.startswith('OTPU_') or
             k in ('CL_DIR', 'CL', 'SHELL_MODE', 'BUILD_FLOW', 'BUILD_TAG', 'ENCRYPT', 'VIVADO_TOOL_VERSION')}}, indent=2) + '\n')
     if a.prepare_only:
         print(f'Prepared {cl}; invocation: {out / "invocation.json"}')

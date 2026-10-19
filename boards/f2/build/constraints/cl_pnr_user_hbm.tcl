@@ -1,24 +1,23 @@
-# The HBM build's floorplan (cl_opentpu_hbm, rtl/boards/f2/otpu_f2_hbm_sys.sv; docs/v4/f2-timing.md
-# "Round 3"). boards/f2/build.py appends this file to cl_pnr_user.tcl for an HBM target, which
-# build_level_1_cl.tcl reads unmanaged (read_xdc -unmanaged: Tcl, not a managed XDC, which drops
-# proc / if / foreach) right before the HDK's opt_design, after the HDK's own
-# small_shell_level_1_fp_cl.xdc, whose pblock_CL (the CL's region of the VU47P: all of SLR2,
-# parts of SLR1 and SLR0) is the parent of every pblock here. Ranges by complete clock regions,
-# added as the HDK adds its own, then cut down to the sites the parent holds (otpu_contain
-# below); the VU47P's SLRs are rows Y0-Y3 (SLR0, the HBM stacks and their AXI ports below it),
-# Y4-Y7 (SLR1) and Y8-Y11 (SLR2); a clock region holds ~13.6K LUTs, ~27K flip-flops, ~21 RAMB36.
+# The HBM build's floorplan, five pblocks (cl_opentpu_hbm, rtl/boards/f2/otpu_f2_hbm_sys.sv;
+# docs/v4/f2-timing.md "Round 3", docs/v4/f2-round5.md): boards/f2/build.py --floorplan five (the
+# default) appends this file to cl_pnr_user.tcl for an HBM target, which build_level_1_cl.tcl
+# reads unmanaged (read_xdc -unmanaged: Tcl, not a managed XDC, which drops proc / if / foreach)
+# right before the HDK's opt_design, after the HDK's own small_shell_level_1_fp_cl.xdc, whose
+# pblock_CL (the CL's region of the VU47P: all of SLR2, parts of SLR1 and SLR0) is the parent of
+# every pblock here. Ranges by complete clock regions, added as the HDK adds its own, then cut
+# down to the sites the parent holds (otpu_contain below); the VU47P's SLRs are rows Y0-Y3
+# (SLR0, the HBM stacks and their AXI ports below it), Y4-Y7 (SLR1) and Y8-Y11 (SLR2); a clock
+# region holds ~13.6K LUTs, ~27K flip-flops, ~21 RAMB36. The alternative, Alex's one SLR0 pblock
+# with explicit ranges, is cl_pnr_user_hbm_slr0.tcl (--floorplan slr0).
 #
-# The f2-hbm CL is one slice (99K LUTs), its adapter (39K, LUT RAM heavy), 8 bridges (26K) and
-# the host path (2K): 175K LUTs, 262 RAMB36, 727 DSPs (docs/f2_hbm.md "Synthesis"). The two
-# routed builds so far (61d07199 with SSI_SpreadLogic_high, a2af0904 with Default) placed it
-# free and failed on 90%-route paths: the host path to the HBM ports, the bridges' write counts
-# into the slice, the DMA's TMEM request into the pumped banks (4-6 ns of route on 2-8 level
-# paths). Here:
+# The f2-hbm CL is one slice (99K LUTs), its adapter (39K, LUT RAM heavy), 8 channel masters
+# (~0.5K each), 8 port arbiters, the host path (2K), 8 SmartConnects (the HDK's cl_axi_sc_1x1,
+# a few K each: to be read from the first synthesis) and the HBM wrapper (1K). Here:
 #   pb_otpu_slr0  (SLR0, the CL's 20 whole clock regions there, ~272K LUTs): the board (the
-#                 slice, its adapter, the control block, the trace: u_sys/u_board) and the HBM
-#                 fabric (the bridges, the host registers, the port arbiters, the host path's
-#                 queues) together, 64% of the box, beside the HBM's AXI ports under SLR0: no
-#                 slice <-> fabric net crosses an SLR, every bridge sits by its port.
+#                 slice, its adapter, the control block, the trace: u_sys/u_board), the fabric
+#                 (the masters, the arbiters, the host path's queues: u_sys/u_mem) and the
+#                 SmartConnects (g_sc[*].u_sc) together, beside the HBM's AXI ports under SLR0:
+#                 no slice <-> fabric net crosses an SLR, every master sits by its port.
 #   pb_otpu_tmem  (a child of pb_otpu_slr0, X0Y2:X3Y3, 8 clock regions, ~109K LUTs): the TMEM
 #                 (12K LUTs, 64 RAMB36), the VPU (36K), the DMA (9K) and the quantizer (9K)
 #                 together, 61%: the pumped banks' read requests (clk -> clk_f, two fast periods
@@ -29,16 +28,16 @@
 #                 round 4: 8b2fd3a0 placed u_mxu/t_rq_reg and its _rep copies outside it, 4.1 ns
 #                 of route to a bank. The MXU (the slice's rest, ~45K) wraps around the box in
 #                 SLR0's other 12 regions with the adapter.
-#   pb_otpu_fab   (a child of pb_otpu_slr0, X0Y0:X3Y0, the bottom row, 4 clock regions, ~54K
-#                 LUTs): the 8 bridges, the host registers, the port arbiters and the host
-#                 links' receiving ends (30K, 56%) by the HBM's AXI ports under them, each
-#                 bridge compact beside its port: 8b2fd3a0 spread a bridge's core side over
-#                 4.9 ns of route (h_a -> the read-address array's enables) and the write
-#                 count's stage into the adapter over 4.8. The adapter (u_board/u_mem, 39K, LUT
-#                 RAM heavy) is not boxed: its loads are the bridges below and the slice above,
-#                 the placer puts it between. The host block (u_host: the links' sending ends,
-#                 the queues) stays free in SLR0 by its PCIS link stages (pb_otpu_xs); the links'
-#                 HNS stages carry the distance down to the ports a wire a cycle.
+#   pb_otpu_fab   (a child of pb_otpu_slr0, X0Y0:X7Y0, the bottom row, 8 clock regions, ~109K
+#                 LUTs): the channel masters, the port arbiters and the SmartConnects by the
+#                 HBM's AXI ports under them, each master compact beside its SmartConnect and
+#                 that beside its port (round 4's box was the row's left half, X0Y0:X3Y0, for
+#                 the 450 MHz bridges; the SmartConnects need the room). The adapter
+#                 (u_board/u_mem, 39K, LUT RAM heavy) is not boxed: its loads are the masters
+#                 below and the slice above, the placer puts it between. The host block (u_host:
+#                 the links' sending ends, the queues, the per-port valids) stays free in SLR0
+#                 by its PCIS link stages (pb_otpu_xs); its buses to the arbiters are a core
+#                 period's wire each.
 #   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS / OCL column): the host path's
 #                 PCIS skid buffers, output registers and link ends (u_host/u_pcis_*, aclk only)
 #                 and the OCL crossing (u_ocl: its OCL side faces the shell, its core side holds
@@ -65,21 +64,21 @@ proc otpu_cells {pattern} {
   if {![llength $cells]} { error "openTPU floorplan: no cells match $pattern" }
   return $cells
 }
-set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]]
+set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_axi}]]
 puts "OTPU_FLOORPLAN ports=$otpu_nport"
 
 ########################################
-# pb_otpu_slr0: the board and the HBM fabric, SLR0
+# pb_otpu_slr0: the board, the fabric and the SmartConnects, SLR0
 ########################################
 create_pblock pb_otpu_slr0
 set_property PARENT pblock_CL [get_pblocks pb_otpu_slr0]
 resize_pblock pb_otpu_slr0 -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3}
 resize_pblock pb_otpu_slr0 -add {CLOCKREGION_X4Y0:CLOCKREGION_X7Y0}
 add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_board}]
-add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]
-add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_hreg}]
+add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_axi}]
 add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_port}]
 add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_host}]
+add_cells_to_pblock pb_otpu_slr0 [otpu_cells {WRAPPER/CL/g_sc[*].u_sc}]
 
 ########################################
 # pb_otpu_tmem: the TMEM with the units whose requests reach its pumped banks, inside SLR0
@@ -95,17 +94,14 @@ add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_mxu/t_ren_reg*}]
 
 ########################################
-# pb_otpu_fab: the bridges, the host registers and arbiters by the HBM's ports, SLR0's bottom row
+# pb_otpu_fab: the masters, the arbiters and the SmartConnects by the HBM's ports, SLR0's bottom row
 ########################################
 create_pblock pb_otpu_fab
 set_property PARENT pb_otpu_slr0 [get_pblocks pb_otpu_fab]
-resize_pblock pb_otpu_fab -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y0}
-add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_nch}]
-add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_hreg}]
+resize_pblock pb_otpu_fab -add {CLOCKREGION_X0Y0:CLOCKREGION_X7Y0}
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_axi}]
 add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_port}]
-add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_aw/u_rx}]
-add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_w/u_rx}]
-add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_lk_ar/u_rx}]
+add_cells_to_pblock pb_otpu_fab [otpu_cells {WRAPPER/CL/g_sc[*].u_sc}]
 
 ########################################
 # pb_otpu_pcis: the PCIS registers and the OCL crossing beside the shell's column, SLR1

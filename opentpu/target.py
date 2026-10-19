@@ -91,7 +91,7 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
           # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
           "f2-hbm": ["shell/otpu_skidbuf.sv", "shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv",
-                     "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
+                     "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_hbm_port.sv",
                      "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
                      "boards/f2/otpu_f2_hbm_sys.sv"]}
 

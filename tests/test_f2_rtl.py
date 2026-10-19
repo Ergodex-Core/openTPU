@@ -61,13 +61,15 @@ def test_f2_ocl_crossing(have_verilator, core_half, axi_half):
 
 # ---------------------------------------------------------------- the HBM build (f2-hbm)
 HBM_FABRIC = ["shell/otpu_afifo.sv", "shell/otpu_skidbuf.sv", "shell/otpu_link.sv",
-              "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
+              "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_hbm_port.sv",
               "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv"]
 
 
 def _hbm_exe(**params):
+    # (tb_f2hbm_sc: the behavioural stand-in for the HDK's SmartConnect per port, which has no
+    # Verilator model; docs/v4/f2-round5.md)
     return rtlsim.build("tb_f2hbm", [rtlsim.RTL / f for f in HBM_FABRIC] +
-                        [rtlsim.TB / "tb_f2hbm.sv"], params)
+                        [rtlsim.TB / "tb_f2hbm_sc.sv", rtlsim.TB / "tb_f2hbm.sv"], params)
 
 
 @pytest.mark.parametrize("nport,core_half,axi_half,hbm_half", [
@@ -76,8 +78,9 @@ def _hbm_exe(**params):
     (4, 3, 5, 2),       # a fast core against a slow shell clock
     (32, 5, 4, 2)])     # every port (S = 4 x 8): no port left for reads of zeros
 def test_f2_hbm_fabric(have_verilator, nport, core_half, axi_half, hbm_half):
-    """Every channel's native contract over a reordering, interleaving HBM model; bridges stay in
-    their pseudo-channels and form bursts; the host reaches every port in its own order."""
+    """Every channel's native contract over the SmartConnect stand-ins and a reordering HBM
+    model; every port's traffic stays in its pseudo-channel and runs of reads go out as bursts;
+    the host reaches every port in its own order."""
     exe = _hbm_exe(NPORT=nport, CORE_HALF=core_half, AXI_HALF=axi_half, HBM_HALF=hbm_half)
     for seed, nb in [(1, 1), (7, 6), (31, 64)]:
         r = subprocess.run([str(exe), f"+seed={seed}", f"+nb={nb}", "+cycles=8000"],
@@ -87,7 +90,7 @@ def test_f2_hbm_fabric(have_verilator, nport, core_half, axi_half, hbm_half):
 
 
 def test_f2_hbm_fabric_detects_missing_hazards(have_verilator):
-    """Without the bridges' same-beat waits the HBM's reordering returns stale data."""
+    """Without the masters' direction barrier the HBM's reordering returns stale data."""
     exe = _hbm_exe(NPORT=4, HAZ=0)
     r = subprocess.run([str(exe), "+seed=1", "+nb=1", "+cycles=4000"],
                        capture_output=True, text=True, timeout=600)
