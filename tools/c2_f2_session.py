@@ -78,7 +78,7 @@ def qualify(build_dir, image_record):
                  "unrouted_nets", "drc_blockers", "methodology_blockers"):
         if values.get(name) != "0":
             raise ValueError(f"physical qualification failed or absent: {name}")
-    if values.get("gray_bus_constraints") != "39" or values.get("cdc_crossing_witnesses") != "6":
+    if values.get("gray_bus_constraints") != "47" or values.get("cdc_crossing_witnesses") != "6":
         raise ValueError("missing reviewed HBM CDC constraint inventory")
     expected = dict(schema=1, region="us-east-1", build_id=build, inputs_sha256=sha(root/"inputs.json"),
                     outputs_sha256=sha(root/"outputs.json"),

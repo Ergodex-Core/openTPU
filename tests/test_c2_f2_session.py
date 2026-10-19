@@ -33,7 +33,7 @@ def qualified_fixture(tmp_path):
     report = reportdir/f"cl_opentpu.{build}.route_validation.txt"
     report.write_text("\n".join(f"{k}=0" for k in (
         "setup_failed","hold_failed","timing_failed","bus_skew_failed","unrouted_nets",
-        "drc_blockers","methodology_blockers"))+"\ngray_bus_constraints=39\ncdc_crossing_witnesses=6\n")
+        "drc_blockers","methodology_blockers"))+"\ngray_bus_constraints=47\ncdc_crossing_witnesses=6\n")
     inputs = dict(kind="c2-hbm-kernel",build_id=build,part="xcvu47p-fsvh2892-2-e",core_khz=200000,hbm_ports=8)
     S.write_json(root/"inputs.json",inputs)
     outputs = dict(flow="BuildAll",inputs_sha256=S.sha(root/"inputs.json"),
@@ -57,18 +57,25 @@ def test_qualification_binds_exact_files_and_available_image(tmp_path):
         S.qualify(root,record)
 
 
-@pytest.mark.parametrize("change",["synth_only","failed_timing","bad_inventory","pending_image","bad_record_hash"])
+@pytest.mark.parametrize("change",["synth_only","failed_timing","old_39_inventory","missing_crossing","pending_image","bad_record_hash"])
 def test_qualification_fail_closed(tmp_path,change):
     root,path = qualified_fixture(tmp_path)
     if change == "synth_only":
         out=json.loads((root/"outputs.json").read_text());out["flow"]="SynthCL";S.write_json(root/"outputs.json",out)
-    elif change in ("failed_timing","bad_inventory"):
+    elif change in ("failed_timing","old_39_inventory","missing_crossing"):
         report=root/"cl_opentpu/build/reports/cl_opentpu.4f750912.route_validation.txt"
-        text=report.read_text().replace("setup_failed=0","setup_failed=1") if change=="failed_timing" else report.read_text().replace("gray_bus_constraints=39","gray_bus_constraints=38")
+        old,new={"failed_timing":("setup_failed=0","setup_failed=1"),
+                 "old_39_inventory":("gray_bus_constraints=47","gray_bus_constraints=39"),
+                 "missing_crossing":("cdc_crossing_witnesses=6","cdc_crossing_witnesses=5")}[change]
+        text=report.read_text().replace(old,new)
         report.write_text(text)
+        record=json.loads(path.read_text())
+        record["validation_report_sha256"]=S.sha(report)
+        S.write_json(path,record)
     else:
         r=json.loads(path.read_text());r["state" if change=="pending_image" else "package_sha256"]="pending";S.write_json(path,r)
-    with pytest.raises(ValueError):S.qualify(root,path)
+    reason="missing reviewed HBM CDC" if change in ("old_39_inventory","missing_crossing") else None
+    with pytest.raises(ValueError,match=reason):S.qualify(root,path)
 
 
 def aws_response(q):

@@ -15,7 +15,9 @@ The complete qualified build directory must contain matching `inputs.json` and
 `outputs.json`, the routed DCP, packaged `.Developer_CL.tar`, route qualification
 marker, and route validation report. The script verifies hashes, exact VU47P part,
 200 MHz core, eight HBM ports, `BuildAll`, zero setup/hold/timing/skew/unrouted/DRC/
-methodology blockers, six CDC witnesses, and 39 fabric gray-bus constraints.
+methodology blockers, six CDC witnesses, and 47 fabric gray-bus constraints.
+The 47 include eight retained native write-counter groups observed after real
+shell optimization; the earlier 39-constraint inventory is rejected.
 Synthesis or OOC reports cannot pass this gate.
 
 The image record comes from `tools/c2_f2_publish.py` after AWS reports the candidate
@@ -123,4 +125,5 @@ wrong candidate identity, benchmark failure, cancellation, BDF movement, restora
 failure, no-load preflight failures, real parent/child lock inheritance and only-own-
 child termination, resolved sysfs BAR mappings, evidence-disk failures and bounded
 calibration polling. These are offline control-flow tests, not physical qualification.
-The session, host and publisher suites passed 78 tests together on 2026-10-19.
+The session suite includes an explicit rejection test for the obsolete
+39-constraint qualification inventory.
