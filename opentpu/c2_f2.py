@@ -281,7 +281,8 @@ def lens_data(result, name):
     return dict(kind="board", name=name+" [F2 / aggregate counters]", cycles=cycles,
         clock_mhz=result["identity"]["core_khz"]/1000,
         config=lens._config(cfg, {"MEM": "hbm", "PCS": 8, "C2_COLUMNS": 4, "C": 1}),
-        roofline=dict(bound=bound, efficiency=bound/cycles,
+        measurements=dict(unit_utilization=False, instruction_timeline=False),
+        roofline=dict(kind="native-interface-lower-bound", bound=bound, efficiency=bound/cycles,
                       per_slice=[dict(bound=bound, portb=sum(pc["returned"] for pc in result["pcs"]), porta=0)],
                       note="native 8 x 64-byte interface floor only, not HBM peak or a measured critical path"),
         macs=result["rows"]*result["kb"]*128, bytes=result["weight_bytes"],
@@ -293,6 +294,13 @@ def lens_data(result, name):
                     "Clock comes from the image configuration; it is not a frequency measurement."),
                dict(level="info", text=result["measured_window"]+". Same weight addresses and bytes in both modes; "
                     "ACT/scales resident, local result sink, no full-token speedup claim."),
-               dict(level="info", text=f"Aggregate stalls: native blocked {c['native_blocked_cycles']}, "
-                    f"weight {c['weight_wait']}, scale {c['scale_wait']}, ACT {c['act_wait']}, "
-                    f"output {c['output_wait']}. Overlapping counters must not be added into a critical path.")])
+               dict(level="info", text=f"Operand-fill occupancy: weight {c['weight_wait']}, "
+                    f"scale {c['scale_wait']}, ACT {c['act_wait']} cycles with at least one required "
+                    "operand bank incomplete. These include successful transfers and can overlap "
+                    "compute in the other bank; they are not missing-response or bubble cycles."),
+               dict(level="info", text=f"Native command backpressure {c['native_blocked_cycles']} "
+                    f"cycles; output backpressure {c['output_wait']} cycles. Per-PC pending_no_response "
+                    "counts cycles with outstanding requests and no response, not per-request latency. "
+                    "Per-PC credit_wait counts full receive reservations, including returned data "
+                    "awaiting its paired half or core consumption. These counters overlap and cannot "
+                    "be added into lost cycles or a critical path.")])

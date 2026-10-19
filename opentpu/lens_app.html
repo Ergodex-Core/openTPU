@@ -418,6 +418,9 @@ function redraw() { if (!M) return; if (VIEW === "timeline") drawTimeline(); if 
 // ------------------------------------------------------------------ overview
 function renderOverview() {
   const p = M.p, m = M, cyc = m.cycles, cfg = p.config, rl = p.roofline;
+  const nativeBound = rl.kind === "native-interface-lower-bound";
+  const measuredUnits = p.measurements?.unit_utilization !== false;
+  const measuredInstructions = p.measurements?.instruction_timeline !== false;
   const us = cyc / (p.clock_mhz || 100);
   const sl = p.slices[m.s] || {};
   const ports = sl.ports || {};
@@ -426,11 +429,12 @@ function renderOverview() {
   <div class="kpis">
     <div class="kpi"><div class="v">${fmt(cyc)}</div><div class="l">cycles${p.kind === "isa" ? " (analytic, serial)" : ""}</div></div>
     <div class="kpi"><div class="v">${us >= 1000 ? (us / 1000).toFixed(2) + " ms" : us.toFixed(1) + " µs"}</div><div class="l">at ${p.clock_mhz || 100} MHz</div></div>
-    <div class="kpi"><div class="v" style="color:var(${rl.efficiency >= .9 ? "--good" : rl.efficiency >= .7 ? "--warn" : "--bad"})">${pct(rl.efficiency)}</div><div class="l">of the DRAM roofline (${fmt(rl.bound)} cycles)</div></div>
+    ${nativeBound ? `<div class="kpi"><div class="v">${fmt(rl.bound)} cycles</div><div class="l">native-interface lower bound · not HBM efficiency</div></div>` : `<div class="kpi"><div class="v" style="color:var(${rl.efficiency >= .9 ? "--good" : rl.efficiency >= .7 ? "--warn" : "--bad"})">${pct(rl.efficiency)}</div><div class="l">of the DRAM roofline (${fmt(rl.bound)} cycles)</div></div>`}
     <div class="kpi"><div class="v">${ports.bmxu != null ? pct(portB) : "–"}</div><div class="l">DRAM port B busy (slice ${m.s})</div></div>
     <div class="kpi"><div class="v">${p.macs ? (p.macs / cyc).toFixed(0) : "–"}</div><div class="l">MACs / cycle (peak ${fmt(p.peak_macs)})</div></div>
-    <div class="kpi"><div class="v">${fmt(m.ins.length)}</div><div class="l">instructions (slice ${m.s})</div></div>
+    <div class="kpi"><div class="v">${measuredInstructions ? fmt(m.ins.length) : "unmeasured"}</div><div class="l">instructions (slice ${m.s})</div></div>
   </div></div>`;
+  if (nativeBound && rl.note) h += `<div class="note info">${esc(rl.note)}</div>`;
   if (m.nb) {
     const tot = allCauses(m);
     const top = CAUSES.filter(c => c[0] !== "busy").map(c => [c, tot[c[0]] || 0]).sort((a, b) => b[1] - a[1]).filter(x => x[1] > 0).slice(0, 3);
@@ -441,7 +445,8 @@ function renderOverview() {
   // utilisation
   const busy = sl.busy || {};
   h += `<div class="grid2"><div class="card"><h2>Unit utilisation <small>cycles with an instruction in flight</small></h2>`;
-  m.units.forEach((u, i) => { const v = (busy[u] || 0) / cyc; h += `<div class="urow"><span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${UCOL(i)};margin-right:6px"></i>${u}</span><div class="bar"><div style="width:${Math.min(100, 100 * v)}%;background:${UCOL(i)}"></div></div><span class="mono" style="text-align:right">${pct(v)}</span></div>`; });
+  if (!measuredUnits) h += `<p class="muted">Unmeasured: this profile contains aggregate hardware counters, without unit busy-cycle counters.</p>`;
+  else m.units.forEach((u, i) => { const v = (busy[u] || 0) / cyc; h += `<div class="urow"><span><i style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${UCOL(i)};margin-right:6px"></i>${u}</span><div class="bar"><div style="width:${Math.min(100, 100 * v)}%;background:${UCOL(i)}"></div></div><span class="mono" style="text-align:right">${pct(v)}</span></div>`; });
   const lose = sl.lose || {};
   if (Object.values(lose).some(x => x)) {
     h += `<h2 style="margin-top:14px">TMEM arbitration losses</h2>`;

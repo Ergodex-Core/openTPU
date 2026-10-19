@@ -929,6 +929,7 @@ def summary_data(d: dict, s: int = 0) -> dict:
         "name": d.get("name"), "kind": d.get("kind"), "cycles": cyc,
         "clock_mhz": d.get("clock_mhz"), "config": d.get("config") or {},
         "roofline": d.get("roofline") or {}, "macs": d.get("macs") or 0,
+        "measurements": d.get("measurements") or {},
         "peak_macs": d.get("peak_macs") or 0, "bytes": d.get("bytes") or 0,
         "slice": s, "busy": busy, "lose": sl.get("lose") or {},
         "causes": port_b_causes(d, s), "classes": class_rows(d, s),
@@ -946,13 +947,17 @@ def render_summary(d: dict, s: int = 0) -> str:
     eff = rl.get("efficiency") or 0.0
     bound = rl.get("bound") or 0
     mhz = m["clock_mhz"] or CLOCK_MHZ
+    instructions = ("instructions unmeasured" if m["measurements"].get("instruction_timeline") is False
+                    else f"{m['n_instr']} instructions")
     cfg_bits = " ".join(f"{k}={cfg[k]}" for k in ("S", "D", "MCOLS", "LANES") if k in cfg)
     lines = [
         f"{m['name']}  [{m['kind']}]  slice {s}  {cfg_bits}",
         f"  {_fmt_n(m['cycles'])} cycles   {_time_at(m['cycles'], mhz)} at {mhz:g} MHz   "
-        f"{m['n_instr']} instructions",
-        f"  Roofline {_bar(eff)} {_pct(eff)} of DRAM-bound minimum "
-        f"(bound {_fmt_n(bound)} cycles)",
+        + instructions,
+        (f"  Native-interface lower bound {_fmt_n(bound)} cycles (not HBM efficiency)"
+         if rl.get("kind") == "native-interface-lower-bound" else
+         f"  Roofline {_bar(eff)} {_pct(eff)} of DRAM-bound minimum "
+         f"(bound {_fmt_n(bound)} cycles)"),
     ]
     if m["macs"]:
         lines.append(f"  MACs/cycle {m['macs'] / cyc:.0f}  (peak {m['peak_macs']})")
@@ -981,7 +986,9 @@ def render_summary(d: dict, s: int = 0) -> str:
             lines.append(f"  Biggest losses: {bits}.")
     units = d.get("units") or UNITS
     busy = m["busy"]
-    if busy:
+    if m["measurements"].get("unit_utilization") is False:
+        lines.append("Unit utilisation: unmeasured (unit busy-cycle counters not collected)")
+    elif busy:
         lines.append("Unit utilisation  (cycles with an instruction in flight)")
         for u in units:
             v = (busy.get(u) or 0) / cyc
@@ -1119,9 +1126,13 @@ def main(argv=None) -> None:
         print(f"{a.file}: {doc['format']} v{doc['version']}, created {doc.get('created', '?')}")
         for d in doc["profiles"]:
             c = d["config"]
-            print(f"  [{d['kind']}] {d['name']}: {d['cycles']} cycles, roofline "
-                  f"{d['roofline']['bound']} ({100 * d['roofline']['efficiency']:.1f}%), "
-                  f"{len(d['instrs'])} instructions, S={c['S']} D={c['D']} MCOLS={c['MCOLS']} "
+            bound = (f"native-interface lower bound {d['roofline']['bound']} cycles (not HBM efficiency)"
+                     if d['roofline'].get('kind') == 'native-interface-lower-bound' else
+                     f"roofline {d['roofline']['bound']} ({100 * d['roofline']['efficiency']:.1f}%)")
+            instructions = ("instructions unmeasured" if d.get('measurements', {}).get('instruction_timeline') is False
+                            else f"{len(d['instrs'])} instructions")
+            print(f"  [{d['kind']}] {d['name']}: {d['cycles']} cycles, {bound}, "
+                  f"{instructions}, S={c['S']} D={c['D']} MCOLS={c['MCOLS']} "
                   f"LANES={c['LANES']}")
         return
     if a.cmd == "summary":

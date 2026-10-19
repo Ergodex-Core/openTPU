@@ -92,6 +92,61 @@ def test_app_javascript_parses(tmp_path):
     assert r.returncode == 0, r.stderr
 
 
+@pytest.mark.parametrize("native_bound", [False, True])
+def test_overview_distinguishes_native_bound_and_unmeasured_units(native_bound):
+    """Exercise the real renderer with in-memory display fixtures, never hardware evidence."""
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node not installed")
+    page = lens.APP.read_text()
+    overview = page.split("function renderOverview() {", 1)[1].split(
+        "// ------------------------------------------------------------------ timeline (canvas)", 1)[0]
+    profile = {
+        "kind": "unit-test", "name": "display fixture", "cycles": 100, "clock_mhz": 200,
+        "config": {"S": 1, "D": 128, "MCOLS": 4, "LANES": 8},
+        "roofline": {"bound": 10, "efficiency": .1}, "macs": 0, "peak_macs": 512,
+        "slices": [{"busy": {}}], "notes": [],
+    }
+    if native_bound:
+        profile["roofline"].update(kind="native-interface-lower-bound", note="Native interface floor only")
+        profile["measurements"] = {"unit_utilization": False, "instruction_timeline": False}
+    js = """
+const target = {};
+const $ = () => target;
+const fmt = String, pct = x => (100*x).toFixed(1)+'%', UCOL = () => 'red';
+const esc = s => String(s).replace(/[&<>\"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const p = PROFILE;
+const M = {p, cycles:p.cycles, s:0, ins:[], units:['MXU'], nb:0};
+""".replace("PROFILE", json.dumps(profile))
+    js += "function renderOverview() {" + overview + "\nrenderOverview();process.stdout.write(target.innerHTML);"
+    r = subprocess.run([node, "-e", js], capture_output=True, text=True, check=True)
+    if native_bound:
+        assert "native-interface lower bound · not HBM efficiency" in r.stdout
+        assert "Native interface floor only" in r.stdout
+        assert "of the DRAM roofline" not in r.stdout
+        assert "Unmeasured: this profile" in r.stdout
+        assert 'class="urow"' not in r.stdout and 'class="v">unmeasured<' in r.stdout
+    else:
+        assert "of the DRAM roofline (10 cycles)" in r.stdout
+        assert 'class="urow"' in r.stdout and "0.0%" in r.stdout
+        assert "Unmeasured" not in r.stdout
+
+
+def test_terminal_native_bound_and_missing_measurements():
+    """Metadata changes labels without manufacturing counters or writing a profile."""
+    profile = {
+        "kind": "unit-test", "name": "display fixture", "cycles": 100,
+        "config": {"S": 1}, "slices": [{}], "instrs": [],
+        "roofline": {"kind": "native-interface-lower-bound", "bound": 10, "efficiency": .1},
+        "measurements": {"unit_utilization": False, "instruction_timeline": False},
+    }
+    text = lens.render_summary(profile)
+    assert "Native-interface lower bound 10 cycles (not HBM efficiency)" in text
+    assert "of DRAM-bound minimum" not in text
+    assert "Unit utilisation: unmeasured" in text and "instructions unmeasured" in text
+    assert lens.summary_data(profile)["busy"] == {}
+
+
 def test_server_serves_app_and_profile(tmp_path, rtl_prof):
     f = lens.save([rtl_prof], tmp_path / "a.otpuprof")
     srv = lens.serve(f, port=0, open_browser=False, block=False)
