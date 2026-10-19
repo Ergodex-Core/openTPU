@@ -241,6 +241,11 @@ shell side, pblocks for the slice / TMEM / host side, MAX_FANOUT on the HBM rese
 the flow fix that makes the HDK read the floorplan Tcl at all; all F2 suites pass and the
 Gemma 3 token stays bit-exact) and **build 3** runs (unit `otpu-f2hbm-build3`, output
 `/home/ubuntu/rachit/f2hbm-run3`). Build 2 routed at WNS -2.24 ns and was stopped.
+Build 3 routed at **WNS -1.40 ns** (TNS -29,000, hold clean; the floorplan applied, the reset
+exception on 12 endpoints): the host-to-port link at 450 MHz is a bare 3.4 ns wire (-1.4),
+three fabric paths at 200 MHz ride 5 ns of route (-1.0), the TMEM address paths are within
+0.5 ns. Round 4 (link stages between host and ports, registered enable cones, per-port and
+tighter TMEM pblocks) is in progress.
 
 ## Decision (taken 2026-10-18)
 
