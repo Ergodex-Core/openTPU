@@ -150,13 +150,13 @@ add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u
 # cd16e195 placed the channels' SmartConnects' 450 MHz side at -1.350 ns, 3.2 of 3.5 ns route
 # (sc_c4/inst/m00_nodes/m00_w_node -> m00_exit_pipeline). The HBM's AXI ports sit along SLR0's
 # bottom edge: each port's clock region from its site (the HBM IP's AXI interface site,
-# HBM_SNGLBLI_INTF_AXI_X<p>Y0; if the device names it otherwise, the VU47P's layout, four ports a
+# BLI_HBM_AXI_INTF_X<p>Y0; if the device names it otherwise, the VU47P's layout, four ports a
 # clock region, X<p/4>Y0, with a warning line), and a box of that column's two clock regions
 # (Y0:Y1) holds the SmartConnects and the 450 MHz register slices of the ports in it (a child of
 # pb_otpu_hbm; the channels' core-clock register slices and otpu_native_axi stay in its parent),
 # the host's SmartConnect and 450 MHz slice (u_hsc, u_hrs256) beside its port NPORT the same way.
 proc otpu_hbm_port_x {p} {
-  set site [get_sites -quiet HBM_SNGLBLI_INTF_AXI_X${p}Y0]
+  set site [get_sites -quiet BLI_HBM_AXI_INTF_X${p}Y0]
   if {[llength $site] == 1} {
     set cr [get_clock_regions -quiet -of_objects $site]
     if {[regexp {^X(\d+)Y0$} [get_property NAME $cr] -> x]} {
@@ -165,7 +165,7 @@ proc otpu_hbm_port_x {p} {
     }
   }
   set x [expr {$p / 4}]
-  puts "OTPU_FLOORPLAN_WARNING hbm port $p: no site HBM_SNGLBLI_INTF_AXI_X${p}Y0 (or not in row Y0); X${x}Y0 from the VU47P's four ports a clock region"
+  puts "OTPU_FLOORPLAN_WARNING hbm port $p: no site BLI_HBM_AXI_INTF_X${p}Y0 (or not in row Y0); X${x}Y0 from the VU47P's four ports a clock region"
   return $x
 }
 set otpu_cols {}

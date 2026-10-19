@@ -171,7 +171,7 @@ endpoints in the 2 x 1 channel SmartConnects' 450 MHz side, each 8,548 LUTs / 16
   column of HBM ports (pb_otpu_hbmx<x>, that column's Y0:Y1) holds the SmartConnects and the
   450 MHz slices of its ports, the host's SmartConnect and 450 MHz slice in its port's column
   (its 512-bit slice with the gate in pb_otpu_pcis); each port's column
-  from its HBM_SNGLBLI_INTF_AXI_X<p>Y0 site (a warning line and four ports a clock region if the
+  from its BLI_HBM_AXI_INTF_X<p>Y0 site (a warning line and four ports a clock region if the
   device names it otherwise). The shell's PCIS: the floorplan finds the cell driving
   sh_cl_dma_pcis_awvalid in the linked design and fails closed unless it is in pb_otpu_pcis's
   SLR (SLR1 on the VU47P: round 3's placed report put that register at SLICE_X176Y399; the
