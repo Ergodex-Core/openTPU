@@ -85,12 +85,16 @@ reference they name), and dataflow organized so pipeline stages stay inside one 
 
 Consequences for our designs:
 
-- **The PCIS's first register slice belongs in SLR2**, not SLR1. Alex's `f2_pcis_pipe` sits
-  in SLR1 and still closed, but build 6's worst setup path (+0.035 ns) is exactly the
-  SmartConnect's host entry into that pipe. The HDK example does it right: `AXI4_REG_SLC_PCIS_SLR2`
-  in SLR2, then `AXI4_REG_SLC_PCIS_SLR1` and the crossbar in SLR1, then one slice per
-  destination SLR. In a three-slice design the host path is a chain SLR2 -> SLR1 -> SLR0
-  with a register slice at each hop, and slice 2 (in SLR2) is the host's nearest window.
+- **The PCIS enters in SLR1 on the SMALL_SHELL.** The spec's table is the generic one
+  (PCIS in the top SLR on the XDMA shell), but the Shell Floorplan page states for the small
+  shell: "The PCIS bus is physically located in SLR1 in SMALL_SHELL. Any customer logic
+  interfacing with this bus should reside in SLR1." The HDK example's small-shell floorplan
+  agrees (`AXI4_REG_SLC_PCIS_SLR1` and the crossbar in SLR1; its SLR2 pblock holds only the
+  DDR side). Alex's `f2_pcis_pipe` in SLR1 is therefore right; build 6's worst setup path
+  (+0.035 ns, the SmartConnect's host entry into that pipe) is a same-SLR path to tune, not
+  a placement error. In a three-slice design the host path is the PCIS register slice and
+  the fan-out crossbar in SLR1 (the `pblock_CL_SLR1_XBAR` grandchild), then one register
+  slice per destination SLR (SLR0 and SLR2 one hop each).
 - **OCL (our control registers) stays in SLR1**: Alex's `f2_ocl_cdc` is already there; the
   one `otpu_board` control port is reached from SLR1, so the board's control fan-out to
   slices in SLR0 and SLR2 needs a registered stage per hop (the board's control path is at
