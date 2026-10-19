@@ -17,13 +17,18 @@ set_property include_dirs [list ${CL_DIR}/design ${otpu_ip} ${HDK_SHELL_DESIGN_D
 source ${CL_DIR}/design/sources.tcl
 foreach f $otpu_sources { read_verilog -sv ${CL_DIR}/design/$f }
 read_verilog -sv ${CL_DIR}/design/cl_mem_hbm_wrapper.sv
-# the SmartConnect fabric (as Alex's build_f2.tcl reads his f2_mem block design)
+# the memory path (AWS's cl_dram_hbm_dma chain: its synth script reads these the same way): the
+# host's cl_axi_sc_1x1 as shipped, the channels' SmartConnects (as Alex's build_f2.tcl reads his)
+add_files ${HDK_BD_SRC_DIR}/cl_axi_sc_1x1/cl_axi_sc_1x1.bd
+read_verilog ${HDK_BD_GEN_DIR}/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v
 add_files ${otpu_ip}/project/otpu_hbm_sc.srcs/sources_1/bd/otpu_hbm_sc/otpu_hbm_sc.bd
 read_verilog ${otpu_ip}/otpu_hbm_sc_wrapper.v
 read_verilog -sv ${CL_DIR}/design/cl_opentpu_hbm.sv
 # the HBM controller; sh_ddr (pins only here) keeps the converter pair the DDR build reads
 read_ip [list \
   ${HDK_IP_SRC_DIR}/cl_hbm/cl_hbm.xci \
+  ${HDK_IP_SRC_DIR}/axi_register_slice/axi_register_slice.xci \
+  ${HDK_IP_SRC_DIR}/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice.xci \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter/cl_axi_clock_converter.xci \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter_light/cl_axi_clock_converter_light.xci]
 read_xdc ${constraints_dir}/cl_synth_user.xdc
@@ -46,6 +51,9 @@ if {![llength $c2x_pb] || ![info exists c2x_ip] || ![llength $c2x_ip] ||
 report_utilization -file ${reports_dir}/${CL}.${TAG}.synth_utilization.rpt
 report_utilization -hierarchical -hierarchical_depth 4 -file ${reports_dir}/${CL}.${TAG}.synth_utilization_hier.rpt
 report_timing_summary -file ${reports_dir}/${CL}.${TAG}.synth_timing.rpt
+# logic levels and congestion (the AWS Shell Interface Specification's timing hygiene: paths
+# above ~10 levels at 250 MHz show here; a report, not a gate)
+report_design_analysis -logic_level_distribution -file ${reports_dir}/${CL}.${TAG}.synth_logic_levels.rpt
 report_clock_interaction -file ${reports_dir}/${CL}.${TAG}.synth_clock_interaction.rpt
 report_cdc -details -file ${reports_dir}/${CL}.${TAG}.synth_cdc.rpt
 source ${HDK_SHELL_DIR}/build/scripts/synth_cl_footer.tcl

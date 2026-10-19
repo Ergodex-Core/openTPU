@@ -3,8 +3,9 @@
 // into otpu_native_axi each, the PCIS through otpu_f2_pcis_gate) in front of a model of what the
 // CL puts behind it: the SmartConnect fabric (encrypted IP: modelled by its behaviour) and the
 // HBM. Per channel p:
-//   - the channel's master (core clock) and the host's branch (aclk; the host's 1 x NPORT demux
-//     by address bits 33:29) into port p's SmartConnect: each AR / AW taken with random readies
+//   - the channel's master (core clock) into port p's SmartConnect (1 x 1), the host's (aclk) into
+//     its own port NPORT's (since the first placed build: the HBM's global address switch takes
+//     it to any channel's pseudo-channel, LSW later each way): each AR / AW taken with random readies
 //     in its own clock, reaching the HBM side after a clock-crossing latency (LREQ + jitter),
 //     in arrival order (the SmartConnect's master is single-threaded: one ID on the HBM port);
 //     a write's service time up to 4 LREQ longer than a read's, so reads overtake writes;
@@ -19,14 +20,21 @@
 // 4 KiB, ID 0; streams coalesce into bursts (the histogram printed; some bursts longer than one
 // beat); the host's writes land, its reads (issued right after its writes are handed over,
 // before their B: the gate must hold them) return its own writes, B / R in order with its IDs;
-// pcis_wbusy high while a host write is unanswered. Plusargs +seed= +cycles= +nb=.
+// pcis_wbusy high while a host write is unanswered; at most OT (32, AWS's cl_axi_sc_1x1)
+// transactions in flight a direction on a channel. Plusargs +seed= +cycles= +nb=.
+// (Verilator 5.048: a pop_front / slice of a queue that is an element of an array of queues,
+// inside a loop, lost entries here; the host's responses and write beats use plain queues, the
+// beats read by index and deleted after the loop.)
 module tb_f2hbm_axi;
   parameter int NPORT = 8;
   parameter int NXR = 3;
   parameter int CORE_HALF = 5, AXI_HALF = 4, HBM_HALF = 2;   // 100 / 125 / 250: the ratios
   parameter int LREQ = 40, LRSP = 40;     // the SmartConnect's crossing latencies (time units)
-  parameter int READ_BURST = 4, READ_IDLE = 1;
-  parameter bit READ_WAIT = 1'b0;
+  parameter int LSW = 20;                 // the host port's extra (the HBM's global switch)
+  parameter int READ_BURST = 8, READ_IDLE = 1;
+  parameter int OT = 32;                  // the 1 x 1 SmartConnect's transactions in flight a
+                                          //   direction (AWS's cl_axi_sc_1x1: 32)
+  parameter bit READ_WAIT = 1'b1;
   parameter bit ORDER = 1'b1;             // 0: the order rules off (must fail)
 
   logic clk = 1'b0, aclk = 1'b0, hclk = 1'b0;
@@ -127,40 +135,62 @@ module tb_f2hbm_axi;
   typedef struct { bit src; logic [27:0] b; int n; longint due; int seq; } tx_t;
   typedef struct { logic [511:0] d; logic [63:0] m; } wb_t;
   typedef struct { logic [511:0] d; bit last; longint due; int seq; } rsp_t;
-  tx_t  arq [NPORT][$], awq [NPORT][$];
-  wb_t  wq [NPORT][2][$];                    // write beats per slave, in AW order
-  rsp_t rq [NPORT][2][$];                    // read beats back to each slave
-  rsp_t bq [NPORT][2][$];                    // B's back to each slave
+  // ports 0 .. NPORT - 1 the channels', NPORT the host's own (through the HBM's global address
+  // switch: LSW more each way, the same memory)
+  tx_t  arq [NPORT+1][$], awq [NPORT+1][$];
+  wb_t  wq [NPORT+1][2][$];                  // write beats per slave, in AW order
+  rsp_t rq [NPORT+1][2][$];                  // read beats back to each slave
+  rsp_t bq [NPORT+1][2][$];                  // B's back to each slave
+  rsp_t hrq [$], hbq [$];                    // the host's (its one port: in order)
+  wb_t  hwq [$];                             // the host's write beats, in AW order
   int   hist [17];
   int   nbursts = 0, nlong = 0;
-  for (genvar p = 0; p < NPORT; p++) begin : g_port
+  for (genvar p = 0; p <= NPORT; p++) begin : g_port
     longint rnext = 0;
     // the HBM side (hclk): one read and one write may complete a cycle, in order per direction
     always @(posedge hclk) if (!rst) begin
       if (arq[p].size() && arq[p][0].due <= $time && $urandom % 3 != 0) begin
         automatic tx_t t = arq[p].pop_front();
         for (int i = 0; i < t.n; i++) begin
-          automatic longint d = $time + LRSP + $urandom % 16;
+          automatic longint d = $time + LRSP + (p == NPORT ? LSW : 0) + $urandom % 16;
           if (d < rnext + 4 * HBM_HALF) d = rnext + 4 * HBM_HALF;     // 2 HBM beats a 512-bit beat
           rnext = d;
-          rq[p][t.src].push_back('{rd(t.b + 28'(i)), i == t.n - 1, d, t.seq});
+          if (t.src) hrq.push_back('{rd(t.b + 28'(i)), i == t.n - 1, d, t.seq});
+          else rq[p][0].push_back('{rd(t.b + 28'(i)), i == t.n - 1, d, t.seq});
         end
       end
-      if (awq[p].size() && awq[p][0].due <= $time && wq[p][awq[p][0].src].size() >= awq[p][0].n
-          && $urandom % 3 != 0) begin
+      if (awq[p].size() && awq[p][0].due <= $time &&
+          (awq[p][0].src ? hwq.size() : wq[p][0].size()) >= awq[p][0].n && $urandom % 3 != 0) begin
+        // (beats read by index, the queue sliced after: a pop_front in this loop on an element
+        // of an array of queues lost entries under Verilator 5.048)
         automatic tx_t t = awq[p].pop_front();
-        for (int i = 0; i < t.n; i++) begin
-          automatic wb_t w = wq[p][t.src].pop_front();
-          mem[t.b + 28'(i)] = merge(rd(t.b + 28'(i)), w.d, w.m);
+        if (t.src) begin
+          for (int i = 0; i < t.n; i++) begin
+            automatic wb_t w = hwq[i];
+            mem[t.b + 28'(i)] = merge(rd(t.b + 28'(i)), w.d, w.m);
+          end
+          for (int i = 0; i < t.n; i++) hwq.delete(0);
+        end else begin                       // a channel's write: one beat (otpu_native_axi)
+          automatic wb_t w = wq[p][0].pop_front();
+          if (t.n != 1) fail("a channel write of more than one beat");
+          mem[t.b] = merge(rd(t.b), w.d, w.m);
         end
-        bq[p][t.src].push_back('{'0, 1'b1, $time + LRSP + $urandom % 16, t.seq});
+        if (t.src) hbq.push_back('{'0, 1'b1, $time + LRSP + LSW + $urandom % 16, t.seq});
+        else bq[p][0].push_back('{'0, 1'b1, $time + LRSP + $urandom % 16, t.seq});
       end
     end
-    // the channel's slave (core clock)
+    // the channel's slave (core clock), at most OT transactions in flight each way (counted from
+    // AR / AW to the last R / the B; a margin of two for the readies' register)
+    if (p < NPORT) begin : g_slave
+    int rd_ot = 0, wr_ot = 0, max_rd_ot = 0;
     always @(posedge clk) begin
-      c_awready[p] <= $urandom % 4 != 0;
+      rd_ot += int'(c_arvalid[p] && c_arready[p]) - int'(c_rvalid[p] && c_rlast[p]);
+      wr_ot += int'(c_awvalid[p] && c_awready[p]) - int'(c_bvalid[p]);
+      if (rd_ot > max_rd_ot) max_rd_ot = rd_ot;
+      if (rd_ot > OT || wr_ot > OT) fail($sformatf("ch%0d: over %0d transactions in flight", p, OT));
+      c_awready[p] <= $urandom % 4 != 0 && wr_ot < OT - 1;
       c_wready[p] <= $urandom % 4 != 0;
-      c_arready[p] <= $urandom % 4 != 0;
+      c_arready[p] <= $urandom % 4 != 0 && rd_ot < OT - 1;
       if (!rst) begin
         if (c_arvalid[p] && c_arready[p]) begin
           if (c_araddr[p][33:29] != 5'(p)) fail($sformatf("ch%0d: a read outside its pseudo-channel", p));
@@ -191,10 +221,12 @@ module tb_f2hbm_axi;
         c_bvalid[p] <= 1'b1; void'(bq[p][0].pop_front());
       end
     end
+    end
   end
 
-  // the host's branch (aclk): the demux by address, the host's own order back
-  int hseq_r = 0, hseq_b = 0, hnext_r = 0, hnext_b = 0, hwport [$];
+  // the host's own port (aclk side): its HBM port NPORT reaches every channel's pseudo-channel
+  // through the switch (addresses outside the channels' fail); in order, one port
+  int hseq_r = 0, hseq_b = 0, hnext_r = 0, hnext_b = 0;
   wb_t hwpend [$];
   logic [15:0] hr_id_q [$], hb_id_q [$];
   always @(posedge aclk) begin
@@ -203,43 +235,38 @@ module tb_f2hbm_axi;
     h_arready <= $urandom % 4 != 0;
     if (!arst) begin
       if (h_arvalid && h_arready) begin
-        automatic int p = h_araddr[33:29];
-        if (h_araddr[63:34] != 0 || p >= NPORT) fail("host: read outside the channels");
-        else arq[p].push_back('{1'b1, h_araddr[33:6], h_arlen + 1, $time + LREQ + $urandom % 32, hseq_r++});
+        if (h_araddr[63:34] != 0 || h_araddr[33:29] >= NPORT) fail("host: read outside the channels");
+        else arq[NPORT].push_back('{1'b1, h_araddr[33:6], h_arlen + 1, $time + LREQ + LSW + $urandom % 32, hseq_r++});
       end
       if (h_awvalid && h_awready) begin
-        automatic int p = h_awaddr[33:29];
-        if (h_awaddr[63:34] != 0 || p >= NPORT) fail("host: write outside the channels");
+        if (h_awaddr[63:34] != 0 || h_awaddr[33:29] >= NPORT) fail("host: write outside the channels");
         else begin
-          awq[p].push_back('{1'b1, h_awaddr[33:6], h_awlen + 1, $time + LREQ + $urandom % (4 * LREQ), hseq_b++});
-          for (int i = 0; i <= h_awlen; i++) hwport.push_back(p);
+          awq[NPORT].push_back('{1'b1, h_awaddr[33:6], h_awlen + 1, $time + LREQ + LSW + $urandom % (4 * LREQ), hseq_b++});
         end
       end
       if (h_wvalid && h_wready) hwpend.push_back('{h_wdata, h_wstrb});   // W may lead its AW
-      while (hwport.size() && hwpend.size()) wq[hwport.pop_front()][1].push_back(hwpend.pop_front());
+      while (hwpend.size()) hwq.push_back(hwpend.pop_front());
       // R and B from registers, held until taken; the next of the host's order loaded
       if (h_arvalid && h_arready) hr_id_q.push_back(h_arid);
       if (h_awvalid && h_awready) hb_id_q.push_back(h_awid);
       if (!h_rvalid || h_rready) begin
         h_rvalid <= 1'b0;
-        for (int p = 0; p < NPORT; p++)
-          if (rq[p][1].size() && rq[p][1][0].seq == hnext_r && rq[p][1][0].due <= $time) begin
-            h_rvalid <= 1'b1; h_rdata <= rq[p][1][0].d; h_rlast <= rq[p][1][0].last;
-            h_rid <= hr_id_q[0];
-            if (rq[p][1][0].last) begin hnext_r++; void'(hr_id_q.pop_front()); end
-            void'(rq[p][1].pop_front());
-            break;
-          end
+        if (hrq.size() && hrq[0].due <= $time) begin
+          if (hrq[0].seq != hnext_r) fail("host: model read order");
+          h_rvalid <= 1'b1; h_rdata <= hrq[0].d; h_rlast <= hrq[0].last;
+          h_rid <= hr_id_q[0];
+          if (hrq[0].last) begin hnext_r++; void'(hr_id_q.pop_front()); end
+          void'(hrq.pop_front());
+        end
       end
       if (!h_bvalid || h_bready) begin
         h_bvalid <= 1'b0;
-        for (int p = 0; p < NPORT; p++)
-          if (bq[p][1].size() && bq[p][1][0].seq == hnext_b && bq[p][1][0].due <= $time) begin
-            h_bvalid <= 1'b1; h_bid <= hb_id_q[0];
-            hnext_b++; void'(hb_id_q.pop_front());
-            void'(bq[p][1].pop_front());
-            break;
-          end
+        if (hbq.size() && hbq[0].due <= $time) begin
+          if (hbq[0].seq != hnext_b) fail("host: model write order");
+          h_bvalid <= 1'b1; h_bid <= hb_id_q[0];
+          hnext_b++; void'(hb_id_q.pop_front());
+          void'(hbq.pop_front());
+        end
       end
     end else begin
       h_rvalid <= 1'b0; h_bvalid <= 1'b0;

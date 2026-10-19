@@ -277,7 +277,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
         # the SLR chain, otpu_native_axi; docs/f2_hbm.md): only when asked (the cache keys stay)
         p["NAXI"] = 1
-        for k in ("XR", "BURST", "IDLE", "WAIT"):
+        for k in ("XR", "BURST", "IDLE", "WAIT", "OT"):
             if os.environ.get("OTPU_NAXI_" + k):
                 p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
     if getattr(cfg, "PORTB", 1) > 1:    # a wide port B (otpu_slice PORTB; only when on: the

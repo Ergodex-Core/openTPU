@@ -66,9 +66,9 @@ module otpu_f2_hbm_sys #(
   parameter int DRAM_LOG2  = 32,         // what a slice addresses (otpu_board; CFG_DRAM)
   parameter int NXR        = 3,          // SLR crossing stages each way (the floorplan's three
                                          //   SLRs; 0: wired, no floorplan)
-  parameter int READ_BURST = 4,          // otpu_native_axi's read bursts (native beats) and
+  parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
   parameter int READ_IDLE  = 1,          //   gather timeout,
-  parameter bit READ_WAIT  = 1'b0        //   and wait (docs/f2_hbm.md "The memory path")
+  parameter bit READ_WAIT  = 1'b1        //   and wait (docs/f2_hbm.md "The memory path")
 ) (
   input  logic          clk,
   input  logic          clk_f,

@@ -103,6 +103,13 @@ ROWLANES = true                 # an advance, the MXU's roofline (docs/row_lanes
 MCOLS = 8                       # 64 bytes"). build.py --target f2-hbm:p4rl8a64
 ALINE = 64
 
+[variants.p4rl8a64c150]         # ... at a 150 MHz core (TMEM pumped at 300; the shell's 250 and
+PORTB = 4                       # the HBM AXI's 450 unchanged): the alex-shell path's first build
+ROWLANES = true                 # placed at WNS -1.609 ns at 200 MHz (docs/wide_port.md "Alex's
+MCOLS = 8                       # shell"). build.py --target f2-hbm:p4rl8a64c150
+ALINE = 64
+core_mhz = 150.0
+
 [variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
 PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl
 ROWLANES = true

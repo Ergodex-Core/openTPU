@@ -43,6 +43,18 @@ def check_vivado_version(output: str, expected: str) -> None:
 
 
 HBM_WRAPPER = 'hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv'
+HBM_BD_SRC = 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd'
+HBM_CHAIN_IP = ('hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice/axi_register_slice.xci',
+                'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice.xci',
+                HBM_BD_SRC + '/cl_axi_sc_1x1/cl_axi_sc_1x1.bd',
+                'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v')
+
+# The HBM CL's core clocks (cl_opentpu_hbm.sv u_mmcm, from clk_main_a0 = 250 MHz): core kHz ->
+# (DIVCLK_DIVIDE, CLKFBOUT_MULT_F, CLKOUT0_DIVIDE_F = the core clock, CLKOUT1_DIVIDE = the pumped
+# TMEM's, 2x the core); every VCO 800-1600 MHz, multiples of 0.125, integer CLKOUT1
+HBM_CORE_MMCM = {200000: (1, 4.8, 6.0, 3),      # VCO 1200: 200 / 400
+                 175000: (5, 21.0, 6.0, 3),     # PFD 50, VCO 1050: 175 / 350
+                 150000: (1, 4.8, 8.0, 4)}      # VCO 1200: 150 / 300
 
 
 def is_hbm(t: target.Target) -> bool:
@@ -57,16 +69,25 @@ def check_hbm_ip(hdk: Path) -> None:
     if not ip.is_file():
         raise RuntimeError(f'Missing HBM IP: {ip}; source hdk_setup.sh')
     p = json.loads(ip.read_text())['ip_inst']['parameters']['component_parameters']
+    # the global address switch on: the host's own port (NPORT) reaches every channel's
+    # pseudo-channel; the monitor APB on: the shell's MON_APB ports are connected (the AWS Shell
+    # Interface Specification: an unconnected monitor interface fails AFI creation)
     want = {'USER_HBM_STACK': '2', 'USER_AXI_CLK_FREQ': '450', 'USER_HBM_DENSITY': '16GB',
-            'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE'}
+            'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE',
+            'USER_MON_APB_EN': 'TRUE'}
     for k, v in want.items():
         if p.get(k, [{}])[0].get('value') != v:
-            raise RuntimeError(f'{ip}: {k} is not {v}')
+            near = sorted(n for n in p if 'APB' in n or 'SWITCH' in n)
+            raise RuntimeError(f'{ip}: {k} is not {v} (the IP\'s APB / switch parameters: {near})')
     gen = hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_hbm/synth/cl_hbm.v'
     if not gen.is_file():
         raise RuntimeError(f'Missing HBM generated product: {gen}')
     if not (hdk / HBM_WRAPPER).is_file():
         raise RuntimeError(f'Missing HDK HBM wrapper: {hdk / HBM_WRAPPER}')
+    # the memory path's prebuilt IP (AWS's cl_dram_hbm_dma chain: docs/f2_hbm.md)
+    for rel in HBM_CHAIN_IP:
+        if not (hdk / rel).is_file():
+            raise RuntimeError(f'Missing HDK IP for the HBM chain: {hdk / rel}')
 
 
 def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
@@ -121,10 +142,11 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     p = t.platform
     if hbm:
         nport = t.arch['S'] * p['channels_per_slice']
-        if (t.core_khz != 200000 or p['channel_bytes'] != 2**29 or nport > 32 or
+        if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] != 2**29 or nport > 31 or
                 p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
-            raise RuntimeError('F2 HBM CL requires 200 MHz (TMEM 400), 512 MiB channels, '
-                               'a power-of-two NCH and S x NCH <= 32 ports')
+            raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core (the pumped TMEM at '
+                               '2x), 512 MiB channels, a power-of-two NCH and S x NCH <= 31 ports (the host '
+                               'has its own HBM port)')
     elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')
     cl = out / 'cl_opentpu'
@@ -151,8 +173,12 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         if not w.is_file():
             raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
         shutil.copy2(w, cl / 'design/cl_mem_hbm_wrapper.sv')
+        div, mult, d0, d1 = HBM_CORE_MMCM[t.core_khz]
         (cl / 'design/opentpu_geometry.vh').write_text(
-            f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n")
+            f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n"
+            f"localparam int CORE_KHZ_CL = {t.core_khz};\n"
+            f"localparam int MMCM_DIVCLK = {div};\nlocalparam real MMCM_MULT = {mult};\n"
+            f"localparam real MMCM_DIV0 = {d0};\nlocalparam int MMCM_DIV1 = {d1};\n")
     else:
         (cl / 'design/cl_opentpu_hbm.sv').unlink()
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
@@ -199,14 +225,15 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     return cl
 
 
-def hbm_sc_command(cl: Path, t: target.Target, log: Path) -> list[str]:
+def hbm_sc_command(cl: Path, t: target.Target, log: Path, hdk: Path | None = None) -> list[str]:
     """The SmartConnect fabric's generation (an HBM target, before synthesis): Vivado batch on
     create_hbm_sc.tcl into cl/ip (the block design, its OOC checkpoints, its wrapper and the
     CL's instance of it, otpu_hbm_sc_inst.vh; docs/f2_hbm.md "The memory path")."""
     nport = t.arch['S'] * t.platform['channels_per_slice']
     return ['vivado', '-mode', 'batch', '-source', str(cl / 'build/scripts/create_hbm_sc.tcl'),
             '-log', str(log), '-journal', str(log.with_suffix('.jou')),
-            '-tclargs', str(cl / 'ip'), str(nport), t.tech['part']]
+            '-tclargs', str(cl / 'ip'), str(nport), t.tech['part'], str(t.core_khz * 1000),
+            str((hdk or Path('/HDK')) / HBM_BD_SRC)]
 
 
 def load_synthesis(run: Path, expected_sha: str) -> tuple[dict, Path, str]:
@@ -428,7 +455,7 @@ def main() -> None:
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
-    ip_cmd = (hbm_sc_command(cl, t, out / 'hbm_sc.log')
+    ip_cmd = (hbm_sc_command(cl, t, out / 'hbm_sc.log', hdk)
               if is_hbm(t) and a.flow != 'ImplCL' else None)
     (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),

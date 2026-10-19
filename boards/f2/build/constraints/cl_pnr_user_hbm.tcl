@@ -70,8 +70,14 @@ set_property PARENT pblock_CL [get_pblocks pb_otpu_hbm]
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3}
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X4Y0:CLOCKREGION_X7Y0}
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X4Y3:CLOCKREGION_X4Y3}
+# (AWS's own SLR0 outline for its HBM logic, cl_mem_perf's pblock_CL_SLR0: the clock regions
+# X5Y1:X5Y3 and X6Y1 and four column ranges beside the shell, next to the HBM stacks' AXI pins)
+resize_pblock pb_otpu_hbm -add {CLOCKREGION_X5Y1:CLOCKREGION_X5Y3}
+resize_pblock pb_otpu_hbm -add {CLOCKREGION_X6Y1:CLOCKREGION_X6Y1}
+resize_pblock pb_otpu_hbm -add {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119}
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sc}]
+add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/g_ch[*].u_rs512}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
@@ -107,6 +113,8 @@ resize_pblock pb_otpu_pcis -add {CLOCKREGION_X5Y5:CLOCKREGION_X5Y6}
 # write-pending count, every output a register; its master side meets the SmartConnect fabric's
 # host demux in SLR0, as Alex's f2_pcis_pipe in his SLR1 pblock met his memory_sc in SLR0)
 add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_sys/u_mem/u_pcis}]
+# (the host chain's first register slice, AWS's AXI4_REG_SLC_HBM position, in the shell's PCIS SLR)
+add_cells_to_pblock pb_otpu_pcis [otpu_cells {WRAPPER/CL/u_hrs512}]
 # round 8: the OCL's crossing (otpu_axil_cdc: the shell-facing skid buffers and the aclk state
 # machine, its hold registered inside) beside the shell's AXI-Lite master; its core-clock side
 # reaches u_cx in SLR0 under the CDC's datapath-only bounds (round 7 placed u_ocl/u_skid_aw ->
@@ -137,6 +145,73 @@ add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
 
 ########################################
+# the memory path's 450 MHz ends beside their HBM ports, SLR0 (since the first placed build)
+########################################
+# cd16e195 placed the channels' SmartConnects' 450 MHz side at -1.350 ns, 3.2 of 3.5 ns route
+# (sc_c4/inst/m00_nodes/m00_w_node -> m00_exit_pipeline). The HBM's AXI ports sit along SLR0's
+# bottom edge: each port's clock region from its site (the HBM IP's AXI interface site,
+# HBM_SNGLBLI_INTF_AXI_X<p>Y0; if the device names it otherwise, the VU47P's layout, four ports a
+# clock region, X<p/4>Y0, with a warning line), and a box of that column's two clock regions
+# (Y0:Y1) holds the SmartConnects and the 450 MHz register slices of the ports in it (a child of
+# pb_otpu_hbm; the channels' core-clock register slices and otpu_native_axi stay in its parent),
+# the host's SmartConnect and 450 MHz slice (u_hsc, u_hrs256) beside its port NPORT the same way.
+proc otpu_hbm_port_x {p} {
+  set site [get_sites -quiet HBM_SNGLBLI_INTF_AXI_X${p}Y0]
+  if {[llength $site] == 1} {
+    set cr [get_clock_regions -quiet -of_objects $site]
+    if {[regexp {^X(\d+)Y0$} [get_property NAME $cr] -> x]} {
+      puts "OTPU_FLOORPLAN hbm port $p site $site clock region [get_property NAME $cr]"
+      return $x
+    }
+  }
+  set x [expr {$p / 4}]
+  puts "OTPU_FLOORPLAN_WARNING hbm port $p: no site HBM_SNGLBLI_INTF_AXI_X${p}Y0 (or not in row Y0); X${x}Y0 from the VU47P's four ports a clock region"
+  return $x
+}
+set otpu_cols {}
+for {set otpu_p 0} {$otpu_p <= $otpu_nport} {incr otpu_p} {
+  set otpu_x [otpu_hbm_port_x $otpu_p]
+  if {$otpu_p < $otpu_nport} {
+    dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c$otpu_p"]
+    dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\\\[$otpu_p\\\].u_rs256"]
+  } else {
+    foreach otpu_c {u_hsc u_hrs256} { dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/$otpu_c"] }
+  }
+}
+set otpu_portbox {}
+dict for {otpu_x otpu_cl} $otpu_cols {
+  set otpu_pb pb_otpu_hbmx$otpu_x
+  create_pblock $otpu_pb
+  set_property PARENT pb_otpu_hbm [get_pblocks $otpu_pb]
+  resize_pblock $otpu_pb -add "CLOCKREGION_X${otpu_x}Y0:CLOCKREGION_X${otpu_x}Y1"
+  add_cells_to_pblock $otpu_pb [concat {*}$otpu_cl]
+  lappend otpu_portbox $otpu_pb
+  puts "OTPU_FLOORPLAN $otpu_pb X${otpu_x}Y0:X${otpu_x}Y1 cells=[llength $otpu_cl]"
+}
+# (the host chain's first register slice u_hrs512 sits with the PCIS gate in the shell's PCIS SLR,
+# pb_otpu_pcis, below: the SLR crossing runs from its registers to cl_axi_sc_1x1's entry register
+# slice beside port NPORT, flop to flop, as the AWS Shell Interface Specification asks)
+
+########################################
+# the shell's PCIS boundary: in the SLR of pb_otpu_pcis, found from the linked shell's cells
+########################################
+# The specification's table puts PCIS in the top SLR; round 3's placed report showed the shell's
+# PCIS register at SLICE_X176Y399 (SLR1). Ask the linked design: the cell driving the CL's
+# sh_cl_dma_pcis_awvalid input, its SLR; it must be pb_otpu_pcis's (fail closed: none found, or
+# another SLR, stops the build with the SLR named).
+set otpu_pcis_net [get_nets -quiet WRAPPER/CL/sh_cl_dma_pcis_awvalid]
+set otpu_pcis_drv [get_cells -quiet -of_objects [get_pins -quiet -leaf -of_objects $otpu_pcis_net -filter {DIRECTION == OUT}]]
+set otpu_pcis_slr [get_slrs -quiet -of_objects $otpu_pcis_drv]
+set otpu_box_slr [get_slrs -quiet -of_objects [get_clock_regions -quiet X5Y5]]
+if {[llength $otpu_pcis_slr] != 1 || [llength $otpu_box_slr] != 1} {
+  error "openTPU floorplan: the shell's PCIS driver of sh_cl_dma_pcis_awvalid: cell '$otpu_pcis_drv', SLR '$otpu_pcis_slr' (pb_otpu_pcis: '$otpu_box_slr')"
+}
+if {[get_property NAME $otpu_pcis_slr] ne [get_property NAME $otpu_box_slr]} {
+  error "openTPU floorplan: the shell's PCIS is in [get_property NAME $otpu_pcis_slr] ($otpu_pcis_drv), pb_otpu_pcis in [get_property NAME $otpu_box_slr]"
+}
+puts "OTPU_FLOORPLAN shell PCIS [get_property NAME $otpu_pcis_slr] ($otpu_pcis_drv): pb_otpu_pcis there"
+
+########################################
 # Parameters and containment
 ########################################
 proc otpu_contain {pb} {
@@ -150,13 +225,13 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb {pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem} {
+foreach pb [concat {pb_otpu_hbm} $otpu_portbox {pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem}] {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=5"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {5 + [llength $otpu_portbox]}]"
 
 ########################################
 # the core clock and the pump clock on one insertion delay (round 8)

@@ -19,9 +19,12 @@ module otpu_f2_hbm_axi #(
   parameter int NXR        = 0,         // SLR crossing stages each way (0: wired)
   parameter int CH_LOG2    = 29,        // a channel's window (a pseudo-channel's 512 MiB)
   parameter int QD         = 16,        // u_naxi's queues
-  parameter int READ_BURST = 4,         // u_naxi's longest read burst, native beats
+  parameter int READ_BURST = 8,         // u_naxi's longest read burst, native beats (8: 512 B,
+                                        //   the 16-beat AXI3 burst after the 512 -> 256 SmartConnect)
   parameter int READ_IDLE  = 1,         // u_naxi's burst gather timeout, core cycles
-  parameter bit READ_WAIT  = 1'b0,      // u_naxi's bursts: 0 only what is queued (no wait)
+  parameter bit READ_WAIT  = 1'b1,      // u_naxi's bursts wait READ_IDLE for the next command
+                                        //   (0: only what is queued; under the SmartConnect's
+                                        //   32 transactions 8-beat waiting bursts measured best)
   parameter int MAX_OUT    = 128,       // u_naxi's reads in flight (the adapter keeps <= 64)
   parameter bit ORDER      = 1'b1       // the read / write order rules (0: tests only)
 ) (
@@ -127,6 +130,9 @@ module otpu_f2_hbm_axi #(
 );
   initial if (NPORT < 1 || NPORT > 32 || NPORT * (64'd1 << CH_LOG2) > (64'd1 << 34))
     $fatal(1, "otpu_f2_hbm_axi: at most 32 channels within the HBM's 16 GiB");
+  // a read burst of READ_BURST 64-byte beats is 2 READ_BURST 32-byte beats on the HBM's AXI3
+  // port: at most 16 (AXI3's longest; the 1 x 1 SmartConnect would otherwise split it)
+  initial if (READ_BURST > 8) $fatal(1, "otpu_f2_hbm_axi: READ_BURST over 8 beats (16 AXI3 beats)");
   // the reset into a register here, replicated toward the channels (each u_naxi takes it as is)
   (* max_fanout = 4 *) logic rst_q;
   always_ff @(posedge clk) rst_q <= rst;

@@ -9,8 +9,11 @@
 // with RLAST at each burst's end (no back-pressure, as the SmartConnect towards otpu_native_axi,
 // whose R is always ready); a B per write counted in n_wdone. The model performs at most a
 // command a cycle per channel: the HBM port's 256 bits at 450 MHz (14.4 GB/s) are above a
-// native beat a core cycle (12.8), so the width conversion costs no bandwidth here. The shim's
-// queue adds one cycle (a command pushed is shown the next); the receipt's LAT takes it in.
+// native beat a core cycle (12.8), so the width conversion costs no bandwidth here. OT: at most
+// that many AXI transactions in flight a direction (the 1 x 1 SmartConnect's acceptance, 32 in
+// AWS's cl_axi_sc_1x1: a burst counts once, so READ_BURST is what makes the 64 reads a channel
+// fit). The shim's queue adds one cycle (a command pushed is shown the next); the receipt's LAT
+// takes it in.
 // Same images, pokes and dump as otpu_native_mem (it is the model behind the shim).
 module otpu_naxi_mem #(
   parameter int WORDS = 1 << 18,
@@ -20,7 +23,10 @@ module otpu_naxi_mem #(
   parameter int NXR   = 0,               // SLR stages each way (the build's 3)
   parameter int READ_BURST = 4,
   parameter int READ_IDLE  = 1,
-  parameter bit READ_WAIT  = 1'b0
+  parameter bit READ_WAIT  = 1'b0,
+  parameter int OT         = 32          // AXI transactions in flight a direction (the 1 x 1
+                                         //   SmartConnect's S00 / M00 acceptance: AWS's
+                                         //   cl_axi_sc_1x1 takes 32; 0: no limit)
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -101,9 +107,10 @@ module otpu_naxi_mem #(
     logic [575:0] w_d;
     logic [15:0]  wd_seen;
     logic [15:0]  bpend;
+    logic [7:0]   rd_ot, wr_ot;              // bursts / writes accepted, not yet answered
     wire [4:0] nar = 5'(arlen) + 5'd1;
-    assign arready = qn <= 8'(QN - 17);
-    assign awready = !aw_p && qn <= 8'(QN - 17);
+    assign arready = qn <= 8'(QN - 17) && (OT == 0 || rd_ot < 8'(OT));
+    assign awready = !aw_p && qn <= 8'(QN - 17) && (OT == 0 || wr_ot < 8'(OT));
     assign wready = !w_p && wn < 5'd15;
     assign m_cvalid[c] = qn != 0;
     assign {m_cwe[c], m_caddr[c]} = q[qh[5:0]];
@@ -120,7 +127,10 @@ module otpu_naxi_mem #(
       if (rst) begin
         qh <= '0; qt <= '0; qn <= '0; wh <= '0; wt <= '0; wn <= '0; lh <= '0; lt <= '0;
         rleft <= '0; aw_p <= 1'b0; w_p <= 1'b0; wd_seen <= '0; bpend <= '0;
+        rd_ot <= '0; wr_ot <= '0;
       end else begin
+        rd_ot <= rd_ot + 8'(ar_tk) - 8'(rvalid && rlast);
+        wr_ot <= wr_ot + 8'(awvalid && awready) - 8'(bvalid && bready);
         if (rvalid) begin
           if (rleft == 0) begin rleft <= lens[lh] - 5'd1; lh <= lh + 1'b1; end
           else rleft <= rleft - 5'd1;

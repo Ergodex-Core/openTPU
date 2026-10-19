@@ -15,6 +15,12 @@ and runs S slices (S x NCH <= 32) at 200 MHz with the TMEM pumped at 400 MHz.
 | `f2-hbm16` | 1 | 16 | 0-15 | 8 GiB (CFG_DRAM 33) | 4 GiB (see "Past 4 GiB a slice") |
 | `f2-hbm:p2` | 1 | 8 | 0-7 | 4 GiB | 4 GiB; port B two chunks a cycle (PORTB 2, docs/wide_port.md) |
 | `f2-hbm16:p4` | 1 | 16 | 0-15 | 8 GiB | 4 GiB; port B four chunks a cycle (PORTB 4) |
+| `f2-hbm:p4rl8a64c150` | 1 | 8 | 0-7 | 4 GiB | 4 GiB; the p4rl8a64 slice at a 150 MHz core (TMEM 300; the variant's `core_mhz`, docs/wide_port.md "Alex's shell at 150 MHz") |
+
+The host's PCIS has its own HBM port after the channels' (port S x NCH): S x NCH <= 31, so
+`f2-hbm:s4` (32 channels) is refused since the rework below. build.py takes a 200, 175 or 150 MHz
+core (its HBM_CORE_MMCM: VCO 1200 /6 /3, PFD 50 VCO 1050 /6 /3, VCO 1200 /8 /4) into the CL's
+u_mmcm through opentpu_geometry.vh, the block design's core_clk and CORE_KHZ.
 
 Every one has the f2 target's arch (the YPCB card's m4: CFG_HASH 4ffd1e17 at S = 1, the same
 programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
@@ -31,14 +37,19 @@ endpoints, at -2.2 ns for four rounds; Alex's 450 MHz logic is the SmartConnects
 wrapper, docs/wide_port.md "Alex's shell").
 
 ```
-  SLR2 (core 200 / clk_f 400)        SLR1        SLR0, core 200 MHz        | SmartConnect (u_sc)       | 450 MHz | HBM
- slice -- otpu_native_dram (NCH) --+ xr - xr - xr -- u_naxi 0 (AXI4 512 b) -- sc_c0: S00 @200 \           |
-                                   |                                                  S01 @250 -> M00 AXI3 256 b -- geo -- port 0 (PC 0)
-                                   + xr - xr - xr -- u_naxi 1 ---------------- sc_c1 ...                    -- port 1 (PC 1)
-                                   ...                                                  ^ (S01 of every sc_c)
- PCIS (aclk 250 MHz) -- otpu_f2_pcis_gate (skids; AR held behind writes) -- sc_host 1 x NCH @250 (by address)
+  SLR2 (core clk)                     SLR1      SLR0, core clk                            | 450 MHz (hclk)                 | HBM
+ slice -- otpu_native_dram (NCH) --+ xr - xr - xr -- u_naxi 0 -- rs512 -- sc_c0 (1 x 1, clock + width) -- rs256 -- port 0 (PC 0)
+                                   + xr - xr - xr -- u_naxi 1 -- rs512 -- sc_c1 ...                     -- rs256 -- port 1 (PC 1)
+                                   ...                                                                            ...
+ PCIS (aclk 250, SLR1) -- otpu_f2_pcis_gate (skids; AR held behind writes) ==SLR==> rs512 -- cl_axi_sc_1x1 (AWS's) -- rs256 -- port NCH
+                                                                     (the global address switch: port NCH reaches every PC)
  OCL  (aclk) -- otpu_axil_cdc (held while PCIS writes are unanswered) -- otpu_axil_xr (3 stages) -- otpu_ctrl
 ```
+(rs512 = the HDK's prebuilt axi_register_slice, 512-bit AXI4; rs256 = its cl_axi3_256b_reg_slice,
+256-bit AXI3; the shape of AWS's cl_dram_hbm_dma, hdk/cl/examples/cl_dram_hbm_dma/design/
+cl_hbm_axi4.sv. Until the first placed build, cd16e195, each channel had a 2 x 1 SmartConnect
+shared with the host's branch and the host a 1 x NCH SmartConnect demux: "Since the first placed
+build" below.)
 
 - `rtl/mem/otpu_native_dram.sv` (the slice's DRAM adapter) takes `NCH` channels (a power of two,
   2 to 32). At NCH = 2 it is the two-channel adapter in every bit and every cycle (below).
@@ -106,6 +117,84 @@ At NCH > 2 port B's request passes a register in the adapter (BREG): the pair's 
 bits deep) would otherwise run at the end of the slice's grant chain into every queue write.
 b_rdy reserves room for it (QD - 1, OD - 1). One cycle on port B's reads against the HBM's
 hundreds of nanoseconds.
+
+### Since the first placed build: AWS's chain, the host on its own port (2026-10-20)
+
+The first F2 build of this path (cd16e195, f2-hbm:p4rl8a64 at 200 MHz) placed at WNS -1.609 ns:
+clk_main_a0 -1.609 (5,034 endpoints, all inside the host's 1 x 8 SmartConnect: 21,625 LUTs /
+46,078 FFs, 2,091-bit register-slice vectors, 4.7 of 5.2 ns route), hclk -1.350 (17,226
+endpoints in the 2 x 1 channel SmartConnects' 450 MHz side, each 8,548 LUTs / 16,207 FFs, 3.2 of
+3.5 ns route), the core clock -1.078 (the MXU, 10 levels), clk -> clk_f -0.756 and clk_f -> clk
+-0.793 (the pumped TMEM). The rework, after AWS's own HBM designs:
+
+- **The chain of AWS's cl_dram_hbm_dma** per channel: u_naxi (core clock) -> `axi_register_slice`
+  (the HDK's prebuilt, 512-bit AXI4, g_ch[c].u_rs512) -> a 1 x 1 SmartConnect (sc_c<c>, the
+  clock and width converter: create_hbm_sc.tcl copies every setting of the HDK's
+  cl_axi_sc_1x1.bd, its cell's CONFIG and its AXI4 / AXI3 ports', but the slave side's clock,
+  the core's) -> `cl_axi3_256b_reg_slice` (the HDK's, at 450 MHz, g_ch[c].u_rs256) ->
+  cl_mem_hbm_wrapper port c. otpu_hbm_geometry moved before the 450 MHz slice, so every AXI
+  input of the wrapper comes from that slice's registers (AWS cl_mem_perf's q1_* stage). No
+  crossbar, no 2-input SmartConnect anywhere.
+- **The host on its own HBM port** (port NCH, the next after the channels; f2-hbm:s4's 32
+  channels leave none and are refused): otpu_f2_pcis_gate -> axi_register_slice (both in the
+  shell's PCIS SLR, SLR1; the SLR crossing runs flop to flop from the slice's registers to the
+  SmartConnect's entry slice in SLR0) -> AWS's cl_axi_sc_1x1 as shipped (S00 at the shell's 250
+  MHz, M00 AXI3 256 b at 450, beside port NCH) ->
+  cl_axi3_256b_reg_slice -> port NCH. The cl_hbm IP's global address switch is on
+  (USER_SWITCH_ENABLE_00 / 01 TRUE, build.py checks it), so port NCH reaches every channel's
+  pseudo-channel at the switch's latency: BAR4 offset = HBM address, as before.
+- **Host writes before a run's reads** (different HBM ports, no AXI order between them): the
+  run starts with an OCL write (RUN), and otpu_axil_cdc holds every OCL write while
+  `pcis_wbusy` is high: from a PCIS write's AW until its B is given back to the shell. The B
+  comes back through cl_axi_sc_1x1 from the HBM controller of the pseudo-channel that holds
+  the address (through the switch), sent once the write is in that controller; the run's first
+  read of the address reaches the same controller (each pseudo-channel has one) later, after
+  RUN's register write, the board's control path and the slice's first DMA command, and the
+  controller orders a read behind an earlier write to its address. So a run's reads see every
+  host write whose B came back before RUN, which pcis_wbusy makes all of them. The host's own
+  reads after its writes are held in the gate as before (same port, in order anyway). If the
+  card ever shows otherwise, a host-side fence (a BAR4 read of the last written address before
+  RUN: Alex's transport does it) closes it without RTL.
+- **Reads in flight.** cl_axi_sc_1x1's SmartConnect accepts 32 transactions a direction (its
+  S00 / M00; the AXI3 port says 64): the per-channel cap. otpu_native_axi's READ_BURST is now 8
+  (512 B: the 16-beat AXI3 burst AWS cl_mem_perf measured 426 GB/s read with) so 32 bursts are
+  16 KB in flight a channel against 14.4 GB/s x 280 ns = 4 KB, and READ_WAIT is 1 again (a burst
+  waits READ_IDLE = 1 cycle for its next command): under the 32-transaction cap the receipt
+  measured waiting 8-beat bursts best (1,027,452 cycles at 150 MHz; 4-beat bursts from what is
+  queued 1,030,204; 8-beat from what is queued 1,108,236: the queue's 10 usable slots stall
+  behind a held burst), against 947,522 with no cap (docs/wide_port.md "Alex's shell at 150 MHz").
+  create_hbm_sc.tcl fails closed unless every sc_c<c>/S00_AXI takes >= 32 each way and 8-beat
+  bursts after validation, and logs the values (OTPU_HBM_SC lines). The receipt models the cap
+  (OTPU_NAXI_OT, default 32): docs/wide_port.md "Alex's shell at 150 MHz".
+- **Placement**: pb_otpu_hbm takes AWS's SLR0 outline (cl_mem_perf's pblock_CL_SLR0: X0Y0:X3Y3,
+  X4Y0:X7Y0, X4Y3, X5Y1:X5Y3, X6Y1 and its four SLICE ranges); inside it a box per clock-region
+  column of HBM ports (pb_otpu_hbmx<x>, that column's Y0:Y1) holds the SmartConnects and the
+  450 MHz slices of its ports, the host's SmartConnect and 450 MHz slice in its port's column
+  (its 512-bit slice with the gate in pb_otpu_pcis); each port's column
+  from its HBM_SNGLBLI_INTF_AXI_X<p>Y0 site (a warning line and four ports a clock region if the
+  device names it otherwise). The shell's PCIS: the floorplan finds the cell driving
+  sh_cl_dma_pcis_awvalid in the linked design and fails closed unless it is in pb_otpu_pcis's
+  SLR (SLR1 on the VU47P: round 3's placed report put that register at SLICE_X176Y399; the
+  Shell Interface Specification's table says TOP). pb_otpu_pcis (X5Y5:X5Y6) is beside that
+  register, outside AWS's PCIS-crossbar box (X0Y4:X4Y7) but in its pblock_CL_SLR1 (X5Y4:X5Y7).
+- **Timing hygiene** (the Shell Interface Specification): `shreg_extract = "no"` on otpu_xr's
+  stages and otpu_skidbuf's registers; each new domain's reset registered again from its
+  synchronizer with max_fanout (sc_aresetn core, sc_host_aresetn 250, sc_hbm_aresetn 450);
+  report_design_analysis -logic_level_distribution after synthesis and after routing, and
+  -congestion after routing (reports, not gates).
+- **The HBM monitor APB** (an unconnected monitor interface fails AFI creation): both racks'
+  `hbm_apb_preset_n_<0/1>` straight into cl_mem_hbm_wrapper's `i_hbm_apb_preset_n_<0/1>`
+  (MON_APB_<0/1>_PRESET_N inside it), every `hbm_apb_*_<0/1>` output from its `o_hbm_apb_*`,
+  apb_clk = clk_hbm_ref, as cl_mem_perf; build.py checks the cl_hbm IP's USER_MON_APB_EN is
+  TRUE (and the switch), tests/test_f2_build.py that the CL connects all 22 signals.
+- **The crossings** (none a plain two-flop path at 450 MHz): core <-> clk_main_a0 in
+  otpu_axil_cdc (the OCL: held words, toggles through two-flop synchronizers) and the board's
+  LED / HBM-ready levels, bounded by cl_timing_user_hbm.tcl's datapath-only max delays at the
+  destination's period; core -> hclk and hclk -> core only inside each sc_c<c> (SmartConnect's
+  clock converter, its own scoped constraints); clk_main_a0 <-> hclk only inside cl_axi_sc_1x1
+  and the HDK wrapper (their own); the resets through the async-assert synchronizers (their
+  linked exception, cl_pnr_user.tcl, takes hbm_reset_n); the MMCMs' LOCKED false-pathed to
+  reset pins. No otpu_afifo in the build.
 
 ### The memory path (Alex's shell, since 2026-10-19)
 

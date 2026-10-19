@@ -173,20 +173,23 @@ def _hbm_axi_exe(**params):
 
 
 @pytest.mark.parametrize("nport,core_half,axi_half,hbm_half,nxr,burst,wait", [
-    (8, 5, 4, 2, 3, 4, 0),     # the build: 8 channels at 200 / 250 / 450 (ratios), three SLR stages
-    (8, 5, 4, 2, 0, 4, 0),     # wired
-    (8, 5, 4, 2, 3, 16, 1),    # Alex's waiting 16-beat bursts
-    (16, 5, 4, 2, 3, 4, 0),    # f2-hbm16 / S = 2 x 8
-    (4, 3, 5, 2, 3, 4, 0),     # a fast core against a slow shell clock
-    (32, 5, 4, 2, 0, 4, 0)])   # every port (S = 4 x 8)
+    (8, 5, 4, 2, 3, 8, 1),     # the build: 8 channels at 200 / 250 / 450 (ratios), three SLR stages,
+                               #   8-beat waiting bursts (the AXI3 port's 16-beat burst)
+    (8, 5, 4, 2, 0, 8, 1),     # wired
+    (8, 5, 4, 2, 3, 8, 0),     # bursts only from what is queued
+    (8, 5, 4, 2, 3, 4, 0),     # 4-beat bursts
+    (16, 5, 4, 2, 3, 8, 1),    # f2-hbm16 / S = 2 x 8
+    (4, 3, 5, 2, 3, 8, 1),     # a fast core against a slow shell clock
+    (8, 7, 4, 2, 3, 8, 1)])    # f2-hbm:...c150: a 150 MHz core against 250 / 450 (the ratios)
 def test_f2_hbm_axi(have_verilator, nport, core_half, axi_half, hbm_half, nxr, burst, wait):
-    """Every channel's native contract through otpu_native_axi and a SmartConnect + HBM model
+    """Every channel's native contract through otpu_native_axi and a SmartConnect + HBM model (the
+    host on its own HBM port through the switch since the first placed build)
     (crossing latencies, in order per slave, reads overtaking writes, two HBM beats a 512-bit
     beat); channels inside their pseudo-channels, INCR within 4 KiB, streams coalesced; the
     host's writes and reads (held behind its unanswered writes) in its order with its IDs;
     pcis_wbusy while a host write is unanswered."""
     exe = _hbm_axi_exe(NPORT=nport, CORE_HALF=core_half, AXI_HALF=axi_half, HBM_HALF=hbm_half,
-                       NXR=nxr, READ_BURST=burst, READ_WAIT=wait, READ_IDLE=4 if wait else 1)
+                       NXR=nxr, READ_BURST=burst, READ_WAIT=wait, READ_IDLE=1)
     for seed, nb in [(1, 1), (7, 6), (31, 64)]:
         r = subprocess.run([str(exe), f"+seed={seed}", f"+nb={nb}", "+cycles=8000"],
                            capture_output=True, text=True, timeout=600)

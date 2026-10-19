@@ -1596,6 +1596,72 @@ tests/test_rtl.py `-k "replay or act_reads or attention or lane_count"` (OTPU_TA
 OTPU_NCH=8) 27 passed, 1 skipped, tests/test_observability.py 18, tests/test_wide_port_rtl.py
 168 (63 minutes, no xdist).
 
+### Alex's shell at 150 MHz, and AWS's chain (2026-10-20; Verilator only)
+
+The first F2 build of cd16e195 (f2-hbm:p4rl8a64, 200 MHz) placed at WNS -1.609 ns: clk_main_a0
+-1.609 inside the host's 1 x 8 SmartConnect (21.6K LUTs / 46K FFs), hclk -1.350 inside the 2 x 1
+channel SmartConnects' 450 MHz side (8.5K LUTs / 16.2K FFs each), the core clock -1.078 (the
+MXU), clk -> clk_f -0.756 and clk_f -> clk -0.793 (the pumped TMEM). The rework (docs/f2_hbm.md
+"Since the first placed build"):
+
+- **f2-hbm:p4rl8a64c150**, the same slice at a 150 MHz core (TMEM pumped at 300; the shell's 250
+  and the HBM AXI's 450 unchanged): a variant may now set `core_mhz` (opentpu/target.py
+  VARIANT_PLATFORM_KEYS); build.py's HBM_CORE_MMCM gives u_mmcm VCO 1200 /8 /4 (200: /6 /3; 175:
+  PFD 50, VCO 1050, /6 /3), CORE_KHZ 150000 into CFG (the host's tok/s at the real clock), the
+  block design's core_clk at 150 MHz; the CDC bounds and otpu_clk2x read the clocks' periods
+  (6.667 / 3.333). It fixes the core clock's -1.078 and clk -> clk_f's -0.756 with ~1.67 ns of
+  period; clk_f -> clk (the pumped read data's return, one fast period) gains ~0.83 ns, to ~+0.04:
+  a capture register on clk at the piece would add a core cycle of TMEM read latency, not taken;
+  otpu_clk2x.tcl now prints the worst return paths and their starts (if they are not a piece's
+  qa / qb register, they are outside the read-data exception by design).
+- **AWS's chain** (cl_dram_hbm_dma's cl_hbm_axi4.sv) per channel and for the host: the HDK's
+  axi_register_slice -> a 1 x 1 SmartConnect (the channels': cl_axi_sc_1x1's settings with S00
+  at the core clock; the host: cl_axi_sc_1x1 as shipped) -> cl_axi3_256b_reg_slice at 450 ->
+  the HBM port; the host on its own port (8), reaching the channels' pseudo-channels through the
+  global switch. Each port's SmartConnect and 450 MHz slice boxed in its port's clock-region
+  column (Y0:Y1).
+- **otpu_native_axi READ_BURST 8, READ_WAIT 1** (bursts wait one cycle for their next command):
+  AWS's 1 x 1 SmartConnect takes 32 transactions a direction, so 512-byte bursts keep 16 KB in
+  flight a channel. The receipt now caps the shim at 32 transactions (OTPU_NAXI_OT).
+
+Expected slack by domain (reasoning, not a placed number): the core clock at 150 MHz has +1.67
+ns over 200's period against -1.078 (MXU) and -0.756 (clk -> clk_f): ~+0.6 / +0.9 ns; clk_f ->
+clk ~+0.04 ns (one fast period gains 0.83 against -0.793): the tightest, riding on the margin and
+the TMEM box; clk_main_a0: the 1 x 8 demux (all 5,034 failing endpoints) is gone, the host's
+chain is AWS's own (closed in AWS's examples at 250) and the shell -> gate -> slice crossing flop
+to flop: expected positive; hclk: the failing structure (a 2 x 1 SmartConnect's node FIFO into
+its exit register, route-dominated) is replaced by 1 x 1s (no arbitration, half the slave side)
+each boxed by its port with a full register slice before the port: expected to close, the risk
+being the SmartConnect's own node -> exit path if its column box is congested.
+
+IP sizes (estimates from the placed build's per-instance numbers; synthesis will give them):
+before, per channel 8.5K LUT / 16.2K FF (2 x 1 SmartConnect) x 8 + host demux 21.6K / 46.1K =
+89.6K LUT / 175.7K FF; after, per channel ~5K / ~9K (1 x 1 SmartConnect) + ~0.7K / ~2.6K (512-bit
+slice, full) + ~0.4K / ~1.5K (256-bit slice) = ~6.1K LUT / ~13K FF / 0 BRAM, x 8 + the host chain
+~6K / ~13K = ~55K LUT / ~117K FF. NCH 16 (f2-hbm16): ~104K LUT / ~221K FF in SLR0's ~290K LUTs;
+32 channels leave the host no port (refused).
+
+**The receipt at 150 MHz** (tools/perf_qwen.py `--model gemma3 --layers 4 --wformat int8
+--head-format int8 --mhz 150 --portb 4 --rowlanes --mcols 8 --aline 64`, OTPU_TARGET=f2-hbm
+OTPU_NCH=8; the path's latency in nanoseconds held from the 200 MHz estimate, ~335 ns at the
+native port with AWS's chain's two register slices, so 50 cycles at 150 MHz: the native model at
+--lat 53 (with u_naxi's 3), u_naxi + the SLR chain in the loop at LAT 49):
+
+| memory model at 150 MHz | 4 layers + head | whole model, int8 tok/s |
+|---|---|---|
+| native, --lat 53 | 871,485 | 67.8 |
+| u_naxi + SLR chain, no transaction cap (burst 4, no wait) | 947,522 | 62.9 |
+| the same, 32 transactions (the SmartConnect), burst 4, no wait | 1,030,204 | 58.3 |
+| the same, burst 8, no wait | 1,108,236 | 54.3 |
+| **the same, burst 8, waiting (the build)** | **1,027,452** | **58.5** |
+
+(200 MHz, the same methodology before the cap: 1,133,177, 71.2 tok/s; the reference 83.5.) LPN
+(tools/wideport_lpn.py --mhz 150): --lat 53 902,447 (+3.6% vs the native model), --lat 59
+(53 + the chain's 6) 976,038 (+3.0% vs the uncapped loop, -5.0% vs the build's), --lat 62 (+3
+for the bursts' wait) 1,013,343 (-1.4% vs the build's 1,027,452; mean phase error 4.2%): 60.0
+tok/s. The lever stays reads in flight: the adapter's 64 a channel and the SmartConnect's 32
+transactions.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
