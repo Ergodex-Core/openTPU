@@ -1004,3 +1004,95 @@ def test_hbm_sc_block_design_is_per_channel(tmp_path, nport, khz, sc_fault):
     assert (ipdir / 'ip_done.txt').read_text().startswith('IP_DONE')
     inst = (ipdir / 'otpu_hbm_sc_inst.vh').read_text()
     assert f'.S_N{nport - 1}_araddr(cs_araddr[{nport - 1}])' in inst
+
+
+# ---- v5 (docs/full_hbm.md): the engine path's floorplan, cl_pnr_user_hbm5.tcl
+# The mock's geometry: S 4 x NCH 2 (8 engines, g_slice[1..3]), the host muxed onto port 7; the
+# chains' register vectors answered as r_reg[i] cells for a `-hierarchical -filter` query
+FLOORPLAN5_HARNESS = FLOORPLAN_HARNESS + r'''
+dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y2 {s0a}
+dict set sites CLOCKREGION_X1Y5:CLOCKREGION_X3Y6 {s1a}
+dict set sites CLOCKREGION_X0Y9:CLOCKREGION_X3Y10 {s2a}
+dict set sites CLOCKREGION_X4Y9:CLOCKREGION_X7Y10 {s2b}
+proc get_cells {args} {
+  set pattern [lindex $args end]
+  if {$::fault eq "missing" && [string match *u_chub* $pattern]} { return {} }
+  if {[regexp {^(.*)/r_reg\\\[\*\\\]$} $pattern -> stage]} {
+    set out {}
+    for {set i 0} {$i < [expr {8 * 517}]} {incr i} { lappend out "$stage/r_reg\[$i\]" }
+    return $out
+  }
+  if {[string match {*g_port\[\*\]*} $pattern]} {
+    set out {}
+    for {set i 0} {$i < 8} {incr i} { lappend out "${pattern}$i" }
+    return $out
+  }
+  if {[string match {*g_slice\[\*\]*} $pattern]} { return [list ${pattern}1 ${pattern}2 ${pattern}3] }
+  if {[string match {*g_x\[\*\]*} $pattern]} { return [list ${pattern}0 ${pattern}1 ${pattern}2 ${pattern}3] }
+  return [list $pattern]
+}
+'''
+
+
+@pytest.mark.parametrize('fault', ['none', 'missing'])
+def test_hbm5_floorplan_places_slices_per_slr_and_fails_closed(fault):
+    """v5: slice 0 with the engines in SLR0, slice 1 with the hub, ctrl and trace in SLR1,
+    slices 2 and 3 in SLR2; the chains' bits by port and stage; a TMEM box a slice; the host's
+    chain and mux beside port NPORT - 1; a renamed hierarchy stops the build."""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm5.tcl'
+    report = r'''
+puts "PBLOCKS $pblocks"
+foreach r $ranges { puts "RANGE [lindex $r 0] [lindex $r 1]" }
+foreach c $cells { puts "CELL [lindex $c 0] [lindex $c 1]" }
+foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
+'''
+    harness = (f'set fault {fault}\n' + FLOORPLAN5_HARNESS +
+               f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if fault == 'missing':
+        assert result.returncode != 0 and 'no cells match' in result.stderr
+        assert 'OTPU_FLOORPLAN_APPLIED' not in result.stdout
+        return
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert 'OTPU_FLOORPLAN ports=8 slices=4 nch=2' in out
+    assert 'OTPU_FLOORPLAN host port 7 mux=1' in out
+    assert 'OTPU_FLOORPLAN_APPLIED pblocks=10' in out      # 4 + 2 port columns + 4 TMEM boxes
+    assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
+    cells = {}
+    for line in out.splitlines():
+        if line.startswith('CELL '):
+            _, pb, cell = line.split(' ', 2)
+            cells.setdefault(pb, []).append(cell)
+    hbm, mid, board = cells['pb_otpu_hbm'], cells['pb_otpu_mid'], cells['pb_otpu_board']
+    # (the mock echoes a pattern as the cell: an index built with escaped brackets reads g_x\[2\])
+    e = lambda name: name.replace('[', '\\[').replace(']', '\\]')          # noqa: E731
+    # the slices by SLR
+    assert 'WRAPPER/CL/u_sys/u_board/u_slice' in hbm and 'WRAPPER/CL/u_sys/u_board/u_mem' in hbm
+    assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.u_chub' in mid
+    assert 'WRAPPER/CL/u_sys/u_board/u_ctrl' in mid and 'WRAPPER/CL/u_sys/u_board/u_trace' in mid
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_slice') in board and e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_mem') in board
+    # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's chain and mux)
+    assert all(f'WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng{p}' in hbm for p in range(8))
+    assert 'WRAPPER/CL/u_sys/u_mem/g_mux.u_mux' in cells['pb_otpu_hbmx1'] and 'WRAPPER/CL/u_hsc' in cells['pb_otpu_hbmx1']
+    assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng') in cells['pb_otpu_hbmx1']
+    # the hub links: slice 2's rx / tx / port in SLR2, the hub's tx / rx in SLR1
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in board and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in board
+    assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid
+    # the chains' bits: port 0 (slice 0) every stage in SLR0; port 2 (slice 1) stage 1 and 2 in
+    # SLR1; port 6 (slice 3) stage 1 in SLR1, stage 2 in SLR2
+    def stage(k, p, lo, w):
+        return e(f'WRAPPER/CL/u_sys/u_mem/g_xr.g_x[{k}].u_up') + f'/r_reg[{lo + p * w}]'
+    assert stage(0, 0, 0, 517) in hbm and stage(2, 0, 0, 517) in hbm
+    assert stage(1, 2, 0, 517) in mid and stage(2, 2, 516, 517) in mid
+    assert stage(1, 6, 0, 517) in mid and stage(2, 6, 0, 517) in board and stage(0, 6, 0, 517) in hbm
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[1160]' in board     # slice 2's write bus end
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[0]' in hbm          # slice 0's
+    # a TMEM box a slice, within the slice's pblock
+    assert 'PROP pb_otpu_tmem0 PARENT pb_otpu_hbm' in out and 'PROP pb_otpu_tmem1 PARENT pb_otpu_mid' in out
+    assert 'PROP pb_otpu_tmem3 PARENT pb_otpu_board' in out
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_tmem' in cells['pb_otpu_tmem3']
+    assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
