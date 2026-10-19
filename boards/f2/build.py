@@ -61,6 +61,13 @@ def is_hbm(t: target.Target) -> bool:
     return t.platform.get('mem') == 'hbm'
 
 
+def is_engine(t: target.Target) -> bool:
+    """v5's memory path (platform mem_path "engine": a 450 MHz engine per HBM port, the host's
+    cl_axi_sc_1x1 kept; docs/full_hbm.md): the hbm5 top, synthesis script and floorplan, no
+    channel SmartConnect block design to generate."""
+    return is_hbm(t) and t.platform.get('mem_path') == 'engine'
+
+
 def check_hbm_ip(hdk: Path) -> None:
     """The HDK's cl_hbm IP as the HBM CL assumes it: both stacks, 450 MHz AXI ports, the
     switch on (every port reaches all 16 GiB; the CL keeps each channel on its own port's
@@ -138,15 +145,18 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     (`wrapper`; default the HDK's beside `sh`)."""
     if out.exists():
         raise RuntimeError(f'{out} already exists; choose a new run directory')
-    hbm = is_hbm(t)
+    hbm, engine = is_hbm(t), is_engine(t)
     p = t.platform
+    host_mux = False
     if hbm:
         nport = t.arch['S'] * p['channels_per_slice']
-        if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] != 2**29 or nport > 31 or
+        host_mux = engine and nport == 32       # (the host through port 31's mux: docs/full_hbm.md)
+        if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] != 2**29 or
+                nport > (32 if engine else 31) or
                 p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
             raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core (the pumped TMEM at '
                                '2x), 512 MiB channels, a power-of-two NCH and S x NCH <= 31 ports (the host '
-                               'has its own HBM port)')
+                               'has its own HBM port; the engine path takes 32 with the host muxed)')
     elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')
     cl = out / 'cl_opentpu'
@@ -154,9 +164,21 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     shutil.copytree(ROOT / 'boards/f2/build', cl / 'build')
     scripts, cons = cl / 'build/scripts', cl / 'build/constraints'
     if hbm:
-        # the HBM CL's top, synthesis script and CDC constraints in the DDR ones' places
+        # the HBM CL's top, synthesis script and CDC constraints in the DDR ones' places (the
+        # engine path: its own top and synthesis script, the SmartConnect path's left out)
         (cl / 'design/cl_opentpu.sv').unlink()
-        (scripts / 'synth_cl_opentpu_hbm.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
+        if engine:
+            (cl / 'design/cl_opentpu_hbm.sv').unlink()
+            (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
+            (scripts / 'synth_cl_opentpu_hbm5.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
+            (cons / 'cl_pnr_user_hbm.tcl').unlink()
+            (scripts / 'create_hbm_sc.tcl').unlink()
+            (scripts / 'hbm_sc_inst.tcl').unlink()
+        else:
+            (cl / 'design/cl_opentpu_hbm5.sv').unlink()
+            (scripts / 'synth_cl_opentpu_hbm5.tcl').unlink()
+            (scripts / 'synth_cl_opentpu_hbm.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
+            (cons / 'cl_pnr_user_hbm5.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
         # the linked-reset exception covers the HBM clock's synchronizer too, and the HBM
         # build's floorplan (its pblocks under the HDK's pblock_CL) follows it in the one file
@@ -165,7 +187,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         old = 'foreach stem {main_reset_n bridge_reset_n core_reset_n}'
         if old not in pnr.read_text():
             raise RuntimeError(f'{pnr}: the reset synchronizer list moved')
-        floorplan = cons / 'cl_pnr_user_hbm.tcl'
+        floorplan = cons / ('cl_pnr_user_hbm5.tcl' if engine else 'cl_pnr_user_hbm.tcl')
         pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' +
                        floorplan.read_text())
         floorplan.unlink()
@@ -181,9 +203,12 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
             f"localparam real MMCM_DIV0 = {d0};\nlocalparam int MMCM_DIV1 = {d1};\n")
     else:
         (cl / 'design/cl_opentpu_hbm.sv').unlink()
+        (cl / 'design/cl_opentpu_hbm5.sv').unlink()
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
+        (scripts / 'synth_cl_opentpu_hbm5.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
         (cons / 'cl_pnr_user_hbm.tcl').unlink()
+        (cons / 'cl_pnr_user_hbm5.tcl').unlink()
         (scripts / 'create_hbm_sc.tcl').unlink()
         (scripts / 'hbm_sc_inst.tcl').unlink()
     files = target.sources(t)
@@ -196,6 +221,9 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         params.pop('DDR_MTS')
         params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16))
         sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_hbm_sys.sv'
+        if engine:                      # v5's sys top: the host's mux at 32 ports
+            params.update(HOST_MUX=int(host_mux))
+            sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_hbmeng_sys.sv'
     else:
         for name in ('S', 'NCH', 'CH_LOG2', 'DRAM_LOG2'):
             params.pop(name)
@@ -456,7 +484,7 @@ def main() -> None:
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
     ip_cmd = (hbm_sc_command(cl, t, out / 'hbm_sc.log', hdk)
-              if is_hbm(t) and a.flow != 'ImplCL' else None)
+              if is_hbm(t) and not is_engine(t) and a.flow != 'ImplCL' else None)
     (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),
         'environment': {k: env[k] for k in env if k.startswith('HDK_') or

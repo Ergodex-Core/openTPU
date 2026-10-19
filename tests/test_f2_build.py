@@ -1096,3 +1096,58 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert 'PROP pb_otpu_tmem3 PARENT pb_otpu_board' in out
     assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_tmem' in cells['pb_otpu_tmem3']
     assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
+
+
+@pytest.mark.parametrize('name,S,nch,host_mux', [('f2-hbm:v5', 4, 8, 1), ('f2-hbm:v5s3', 3, 8, 0)])
+def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out(tmp_path, name, S,
+                                                                                nch, host_mux):
+    """v5 (docs/full_hbm.md): the engine top in cl_opentpu's place, its synthesis script (no
+    channel block design), the v5 floorplan, the engine sources, HOST_MUX at 32 ports, the
+    adapter's NRD; the SmartConnect path's files left out and no SmartConnect to generate."""
+    shell = tmp_path / 'shell'
+    scripts = shell / 'build/scripts'
+    scripts.mkdir(parents=True)
+    (scripts / 'build_all.tcl').write_text('# test HDK script\n')
+    wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
+    wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
+    t = T.load(name)
+    assert flow.is_hbm(t) and flow.is_engine(t) and t.arch['S'] == S
+    out = tmp_path / 'run'
+    cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
+    d = cl / 'design'
+    assert not (d / 'cl_opentpu.sv').exists() and not (d / 'cl_opentpu_hbm.sv').exists()
+    assert (d / 'cl_opentpu_hbm5.sv').is_file()
+    assert (cl / 'build/scripts/synth_cl_opentpu.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm5.tcl').read_bytes()
+    assert not (cl / 'build/scripts/synth_cl_opentpu_hbm.tcl').exists()
+    for f in ('create_hbm_sc.tcl', 'hbm_sc_inst.tcl'):
+        assert not (cl / 'build/scripts' / f).exists()
+    pnr = (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
+    floorplan = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm5.tcl').read_text()
+    assert pnr.endswith('\n' + floorplan) and 'hbm_reset_n}' in pnr
+    assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_pnr_user_hbm5.tcl').exists()
+    params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
+    assert (params['S'], params['NCH'], params['HOST_MUX'], params['NRD']) == (S, nch, host_mux, 128)
+    assert params['FIFO_DEPTH'] == 256 and params['ACT_ROWS'] == 8 and params['TRACE_DEPTH'] == 4096
+    assert params['PORTB'] == 4 and params['RL'] == 4 and params['ALINE'] == 64 and params['MCOLS'] == 4
+    vh = (d / 'opentpu_params.vh').read_text()
+    assert f".HOST_MUX(1'h{host_mux})" in vh and ".NRD(32'h80)" in vh
+    srcs = (d / 'sources.tcl').read_text()
+    for f in ('otpu_hbm_ch.sv', 'otpu_hbm_afifo.sv', 'otpu_hbm_mux2.sv', 'otpu_f2_hbm_eng.sv',
+              'otpu_f2_hbmeng_sys.sv', 'otpu_f2_pcis_gate.sv', 'otpu_hbm_geometry.sv'):
+        assert f'rtl/boards/f2/{f}' in srcs
+    for f in ('otpu_native_axi.sv', 'otpu_f2_hbm_axi.sv', 'otpu_f2_hbm_sys.sv'):
+        assert f not in srcs
+    top = (d / 'cl_opentpu_hbm5.sv').read_text()
+    for inst in ('otpu_f2_hbmeng_sys #(', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512',
+                 'cl_axi_sc_1x1_wrapper u_hsc', 'cl_axi3_256b_reg_slice u_hrs256',
+                 'cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NHBM)', 'localparam bit HOST_MUX = NPORT == 32'):
+        assert inst in top
+    assert 'otpu_hbm_sc_inst' not in top and 'u_rs512' not in top
+    for k in (0, 1):
+        assert f'.i_hbm_apb_preset_n_{k}(hbm_apb_preset_n_{k})' in top
+    for f in T.sources(t):
+        assert (d / 'rtl' / f).read_bytes() == (ROOT / 'rtl' / f).read_bytes()
+    # the SmartConnect path's targets keep their flow: the engine files out of their snapshots
+    assert not flow.is_engine(T.load('f2-hbm:p4rl8a64'))

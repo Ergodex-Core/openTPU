@@ -102,7 +102,15 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
                      "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_pcis_gate.sv",
                      "boards/f2/otpu_f2_hbm_axi.sv", "boards/f2/otpu_hbm_geometry.sv",
-                     "boards/f2/otpu_f2_hbm_sys.sv"]}
+                     "boards/f2/otpu_f2_hbm_sys.sv"],
+          # v5, the full HBM (platform mem_path "engine": targets/f2-hbm.toml v5 / v5s3; its top
+          # cl_opentpu_hbm5.sv; docs/full_hbm.md): a 450 MHz engine per HBM port in place of the
+          # SmartConnect chain, the host's cl_axi_sc_1x1 kept, muxed onto port 31 at 32 channels
+          "f2-hbm5": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+                      "boards/f2/otpu_f2_pcis_gate.sv", "boards/f2/otpu_hbm_geometry.sv",
+                      "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_ch.sv",
+                      "boards/f2/otpu_hbm_mux2.sv", "boards/f2/otpu_f2_hbm_eng.sv",
+                      "boards/f2/otpu_f2_hbmeng_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -292,6 +300,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
+    if u.get("NRD"):                            # (only when named: the other cache keys stay)
+        d["NRD"] = int(u["NRD"])
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
@@ -328,7 +338,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "DRAM_LOG2": (p.get("slice_bytes", a["DRAM_BYTES"]) - 1).bit_length(),
         "PLATFORM": t.platform_id,
         "ARCH_HASH": arch_hash(cfg),
-    }
+    } | ({"NRD": int(u["NRD"])} if u.get("NRD") else {})
 
 
 def sources(t: Target | str | None = None, family: str | None = None) -> list[str]:
@@ -342,7 +352,7 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
         return core
     board = t.platform["board"]
     if board == "f2" and t.platform.get("mem") == "hbm":
-        board = "f2-hbm"
+        board = "f2-hbm5" if t.platform.get("mem_path") == "engine" else "f2-hbm"
     return core + SHELL + BOARDS.get(board, [])
 
 
