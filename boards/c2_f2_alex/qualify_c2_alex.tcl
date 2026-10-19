@@ -40,7 +40,28 @@ proc ::c2_alex_route::clock {pin period} {
     if {[llength $clock] != 1 || abs([number [prop $clock PERIOD]]-$period)>0.001} {error "C2 Alex route: wrong/missing clock at $pin"}
     return $clock
 }
-proc ::c2_alex_route::structure {audit} {
+# Physical optimization can replicate a host-ready register and absorb the
+# shared native-ready inverter into LUT truth tables. Preserve the synthesis
+# audit unchanged. Collect 153 unchanged flows plus the explicit host replica
+# proof; the separate native LUT equivalence predicate remains mandatory.
+proc ::c2_alex_route::routed_fabric {prefix clocks audit} {
+    if {$prefix ne "WRAPPER/CL"} {error "C2 routed fabric: unexpected CL scope"}
+    ::c2_alex::fabric_clocks $prefix $clocks {} $audit
+    set count 0
+    foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {
+        if {$signal eq "wready"} {::c2_alex_routed_ready::host_wready $audit} else {::c2_alex::flow $prefix S_HOST $signal $audit}
+        incr count
+    }
+    for {set p 0} {$p<8} {incr p} {
+        foreach signal {awvalid awready wvalid wready bvalid arvalid arready rvalid} {::c2_alex::flow $prefix S_N$p $signal $audit;incr count}
+        foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {::c2_alex::flow $prefix M_H$p $signal $audit;incr count}
+    }
+    if {$count!=154} {error "C2 routed fabric: incomplete active handshake inventory"}
+    puts $audit [list native_ready_equivalence state pending review current_routed_native_ready_equivalence expected_channels 16 route_qualified 0]
+    return [dict create slave_interfaces 9 master_interfaces 8 active_handshake_witnesses $count \
+        shared_reset_ready_connections 0 state pending_native_ready_equivalence declared_width_authority generated_BD_required]
+}
+proc ::c2_alex_route::structure {audit {routed 0}} {
     variable cl
     ::c2_alex::cell $cl cl_opentpu 1
     ::c2_alex::cell $cl/u_board otpu_c2_hbm_kernel 1
@@ -82,7 +103,7 @@ proc ::c2_alex_route::structure {audit} {
             }
         }
     }
-    set fabric [::c2_alex::fabric_topology $cl $clocks {} $audit]
+    if {$routed} {set fabric [routed_fabric $cl $clocks $audit]} else {set fabric [::c2_alex::fabric_topology $cl $clocks {} $audit]}
     puts $audit [list interface_topology $fabric address_map_evidence generated_BD_required]
     # No actual consumer may hide behind a removed/renamed unused wizard pin.
     foreach object [get_clocks -quiet *] {
@@ -658,7 +679,8 @@ proc ::c2_alex_route::qualify {run checkpoint} {
     set audit [open $directory/objects.tcldata {WRONLY CREAT EXCL}]
     set status [catch {
         puts $audit [list checkpoint $checkpoint sha256 $digest]
-        set topology [structure $audit]
+        source [file join $run routed_host_ready.tcl]
+        set topology [structure $audit 1]
         set groups [gray_inventory $audit]
         gray_witnesses $groups $audit
         set inventory [report_set $directory]
@@ -689,7 +711,7 @@ proc ::c2_alex_route::qualify {run checkpoint} {
         # Actual current-design identities/exception coverage are review inputs,
         # not a historical two-port whitelist. Until reviewed classifiers exist,
         # this stage deliberately cannot manufacture a qualified image.
-        set pending {current_vendor_CDC_and_gray_max_delay_scope current_exception_coverage_and_ignored_paths current_DRC_methodology_and_severity_configuration exact_shell_inherited_witnesses current_9SI_8MI_vendor_simulation_and_generated_IP_binding}
+        set pending {current_vendor_CDC_and_gray_max_delay_scope current_exception_coverage_and_ignored_paths current_DRC_methodology_and_severity_configuration exact_shell_inherited_witnesses current_9SI_8MI_vendor_simulation_and_generated_IP_binding current_routed_native_ready_equivalence}
         set result [dict create schema 1 stage final_route route_qualified 0 hardware_measured 0 checkpoint $checkpoint checkpoint_sha256 $digest \
             report_directory $directory reason [expr {[llength $blockers] ? "physical_checks_failed_and_review_required" : "review_required"}] \
             blockers [lsort -unique $blockers] pending_reviews $pending supplemental_evidence $supplemental timing $timing routing $route \

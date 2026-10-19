@@ -306,7 +306,7 @@ def executor_inputs(stage):
     if stage in ('link', 'qualify'):
         paths += [HERE / 'qualify_c2_alex.tcl', HERE / 'audit_c2_alex.tcl']
     if stage == 'qualify':
-        paths += [HERE / 'simulate.py']
+        paths += [HERE / 'simulate.py', HERE / 'routed_host_ready.tcl']
     return b.inventory(paths, ROOT)
 
 
@@ -340,6 +340,8 @@ source $run/qualify_c2_alex.tcl
     if stage in ('link', 'qualify'):
         for name in ('qualify_c2_alex.tcl', 'audit_c2_alex.tcl'):
             shutil.copy2(HERE / name, out / name)
+    if stage == 'qualify':
+        shutil.copy2(HERE / 'routed_host_ready.tcl', out / 'routed_host_ready.tcl')
     inputs = {'schema': 1, 'kind': 'c2-alex-checkpoint-stage-inputs', 'stage': stage,
               'executor_revision': executor_revision, 'executor_sources': tools,
               'source_revision': origin['inputs']['source_revision'],

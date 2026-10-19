@@ -46,6 +46,18 @@ SOURCE_ROLES = ('hardware', 'ip', 'link', 'implement', 'refine', 'qualify', 'sim
 RECEIPTS = {'ip': 'ip-complete.json', 'synth': 'synth-complete.json',
             **{stage: 'stage-result.json' for stage in ('link', 'implement', 'refine', 'qualify')},
             'simulation': 'simulation-complete.json', 'dependencies': 'attestation/complete.json'}
+def schema_roles(schema):
+    return ROLES + (('review',) if schema == 2 else ())
+
+
+def schema_sources(schema):
+    return SOURCE_ROLES + (('review',) if schema == 2 else ())
+
+
+def schema_receipts(schema):
+    return {**RECEIPTS, **({'review': 'review-result.json'} if schema == 2 else {})}
+
+
 DEPENDENCY_SOURCE = '264d84134da11630622002cd869cf88b07e49aec'
 OBSERVER_SHA256 = 'e243c6f260187a26dbea41811c0d5c068a265401f4fa8fd821425bfdd56b4615'
 SYNCHRONOUS_WRAPPER_SHA256 = '006e3feacbf3e15c16e92187fe0e4ce1fca9e749bc445f1ae7a71d9a302f0cbb'
@@ -61,6 +73,11 @@ REVIEWED_HISTORICAL = {('link', 'boards/c2_f2_alex/qualify_c2_alex.tcl'):
                        'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'},
                       ('ip', 'boards/c2_f2_alex/audit_c2_alex.tcl'):
                       {'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e'}}
+# Preserve the executed stage runner only for completed pre-qualification roles.
+for _stage in ('link', 'implement', 'refine'):
+    REVIEWED_HISTORICAL[(_stage, 'boards/c2_f2_alex/implement.py')] = {
+        '812b64f8afab2c3c8ff2d5235d6cdcb0eaec38b486a4ff2f786360144e956295'}
+
 DEPENDENCY_TREES = tuple(f'{stage}/ip_project/{project}.{suffix}'
                         for stage, project in (('ip', 'f2_ip'), ('pcis', 'pcis'), ('clocks', 'clocks'))
                         for suffix in ('srcs', 'gen'))
@@ -124,13 +141,13 @@ def manifest_data(raw, expected_sha256):
     m = decode(raw)
     require(set(m) == {'schema', 'kind', 'instance_id', 'hardware', 'roots', 'source_snapshots', 'receipts', 'files'},
             'Unknown/missing manifest fields')
-    require(type(m['schema']) is int and m['schema'] == 1 and m['kind'] == 'c2-alex-portable-evidence' and m['instance_id'] == INSTANCE,
+    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c2-alex-portable-evidence' and m['instance_id'] == INSTANCE,
             'Wrong evidence schema or dedicated instance')
     hardware = m['hardware']
     require(set(hardware) == {'source_revision', 'build_id'} and
             re.fullmatch('[0-9a-f]{40}', hardware['source_revision']) and
             hardware['build_id'] == hardware['source_revision'][:8], 'Invalid hardware revision/build ID')
-    require(set(m['roots']) == set(ROLES) and set(m['source_snapshots']) == set(SOURCE_ROLES), 'Incomplete relocation roles')
+    require(set(m['roots']) == set(schema_roles(m['schema'])) and set(m['source_snapshots']) == set(schema_sources(m['schema'])), 'Incomplete relocation roles')
     prefixes = {}
     for role, row in m['roots'].items():
         require(set(row) == {'original_absolute_path', 'bundle_relative_path'}, 'Malformed run relocation')
@@ -164,8 +181,8 @@ def manifest_data(raw, expected_sha256):
         relative(name); metadata(row); total += row['bytes']
         require(any(name.startswith(prefix + '/') for prefix in prefixes.values()), 'File outside mapped evidence roots')
     require(total <= MAX_TOTAL, 'Expanded evidence exceeds size bound')
-    require(set(m['receipts']) == set(RECEIPTS), 'Incomplete receipt inventory')
-    for role, filename in RECEIPTS.items():
+    require(set(m['receipts']) == set(schema_receipts(m['schema'])), 'Incomplete receipt inventory')
+    for role, filename in schema_receipts(m['schema']).items():
         record = m['receipts'][role]
         expected = m['roots'][role]['bundle_relative_path'] + '/' + filename
         require(set(record) == {'relative_path', 'sha256'} and record['relative_path'] == expected and
@@ -276,7 +293,7 @@ class Bundle:
 
     def receipt(self, role):
         record = self.manifest['receipts'][role]
-        return self.read(role, RECEIPTS[role], record['sha256'])
+        return self.read(role, schema_receipts(self.manifest['schema'])[role], record['sha256'])
 
 
 def local_module(name):
@@ -495,7 +512,9 @@ def verify_bundle(root, manifest_sha256):
     for stage in ('link', 'implement', 'refine', 'qualify'):
         receipt = x.receipt(stage); stage_inputs = x.read(stage, 'stage-inputs.json', receipt['inputs_sha256'])
         require(receipt.get('schema') == 1 and receipt.get('kind') == 'c2-alex-checkpoint-stage' and receipt.get('stage') == stage and receipt.get('returncode') == 0 and receipt.get('hardware_actions') is False, 'Failed/wrong checkpoint stage')
-        require(receipt.get('status') == ('candidate' if stage == 'implement' else 'complete') and receipt.get('route_qualified') is (stage == 'qualify'), 'Pending/unqualified checkpoint stage')
+        reviewed_collection = m['schema'] == 2 and stage == 'qualify'
+        expected_status = 'pending-review' if reviewed_collection else ('candidate' if stage == 'implement' else 'complete')
+        require(receipt.get('status') == expected_status and receipt.get('route_qualified') is (stage == 'qualify' and not reviewed_collection), 'Pending/unqualified checkpoint stage')
         require(stage_inputs.get('schema') == 1 and stage_inputs.get('kind') == 'c2-alex-checkpoint-stage-inputs' and stage_inputs.get('stage') == stage and stage_inputs.get('max_threads') == 4 and stage_inputs.get('resynthesis') is False and stage_inputs.get('hardware_actions') is False, 'Invalid stage execution contract')
         for key, expected in {'source_revision': hardware['source_revision'], 'build_id': hardware['build_id'], 'synth_run': x.original('synth'), 'synth_receipt_sha256': m['receipts']['synth']['sha256'], 'synth_inputs_sha256': synth['inputs_sha256'], 'ip_run': x.original('ip'), 'ip_receipt_sha256': m['receipts']['ip']['sha256'], 'hdk': x.original('installed'), 'shell_sha256': b.SHELL_SHA256}.items():
             require(stage_inputs.get(key) == expected, 'Stage identity/relocation mismatch: ' + key)
@@ -509,13 +528,19 @@ def verify_bundle(root, manifest_sha256):
         if stage in ('link', 'qualify'):
             prepared |= {'qualify_c2_alex.tcl', 'audit_c2_alex.tcl'}
             executors |= {'boards/c2_f2_alex/' + name for name in prepared - {'run.tcl'}}
-        if stage == 'qualify': executors.add('boards/c2_f2_alex/simulate.py')
+        if stage == 'qualify':
+            executors.add('boards/c2_f2_alex/simulate.py')
+            if m['schema'] == 2:
+                prepared.add('routed_host_ready.tcl')
+                executors.add('boards/c2_f2_alex/routed_host_ready.tcl')
         if stage == 'implement': prepared |= {'floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'}
         require(set(stage_inputs['executor_sources']) == executors, 'Incomplete executor source inventory')
         x.source(stage, stage_inputs['executor_revision'], stage_inputs['executor_sources'], current=executors)
         x.inventory(stage, stage_inputs['prepared_files'], exact=prepared)
         if stage in ('link', 'qualify'):
-            for name in ('qualify_c2_alex.tcl', 'audit_c2_alex.tcl'):
+            helpers = ('qualify_c2_alex.tcl', 'audit_c2_alex.tcl')
+            if stage == 'qualify' and m['schema'] == 2: helpers += ('routed_host_ready.tcl',)
+            for name in helpers:
                 require(x.record(stage, name) == stage_inputs['executor_sources']['boards/c2_f2_alex/' + name],
                         'Stage executed a different audit helper')
         x.inventory(stage, receipt.get('outputs'), required=('run.tcl', 'command.json', 'console.log'), exact=x.names(stage) - {'stage-inputs.json', 'stage-result.json'})
@@ -533,18 +558,25 @@ def verify_bundle(root, manifest_sha256):
         checkpoint = 'post_link.dcp' if stage == 'link' else 'post_route.dcp'
         if stage == 'qualify':
             require(receipt.get('checkpoint') == x.original(previous_role, previous_checkpoint) and receipt.get('checkpoint_sha256') == source_record['sha256'], 'Qualifier DCP mismatch')
-            require(kv(x.text(stage, 'audit-result.txt'), ('route_qualified', 'checkpoint_sha256')) == {'route_qualified': '1', 'checkpoint_sha256': source_record['sha256']}, 'Raw qualifier is pending/unqualified or bound to another DCP')
+            require(kv(x.text(stage, 'audit-result.txt'), ('route_qualified', 'checkpoint_sha256')) == {'route_qualified': '0' if reviewed_collection else '1', 'checkpoint_sha256': source_record['sha256']}, 'Raw qualifier state or checkpoint differs')
         else:
             require(receipt.get('checkpoint') == checkpoint and receipt.get('checkpoint_sha256') == x.record(stage, checkpoint)['sha256'], 'Stage output checkpoint mismatch')
             previous_role, previous_checkpoint = stage, checkpoint
         stages[stage] = stage_inputs
     final_sha = x.record('refine', 'post_route.dcp')['sha256']
-    require('qualification/NOT_QUALIFIED.txt' not in x.names('qualify'), 'Explicit NOT_QUALIFIED evidence present')
+    if m['schema'] == 1:
+        require('qualification/NOT_QUALIFIED.txt' not in x.names('qualify'), 'Explicit NOT_QUALIFIED evidence present')
+    else:
+        require('qualification/NOT_QUALIFIED.txt' in x.names('qualify'), 'Original pending collector evidence was removed')
     for name in FINAL_REPORTS:
         if name == 'supplemental.tcldata': x.supplemental_text()
         else: x.text('qualify', 'qualification/' + name)
     summary = tcl_dict(x.text('qualify', 'qualification/summary.tcldata'))
-    require(summary.get('schema') == '1' and summary.get('stage') == 'final_route' and summary.get('route_qualified') == '1' and summary.get('hardware_measured') == '0' and summary.get('checkpoint_sha256') == final_sha and summary.get('checkpoint') == x.original('refine', 'post_route.dcp') and summary.get('blockers') == '' and summary.get('pending_reviews') == '', 'Final raw qualification has blockers/pending review or mismatched DCP')
+    require(summary.get('schema') == '1' and summary.get('stage') == 'final_route' and summary.get('hardware_measured') == '0' and summary.get('checkpoint_sha256') == final_sha and summary.get('checkpoint') == x.original('refine', 'post_route.dcp') and summary.get('blockers') == '', 'Final raw collection has physical blockers or mismatched DCP')
+    if m['schema'] == 1:
+        require(summary.get('route_qualified') == '1' and summary.get('pending_reviews') == '', 'Final raw qualification has pending review')
+    else:
+        require(summary.get('route_qualified') == '0' and summary.get('pending_reviews'), 'Original pending collection state was changed')
     simulation = x.receipt('simulation'); si = x.read('simulation', 'inputs.json', simulation['inputs_sha256'])
     require(simulation.get('schema') == 1 and simulation.get('kind') == 'c2-alex-vendor-fabric-simulation' and simulation.get('state') == 'passed' and simulation.get('hardware_actions') is False and simulation.get('qualification') == 'protocol-simulation-only-not-physical-timing', 'Vendor simulation not passed')
     require(stages['qualify'].get('simulation') == {'run': x.original('simulation'), 'receipt_sha256': m['receipts']['simulation']['sha256'], 'inputs_sha256': simulation['inputs_sha256']}, 'Qualification did not bind this vendor simulation')
@@ -574,6 +606,8 @@ def verify_bundle(root, manifest_sha256):
             require(x.record('simulation', prefix + 'rtl/' + name)['sha256'] == si['sources'][name], 'Scenario source differs')
         expected_script = sim.simulation_tcl(Path(x.original('simulation', prefix.rstrip('/'))), Path(x.original('simulation_private')), seed, phase)
         require(x.text('simulation', prefix + 'simulate.tcl') == expected_script, 'Scenario command topology/paths changed')
+    if m['schema'] == 2:
+        local_module('final_review').verify_review(x)
     # Check the bundle did not change during semantic validation.
     for name, row in x.files.items():
         require(sha(x.root / name) == row['sha256'], 'Bundle changed while verifying')
@@ -586,7 +620,8 @@ def verify_bundle(root, manifest_sha256):
             'synth_inputs_relative_path': x.path('synth', 'inputs.json').relative_to(x.root).as_posix(),
             'ip_receipt_sha256': m['receipts']['ip']['sha256'],
             'simulation_receipt_sha256': m['receipts']['simulation']['sha256'],
-            'qualification_receipt_sha256': m['receipts']['qualify']['sha256'],
+            'qualification_receipt_sha256': m['receipts']['review' if m['schema'] == 2 else 'qualify']['sha256'],
+            **({'collection_receipt_sha256': m['receipts']['qualify']['sha256'], 'final_review_receipt_sha256': m['receipts']['review']['sha256']} if m['schema'] == 2 else {}),
             'files': len(x.files), 'bytes': sum(row['bytes'] for row in x.files.values())}
 
 

@@ -127,7 +127,7 @@ class Plan:
         self.roots = {role: Path(path) for role, path in spec['roots'].items()}
         self.files, self.source_bytes, self.tree_checks = {}, {}, []
         self.git = {}
-        self.manifest = {'schema': 1, 'kind': 'c2-alex-portable-evidence', 'instance_id': e.INSTANCE,
+        self.manifest = {'schema': spec['schema'], 'kind': 'c2-alex-portable-evidence', 'instance_id': e.INSTANCE,
                          'hardware': {}, 'roots': {}, 'source_snapshots': {}, 'receipts': {}, 'files': {}}
         for role, path in self.roots.items():
             prefix = 'runs/simulation/private-ip' if role == 'simulation_private' else 'runs/' + role
@@ -160,7 +160,7 @@ class Plan:
         return e.decode(raw)
 
     def receipt(self, role):
-        name = e.RECEIPTS[role]; digest = self.spec['receipt_sha256'][role]
+        name = e.schema_receipts(self.spec['schema'])[role]; digest = self.spec['receipt_sha256'][role]
         result = self.read(role, name, digest)
         self.manifest['receipts'][role] = {'relative_path': self.manifest['roots'][role]['bundle_relative_path'] + '/' + name,
                                          'sha256': digest}
@@ -205,10 +205,10 @@ class Plan:
 def checked_spec(spec):
     e.require(isinstance(spec, dict) and set(spec) == {'schema', 'kind', 'instance_id', 'roots', 'receipt_sha256', 'source_checkouts'},
               'Invalid collection specification fields')
-    e.require(type(spec['schema']) is int and spec['schema'] == 1 and spec['kind'] == 'c2-alex-evidence-collection-inputs'
+    e.require(type(spec['schema']) is int and spec['schema'] in (1, 2) and spec['kind'] == 'c2-alex-evidence-collection-inputs'
               and spec['instance_id'] == e.INSTANCE, 'Wrong collection schema/dedicated instance')
-    e.require(set(spec['roots']) == set(e.ROLES) and set(spec['receipt_sha256']) == set(e.RECEIPTS)
-              and set(spec['source_checkouts']) == set(e.SOURCE_ROLES), 'Incomplete collection roles/trusted receipt hashes')
+    e.require(set(spec['roots']) == set(e.schema_roles(spec['schema'])) and set(spec['receipt_sha256']) == set(e.schema_receipts(spec['schema']))
+              and set(spec['source_checkouts']) == set(e.schema_sources(spec['schema'])), 'Incomplete collection roles/trusted receipt hashes')
     for role, path in spec['roots'].items():
         e.absolute(path); e.no_symlink(Path(path)); e.require(Path(path).is_dir(), 'Missing collection input root: ' + role)
     for value in spec['receipt_sha256'].values(): e.digest(value)
@@ -222,8 +222,18 @@ def checked_spec(spec):
 def make_plan(spec):
     p = Plan(spec); b, sim = e.local_module('build'), e.local_module('simulate')
     final = p.receipt('qualify')
-    e.require(final.get('status') == 'complete' and final.get('route_qualified') is True and final.get('returncode') == 0,
-              'Collection requires complete qualified route; pending review is not collectable')
+    if spec['schema'] == 1:
+        e.require(final.get('status') == 'complete' and final.get('route_qualified') is True and final.get('returncode') == 0,
+                  'Collection requires complete qualified route; pending review is not collectable')
+    else:
+        e.require(final.get('status') == 'pending-review' and final.get('route_qualified') is False and final.get('returncode') == 0,
+                  'Schema2 requires successful immutable pending collection')
+        review = p.receipt('review')
+        e.require(review.get('kind') == 'c2-alex-final-semantic-review' and review.get('status') == 'complete' and review.get('route_qualified') is True,
+                  'Pending collection requires separate successful semantic review')
+        p.inventory('review', review['outputs'])
+        p.source('review', review['source_revision'], review['source_inputs'])
+        p.exact_tree('review', '', set(review['outputs']) | {'review-result.json'})
     ip, synth, simulation, dep = (p.receipt(role) for role in ('ip', 'synth', 'simulation', 'dependencies'))
     ipi = p.read('ip', 'inputs.json', e.digest(ip['inputs_sha256']))
     syni = p.read('synth', 'inputs.json', e.digest(synth['inputs_sha256']))

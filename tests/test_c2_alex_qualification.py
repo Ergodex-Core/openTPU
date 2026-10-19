@@ -229,6 +229,15 @@ def run_mock(tmp_path, fault='none', action='qualify', overrides=None):
     for name, text in reports.items():
         (fixtures / name).write_text(text)
     (tmp_path / 'input.dcp').write_bytes(b'SYNTHETIC TEST CHECKPOINT NOT FPGA DATA')
+    # This fixture models an unreplicated synthetic fabric. The real routed
+    # replication helper has dedicated positive and adversarial tests.
+    (tmp_path / 'routed_host_ready.tcl').write_text('''
+namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::host_wready {audit} {
+    ::c2_alex::flow WRAPPER/CL S_HOST wready $audit
+    return [dict create structural_pass 1 route_qualified 0]
+}
+''')
     return tcl(tmp_path, object_mock(), tmp_path, fault, action)
 
 
@@ -869,3 +878,36 @@ puts [list pending $::c2_alex_route::capture_pending]
     assert 'related_nets' in raw and 'shell/net730' in raw
     assert 'related_ports' in raw and 'shell_port' in raw
     assert 'object_properties' not in raw
+
+
+def test_routed_fabric_preserves_153_flows_and_requires_native_semantic_review(tmp_path):
+    result = tcl(tmp_path, '''source [lindex $argv 0]
+set flows {};set host_count 0
+proc ::c2_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
+proc ::c2_alex::flow {prefix iface signal audit} {lappend ::flows [list $iface $signal]}
+namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::host_wready {audit} {incr ::host_count}
+set out [open [lindex $argv 1] w]
+set facts [::c2_alex_route::routed_fabric WRAPPER/CL {} $out]
+close $out
+if {[llength $flows]!=153 || [llength [lsort -unique $flows]]!=153 || $host_count!=1} {error "Flow inventory differs"}
+if {{S_HOST wready} in $flows || [dict get $facts active_handshake_witnesses]!=154 || [dict get $facts shared_reset_ready_connections]!=0 || [dict get $facts state] ne "pending_native_ready_equivalence"} {error "Missing explicit native review"}
+puts $facts
+''', tmp_path/'routed.tcldata')
+    assert result.returncode == 0, result.stderr
+    assert 'pending_native_ready_equivalence' in result.stdout
+    raw = (tmp_path/'routed.tcldata').read_text()
+    assert 'current_routed_native_ready_equivalence' in raw
+    assert 'route_qualified 0' in raw
+
+
+def test_routed_fabric_does_not_swallow_host_replica_failure(tmp_path):
+    result = tcl(tmp_path, '''source [lindex $argv 0]
+proc ::c2_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
+proc ::c2_alex::flow {prefix iface signal audit} {return {}}
+namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::host_wready {audit} {error "Changed replica controls"}
+::c2_alex_route::routed_fabric WRAPPER/CL {} stdout
+''')
+    assert result.returncode != 0
+    assert 'Changed replica controls' in result.stderr

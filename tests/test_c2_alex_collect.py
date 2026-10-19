@@ -229,3 +229,47 @@ def test_retry_checkout_exclusion_is_exact_and_hash_bound(synchronous_inputs,cha
         f.put(dep/'attestation/identity.json',identity)
     with pytest.raises(ValueError):c.collect(spec,out)
     assert (out/'failure.json').is_file() and not (out/'evidence.tar').exists()
+
+
+def schema2_inputs(inputs):
+    spec,origin,out=inputs;spec['schema']=2
+    q=Path(spec['roots']['qualify']);receipt=f.read(q/'stage-result.json')
+    receipt.update(status='pending-review',route_qualified=False)
+    f.put(q/'stage-result.json',receipt)
+    path=q/'audit-result.txt';f.put(path,path.read_text().replace('route_qualified=1','route_qualified=0'))
+    path=q/'qualification/summary.tcldata';f.put(path,path.read_text().replace('route_qualified 1','route_qualified 0').replace('pending_reviews {}','pending_reviews {synthetic_pending}'))
+    f.put(q/'qualification/NOT_QUALIFIED.txt','retain pending collection')
+    helper='boards/c2_f2_alex/routed_host_ready.tcl'
+    source=f.source_copy(origin,'qualify',[helper]);f.put(q/'routed_host_ready.tcl',(ROOT/helper).read_bytes())
+    si=f.read(q/'stage-inputs.json');si['executor_sources'].update(source)
+    si['prepared_files']['routed_host_ready.tcl']=f.rec(q/'routed_host_ready.tcl');f.put(q/'stage-inputs.json',si)
+    manifest=f.read(origin/f.e.MANIFEST);f.update_last_receipt(origin,manifest)
+    spec['receipt_sha256']['qualify']=f.e.sha(q/'stage-result.json')
+    review=origin/'runs/review';f.put(review/'review-decisions.json',{'SYNTHETIC':True})
+    source=f.source_copy(origin,'review',['boards/c2_f2_alex/evidence.py'])
+    f.put(review/'review-result.json',{'kind':'c2-alex-final-semantic-review','status':'complete','route_qualified':True,'source_revision':'d'*40,'source_inputs':source,'outputs':{'review-decisions.json':f.rec(review/'review-decisions.json')}})
+    spec['roots']['review']=str(review);spec['receipt_sha256']['review']=f.e.sha(review/'review-result.json')
+    spec['source_checkouts']['review']={'path':str(origin/'sources/review'),'revision':'d'*40}
+    return spec,origin,out
+
+
+def test_schema2_collection_keeps_pending_evidence_and_replays_review(inputs,monkeypatch):
+    spec,origin,out=schema2_inputs(inputs);old=c.e.local_module;calls=[]
+    def verify(x):
+        calls.append(x)
+        assert x.text('qualify','qualification/NOT_QUALIFIED.txt')=='retain pending collection'
+        return {'SYNTHETIC':'protocol test only'}
+    monkeypatch.setattr(c.e,'local_module',lambda name:SimpleNamespace(verify_review=verify) if name=='final_review' else old(name))
+    before=f.inventory(origin);receipt=c.collect(spec,out)
+    assert f.inventory(origin)==before and calls
+    assert receipt['verified']['qualification_receipt_sha256']==spec['receipt_sha256']['review']
+    assert receipt['verified']['collection_receipt_sha256']==spec['receipt_sha256']['qualify']
+    assert (out/'bundle/runs/qualify/qualification/NOT_QUALIFIED.txt').is_file()
+
+
+def test_schema2_claimed_review_is_not_enough_to_publish(inputs,monkeypatch):
+    spec,origin,out=schema2_inputs(inputs);old=c.e.local_module
+    def fail(x):raise ValueError('Raw semantic predicates still unresolved')
+    monkeypatch.setattr(c.e,'local_module',lambda name:SimpleNamespace(verify_review=fail) if name=='final_review' else old(name))
+    with pytest.raises(ValueError,match='semantic predicates still unresolved'):c.collect(spec,out)
+    assert not (out/'evidence.tar').exists() and not (out/'collection.json').exists()

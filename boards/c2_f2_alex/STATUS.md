@@ -1,16 +1,52 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 22:02 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 22:47 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
-Current stage: **refinement passed; final qualification collection is next** on
-`opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
+Current stage: **refinement passed; routed connectivity qualification is under
+diagnosis** on `opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
 hold +0.010 ns. Its receipt SHA256 is
 `082bfd082f9d834b980c5922802fdbff054fd1c139600f1bb6b6aeef79539476`;
 the final checkpoint SHA256 is
 `f30f57b94c4566fc70eb02678afbc47884fd2e088a72c4f9ee648005ac18bad2`.
 No image has been published or loaded.
+
+Final qualification from executor `136e8218` stopped at the routed S_HOST/wready
+structural assertion before collecting reports. Its failed receipt is
+`e025936c59953e8205e6d426c2b2f187099b9e9cd9f342bc787449c16cb914af`.
+A separate read-only replay completed all 154 handshake checks: 153 passed;
+S_HOST/wready has a valid SmartConnect driver but no PCIS sink on the original
+net. The shared native-ready top-level aliases also no longer exist after route.
+A focused capture now identifies a physical FDRE replica with the same initial
+state, clock and C/CE/D/R controls: the original drives 12 SmartConnect sinks,
+and its replica drives the three PCIS sinks. A separate routed helper verifies
+that exact transformation while leaving the frozen synthesis audit unchanged.
+The formal collector is ready for a fresh report-only run.
+
+All 80 native-ready LUT functions match the successful linked checkpoint across
+2,816 truth assignments after the captured reset-inverter substitution. Sixteen
+output comparisons still have a removed `m_vector_i_reg[1024]/CE` sink. They
+remain blocking until exact register/output evidence proves those removals
+unobservable or equivalent; a dedicated read-only probe compares both checkpoints.
+Neither the truth-only result nor the pending collector qualifies the design.
+
+The reset/status collector's first attempt failed because a Tcl object type was
+lost across an API boundary. The second attempt reselects exact typed objects and
+completed in `otpu-c2-alex-reset-status-12d364d6e8f1.service`, invocation
+`7a2b5c53f2b14eb4bccf764e606a3eed`. Its primitive-polarity, reset/status topology
+and scoped pulse review passes. Neither attempt changes constraints or the FPGA.
+
+The five OCL handshake captures from the final checkpoint completed and passed
+semantic replay: AR/AW are 12 bits each, W is 36, B is 2, and R is 34; all use
+three synchronization stages. Clock-derived constraints are 15 ns toward the
+200 MHz core and 12 ns toward the 250 MHz host. Final exported exception/skew
+comparison remains required. Raw witness SHA256 is
+`26dc7690e709a63bb4c5a1ce3d4ee5ed7a96cb21ee5a7659400dc5e283bb7951`.
+The reset/status graph, actual primitive polarity and 315 scoped pulse rows pass
+semantic replay with zero issues. The five
+reported omissions are clock-network detail caps with complete clock identities,
+not query errors or missing endpoint mappings.
 
 The linked gray review checked 128 groups and 768 bits: topology, clocks,
 effective max-delay bounds and all four normal timing variants per bit agreed;
@@ -18,7 +54,8 @@ there were no ignored paths. It remains unqualified because the global register
 inventory was serialized as 500 names plus a literal ellipsis, versus 2,304
 individually captured destination stages. The corrected evidence writer expands
 each typed object's NAME while preserving the typed return value. It also records
-full finding-related net and port inventories. All 126 qualification tests pass;
+full finding-related net and port inventories. All 141 qualification/host-ready
+tests and 75 implementation-runner tests pass;
 the final checkpoint must supply fresh, complete evidence before acceptance.
 
 The original-shell comparison confirms all 35 visible no-clock identities and
@@ -27,8 +64,9 @@ hidden endpoint identity is not claimed. The two apparent property conflicts
 were a pin and a net sharing a NAME, not changed properties of the same object.
 
 The latest Codex snapshot is verified at
-`s3://opentpu-agent-traces/codex/snapshots/20261019T215956.331579Z/`, archive SHA256
-`8fa5be565078aacda3fbd8d0f266285864d476995bd3b56dceb2b2c35e1e8783`.
+`s3://opentpu-agent-traces/codex/snapshots/20261019T222710.713630Z/`, archive SHA256
+`e2d1901dc14b12e506451d28c9d4935a5dc3bced7aac20319041a58b64791eab`
+(384,031,635 bytes, verified at 22:28:38 UTC).
 
 Implementation completed at 21:31:14 UTC with setup slack +0.028 ns and hold
 slack +0.010 ns. The implementation receipt SHA256 is
