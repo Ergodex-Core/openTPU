@@ -147,7 +147,8 @@ What could run here, without Vivado or the HDK: the snapshot step `build.py prep
 as `tests/test_f2_build.py`'s HBM snapshot test runs it (the command line's `--prepare-only`
 needs `check_hdk` first: `git rev-parse` of the HDK checkout at the pinned commits, the IP's
 xci and generated products, so it cannot run without the HDK). It wrote `RUN/cl_opentpu/design/`
-with `cl_opentpu_hbm.sv`, `cl_id_defines.vh`, the wrapper, `opentpu_geometry.vh` (`S = 1`,
+(at 1113137e; the v4-f2-timing branch adds the placement Tcl `cl_pnr_user.tcl` with the floorplan
+and `cl_synth_user_hbm.xdc`, [f2-timing.md](f2-timing.md)) with `cl_opentpu_hbm.sv`, `cl_id_defines.vh`, the wrapper, `opentpu_geometry.vh` (`S = 1`,
 `NCH = 8`), `opentpu_params.vh` (otpu_f2_hbm_sys's 32 parameters: `.S(32'h1) .D(32'h80)
 .MCOLS(32'h4) .LANES(32'h8) .ACT_ROWS(32'h10) .TMEM_IMPL(32'h3) .TMEM_PMP(32'h1) ... .NCH(32'h8)
 .CH_LOG2(32'h1d) .DRAM_LOG2(32'h20) .PLATFORM(32'h3) .ARCH_HASH(32'h4ffd1e17)

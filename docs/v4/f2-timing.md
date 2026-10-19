@@ -242,6 +242,107 @@ What the coordinator's next run should take, in order of expected effect:
    bits x 300 MHz = 153 GB/s raw, 6x what one slice streams), which fits 5-6 level cones with
    1.5 ns of route. The post-route report of this branch's build decides.
 
+## Round 3: build 2 (a2af0904, `--place-directive Default`) and its fixes
+
+Build 2 (this branch at a2af0904, placed with `Default`) went from WNS -3.66 / TNS -68,500 to
+WNS -2.19 / TNS -25,900 after phys_opt (WHS -0.75 there), still failing; the post-place
+report's worst paths (50 endpoints, 10 each on the first two):
+
+| group | worst path | slack | data path | what it is |
+|---|---|---|---|---|
+| hclk_raw | `u_host/hr_v_reg/C` -> `u_host/u_rt/mem_reg_0_15_434_447/RAMA/WE` | -2.60 | 4.451: logic 0.166 (2 levels), route 4.285 | the host's 512-bit read-return FIFO (LUT RAM, 64 SLICEMs): its write enable from one register through `r_zero` into every cell |
+| clk_raw | `g_port[2].u_nch/cf_h_reg[0]/C` -> `u_nch/u_xq/mem_reg_0_15_518_531/RAMA/WE` | -2.42 | 7.119: logic 0.869 (8 levels), route 6.250 | the bridge's command FIFO head (a LUT RAM read by `cf_h`) through the 80 hazard compares and the issue into the 602-bit crossing's write enables |
+| clk_raw -> clk_f_raw (req 5.000) | `u_dma/t_re_q_reg[2]/C` -> `g_bank[5].g_sub[0].g_pmp.u_pb/g_b.mem_reg_2/ADDRBWRADDR[11]` | -1.41 (-1.34, -1.32 siblings) | 4.899: logic 0.501 (8 levels), route 4.398 | the DMA's request through TMEM's lane rotation, rank select and address AND-OR into a bank's pins: the replication did not help, a lane's enable has one load per bank and every bank is elsewhere |
+| clk_main_a0 | a hidden shell path | -1.03 | 4.652: logic 0.347 (3 levels), route 4.305 | our side of the PCIS / OCL handshake placed far from the shell's interface registers |
+| `**async_default**` | `u_hbm/PIPE_HBM_AXI_RST/pipe_reg[3][0]` -> `HBM_SNGLBLI_INTF_AXI<15..11>_INST/ARESET_N` | -0.44 .. -0.89 | route 2.3-2.8 | one reset pipe register into the AXI resets of both stacks' 32 ports |
+
+**RTL** (bit-exact; the bridges' and host path's changes are not on a token's numerics; the
+suites and the token below):
+
+1. **The wide crossing FIFOs written at their tail every cycle** (`otpu_afifo` `WT` with `RWR`,
+   rhino's e165f4f8): the RAM's write enable is a registered copy of the room (`wput_q`,
+   `max_fanout 32`, as the address copy `wa_q` already was), the tail slot takes whatever
+   `wdata` shows every cycle there is room, and `wvalid` moves only the pointer; the slot at
+   the write pointer is never live while the room is up (the room is against the read pointer
+   as synchronized, which only grows), so the write is safe. On the host's read-return FIFO
+   `u_rt` (the -2.60 path: `hr_v` now reaches 5 pointer flip-flops, not 64 SLICEMs' WE pins),
+   the host's PCIS W crossing `u_xw`, the bridge's command crossing `u_xq` (the -2.42 path's
+   end) and its read-return FIFO `u_rq` (the same 512-bit shape at 450 MHz, the next of its
+   kind). The writers that never see these FIFOs full (`u_rt`: RQ beats in flight, `u_rq`: RD
+   reads in flight) are unaffected by the registered ready's one cycle of conservatism.
+2. **The bridge's command head in a register** (`h_v / h_we / h_a`, rhino's e165f4f8): the
+   hazard compares and the issue start from flip-flops, not from the FIFO's LUT RAM read by
+   `cf_h`; with WT the issue reaches only the crossing's pointer. The -2.42 path's 8 levels
+   become the compares and the issue alone (no RAM read in front, no 600 enables behind). A
+   command issues one core cycle later than before (5 ns on the HBM's ~400); the order check,
+   the request order and the adapter are untouched.
+3. **The host's PCIS side behind registers** (rhino's rounds 4-7: 7d3da502, 1197a113, 98aa0368,
+   round 7; `rtl/shell/otpu_skidbuf.sv`, `otpu_link.sv`, `otpu_f2_hbm_oreg`, the one-bit stage
+   `otpu_f2_hbm_xr`): AW, W and AR enter two-entry skid buffers whose ready is a flip-flop
+   (`u_pcis_aw / _w / _ar`), B and R leave through output registers (`u_pcis_b / _r`), and
+   between those registers (for the floorplan: beside the shell, SLR1) and the queues (SLR0)
+   runs an `otpu_link` per channel (the sender registers the take with its beat, the receiver
+   registers them again and queues them, the credit comes back as a registered pulse), so
+   every net across the boundary is a flip-flop to a flip-flop in both directions. The order
+   rule (`pcis_wbusy` holds the reads and the OCL's writes) is formed from registers only: the
+   queues, the unanswered B's and the write-pending bit of the registers' side, registered
+   twice on its way (`u_pcis_wb`, `u_xs_wb`); the OCL crossing (`otpu_axil_cdc`) takes its
+   AW / W / AR through skid buffers of its own and starts a write only from a beat two cycles
+   old, so a PCIS write shown with an OCL write is counted first (tb_f2axil checks the start,
+   not the handshake, against the hold). Cost: +2 aclk cycles on a host access's way in and
+   +2 on its response's way out; nothing on the token. The structural test
+   `test_pcis_registers_only_drive_the_link_stage` keeps the registers' side from reaching
+   the queues' logic any other way.
+
+**Constraints only (no RTL)**:
+
+4. **The floorplan** (`boards/f2/build/constraints/cl_pnr_user_hbm.tcl`, appended by build.py to
+   `cl_pnr_user.tcl` for an HBM target): four pblocks under the HDK's `pblock_CL`.
+   `pb_otpu_slr0` (SLR0's 20 CL clock regions, ~272K LUTs): the board and the HBM fabric
+   together (175K, 64%), beside the HBM's AXI ports under SLR0, so no slice <-> fabric net
+   crosses an SLR. `pb_otpu_tmem` (inside it, X0Y2:X3Y3, 8 regions): the TMEM with the VPU,
+   the DMA and the quantizer (66K, 61%; 82 of the box's ~170 RAMB36), the units whose request
+   registers reach the pumped banks in two fast periods: the -1.41 path's 4.4 ns of route
+   becomes a box of 2 x 4 regions; the MXU wraps around it. `pb_otpu_pcis` (SLR1, X5Y5:X5Y6,
+   beside the shell's PCIS / OCL column): the PCIS skids, output registers, link ends and
+   `u_ocl`, so the shell -> register hop (the -1.03 path) stays in one SLR; `pb_otpu_xs` (SLR0,
+   X4Y3): the links' SLR0 ends, so the SLR1 -> SLR0 hop is flip-flop to flip-flop and the
+   stage -> queue paths stay in SLR0. Every pblock is cut down to the sites its parent holds
+   (`otpu_contain`: the HDK's `pblock_CL` is not whole clock regions and opt_design's HDPR-23
+   DRC rejects a child outside it), `CONTAIN_ROUTING` off, the cell queries failing closed.
+   The flow fix that makes it apply (rhino's 76a8f878): the HDK reads
+   `small_shell_cl_pnr_user.xdc` as a managed XDC and drops its Tcl (so the linked-reset
+   exception had run on no pins in builds 1 and 2), so openTPU's placement Tcl is
+   `cl_pnr_user.tcl`, read unmanaged by our `build_level_1_cl.tcl` inside a wrapped
+   `opt_design` (otpu_clk2x.tcl's multicycles re-read with it on the linked design), the
+   managed XDC holding comments only; tests/test_f2_build.py runs the floorplan and the
+   wrapper under Tcl mocks (containment, cell lists, order, failing closed).
+   What is not boxed: the MXU (wrapping the TMEM box: its `t_raddr` reaches the banks from
+   outside, the same path family; if it shows, the box grows or the MXU's request registers
+   get a box of their own beside it), the adapter and the bridges (free in SLR0 with the HBM
+   ports), the top's MMCMs and synchronizers.
+5. **The HBM AXI reset pipe replicated at synthesis** (`cl_synth_user_hbm.xdc`, read by the HBM
+   synthesis script after `cl_synth_user.xdc`): `MAX_FANOUT 8` on the net of the wrapper's
+   `PIPE_HBM_AXI_RST/pipe_reg[3]*/Q`, the HDK's own idiom for a reset driver (cl_mem_perf's
+   `cl_synth_user.xdc` puts `MAX_FANOUT 50` on its `sync_rst_n_reg`'s net), so synthesis keeps
+   a copy of the last stage per 8 of the IP's 32 `ARESET_N` loads and the placer can put each
+   beside its ports (the recovery check's 2.3-2.8 ns of route become a quarter). The wrapper
+   itself is the HDK's, copied by build.py, untouched; cl_mem_perf's constraints have no
+   timing exception on this reset (its `cl_timing_user.xdc` carries multicycles on its own
+   `PIPE_*_HBM` registers and false paths on its FIFOs only), so none is set here.
+
+Not changed, and why: the DMA -> TMEM address stage (item 3's other option). A piece's read
+request is combinational from the units' request registers and the RAM samples it at the
+even edge one core period later; a clk register at the TMEM would move the sampling to the
+next even edge, a core cycle on every TMEM read for every unit (the lanes take the word the
+cycle after the grant; the replay buffers, the DMA's stream fill and the quantizer's three
+reads assume it), so the VPU's, MXU's and quantizer's request registers would all move with
+it: a slice-wide protocol change, not a local one. The uarch options stay as in round 1 (P3 in
+block RAM is tmem_pump.md's pick for this part at 200 / 400 MHz; the arithmetic closes when
+the request is near its RAM, which the box is for). The WHS -0.75 after phys_opt was not
+detailed in the report; the pump's write stage (`pk_*`, one fast period) and the LUT RAM
+crossings are the usual sources, and the route stage's hold fixing is what to read first.
+
 ## Verification
 
 Verilator 5.048, one run at a time, from the worktree root (the tree's `.venv`):
@@ -262,6 +363,14 @@ Verilator 5.048, one run at a time, from the worktree root (the tree's `.venv`):
   are replication, so the board model's cycles are the same by construction; the channel
   statistics and `mxu_block` counters match f2-port-status.md's to the count). The fabric's
   extra cycle per write count and the host path's two show only on the card.
+
+Round 3 (b3c27ee6 the RTL, 7c708acf the constraints and flow): tests/test_f2_rtl.py 14 passed
+(the fabric at 4 / 8 / 16 / 32 ports with HAZ 0 caught, the DDR protocol and ordering, the OCL
+crossing at both clock ratios, the structural link-stage test), tests/test_native_nch.py 10
+passed, tests/test_f2_build.py + test_f2_scoped_clocks.py + test_target.py 177 passed (the
+floorplan and the link wrapper under Tcl mocks); the Gate 4 token bit-exact again: token
+19058 `Okay`, logits identical, DRAM identical, 8,029,592 cycles (the board model's sources
+are unchanged: the WT mode is off on otpu_mem_ch's FIFOs, the fabric is not in tb_top).
 
 The commits: 45ec6579 (the fabric: host, mem, port, nch), ea4ac41e and 3686f79e (the units'
 request registers; the DMA's is `t_ra_q`, `t_rq` being its port-B request register), 9ef46073
