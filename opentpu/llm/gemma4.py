@@ -98,8 +98,32 @@ from .qwen3 import (ATTN_BLOCK, ATTN_DEPTH, RunPos, _Bump, _lm_head, _lm_head_ro
                     step_descriptors)
 
 SLIDE, FULL = "sliding", "full"
-SLICES = (1, 2, 4)      # the tensor-parallel splits (docs/gemma4.md "Slices"): every matrix by
-                        # output rows, the inputs all-gathered; one slice is today's programs
+SLICES = (1, 2, 3, 4)   # the tensor-parallel splits (docs/gemma4.md "Slices"): every matrix by
+                        # output rows, the inputs all-gathered; one slice is today's programs.
+                        # S = 3 (docs/v4/f2-burst200-s3.md): the dimensions S does not divide
+                        # (Gemma 3's 4 query heads, its 256 K / V rows, the vocabulary) split
+                        # unevenly: zero-padded rows (gathered, then cut) or per-slice ranges
+
+
+def split_rows(n: int, S: int, D: int) -> int:
+    """Rows of an N-row matrix per slice when its output is all-gathered: n / S when S divides
+    n (the even split: S = 1, 2, 4 on Gemma), else whole blocks of D, the last slice's rows
+    past n zero (rowpad), the gathered tile cut back to n (an uneven S, docs/v4/f2-burst200-s3.md)."""
+    return n // S if n % S == 0 else -(-n // (S * D)) * D
+
+
+def split_ranges(n: int, S: int, D: int) -> list[tuple[int, int]]:
+    """[(first row, rows)] of each slice's part of an n-row matrix whose parts are never
+    gathered (the LM head): n / S each when S divides n, else whole blocks of D spread as evenly
+    as they go (the last block short), per-slice offsets."""
+    if n % S == 0:
+        return [(s * (n // S), n // S) for s in range(S)]
+    nb = -(-n // D)
+    out = []
+    for s in range(S):
+        a, e = D * (nb * s // S), min(n, D * (nb * (s + 1) // S))
+        out.append((a, e - a))
+    return out
 
 
 # =============================================================================== model spec
@@ -244,13 +268,10 @@ class Spec:
 
     def check(self, cfg: Config) -> None:
         D, S = cfg.D, cfg.S
+        # (n_q, the K / V rows and the vocabulary need not divide by S: split_rows / split_ranges)
         need = [(S in SLICES, f"slices S in {SLICES}"),
-                (self.n_q % S == 0, f"n_q {self.n_q} % S"),
-                (self.vocab % S == 0, f"vocab {self.vocab} % S"),
                 (self.hidden % S == 0, f"hidden {self.hidden} % S"),
                 (all(f % S == 0 for f in self.ffn), "ffn % S"),
-                (all(self.kvh(i) * self.hd(i) % S == 0 for i in range(self.layers)),
-                 "K / V rows % S"),
                 (self.ple_dim % S == 0, f"ple_dim {self.ple_dim} % S"),
                 (S == 1 or not self.experts, "a MoE model on one slice"),
                 (self.head_dim % D == 0 and self.global_head_dim % D == 0, "head dims % D"),
@@ -870,7 +891,12 @@ class Image:
         # gate / up rows, the down rows, the LM head's vocabulary rows); the norms, the KV
         # cache, the tables and the whole LM head table (the embedding gathers) replicated
         S = cfg.S
-        self.S, self.v_loc, self.h_loc = S, spec.vocab // S, H // S
+        # the LM head's rows per slice: (first row, rows) each (the whole table is in every
+        # slice; S = 3 on Gemma 3's 2^18 rows: 682 / 683 / 683 blocks, split_ranges)
+        self.v_ranges = split_ranges(spec.vocab, S, D)
+        self.S, self.v_loc, self.h_loc = S, self.v_ranges[0][1], H // S
+        # the query rows per slice (W_q by output rows; when S does not divide n_q every slice
+        # attends every head on the gathered q: split_rows pads the last slice's rows)
         self.nq_loc, self.p_loc = spec.n_q // S, P // S
         self.ring = min(cap, spec.window + RING_BLOCKS * block)         # sliding cache slots
         hs, hg, rot = spec.head_dim, spec.global_head_dim, spec.global_rot
@@ -932,16 +958,16 @@ class Image:
             if fp_ % S:
                 raise ValueError(f"the MLP width {fp_} (padded) does not split over {S} slices")
             # (rows, columns, format) of the slice's part of each projection: rows s / S ..
-            mats = {"wq": (nq // S, H, fa), "wo": (H // S, nq, fa), "wg": (fp_ // S, H, fg),
-                    "wu": (fp_ // S, H, fg)}
+            mats = {"wq": (split_rows(nq, S, D), H, fa), "wo": (H // S, nq, fa),
+                    "wg": (fp_ // S, H, fg), "wu": (fp_ // S, H, fg)}
             if P:
                 mats.update(wpg=(P // S, H, fp), wpp=(H // S, P, fp))
             nkv = spec.kvh(i)
             if own:
                 o["kn"] = lb.alloc(4 * d)
-                mats.update(wk=(nkv * d // S, H, fa))
+                mats.update(wk=(split_rows(nkv * d, S, D), H, fa))
                 if not spec.kv_same(i):
-                    mats.update(wv=(nkv * d // S, H, fa))
+                    mats.update(wv=(split_rows(nkv * d, S, D), H, fa))
             for n, (r, c, f) in mats.items():
                 o[n] = (lb.alloc(r * rb(c, f)), lb.alloc(r * sb(c, f)))
             C = self.dchunk[ff, fd]             # (the F chunk is the one-slice image's: the
@@ -1088,6 +1114,9 @@ class Image:
                 put(base + o["kn"], f32(W[a + "k_norm.weight"]))
             for n, (r, _, f) in o["mats"].items():     # gate / up: rows padded with zeros
                 pad = n in ("wg", "wu") and r * S != spec.ffn[i]
+                if n in ("wq", "wk", "wv"):             # (an uneven S: the last slice's too)
+                    full = spec.n_q * spec.hd(i) if n == "wq" else spec.kvh(i) * spec.hd(i)
+                    pad = pad or r * S != full
                 for s in range(S):
                     if S == 1:
                         sel = ("pad", r) if pad else None
@@ -1137,7 +1166,8 @@ class Image:
             for f, addr in lk["onehot"].items():
                 put(addr, GA.onehot(D, cfg.MCOLS, "int8" if f == "int8" else "fp4"))
             for s in range(S):
-                G.build(lambda _s, addr, a: put(addr, a, _s), s, S, spec, self.cap, lk["gen"])
+                G.build(lambda _s, addr, a: put(addr, a, _s), s, S, spec, self.cap, lk["gen"],
+                        v_loc=self.v_ranges[s][1])
         return imgs
 
     def _cols(self) -> np.ndarray:
@@ -1471,11 +1501,12 @@ class Image:
             mask=_tdesc(self.io["mask"], (2, self.block)), z2=self.io["z2"],
             xbuf=_tdesc(self.io["xbuf"], (self.prefill_rows, H)) if self.prefill_rows else None,
             wproj=_qdesc(*self.wproj, L * P // cfg.S, H, D, self.pformat) if P else None,
-            # the LM head MM streams this slice's vocabulary rows of the whole table
-            head=_qdesc(self.head[0] + sid * self.v_loc * Q.row_bytes(H, self.head_format, D),
-                        self.head[1] + sid * self.v_loc * Q.scale_bytes(H, self.head_format, D),
-                        self.v_loc, H, D, self.head_format),
-            v_loc=self.v_loc,
+            # the LM head MM streams this slice's vocabulary rows of the whole table (its
+            # first row v_off: an uneven S's ranges differ, split_ranges)
+            head=_qdesc(self.head[0] + self.v_ranges[sid][0] * Q.row_bytes(H, self.head_format, D),
+                        self.head[1] + self.v_ranges[sid][0] * Q.scale_bytes(H, self.head_format, D),
+                        self.v_ranges[sid][1], H, D, self.head_format),
+            v_loc=self.v_ranges[sid][1], v_off=self.v_ranges[sid][0],
             head_tab=GA.table(self.head[0], self.head_gs, spec.vocab, H, self.head_format, D),
             ple=GA.record_table(self.ple, R if self.ple_host else spec.vocab, self.ple_S,
                                 self.ple_format, D) if P else None)
@@ -1691,8 +1722,12 @@ def _attention(x, lw, m, pos, ropes, block: int):
     # W_k / W_v gathered to the whole K / V (normed, RoPE'd and appended by every slice to its
     # own copy of the cache), its heads' attention alone, W_o's rows on the gathered heads
     S, sid = ol.num_programs(), ol.program_id()
-    nq_loc = spec.n_q // S
-    h0 = sid * nq_loc
+    # an S that does not divide n_q (3 on Gemma 3's 4 heads; split_rows): W_q's rows padded to
+    # whole blocks, q gathered to the whole [R, n_q d] and cut, every slice attends every head
+    # (the one-slice entries), its output local; W_o's rows split as ever
+    q_all = spec.n_q % S != 0
+    nq_loc = spec.n_q if q_all else spec.n_q // S
+    h0 = 0 if q_all else sid * nq_loc
 
     def cos_sin(r):
         """Row r's cos and sin (a RoPE row: sliding cos, sin, then global cos, sin)."""
@@ -1701,9 +1736,11 @@ def _attention(x, lw, m, pos, ropes, block: int):
     kv = lw.kv
     xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
     q = ol.dot(xs, lw.wq)                                   # [R, nq_loc*d]
+    if q_all:
+        q = _cut(ol.all_gather(q), spec.n_q * d)
     if lw.own:
-        k = ol.all_gather(ol.dot(xs, lw.wk))                # [R, nkv*d]
-        v = k if lw.same else ol.all_gather(ol.dot(xs, lw.wv))
+        k = _cut(ol.all_gather(ol.dot(xs, lw.wk)), nkv * d) # [R, nkv*d]
+        v = k if lw.same else _cut(ol.all_gather(ol.dot(xs, lw.wv)), nkv * d)
         kn = ol.load(lw.kn)
         for r in range(R):
             c, s_ = cos_sin(r)
@@ -1743,10 +1780,16 @@ def _attention(x, lw, m, pos, ropes, block: int):
                   [j for _, j, _, _, _ in ent], [e[4] for e in ent], block, ol.LOG2E,
                   depth=ATTN_DEPTH, emit=emit)
     del Qs
-    o_all = ol.all_gather(o)                                # [R, n_q*d], the heads in order
+    o_all = o if q_all else ol.all_gather(o)                # [R, n_q*d], the heads in order
     y = ol.all_gather(ol.dot(o_all, lw.wo))                 # [R, H]
     del o, o_all
     _add_norm(x, y, ol.load(lw.g_attn), eps)
+
+
+def _cut(t, cols: int):
+    """The first `cols` columns of a gathered tile (the padded rows of an uneven split come
+    last, split_rows); the tile itself when nothing is padded."""
+    return t if t.cols == cols else t[:, 0:cols]
 
 
 def _add_norm(x, y, g, eps, scale=None):

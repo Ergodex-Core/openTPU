@@ -26,13 +26,13 @@ def _cos(a, b):
     return (a * b).sum(-1) / np.linalg.norm(a, axis=-1) / np.linalg.norm(b, axis=-1)
 
 
-def _model(d, layers=LAYERS, window=512):
+def _model(d, layers=LAYERS, window=512, hidden=256, ffn=512):
     """A tiny random Gemma 3 (HF's layer pattern: 5 sliding then a global): (HF model, the
     weights folded for Gemma 4's code, Spec), its config.json in d."""
     torch.manual_seed(0)
     hc = transformers.Gemma3TextConfig(
-        hidden_size=256, num_hidden_layers=layers, num_attention_heads=4,
-        num_key_value_heads=1, head_dim=128, intermediate_size=512, vocab_size=1000,
+        hidden_size=hidden, num_hidden_layers=layers, num_attention_heads=4,
+        num_key_value_heads=1, head_dim=128, intermediate_size=ffn, vocab_size=1000,
         sliding_window=window, sliding_window_pattern=6, query_pre_attn_scalar=128,
         max_position_embeddings=4096, final_logit_softcapping=None,
         attn_logit_softcapping=None)
@@ -159,21 +159,63 @@ def test_four_slices_resident_and_prefill_are_bit_exact(tiny_w256):
         np.testing.assert_array_equal(c.step(t), r)
 
 
+@pytest.fixture(scope="module")
+def tiny_h384(tmp_path_factory):
+    """The tiny model with hidden 384 and an MLP of 768: the widths three slices divide
+    (Gemma 3 1B's 1152 and 6912 do); its 4 query heads, 256 K / V rows and 1000-row head do
+    not, as the real model's."""
+    return _model(tmp_path_factory.mktemp("gemma3_h384"), hidden=384, ffn=768)
+
+
+def test_three_slices_match_hf_and_one_slice(tiny_h384):
+    """S = 3 (docs/v4/f2-burst200-s3.md), the uneven split: W_q's 512 rows as 128-row blocks
+    of 2 / 2 / 0 per slice (the last slice's padded), q gathered and every slice attending
+    every head; W_k / W_v's 128 rows as 1 / 0 / 0 blocks, gathered and cut; W_o, gate / up and
+    down by thirds; the head's 1000 rows as 2 / 3 / 3 blocks (split_ranges). Every fp32 sum
+    stays the one-slice program's: bit-exact to S = 1, per position and resident."""
+    m, W, spec = tiny_h384
+    assert spec.hidden == 384 and spec.n_q % 3 and spec.vocab % 3
+    assert G.split_rows(512, 3, 128) == 256 and G.split_rows(128, 3, 128) == 128
+    assert G.split_ranges(1000, 3, 128) == [(0, 256), (256, 384), (640, 360)]
+    assert G.split_ranges(2 ** 18, 3, 128) == [(0, 87296), (87296, 87424), (174720, 87424)]
+    toks = [int(t) for t in np.random.default_rng(5).integers(0, 1000, 20)]
+    with torch.no_grad():
+        hf = m(torch.tensor([toks])).logits[0].numpy()
+    ref = Engine(spec, W, cap=1024, cfg=_cfg())
+    one = np.array([ref.step(t) for t in toks])
+    eng = Engine(spec, W, cap=1024, cfg=_cfg(3))
+    assert eng.cfg.S == 3 and eng.image.v_ranges == [(0, 256), (256, 384), (640, 360)]
+    img = eng.image
+    assert img.bofs[img._key(0)]["mats"]["wq"][0] == 256
+    assert img.bofs[img._key(0)]["mats"]["wk"][0] == 128
+    dev = np.array([eng.step(t) for t in toks])
+    assert _cos(dev, hf).min() > 0.985
+    np.testing.assert_array_equal(dev, one)
+    res = Engine(spec, W, cap=1024, cfg=_cfg(3), resident=True)
+    assert res.resident
+    np.testing.assert_array_equal(np.array([res.step(t) for t in toks]), one)
+    # the slices' images: the same offsets, slice 2's W_q rows past the 4 heads zero
+    base = img._off(0).static() + img.bofs[img._key(0)]["wq"][0]
+    rb = 384                                        # an int8 row of 384 columns
+    assert eng.backend.machine.slices[2].dram[base:base + 256 * rb].any() is np.False_
+
+
 def test_slices_the_model_does_not_split_over():
-    """Spec.check: S in (1, 2, 4) and the dimensions divisible by S."""
+    """Spec.check: S in (1, 2, 3, 4) and the hidden / MLP widths divisible by S (the heads,
+    the K / V rows and the vocabulary split unevenly: split_rows, split_ranges)."""
     spec = G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=4,
                   n_kv=1, head_dim=128, global_head_dim=128, vocab=1000, ple_dim=0)
     spec.check(_cfg(4))
     with pytest.raises(ValueError, match="slices S in"):
+        spec.check(_cfg(5))
+    with pytest.raises(ValueError, match="hidden 256 % S"):
         spec.check(_cfg(3))
-    with pytest.raises(ValueError, match="n_q 2 % S"):
-        G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=2,
+    G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=2,
+           n_kv=1, head_dim=128, global_head_dim=128, vocab=1002, ple_dim=0).check(_cfg(4))
+    with pytest.raises(ValueError, match="ffn % S"):
+        G.Spec(hidden=384, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=4,
                n_kv=1, head_dim=128, global_head_dim=128, vocab=1000, ple_dim=0,
-               ).check(_cfg(4))
-    with pytest.raises(ValueError, match="vocab 1002 % S"):
-        G.Spec(hidden=256, kinds=(G.SLIDE,) * 2, kv_src=(0, 1), ffn=(512, 512), n_q=4,
-               n_kv=1, head_dim=128, global_head_dim=128, vocab=1002, ple_dim=0,
-               ).check(_cfg(4))
+               ).check(_cfg(3))
 
 
 def checkpoint(d: Path) -> Path:

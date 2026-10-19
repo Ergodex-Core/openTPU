@@ -433,8 +433,11 @@ def _ranges(ws):
 def logits(eng, R: int) -> np.ndarray:
     """The L run's last row's logits."""
     io, S, v, v_loc = eng.image.io, eng.cfg.S, eng.spec.vocab, eng.image.v_loc
-    return np.concatenate([eng.backend.read(s, io["logits"] + 4 * ((R - 1) * v + s * v_loc),
-                                            4 * v_loc).view(np.float32) for s in range(S)])
+    # (an image with per-slice head ranges, gemma4.split_ranges: each slice's own columns)
+    ranges = getattr(eng.image, "v_ranges", None) or [(s * v_loc, v_loc) for s in range(S)]
+    return np.concatenate([eng.backend.read(s, io["logits"] + 4 * ((R - 1) * v + a),
+                                            4 * n).view(np.float32) for s, (a, n) in
+                           zip(range(S), ranges)])
 
 
 def chunks(eng, tokens, head: bool = True):

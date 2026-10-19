@@ -117,9 +117,11 @@ def ptab2_addr(g: dict, mode: int = 0) -> int:
     return g["ptab2"] + 16 * (g["nb"] + 2) * mode
 
 
-def build(put, s: int, S: int, spec, cap: int, g: dict) -> None:
+def build(put, s: int, S: int, spec, cap: int, g: dict, v_loc: int | None = None) -> None:
+    """Slice s's generate area; v_loc: its LM head rows (default vocab / S; an uneven split's
+    own, gemma4.split_ranges)."""
     put(s, g["out"], np.full(cap + 1, OUT_MARK, np.uint32).view(np.float32))
-    V, v_loc = _vpad(spec), spec.vocab // S
+    V, v_loc = _vpad(spec), spec.vocab // S if v_loc is None else v_loc
     lg = np.full(V, -np.inf, np.float32)
     put(s, g["lg"], lg[:-(-v_loc // BLK) * BLK])
     put(s, g["pa"], np.ones(V, np.float32))
@@ -323,7 +325,8 @@ class Sampler:
             pen_from.shared = True
         self.chunk_seen = 0
         v = m.v_loc
-        self.o = ol.program_id() * v             # this slice's first vocabulary row
+        # this slice's first vocabulary row (m.v_off: an uneven split's, gemma4.split_ranges)
+        self.o = getattr(m, "v_off", ol.program_id() * v)
         self.nb = -(-v // BLK)
         self.bm = b.alloc((self.nb,))            # block maxima
         self.pt = None                           # the penalty's tiles (at the first chunk)

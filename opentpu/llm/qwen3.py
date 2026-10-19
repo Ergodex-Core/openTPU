@@ -1475,11 +1475,12 @@ def fill_logits(m) -> None:
     cursor = b.tmem_next
     n = min(HEAD_CHUNK, ol.tmem_words() // 8, m.v_loc)
     t = ol.full([n], -math.inf)                     # FILL_SENTINEL
+    v0 = getattr(m, "v_off", sid * m.v_loc)
     for c0 in range(0, m.v_loc, n):
         k = min(n, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         ol.store(m.logits[0, col:col + k], t[:k])
-    last = sid * m.v_loc + m.v_loc - 1
+    last = v0 + m.v_loc - 1
     b.rld(0, ol.load(m.logits[0, last:last + 1], out=t[0:1]), comment="logits fill landed")
     del t
     b.tmem_next = cursor        # the rest of the program as compiled without the fill
@@ -1746,9 +1747,10 @@ def _lm_head(x, m, spec):
     xs = ol.quantize(rmsnorm(x, ol.load(m.g_final), spec.eps))
     chunk = min(HEAD_CHUNK, ol.tmem_words() // 8)
     sink = getattr(m, "lm_sink", None)
+    v0 = getattr(m, "v_off", sid * m.v_loc)   # its first row (gemma4.split_ranges: uneven)
     for c0 in range(0, m.v_loc, chunk):
         n = min(chunk, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         if sink is None:
             ol.store(m.logits[:, col:col + n], ol.dot(xs, m.head[c0:c0 + n, :]))
         else:
@@ -1908,9 +1910,10 @@ def _lm_head_rows(x, m, spec, logit_rows):
     xs = ol.quantize(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps))
     chunk = head_rows_chunk(e - a)
     sinks = getattr(m, "lm_sinks", None)
+    v0 = getattr(m, "v_off", sid * m.v_loc)
     for c0 in range(0, m.v_loc, chunk):
         n = min(chunk, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         if sinks is None:
             ol.store(m.logitsr[a:e, col:col + n], ol.dot(xs, m.head[c0:c0 + n, :]))
             continue
@@ -2733,9 +2736,7 @@ class Engine:
             st = self.backend.wait(feed)
         self.stats.append(st)
         if stream is None:
-            logits = np.concatenate([self.backend.read(s, io["logits"] + 4 * s * v_loc,
-                                                       4 * v_loc).view(np.float32)
-                                     for s in range(S)])
+            logits = self._read_logits(io["logits"])
             if sink is not None:
                 sink.feed(0, logits)
         self.pos += 1
@@ -2779,11 +2780,17 @@ class Engine:
         st = self.backend.run(programs)
         st["rows"] = len(rows)
         self.stats.append(st)
-        v, v_loc = spec.vocab, self.image.v_loc
-        out = [np.concatenate([self.backend.read(s, io["logits"] + 4 * (r * v + s * v_loc),
-                                                 4 * v_loc).view(np.float32) for s in range(S)])
-               for r in logit_rows]
+        v = spec.vocab
+        out = [self._read_logits(io["logits"] + 4 * r * v) for r in logit_rows]
         return np.array(out, np.float32).reshape(len(logit_rows), v)
+
+    def _read_logits(self, addr: int) -> np.ndarray:
+        """One row of logits at DRAM `addr` (the row's first column): every slice's own
+        columns (vocab / S each, or an image's per-slice ranges: gemma4.split_ranges)."""
+        S, v_loc = self.cfg.S, self.image.v_loc
+        ranges = getattr(self.image, "v_ranges", None) or [(s * v_loc, v_loc) for s in range(S)]
+        return np.concatenate([self.backend.read(s, addr + 4 * a, 4 * n).view(np.float32)
+                               for s, (a, n) in zip(range(S), ranges)])
 
     def _chunk(self, seq: int, p0: int, n: int, left: int, fit: int, toks=None,
                whole: bool = True, logits: bool = True):
@@ -3133,9 +3140,7 @@ class Engine:
             return None
         if not em:
             run("head", {"row": len(part) - 1})
-        io, S, v_loc = img.io, self.cfg.S, img.v_loc
-        return np.concatenate([self.backend.read(s, io["logits"] + 4 * s * v_loc, 4 * v_loc)
-                               .view(np.float32) for s in range(S)])
+        return self._read_logits(img.io["logits"])
 
     def _send_ahead(self, send, j: int) -> None:
         """MoE layer j's experts to the server's ahead_layer, as global ids in layer_ahead's
@@ -3373,10 +3378,7 @@ class Engine:
                 self.stats.append(st)
                 self.pos += len(got)
                 if self.gen_debug:          # the logits of the run's last token
-                    io, v = self.image.io, self.image.v_loc
-                    self.gen_logits = np.concatenate([
-                        self.backend.read(s, io["logits"] + 4 * s * v, 4 * v).view(np.float32)
-                        for s in range(self.cfg.S)])
+                    self.gen_logits = self._read_logits(self.image.io["logits"])
             out += got
             ctx += got
             n -= len(got)
