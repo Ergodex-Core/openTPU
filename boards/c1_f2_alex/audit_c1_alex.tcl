@@ -330,7 +330,10 @@ proc ::c1_alex::native_disabled_writes {prefix audit} {
             set name ${root}u_mem/f2_mem_i/memory_sc/inst/${si}_entry_pipeline/${si}_mmu/inst/${channel}_sreg/s_axi_${channel}valid
             set pin [exact_pin $name]
             if {[get_property DIRECTION $pin] ne "IN"} {error "C1 Alex audit: disabled write input has wrong direction $name"}
-            set nets [get_nets -quiet -segments -of_objects $pin]
+            # -leaf resolves the actual driver through this exact local net.
+            # Expanding -segments first repeats the shared constant network
+            # (tens of thousands of aliases) separately for all sixteen pins.
+            set nets [get_nets -quiet -of_objects $pin]
             if {![llength $nets] || [llength [get_ports -quiet -of_objects $nets]]} {error "C1 Alex audit: disabled write input disconnected/escaped $name"}
             set drivers [get_pins -quiet -leaf -filter {DIRECTION == OUT} -of_objects $nets]
             if {[llength $drivers] != 1} {error "C1 Alex audit: disabled write input lacks unique constant driver $name"}
