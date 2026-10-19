@@ -73,11 +73,20 @@ and the four gathers (k, v, o, y: ~460 cycles). It is 22% of the token where it 
 v4's: the next lever after the memory path is the attention's VPU work (ULANES 16, or the
 composite functions pipelined), not the port. The 4-layer + head point at S = 4: 264,302.
 
-### RTL (measured): to be filled from the Verilator receipts
+### RTL (measured)
 
-(The configurations table with RTL cycles / tok/s / LPN / Lens roofline %, from
-`tools/perf_qwen.py --slices S` on the engine model and on the native model, with the v4
-numbers 949,550 / 2,394,257 beside them.)
+The first S = 4 run of the RTL (`OTPU_TARGET=f2-hbm:v5 OTPU_NCH=8 tools/perf_qwen.py --model
+gemma3 --layers 1 --wformat int8 --head-format int8 --lat 60 --mhz 200 --portb 4 --rowlanes
+--mcols 4 --aline 64 --slices 4`; four slices on 32 channels of the native memory model, the
+adapter still at RD 64, 501 s of simulation): **1 layer + head 195,339 cycles**, 82.7% of the
+core-port roofline 161,635 (port B 646,541 chunks at 4 a cycle; the slice's MXU 161,258
+advances), the channels at 0.84 beats a cycle each (the RD 64 bound, as v4), MAC 82.6%, 0
+two-part reads, the 7 GATHERs of the layer 1,434 cycles in all (205 each). LPN (lpn-estimate)
+202,690 (+3.8%; the head +4.5%, the MLP -1.9%, the attention -1.9%: calibrated at a mean
+2.8%, the v4 model's quality).
+
+(The configurations table with RTL cycles / tok/s / LPN / Lens roofline % on the engine model
+at RD 128 follows below, with the v4 numbers 949,550 / 2,394,257 beside them.)
 
 ## Utilization (estimated per SLR; tools/v5_utilization.py)
 
@@ -115,4 +124,27 @@ slice 0 (-2K LUT in SLR0).
 
 ## What still blocks an FPGA build
 
-(To be filled.)
+Nothing in this tree has been synthesized (the brief: Verilator first; the F2 host's Vivado
+seat is taken, the build is a later, separately approved step). In order of risk:
+
+1. **The 450 MHz engine's timing** is a structure, not a report: the generator's 2-3 LUT
+   levels, the asynchronous FIFOs' gray pointers and the registered AXI outputs follow
+   cl_mem_perf's recipe, which closed in AWS's example, but no placed WNS exists for
+   otpu_hbm_ch; and the host's 2 x 1 mux (S = 4) is the kind of 256-bit two-master select that
+   failed at -2.2 ns in rounds 1-8. `f2-hbm:v5s3` has no mux.
+2. **The SLL budget is an assumption** (23K a boundary; 71% / 55% used at S = 4): read the
+   count from `report_utilization -slr` on the v4 placed checkpoint before trusting it.
+3. **Every SLR is at 75-79% LUT on the estimate**, SLR0 with 73% of its RAMB36: a synthesis
+   that lands 10% higher needs the levers in "Utilization" (ACT_ROWS 4, the TMEM in URAM).
+4. **The build flow**: `boards/f2/build.py` accepts `f2-hbm:v5` / `v5s3` (mem_path "engine":
+   the CL top cl_opentpu_hbm5.sv, the floorplan cl_pnr_user_hbm5.tcl, the host's
+   cl_axi_sc_1x1 alone from the HDK's prebuilt block design), checked under the Tcl mocks of
+   tests/test_f2_build.py and never against the HDK: the first SynthCL run will find what the
+   mocks do not (the HBM wrapper's port instance for 32 ports, the CDC constraints of the
+   engines' crossings, which cl_timing_user_hbm.tcl must bound by the destination period as
+   the OCL's are).
+5. **The multi-slice control path**: otpu_board at S = 4 (the hub, the four slices' resets and
+   starts through the chains) has run only in Verilator; the v4 card ran S = 1.
+6. **The host at S = 4** reaches the HBM through port 31's mux; the ordering rule (a run's
+   reads after the host's writes, pcis_wbusy) holds as in v4 since every host transaction
+   completes through the global switch before RUN; the card is where this is proven.
