@@ -243,11 +243,11 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   (29,469 / 29,475 / 29,442 cycles, 268 instructions a slice), every slice's DRAM the ISA
   simulator's (`test_tiny_gemma3_three_slices_on_board_model`; `pytest
   tests/test_f2_burst200_s3.py -q`: 10 passed).
-- Gemma 3 1B's token at S = 3 on the Verilator RTL: 2,993,389 cycles, the ISA simulator's next
-  token (the Lens run above); the bit-exact gate
-  (`test_gemma3_1b_token_on_three_slice_rtl_is_bit_exact`: the prompt on the ISA simulator,
-  the last step on the RTL and on the ISA simulator from the same DRAM, logits and every
-  slice's DRAM compared) is recorded below.
+- Gemma 3 1B's token at S = 3 on the Verilator RTL, the bit-exact gate
+  (`test_gemma3_1b_token_on_three_slice_rtl_is_bit_exact`: the chat prompt's 14 tokens on
+  the ISA simulator, the step at position 14 on the RTL and on the ISA simulator from the
+  same DRAM state): **logits equal bit for bit, every slice's DRAM equal, 2,993,389 cycles,
+  next token 19058 'Okay'** (the Lens run above's cycles exactly; 10 min of Verilator).
 - Gemma 3 1B at S = 3 on the ISA simulator: S = 1's tokens and HF statistics (above).
 
 ## Risks
