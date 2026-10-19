@@ -264,3 +264,47 @@ def test_historical_executor_is_accepted_only_for_completed_prequalification_rol
  e=r.module('evidence')
  for role in ('link','implement','refine'):assert sha in e.REVIEWED_HISTORICAL[(role,'boards/c2_f2_alex/implement.py')]
  assert sha not in e.REVIEWED_HISTORICAL.get(('qualify','boards/c2_f2_alex/implement.py'),set())
+
+
+def pulse_text():
+ return '''3. checking pulse_width_clock (1)
+---------------------------------
+ There is 1 register/latch pin which need pulse_width check. (LOW)
+
+<hidden>/<hidden>/<hidden>/<hidden>
+
+4. checking unconstrained_internal_endpoints (0)
+Pulse Width Checks
+--------------------------------------------------------------------------------------
+Clock Name:         clk_125
+Waveform(ns):       { 0.000 4.000 }
+Period(ns):         8.000
+Sources:            { WRAPPER/IO_SHIM/PLL/CLKOUT1 }
+
+Check Type        Corner  Lib Pin   Reference Pin  Required(ns)  Actual(ns)  Slack(ns)  Location        Pin
+Low Pulse Width   Slow    FDCE/C    n/a            0.275         4.000       3.725      SLICE_X119Y148  <hidden>/<hidden>/<hidden>/<hidden>
+High Pulse Width  Slow    FDCE/C    n/a            0.275         4.000       3.725      SLICE_X119Y148  <hidden>/<hidden>/<hidden>/<hidden>
+
+'''
+
+
+def test_exact_protected_pulse_context_preserves_identity_limit(tmp_path):
+ old=tmp_path/'old';new=tmp_path/'new';old.write_text(pulse_text());new.write_text(pulse_text())
+ out=r.protected_pulse_context(reports={'timing.rpt':new},auxiliary={'shell_timing':old},physical_result=r.physical(g,summary()))
+ assert out['current_rows']==2 and out['hidden_endpoint_identity_asserted'] is False
+ assert out['scoped_report_exhaustiveness_asserted'] is False
+
+
+@pytest.mark.parametrize('before,after',[
+ ('There is 1 register','There are 2 registers'),
+ ('<hidden>/<hidden>/<hidden>/<hidden>','WRAPPER/CL/unknown/C'),
+ ('CLKOUT1','CLKOUT2'),('3.725','-0.001'),('3.725','3.700'),('3.725','NaN'),
+ ('High Pulse Width','Unknown Check'),('Clock Name:','Wrong Header:'),
+])
+def test_changed_protected_pulse_evidence_rejected(tmp_path,before,after):
+ old=tmp_path/'old';new=tmp_path/'new';old.write_text(pulse_text());new.write_text(pulse_text().replace(before,after))
+ with pytest.raises(ValueError):r.protected_pulse_context(reports={'timing.rpt':new},auxiliary={'shell_timing':old},physical_result=r.physical(g,summary()))
+
+
+def test_exact_handshake_class_only_applies_to_cdc():
+ assert r.CLASSES['reviewed-vendor-handshake-cdc']=={'cdc'}

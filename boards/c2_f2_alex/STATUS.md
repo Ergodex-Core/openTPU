@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 22:57 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 23:16 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -18,6 +18,26 @@ semantic review. Its immutable receipt SHA256 is
 `061fb42a481565d1d40639c2fd1f210ab7a566554f455fbbda91f852f7280870`.
 The raw reports retain `route_qualified=false`; later review writes a separate
 receipt and does not alter or reclassify the original collection artifacts.
+
+The signed bus-skew checker was corrected in `dd123aad`: Vivado's actual skew
+includes relative clock-delay/CRPR terms and may be negative. All 133 current
+rows satisfy `slack = requirement - actual`; the smallest slack is +2.928 ns.
+The corrected reviewer still rejects negative slack, exceeded bounds, nonfinite
+values and inconsistent arithmetic. Its 113 focused tests pass. A fresh semantic
+replay is running; no RTL, constraints or routed checkpoint changed.
+
+The current no-clock comparison passes for all 35 pins and 6,678 rule settings.
+The unused-net finding contains 1,820 exact original-shell nets and 35 additional
+outputs. Complete segment/leaf/port capture proves each added net has one output
+driver and no consumer or port. The five deterministic hardware fixtures are
+prepared under `/home/ubuntu/rachit/codex-c2/alex-fixtures-dd123aad`; package input
+roots, eight original receipt hashes and seven source revisions were verified.
+
+C1 is independently building on `m7a.8xlarge` instance `i-06cf8792fb8f15534`,
+using source `b2f45962` and continuation executor `178ca139`. IP/synthesis started
+at 22:59:59 UTC; simulation and link/implementation/refinement follow-ons wait
+for successful, hash-bound upstream completion. FPGA runs remain restricted to
+`opentpu-f2` (`i-0c78de2253f66519d`).
 
 Final qualification from executor `136e8218` stopped at the routed S_HOST/wready
 structural assertion before collecting reports. Its failed receipt is
@@ -74,9 +94,9 @@ hidden endpoint identity is not claimed. The two apparent property conflicts
 were a pin and a net sharing a NAME, not changed properties of the same object.
 
 The latest Codex snapshot is verified at
-`s3://opentpu-agent-traces/codex/snapshots/20261019T222710.713630Z/`, archive SHA256
-`e2d1901dc14b12e506451d28c9d4935a5dc3bced7aac20319041a58b64791eab`
-(384,031,635 bytes, verified at 22:28:38 UTC).
+`s3://opentpu-agent-traces/codex/snapshots/20261019T225835.136229Z/`, archive SHA256
+`8e038cd331e4bd28e63bca36cdaaf4c6cc0de394aaa3c6179a6af42bca779638`
+(391,178,581 bytes, verified at 23:00:30 UTC).
 
 Implementation completed at 21:31:14 UTC with setup slack +0.028 ns and hold
 slack +0.010 ns. The implementation receipt SHA256 is

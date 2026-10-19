@@ -54,3 +54,11 @@ The bundle preserves the pending collection and adds the immutable review role.
 copied reports and compare the decisions, sources, checkpoint and receipt chain.
 A claimed successful review receipt alone is insufficient. Schema `1` retains
 its original qualified-collector rules.
+
+For the current RTSTAT-10 finding, `unused_outputs` must retain the raw
+`unused_output_nets` capture from the exact refined checkpoint. The exception
+predicate compares the complete reported net inventory to the original shell's
+full typed relation inventory and replays the full segment/leaf/port proof for
+every added CL output. The capture cannot be replaced by a summary or success
+flag; the exact finding and auxiliary hashes still require an artifact-specific
+disposition.

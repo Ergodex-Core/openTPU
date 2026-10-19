@@ -23,6 +23,7 @@ MODULES = ('evidence.py', 'build.py', 'final_review.py', 'gray_review.py', 'no_c
 CLASSES = {
     'inherited-protected-shell': {'cdc', 'check_timing'},
     'reviewed-vendor-fifo-cdc': {'cdc'},
+    'reviewed-vendor-handshake-cdc': {'cdc'},
     'reviewed-reset-status-cdc': {'cdc'},
     'reviewed-memory-output-register-suggestion': {'methodology'},
     'reviewed-clock-placement-suggestion': {'methodology'},
@@ -146,6 +147,62 @@ def linked_checkpoint(auxiliary):
     return module('evidence').digest(header.get('checkpoint_sha256'))
 
 
+def protected_pulse_context(*, reports, auxiliary, physical_result):
+    """Compare inherited visible shell context, never infer a hidden pin identity."""
+    from decimal import Decimal, InvalidOperation
+    require('shell_timing' in auxiliary, 'Missing original shell timing witness')
+    def parse(path):
+        text = Path(path).read_text()
+        sections = re.findall(r'(?m)^3\. checking pulse_width_clock \(\d+\)\n-+\n(.*?)(?=^4\. checking)', text, re.S)
+        require(len(sections) == 1, 'Missing/ambiguous detailed pulse warning')
+        warning = tuple(line.strip() for line in sections[0].splitlines() if line.strip())
+        require(len(warning) == 2 and warning[0] == 'There is 1 register/latch pin which need pulse_width check. (LOW)' and
+                re.fullmatch(r'<hidden>(?:/<hidden>)+', warning[1]), 'Unexpected protected pulse warning')
+        clocks = {}; rows = []
+        blocks = re.split(r'(?m)^Pulse Width Checks\s*\n-+\n', text)[1:]
+        require(blocks, 'No pulse check tables')
+        for block in blocks:
+            head = re.match(r'Clock Name:\s*([^\n]+)\nWaveform\(ns\):\s*([^\n]+)\nPeriod\(ns\):\s*([^\n]+)\nSources:\s*([^\n]+)\n', block)
+            require(head is not None, 'Malformed pulse clock metadata')
+            name, waveform, period, sources = (value.strip() for value in head.groups())
+            require(name not in clocks, 'Duplicate pulse clock table')
+            try:
+                p = Decimal(period); wave = [Decimal(v) for v in waveform.strip('{} ').split()]
+                require(p.is_finite() and p > 0 and len(wave) == 2 and all(v.is_finite() for v in wave) and 0 <= wave[0] < wave[1] < p, 'Invalid pulse clock waveform')
+            except InvalidOperation: raise ValueError('Invalid pulse clock number')
+            clocks[name] = dict(waveform=waveform, period=period, sources=sources)
+            tail = block[head.end():].lstrip().splitlines()
+            require(tail and tail[0].startswith('Check Type'), 'Pulse table header absent')
+            count = 0
+            for line in tail[1:]:
+                if not line.strip(): break
+                match = re.fullmatch(r'(Min Period|Max Period|Low Pulse Width|High Pulse Width)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)\s+(\S+)', line.strip())
+                require(match is not None, 'Unparsed pulse row')
+                kind, corner, lib, ref, req, act, slack, loc, pin = match.groups()
+                try:
+                    required, actual, margin = map(Decimal, (req, act, slack))
+                    require(all(v.is_finite() and v >= 0 for v in (required, actual, margin)), 'Negative/nonfinite pulse result')
+                    expected = required - actual if kind == 'Max Period' else actual - required
+                    require(abs(expected - margin) <= Decimal('0.002'), 'Pulse arithmetic mismatch')
+                except InvalidOperation: raise ValueError('Invalid pulse row number')
+                rows.append([name, *match.groups()]); count += 1
+            require(count > 0, 'Empty pulse table')
+        return warning, clocks, rows
+    old_warning, old_clocks, old_rows = parse(auxiliary['shell_timing'])
+    warning, clocks, rows = parse(reports['timing.rpt'])
+    require(warning == old_warning, 'Protected pulse context differs from original shell')
+    require(all(name in clocks and clocks[name] == value for name, value in old_clocks.items()), 'Original shell pulse clock metadata changed')
+    require(physical_result['checks']['pulse_width_clock'] == '1' and
+            Decimal(physical_result['timing']['pulse_failing']) == 0 and
+            Decimal(physical_result['timing']['tpws']) == 0 and
+            Decimal(physical_result['timing']['wpws']) >= 0, 'Final complete pulse totals fail')
+    return dict(warning=list(warning), inherited_clock_metadata=old_clocks,
+                current_rows_sha256=canonical(rows), current_rows=len(rows), original_rows_sha256=canonical(old_rows),
+                inputs={'current':record(reports['timing.rpt']), 'shell':record(auxiliary['shell_timing'])},
+                hidden_endpoint_identity_asserted=False, scoped_report_exhaustiveness_asserted=False,
+                basis='exact_original_shell_visible_warning_and_clock_context_plus_complete_final_pulse_totals')
+
+
 def replay(*, reports, auxiliary, disposition_path, checkpoint, collection_receipt_sha256, linked_checkpoint_sha256=None):
     g = module('gray_review'); n = module('no_clock_review')
     policy = read_json(POLICY)
@@ -177,6 +234,7 @@ def replay(*, reports, auxiliary, disposition_path, checkpoint, collection_recei
     require(isinstance(result['reset_status'],dict) and result['reset_status'].get('issues') == [] and 'canonical_facts' in result['reset_status'], 'Reset/status predicate unresolved/incomplete')
     exception = module('exception_review')
     require(hasattr(exception,'review_artifact'), 'Exception artifact predicate is not implemented')
+    result['protected_pulse'] = protected_pulse_context(reports=reports, auxiliary=auxiliary, physical_result=result['physical'])
     result['exceptions'] = exception.review_artifact(reports=reports, auxiliary=auxiliary, checkpoint_sha256=checkpoint,
         prerequisites={name: result[name] for name in ('gray', 'no_clock', 'reset_status')})
     require(isinstance(result['exceptions'],dict) and result['exceptions'].get('issues') == [] and 'canonical_facts' in result['exceptions'], 'Exception/methodology predicate unresolved/incomplete')

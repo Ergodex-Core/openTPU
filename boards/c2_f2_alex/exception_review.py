@@ -600,6 +600,64 @@ def unused_net_inventory(supplemental,findings):
     return result
 
 
+
+def review_unused_outputs(inventories,shell_objects,topology,checkpoint):
+    """Exact current RTSTAT membership plus complete physical unused-output proof.
+
+    The caller binds raw shell and probe bytes to the artifact policy. Counts or
+    matching names alone never discharge a newly introduced CL net.
+    """
+    g=_peer('gray_review')
+    def unique(text):
+        values=g.tcl_list(text)
+        require(len(values)==len(set(values)) and all(v and v!='...' for v in values),'Duplicate/truncated unused-net inventory')
+        return values
+    require(set(inventories)=={'RTSTAT-10#1'},'Unexpected unused-net finding inventory')
+    observed=inventories['RTSTAT-10#1']
+    require(not observed['ports'],'Unexpected unused-net port endpoint')
+    current={'related_nets':observed['nets']};baseline={}
+    for row in g.records(shell_objects):
+        if row[0]!='relation_inventory' or g.label(row[1])!=('drc','RTSTAT-10#1'):continue
+        data=g.pairs(row[3:]);require(row[2] not in baseline,'Duplicate baseline unused-net relation')
+        baseline[row[2]]=unique(data['names'])
+        require(len(baseline[row[2]])==int(data['count']),'Incomplete baseline unused-net inventory')
+    require(set(baseline)=={'pins','cells','nets','ports','pblocks'},'Missing baseline unused-net relations')
+    shared=set(current['related_nets'])&set(baseline['nets']);new=set(current['related_nets'])-shared
+    require(shared and all(not n.startswith('WRAPPER/CL/') for n in shared),'Invalid protected-shell inheritance scope')
+    expected={'WRAPPER/CL/SH_DDR/genblk1.IS_DDR_IO.DDR_CLK/O'}
+    expected.update(f'WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top/sl_oport{s}[{bit}]' for s in range(2) for bit in range(17))
+    require(new==expected,'New net lacks reviewed source contract')
+    nets={};leaves={};headers=[];selected=[];complete=[]
+    for ordinal,row in enumerate(g.records(topology),1):
+        require(ordinal<=1000,'Unused-output record cap')
+        if row[0]=='schema': headers.append(g.pairs(row))
+        elif row[0]=='selected_nets':selected.append(unique(g.pairs(row[1:])['names']))
+        elif row[0]=='net':
+            require(row[1] not in nets,'Duplicate net');nets[row[1]]=g.pairs(row[2:])
+        elif row[0]=='leaf':
+            data=g.pairs(row[2:]);key=(row[1],data['name']);require(key not in leaves,'Duplicate leaf');leaves[key]=data
+        elif row[0]=='complete':complete.append(g.pairs(row[1:]))
+        else:raise ValueError('Unexpected/error/capped/port record: '+row[0])
+    require(headers==[{'schema':'1','kind':'unused_output_nets','checkpoint_sha256':checkpoint,'route_qualified':'0'}],'Wrong checkpoint/header')
+    require(len(selected)==1 and set(selected[0])==new and set(nets)==new,'Probe does not cover exact new nets')
+    require(complete==[{'nets':str(len(new)),'route_qualified':'0'}],'Probe incomplete')
+    facts=[];used=set()
+    for name,row in sorted(nets.items()):
+        props=g.td(row['properties']);require(props.get('NAME')==name and props.get('CLASS')=='net' and props.get('ROUTE_STATUS')=='NOLOADS','Net identity/routing differs')
+        segments=unique(row['segments']);pins=unique(row['pins']);leaf_names=unique(row['leaf_pins']);ports=unique(row['ports'])
+        require(name in segments and pins and len(leaf_names)==1 and not ports,'Net has missing evidence or observable endpoints')
+        key=(name,leaf_names[0]);require(key in leaves,'Missing sole leaf properties');used.add(key)
+        leaf=leaves[key];lp=g.td(leaf['properties']);cp=g.td(leaf['owner_properties']);owner=unique(leaf['owner'])
+        expected_ref='IBUFCTRL' if name.startswith('WRAPPER/CL/SH_DDR/') else 'LUT1'
+        require(lp.get('NAME')==leaf_names[0] and lp.get('CLASS')=='pin' and lp.get('DIRECTION')=='OUT' and lp.get('REF_PIN_NAME')=='O' and lp.get('REF_NAME')==expected_ref,'Leaf is not sole output driver')
+        require(owner==[leaf_names[0].rsplit('/',1)[0]] and cp.get('NAME')==owner[0] and cp.get('CLASS')=='cell' and cp.get('REF_NAME')==expected_ref and cp.get('IS_PRIMITIVE')=='1' and cp.get('IS_BLACKBOX')=='0','Driver primitive identity differs')
+        facts.append({'net':name,'segments':segments,'sole_leaf_output':lp,'driver_cell':cp,'ports':[]})
+    require(used==set(leaves),'Extra leaf record')
+    return {'kind':'rtstat-unused-net-semantic-review','route_qualified':False,'issues':[],
+            'checkpoint_sha256':checkpoint,'canonical_facts':{'inherited_shell_nets':sorted(shared),'inherited_shell_nets_sha256':digest(sorted(shared)),
+            'new_unused_outputs':facts,'new_unused_outputs_sha256':digest(facts),'current_net_inventory_sha256':digest(sorted(current['related_nets']))},
+            'rationale':'Every current net is either exactly present in the original protected-shell finding or independently captured across all net segments with its sole primitive output driver and no consumer/port. New nets match synthesis-pinned disabled XSDB/DDR contracts; no constant value or name/count-only waiver is asserted.'}
+
 def review_artifact(*,reports,auxiliary,checkpoint_sha256,prerequisites=None):
     """Replay source-pinned raw files; caller binds hashes and exact dispositions.
 
@@ -622,10 +680,13 @@ def review_artifact(*,reports,auxiliary,checkpoint_sha256,prerequisites=None):
         require(set(result['canonical_facts']['handshake_roots'])==set(handshakes),'Export/raw handshake root mismatch')
         drc=Path(reports['drc.rpt']).read_text();method=Path(reports['methodology.rpt']).read_text()
         facts['unused_nets']=unused_net_inventory(reports['supplemental.tcldata'],parse_findings_report(drc))
+        if facts['unused_nets']:
+            require('unused_outputs' in auxiliary and 'shell_objects' in auxiliary,'Missing raw unused-output/shell witness')
+            facts['unused_output_review']=review_unused_outputs(facts['unused_nets'],auxiliary['shell_objects'],auxiliary['unused_outputs'],checkpoint_sha256)
         objects=[g.td(row[1]) for row in g.records(reports['objects.tcldata']) if row and row[0]=='cdc']
         facts['cdc_inventory']=current_cdc_inventory(Path(reports['cdc.rpt']).read_text(),objects)
         no_clock=prerequisites.get('no_clock',{});reset=prerequisites.get('reset_status',{})
-        witnesses={'unused_net_topology_required':facts['unused_nets'],
+        witnesses={'unused_net_topology_required':facts.get('unused_output_review',{}).get('issues')==[] and bool(facts.get('unused_output_review',{}).get('canonical_facts')),
             'exact_shell_no_clock_witness_required':no_clock.get('predicate_satisfied') is True and no_clock.get('canonical_current_sha256')==no_clock.get('canonical_shell_sha256') and no_clock.get('unresolved_count')==0,
             'complete_current_cdc_review_required':facts['cdc_inventory'] and reset.get('issues')==[] and bool(reset.get('canonical_facts'))}
         result=review_methodology(drc,method,witnesses=witnesses)
