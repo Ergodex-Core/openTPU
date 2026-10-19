@@ -177,15 +177,22 @@ Verilator 5.048, one run at a time (the tree's `build/verilator` cleared between
   runs of reads as bursts (the `longs * 20 < bursts` check), the host's writes, reads, B's and
   R's in order with its IDs, zeros past the last port; `BARRIER 0` returns stale data; the DDR
   protocol and ordering, the OCL crossing, the PCIS structural test).
-- `tests/test_native_nch.py`: see the hand-back (the adapter is untouched by this round).
+- `tests/test_native_nch.py`: **11 passed** (the adapter is untouched by this round: NCH 2
+  cycle-identical to the two-channel adapter, NCH 2 / 4 / 8 / 16 with the host's map, above 4
+  GiB, WDQ 1).
 - `tests/test_f2_build.py`, `tests/test_f2_scoped_clocks.py`, `tests/test_target.py`: **183
   passed** (the HBM snapshot with the SmartConnect block design in the synthesis script and the
   CL top; the three floorplans, the five-pblock one on the new cells and its containment, Alex's
   under the same Tcl mocks; `check_hbm_sc` on a bd of the HDK's schema, failing closed; the
   link wrapper's retime hook and the DONT_TOUCH workaround).
-- **Gate 4** ([f2-port-status.md](f2-port-status.md)): see the hand-back (`tb_top`'s board
-  model does not include the fabric, so the token's cycles and logits are this branch's
-  core, which is untouched).
+- **Gate 4** ([f2-port-status.md](f2-port-status.md)): one Gemma 3 decode token through the
+  NCH 8 board model (`OTPU_NCH=8 OTPU_AXI=1 PYTHONPATH=. python /tmp/f2port_rtl_token.py
+  <tree>`, "Why is the sky blue?" prefilled on the ISA simulator, the step at its last token
+  on the RTL and on the ISA simulator): **bit-exact**, both pick token 19058 `Okay`, `logits
+  identical: True, max |diff| 0.0, DRAM after the step identical: True`; the ISA step 25 s,
+  the RTL step 524 s; **8,029,592 cycles**, the number of rounds 1-4 (`tb_top`'s board model
+  is otpu_native_mem's channel model, not the fabric, and the core is untouched); the channel
+  statistics and the `mxu_block` counters match f2-port-status.md's to the count.
 
 ## The build (opentpu-f2, i-0c78de2253f66519d)
 
