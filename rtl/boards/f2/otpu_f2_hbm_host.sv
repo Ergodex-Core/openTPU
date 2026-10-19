@@ -11,15 +11,17 @@
 // host, crossed back gray-coded) reaches the burst's last beat. Beats to a port past the last
 // (NPORT) are dropped (counted done).
 //
-// The ports' side (p_*): the head beat's AW, W and AR go to every port on shared buses, with a
-// valid per port, and each port registers them (otpu_f2_hbm_mem's otpu_f2_hbm_hreg: a one-entry
-// register per channel whose ready is its own emptiness, a flip-flop), as it registers its R
-// and B back; here the shared buses (p_awaddr, p_wdata / p_wstrb / p_wlast, p_araddr) and the
-// valids (p_awvalid, p_wvalid, p_arvalid) are flip-flops too, so every net between this block
-// and a port runs from a flip-flop through at most one LUT into a flip-flop, with the cycle for
-// its route (the 61d07199 placement, docs/v4/f2-timing.md: ws_reg -> every port's m_wdata_reg,
-// 2 levels, 6.0 of 6.2 ns of route at 450 MHz). The resets through registers of their own
-// (arst_q, hrst_q: otpu_f2_hbm_nch).
+// The ports' side (p_*): the head beat's AW, W (the whole 64 bytes: one W of 512 bits, which
+// the port's register sends as its two AXI beats) and AR go to every port on shared buses, with
+// a valid per port, and each port takes them through a link of register stages into a one-entry
+// register (otpu_f2_hbm_mem's otpu_f2_hbm_hlink and otpu_f2_hbm_hreg), as its R and B come back
+// through stages; here the shared buses (p_awaddr, p_wdata / p_wstrb, p_araddr) and the valids
+// (p_awvalid, p_wvalid, p_arvalid) are flip-flops, the readies the links' credit flip-flops, so
+// every net between this block and a port's link runs from a flip-flop through at most one LUT
+// into a flip-flop beside it (docs/v4/f2-timing.md: the 61d07199 placement's ws_reg -> every
+// port's m_wdata_reg over 6.0 ns, the 8b2fd3a0 placement's hw_wd_reg -> port 0's register over
+// 3.4 ns of bare wire). The resets through registers of their own (arst_q, hrst_q:
+// otpu_f2_hbm_nch).
 //
 // Order (otpu_f2_mem's): pcis_wbusy (an AW or W in a skid buffer or taken, a burst's B not yet
 // given back; registers only) holds the host's reads (an AR leaves its skid buffer for the read queue
@@ -78,9 +80,8 @@ module otpu_f2_hbm_host #(
   output logic [33:0]           p_awaddr,
   output logic [NPORT-1:0]      p_wvalid,
   input  logic [NPORT-1:0]      p_wready,
-  output logic [255:0]          p_wdata,
-  output logic [31:0]           p_wstrb,
-  output logic                  p_wlast,
+  output logic [511:0]          p_wdata,         // the whole beat: the port's register
+  output logic [63:0]           p_wstrb,         //   sends its two AXI beats
   input  logic [NPORT-1:0]      p_bvalid,
   output logic [NPORT-1:0]      p_arvalid,
   input  logic [NPORT-1:0]      p_arready,
@@ -314,34 +315,31 @@ module otpu_f2_hbm_host #(
   // ================================================================== hclk: writes
   // The head beat in registers (hw_*: its port one-hot, or none past the last port), so the
   // crossing's LUT RAM read and gray compare stay off the ports' arbitration (the f278ff5f
-  // synthesis: -0.9 ns at 450 MHz without them). What the ports see is registers only: the W
-  // beat shown (hw_wd, hw_ws, hw_wl: the low half loads with the head, the high half replaces
-  // it as the low one is taken, ws 1 -> 2), so the 256 + 32 bits go from a flip-flop to the
-  // ports' registers with no select between (61d07199 placed ws_reg's replicas and hw_d / hw_s
-  // into every port's m_wdata / m_wstrb over 6.0 ns of route, 2 LUT levels; ws now selects
-  // only the load of hw_wd, here), and the AW / W valids per port (pv_aw, pv_w: set as the
-  // head loads / as the AW and then the low half are taken, cleared as the port takes them),
-  // so a port's register sees one flip-flop through one LUT, and this block sees the port's
-  // ready (a flip-flop) through the one AND-OR of hw_aw / hw_w.
-  logic [1:0]  ws;                      // 0: AW, 1: W low, 2: W high (last)
+  // synthesis: -0.9 ns at 450 MHz without them). What the ports see is registers only: the
+  // whole beat (hw_d, hw_s: one W of 512 bits, the port's register splits it into its two AXI
+  // beats), loading on the head's load alone (hw_ld, replicated per 64 enables: the 8b2fd3a0
+  // placement ran pv_w's replicas through the half select into the shown half's 288 clock
+  // enables, 5 levels at 450 MHz), and the AW / W valids per port (pv_aw, pv_w: set as the head
+  // loads / as the AW is taken, cleared as the port's link takes them), so a link's take sees
+  // one flip-flop through one LUT, and this block sees the link's credit (a flip-flop) through
+  // the one AND-OR of hw_aw / hw_w.
+  logic        ws;                      // 0: AW, 1: W
   logic        hw_v, hw_null;
   logic [27:0] hw_a;
-  logic [255:0] hw_dh;                  // the head beat's high half, waiting
-  logic [31:0] hw_sh;
-  logic [255:0] hw_wd;                  // the W beat shown: the low half, then the high
-  logic [31:0] hw_ws;
-  logic        hw_wl;
+  logic [511:0] hw_d;
+  logic [63:0] hw_s;
   logic [NPORT-1:0] hw_sel, pv_aw, pv_w;
+  (* max_fanout = 64 *) logic hw_ld;    // the head loads: the beat's 576 enables, this net alone
+  assign hw_ld = xw_v && !hw_v;
+  assign xw_pop = hw_ld;
   assign p_awvalid = pv_aw;
   assign p_wvalid = pv_w;
   assign p_awaddr = {hw_a, 6'd0};
-  assign p_wdata = hw_wd;
-  assign p_wstrb = hw_ws;
-  assign p_wlast = hw_wl;
+  assign p_wdata = hw_d;
+  assign p_wstrb = hw_s;
   wire hw_aw = |(pv_aw & p_awready);
   wire hw_w = |(pv_w & p_wready);
-  wire hw_end = hw_v && (hw_null || (ws == 2'd2 && hw_w));
-  assign xw_pop = xw_v && !hw_v;
+  wire hw_end = hw_v && (hw_null || (ws && hw_w));
   logic [15:0] btarget, bcnt, bgray;
   logic [5:0]  bsum;
   logic [NPORT-1:0] b_q;                // the ports' host B's, registered (off the HBM's pins)
@@ -350,28 +348,25 @@ module otpu_f2_hbm_host #(
     bsum = '0;
     for (int p = 0; p < NPORT; p++) bsum += 6'(b_q[p]);
   end
+  always_ff @(posedge hclk) if (hw_ld) begin hw_d <= xw_d; hw_s <= xw_s; end
   always_ff @(posedge hclk) begin
-    if (xw_pop) begin
-      hw_a <= xw_a; hw_dh <= xw_d[511:256]; hw_sh <= xw_s[63:32];
-      hw_wd <= xw_d[255:0]; hw_ws <= xw_s[31:0]; hw_wl <= 1'b0;
+    if (hw_ld) begin
+      hw_a <= xw_a;
       hw_null <= 32'(xw_a[27:23]) >= NPORT;
       for (int p = 0; p < NPORT; p++) hw_sel[p] <= xw_a[27:23] == 5'(p);
-    end else if (ws == 2'd1 && hw_w) begin
-      hw_wd <= hw_dh; hw_ws <= hw_sh; hw_wl <= 1'b1;
     end
     if (hrst_q) begin
-      ws <= '0; hw_v <= 1'b0; pv_aw <= '0; pv_w <= '0; btarget <= '0; bcnt <= '0; bgray <= '0;
+      ws <= 1'b0; hw_v <= 1'b0; pv_aw <= '0; pv_w <= '0; btarget <= '0; bcnt <= '0; bgray <= '0;
     end else begin
       hw_v <= xw_pop || (hw_v && !hw_end);
       // the AW valid: its port's bit as the head loads (none past the last port), until taken
       for (int p = 0; p < NPORT; p++)
         pv_aw[p] <= xw_pop ? xw_a[27:23] == 5'(p) : (pv_aw[p] && !p_awready[p]);
-      // the W valid: as the AW is taken (the low half) and again as the low half is taken (the
-      // high, shown from the same cycle), until taken
-      pv_w <= (hw_aw || (ws == 2'd1 && hw_w)) ? hw_sel : (pv_w & ~p_wready);
+      // the W valid: as the AW is taken, until taken
+      pv_w <= hw_aw ? hw_sel : (pv_w & ~p_wready);
       if (hw_v && !hw_null) begin
-        if (ws == 2'd0 && hw_aw) ws <= 2'd1;
-        else if (ws != 2'd0 && hw_w) ws <= ws == 2'd2 ? 2'd0 : 2'd2;
+        if (!ws && hw_aw) ws <= 1'b1;
+        else if (ws && hw_w) ws <= 1'b0;
       end
       // a B per beat (the ports' host B's, bready 1); a dropped beat counts at once
       btarget <= btarget + 16'(bsum) + 16'(hw_v && hw_null);
@@ -443,8 +438,8 @@ module otpu_f2_hbm_host #(
   always_ff @(posedge hclk) if (!hrst_q) begin
     if (|(p_rvalid & ~(NPORT'(1) << cur))) $fatal(1, "otpu_f2_hbm_host: R from a port not read");
     if (|(p_rvalid & cur_sel) && h_out == 0) $fatal(1, "otpu_f2_hbm_host: R with no read in flight");
-    // the valids and the state agree: an AW valid only in state 0, a W valid only in 1 / 2
-    if ((pv_aw != '0) != (hw_v && !hw_null && ws == 2'd0) || (pv_w != '0) != (hw_v && !hw_null && ws != 2'd0))
+    // the valids and the state agree: an AW valid only in state 0, a W valid only in 1
+    if ((pv_aw != '0) != (hw_v && !hw_null && !ws) || (pv_w != '0) != (hw_v && !hw_null && ws))
       $fatal(1, "otpu_f2_hbm_host: pv_aw %b pv_w %b against hw_v %0d null %0d ws %0d", pv_aw, pv_w, hw_v, hw_null, ws);
   end
 `endif

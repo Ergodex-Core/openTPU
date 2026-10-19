@@ -478,21 +478,37 @@ module otpu_tmem #(
     // age[i][o] (o < i): o's replay began before i's (meaningful while both replay). A replay
     // begins the cycle after its port's read loses (lost, rpv low): o's beginning makes it the
     // younger, unless i's begins with it
-    logic [NRP-1:0][NRP-1:0] age;
-    always_ff @(posedge clk)
+    logic [NRP-1:0][NRP-1:0] age, age_nx;   // (age_nx: the next value, for bf below)
+    always_comb begin
+      age_nx = age;
       for (int i = 0; i < NRP; i++)
         for (int o = 0; o < i; o++)
           if (aged(i, o)) begin
             if (lost[o] && !rpv[o])
-              age[i][o] <= (lost[i] && !rpv[i]) ? rnk(o, 1'b1) < rnk(i, 1'b1) : 1'b0;
-            else if (lost[i] && !rpv[i]) age[i][o] <= 1'b1;
+              age_nx[i][o] = (lost[i] && !rpv[i]) ? rnk(o, 1'b1) < rnk(i, 1'b1) : 1'b0;
+            else if (lost[i] && !rpv[i]) age_nx[i][o] = 1'b1;
           end
+    end
+    always_ff @(posedge clk) age <= age_nx;
 `ifndef SYNTHESIS
     initial age = '0;
 `endif
     // bf[i][o]: asker o ranks before asker i this cycle (on i's side; the replays' registers pick
-    // the case of four: three constant ones, and with both replaying their age where it is kept)
+    // the case of four: three constant ones, and with both replaying their age where it is kept).
+    // A register: computed a cycle early from the replay valids' next values (rpv <= lost) and
+    // the age's (age_nx), so the rank multiplexer into the pumped banks' addresses starts from
+    // a flip-flop, not from rpv through this select (the 8b2fd3a0 placement: rpv_reg -> a bank's
+    // ADDRBWRADDR, 7 levels against the two fast periods; docs/v4/f2-timing.md). The simulation
+    // checks the register against the select every cycle
     logic [NRP-1:0][NRP-1:0] bf;
+    logic [NRP-1:0]          rp_nx;     // rp's next value
+    for (genvar i = 0; i < NRP; i++) begin : g_rpn
+`ifdef OTPU_TMEM_ABL_RPL
+      assign rp_nx[i] = 1'b0;
+`else
+      assign rp_nx[i] = rlive(i) && lost[i];
+`endif
+    end
     for (genvar i = 0; i < NRP; i++) begin : g_bf
       for (genvar o = 0; o < NRP; o++) begin : g_o
         if (o == i || sd_of(o) != sd_of(i)) begin : g_n
@@ -502,8 +518,17 @@ module otpu_tmem #(
           localparam bit B01 = rnk(o, 1'b0) < rnk(i, 1'b1);
           localparam bit B10 = rnk(o, 1'b1) < rnk(i, 1'b0);
           localparam bit B11 = rnk(o, 1'b1) < rnk(i, 1'b1);
+          wire ol_nx = !aged(i, o) ? B11 : (o < i) ? age_nx[i][o] : !age_nx[o][i];
+          logic bq = B00;               // (the power-up value: no replay, no age)
+          always_ff @(posedge clk)
+            bq <= rp_nx[o] ? (rp_nx[i] ? ol_nx : B10) : (rp_nx[i] ? B01 : B00);
+          assign bf[i][o] = bq;
+`ifndef SYNTHESIS
           wire ol = !aged(i, o) ? B11 : (o < i) ? age[i][o] : !age[o][i];
-          assign bf[i][o] = rp[o] ? (rp[i] ? ol : B10) : (rp[i] ? B01 : B00);
+          always @(posedge clk)
+            if (bq != (rp[o] ? (rp[i] ? ol : B10) : (rp[i] ? B01 : B00)))
+              $fatal(1, "TMEM%0d: bf[%0d][%0d]'s register differs from its select at %0t", SID, i, o, $time);
+`endif
         end
       end
     end
