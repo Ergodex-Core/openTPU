@@ -1,8 +1,11 @@
 # Called by the pinned HDK build_all.tcl for an HBM target (boards/f2/build.py puts this file in
 # place of synth_cl_opentpu.tcl). Sources and target parameters are frozen by build.py in a fresh
 # CL directory before Vivado starts; the HDK's cl_mem_hbm_wrapper is copied next to them, and the
-# cl_hbm IP (both stacks, 32 AXI ports at 450 MHz, the global address switch on) is the HDK's
-# generated one (hdk/common/ip, read here as cl_mem_perf reads it). docs/f2_hbm.md.
+# cl_hbm IP (both stacks, 32 AXI ports at 450 MHz, the global address switch on) and the
+# cl_axi_sc_1x1 SmartConnect block design (one per HBM port: the clock, width and protocol
+# conversion from the fabric's 512-bit AXI4 at the core clock into the port's 256-bit AXI3 at
+# 450 MHz, docs/v4/f2-round5.md) are the HDK's generated ones (hdk/common/ip, read here as
+# cl_mem_perf's synth_cl_mem_perf.tcl reads them). docs/f2_hbm.md.
 set_param general.maxThreads 6
 source ${HDK_SHELL_DIR}/build/scripts/synth_cl_header.tcl
 set_property verilog_define {SYNTHESIS XSDB_SLV_DIS} [current_fileset]
@@ -16,6 +19,9 @@ read_ip [list \
   ${HDK_IP_SRC_DIR}/cl_hbm/cl_hbm.xci \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter/cl_axi_clock_converter.xci \
   ${HDK_IP_SRC_DIR}/cl_axi_clock_converter_light/cl_axi_clock_converter_light.xci]
+# the SmartConnect block design and its generated wrapper (cl_opentpu_hbm.sv g_sc[*].u_sc)
+add_files ${HDK_BD_SRC_DIR}/cl_axi_sc_1x1/cl_axi_sc_1x1.bd
+read_verilog ${HDK_BD_GEN_DIR}/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v
 read_xdc ${constraints_dir}/cl_synth_user.xdc
 # the HBM CL's own (the wrapper's AXI reset pipe replicated toward the IP's ports)
 read_xdc ${constraints_dir}/cl_synth_user_hbm.xdc

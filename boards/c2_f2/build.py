@@ -28,9 +28,19 @@ CORE_SOURCES = ["vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv",
                 "tech/xilinxus/otpu_tech_dsp.sv", "mxu/otpu_mxu.sv",
                 "mxu/otpu_c2_mxu.sv", "c2/otpu_c2_hbm_kernel.sv"]
 FABRIC_SOURCES = ["shell/otpu_afifo.sv", "shell/otpu_link.sv", "shell/otpu_skidbuf.sv",
-                  "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_hbm_nch.sv",
+                  "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_native_axi.sv",
                   "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_port.sv",
                   "boards/f2/otpu_f2_hbm_mem.sv"]
+TUNING = {"place": "ExtraNetDelay_high", "phys": "AggressiveExplore",
+          "route": "Explore", "retime": True}
+# Generated products inventoried on opentpu-f2, independently downloaded and
+# SHA-checked against its read-only SSM inventory on 2026-10-19.
+SMARTCONNECT_SHA256 = {
+    "cl_axi_sc_1x1.bd": "af85051845af4743b3381be1cb65b089ab05a6dc9f1f8ac970492223ac802d89",
+    "cl_axi_sc_1x1_wrapper.v": "43dd040c56dfeb49d4b9e72ddee9e46be54bea9f381f5522af23907b8cdd091a",
+}
+VENDOR_PRODUCT_SUFFIXES = {".bd", ".v", ".sv", ".vhd", ".xdc", ".xci", ".dcp", ".mem", ".dat", ".coe"}
+VENDOR_COPY_LIMIT = 1 << 20
 
 
 def sha(path):
@@ -58,6 +68,95 @@ def replace_once(text, old, new):
     if text.count(old) != 1:
         raise RuntimeError(f"Frozen support anchor changed: {old[:90]!r}")
     return text.replace(old, new, 1)
+
+
+def smartconnect_products(hdk):
+    """Inventory synthesis products only, not logs, simulation outputs or caches."""
+    helper = support_builder()
+    roots = [(hdk / helper.HBM_SC_BD).parent, (hdk / helper.HBM_SC_WRAPPER).parent.parent]
+    products = {}
+    for root in roots:
+        if not root.is_dir():
+            raise RuntimeError(f"Missing HDK SmartConnect product tree: {root}")
+        for path in sorted(root.rglob("*")):
+            # Path.rglob does not recurse into directory symlinks; refuse to
+            # silently omit input trees. Ordinary file links are hashed/copied.
+            if path.is_symlink() and path.is_dir():
+                raise RuntimeError(f"Unreviewed directory link in SmartConnect products: {path}")
+            if path.is_file() and path.suffix.lower() in VENDOR_PRODUCT_SUFFIXES:
+                size = path.stat().st_size
+                products[str(path.relative_to(hdk))] = {
+                    "sha256": sha(path), "bytes": size,
+                    "preserved": path.suffix.lower() != ".dcp" and size <= VENDOR_COPY_LIMIT,
+                }
+    return products
+
+
+def check_smartconnect(hdk):
+    """Check the generated HDK interface actually wired by the pinned C2 top.
+
+    The vendor port name/metadata is aclk_250; it is driven by the actual 200 MHz
+    core clock. Record the metadata unchanged so synthesis/CDC can audit it.
+    """
+    helper = support_builder()
+    bd, wrapper = hdk / helper.HBM_SC_BD, hdk / helper.HBM_SC_WRAPPER
+    interfaces = helper.check_hbm_sc(bd, wrapper)
+    for name in ("AXI4", "AXI3"):
+        if interfaces[name].get("ADDR_WIDTH") != "64":
+            raise RuntimeError(f"{bd}: {name} address width must be 64")
+    declarations = {}
+    text = re.sub(r"/\*.*?\*/|//[^\n]*", "", wrapper.read_text(), flags=re.S)
+    for direction, high, low, name in re.findall(
+            r"\b(input|output)\s+(?:wire\s+)?(?:\[\s*(\d+)\s*:\s*(\d+)\s*\]\s*)?(\w+)\s*;",
+            text):
+        if name in declarations:
+            raise RuntimeError(f"{wrapper}: duplicate port declaration {name}")
+        declarations[name] = (direction, abs(int(high) - int(low)) + 1 if high else 1)
+    expected = {"aclk_250": ("input", 1), "aclk_450": ("input", 1),
+                "aresetn_250": ("input", 1)}
+    # Only named connections in the top are required. AXI3 lock/cache/prot/qos
+    # outputs are deliberately open; they still have their specified widths.
+    for bus, data, ids, master in [("AXI4", 512, 16, False), ("AXI3", 256, 0, True)]:
+        forward = {"awaddr": 64, "awlen": 8 if bus == "AXI4" else 4,
+                   "awsize": 3, "awburst": 2, "awvalid": 1,
+                   "wdata": data, "wstrb": data // 8, "wlast": 1, "wvalid": 1,
+                   "bready": 1, "araddr": 64, "arlen": 8 if bus == "AXI4" else 4,
+                   "arsize": 3, "arburst": 2, "arvalid": 1, "rready": 1}
+        backward = {"awready": 1, "wready": 1, "bresp": 2, "bvalid": 1,
+                    "arready": 1, "rdata": data, "rresp": 2, "rlast": 1, "rvalid": 1}
+        if ids:
+            forward.update(awid=ids, arid=ids)
+            backward.update(bid=ids, rid=ids)
+        for channel in ("aw", "ar"):
+            forward.update({channel + "lock": 1 if bus == "AXI4" else 2,
+                            channel + "cache": 4, channel + "prot": 3, channel + "qos": 4})
+        for fields, direction in [(forward, "output" if master else "input"),
+                                  (backward, "input" if master else "output")]:
+            expected.update({bus + "_" + name: (direction, width) for name, width in fields.items()})
+    for name, wanted in expected.items():
+        if declarations.get(name) != wanted:
+            raise RuntimeError(f"{wrapper}: {name} is {declarations.get(name)}, expected {wanted}")
+    design = json.loads(bd.read_text())["design"]
+    components = design.get("components", {})
+    sc = components.get("smartconnect_0", {})
+    values = {k: v.get("value") for k, v in sc.get("parameters", {}).items()}
+    if sc.get("vlnv") != "xilinx.com:ip:smartconnect:1.0" or any(
+            values.get(k) != v for k, v in {"NUM_CLKS": "2", "NUM_MI": "1", "NUM_SI": "1"}.items()):
+        raise RuntimeError(f"{bd}: expected one 1x1 SmartConnect with two clocks")
+    for path in (bd, wrapper):
+        if sha(path) != SMARTCONNECT_SHA256[path.name]:
+            raise RuntimeError(f"Unreviewed HDK SmartConnect bytes: {path}")
+    return {"interfaces": interfaces, "ports": design.get("ports", {}), "components": components,
+            "driven_clock_mhz": {"aclk_250": 200, "aclk_450": 450},
+            "files": smartconnect_products(hdk)}
+
+
+def check_vendor_unchanged(hdk, record):
+    current = smartconnect_products(hdk)
+    if current != record["files"]:
+        changed = sorted(name for name in current.keys() | record["files"].keys()
+                         if current.get(name) != record["files"].get(name))
+        raise RuntimeError(f"HDK SmartConnect input changed during build: {changed[:8]}")
 
 
 def check_clocks(top):
@@ -123,6 +222,7 @@ def make_sys():
         "module otpu_f2_c2_sys #(parameter int S=1, NCH=8, CORE_KHZ=200000,\n"
         "  parameter logic [31:0] BUILD_ID=0\n" + text[ports:])
     text = replace_once(text, "NPORT > 32 || CH_LOG2 != 29", "NPORT != 8")
+    text = replace_once(text, ".NPORT(NPORT), .CH_LOG2(CH_LOG2)", ".NPORT(NPORT), .CH_LOG2(29)")
     text = text.replace(
         "otpu_f2_hbm_sys: at most 32 HBM ports of 512 MiB (S x NCH <= 32, CH_LOG2 29)",
         "otpu_f2_c2_sys: exactly eight HBM ports required")
@@ -157,23 +257,34 @@ def configure_scripts(cl):
     (scripts / "build_level_1_cl.tcl").write_text(impl)
 
     timing = (constraints / "cl_timing_user_hbm.tcl").read_text()
-    # Post-opt Vivado retains the native write counters and their hazard-state
-    # fanout even with read-only commands. Keep the frozen native + host skew
-    # constraints and require the complete eight-native/one-host inventory.
+    # Round 5 has only the host's three custom afifos and one gray write counter.
+    # Vendor SmartConnect CDC constraints are audited separately after synthesis.
     timing = replace_once(timing,
-        'if {[llength $counters] < 2} { error "openTPU CDC: expected the HBM bridges and the host path" }',
-        'if {[llength $counters] != 9} { error "C2 HBM CDC: expected nine write-counter groups (eight native and one host)" }')
+        'foreach f $fifos {',
+        'if {[llength $fifos] != 3} { error "C2 HBM CDC: expected exactly three host FIFOs" }\nforeach f $fifos {')
+    timing = replace_once(timing,
+        'if {[llength $counters] < 1} { error "openTPU CDC: expected the host path" }',
+        'if {[llength $counters] != 1} { error "C2 HBM CDC: expected exactly one host write counter" }')
+    # Tcl string-match bracket classes in the frozen R5 gate reject real names
+    # such as g_sc[7].u_sc/.../src_gray_ff_reg[5]. Anchored regexps bound the
+    # exact eight instances, wrapper hierarchy and three reset bits instead.
+    timing = replace_once(timing,
+        '  if {![string match {g_sc[[]*[]].u_sc/*} $n] && ![string match {u_hbm/*} $n] &&\n'
+        '      ![string match {hbm_reset_n_reg*} $n]} { lappend otpu_on_hclk $n }',
+        r'  if {![regexp {^g_sc\[[0-7]\]\.u_sc/.+$} $n] && ![regexp {^u_hbm/.+$} $n] &&' + '\n' +
+        r'      ![regexp {^hbm_reset_n_reg\[[0-2]\]$} $n]} { lappend otpu_on_hclk $n }')
     (constraints / "cl_timing_user.tcl").write_text(timing)
     pnr = (constraints / "cl_pnr_user.tcl").read_text().replace(
         "foreach stem {main_reset_n bridge_reset_n core_reset_n}",
         "foreach stem {main_reset_n bridge_reset_n core_reset_n hbm_reset_n}")
     floorplan = (constraints / "cl_pnr_user_hbm.tcl").read_text()
     start = floorplan.index("########################################\n# pb_otpu_tmem:")
-    end = floorplan.index("########################################\n# pb_otpu_pcis:", start)
+    end = floorplan.index("########################################\n# pb_otpu_fab:", start)
     floorplan = floorplan[:start] + floorplan[end:]
-    floorplan = floorplan.replace("foreach pb {pb_otpu_slr0 pb_otpu_tmem pb_otpu_pcis pb_otpu_xs}",
-                                  "foreach pb {pb_otpu_slr0 pb_otpu_pcis pb_otpu_xs}")
-    floorplan = floorplan.replace("pblocks=4", "pblocks=3")
+    floorplan = replace_once(floorplan,
+        "foreach pb {pb_otpu_slr0 pb_otpu_tmem pb_otpu_fab pb_otpu_pcis pb_otpu_xs}",
+        "foreach pb {pb_otpu_slr0 pb_otpu_fab pb_otpu_pcis pb_otpu_xs}")
+    floorplan = replace_once(floorplan, "pblocks=5", "pblocks=4")
     (constraints / "cl_pnr_user.tcl").write_text(pnr + "\n" + floorplan)
 
     shutil.copy2(HERE / "validate_hbm_route.tcl", scripts / "validate_route.tcl")
@@ -185,6 +296,7 @@ def prepare(out, hdk, shell, build_id):
     if out.exists():
         raise RuntimeError(f"Refusing to reuse run directory: {out}")
     support = verify_support()
+    smartconnect = check_smartconnect(hdk)
     for name in CORE_SOURCES:
         if not (ROOT / "rtl" / name).is_file():
             raise RuntimeError(f"Missing C2 kernel source: {name}")
@@ -209,10 +321,21 @@ def prepare(out, hdk, shell, build_id):
     (design / "sources.tcl").write_text("set otpu_sources {\n" + "\n".join(files) + "\n}\n")
     configure_scripts(cl)
     (cl / "build/scripts/build_all.tcl").symlink_to(shell / "build/scripts/build_all.tcl")
+    # Preserve small synthesis source products and hash every selected product,
+    # including generated child-IP checkpoints. Vivado still reads installed
+    # HDK paths; these are evidence copies, not relocated IP inputs.
+    for name, record in smartconnect["files"].items():
+        if not record["preserved"]:
+            continue
+        target = out / "vendor-inputs" / name
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(hdk / name, target)
+    check_vendor_unchanged(hdk, smartconnect)
     provenance = {
         "kind": "c2-hbm-kernel", "build_id": build_id, "core_khz": 200000,
         "part": PART, "hbm_ports": 8, "platform": {"mem": "hbm"},
         "support_commit": support["commit"], "support_manifest_sha256": sha(SUPPORT / "manifest.json"),
+        "smartconnect": smartconnect, "implementation_tuning": TUNING,
         "git_commit": subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip(),
         "git_status": subprocess.check_output(["git", "status", "--porcelain"], cwd=ROOT, text=True),
         "builder_sha256": sha(__file__),
@@ -245,20 +368,22 @@ def main():
                HDK_IP_SRC_DIR=str(hdk / "hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip"),
                HDK_BD_SRC_DIR=str(hdk / "hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd"),
                HDK_BD_GEN_DIR=str(hdk / "hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd"),
-               VIVADO_TOOL_VERSION="2025.2")
+               VIVADO_TOOL_VERSION="2025.2", OTPU_RETIME="1", OTPU_FLOORPLAN="c2-four")
     cmd = ["vivado", "-mode", "batch", "-source", "build_all.tcl", "-log", str(out / "vivado.log"),
-           "-journal", str(out / "vivado.jou"), "-tclargs", "Default", "AggressiveExplore",
-           "AggressiveExplore", "A1", "B2", "C0", "H2"]
+           "-journal", str(out / "vivado.jou"), "-tclargs", TUNING["place"], TUNING["phys"],
+           TUNING["route"], "A1", "B2", "C0", "H2"]
     (out / "invocation.json").write_text(json.dumps({"command": cmd, "cwd": str(cl / "build/scripts"),
-        "environment": {k: env[k] for k in env if k.startswith("HDK_") or k in
+        "environment": {k: env[k] for k in env if k.startswith(("HDK_", "OTPU_")) or k in
                         ["CL_DIR", "CL", "SHELL_MODE", "BUILD_FLOW", "BUILD_TAG", "ENCRYPT", "VIVADO_TOOL_VERSION"]}}, indent=2) + "\n")
     if a.prepare_only:
         print(f"Prepared {cl}")
         return
     helper.check_vivado_version(helper.command("vivado", "-version"), "2025.2")
+    check_vendor_unchanged(hdk, json.loads((out / "inputs.json").read_text())["smartconnect"])
     with (out / "console.log").open("w") as log:
         result = subprocess.run(cmd, cwd=cl / "build/scripts", env=env, stdout=log, stderr=subprocess.STDOUT)
     (out / "exit_code").write_text(str(result.returncode) + "\n")
+    check_vendor_unchanged(hdk, json.loads((out / "inputs.json").read_text())["smartconnect"])
     stage = "post_synth" if a.flow == "SynthCL" else "post_route"
     dcp = cl / f"build/checkpoints/cl_opentpu.{build_id}.{stage}.dcp"
     if result.returncode or not dcp.is_file():

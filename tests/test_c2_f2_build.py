@@ -21,9 +21,52 @@ def builder():
     return module
 
 
+def smartconnect_fixture(module, hdk):
+    helper = module.support_builder()
+    bd, wrapper = hdk / helper.HBM_SC_BD, hdk / helper.HBM_SC_WRAPPER
+    bd.parent.mkdir(parents=True, exist_ok=True)
+    wrapper.parent.mkdir(parents=True, exist_ok=True)
+    design = {"ports": {"aclk_250": {"type": "clk", "parameters": {"FREQ_HZ": {"value": "250000000"}}},
+                        "aclk_450": {"type": "clk"}, "aresetn_250": {"type": "rst"}},
+              "interface_ports": {}, "components": {"smartconnect_0": {
+                  "vlnv": "xilinx.com:ip:smartconnect:1.0", "parameters": {
+                      k: {"value": v} for k, v in {"NUM_CLKS": "2", "NUM_MI": "1", "NUM_SI": "1"}.items()}}}}
+    for name, mode, width, ids in [("AXI4", "Slave", 512, 16), ("AXI3", "Master", 256, 0)]:
+        design["interface_ports"][name] = {"mode": mode, "parameters": {
+            k: {"value": str(v)} for k, v in {"PROTOCOL": name, "DATA_WIDTH": width,
+            "ID_WIDTH": ids, "ADDR_WIDTH": 64, "NUM_READ_OUTSTANDING": 32}.items()}}
+    bd.write_text(json.dumps({"design": design}))
+    # Actual Vivado wrapper style: non-ANSI port declarations. Interface fixture
+    # is independent of the builder's declaration parser.
+    pins = {"aclk_250": ("input", 1), "aclk_450": ("input", 1), "aresetn_250": ("input", 1)}
+    for bus, send, receive, data, length, lock in [
+            ("AXI4", "input", "output", 512, 8, 1), ("AXI3", "output", "input", 256, 4, 2)]:
+        for ch in ("aw", "ar"):
+            for suffix, width in [("addr", 64), ("len", length), ("size", 3), ("burst", 2),
+                                  ("lock", lock), ("cache", 4), ("prot", 3), ("qos", 4), ("valid", 1)]:
+                pins[bus+"_"+ch+suffix] = (send, width)
+            pins[bus+"_"+ch+"ready"] = (receive, 1)
+        for name, width in [("wdata", data), ("wstrb", data//8), ("wlast", 1), ("wvalid", 1),
+                            ("bready", 1), ("rready", 1)]:
+            pins[bus+"_"+name] = (send, width)
+        for name, width in [("wready", 1), ("bresp", 2), ("bvalid", 1), ("rdata", data),
+                            ("rresp", 2), ("rlast", 1), ("rvalid", 1)]:
+            pins[bus+"_"+name] = (receive, width)
+    pins.update({"AXI4_awid": ("input", 16), "AXI4_arid": ("input", 16),
+                 "AXI4_bid": ("output", 16), "AXI4_rid": ("output", 16)})
+    wrapper.write_text("module cl_axi_sc_1x1_wrapper("+",".join(pins)+");\n" + "\n".join(
+        f"{direction} " + (f"[{width-1}:0] " if width > 1 else "") + name + ";"
+        for name, (direction, width) in pins.items()) + "\nendmodule\n")
+    # The offline fixture has its own explicit pins. Production accepts only the
+    # independently recorded dedicated-host bytes, with no CLI override.
+    module.SMARTCONNECT_SHA256 = {p.name: module.sha(p) for p in (bd, wrapper)}
+    return bd, wrapper
+
+
 def snapshot(tmp_path):
     module = builder()
     hdk = tmp_path / "hdk"
+    smartconnect_fixture(module, hdk)
     wrapper = hdk / "hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv"
     wrapper.parent.mkdir(parents=True)
     wrapper.write_text("// test HDK wrapper\n")
@@ -42,6 +85,8 @@ def test_kernel_snapshot_contains_one_c2_and_no_production_core(tmp_path):
     assert "rtl/mxu/otpu_c2_mxu.sv" in sources
     assert "rtl/c2/otpu_c2_hbm_kernel.sv" in sources
     assert "rtl/boards/f2/otpu_f2_hbm_mem.sv" in sources
+    assert "rtl/boards/f2/otpu_native_axi.sv" in sources
+    assert "otpu_f2_hbm_nch.sv" not in sources
     assert "rtl/top/otpu_slice.sv" not in sources
     assert "rtl/shell/otpu_board.sv" not in sources
     system = (cl / "design/otpu_f2_c2_sys.sv").read_text()
@@ -53,6 +98,12 @@ def test_kernel_snapshot_contains_one_c2_and_no_production_core(tmp_path):
     info = json.loads((out / "inputs.json").read_text())
     assert info["kind"] == "c2-hbm-kernel"
     assert info["hbm_ports"] == 8
+    assert info["support_commit"] == "fbf21635d7ac7ab4633eaa0953dbc39274dcb690"
+    assert info["implementation_tuning"] == {"place": "ExtraNetDelay_high", "phys": "AggressiveExplore",
+                                              "route": "Explore", "retime": True}
+    assert info["smartconnect"]["driven_clock_mhz"] == {"aclk_250": 200, "aclk_450": 450}
+    for name, record in info["smartconnect"]["files"].items():
+        assert hashlib.sha256((out / "vendor-inputs" / name).read_bytes()).hexdigest() == record["sha256"]
     for name, digest in info["sources"].items():
         assert hashlib.sha256((cl / name).read_bytes()).hexdigest() == digest
 
@@ -73,6 +124,10 @@ def test_hbm_qualification_has_no_ddr_or_pumped_tmem_assumptions(tmp_path):
     assert "otpu_clk2x.tcl" not in synth
     assert "read_xdc -unmanaged ${::constraints_dir}/otpu_clk2x.tcl" not in impl
     assert "read_xdc -unmanaged ${constraints_dir}/cl_timing_user.tcl" in synth
+    assert "general.maxThreads 4" in synth and "general.maxThreads 4" in impl
+    assert "add_files ${HDK_BD_SRC_DIR}/cl_axi_sc_1x1/cl_axi_sc_1x1.bd" in synth
+    assert "${HDK_BD_GEN_DIR}/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v" in synth
+    assert "otpu_hdk_phys_opt_design -retime" in impl
     assert "source ${scripts_dir}/validate_route.tcl" in impl
     assert (scripts / "validate_route.tcl").read_bytes() == (
         ROOT / "boards/c2_f2/validate_hbm_route.tcl").read_bytes()
@@ -83,59 +138,171 @@ def test_hbm_qualification_has_no_ddr_or_pumped_tmem_assumptions(tmp_path):
     pnr = (constraints / "cl_pnr_user.tcl").read_text()
     assert "create_pblock pb_otpu_tmem" not in pnr
     assert "create_pblock pb_otpu_slr0" in pnr
+    assert re.findall(r"^create_pblock (\w+)$", pnr, re.M) == [
+        "pb_otpu_slr0", "pb_otpu_fab", "pb_otpu_pcis", "pb_otpu_xs"]
+    assert "CLOCKREGION_X0Y0:CLOCKREGION_X7Y0" in pnr
+    assert "WRAPPER/CL/g_sc[*].u_sc" in pnr
+    assert "u_slice" not in pnr[pnr.index("create_pblock pb_otpu_slr0"):]
+    assert "OTPU_FLOORPLAN_APPLIED pblocks=4" in pnr
     assert "core_reset_n hbm_reset_n" in pnr
 
 
-@pytest.mark.parametrize("native_count", [0, 7, 8, 9])
-def test_generated_constraints_cover_every_retained_write_counter(tmp_path, native_count):
+@pytest.mark.parametrize("change,reason", [
+    ("missing_bd", "Missing HDK SmartConnect"),
+    ("address", "address width must be 64"),
+    ("protocol", "expected"),
+    ("data", "AXI4_rdata"),
+    ("direction", "AXI4_rid"),
+    ("clocks", "two clocks"),
+    ("bytes", "Unreviewed HDK SmartConnect bytes"),
+])
+def test_smartconnect_preflight_rejects_incompatible_or_unreviewed_inputs(tmp_path, change, reason):
+    module = builder()
+    bd, wrapper = smartconnect_fixture(module, tmp_path)
+    data = json.loads(bd.read_text())
+    if change == "missing_bd":
+        bd.unlink()
+    elif change == "address":
+        data["design"]["interface_ports"]["AXI3"]["parameters"]["ADDR_WIDTH"]["value"] = "34"
+        bd.write_text(json.dumps(data))
+    elif change == "protocol":
+        data["design"]["interface_ports"]["AXI4"]["parameters"]["ID_WIDTH"]["value"] = "0"
+        bd.write_text(json.dumps(data))
+    elif change == "data":
+        wrapper.write_text(wrapper.read_text().replace("output [511:0] AXI4_rdata;", "output [255:0] AXI4_rdata;"))
+    elif change == "direction":
+        wrapper.write_text(wrapper.read_text().replace("output [15:0] AXI4_rid;", "input [15:0] AXI4_rid;"))
+    elif change == "clocks":
+        data["design"]["components"]["smartconnect_0"]["parameters"]["NUM_CLKS"]["value"] = "1"
+        bd.write_text(json.dumps(data))
+    else:
+        wrapper.write_text(wrapper.read_text() + "// different generated version\n")
+    with pytest.raises(RuntimeError, match=reason):
+        module.check_smartconnect(tmp_path)
+
+
+def test_vendor_input_change_after_snapshot_is_rejected(tmp_path):
+    module, out, _, hdk, _ = snapshot(tmp_path)
+    record = json.loads((out / "inputs.json").read_text())["smartconnect"]
+    module.check_vendor_unchanged(hdk, record)
+    wrapper = hdk / module.support_builder().HBM_SC_WRAPPER
+    wrapper.write_text(wrapper.read_text().replace("input aclk_450;", "input aclk_451;"))
+    with pytest.raises(RuntimeError, match="input changed during build"):
+        module.check_vendor_unchanged(hdk, record)
+
+
+@pytest.mark.parametrize("change", ["edit", "add", "remove"])
+def test_child_ip_synthesis_inventory_detects_changes_and_ignores_logs(tmp_path, change):
+    module = builder()
+    _, wrapper = smartconnect_fixture(module, tmp_path)
+    child = wrapper.parent.parent / "ip/child"
+    child.mkdir(parents=True)
+    constraint, checkpoint = child / "child.xdc", child / "child.dcp"
+    constraint.write_text("# generated child constraint\n")
+    checkpoint.write_bytes(b"test-only checkpoint envelope")
+    record = module.check_smartconnect(tmp_path)
+    assert record["files"][str(constraint.relative_to(tmp_path))]["preserved"]
+    assert not record["files"][str(checkpoint.relative_to(tmp_path))]["preserved"]
+    (child / "vivado.log").write_text("new log content\n")
+    module.check_vendor_unchanged(tmp_path, record)
+    if change == "edit":
+        checkpoint.write_bytes(b"different checkpoint envelope")
+    elif change == "add":
+        (child / "new.mem").write_text("00000000\n")
+    else:
+        constraint.unlink()
+    with pytest.raises(RuntimeError, match="input changed during build"):
+        module.check_vendor_unchanged(tmp_path, record)
+
+
+def test_child_ip_directory_link_is_not_silently_omitted(tmp_path):
+    module = builder()
+    _, wrapper = smartconnect_fixture(module, tmp_path)
+    outside = tmp_path / "shared-generated"
+    outside.mkdir()
+    (outside / "child.sv").write_text("// generated child\n")
+    (wrapper.parent / "child").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(RuntimeError, match="directory link"):
+        module.check_smartconnect(tmp_path)
+
+
+def run_hclk_gate(tmp_path, timing, cells, fifos=3, counters=1):
     tclsh = shutil.which("tclsh")
     if not tclsh:
         pytest.skip("tclsh required")
-    module, _, cl, _, _ = snapshot(tmp_path)
-    timing = (cl / "build/constraints/cl_timing_user.tcl").read_text()
-    # Only the exact inventory guard changes: native and host source/sink
-    # selectors and every constraint remain the frozen, reviewed implementation.
-    original = (module.SUPPORT / "boards/f2/build/constraints/cl_timing_user_hbm.tcl").read_text()
-    assert timing.replace(
-        'if {[llength $counters] != 9} { error "C2 HBM CDC: expected nine write-counter groups (eight native and one host)" }',
-        'if {[llength $counters] < 2} { error "openTPU CDC: expected the HBM bridges and the host path" }') == original
-    counter_block = timing[timing.index("set counters [concat"):timing.index('puts "OTPU_HBM_CDC')]
-    driver = tmp_path / "counter_constraints.tcl"
-    driver.write_text(r'''
-set native_count [lindex $argv 0]
-set t_skew 2.222222222222
+    script = tmp_path / "gate.tcl"
+    driver = r'''
 set bounds {}
-proc otpu_required {objects description} {
-  if {![llength $objects]} {error "missing $description"}
-  return $objects
+set skews {}
+proc get_pins {args} { return [lindex $args end] }
+proc get_ports {args} { return [lindex $args end] }
+proc get_clocks {args} { return [lindex $args end] }
+proc get_property {key object} {
+  if {$key eq "NAME"} {return $object}
+  if {$object eq "u_clk/O"} {return 5.0}
+  if {$object eq "u_hclk/O"} {return 2.222222222222}
+  return 4.0
 }
 proc get_cells {args} {
-  if {[lsearch -exact $args -hier] >= 0} {
-    if {[string first "otpu_f2_hbm_nch" [lindex $args end]] >= 0} {
-      set cells {}
-      for {set p 0} {$p<$::native_count} {incr p} {lappend cells native$p}
-      return $cells
-    }
-    return host
+  set selector [lindex $args end]
+  if {[string first "otpu_afifo" $selector] >= 0} {
+    set result {}; for {set i 0} {$i<$::fifo_count} {incr i} {lappend result host/fifo$i}; return $result
+  }
+  if {[string first "otpu_f2_hbm_host" $selector] >= 0} {
+    set result {}; for {set i 0} {$i<$::counter_count} {incr i} {lappend result host$i}; return $result
   }
   return [lindex $args end]
 }
-proc set_bus_skew {args} {lappend ::bounds $args}
-''' + counter_block + r'''
-if {[llength $bounds] != 9} {error "wrong applied counter inventory"}
-for {set p 0} {$p<8} {incr p} {
-  if {[string first "native$p/bgray_reg" [lindex $bounds $p]] < 0} {error "missing native counter $p"}
-}
-if {[string first "host/bgray_reg" [lindex $bounds 8]] < 0} {error "missing host counter"}
-puts "NINE_COUNTER_BOUNDS_APPLIED"
-''')
-    result = subprocess.run([tclsh, str(driver), str(native_count)], text=True, capture_output=True)
-    if native_count == 8:
-        assert result.returncode == 0, result.stderr
-        assert "NINE_COUNTER_BOUNDS_APPLIED" in result.stdout
-    else:
-        assert result.returncode != 0
-        assert "expected nine write-counter groups" in result.stderr
+proc all_registers {args} {return $::registers}
+proc set_max_delay {args} {lappend ::bounds $args}
+proc set_bus_skew {args} {lappend ::skews $args}
+proc set_false_path {args} {}
+'''
+    script.write_text(f"set fifo_count {fifos}\nset counter_count {counters}\n" +
+        "set registers [list " + " ".join("{"+c+"}" for c in cells) + "]\n" + driver + timing +
+        '\nif {[llength $bounds] != 6 || [llength $skews] != 7} {error "wrong bounds inventory"}\n')
+    return subprocess.run([tclsh, str(script)], text=True, capture_output=True)
+
+
+def vendor_cells():
+    tail = ("cl_axi_sc_1x1_i/smartconnect_0/inst/s00_nodes/s00_w_node/inst/"
+            "inst_mi_handler/gen_normal_area.inst_fifo_node_payld/gen_xpm_memory_fifo.inst_fifo/"
+            "gen_async_clocks.inst_cdc_addrb_to_wr_clk/src_gray_ff_reg[5]")
+    return [f"g_sc[{p}].u_sc/{tail}" for p in range(8)] + [
+        "u_hbm/HBM_CORE_I/inst/reset_ff", *[f"hbm_reset_n_reg[{p}]" for p in range(3)]]
+
+
+def test_hclk_gate_accepts_actual_vivado_vendor_names_and_exact_host_cdc(tmp_path):
+    _, _, cl, _, _ = snapshot(tmp_path)
+    timing = (cl / "build/constraints/cl_timing_user.tcl").read_text()
+    result = run_hclk_gate(tmp_path, timing, vendor_cells())
+    assert result.returncode == 0, result.stderr
+    assert "OTPU_HBM_CDC fifos=3 counters=1" in result.stdout
+    assert "OTPU_HBM_NO_HCLK_RTL vendor=12" in result.stdout
+
+
+@pytest.mark.parametrize("bad", [
+    "g_sc[8].u_sc/x", "g_sc[10].u_sc/x", "g_sc[00].u_sc/x", "g_sc[7]Xu_sc/x",
+    "g_sc[7].u_sc_evil/x", "prefix/g_sc[7].u_sc/x", "g_sc[7].u_sc/", "u_hbm_evil/x",
+    "prefix/u_hbm/x", "hbm_reset_n_reg[3]", "hbm_reset_n_reg[0]_replica", "hbm_reset_n_reg_bad",
+    "u_sys/u_mem/u_host/hr_v_reg", "u_sys/u_board/state_reg[0]",
+])
+def test_hclk_gate_rejects_custom_logic_and_near_spoof_names(tmp_path, bad):
+    _, _, cl, _, _ = snapshot(tmp_path)
+    result = run_hclk_gate(tmp_path, (cl / "build/constraints/cl_timing_user.tcl").read_text(),
+                          vendor_cells() + [bad])
+    assert result.returncode != 0
+    assert "1 openTPU cells on the HBM clock" in result.stderr
+
+
+@pytest.mark.parametrize("fifos,counters", [(2,1), (4,1), (3,0), (3,2)])
+def test_custom_cdc_inventory_is_exact(tmp_path, fifos, counters):
+    _, _, cl, _, _ = snapshot(tmp_path)
+    result = run_hclk_gate(tmp_path, (cl / "build/constraints/cl_timing_user.tcl").read_text(),
+                          vendor_cells(), fifos, counters)
+    assert result.returncode != 0
+    assert "expected exactly" in result.stderr
+
 
 
 def test_support_mutation_is_rejected_before_build(tmp_path, monkeypatch):
@@ -158,7 +325,8 @@ def test_generated_top_uses_separate_kernel_identity():
     system = module.make_sys()
     assert "module otpu_f2_c2_sys" in system
     assert "NPORT != 8" in system
-    assert "CH_LOG2" not in system
+    assert ".CH_LOG2(29)" in system
+    assert ".CH_LOG2(CH_LOG2)" not in system
     assert "TMEM_WORDS" not in system
 
 
