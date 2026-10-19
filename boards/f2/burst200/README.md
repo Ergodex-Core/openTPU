@@ -79,7 +79,10 @@ python3 boards/f2/burst200/build.py --hdk /path/to/aws-fpga/hdk
 ```
 
 Use `--output /path/to/new/experiment` to select a fresh directory and
-`--vivado /path/to/vivado` to select the executable. Existing output
+`--vivado /path/to/vivado` to select the executable. `--target targets/f2-burst200-s3.toml`
+builds the three-slice variant (one slice per SLR on six HBM ports, its top in
+`rtl/boards/f2/burst200-s3/`, `constraints/floorplan_s3.tcl`; `docs/v4/f2-burst200-s3.md`);
+the default target is this one-slice design and its flow is unchanged. Existing output
 directories are refused. The driver saves source hashes, commands and logs,
 then performs these stages sequentially:
 

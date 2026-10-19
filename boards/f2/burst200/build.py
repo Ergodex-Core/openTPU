@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
-"""Build the burst200 AWS F2 CL against a full, externally installed HDK."""
+"""Build the burst200 AWS F2 CL against a full, externally installed HDK.
+
+--target selects the openTPU target (default targets/f2-burst200.toml, Alex's one slice;
+targets/f2-burst200-s3.toml: three slices on six HBM ports, docs/v4/f2-burst200-s3.md). The
+target's [platform] rtl_board names the directory of its CL top under rtl/boards/f2
+(f2-burst200: burst200/, the checked-in hardware-tested wrapper; f2-burst200-s3: burst200-s3/,
+with the adapters taken from burst200/), its floorplan the constraints file placed as
+floorplan.tcl (default floorplan.tcl), and its slices and hbm_ports the geometry the IP, PCIS
+and link stages read from geometry.tcl."""
 import argparse
 import hashlib
 import json
@@ -9,9 +17,39 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[3]
+sys.path.insert(0, str(ROOT))
 BOARD = ROOT / 'boards/f2/burst200'
 SCRIPTS = BOARD / 'scripts'
 STAGES = ['ip', 'pcis', 'clocks', 'synth_link', 'implement', 'refine', 'audit']
+ADAPTERS = ['otpu_native_axi.sv', 'otpu_hbm_geometry.sv']     # Alex's, shared by every top
+
+
+def plan(target_path: Path) -> dict:
+    """What the target asks of the flow: its toml, the RTL files of its CL top, the floorplan
+    constraints file and the geometry Tcl (slices, HBM ports) the stages read."""
+    from opentpu import target as T
+    t = T.load(str(target_path.resolve()))
+    board = t.platform.get('rtl_board', 'f2-burst200')
+    if not board.startswith('f2-burst200'):
+        raise SystemExit(f'{target_path}: rtl_board {board!r} is not a burst200 flow target')
+    top_dir = ROOT / 'rtl/boards/f2' / board[len('f2-'):]
+    if board == 'f2-burst200':
+        rtl = sorted(top_dir.glob('*.sv'))
+    else:
+        rtl = sorted(top_dir.glob('*.sv')) + [ROOT / 'rtl/boards/f2/burst200' / f for f in ADAPTERS]
+    if not any(p.name == 'cl_opentpu.sv' for p in rtl):
+        raise SystemExit(f'{top_dir}: no cl_opentpu.sv')
+    floorplan = BOARD / 'constraints' / t.platform.get('floorplan', 'floorplan.tcl')
+    if not floorplan.is_file():
+        raise SystemExit(f'{target_path}: floorplan {floorplan} does not exist')
+    S, nch = t.arch['S'], t.platform['channels_per_slice']
+    ports = list(t.platform.get('hbm_ports', [0, 4]))
+    if nch != 2 or len(ports) != 2 * S or len(set(ports)) != len(ports):
+        raise SystemExit(f'{target_path}: two channels a slice on {2 * S} distinct HBM ports')
+    geometry = (f'# {target_path.name}: {S} slice(s), window j = 2 s + c on HBM AXI port otpu_ports[j]\n'
+                f'set otpu_S {S}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n')
+    return dict(target=t, toml=target_path.resolve(), rtl=rtl, floorplan=floorplan,
+                geometry=geometry, S=S, ports=ports)
 
 
 def main():
@@ -19,11 +57,17 @@ def main():
     ap.add_argument('--hdk', required=True, type=Path, help='Full aws-fpga/hdk directory')
     ap.add_argument('--vivado', default='vivado')
     ap.add_argument('--output', type=Path, default=ROOT / 'build/f2/burst200')
+    ap.add_argument('--target', type=Path, default=ROOT / 'targets/f2-burst200.toml',
+                    help='the openTPU target (its rtl_board, floorplan, slices and hbm_ports)')
     ap.add_argument('--plan', action='store_true', help='Print stages without creating files')
     a = ap.parse_args()
     hdk, output = a.hdk.resolve(), a.output.resolve()
+    pl = plan(a.target)
     if a.plan:
         print('HDK:', hdk, '\nOutput:', output)
+        print('Target:', pl['toml'], f"({pl['S']} slice(s), HBM ports {pl['ports']})")
+        print('CL top:', ', '.join(str(p.relative_to(ROOT)) for p in pl['rtl']))
+        print('Floorplan:', pl['floorplan'].relative_to(ROOT))
         print('\n'.join(f'{i + 1}. {stage}' for i, stage in enumerate(STAGES)))
         return
     if output.exists():
@@ -57,14 +101,22 @@ def main():
         shutil.copy2(SCRIPTS / name, dirs[stage] / 'build.tcl')
     for stage in ['synth_link', 'implement']:
         for p in (BOARD / 'constraints').glob('*.tcl'):
+            if p.name.startswith('floorplan'):
+                continue                    # the target's floorplan alone, as floorplan.tcl
             shutil.copy2(p, dirs[stage] / p.name)
-    shutil.copytree(ROOT / 'rtl/boards/f2/burst200', dirs['synth_link'] / 'rtl')
-    shutil.copy2(ROOT / 'targets/f2-burst200.toml', dirs['synth_link'] / 'f2-burst200.toml')
+        shutil.copy2(pl['floorplan'], dirs[stage] / 'floorplan.tcl')
+    for stage in ['ip', 'pcis', 'synth_link']:
+        (dirs[stage] / 'geometry.tcl').write_text(pl['geometry'])
+    (dirs['synth_link'] / 'rtl').mkdir()
+    for p in pl['rtl']:
+        shutil.copy2(p, dirs['synth_link'] / 'rtl' / p.name)
+    shutil.copy2(pl['toml'], dirs['synth_link'] / pl['toml'].name)
     with (dirs['synth_link'] / 'config_generation.log').open('w') as log:
         subprocess.run([sys.executable, str(SCRIPTS / 'emit_config.py'),
-                        str(dirs['synth_link'])], stdout=log, stderr=subprocess.STDOUT, check=True)
+                        str(dirs['synth_link']), '--target', str(pl['toml'])],
+                       stdout=log, stderr=subprocess.STDOUT, check=True)
     inputs = [*(ROOT / 'rtl').rglob('*.sv'), *BOARD.rglob('*.tcl'),
-              *BOARD.rglob('*.py'), ROOT / 'targets/f2-burst200.toml']
+              *BOARD.rglob('*.py'), pl['toml']]
     hashes = {str(p.relative_to(ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
               for p in sorted(inputs)}
     (output / 'inputs.sha256.json').write_text(json.dumps(hashes, indent=2) + '\n')
