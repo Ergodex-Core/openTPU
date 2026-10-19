@@ -36,12 +36,12 @@ def legacy_groups(groups):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--out-dir", type=Path, default=Path("build/lens/c2/rtl"))
+    parser.add_argument("--out-dir", type=Path, default=Path("build/lens/c2/rtl-sync-ram"))
     args = parser.parse_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     revision = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=C.rtlsim.ROOT, text=True).strip()
     dirty = subprocess.run(["git", "diff", "--quiet"], cwd=C.rtlsim.ROOT).returncode != 0
-    source = {"commit": revision, "dirty": dirty, "variant": "ping-pong",
+    source = {"commit": revision, "dirty": dirty, "variant": "ping-pong-sync-ram",
               "sha256": {str(p.relative_to(C.rtlsim.ROOT)): hashlib.sha256(p.read_bytes()).hexdigest()
                          for p in [C.rtlsim.ROOT / s for s in (
                              "rtl/mxu/otpu_c2_mxu.sv", "rtl/mxu/otpu_mxu.sv",
@@ -69,7 +69,7 @@ def main():
         evidence["source"] = source
         profiles.append(C.lens_data(groups, evidence, "C2 "+name))
         profiles[-1]["notes"].append({"level": "info", "text":
-            f"Ping-pong operand buffers. Source commit {revision}; dirty={dirty}. Full source hashes retained in c2_rtl.source."})
+            f"Synchronous-read ping-pong operand RAMs; one extra fetch stage. Source commit {revision}; dirty={dirty}. Full source hashes retained in c2_rtl.source."})
         reports.append({"name": name, **{k:v for k,v in evidence.items() if k != "events"}})
         print(name, json.dumps(evidence["counts"], sort_keys=True), flush=True)
     # Matched numerical workload, despite different grouping and simulated timing.
@@ -78,7 +78,7 @@ def main():
     path = lens.save(profiles, args.out_dir/"c2-rtl.otpuprof")
     (args.out_dir/"c2-rtl.html").write_text(lens.render(profiles, title="C2 standalone RTL cycles — synthetic service"))
     (args.out_dir/"c2-rtl.json").write_text(json.dumps({
-        "model": "Verilator execution of standalone dual-mode RTL with ping-pong buffers and synthetic per-channel services",
+        "model": "Verilator execution of standalone dual-mode RTL with synchronous-read ping-pong RAMs and synthetic per-channel services",
         "source": source,
         "clock": "200 MHz assumed display conversion; not synthesized or measured",
         "scope": "One D128/C4 product bank, operand/result queues, four epilogue lanes; no production/HBM integration",

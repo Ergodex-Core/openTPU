@@ -194,3 +194,33 @@ uses 256 KiB of ACT packet buffering plus metadata, before any physical mapping 
 Verilator lint passes. A generic sv2v/Yosys attempt encountered undriven converted
 early-return temporaries also reproduced in unchanged `otpu_fmul`; it is not accepted as
 synthesis evidence. There is no resource-fit or achieved-clock claim.
+
+## Synchronous operand RAM preparation (2026-10-19)
+
+The asynchronous, dynamically banked operand reads above have been replaced with
+sixteen explicit simple-dual-port synchronous RAMs: four each for weights (1024 bits),
+ACT bytes (1024), weight scales/offsets (40), and ACT scales/offsets (64). Every RAM has
+512 entries, with the ping-pong bank as the address MSB, and requests block-RAM inference.
+The memory and read-data registers have no reset; the separately reset fetch-valid bit
+controls whether the data is used. The final synchronous read captures all operands and
+metadata before its bank becomes reusable. Physical resource inference is still to be
+verified by the supported Vivado flow, not inferred from Verilator behavior.
+
+One fetch stage precedes the existing arithmetic pipeline. Array and RAM-read events carry
+separate tags/bank IDs, and tests verify their one-stage correspondence. Scale shift control
+now uses a nine-bit unsigned offset sum and a bounded five-bit right shift of `17'h10000`,
+dropping sums above 16. This preserves the original semantics even for `255 + 255`.
+
+All **17 C2 RTL tests pass**, including the previous numerical/stall/reset/mode matrix and
+an added offset-window/overflow test. The added latency exposed a testbench scheduling
+race: the synthetic old-value source used a stale continuous `old_ready` after changing
+`out_ready` in the same procedural block. Its ready predicate is now evaluated explicitly;
+the independent held-valid response test still checks real backpressure. Simultaneous
+accept/commit coverage remains required in the fixed seed-7 pressure case, rather than
+depending on that coincidence in every random schedule.
+
+New exports go to `build/lens/c2/rtl-sync-ram/`, preserving both earlier baseline bundles.
+They are labeled `SYNC-RAM PING-PONG RTL / SYNTHETIC SERVICE`, with fresh observed cycles,
+source hashes and the same explicit assumed display clock. They are not hardware timing.
+The separate F2 benchmark adapter and its memory-service measurements are a subsequent
+integration layer; this core change does not add HBM or production dispatch interfaces.

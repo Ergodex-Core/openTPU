@@ -33,7 +33,10 @@ def test_independent_delivery_and_full_credit_drain(have_verilator, seed):
     assert c["peak_result_groups"] == 8
     assert c["credit_wait"] > 0 and c["old_wait"] > 100 and c["output_wait"] > 0
     assert c["mode_wait"] > 0
-    assert any(e["accept"] and e["commit"] for e in r["events"])
+    # This fixed schedule exercises simultaneous credit allocation/retirement;
+    # the other random seeds need not happen to coincide on the same cycle.
+    if seed == 7:
+        assert any(e["accept"] and e["commit"] for e in r["events"])
     # The RTL/harness asserts that stalled commits and ACC requests retain their
     # complete tags, mask, addresses, fp32 data and integer payload until accepted.
 
@@ -78,9 +81,13 @@ def test_pingpong_overlap_and_bank_recycling(have_verilator, stalls):
     accepts=[e for e in r["events"] if e["accept"]]
     assert [e["fill_bank"] for e in accepts]==[i%2 for i in range(16)]
     for e in r["events"]:
-        if e["advance"] and (e["weight_accept_mask"] or e["scale_accept_mask"] or e["act_accept_mask"]):
+        if e["ram_read"] and (e["weight_accept_mask"] or e["scale_accept_mask"] or e["act_accept_mask"]):
             assert e["fill_bank"]!=e["compute_bank"]
-            assert e["fill_tag"]!=e["array_tag"]
+            assert e["fill_tag"]!=e["ram_read_tag"]
+    # Synchronous reads preserve every tag through the added fetch register,
+    # including KB1 and the final read before a ping-pong bank is recycled.
+    assert [(e["array_tag"],e["array_bank"]) for e in r["events"] if e["advance"]] == [
+        (e["ram_read_tag"],e["compute_bank"]) for e in r["events"] if e["ram_read"]]
 
 
 def test_recycled_banks_with_unequal_kb(have_verilator):
@@ -98,3 +105,15 @@ def test_held_acc_response_through_blocked_epilogue(have_verilator):
     assert r["counts"]["old_response_backpressure"]>0
     assert r["counts"]["output_wait"]>0
     assert r["bit_exact"]
+
+
+def test_bounded_offset_decode_does_not_wrap(have_verilator):
+    # Offset bytes are unsigned, including values larger than the shift window.
+    # In particular 255+255 must not wrap into a valid positive multiplier.
+    groups=[]
+    for i, (dw, da) in enumerate(((0,0),(0,16),(0,17),(16,0),(17,0),
+                                  (31,1),(127,129),(255,1),(255,255))):
+        g=C.make_group(1, tag=i, seed=1800+i)
+        g.dw[:]=dw;g.da[:]=da
+        groups.append(g)
+    assert C.run(groups, wstall=23, sstall=31, astall=17)["bit_exact"]

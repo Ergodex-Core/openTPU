@@ -117,7 +117,10 @@ module tb_c2_mxu;
         end
       end
       out_ready=cy>=hold_cycles && $urandom_range(0,99)>=ostall;
-      old_valid=old_ready && cy>=old_hold && $urandom_range(0,99)>=rstall;
+      // out_ready changed above in this procedural block; old_ready's continuous
+      // assignment need not have reevaluated yet. Use its handshake predicate
+      // explicitly, otherwise this source can pulse valid on a newly stalled edge.
+      old_valid=old_req && (!out_valid || out_ready) && cy>=old_hold && $urandom_range(0,99)>=rstall;
       for(int c=0;c<C;c++) old_data[c]=memory[old_addr[c][15:0]];
       if(hold_response!=0) begin
         if(!response_pending && old_req && cy>=old_hold && $urandom_range(0,99)>=rstall) begin
@@ -153,14 +156,14 @@ module tb_c2_mxu;
       $fatal(1,"C2 ACC response source violated backpressure");
     response_stalled=old_valid && !old_ready;response_held=old_data;
     if(old_valid && old_ready) response_pending=0;
-    $fdisplay(evfd,"%0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d",
+    $fdisplay(evfd,"%0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d %0d",
       cy,cmd_valid&&cmd_ready,cmd_tag,pf_advance,dut.command.tag,w_valid&w_ready,s_valid&s_ready,
       a_valid&a_ready,out_valid&&out_ready,out_tag,pf_old_wait,pf_out_wait,pf_mode_wait,pf_credit_wait,
       pf_w_wait,pf_s_wait,pf_a_wait,pf_live,pf_results,
       (pf_w_level[0]>pf_w_level[1] ? pf_w_level[0]:pf_w_level[1]),
       (pf_w_level[2]>pf_w_level[3] ? pf_w_level[2]:pf_w_level[3]),
       dut.fill_bank,dut.compute_bank,cmd_valid && !dut.filling && dut.occupied[dut.fill_bank],
-      old_valid && !old_ready);
+      old_valid && !old_ready,dut.read_advance,dut.command_bank[dut.compute_bank].tag,dut.fetch_bank);
     if(cmd_valid && cmd_ready) begin
       feed=next_cmd;next_cmd=next_cmd+1;feed_cycle=cy;
       for(int c=0;c<C;c++) begin wi[c]=0;si[c]=0;ai[c]=0;end

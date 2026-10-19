@@ -63,9 +63,14 @@ module otpu_c2_mxu
   logic [1:0] occupied, filled;
   logic [8:0] kb, fkb, kb_bank[2], issued;
   logic [C-1:0][8:0] wn, sn, an;
-  logic [D*8-1:0] wm[2][C][DEPTH], am[2][C][DEPTH];
-  logic [39:0] sm[2][C][DEPTH];
-  logic [63:0] asc[2][C][DEPTH];
+  // Fixed physical column per SDP RAM, with ping-pong bank as address MSB.
+  // Synchronous read is required for FPGA block-RAM inference; array-style
+  // asynchronous reads would turn the large operand store into LUTs/registers.
+  logic [C-1:0][D*8-1:0] wq, aq;
+  logic [C-1:0][39:0] sq;
+  logic [C-1:0][63:0] asq;
+  logic fetch_valid, first0, last0, fetch_bank;
+  wire read_advance=filled[compute_bank];
   logic [C-1:0] need_w, need_a;
   logic fill_complete;
   logic [FW:0] live, rn;
@@ -73,7 +78,6 @@ module otpu_c2_mxu
   result_t results[RF], head;
   wire accept=cmd_valid && cmd_ready;
   wire commit=out_valid && out_ready;
-  assign command=command_bank[compute_bank];
   assign fill_command=command_bank[fill_bank];
   assign kb=kb_bank[compute_bank];
   assign fkb=kb_bank[fill_bank];
@@ -102,17 +106,31 @@ module otpu_c2_mxu
           (need_a[c] && an[c]+9'(a_valid[c]&&a_ready[c])!=fkb)) fill_complete=0;
     end
   end
-  assign pf_advance=filled[compute_bank];
+  assign pf_advance=fetch_valid;
+  for(genvar c=0;c<C;c++) begin:g_operand
+    otpu_c2_operand_ram #(.W(D*8),.N(2*DEPTH)) u_w(
+      .clk,.we(w_valid[c] && w_ready[c]),.wa({fill_bank,wn[c][AW-1:0]}),.d(w_data[c]),
+      .re(read_advance),.ra({compute_bank,issued[AW-1:0]}),.q(wq[c]));
+    otpu_c2_operand_ram #(.W(D*8),.N(2*DEPTH)) u_a(
+      .clk,.we(a_valid[c] && a_ready[c]),.wa({fill_bank,an[c][AW-1:0]}),.d(a_data[c]),
+      .re(read_advance),.ra({compute_bank,issued[AW-1:0]}),.q(aq[c]));
+    otpu_c2_operand_ram #(.W(40),.N(2*DEPTH)) u_s(
+      .clk,.we(s_valid[c] && s_ready[c]),.wa({fill_bank,sn[c][AW-1:0]}),.d({s_sw[c],s_dw[c]}),
+      .re(read_advance),.ra({compute_bank,issued[AW-1:0]}),.q(sq[c]));
+    otpu_c2_operand_ram #(.W(64),.N(2*DEPTH)) u_as(
+      .clk,.we(a_valid[c] && a_ready[c]),.wa({fill_bank,an[c][AW-1:0]}),.d({a_da[c],a_sa[c]}),
+      .re(read_advance),.ra({compute_bank,issued[AW-1:0]}),.q(asq[c]));
+  end
   // S0: choose operands before the shared physical PEs. The invalid columns are
   // masked in bm2 and at retirement; no input/read is requested for their padding.
   logic [C-1:0][D*8-1:0] a0, w0;
   logic [C-1:0][31:0] da0, sa0, sw0;
   logic [C-1:0][7:0] dw0;
   always_comb for (int c=0;c<C;c++) begin
-    a0[c]=am[compute_bank][command.decode ? 0:c][issued[AW-1:0]];
-    {da0[c],sa0[c]}=asc[compute_bank][command.decode ? 0:c][issued[AW-1:0]];
-    w0[c]=wm[compute_bank][command.decode ? c:0][issued[AW-1:0]];
-    {sw0[c],dw0[c]}=sm[compute_bank][command.decode ? c:0][issued[AW-1:0]];
+    a0[c]=command.decode ? aq[0]:aq[c];
+    {da0[c],sa0[c]}=command.decode ? asq[0]:asq[c];
+    w0[c]=command.decode ? wq[c]:wq[0];
+    {sw0[c],dw0[c]}=command.decode ? sq[c]:sq[0];
   end
   logic [C-1:0][D-1:0][7:0] wd;
   logic [C-1:0][31:0] da1, sw1, sap1;
@@ -125,9 +143,10 @@ module otpu_c2_mxu
     for(int c=0;c<C;c++) begin
       sap1[c]<=fp_mul(sa0[c],32'h37800000); // exact repo Sa * 2^-16
       for(int g=0;g<8;g++) begin
-        int sh;
-        sh=16-int'(dw1[c])-int'(da1[c][(g/2)*8+:8]);
-        bm2[c][g]<=(valid1[c] && sh>=0) ? 17'(17'd1<<sh) : 17'd0;
+        logic [8:0] offset_sum;
+        offset_sum={1'b0,dw1[c]}+{1'b0,da1[c][(g/2)*8+:8]};
+        bm2[c][g]<=(valid1[c] && offset_sum<=9'd16) ?
+                   (17'h10000 >> offset_sum[4:0]) : 17'd0;
       end
     end
   end
@@ -150,7 +169,7 @@ module otpu_c2_mxu
     for(genvar g=0;g<8;g++) assign ca[g]=preg[c][g*CLS+CLS-1];
     otpu_skew #(.W(136),.N(CLS-1+c)) u_b(.clk,.en(1'b1),.d(bm2[c]),.q(bm));
     otpu_skew #(.W(1),.N(CLS+4+c)) u_f(.clk,.en(1'b1),
-      .d(pf_advance && issued==0),.q(first));
+      .d(pf_advance && first0),.q(first));
     otpu_mxce #(.CPG(1)) u_ce(.clk,.a(ca),.d(192'd0),.bm,.first,.acc);
     otpu_skew #(.W(48),.N(C-1-c)) u_align(.clk,.en(1'b1),.d(acc),.q(integers[c]));
   end
@@ -196,11 +215,18 @@ module otpu_c2_mxu
     if(rst) begin
       filling<=0;mode_valid<=0;mode<=0;issued<=0;fill_bank<=0;compute_bank<=0;
       occupied<=0;filled<=0;
+      fetch_valid<=0;first0<=0;last0<=0;fetch_bank<=0;command<='0;
       for(int b=0;b<2;b++) begin command_bank[b]<='0;kb_bank[b]<=0;end
       wn<='0;sn<='0;an<='0;live<=0;rn<=0;rh<=0;rt<=0;
       row_valid<='0;ev<='0;
     end else begin
-      row_valid<={row_valid[LROW-2:0],pf_advance && issued+1==kb};
+      fetch_valid<=read_advance;
+      if(read_advance) begin
+        command<=command_bank[compute_bank];
+        fetch_bank<=compute_bank;
+        first0<=issued==0;last0<=issued+1==kb;
+      end
+      row_valid<={row_valid[LROW-2:0],pf_advance && last0};
       if(epi_en) ev<={ev[EP-2:0],pop};
       case({accept,commit})
         2'b10:live<=live+1'b1;
@@ -214,16 +240,14 @@ module otpu_c2_mxu
         wn<='0;sn<='0;an<='0;
       end
       for(int c=0;c<C;c++) begin
-        if(w_valid[c] && w_ready[c]) begin wm[fill_bank][c][wn[c][AW-1:0]]<=w_data[c];wn[c]<=wn[c]+1'b1;end
-        if(s_valid[c] && s_ready[c]) begin sm[fill_bank][c][sn[c][AW-1:0]]<={s_sw[c],s_dw[c]};sn[c]<=sn[c]+1'b1;end
-        if(a_valid[c] && a_ready[c]) begin
-          am[fill_bank][c][an[c][AW-1:0]]<=a_data[c];asc[fill_bank][c][an[c][AW-1:0]]<={a_da[c],a_sa[c]};an[c]<=an[c]+1'b1;
-        end
+        if(w_valid[c] && w_ready[c]) wn[c]<=wn[c]+1'b1;
+        if(s_valid[c] && s_ready[c]) sn[c]<=sn[c]+1'b1;
+        if(a_valid[c] && a_ready[c]) an[c]<=an[c]+1'b1;
       end
       if(fill_complete) begin
         filling<=0;filled[fill_bank]<=1;fill_bank<=!fill_bank;
       end
-      if(pf_advance) begin
+      if(read_advance) begin
         issued<=issued+1'b1;
         if(issued+1==kb) begin
           issued<=0;filled[compute_bank]<=0;occupied[compute_bank]<=0;compute_bank<=!compute_bank;
@@ -241,20 +265,39 @@ module otpu_c2_mxu
     end
   end
 `ifndef SYNTHESIS
+  logic [C-1:0][31:0] first_sw,first_sa;
   always @(posedge clk) if(!rst) begin
     if(accept && (cmd_kb==0 || cmd_kb>DEPTH || cmd_mask==0)) $fatal(1,"C2 invalid command");
     if(accept && mode_valid && cmd_decode!=mode && live!=0) $fatal(1,"C2 mode changed before drain");
     if(push && rn==RF && !pop) $fatal(1,"C2 result overflow");
     if(commit && live==0) $fatal(1,"C2 unreserved commit");
     for(int c=0;c<C;c++) begin
-      if(s_valid[c] && s_ready[c] && sn[c]!=0 && s_sw[c]!=sm[fill_bank][c][0][39:8])
+      if(s_valid[c] && s_ready[c] && sn[c]==0) first_sw[c]<=s_sw[c];
+      if(a_valid[c] && a_ready[c] && an[c]==0) first_sa[c]<=a_sa[c];
+      if(s_valid[c] && s_ready[c] && sn[c]!=0 && s_sw[c]!=first_sw[c])
         $fatal(1,"C2 Sw changes within a row");
-      if(a_valid[c] && a_ready[c] && an[c]!=0 && a_sa[c]!=asc[fill_bank][c][0][31:0])
+      if(a_valid[c] && a_ready[c] && an[c]!=0 && a_sa[c]!=first_sa[c])
         $fatal(1,"C2 Sa changes within a row");
     end
     if(filling && (!occupied[fill_bank] || filled[fill_bank])) $fatal(1,"C2 fill bank ownership");
-    if(pf_advance && (!occupied[compute_bank] || (filling && fill_bank==compute_bank)))
+    if(read_advance && (!occupied[compute_bank] || (filling && fill_bank==compute_bank)))
       $fatal(1,"C2 compute bank ownership");
   end
 `endif
+endmodule
+
+// One synchronous read port and one independent write port. No reset on memory
+// or read data: validity lives in otpu_c2_mxu. Banks are never read and written
+// concurrently at the same address, including the final read before bank reuse.
+module otpu_c2_operand_ram #(parameter int W=1024,N=512,AW=$clog2(N)) (
+  input logic clk,we,re,
+  input logic [AW-1:0] wa,ra,
+  input logic [W-1:0] d,
+  output logic [W-1:0] q
+);
+  (* ram_style="block" *) logic [W-1:0] mem[N];
+  always_ff @(posedge clk) begin
+    if(we) mem[wa]<=d;
+    if(re) q<=mem[ra];
+  end
 endmodule

@@ -150,7 +150,8 @@ FIELDS = ("cycle", "accept", "accepted_tag", "advance", "array_tag", "weight_acc
           "scale_accept_mask", "act_accept_mask", "commit", "commit_tag", "old_wait",
           "output_wait", "mode_wait", "credit_wait", "weight_wait_mask", "scale_wait_mask",
           "act_wait_mask", "live_groups", "result_groups", "weight_peak01", "weight_peak23",
-          "fill_bank", "compute_bank", "operand_bank_wait", "old_response_backpressure")
+          "fill_bank", "compute_bank", "operand_bank_wait", "old_response_backpressure",
+          "ram_read", "ram_read_tag", "array_bank")
 
 
 def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
@@ -220,7 +221,7 @@ def run(groups, *, out_dir=None, seed=1, wstall=0, sstall=0, astall=0,
                   peak_live_groups=max(e["live_groups"] for e in events),
                   peak_result_groups=max(e["result_groups"] for e in events),
                   peak_weight_chunks_per_column=max(max(e["weight_peak01"], e["weight_peak23"]) for e in events))
-    return dict(bit_exact=True, model="standalone-c2-verilator-v2-pingpong", service=params,
+    return dict(bit_exact=True, model="standalone-c2-verilator-v3-sync-ram", service=params,
                 counts=counts, outputs=outputs, events=events)
 
 
@@ -240,7 +241,7 @@ def lens_data(groups, evidence, name):
     macs = sum(g.kb * g.count * 128 for g in groups)
     bound = counts["advance"]
     cfg = Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=256)
-    return {"kind": "rtl", "name": name + " [PING-PONG RTL / SYNTHETIC SERVICE]",
+    return {"kind": "rtl", "name": name + " [SYNC-RAM PING-PONG RTL / SYNTHETIC SERVICE]",
             "cycles": cycles, "clock_mhz": 200.0,
             "config": lens._config(cfg, {"C": 1, "C2_COLUMNS": 4, "FIFO_DEPTH": 256, "MXU_E": 4}),
             "roofline": {"bound": bound, "efficiency": bound / cycles,
