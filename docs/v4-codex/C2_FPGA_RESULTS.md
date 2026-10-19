@@ -3,8 +3,8 @@
 **No C2 FPGA execution or physical HBM performance result is available yet.**
 The first integrated build, from frozen commit
 `4f7509123fdd2cf1eba5a2c88289a3e3c2709439`, was stopped after a clock DRC failure.
-Clock and CDC qualification fixes are being prepared for a fresh isolated build.
-RTL Lens results remain simulations.
+The corrected full build is running from frozen commit
+`7028e35e8720cb70d7b38d65010813dd23d88bcf`. RTL Lens results remain simulations.
 
 ## Standalone core synthesis and route
 
@@ -104,6 +104,23 @@ are in `build/c2-fpga/methodology-evidence/` and S3
 `full-4f750912/methodology-evidence.tar.gz`, with SHA256
 `c7da174694ff9e07d4f6f1f929fad8481d0bf4ec3f7f90083f9bc64c96fb2125`.
 
+The corrected classifier was then executed directly in Vivado on the preserved
+checkpoint: `raw_blockers=39`, `inherited_shell=35`, `scoped_context=4`,
+`remaining_blockers=0`. This verifies methodology context, not routed timing.
+Its exact source bytes match committed `7028e35e`; verification evidence is in
+`build/c2-fpga/methodology-verification/` and the S3 archive
+`full-4f750912/methodology-verification.tar.gz`, SHA256
+`401924eb101be7954a8a5693e274c9e81f86e18f5204e085355b5987a6c5db22`.
+The combined build, route, methodology, publisher, session and host suite passed
+**213 tests** before freezing this revision.
+
+The new full build started at approximately 14:36 UTC under
+`otpu-c2-full-7028e35e.service`, in
+`/home/ubuntu/rachit/codex-c2/source-7028e35e/full`. It uses the same bounded
+resources and separate source checkout as the first attempt. At 14:42 UTC it
+had finished technology mapping with no errors or critical warnings; placement,
+routing and final qualification were still pending.
+
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
 unless those gates pass. The planned execution host is the dedicated
@@ -122,3 +139,17 @@ The combined Lens viewer contains 128 profiles; its latest ten are explicitly
 synthetic native-service RTL profiles. Their memory-stall findings and physical
 measurement priorities are in [C2_NATIVE_PROFILE_ANALYSIS.md](C2_NATIVE_PROFILE_ANALYSIS.md).
 The build/benchmark contract is [F2-BENCH.md](F2-BENCH.md).
+
+The dedicated host now has the exact `7028e35e` tools in
+`/home/ubuntu/rachit/codex-c2/session-tools`, using
+`/home/ubuntu/opentpu-venv/bin/python3`. All five transferred fixtures passed
+checksums, canonical fp32/integer results and expected per-PC traffic checks
+without accessing the FPGA. The host's role could not initially read S3 objects;
+the transfer used two 900-second presigned HTTPS downloads with SHA256 checks.
+The role also lacked the runtime image-status permission. A separate inline
+policy, `OpenTpuC2FpgaImageReadUsEast1`, now allows only
+`ec2:DescribeFpgaImages` in `us-east-1`. IAM simulation verified that it does not
+grant image writes or access in another region, and a live query from the host
+passed. The existing SSM policy and trust policy were left unchanged. Local
+receipts are in `build/c2-fpga/remote/session-stage-7028e35e/retry1/` and
+`session-image-read-policy-receipt.json`.
