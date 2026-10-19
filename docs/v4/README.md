@@ -235,7 +235,12 @@ token bit-exact) and **build 2** runs with `--place-directive Default` (unit
 queue write enable at 200 MHz (-2.4, 8 logic levels), the DMA-to-TMEM address at the pumped
 clock (-1.4), a shell-side path (-1.0), the HBM reset pipe into 32 ports (-0.9); round 3 (block
 RAM FIFOs / registered write enables, a pipelined bridge, pblocks for the slice and the
-host side, a replicated reset pipe) is in progress on `v4-f2-timing`.
+host side, a replicated reset pipe) is merged (8b2fd3a0, [f2-timing.md](f2-timing.md)
+"Round 3": register-enabled FIFOs, a registered bridge head, skid buffers and links on the
+shell side, pblocks for the slice / TMEM / host side, MAX_FANOUT on the HBM reset pipe, and
+the flow fix that makes the HDK read the floorplan Tcl at all; all F2 suites pass and the
+Gemma 3 token stays bit-exact) and **build 3** runs (unit `otpu-f2hbm-build3`, output
+`/home/ubuntu/rachit/f2hbm-run3`). Build 2 routed at WNS -2.24 ns and was stopped.
 
 ## Decision (taken 2026-10-18)
 
