@@ -244,8 +244,11 @@ Gemma 3 token stays bit-exact) and **build 3** runs (unit `otpu-f2hbm-build3`, o
 Build 3 routed at **WNS -1.40 ns** (TNS -29,000, hold clean; the floorplan applied, the reset
 exception on 12 endpoints): the host-to-port link at 450 MHz is a bare 3.4 ns wire (-1.4),
 three fabric paths at 200 MHz ride 5 ns of route (-1.0), the TMEM address paths are within
-0.5 ns. Round 4 (link stages between host and ports, registered enable cones, per-port and
-tighter TMEM pblocks) is in progress.
+0.5 ns. Round 4 is merged (ae770a3d, [f2-timing.md](f2-timing.md) "Round 4": one-beat
+host writes behind link stages per port, a registered write-done compare and hazard mirror
+in the adapter, a registered TMEM priority mask, a bridge pblock on the HBM ports' row and the
+MXU's request registers in the TMEM pblock; cycle-exact and bit-exact in Verilator) and
+**build 4** runs (unit `otpu-f2hbm-build4`, output `/home/ubuntu/rachit/f2hbm-run4`).
 
 ## Decision (taken 2026-10-18)
 
