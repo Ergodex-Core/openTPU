@@ -101,31 +101,42 @@ module otpu_f2_hbm_nch #(
   always_ff @(posedge hclk) hrst_q <= hrst;
 
   // ================================================================== core side
-  // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more)
+  // ---- the native port into two FIFOs of 4 (readies from flip-flops: room for two more), the
+  // command FIFO's head into a register (h_*: the hazard compares below and the issue start
+  // from flip-flops. The a2af0904 placement ran the head read by cf_h through the 80 compares
+  // into the crossing's 600 write enables, 8 levels, 6.3 of 7.1 ns of route at 200 MHz
+  // (rhino's e165f4f8 on its p4rl8 build: the same path); the crossing now writes its tail
+  // every cycle, otpu_afifo WT, so the issue reaches only its pointer). The register is a core
+  // cycle on a command's way (a stream's commands pipeline through it one a cycle: the first
+  // issues two cycles after its take, not one), 5 ns on the HBM's hundreds
   logic [25:0]  cf [4];
   logic [575:0] df [4];
   logic [2:0]   cf_n, df_n;
   logic [1:0]   cf_h, df_h;
-  logic         c_pop, d_pop;
+  logic         h_v, h_we;
+  logic [24:0]  h_a;
+  logic         c_pop, d_pop;              // the head issues; a write's data with it
   wire c_take = n_cvalid && n_cready;
   wire d_take = n_wvalid && n_wready;
+  wire h_load = cf_n != 0 && (!h_v || c_pop);   // the FIFO's head into the register
   always_ff @(posedge clk) begin
+    if (h_load) {h_we, h_a} <= cf[cf_h];
     if (rst_q) begin
       cf_n <= '0; df_n <= '0; cf_h <= '0; df_h <= '0; n_cready <= 1'b0; n_wready <= 1'b0;
+      h_v <= 1'b0;
     end else begin
       if (c_take) cf[2'(cf_h + cf_n)] <= {n_cwe, n_caddr};
       if (d_take) df[2'(df_h + df_n)] <= {n_wmask, n_wdata};
-      cf_n <= cf_n + 3'(c_take) - 3'(c_pop);
+      cf_n <= cf_n + 3'(c_take) - 3'(h_load);
       df_n <= df_n + 3'(d_take) - 3'(d_pop);
-      if (c_pop) cf_h <= cf_h + 1'b1;
+      if (h_load) cf_h <= cf_h + 1'b1;
+      if (!h_v || c_pop) h_v <= cf_n != 0;
       if (d_pop) df_h <= df_h + 1'b1;
       // room for this cycle's take and the next's: at most 2 after this cycle's changes
-      n_cready <= (cf_n + 3'(c_take) - 3'(c_pop)) <= 3'd2;
+      n_cready <= (cf_n + 3'(c_take) - 3'(h_load)) <= 3'd2;
       n_wready <= (df_n + 3'(d_take) - 3'(d_pop)) <= 3'd2;
     end
   end
-  wire        h_we = cf[cf_h][25];
-  wire [24:0] h_a  = cf[cf_h][24:0];
 
   // ---- in flight: the beats of the issued writes (to n_wdone) and reads (to n_rvalid)
   logic [WOD-1:0][24:0] wa;
@@ -147,8 +158,8 @@ module otpu_f2_hbm_nch #(
 
   // ---- issue: the head command into the crossing (a write with its data)
   logic        x_ready;
-  wire iss_w = cf_n != 0 && h_we && df_n != 0 && x_ready && !wn[WW] && !hz_r;
-  wire iss_r = cf_n != 0 && !h_we && x_ready && !rn[RW] && !hz_w;
+  wire iss_w = h_v && h_we && df_n != 0 && x_ready && !wn[WW] && !hz_r;
+  wire iss_r = h_v && !h_we && x_ready && !rn[RW] && !hz_w;
   assign c_pop = iss_w || iss_r;
   assign d_pop = iss_w;
   logic        x_v, x_we;
@@ -157,7 +168,9 @@ module otpu_f2_hbm_nch #(
   logic        xr_v;
   logic [511:0] xr_d;
   logic x_pop;
-  otpu_afifo #(.W(602), .DEPTH(CQ)) u_xq (
+  // (RWR, WT: x_ready and the RAM's write enables are flip-flops; the tail takes the head and
+  // its data every cycle there is room, the issue moves the pointer)
+  otpu_afifo #(.W(602), .DEPTH(CQ), .RWR(1'b1), .WT(1'b1)) u_xq (
     .wclk(clk), .wrst(rst_q), .wvalid(c_pop), .wready(x_ready), .wdata({h_we, h_a, df[df_h]}),
     .wslot('0), .wcommit(), .wused(), .rused(),
     .rclk(hclk), .rrst(hrst_q), .rvalid(x_v), .rready(x_pop), .rdata({x_we, x_a, x_d}));
@@ -349,7 +362,9 @@ module otpu_f2_hbm_nch #(
       end
     end
   end
-  otpu_afifo #(.W(512), .DEPTH(RD)) u_rq (
+  // (RWR, WT as u_xq: the 512-bit RAM's write enables and address are registered copies, the
+  // paired beat's push moves the pointer; the writer never sees the FIFO full: RD reads in flight)
+  otpu_afifo #(.W(512), .DEPTH(RD), .RWR(1'b1), .WT(1'b1)) u_rq (
     .wclk(hclk), .wrst(hrst_q), .wvalid(rr_v && r_half), .wready(), .wdata({rr_d, r_lo}),
     .wslot('0), .wcommit(), .wused(), .rused(),
     .rclk(clk), .rrst(rst_q), .rvalid(xr_v), .rready(1'b1), .rdata(xr_d));

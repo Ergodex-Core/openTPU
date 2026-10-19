@@ -5,8 +5,15 @@
 // which the slave side then gives. Every crossing word is stable from before its toggle until the
 // toggle back (the constraints: max delay, datapath only; boards/f2/build/constraints).
 //
-// hold: a write is not taken while it is high (otpu_f2_mem's pcis_wbusy: the host's writes to the
-// DIMM go first). Accesses outside the control registers' 4 KiB (BAR0 offset bit 12 and up: the
+// Slave side: AW, W and AR enter two-entry skid buffers (otpu_skidbuf, rtl/shell: the ready a
+// register, the access the state machine sees from the buffer's registers), B and R leave from
+// registers (s_bvalid / s_rvalid and their data below), so no OCL output is a combinational
+// function of an OCL input or of hold (round 4's placement, docs/wide_port.md "Round 5 RTL":
+// the shell's PCIS wvalid through pcis_wbusy into s_awready and back to the shell, 8.0 ns of
+// route over two SLRs on the 4 ns clock). The AW and W buffers' exits wait for !hold.
+//
+// hold: a write is not started while it is high (otpu_f2_mem's pcis_wbusy: the host's writes to
+// the DIMM go first; the write waits in its skid buffer). Accesses outside the control registers' 4 KiB (BAR0 offset bit 12 and up: the
 // card's other windows, the LiteDRAM / DDR4 CSRs of the other boards) never reach the port: reads
 // return 0, writes are dropped, both OKAY (the host's drivers probe them).
 module otpu_axil_cdc (
@@ -63,12 +70,36 @@ module otpu_axil_cdc (
   logic [31:0] y_rdata;                 // crossing back: held from the ack's toggle on
   logic [1:0]  y_resp;
 
-  assign s_awready = ss == S_IDLE && !have_aw && !hold && !s_arvalid_pri();
-  assign s_wready  = ss == S_IDLE && !have_w && !hold && !s_arvalid_pri();
-  assign s_arready = ss == S_IDLE && !have_aw && !have_w;
+  // the skid buffers' outputs (k_*: what the state machine sees) and their takes
+  logic        k_awv, k_awr, k_wv, k_wr, k_arv, k_arr;
+  logic [31:0] k_awaddr, k_wdata, k_araddr;
+  logic [3:0]  k_wstrb;
+  otpu_skidbuf #(.W(32)) u_skid_aw (.clk(sclk), .rst(srst), .i_v(s_awvalid), .i_r(s_awready),
+                                 .i_d(s_awaddr), .o_v(k_awv), .o_r(k_awr), .o_d(k_awaddr), .any());
+  otpu_skidbuf #(.W(36)) u_skid_w (.clk(sclk), .rst(srst), .i_v(s_wvalid), .i_r(s_wready),
+                                .i_d({s_wstrb, s_wdata}), .o_v(k_wv), .o_r(k_wr),
+                                .o_d({k_wstrb, k_wdata}), .any());
+  otpu_skidbuf #(.W(32)) u_skid_ar (.clk(sclk), .rst(srst), .i_v(s_arvalid), .i_r(s_arready),
+                                 .i_d(s_araddr), .o_v(k_arv), .o_r(k_arr), .o_d(k_araddr), .any());
+  // a write starts only from an AW / W two cycles old in its buffer (k_aw2 / k_w2: the beat's
+  // age; round 7, docs/wide_port.md "Round 7 RTL"): hold, the host's write-pending bit, is
+  // registered twice on its way here, so a PCIS write shown with the OCL's is counted before
+  // the OCL's starts
+  logic [1:0] aw_age, w_age;
+  wire k_aw2 = aw_age[1];
+  wire k_w2 = w_age[1];
+  always_ff @(posedge sclk) begin
+    if (srst || !k_awv || (k_awr && k_awv)) aw_age <= 2'd0;
+    else if (!aw_age[1]) aw_age <= aw_age + 2'd1;
+    if (srst || !k_wv || (k_wr && k_wv)) w_age <= 2'd0;
+    else if (!w_age[1]) w_age <= w_age + 2'd1;
+  end
+  assign k_awr = ss == S_IDLE && !have_aw && !hold && k_aw2 && !k_arvalid_pri();
+  assign k_wr  = ss == S_IDLE && !have_w && !hold && k_w2 && !k_arvalid_pri();
+  assign k_arr = ss == S_IDLE && !have_aw && !have_w;
   // a read waiting takes the turn when no write has started
-  function automatic logic s_arvalid_pri();
-    return s_arvalid && !have_aw && !have_w;
+  function automatic logic k_arvalid_pri();
+    return k_arv && !have_aw && !have_w;
   endfunction
 
   always_ff @(posedge sclk) begin
@@ -79,12 +110,12 @@ module otpu_axil_cdc (
       a1 <= y_ack; a2 <= a1; a3 <= a2;
       case (ss)
         S_IDLE: begin
-          if (s_arready && s_arvalid) begin
-            x_addr <= s_araddr; x_wr <= 1'b0; x_req <= !x_req; ss <= S_WAIT;
+          if (k_arr && k_arv) begin
+            x_addr <= k_araddr; x_wr <= 1'b0; x_req <= !x_req; ss <= S_WAIT;
           end else begin
-            if (s_awready && s_awvalid) begin x_addr <= s_awaddr; have_aw <= 1'b1; end
-            if (s_wready && s_wvalid) begin x_wdata <= s_wdata; x_wstrb <= s_wstrb; have_w <= 1'b1; end
-            if ((have_aw || (s_awready && s_awvalid)) && (have_w || (s_wready && s_wvalid))) begin
+            if (k_awr && k_awv) begin x_addr <= k_awaddr; have_aw <= 1'b1; end
+            if (k_wr && k_wv) begin x_wdata <= k_wdata; x_wstrb <= k_wstrb; have_w <= 1'b1; end
+            if ((have_aw || (k_awr && k_awv)) && (have_w || (k_wr && k_wv))) begin
               x_wr <= 1'b1; x_req <= !x_req; ss <= S_WAIT;
             end
           end

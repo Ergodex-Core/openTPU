@@ -122,8 +122,13 @@ host block shows its AW / W valids and the W beat from flip-flops, so no hclk ne
 host block and a port carries logic across the die ([v4/f2-timing.md](v4/f2-timing.md)). The
 host's B for a burst goes back when the
 host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
-`pcis_wbusy` (an AW / W shown or taken, a B not given back) holds the host's reads and the OCL's
-writes (a RUN after data finds the data in the HBM) as on the DDR build. PCIS reads: a beat at a
+`pcis_wbusy` (an AW / W in its skid buffer, link or queue, a B not given back: registers only)
+holds the host's reads and the OCL's writes (a RUN after data finds the data in the HBM) as on
+the DDR build. The PCIS side: AW, W and AR enter two-entry skid buffers (`otpu_skidbuf`), B and
+R leave through output registers, and an `otpu_link` per channel (a registered take, a
+registered stage, a registered credit pulse back) joins those registers, which the floorplan
+puts beside the shell, to the queues in SLR0: +2 aclk cycles each way, every net across the
+boundary a flip-flop to a flip-flop ([v4/f2-timing.md](v4/f2-timing.md) "Round 3"). PCIS reads: a beat at a
 time crosses as a two-beat read on its port, RQ = 16 in flight, one port at a time (a read to
 another port waits for the last port's reads: one ID's reads come back in order on a port, not
 across ports), so the data returns in PCIS order. Addresses past the last used port: writes
