@@ -36,8 +36,13 @@ Every 64-byte native read supplies two successive 32-byte groups from one row.
 No half is discarded or fetched again. Thus `0x48 * 64 == 0x4c * 64 ==
 0x40 * 32 == N * KB * 128` at successful completion. The raw native and useful
 weight ceilings are both `8 * 64 * 200 MHz = 102.4 GB/s`; the eight 32-byte HBM
-interfaces at 450 MHz total 115.2 GB/s before protocol losses. Neither ceiling
-is measured HBM bandwidth or complete-model token throughput.
+interfaces at 450 MHz total 115.2 GB/s before protocol losses. Alex's frozen
+native bridge collects at most 16 beats, then cannot collect another beat during
+the AR handshake cycle (`take_read` requires `!pending_valid`). Consequently,
+even contiguous, always-ready traffic has a sustained request-generation ceiling
+of `102.4 * 16 / 17 = 96.38 GB/s` before row tails, memory, credits or compute
+stalls. These are source-derived ceilings, not measured HBM bandwidth or
+complete-model token throughput.
 
 The first ABI permits N=1..512, KB=1..128, and origin-zero plain output. ACT and
 scales are preloaded through OCL and retained on chip. Header/scale HBM traffic,
