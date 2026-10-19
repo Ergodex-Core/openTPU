@@ -177,6 +177,8 @@ def configure_scripts(cl):
     (constraints / "cl_pnr_user.tcl").write_text(pnr + "\n" + floorplan)
 
     shutil.copy2(HERE / "validate_hbm_route.tcl", scripts / "validate_route.tcl")
+    for name in ("classify_methodology.tcl", "check_scoped_clocks.tcl"):
+        shutil.copy2(HERE / name, scripts / name)
 
 
 def prepare(out, hdk, shell, build_id):

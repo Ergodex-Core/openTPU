@@ -46,10 +46,17 @@ See [the ABI and host commands](../../docs/v4-codex/F2-BENCH.md).
 The image targets a 200 MHz core and 450 MHz HBM interfaces. These are build
 targets until the shell-linked design passes placement, routing, setup/hold,
 bus-skew, DRC and methodology checks. The dedicated HBM route validator also
-requires six clock-crossing bounds and all 39 expected fabric gray-bus
-constraints. The production design's DDR and pumped-TMEM rules do not apply to
-this kernel; its shell methodology classifier remains unchanged and rejects
-unknown violations. No packaging or hardware-performance claim is made from
+requires six destination-period crossing bounds and all 47 expected fabric
+Gray-bus constraints (38 FIFO pointer directions and nine write counters).
+The C2 methodology classifier keeps the unchanged exact 35-finding shell
+baseline and separately reviews the four scoped-clock warnings against actual
+Vivado 2025.2 HBM evidence. It verifies all six exported bounds, clock identity
+and membership, and complete outside-CL and top-level I/O path inventories.
+Only the exact existing shell-reset entries to core/HBM synchronizer CLR pins
+are accepted outside CL; any new blocking finding or unreviewed scoped context remains blocking.
+These checks classify context without changing severities, exceptions or timing
+gates. The production design's DDR and pumped-TMEM rules do not apply to this
+kernel. No packaging or hardware-performance claim is made from
 an out-of-context result alone.
 
 The build command creates no cloud resources, submits no AFI and changes no

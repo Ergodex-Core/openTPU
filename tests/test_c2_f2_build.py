@@ -76,6 +76,10 @@ def test_hbm_qualification_has_no_ddr_or_pumped_tmem_assumptions(tmp_path):
     assert "source ${scripts_dir}/validate_route.tcl" in impl
     assert (scripts / "validate_route.tcl").read_bytes() == (
         ROOT / "boards/c2_f2/validate_hbm_route.tcl").read_bytes()
+    for name in ("classify_methodology.tcl", "check_scoped_clocks.tcl"):
+        assert (scripts / name).read_bytes() == (ROOT / "boards/c2_f2" / name).read_bytes()
+    for name in ("check_shell_baseline.tcl", "shell_baseline_2025_2.tcl"):
+        assert (scripts / name).read_bytes() == (ROOT / "boards/c2_f2/support/boards/f2/build/scripts" / name).read_bytes()
     pnr = (constraints / "cl_pnr_user.tcl").read_text()
     assert "create_pblock pb_otpu_tmem" not in pnr
     assert "create_pblock pb_otpu_slr0" in pnr
