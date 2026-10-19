@@ -172,7 +172,29 @@ proc ::c2_alex_route::capture {audit label command} {
         puts $audit [list query $label status error message $value options $options review pending]
         return [dict create ok 0 value {}]
     }
-    puts $audit [list query $label status observed value $value review pending]
+    # Vivado stringifies large typed collections as 500 names plus "...".
+    # Expand only known NAME-bearing collection APIs into a separate plain list
+    # for the evidence file. Preserve the original typed value for downstream
+    # -of_objects queries; do not replace it with its names or pass it through
+    # expr/list reconstruction. Property values and report text stay literal.
+    set display_value $value
+    set api [namespace tail [lindex $command 0]]
+    if {$api in {get_cells get_pins get_nets get_ports get_clocks all_fanin all_fanout all_registers get_drc_violations get_methodology_violations get_waivers}} {
+        set code [catch {
+            set display_value {}
+            foreach object $value {
+                set name [get_property NAME $object]
+                if {$name eq ""} {error "C2 Alex capture: empty collection object NAME"}
+                lappend display_value $name
+            }
+        } message options]
+        if {$code} {
+            incr capture_pending
+            puts $audit [list query $label status error stage collection_name_serialization message $message options $options review pending]
+            return [dict create ok 0 value $value]
+        }
+    }
+    puts $audit [list query $label status observed value $display_value review pending]
     return [dict create ok 1 value $value]
 }
 proc ::c2_alex_route::capture_missing {audit label detail} {
@@ -237,7 +259,9 @@ proc ::c2_alex_route::capture_findings {audit} {
         foreach finding [dict get $result value] {
             set rule [capture $audit [list $kind finding_check] [list get_property CHECK $finding]]
             set label [list $kind finding [names $finding]]
-            foreach type {pins cells} {
+            # Full related net/port names are needed for findings such as
+            # RTSTAT-10; no recursive property expansion is required here.
+            foreach type {pins cells nets ports} {
                 set selected [capture $audit [list $label related_$type] [list get_$type -quiet -of_objects $finding]]
                 if {![dict get $selected ok]} {continue}
                 if {$type eq "cells"} {capture_cells $audit $label [dict get $selected value]}

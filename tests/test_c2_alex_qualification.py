@@ -509,6 +509,8 @@ source [lindex $argv 0]
 set fault [lindex $argv 2]
 proc get_methodology_violations {args} {return finding17}
 proc get_drc_violations {args} {return {}}
+proc get_nets {args} {return {}}
+proc get_ports {args} {return {}}
 proc get_pins {args} {
  if {"-of_objects" in $args} {return shell/register/C}
  return [lindex $args end]
@@ -745,3 +747,125 @@ puts [list calls $calls]
         assert 'pulse_report whole_design' in raw and 'pulse_report custom_logic' in raw
         assert raw.count('limit_per_check_type_per_clock 128 checks default_all complete not_asserted') == 2
         assert '-return_string -limit 128 -cells WRAPPER/CL' in result.stdout
+
+
+@pytest.mark.parametrize('api', [
+    'get_cells', 'get_pins', 'get_nets', 'get_ports', 'get_clocks',
+    'all_fanin', 'all_fanout', 'all_registers',
+    'get_drc_violations', 'get_methodology_violations', 'get_waivers',
+])
+def test_capture_expands_over_500_objects_without_replacing_typed_return(tmp_path, api):
+    report = tmp_path / 'collections.tcldata'
+    script = r'''
+source [lindex $argv 0]
+set api [lindex $argv 2]
+set handles {};for {set i 0} {$i<701} {incr i} {lappend handles handle$i}
+proc selected {args} {return $::handles}
+interp alias {} $api {} selected
+set reads 0
+proc get_property {key object} {
+ if {$key ne "NAME" || [llength $object]!=1 || ![regexp {^handle([0-9]+)$} $object -> index]} {
+  error {must read NAME from one original object, not a bulk or reconstructed name list}
+ }
+ incr ::reads
+ return [format {scope/register[%d]} $index]
+}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w]
+set result [::c2_alex_route::capture $f all_objects [list $api -quiet]]
+close $f
+if {[dict get $result value] ne $handles || ![dict get $result ok]} {error {original collection replaced}}
+if {$reads!=701} {error {collection NAME reads incomplete}}
+set f [open [lindex $argv 1] r];set row [gets $f];close $f
+set evidence [dict create {*}[lrange $row 2 end]]
+if {[llength [dict get $evidence value]]!=701 || [lindex [dict get $evidence value] end] ne {scope/register[700]}} {error {serialized inventory incomplete}}
+puts [list queries $::c2_alex_route::capture_queries pending $::c2_alex_route::capture_pending]
+'''
+    result = tcl(tmp_path, script, report, api)
+    assert result.returncode == 0, result.stderr
+    assert 'queries 1 pending 0' in result.stdout
+    raw = report.read_text()
+    assert 'scope/register[700]' in raw and 'handle700' not in raw
+    assert '...' not in raw
+
+
+@pytest.mark.parametrize('fault', ['error', 'empty'])
+def test_collection_name_serialization_failure_remains_explicit(tmp_path, fault):
+    report = tmp_path / 'collection_error.tcldata'
+    script = r'''
+source [lindex $argv 0]
+set fault [lindex $argv 2]
+proc get_cells {args} {return {typed0 typed1}}
+proc get_property {key object} {
+ if {$object eq "typed1"} {
+  if {$::fault eq "error"} {error {name API failed}}
+  return {}
+ }
+ return cell0
+}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w]
+set result [::c2_alex_route::capture $f cells {get_cells -quiet}]
+close $f
+if {[dict get $result ok] || [dict get $result value] ne {typed0 typed1}} {error {failure lost original return or claimed success}}
+puts [list queries $::c2_alex_route::capture_queries pending $::c2_alex_route::capture_pending]
+'''
+    result = tcl(tmp_path, script, report, fault)
+    assert result.returncode == 0, result.stderr
+    assert 'queries 1 pending 1' in result.stdout
+    assert 'status error stage collection_name_serialization' in report.read_text()
+    assert 'status observed' not in report.read_text()
+
+
+def test_capture_does_not_expand_literal_property_values_or_reports(tmp_path):
+    report = tmp_path / 'literal.tcldata'
+    script = r'''
+source [lindex $argv 0]
+proc get_property {key object} {
+ if {$key eq "NAME"} {error {unexpected NAME lookup on literal}}
+ return {literal value ... not a collection}
+}
+proc report_pulse_width {args} {return "literal report ...\nsecond line"}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w]
+set prop [::c2_alex_route::capture $f property {get_property DESCRIPTION object}]
+set report [::c2_alex_route::capture $f report {report_pulse_width -return_string}]
+close $f
+if {[dict get $prop value] ne {literal value ... not a collection} || [dict get $report value] ne "literal report ...\nsecond line"} {error {literal mutated}}
+puts [list queries $::c2_alex_route::capture_queries pending $::c2_alex_route::capture_pending]
+'''
+    result = tcl(tmp_path, script, report)
+    assert result.returncode == 0, result.stderr
+    assert 'queries 2 pending 0' in result.stdout
+
+
+def test_finding_related_nets_and_ports_are_complete_without_recursive_expansion(tmp_path):
+    report = tmp_path / 'finding_relations.tcldata'
+    script = r'''
+source [lindex $argv 0]
+proc get_drc_violations {args} {return finding10}
+proc get_methodology_violations {args} {return {}}
+proc get_cells {args} {return {}}
+proc get_pins {args} {return {}}
+proc get_nets {args} {return $::nets}
+proc get_ports {args} {return {port_handle}}
+set nets {};for {set i 0} {$i<731} {incr i} {lappend nets net_handle$i}
+proc get_property {key object} {
+ if {$key eq {CHECK} && $object eq {finding10}} {return RTSTAT-10}
+ if {$key ne {NAME}} {error {unexpected detail expansion}}
+ if {[regexp {^net_handle([0-9]+)$} $object -> i]} {return shell/net$i}
+ if {$object eq {port_handle}} {return shell_port}
+ return $object
+}
+proc list_property {args} {error {unexpected property inventory}}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0;set ::c2_alex_route::captured_cells {}
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_findings $f;close $f
+puts [list pending $::c2_alex_route::capture_pending]
+'''
+    result = tcl(tmp_path, script, report)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert 'pending 0' in result.stdout
+    assert 'related_nets' in raw and 'shell/net730' in raw
+    assert 'related_ports' in raw and 'shell_port' in raw
+    assert 'object_properties' not in raw

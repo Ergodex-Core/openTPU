@@ -1,10 +1,46 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 20:56 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 22:02 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
-Current stage: **placement and routing is running** on `opentpu-f2` only.
+Current stage: **refinement passed; final qualification collection is next** on
+`opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
+hold +0.010 ns. Its receipt SHA256 is
+`082bfd082f9d834b980c5922802fdbff054fd1c139600f1bb6b6aeef79539476`;
+the final checkpoint SHA256 is
+`f30f57b94c4566fc70eb02678afbc47884fd2e088a72c4f9ee648005ac18bad2`.
+No image has been published or loaded.
+
+The linked gray review checked 128 groups and 768 bits: topology, clocks,
+effective max-delay bounds and all four normal timing variants per bit agreed;
+there were no ignored paths. It remains unqualified because the global register
+inventory was serialized as 500 names plus a literal ellipsis, versus 2,304
+individually captured destination stages. The corrected evidence writer expands
+each typed object's NAME while preserving the typed return value. It also records
+full finding-related net and port inventories. All 126 qualification tests pass;
+the final checkpoint must supply fresh, complete evidence before acceptance.
+
+The original-shell comparison confirms all 35 visible no-clock identities and
+all 6,678 rule settings match. Five protected CDC contexts match with multiplicity;
+hidden endpoint identity is not claimed. The two apparent property conflicts
+were a pin and a net sharing a NAME, not changed properties of the same object.
+
+The latest Codex snapshot is verified at
+`s3://opentpu-agent-traces/codex/snapshots/20261019T215956.331579Z/`, archive SHA256
+`8fa5be565078aacda3fbd8d0f266285864d476995bd3b56dceb2b2c35e1e8783`.
+
+Implementation completed at 21:31:14 UTC with setup slack +0.028 ns and hold
+slack +0.010 ns. The implementation receipt SHA256 is
+`7778fd92aa4e89f9bee7655cc7acde6bc840303bd834e2456411068c7c1cf6bd`;
+its routed checkpoint SHA256 is
+`af9f38af69b226de08358c7c2f4c34a283e7aaee05ecaf3f2baf2bd29938a451`.
+This is a routed candidate, not a qualified or deployed image. Refinement
+started at 21:53:56 UTC in the same executor's `refine` directory, unit
+`otpu-c2-alex-cec9b011-refine-4e1f5faf.service`, invocation
+`ed10c0af34d64383bece8e814247d791`, bounded to four CPUs, 64 GiB and three hours.
+No RTL/IP regeneration or FPGA loading is part of this step.
+
 Formal shell link completed successfully at 20:48:46 UTC from executor
 `cec9b011bf5f66e43bfd876ce6fade63f9c0863a`. Its retained unit exited zero;
 receipt SHA256 is `5c79489ceb14949b1d7c5051787e44fe959a8402882d38ade93c32f6f1db7ec6`
@@ -15,7 +51,7 @@ Implementation started at 20:49:25 UTC in
 `/home/ubuntu/rachit/codex-c2/alex-executor-cec9b011/implement`, unit
 `otpu-c2-alex-cec9b011-implement-65f84275.service`, invocation
 `90d0d11102904245834319b1788e3806`, bounded to four CPUs, 64 GiB and three hours.
-It consumes the exact successful synthesis/link receipts, with no RTL changes,
+It consumed the exact successful synthesis/link receipts, with no RTL changes,
 IP regeneration, automatic continuation, or FPGA loading.
 
 A separate corrected linked diagnostic completed at 20:39:31 UTC. All 768 gray
