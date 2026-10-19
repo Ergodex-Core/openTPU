@@ -1,16 +1,23 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 22:47 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 22:57 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
-Current stage: **refinement passed; routed connectivity qualification is under
-diagnosis** on `opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
+Current stage: **final report collection completed; semantic review pending**
+on `opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
 hold +0.010 ns. Its receipt SHA256 is
 `082bfd082f9d834b980c5922802fdbff054fd1c139600f1bb6b6aeef79539476`;
 the final checkpoint SHA256 is
 `f30f57b94c4566fc70eb02678afbc47884fd2e088a72c4f9ee648005ac18bad2`.
 No image has been published or loaded.
+
+The fresh collector from clean revision `591ecf4b` completed at 22:55:28 UTC.
+Vivado returned zero; the runner intentionally returned three for pending
+semantic review. Its immutable receipt SHA256 is
+`061fb42a481565d1d40639c2fd1f210ab7a566554f455fbbda91f852f7280870`.
+The raw reports retain `route_qualified=false`; later review writes a separate
+receipt and does not alter or reclassify the original collection artifacts.
 
 Final qualification from executor `136e8218` stopped at the routed S_HOST/wready
 structural assertion before collecting reports. Its failed receipt is
@@ -22,14 +29,17 @@ A focused capture now identifies a physical FDRE replica with the same initial
 state, clock and C/CE/D/R controls: the original drives 12 SmartConnect sinks,
 and its replica drives the three PCIS sinks. A separate routed helper verifies
 that exact transformation while leaving the frozen synthesis audit unchanged.
-The formal collector is ready for a fresh report-only run.
+The fresh formal collector completed this routed structural check.
 
 All 80 native-ready LUT functions match the successful linked checkpoint across
-2,816 truth assignments after the captured reset-inverter substitution. Sixteen
-output comparisons still have a removed `m_vector_i_reg[1024]/CE` sink. They
-remain blocking until exact register/output evidence proves those removals
-unobservable or equivalent; a dedicated read-only probe compares both checkpoints.
-Neither the truth-only result nor the pending collector qualifies the design.
+2,816 truth assignments after the captured reset-inverter substitution. The
+sixteen removed `m_vector_i_reg[1024]/CE` sinks are now proven unobservable:
+each original register Q has no other leaf consumer or top-level port, and the
+final checkpoint has none of the sixteen cells, eighty pins or 112 original
+output-net aliases. No constant-value assumption is used. Actual native replay
+has zero issues, with SHA256
+`041a07fcce1a4c6128866d8fd6c47fcea390b3eceeae036fc6395b4f7393a4f2`.
+This scoped equivalence proof alone does not qualify the entire design.
 
 The reset/status collector's first attempt failed because a Tcl object type was
 lost across an API boundary. The second attempt reselects exact typed objects and

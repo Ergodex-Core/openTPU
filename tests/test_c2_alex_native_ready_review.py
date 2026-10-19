@@ -105,3 +105,50 @@ def test_public_api_keeps_actual_removed_sinks_unresolved():
  assert {item['reason'] for item in result['issues']}=={'Output sink identity changed'}
  assert len(result['canonical_facts']['luts'])==64
  assert result['route_qualified'] is False
+
+LINKED_SHA='b8f10ea1a56aa145b9cbfa8f42246e858282dc69a307a32e0b8ed1582095922c'
+REFINED_SHA='f30f57b94c4566fc70eb02678afbc47884fd2e088a72c4f9ee648005ac18bad2'
+
+@pytest.fixture(scope='module')
+def actual_removals():
+ p=ROOT/'build/c2-alex-remote'
+ paths={key:p/name for key,name in {'native_ready_linked':'linked-ready-topology.tcldata','native_ready_refined':'refined-ready-topology.tcldata','native_ready_removed_linked':'removed-ready-linked.tcldata','native_ready_removed_refined':'removed-ready-refined.tcldata'}.items()}
+ if not all(x.exists() for x in paths.values()):pytest.skip('local immutable diagnostic captures not present')
+ return paths
+
+def test_actual_unused_register_disposition(actual_removals):
+ result=m.review_artifact(reports={},auxiliary=actual_removals,checkpoint_sha256=REFINED_SHA,linked_checkpoint_sha256=LINKED_SHA)
+ assert result['issues']==[] and result['route_qualified'] is False
+ facts=result['canonical_facts'];assert len(facts['luts'])==80
+ assert sum(x['assignments'] for x in facts['luts'])==2816
+ removals=facts['unused_register_removals']['luts']
+ assert len(removals)==16 and all(not x['constant_value_asserted'] for x in removals.values())
+ assert all(x['original_q_leaf_pins']==[x['original_q_driver']] for x in removals.values())
+
+def test_half_companion_fails(actual_removals):
+ aux={k:v for k,v in actual_removals.items() if k!='native_ready_removed_refined'}
+ result=m.review_artifact(reports={},auxiliary=aux,checkpoint_sha256=REFINED_SHA,linked_checkpoint_sha256=LINKED_SHA)
+ assert result['issues']
+
+@pytest.mark.parametrize('mutation',['consumer','port','retained_cell','missing_alias','wrong_ce','extra_selection','retained_alias'])
+def test_unused_disposition_rejects_adversarial_evidence(actual_removals,monkeypatch,mutation):
+ paths=actual_removals
+ before=m.read(paths['native_ready_linked'],LINKED_SHA,'linked_native_ready')
+ after=m.read(paths['native_ready_refined'],REFINED_SHA,'narrow_routed_structure')
+ a=m.read_removed(paths['native_ready_removed_linked'],'linked',LINKED_SHA)
+ b=m.read_removed(paths['native_ready_removed_refined'],'refined',REFINED_SHA)
+ name=a['selected'][0];q=name+'/Q'
+ if mutation=='consumer':
+  a['fanout'][q]['names']+=' actual_consumer/D';a['fanout'][q]['directions']+=' IN'
+ elif mutation=='port':a['pin'][q]['ports']='actual_output'
+ elif mutation=='retained_cell':b['cell_selection'][name]['names']='{'+name+'}'
+ elif mutation=='missing_alias':del b['original_net_selection'][next(iter(b['original_net_selection']))]
+ elif mutation=='wrong_ce':a['pin'][name+'/CE']['drivers']='other/O'
+ elif mutation=='extra_selection':b['selected'].append('another/register')
+ elif mutation=='retained_alias':b['original_net_selection'][next(iter(b['original_net_selection']))]['names']='unexpected_net'
+ monkeypatch.setattr(m,'read_removed',lambda path,phase,checkpoint:a if phase=='linked' else b)
+ with pytest.raises(ValueError):m.unused_removal_review(before,after,paths['native_ready_removed_linked'],paths['native_ready_removed_refined'],LINKED_SHA,REFINED_SHA)
+
+def test_removed_allowance_cannot_hide_added_or_unobserved_sinks():
+ with pytest.raises(ValueError,match='identity'):m.compare_cell(f(sinks=['a','dead']),f(sinks=['a','new']),['dead'])
+ with pytest.raises(ValueError,match='Unobserved'):m.compare_cell(f(),f(),['not_seen'])
