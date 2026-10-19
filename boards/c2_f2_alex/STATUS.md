@@ -1,43 +1,65 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 23:16 UTC. There are no C2 hardware measurements or qualified
-C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
-C2 hardware run.
+Recorded 2026-10-19 23:48 UTC. C2 has completed physical routing at 200 MHz,
+with setup +0.028 ns and hold +0.010 ns. Final semantic review and packaging
+remain pending. No C2 AFI has been published or loaded, and there are no C2
+hardware bandwidth or token-throughput measurements. Lens retains its verified
+128-profile baseline.
 
-Current stage: **final report collection completed; semantic review pending**
-on `opentpu-f2` only. Refinement completed at 22:01:25 UTC, with setup +0.028 ns and
-hold +0.010 ns. Its receipt SHA256 is
-`082bfd082f9d834b980c5922802fdbff054fd1c139600f1bb6b6aeef79539476`;
-the final checkpoint SHA256 is
+The immutable final checkpoint SHA256 is
 `f30f57b94c4566fc70eb02678afbc47884fd2e088a72c4f9ee648005ac18bad2`.
-No image has been published or loaded.
-
-The fresh collector from clean revision `591ecf4b` completed at 22:55:28 UTC.
-Vivado returned zero; the runner intentionally returned three for pending
-semantic review. Its immutable receipt SHA256 is
+The final collection completed at 22:55:28 UTC with no physical blockers,
+161,273/161,273 nets routed, zero routing errors, and zero setup/hold/pulse
+failures. Its receipt SHA256 is
 `061fb42a481565d1d40639c2fd1f210ab7a566554f455fbbda91f852f7280870`.
-The raw reports retain `route_qualified=false`; later review writes a separate
-receipt and does not alter or reclassify the original collection artifacts.
+The original reports retain `route_qualified=false`; acceptance requires a
+separate source-pinned semantic review receipt and never rewrites those reports.
 
-The signed bus-skew checker was corrected in `dd123aad`: Vivado's actual skew
-includes relative clock-delay/CRPR terms and may be negative. All 133 current
-rows satisfy `slack = requirement - actual`; the smallest slack is +2.928 ns.
-The corrected reviewer still rejects negative slack, exceeded bounds, nonfinite
-values and inconsistent arithmetic. Its 113 focused tests pass. A fresh semantic
-replay is running; no RTL, constraints or routed checkpoint changed.
+Full raw replay from `2ff2c035` completed at 23:39:28 UTC with zero exception or
+methodology issues. Native-ready equivalence, 128 gray groups, all 133 signed
+bus-skew bounds, 35 inherited no-clock pins, 6,678 rule settings, reset/status
+chains, handshake constraints, unused outputs, and inherited pulse context pass.
+The smallest bus-skew slack is +2.928 ns. Reviewer changes preserve all eleven
+frozen hardware inputs and do not alter RTL, constraints, or the routed DCP.
 
-The current no-clock comparison passes for all 35 pins and 6,678 rule settings.
-The unused-net finding contains 1,820 exact original-shell nets and 35 additional
-outputs. Complete segment/leaf/port capture proves each added net has one output
-driver and no consumer or port. The five deterministic hardware fixtures are
-prepared under `/home/ubuntu/rachit/codex-c2/alex-fixtures-dd123aad`; package input
-roots, eight original receipt hashes and seven source revisions were verified.
+Reviewer revision `a58d7e82` adds exact checks for 17 informational single-bit
+CDC paths and five original-shell CDC records, including multiplicity and
+scoped first-stage exceptions. Two additional reset informational records use
+the already captured reset topology. The complete 12,245-record disposition
+catalog has zero unmapped findings. Its exact hash is source-approved in
+`reviewed_artifacts.json`:
+`bc6a23ef0868f75b4c45a1a170e0214ccef9afa5d3b33824d04e666bcd12fe8d`.
+The finalizer must independently replay the raw predicates before qualification.
+These checks do not assert hidden endpoint identity, MTBF, coherent multi-bit
+status, reset-event pulse width, or reset-gate glitch freedom.
 
-C1 is independently building on `m7a.8xlarge` instance `i-06cf8792fb8f15534`,
-using source `b2f45962` and continuation executor `178ca139`. IP/synthesis started
-at 22:59:59 UTC; simulation and link/implementation/refinement follow-ons wait
-for successful, hash-bound upstream completion. FPGA runs remain restricted to
-`opentpu-f2` (`i-0c78de2253f66519d`).
+Package preparation binds the eight original stage receipts and seven source
+revisions. After review, the existing collector and official packager must
+produce successful independent receipts. Publication will use the existing
+local AWS CLI identity after a confined SSM transfer and local evidence replay.
+Automatic approval review rejected an additive change to the shared F2 IAM role;
+no policy changed. The local publication path requires no role modification.
+
+C1 is independently running on `m7a.8xlarge` instance `i-06cf8792fb8f15534`.
+Private IP and all four vendor simulation scenarios passed. RTL synthesis
+completed, but the inherited audit incorrectly expected native write channels
+in C1's read-only interface. The corrected audit preserves active read/error
+checks and requires the unused AW/W inputs to be tied low. Fresh synthesis from `29057c75` started at 23:46:51 UTC in unit
+`otpu-c1-alex-29057c75-pipeline.service`, invocation
+`158d809e84df45d8af6c39c01b16013e`. Verified physical stages follow on success.
+FPGA hardware runs remain restricted to `opentpu-f2` (`i-0c78de2253f66519d`).
+
+Five deterministic C2 fixtures are ready under
+`/home/ubuntu/rachit/codex-c2/alex-fixtures-dd123aad`. The initial hardware session
+will run both modes three times per shape, verify numerical results, preserve
+stall counters, and restore the original image before Lens import.
+
+The latest Codex snapshot is verified at
+`s3://opentpu-agent-traces/codex/snapshots/20261019T233832.461548Z/`, archive SHA256
+`92f6e66198d6eee98b6be26063c7bbadd9c1caf105afbd2541b8c615ae3f85f8`
+(398,260,088 bytes, verified at 23:39:57 UTC).
+
+## Earlier retained build attempts
 
 Final qualification from executor `136e8218` stopped at the routed S_HOST/wready
 structural assertion before collecting reports. Its failed receipt is
