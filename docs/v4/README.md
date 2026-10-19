@@ -393,7 +393,10 @@ The fix is merged (e22c2bfd: the crossbar's masters without ID connections, each
 host-pipe IDs tied to 0, `ARCH_HASH` as `32'd2167823793`, the lint stubs matching the real
 wrappers, a test against unsized literals from 2^31 up) and **build 8** runs on opentpu-f2
 (unit `otpu-f2burst200-s3-build2`, output `/home/ubuntu/rachit/f2burst200-s3-run2/`, started
-22:59 UTC) while the m7a image is still being created.
+22:59 UTC) while the m7a image is still being created. Build 8 passed RTL elaboration at
+23:09 UTC (0 errors, 0 critical warnings in `synth_link/console.log`: the ID and literal
+errors are gone) and is in synthesis; build 6's one slice took 1 h 51 min end to end, so three
+slices are expected to take two to three times that.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
