@@ -248,7 +248,17 @@ three fabric paths at 200 MHz ride 5 ns of route (-1.0), the TMEM address paths 
 host writes behind link stages per port, a registered write-done compare and hazard mirror
 in the adapter, a registered TMEM priority mask, a bridge pblock on the HBM ports' row and the
 MXU's request registers in the TMEM pblock; cycle-exact and bit-exact in Verilator) and
-**build 4** runs (unit `otpu-f2hbm-build4`, output `/home/ubuntu/rachit/f2hbm-run4`).
+**build 4** ran on fpga-dev-f2 to post-place WNS -2.18 ns (place_design complete, stopped
+there). **Build host change (2026-10-19 15:00 UTC): only `opentpu-f2` (i-0c78de2253f66519d)
+is used from here on; fpga-dev-f2 is abandoned** (its runs 1-4 and tree stay on its disk,
+nothing further is read from it). Build 4 was restarted on opentpu-f2 from a fresh clone of
+f449957a (`/home/ubuntu/rachit/src/tpubench`, venv `/home/ubuntu/opentpu-venv`, HDK
+`/home/ubuntu/aws-fpga` 20fe9018 with ip 6d32be97, Vivado 2025.2 at `/opt/Xilinx/2025.2`,
+checkpoint symlinked at `models/gemma-3-1b-it`): unit `otpu-f2hbm-build4`, script
+`/home/ubuntu/rachit/f2hbm-build4.sh`, log `/home/ubuntu/rachit/logs/f2hbm-build4.log`, output
+`/home/ubuntu/rachit/f2hbm-run4`, `--place-directive Default`, alongside two unrelated Vivado
+jobs on the box (24 vCPUs, 249 GB). Round 5 (Alex's scheme: every openTPU block at 200 MHz
+behind the HDK's SmartConnect) is being implemented on `v4-f2-round5` and builds there next.
 
 **Alex's burst200 sources found (2026-10-19).** Not in any git tree or S3 (S3 holds only the
 DCP tars, AFI logs and host software under `opentpu-alex/`); they live in his run workspace on
