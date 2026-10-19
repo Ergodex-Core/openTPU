@@ -389,6 +389,11 @@ Both go back to the agent: no ID connections on the crossbar's masters, each sli
 `S_HOST` IDs tied to 0, sized literals in the generator, and the lint stubs made to match the
 real generated wrappers so this class is caught before Vivado. Build host from now on: an
 m7a.8xlarge cloned from opentpu-f2 (AMI `ami-0433c6064060ec312`, user's instruction).
+The fix is merged (e22c2bfd: the crossbar's masters without ID connections, each slice's
+host-pipe IDs tied to 0, `ARCH_HASH` as `32'd2167823793`, the lint stubs matching the real
+wrappers, a test against unsized literals from 2^31 up) and **build 8** runs on opentpu-f2
+(unit `otpu-f2burst200-s3-build2`, output `/home/ubuntu/rachit/f2burst200-s3-run2/`, started
+22:59 UTC) while the m7a image is still being created.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
