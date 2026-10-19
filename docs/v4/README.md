@@ -323,6 +323,20 @@ hardware Lens trace (`python -m opentpu.host.hwlens record --dev f2:0 --model
 models/gemma-3-1b-it -o g3-hw.otpuprof`; hwlens' `--dev` now goes through `open_transport`,
 b5495079).
 
+**First hardware run of this tree (2026-10-19 21:20 UTC).** The AFI became available at 21:13
+(28 min), was loaded on slot 0 (`loaded`, ok, shell 0x10212415) and Gemma 3 1B int8 decoded
+on it from the tpubench host (`chat --backend board --dev f2:0 --model gemma3`, greedy,
+"Why is the sky blue? Answer in two sentences."): "The sky appears blue because of a
+phenomenon called Rayleigh scattering, where sunlight is scattered by the tiny air molecules in
+the atmosphere. Blue light is scattered more effectively than other colors, making it spread
+across the sky and reach our eyes." Weights loaded in 14.5 s (image built in 8.0 s); cold
+TTFT 41.0 s (the once-per-image scrub and the program cache); prefill 20 tokens at 98.4
+device tok/s; **decode 46 tokens at 22.2 device tok/s (9.00 Mcycles a token at 200 MHz),
+16.3 wall tok/s** through the BAR4 host path. Against the RTL's 8.03 M cycles a token on the
+8-channel model (24.9 tok/s) the hardware token is 12% longer: the two-channel fabric's
+share at 89% port utilization, Alex's measured 22.1 GB/s of 25.6. Same as his burst200
+image's 22.3 tok/s: the fabric, not the compute, sets the rate.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
