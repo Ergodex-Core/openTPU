@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from fractions import Fraction
 import re
+import shutil
+import subprocess
 
 import pytest
 
@@ -78,6 +80,58 @@ def test_hbm_qualification_has_no_ddr_or_pumped_tmem_assumptions(tmp_path):
     assert "create_pblock pb_otpu_tmem" not in pnr
     assert "create_pblock pb_otpu_slr0" in pnr
     assert "core_reset_n hbm_reset_n" in pnr
+
+
+@pytest.mark.parametrize("native_count", [0, 7, 8, 9])
+def test_generated_constraints_cover_every_retained_write_counter(tmp_path, native_count):
+    tclsh = shutil.which("tclsh")
+    if not tclsh:
+        pytest.skip("tclsh required")
+    module, _, cl, _, _ = snapshot(tmp_path)
+    timing = (cl / "build/constraints/cl_timing_user.tcl").read_text()
+    # Only the exact inventory guard changes: native and host source/sink
+    # selectors and every constraint remain the frozen, reviewed implementation.
+    original = (module.SUPPORT / "boards/f2/build/constraints/cl_timing_user_hbm.tcl").read_text()
+    assert timing.replace(
+        'if {[llength $counters] != 9} { error "C2 HBM CDC: expected nine write-counter groups (eight native and one host)" }',
+        'if {[llength $counters] < 2} { error "openTPU CDC: expected the HBM bridges and the host path" }') == original
+    counter_block = timing[timing.index("set counters [concat"):timing.index('puts "OTPU_HBM_CDC')]
+    driver = tmp_path / "counter_constraints.tcl"
+    driver.write_text(r'''
+set native_count [lindex $argv 0]
+set t_skew 2.222222222222
+set bounds {}
+proc otpu_required {objects description} {
+  if {![llength $objects]} {error "missing $description"}
+  return $objects
+}
+proc get_cells {args} {
+  if {[lsearch -exact $args -hier] >= 0} {
+    if {[string first "otpu_f2_hbm_nch" [lindex $args end]] >= 0} {
+      set cells {}
+      for {set p 0} {$p<$::native_count} {incr p} {lappend cells native$p}
+      return $cells
+    }
+    return host
+  }
+  return [lindex $args end]
+}
+proc set_bus_skew {args} {lappend ::bounds $args}
+''' + counter_block + r'''
+if {[llength $bounds] != 9} {error "wrong applied counter inventory"}
+for {set p 0} {$p<8} {incr p} {
+  if {[string first "native$p/bgray_reg" [lindex $bounds $p]] < 0} {error "missing native counter $p"}
+}
+if {[string first "host/bgray_reg" [lindex $bounds 8]] < 0} {error "missing host counter"}
+puts "NINE_COUNTER_BOUNDS_APPLIED"
+''')
+    result = subprocess.run([tclsh, str(driver), str(native_count)], text=True, capture_output=True)
+    if native_count == 8:
+        assert result.returncode == 0, result.stderr
+        assert "NINE_COUNTER_BOUNDS_APPLIED" in result.stdout
+    else:
+        assert result.returncode != 0
+        assert "expected nine write-counter groups" in result.stderr
 
 
 def test_support_mutation_is_rejected_before_build(tmp_path, monkeypatch):

@@ -37,7 +37,7 @@ proc c2_hbm_crossings {prefix} {
     set exception [c2_hbm_property $path EXCEPTION]
     set requirement [c2_hbm_property $path REQUIREMENT]
     set target [c2_hbm_property $dst PERIOD]
-    if {![regexp {^MaxDelay Path ([0-9]+(?:\.[0-9]+)?)ns$} $exception -> bound] ||
+    if {![regexp {^MaxDelay Path ([0-9]+(?:\.[0-9]+)?)ns -datapath_only$} $exception -> bound] ||
         ![string is double -strict $requirement] ||
         abs($bound-$target)>0.001 || abs($requirement-$target)>0.001} {
       error "C2 HBM: $a to $b lacks destination-period max-delay bound ($exception; $requirement)"
@@ -55,23 +55,47 @@ proc c2_hbm_gray_count {text} {
   # UG906: the Summary lists ALL set_bus_skew constraints; the later per-
   # constraint detail can be limited and must not be counted instead.
   # https://docs.amd.com/r/en-US/ug906-vivado-design-analysis/Bus-Skew-Report-Summary-Section
-  set begin [string first "1. Bus Skew Report Summary" $text]
-  set end [string first "2. Bus Skew Report Per Constraint" $text]
-  if {$begin<0 || $end<=$begin} { error "C2 HBM: unrecognized bus-skew summary format" }
-  set summary [string range $text $begin [expr {$end-1}]]
-  set ids [dict create]
+  # The titles also appear in the table of contents. Select the underlined
+  # sections, then parse Id + Position records; Vivado wraps From/To cell lists
+  # across many lines. Printed Tcl expressions are data and are never evaluated.
+  if {![regexp -indices {(^|\n)1\. Bus Skew Report Summary\r?\n-+\r?\n} $text heading]} {
+    error "C2 HBM: unrecognized bus-skew summary format"
+  }
+  set begin [expr {[lindex $heading 1]+1}]
+  if {![regexp -indices -start $begin {(^|\n)2\. Bus Skew Report Per Constraint\r?\n-+\r?\n} $text heading]} {
+    error "C2 HBM: missing bus-skew detail boundary"
+  }
+  set summary [string range $text $begin [expr {[lindex $heading 0]-1}]]
+  set rows [dict create]; set id {}
   foreach line [split $summary \n] {
-    if {![string match {*u_sys/u_mem/*} $line]} { continue }
-    if {![regexp {^\s*([0-9]+)\s+} $line -> id] || [dict exists $ids $id]} {
-      error "C2 HBM: malformed or duplicate fabric bus-skew summary row"
+    if {[regexp {^\s*([0-9]+)\s+([0-9]+)\s+\[} $line -> next_id position]} {
+      if {[dict exists $rows $next_id]} {error "C2 HBM: duplicate bus-skew summary id"}
+      set id $next_id
+      dict set rows $id "$line\n"
+    } elseif {$id ne ""} {
+      if {[regexp {^\S} $line]} {error "C2 HBM: malformed bus-skew summary row"}
+      dict append rows $id "$line\n"
+    } elseif {[string match {*u_sys/u_mem/*} $line]} {
+      error "C2 HBM: fabric entry without a bus-skew summary id"
+    }
+  }
+  set ids [dict create]
+  dict for {id row} $rows {
+    if {![string match {*u_sys/u_mem/*} $row]} {continue}
+    set last [string trim [lindex [split [string trim $row] \n] end]]
+    if {![regexp {^(?:Fast|Slow)\s+([-+0-9.]+)\s+([-+0-9.]+)\s+([-+0-9.]+)$} $last -> requirement actual slack] ||
+        ![string is double -strict $requirement] || ![string is double -strict $actual] ||
+        ![string is double -strict $slack]} {
+      error "C2 HBM: incomplete fabric bus-skew summary row $id"
     }
     dict set ids $id 1
   }
   # Eight read-only native bridges: two FIFOs each; PCIS: three FIFOs.
-  # Each FIFO has two pointer directions, plus the host write-completion counter.
-  # Native write counters optimize away. Any different inventory needs review.
-  if {[dict size $ids] != 39} {
-    error "C2 HBM: expected 39 fabric gray-bus constraints; found [dict size $ids]"
+  # Each FIFO has two pointer directions. Post-opt retains the eight native
+  # write-completion counters as well as the host counter: 19*2 + 8 + 1 = 47.
+  # Any different inventory needs review.
+  if {[dict size $ids] != 47} {
+    error "C2 HBM: expected 47 fabric gray-bus constraints; found [dict size $ids]"
   }
   return [dict size $ids]
 }

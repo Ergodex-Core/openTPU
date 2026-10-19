@@ -157,14 +157,12 @@ def configure_scripts(cl):
     (scripts / "build_level_1_cl.tcl").write_text(impl)
 
     timing = (constraints / "cl_timing_user_hbm.tcl").read_text()
-    start = timing.index("set counters [concat")
-    end = timing.index("foreach ch $counters", start)
-    # Kernel native ports are read-only: their write counters are constants and
-    # disappear in synthesis. PCIS still writes HBM and its counter is required.
-    timing = timing[:start] + (
-        "set counters [otpu_required [get_cells -hier -filter "
-        "{ORIG_REF_NAME == otpu_f2_hbm_host || REF_NAME == otpu_f2_hbm_host}] "
-        "{PCIS write counter}]\n") + timing[end:]
+    # Post-opt Vivado retains the native write counters and their hazard-state
+    # fanout even with read-only commands. Keep the frozen native + host skew
+    # constraints and require the complete eight-native/one-host inventory.
+    timing = replace_once(timing,
+        'if {[llength $counters] < 2} { error "openTPU CDC: expected the HBM bridges and the host path" }',
+        'if {[llength $counters] != 9} { error "C2 HBM CDC: expected nine write-counter groups (eight native and one host)" }')
     (constraints / "cl_timing_user.tcl").write_text(timing)
     pnr = (constraints / "cl_pnr_user.tcl").read_text().replace(
         "foreach stem {main_reset_n bridge_reset_n core_reset_n}",
