@@ -425,6 +425,8 @@ def main():
           f"({wall:.0f}s sim), core-port roofline {ideal:.0f} cycles (port B {ps['portb']} "
           f"chunks{f' / {portb} a cycle' if portb > 1 else ''}, port A {ps['porta_cycles']}, "
           f"MXU {ps['mxu']}), efficiency {100 * ideal / p.cycles:.1f}%")
+    for line in st.get("naxi", []):     # OTPU_NAXI: the F2 HBM channel path's read bursts
+        print(line)
     ar = st.get("axi_reads", [])
     if ar:
         print("DRAM read / write beats per channel: " +

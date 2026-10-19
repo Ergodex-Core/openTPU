@@ -19,7 +19,8 @@ module otpu_naxi_mem #(
   parameter int NCH   = 2,
   parameter int NXR   = 0,               // SLR stages each way (the build's 3)
   parameter int READ_BURST = 4,
-  parameter int READ_IDLE  = 1
+  parameter int READ_IDLE  = 1,
+  parameter bit READ_WAIT  = 1'b0
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -74,7 +75,7 @@ module otpu_naxi_mem #(
     logic [511:0] wdata;
     logic [63:0] wstrb;
     otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(16), .XL(2 * NXR), .MAX_OUT(128),
-                      .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE)) u_naxi (
+                      .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT)) u_naxi (
       .clk, .rst,
       .n_cvalid(b_cvalid), .n_cready(b_cready), .n_cwe(b_cwe), .n_caddr(b_caddr),
       .n_wvalid(b_wvalid), .n_wready(b_wready), .n_wdata(b_wdata), .n_wmask(b_wmask),
@@ -84,52 +85,66 @@ module otpu_naxi_mem #(
       .m_araddr(araddr), .m_arlen(arlen), .m_arvalid(arvalid), .m_arready(arready),
       .m_rdata(m_rdata[c]), .m_rvalid(rvalid), .m_rlast(rlast), .m_rresp(2'b00), .m_rready(rready));
     always @(posedge clk) if (!rst && b_err) $fatal(1, "otpu_naxi_mem ch%0d: otpu_native_axi n_err", c);
-    // ---- the shim: AXI back to native commands
-    typedef struct packed { logic we; logic [24:0] a; } nc_t;
-    nc_t          q [$];                     // native commands, in AXI arrival order
-    logic [575:0] wq [$];
-    int           lens [$];
-    int           rleft = 0;
+    // ---- the shim: AXI back to native commands (circular buffers, every state change a
+    // non-blocking update: the model and otpu_native_axi sample it at the same edges)
+    localparam int QN = 64;
+    logic [25:0]  q [QN];                    // native commands {we, beat}, in AXI arrival order
+    logic [575:0] wq [16];
+    logic [4:0]   lens [128];                // the bursts' beats, in AR order
+    logic [6:0]   qh, qt, lh, lt;
+    logic [3:0]   wh, wt;
+    logic [7:0]   qn;
+    logic [4:0]   wn;
+    logic [4:0]   rleft;                     // the current burst's beats still to come back
     logic         aw_p, w_p;                 // an AW / a W beat held for its pair
     logic [24:0]  aw_a;
     logic [575:0] w_d;
     logic [15:0]  wd_seen;
-    int           bpend = 0;
-    assign arready = q.size() < 32;
-    assign awready = !aw_p && q.size() < 32;
-    assign wready = !w_p;
-    assign m_cvalid[c] = q.size() != 0;
-    assign m_cwe[c] = q.size() ? q[0].we : 1'b0;
-    assign m_caddr[c] = q.size() ? q[0].a : '0;
-    assign m_wvalid[c] = wq.size() != 0;
-    assign {m_wmask[c], m_wdata[c]} = wq.size() ? wq[0] : '0;
+    logic [15:0]  bpend;
+    wire [4:0] nar = 5'(arlen) + 5'd1;
+    assign arready = qn <= 8'(QN - 17);
+    assign awready = !aw_p && qn <= 8'(QN - 17);
+    assign wready = !w_p && wn < 5'd15;
+    assign m_cvalid[c] = qn != 0;
+    assign {m_cwe[c], m_caddr[c]} = q[qh[5:0]];
+    assign m_wvalid[c] = wn != 0;
+    assign {m_wmask[c], m_wdata[c]} = wq[wh];
     assign rvalid = m_rvalid[c];
-    assign rlast = rleft == 1 || (rleft == 0 && lens.size() && lens[0] == 1);
+    assign rlast = rleft == 5'd1 || (rleft == 5'd0 && lens[lh] == 5'd1);
     assign bvalid = bpend != 0;
+    wire c_pop = m_cvalid[c] && m_cready[c];
+    wire w_pop = m_wvalid[c] && m_wready[c];
+    wire ar_tk = arvalid && arready;
+    wire pair = aw_p && w_p;
     always @(posedge clk) begin
       if (rst) begin
-        q.delete(); wq.delete(); lens.delete(); rleft = 0; aw_p <= 1'b0; w_p <= 1'b0;
-        wd_seen <= '0; bpend = 0;
+        qh <= '0; qt <= '0; qn <= '0; wh <= '0; wt <= '0; wn <= '0; lh <= '0; lt <= '0;
+        rleft <= '0; aw_p <= 1'b0; w_p <= 1'b0; wd_seen <= '0; bpend <= '0;
       end else begin
         if (rvalid) begin
-          if (rleft == 0) begin rleft = lens[0]; void'(lens.pop_front()); end
-          rleft = rleft - 1;
+          if (rleft == 0) begin rleft <= lens[lh] - 5'd1; lh <= lh + 1'b1; end
+          else rleft <= rleft - 5'd1;
         end
-        if (bvalid && bready) bpend = bpend - 1;
-        bpend = bpend + int'(16'(m_wdone[c] - wd_seen));
+        bpend <= bpend - 16'(bvalid && bready) + (m_wdone[c] - wd_seen);
         wd_seen <= m_wdone[c];
-        if (m_cvalid[c] && m_cready[c]) void'(q.pop_front());
-        if (m_wvalid[c] && m_wready[c]) void'(wq.pop_front());
-        if (arvalid && arready) begin
-          lens.push_back(int'(arlen) + 1);
-          for (int i = 0; i <= int'(arlen); i++) q.push_back({1'b0, 25'(araddr[33:6] + 28'(i))});
-          nburst[c]++; nbeat[c] += int'(arlen) + 1; hist[c][arlen + 1]++;
+        // commands in: a burst's beats (AR) or a write pair, one source a cycle (AR first)
+        if (ar_tk) begin
+          for (int i = 0; i < 16; i++)
+            if (i < int'(nar)) q[6'(qt + 7'(i))] <= {1'b0, 25'(araddr[33:6] + 28'(i))};
+          qt <= qt + 7'(nar);
+          lens[lt] <= nar; lt <= lt + 1'b1;
+          nburst[c] <= nburst[c] + 1; nbeat[c] <= nbeat[c] + int'(nar); hist[c][nar] <= hist[c][nar] + 1;
+        end else if (pair) begin
+          q[qt[5:0]] <= {1'b1, aw_a}; qt <= qt + 1'b1;
+          wq[wt] <= w_d; wt <= wt + 1'b1;
+          aw_p <= 1'b0; w_p <= 1'b0;
         end
+        qn <= qn + (ar_tk ? 8'(nar) : pair ? 8'd1 : 8'd0) - 8'(c_pop);
+        wn <= wn + 5'(!ar_tk && pair) - 5'(w_pop);
+        if (c_pop) qh <= qh + 1'b1;
+        if (w_pop) wh <= wh + 1'b1;
         if (awvalid && awready) begin aw_p <= 1'b1; aw_a <= 25'(awaddr[33:6]); end
         if (wvalid && wready) begin w_p <= 1'b1; w_d <= {wstrb, wdata}; end
-        if (aw_p && w_p) begin
-          q.push_back({1'b1, aw_a}); wq.push_back(w_d); aw_p <= 1'b0; w_p <= 1'b0;
-        end
       end
     end
   end

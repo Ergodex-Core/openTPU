@@ -9,7 +9,7 @@
 // otpu_native_axi XL), a stream phase on an always-ready target (a command taken every cycle:
 // the AR register), the burst lengths' histogram, and CH_LOG2 29 (a 512 MiB window at
 // BASE 3 x 512 MiB: a command outside it raises n_err).
-module tb_native_axi #(parameter BURST=16, OUT=32, XL=0, CH_LOG2=31, IDLE=4);
+module tb_native_axi #(parameter BURST=16, OUT=32, XL=0, CH_LOG2=31, IDLE=4, WAIT=1);
   localparam int D = XL / 2;
   localparam logic [33:0] BASE = CH_LOG2 < 31 ? 34'(3) << CH_LOG2 : 34'd0;
   logic clk=0; always #5 clk=~clk;
@@ -24,7 +24,7 @@ module tb_native_axi #(parameter BURST=16, OUT=32, XL=0, CH_LOG2=31, IDLE=4);
   logic [511:0] m_wdata,m_rdata=0; logic[63:0] m_wstrb;
   logic m_wvalid,m_wready=0,m_bvalid=0,m_bready,m_rvalid=0,m_rready,m_rlast=1;
   logic [1:0] m_bresp=0,m_rresp=0;
-  otpu_native_axi #(.QD(XL ? 16 : 4),.XL(XL),.MAX_OUT(OUT),.READ_BURST(BURST),.READ_IDLE(IDLE),
+  otpu_native_axi #(.QD(XL ? 16 : 4),.XL(XL),.MAX_OUT(OUT),.READ_BURST(BURST),.READ_IDLE(IDLE),.READ_WAIT(WAIT),
                     .CH_LOG2(CH_LOG2),.BASE_ADDR(BASE)) dut(.*);
   // the native side: wired, or D stages each way (ready up, the take and its payload down)
   if (D == 0) begin : g_wire

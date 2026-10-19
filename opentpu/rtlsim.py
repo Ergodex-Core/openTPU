@@ -277,7 +277,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
         # the SLR chain, otpu_native_axi; docs/f2_hbm.md): only when asked (the cache keys stay)
         p["NAXI"] = 1
-        for k in ("XR", "BURST", "IDLE"):
+        for k in ("XR", "BURST", "IDLE", "WAIT"):
             if os.environ.get("OTPU_NAXI_" + k):
                 p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
     if getattr(cfg, "PORTB", 1) > 1:    # a wide port B (otpu_slice PORTB; only when on: the
@@ -498,6 +498,8 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         # the co-simulated controller's cycle breakdown (+ldc_break) and the H2C load's bursts
         # and bytes per channel (+h2c_bpk; sim/verilator/otpu_ldc_mem.sv)
         stats["brk"] = re.findall(r"^BRK .*$", out, re.M)
+        # OTPU_NAXI: otpu_native_axi's read bursts per channel (sim/verilator/otpu_naxi_mem.sv)
+        stats["naxi"] = re.findall(r"^NAXI .*$", out, re.M)
         stats["h2c"] = [dict(zip(("bursts", "bytes", "bresp"), map(int, m))) for m in
                         re.findall(r"H2C ch\d bursts=(\d+) bytes=(\d+) bresp=(\d+)", out)]
     if trace:

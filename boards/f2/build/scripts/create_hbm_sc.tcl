@@ -98,7 +98,7 @@ set_property CONFIG.ASSOCIATED_RESET {aresetn} [get_bd_ports core_clk]
 set_property CONFIG.ASSOCIATED_RESET {host_aresetn} [get_bd_ports host_clk]
 # addresses: channel p's pseudo-channel at p x 512 MiB, for its own master and the host's
 for {set p 0} {$p < $nport} {incr p} {
-  set base [format 0x%09X [expr {$p << 29}]]
+  set base [format 0x%09llX [expr {$p << 29}]]   ;# (ll: past 4 GiB)
   assign_bd_address -offset $base -range 0x20000000 -target_address_space [get_bd_addr_spaces S_HOST] [get_bd_addr_segs M_H$p/Reg] -force
   assign_bd_address -offset $base -range 0x20000000 -target_address_space [get_bd_addr_spaces S_N$p] [get_bd_addr_segs M_H$p/Reg] -force
 }

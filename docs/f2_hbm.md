@@ -21,14 +21,23 @@ programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
 
 ## Architecture
 
+Since 2026-10-19 (branch wide-port-alexshell) the memory path is **Alex's burst200 HBM shell**
+(ergodex-openTPU, branch `alex-burst200`, commit **06c169cb**: the design his F2 image closed
+timing with, WNS +0.032 ns, and ran Gemma-3-1B int8 at 22.3 tok/s on two channels), scaled from
+his two channels to NCH: per channel his native-to-AXI adapter at the core clock and a
+SmartConnect for the clock and width conversion, so **no logic of ours runs at 450 MHz** (rounds
+3-8 of the placed builds held our own 450 MHz domain, the bridges, arbiters and host path: 117K
+endpoints, at -2.2 ns for four rounds; Alex's 450 MHz logic is the SmartConnects and the HDK
+wrapper, docs/wide_port.md "Alex's shell").
+
 ```
-            core clock (200 MHz; clk_f 400)            |  hclk (450 MHz)              | HBM
- slice s -- otpu_native_dram (NCH) --+-- ch 0: otpu_f2_hbm_nch ==afifo==> bursts -- port NCH s     (PC NCH s)
-                                     +-- ch 1: otpu_f2_hbm_nch ==afifo==> bursts -- port NCH s + 1
-                                     ...                                     |          ^
-                                                                otpu_f2_hbm_port (2 masters, ID 0/1)
- PCIS (aclk 250 MHz) -- otpu_f2_hbm_host ==afifo==> one 64 B beat at a time ----+ (master 1 of every port)
- OCL  (aclk) -- otpu_axil_cdc (held while PCIS writes are in flight) -- otpu_ctrl (core)
+  SLR2 (core 200 / clk_f 400)        SLR1        SLR0, core 200 MHz        | SmartConnect (u_sc)       | 450 MHz | HBM
+ slice -- otpu_native_dram (NCH) --+ xr - xr - xr -- u_naxi 0 (AXI4 512 b) -- sc_c0: S00 @200 \           |
+                                   |                                                  S01 @250 -> M00 AXI3 256 b -- geo -- port 0 (PC 0)
+                                   + xr - xr - xr -- u_naxi 1 ---------------- sc_c1 ...                    -- port 1 (PC 1)
+                                   ...                                                  ^ (S01 of every sc_c)
+ PCIS (aclk 250 MHz) -- otpu_f2_pcis_gate (skids; AR held behind writes) -- sc_host 1 x NCH @250 (by address)
+ OCL  (aclk) -- otpu_axil_cdc (held while PCIS writes are unanswered) -- otpu_axil_xr (3 stages) -- otpu_ctrl
 ```
 
 - `rtl/mem/otpu_native_dram.sv` (the slice's DRAM adapter) takes `NCH` channels (a power of two,
@@ -37,16 +46,28 @@ programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
   `channels_per_slice`, `channel_bytes`, the arch's `DRAM_BYTES` or the platform's `slice_bytes`)
   instead of hardcoding 2 / 31 / 32; slice s is on channels NCH s .. NCH s + NCH - 1, CFG_DRAM
   reports them, CALIB0 / CALIB1 are the even / odd channels' ready.
-- `rtl/boards/f2/otpu_f2_hbm_nch.sv`: one channel's native port onto one HBM port (below).
-- `rtl/boards/f2/otpu_f2_hbm_port.sv`: a port shared by its bridge (ID 0) and the host (ID 1):
-  AW round-robin with W locked to the granted AW to WLAST, AR round-robin, R and B by ID.
-- `rtl/boards/f2/otpu_f2_hbm_host.sv`: PCIS (BAR4 offset = HBM address) onto the port that owns
-  the address.
-- `rtl/boards/f2/otpu_f2_hbm_mem.sv` (the fabric; `NXR` register stages each way on the native
-  ports, the SLR crossings below), `otpu_axil_xr.sv` (the control path across the same SLRs),
-  `otpu_f2_hbm_sys.sv` (otpu_board + fabric + OCL, `NXR` = 3), `boards/f2/design/cl_opentpu_hbm.sv`
-  (the CL: clocks, resets, the HDK's `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`,
-  `AXI4_INTERFACE = 0`, the unused-DDR template for the DIMM's pins).
+- `rtl/boards/f2/otpu_native_axi.sv` (Alex's, changed: "The memory path" below): one channel's
+  native port onto an AXI4 512-bit master at the core clock, BASE p x 512 MiB.
+- `rtl/boards/f2/otpu_f2_hbm_axi.sv` (`otpu_f2_hbm_sys` u_mem): the `NXR` = 3 SLR chain on every
+  native port, the channels' `u_naxi`, and `otpu_f2_pcis_gate.sv` (`u_pcis`: the PCIS onto the
+  fabric's host branch through skid buffers, the read-after-write and OCL order).
+- `rtl/boards/f2/otpu_hbm_geometry.sv` (Alex's, unchanged): 32-byte aligned HBM addresses after
+  each channel's SmartConnect (the HBM requires them; SmartConnect keeps a narrow single beat's
+  address).
+- `otpu_axil_xr.sv` (the control path across the SLRs), `otpu_f2_hbm_sys.sv` (otpu_board + u_mem +
+  OCL: the channels' AXI4 masters `ch_*` and the host branch `h_*` are its ports),
+  `boards/f2/design/cl_opentpu_hbm.sv` (the CL: clocks, resets, the SmartConnect block design
+  `u_sc` instantiated from `otpu_hbm_sc_inst.vh`, `otpu_hbm_geometry` per port, the HDK's
+  `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`, `AXI4_INTERFACE = 0`, the unused-DDR
+  template for the DIMM's pins).
+- The block design: `boards/f2/build/scripts/create_hbm_sc.tcl` (Alex's create_f2_ip.tcl the
+  model), generated on the build host by build.py before synthesis (below, "Build").
+- Out of the build since the rework (their files kept: `tb_f2hbm`,
+  tests/test_f2_rtl.py::test_f2_hbm_fabric, still tests them; no target uses them):
+  `otpu_f2_hbm_nch.sv` (the channel bridge: core-side order check, afifo, hclk burst builder),
+  `otpu_f2_hbm_port.sv` (a port's two-master arbiter), `otpu_f2_hbm_host.sv` (the 450 MHz host
+  path), `otpu_f2_hbm_mem.sv` (their fabric). Their description is in git at 5d0a5f9a
+  (docs/f2_hbm.md "The channel bridge", "The host path").
 
 ### Address map
 
@@ -58,12 +79,14 @@ Logical (what a slice's programs and `Board.write / read` use): byte address `a`
 - HBM port and pseudo-channel `P = NCH s + c`, HBM byte `P x 512 MiB + u x 64 + a mod 64`
   (= the PCIS BAR4 offset the host writes).
 
-At NCH = 2 this is the DDR boards' map (`c = b ^ parity(m)`, `u = m`). Every bridge's access stays
+At NCH = 2 this is the DDR boards' map (`c = b ^ parity(m)`, `u = m`). Every channel's access stays
 in its own pseudo-channel: the cl_hbm IP has the global address switch on (USER_SWITCH_ENABLE_00
 / 01 TRUE, 34-bit addresses: any port reaches all 16 GiB, through the lateral switch with added
 latency and shared bandwidth, and across the stacks at a fraction of it), and this build never
 uses it -- each channel's traffic, and the host's to that channel, go through the port that owns
-the pseudo-channel. `tb_f2hbm` checks it (an AW / AR of a bridge outside its 512 MiB fails).
+the pseudo-channel (each channel's SmartConnect reaches only its own port, at p x 512 MiB;
+otpu_native_axi masks a beat into its window and flags one outside it). `tb_f2hbm_axi` checks
+it (an AW / AR of a channel outside its 512 MiB fails).
 
 **Why a chunk on a pair, rotating over the pairs.** A chunk is 128 bytes (D = 128: port B's unit,
 one a core cycle), two 64-byte beats; a 64-byte beat is two of the HBM port's 32-byte AXI beats,
@@ -72,9 +95,10 @@ native beats (one AXI beat each: half the commands' efficiency, twice the order 
 tags). Keeping a chunk on two channels and rotating successive chunks over the NCH / 2 pairs
 spreads a stream evenly (every channel one beat in NCH / 2 chunks: at NCH = 8 a channel carries
 3.2 GB/s of the slice's 25.6), keeps the B merge a two-channel join (the tag FIFO holds the
-pair), keeps each bridge a plain one-beat-per-command master, and gives each channel's
+pair), keeps each channel a plain one-beat-per-command master, and gives each channel's
 consecutive beats to consecutive chunks of its pair, so a channel's A run (APF beats) and a
-stream's beats on it are runs of channel beats that the bridge turns into bursts. The fold
+stream's beats on it are runs of channel beats that otpu_native_axi's adjacency test (the
+next beat, within 4 KiB) can turn into bursts ("The memory path" below). The fold
 spreads power-of-two strides of chunks (a transposed V's column: one byte per cache row) over all
 pairs, as CHASH's parity spreads them over a pair's two halves.
 

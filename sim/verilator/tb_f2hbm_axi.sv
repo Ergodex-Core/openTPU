@@ -26,6 +26,7 @@ module tb_f2hbm_axi;
   parameter int CORE_HALF = 5, AXI_HALF = 4, HBM_HALF = 2;   // 100 / 125 / 250: the ratios
   parameter int LREQ = 40, LRSP = 40;     // the SmartConnect's crossing latencies (time units)
   parameter int READ_BURST = 4, READ_IDLE = 1;
+  parameter bit READ_WAIT = 1'b0;
   parameter bit ORDER = 1'b1;             // 0: the order rules off (must fail)
 
   logic clk = 1'b0, aclk = 1'b0, hclk = 1'b0;
@@ -34,7 +35,7 @@ module tb_f2hbm_axi;
   always #(HBM_HALF) hclk = !hclk;
   logic rst = 1'b1, arst = 1'b1;
 
-  int unsigned seed = 1, cycles = 20000, nb = 6, errors = 0;
+  int unsigned seed = 1, cycles = 20000, nb = 6, errors = 0, nstale_ch = 0, nstale_host = 0;
   bit gen = 1'b0;
   initial begin
     void'($value$plusargs("seed=%d", seed));
@@ -92,7 +93,7 @@ module tb_f2hbm_axi;
   logic [NPORT-1:0][63:0]  c_wstrb;
   logic [NPORT-1:0][1:0]   c_bresp, c_rresp;
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
-                  .ORDER(ORDER)) u_dut (
+                  .READ_WAIT(READ_WAIT), .ORDER(ORDER)) u_dut (
     .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
@@ -305,7 +306,9 @@ module tb_f2hbm_axi;
           if (eq[c].size() == 0) fail($sformatf("ch%0d: read data with no read", c));
           else begin
             automatic logic [511:0] e = eq[c].pop_front();
-            if (n_rdata[c] !== e) fail($sformatf("ch%0d: read returned stale or wrong data", c));
+            if (n_rdata[c] !== e) begin
+              nstale_ch++; fail($sformatf("ch%0d: read returned stale or wrong data", c));
+            end
           end
         end
         if (n_err[c]) fail($sformatf("ch%0d: n_err", c));
@@ -388,8 +391,10 @@ module tb_f2hbm_axi;
         if (hre.size() == 0) fail("host: read data with no read");
         else begin
           automatic logic [511:0] e = hre.pop_front();
-          if (s_rdata !== e) fail($sformatf("host: read %0d is not its own writes' (%h, expected %h)",
-                                            hrd, s_rdata[31:0], e[31:0]));
+          if (s_rdata !== e) begin
+            nstale_host++;
+            fail($sformatf("host: read %0d is not its own writes' (%h, expected %h)", hrd, s_rdata[31:0], e[31:0]));
+          end
           if (s_rid !== hr_exp[0].id) fail("host: R's ID out of order");
           if (s_rlast !== (hr_beat == hr_exp[0].len)) fail("host: RLAST at wrong beat");
           if (s_rlast) begin void'(hr_exp.pop_front()); hr_beat = 0; end
@@ -431,7 +436,8 @@ module tb_f2hbm_axi;
     for (int i = 1; i <= 16; i++) if (hist[i]) $write(" %0d:%0d", i, hist[i]);
     $display("; host %0d writes %0d reads", hwr, hrd);
     for (int c = 0; c < NPORT; c++) $display("ch%0d %0d writes %0d reads", c, nwr[c], nrd[c]);
-    if (errors) $display("FAIL (%0d errors)", errors);
+    if (errors) $display("FAIL (%0d errors: %0d stale channel reads, %0d stale host reads)",
+                         errors, nstale_ch, nstale_host);
     else $display("PASS");
     $finish;
   end

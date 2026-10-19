@@ -51,6 +51,7 @@ module tb_top;
   parameter int NAXI_XR    = 3;       //   otpu_top NAXI)
   parameter int NAXI_BURST = 4;
   parameter int NAXI_IDLE  = 1;
+  parameter bit NAXI_WAIT  = 1'b0;
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -67,7 +68,7 @@ module tb_top;
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
-             .NAXI(NAXI), .NAXI_XR(NAXI_XR), .NAXI_BURST(NAXI_BURST), .NAXI_IDLE(NAXI_IDLE),
+             .NAXI(NAXI), .NAXI_XR(NAXI_XR), .NAXI_BURST(NAXI_BURST), .NAXI_IDLE(NAXI_IDLE), .NAXI_WAIT(NAXI_WAIT),
              .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .COLL_GATHER(COLL_GATHER || S > 1)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);

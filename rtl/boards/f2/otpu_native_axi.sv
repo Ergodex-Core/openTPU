@@ -20,7 +20,8 @@
 // Coalescing (Alex's): adjacent read commands (the next beat, within a 4 KiB page) gather into
 // one INCR burst of up to READ_BURST native beats; a burst closes at READ_BURST, at a 4 KiB
 // boundary, at a credit limit, when the queue's head cannot join it (a write, another address)
-// or after READ_IDLE cycles with nothing to take. Writes stay single beats. Order: a read is
+// or after READ_IDLE cycles with nothing to take (READ_WAIT 0, added here: when the queue runs
+// dry, so nothing waits for a command not yet queued). Writes stay single beats. Order: a read is
 // not taken while a write is unanswered (B), a write not issued while a read is unanswered
 // (R), so the native contract (a read after a write to its beat sees it) holds whatever the
 // AXI side reorders between its read and write channels. All IDs 0: one channel's reads come
@@ -33,6 +34,9 @@ module otpu_native_axi #(
   parameter int MAX_OUT = 128,
   parameter int READ_BURST = 16,
   parameter int READ_IDLE = 4,
+  parameter bit READ_WAIT = 1'b1,      // 1 (Alex's): a burst waits for commands still to come
+                                       // (up to READ_IDLE cycles); 0: it takes only what is
+                                       // queued, closing when the queue runs dry
   parameter bit ORDER = 1'b1           // the direction barriers (0: tests only, tb_f2hbm_axi)
 )(
   input logic clk, rst,
@@ -99,7 +103,12 @@ module otpu_native_axi #(
   wire take_read = !pending_valid && cn != 0 && !head_we && (writes == 0 || !ORDER) &&
                    reads < MAX_OUT && (pending_count == 0 || adjacent);
   wire [4:0] cnt_t = pending_count + 5'd1;
-  wire full_t = cnt_t == 5'(READ_BURST) || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1);
+  wire full_t = cnt_t == 5'(READ_BURST) || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
+                (!READ_WAIT && cn == CW'(1));
+  // (READ_WAIT 0: a stream arriving a command a cycle goes out a beat a burst with no wait, a
+  // backlog in the queue as bursts: coalescing adds no latency; with 64 reads in flight a
+  // channel the decode token is latency-bound, and every cycle a burst's first beat waits for
+  // its last is a cycle on its credit: docs/f2_hbm.md "The memory path")
   // Never wait for another command at a direction/page/discontinuity boundary. A short idle
   // timer also flushes isolated final reads.
   wire flush = pending_count != 0 && !pending_valid && !take_read &&
