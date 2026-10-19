@@ -75,6 +75,8 @@ module otpu_board #(
   parameter int ALINE       = 32,      // port A's line, bytes (32, 64; CAPS2 bit5; docs/row_lanes.md)
   parameter int PORTB       = 1,       // chunks a cycle on port B (docs/wide_port.md; CAPS2 [3:1];
                                        //   NCH >= 2 PORTB: otpu_native_dram)
+  parameter int NRD         = 0,       // the adapter's B read beats in flight a channel (0: 64 at
+                                       //   NCH > 2, else 128; the v5 engine path's 128: docs/full_hbm.md)
   parameter int PLATFORM    = 0,       // the target's platform id (CFG_PLATFORM; opentpu/target.py)
   parameter logic [31:0] ARCH_HASH = 32'h0  // the target's arch_hash (CFG_HASH)
 ) (
@@ -128,7 +130,7 @@ module otpu_board #(
   localparam int XR = 2;              // register stages each way across an SLR (S > 1)
   // the native adapter's B read beats in flight per channel: 128 on two channels; on more, each
   // carries 2 / NCH of a stream (and the F2 HBM bridges hold 64 reads a channel)
-  localparam int NRD = (NCH > 2) ? 64 : 128;
+  localparam int NRD_ = (NRD != 0) ? NRD : (NCH > 2) ? 64 : 128;
   initial if (NCH < 2 || NCH != (1 << $clog2(NCH)) || DRAM_LOG2 > (NCH > 2 ? 34 : 32) ||
               DRAM_LOG2 > CH_LOG2 + $clog2(NCH))
     $fatal(1, "otpu_board: NCH a power of two >= 2, DRAM_LOG2 <= 32 (34 at NCH > 2) and <= CH_LOG2 + log2(NCH)");
@@ -392,7 +394,7 @@ module otpu_board #(
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
-  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD_), .PORTB(PORTB), .ALINE(ALINE),
                      .APR(RL != 0 ? 16 : 1)) u_mem (
     .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
     .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
@@ -444,7 +446,7 @@ module otpu_board #(
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
 
-    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD_), .PORTB(PORTB), .ALINE(ALINE),
                        .APR(RL != 0 ? 16 : 1)) u_mem (
       .clk, .rst(x_srst[s]), .a_flush(x_rst[s] || x_ld_start[s] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),

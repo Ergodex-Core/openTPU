@@ -206,3 +206,53 @@ def test_f2_hbm_axi_detects_missing_order(have_verilator):
     import re
     m = re.search(r"FAIL \(\d+ errors: (\d+) stale channel reads, (\d+) stale host reads\)", r.stdout)
     assert m and int(m[1]) > 0 and int(m[2]) > 0, r.stdout[-3000:]
+
+
+# ---------------------------------------------------------------- the v5 engine path (docs/superpowers/
+# specs/2026-10-20-opentpu-design-v5.md section 3): a 450 MHz engine per HBM port (otpu_hbm_ch)
+# behind the SLR chains and the per-slice write bus (otpu_f2_hbm_eng), the host on its own port
+# or through the 2 x 1 mux (otpu_hbm_mux2)
+HBM_ENG = ["shell/otpu_xr.sv", "shell/otpu_skidbuf.sv", "boards/f2/otpu_f2_pcis_gate.sv",
+           "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_ch.sv", "boards/f2/otpu_hbm_mux2.sv",
+           "boards/f2/otpu_f2_hbm_eng.sv"]
+
+
+def _hbm_eng_exe(**params):
+    return rtlsim.build("tb_hbm_eng", [rtlsim.RTL / f for f in HBM_ENG] +
+                        [rtlsim.TB / "tb_hbm_eng.sv"], params)
+
+
+@pytest.mark.parametrize("nport,s,nch,core_half,nxr,mux", [
+    (8, 1, 8, 9, 3, 0),     # one slice's 8 channels at 200 / 250 / 450 (the ratios), three SLR
+                            #   stages, the host on its own port
+    (8, 1, 8, 9, 0, 0),     # wired
+    (16, 2, 8, 9, 3, 0),    # two slices
+    (16, 2, 8, 9, 3, 1),    # ... the host through the mux on port 15
+    (32, 4, 8, 9, 3, 1),    # f2-hbm:v5: four slices, 32 channels, the host on port 31
+    (8, 1, 8, 13, 3, 1)])   # a 150 MHz core against 250 / 450
+def test_hbm_eng(have_verilator, nport, s, nch, core_half, nxr, mux):
+    """Every channel's native contract through the chains, the write bus and otpu_hbm_ch into
+    an AXI3 HBM model at hclk (280 / 172 ns latencies, 64 in flight a port, the ID groups
+    overtaking each other, random stalls): reads return the beats as the channel's commands
+    left them, n_wdone reaches the writes, every write lands; every engine transaction inside
+    its 512 MiB window, 64-byte aligned 32-byte INCR beats, ARLEN <= 15 inside a 512 B group,
+    AWLEN 1, WLAST on the second beat, n_err low; streams coalesce into bursts; the host's
+    writes land and its reads (right after them) return them, B / R in its order with its
+    IDs, through its own port or the mux; pcis_wbusy while a host write is unanswered."""
+    exe = _hbm_eng_exe(NPORT=nport, S=s, NCH=nch, CORE_HALF=core_half, NXR=nxr, HOST_MUX=mux)
+    for seed, nb in [(1, 1), (7, 6), (31, 64)]:
+        r = subprocess.run([str(exe), f"+seed={seed}", f"+nb={nb}", "+cycles=6000"],
+                           capture_output=True, text=True, timeout=600)
+        assert r.returncode == 0 and "PASS" in r.stdout and "FAIL" not in r.stdout, \
+            r.stdout[-3000:] + r.stderr[-3000:]
+
+
+def test_hbm_eng_detects_missing_order(have_verilator):
+    """Without the engine's direction barriers the HBM model's reads overtake writes to the
+    same beat (its reads take longer than its writes, as the card's): stale channel reads."""
+    exe = _hbm_eng_exe(NPORT=8, S=1, NCH=8, NXR=3, HOST_MUX=0, ORDER=0)
+    r = subprocess.run([str(exe), "+seed=1", "+nb=1", "+cycles=6000"],
+                       capture_output=True, text=True, timeout=600)
+    import re
+    m = re.search(r"FAIL \(\d+ errors: (\d+) stale channel reads, (\d+) stale host reads\)", r.stdout)
+    assert m and int(m[1]) > 0, r.stdout[-3000:]
