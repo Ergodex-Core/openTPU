@@ -7,11 +7,13 @@ tool arguments and hashes before invoking Vivado. Packaging requires route quali
 from __future__ import annotations
 
 import argparse
+from fractions import Fraction
 import hashlib
 import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import subprocess
 import sys
@@ -56,6 +58,61 @@ def replace_once(text, old, new):
     if text.count(old) != 1:
         raise RuntimeError(f"Frozen support anchor changed: {old[:90]!r}")
     return text.replace(old, new, 1)
+
+
+def check_clocks(top):
+    """Reject illegal or frequency-changing MMCM recipes before freezing inputs.
+
+    Attribute limits: AMD UG572 MMCM Attributes. Frequency limits: AMD DS923,
+    MMCM Switching Characteristics, Virtex UltraScale+ -2 at 0.85 V.
+    Fractions keep unsupported decimal values (notably 4.8) from rounding away.
+    """
+    for instance, input_mhz, outputs in [
+        ("u_mmcm", 250, {"CLKOUT0_DIVIDE_F": 200, "CLKOUT1_DIVIDE": 400}),
+        ("u_hmmcm", 100, {"CLKOUT0_DIVIDE_F": 450}),
+    ]:
+        blocks = [body for body, name in re.findall(
+            r"MMCME4_ADV\s*#\((.*?)\)\s+(\w+)\s*\(", top, re.S) if name == instance]
+        if len(blocks) != 1:
+            raise RuntimeError(f"Expected one clock primitive: {instance}")
+        values = {key: Fraction(value) for key, value in
+                  re.findall(r"\.(\w+)\(([0-9.]+)\)", blocks[0])}
+
+        def require(ok, reason):
+            if not ok:
+                raise RuntimeError(f"Invalid {instance} clock recipe: {reason}")
+
+        require({"CLKIN1_PERIOD", "DIVCLK_DIVIDE", "CLKFBOUT_MULT_F", *outputs} <= values.keys(),
+                "missing numeric attribute")
+        divide, mult = values["DIVCLK_DIVIDE"], values["CLKFBOUT_MULT_F"]
+        require(divide.denominator == 1 and 1 <= divide <= 106, "DIVCLK_DIVIDE")
+        require(2 <= mult <= 128 and (mult * 8).denominator == 1, "CLKFBOUT_MULT_F granularity/range")
+        require(values["CLKIN1_PERIOD"] == Fraction(1000, input_mhz), "input period")
+        pfd = Fraction(input_mhz, 1) / divide
+        vco = pfd * mult
+        require(10 <= pfd <= 500 and 800 <= vco <= 1600, "PFD/VCO frequency")
+        for name, mhz in outputs.items():
+            output_divide = values[name]
+            if name.endswith("_F"):
+                legal = output_divide == 1 or (2 <= output_divide <= 128 and
+                                               (output_divide * 8).denominator == 1)
+            else:
+                legal = 1 <= output_divide <= 128 and output_divide.denominator == 1
+            require(legal, f"{name} granularity/range")
+            require(vco / output_divide == mhz, f"{name} must produce {mhz} MHz")
+
+
+def make_top():
+    top = (SUPPORT / "boards/f2/design/cl_opentpu_hbm.sv").read_text()
+    # The frozen source's M=4.8 is not a legal 1/8 multiplier. Keep M/D=4.8
+    # with integer M=24, D=5: 50 MHz PFD, 1200 MHz VCO, 200/400 MHz outputs.
+    top = replace_once(top,
+        ".CLKIN1_PERIOD(4.0), .DIVCLK_DIVIDE(1), .CLKFBOUT_MULT_F(4.8)",
+        ".CLKIN1_PERIOD(4.0), .DIVCLK_DIVIDE(5), .CLKFBOUT_MULT_F(24.0)")
+    top = replace_once(top, "otpu_f2_hbm_sys #(", "otpu_f2_c2_sys #(")
+    top = replace_once(top, "32'h4f545055; // OTPU", "32'h43324842; // C2HB")
+    check_clocks(top)
+    return top
 
 
 def make_sys():
@@ -135,10 +192,7 @@ def prepare(out, hdk, shell, build_id):
     shutil.copytree(SUPPORT / "boards/f2/build", cl / "build")
     design = cl / "design"
     design.mkdir()
-    top = (SUPPORT / "boards/f2/design/cl_opentpu_hbm.sv").read_text()
-    top = top.replace("otpu_f2_hbm_sys #(", "otpu_f2_c2_sys #(")
-    top = top.replace("32'h4f545055; // OTPU", "32'h43324842; // C2HB")
-    (design / "cl_opentpu_hbm.sv").write_text(top)
+    (design / "cl_opentpu_hbm.sv").write_text(make_top())
     shutil.copy2(SUPPORT / "boards/f2/design/cl_id_defines.vh", design)
     shutil.copy2(hdk / "hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv", design)
     (design / "opentpu_geometry.vh").write_text("localparam int S=1;\nlocalparam int NCH=8;\n")

@@ -3,6 +3,8 @@ import hashlib
 import importlib.util
 import json
 from pathlib import Path
+from fractions import Fraction
+import re
 
 import pytest
 
@@ -100,3 +102,45 @@ def test_generated_top_uses_separate_kernel_identity():
     assert "NPORT != 8" in system
     assert "CH_LOG2" not in system
     assert "TMEM_WORDS" not in system
+
+
+def test_snapshot_mmcm_is_legal_and_preserves_all_clock_frequencies(tmp_path):
+    module, _, cl, _, _ = snapshot(tmp_path)
+    frozen = (module.SUPPORT / "boards/f2/design/cl_opentpu_hbm.sv").read_text()
+    generated = (cl / "design/cl_opentpu_hbm.sv").read_text()
+    module.verify_support()  # Fix applies to generated inputs, never frozen bytes.
+    assert ".CLKFBOUT_MULT_F(4.8)" in frozen
+    assert ".CLKFBOUT_MULT_F(4.8)" not in generated
+    # Restoring the intentional clock and benchmark identity edits must recover
+    # every frozen byte, including the complete 450 MHz HBM MMCM and its wiring.
+    restored = generated.replace(".DIVCLK_DIVIDE(5), .CLKFBOUT_MULT_F(24.0)",
+                                 ".DIVCLK_DIVIDE(1), .CLKFBOUT_MULT_F(4.8)")
+    restored = restored.replace("otpu_f2_c2_sys #(", "otpu_f2_hbm_sys #(")
+    restored = restored.replace("32'h43324842; // C2HB", "32'h4f545055; // OTPU")
+    assert restored == frozen
+    params = generated.split("MMCME4_ADV #(", 1)[1].split(") u_mmcm", 1)[0]
+    values = {key: Fraction(value) for key, value in
+              re.findall(r"\.(\w+)\(([0-9.]+)\)", params)}
+    assert values["DIVCLK_DIVIDE"] == 5
+    assert values["CLKFBOUT_MULT_F"] == 24
+    assert (values["CLKFBOUT_MULT_F"] * 8).denominator == 1
+    pfd = 1000 / values["CLKIN1_PERIOD"] / values["DIVCLK_DIVIDE"]
+    vco = pfd * values["CLKFBOUT_MULT_F"]
+    assert pfd == 50 and vco == 1200
+    assert vco / values["CLKOUT0_DIVIDE_F"] == 200
+    assert vco / values["CLKOUT1_DIVIDE"] == 400
+
+
+@pytest.mark.parametrize("old,new,reason", [
+    (".DIVCLK_DIVIDE(5), .CLKFBOUT_MULT_F(24.0)",
+     ".DIVCLK_DIVIDE(1), .CLKFBOUT_MULT_F(4.8)", "granularity"),
+    (".CLKFBOUT_MULT_F(24.0)", ".CLKFBOUT_MULT_F(24.1)", "granularity"),
+    (".DIVCLK_DIVIDE(5)", ".DIVCLK_DIVIDE(4)", "must produce 200"),
+    (".CLKOUT0_DIVIDE_F(6.0)", ".CLKOUT0_DIVIDE_F(6.1)", "granularity"),
+    (".CLKFBOUT_MULT_F(24.0)", ".CLKFBOUT_MULT_F(40.0)", "PFD/VCO"),
+    (".CLKFBOUT_MULT_F(9.0)", ".CLKFBOUT_MULT_F(8.0)", "must produce 450"),
+])
+def test_snapshot_rejects_invalid_clock_recipes(old, new, reason):
+    module = builder()
+    with pytest.raises(RuntimeError, match=reason):
+        module.check_clocks(module.make_top().replace(old, new))

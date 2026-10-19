@@ -9,6 +9,16 @@ not implement a production opcode or full-model inference.
 changes from another agent's working tree. `build.py` verifies those hashes and
 creates a new snapshot for each run. Existing run directories are rejected.
 
+The generated top corrects the frozen core MMCM's illegal `M=4.8, D=1`
+attributes to `M=24, D=5`. From the 250 MHz shell clock, this produces a
+50 MHz PFD, 1200 MHz VCO and unchanged 200/400 MHz outputs (dividers 6/3).
+These values satisfy [AMD UG572 attribute increments and ranges](https://docs.amd.com/r/en-US/ug572-ultrascale-clocking/MMCM-Attributes)
+and [DS923 frequency limits](https://docs.amd.com/r/en-US/ds923-virtex-ultrascale-plus/MMCM-Switching-Characteristics)
+for the target Virtex UltraScale+ -2 device. The frozen support and 450 MHz HBM
+MMCM remain byte-identical. Snapshot creation checks both MMCM recipes with
+exact arithmetic; the first full-shell build stopped at `AVAL-168` before
+placement, so a new build must still pass every physical qualification gate.
+
 On the licensed Vivado 2025.2 host, with the pinned AWS HDK and generated HBM IP:
 
 ```sh
