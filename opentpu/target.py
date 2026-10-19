@@ -93,7 +93,11 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           "f2-hbm": ["shell/otpu_skidbuf.sv", "shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv",
                      "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_hbm_port.sv",
                      "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
-                     "boards/f2/otpu_f2_hbm_sys.sv"]}
+                     "boards/f2/otpu_f2_hbm_sys.sv"],
+          # Alex's burst200 flow (boards/f2/burst200; targets/f2-burst200.toml names it by the
+          # platform's rtl_board): its build_f2.tcl reads its own top and adapters from
+          # rtl/boards/f2/burst200, so it takes only the core and the shell from this list
+          "f2-burst200": []}
 
 
 class TargetError(ValueError):
@@ -321,7 +325,7 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     board = t.platform["board"]
     if board == "f2" and t.platform.get("mem") == "hbm":
         board = "f2-hbm"
-    return core + SHELL + BOARDS.get(board, [])
+    return core + SHELL + BOARDS.get(t.platform.get("rtl_board", board), [])
 
 
 def build_config(t: Target | str | None = None, **knobs):
