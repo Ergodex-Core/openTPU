@@ -78,16 +78,20 @@ module otpu_c2_hbm_kernel #(
 
   // Serialized AXI-Lite slave: AW and W may arrive independently. Response payloads
   // remain stable until acknowledged. Reads and writes cannot race MEM_ADDR.
-  logic aw_hold,w_hold,rd_pending,rd_mem;
-  logic [11:0] aw_addr;
+  // Capture the accepted read address before the wide CSR mux. The OCL bridge
+  // sits beside the shell in SLR1; this register keeps its crossing into the
+  // SLR0 kernel separate from register selection. Read side effects and the
+  // synchronous result-RAM access happen together in the following phase.
+  logic aw_hold,w_hold,rd_decode,rd_pending,rd_mem;
+  logic [11:0] aw_addr,rd_addr;
   logic [31:0] w_value,rd_value;
   logic [3:0] w_strobe;
   logic [1:0] rd_response,rd_bank,rd_kind;
   wire wr_fire=aw_hold&&w_hold&&!s_ctl_bvalid;
   wire ar_fire=s_ctl_arvalid&&s_ctl_arready;
-  assign s_ctl_awready=!rst&&!aw_hold&&!s_ctl_bvalid&&!rd_pending&&!s_ctl_rvalid;
-  assign s_ctl_wready=!rst&&!w_hold&&!s_ctl_bvalid&&!rd_pending&&!s_ctl_rvalid;
-  assign s_ctl_arready=!rst&&!rd_pending&&!s_ctl_rvalid&&!aw_hold&&!w_hold&&
+  assign s_ctl_awready=!rst&&!aw_hold&&!s_ctl_bvalid&&!rd_decode&&!rd_pending&&!s_ctl_rvalid;
+  assign s_ctl_wready=!rst&&!w_hold&&!s_ctl_bvalid&&!rd_decode&&!rd_pending&&!s_ctl_rvalid;
+  assign s_ctl_arready=!rst&&!rd_decode&&!rd_pending&&!s_ctl_rvalid&&!aw_hold&&!w_hold&&
                        !s_ctl_awvalid&&!s_ctl_wvalid&&!s_ctl_bvalid;
   wire is_act=mem_addr<DEPTH*32;
   wire is_da=mem_addr>=32'h10000&&mem_addr<32'h10000+DEPTH;
@@ -116,7 +120,7 @@ module otpu_c2_hbm_kernel #(
       default: ;
     endcase
     read_ok=1;csr_value=0;
-    case(s_ctl_araddr)
+    case(rd_addr)
       12'h000:csr_value=32'h43324d42;
       12'h004:csr_value=1;
       12'h008:csr_value=BUILD_ID;
@@ -150,12 +154,12 @@ module otpu_c2_hbm_kernel #(
       default:begin
         read_ok=0;
         for(int p=0;p<8;p++) begin
-          if(s_ctl_araddr==12'(256+p*32+0)) begin csr_value=pc_issued[p];read_ok=1;end
-          if(s_ctl_araddr==12'(256+p*32+4)) begin csr_value=pc_returned[p];read_ok=1;end
-          if(s_ctl_araddr==12'(256+p*32+8)) begin csr_value=pc_peak[p];read_ok=1;end
-          if(s_ctl_araddr==12'(256+p*32+12)) begin csr_value=pc_blocked[p];read_ok=1;end
-          if(s_ctl_araddr==12'(256+p*32+16)) begin csr_value=pc_latency[p];read_ok=1;end
-          if(s_ctl_araddr==12'(256+p*32+20)) begin csr_value=pc_credit[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+0)) begin csr_value=pc_issued[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+4)) begin csr_value=pc_returned[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+8)) begin csr_value=pc_peak[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+12)) begin csr_value=pc_blocked[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+16)) begin csr_value=pc_latency[p];read_ok=1;end
+          if(rd_addr==12'(256+p*32+20)) begin csr_value=pc_credit[p];read_ok=1;end
         end
       end
     endcase
@@ -163,7 +167,7 @@ module otpu_c2_hbm_kernel #(
   logic [3:0][79:0] result_q;
   always_ff @(posedge clk) begin
     if(rst) begin
-      aw_hold<=0;w_hold<=0;s_ctl_bvalid<=0;s_ctl_bresp<=0;rd_pending<=0;
+      aw_hold<=0;w_hold<=0;s_ctl_bvalid<=0;s_ctl_bresp<=0;rd_decode<=0;rd_pending<=0;
       s_ctl_rvalid<=0;s_ctl_rresp<=0;s_ctl_rdata<=0;
       cfg_mode<=1;cfg_kb<=9;cfg_rows<=257;cfg_base<=0;mem_addr<=0;
     end else begin
@@ -184,9 +188,12 @@ module otpu_c2_hbm_kernel #(
       end
       if(s_ctl_rvalid&&s_ctl_rready)s_ctl_rvalid<=0;
       if(ar_fire)begin
-        rd_pending<=1;rd_value<=csr_value;rd_response<=read_ok?0:2;
-        rd_mem<=s_ctl_araddr==12'h02c&&read_ok;rd_bank<=mem_addr[1:0];rd_kind<=result_kind;
-        if(s_ctl_araddr==12'h02c&&read_ok)mem_addr<=mem_addr+1;
+        rd_decode<=1;rd_addr<=s_ctl_araddr;
+      end
+      if(rd_decode)begin
+        rd_decode<=0;rd_pending<=1;rd_value<=csr_value;rd_response<=read_ok?0:2;
+        rd_mem<=rd_addr==12'h02c&&read_ok;rd_bank<=mem_addr[1:0];rd_kind<=result_kind;
+        if(rd_addr==12'h02c&&read_ok)mem_addr<=mem_addr+1;
       end
       if(rd_pending)begin
         rd_pending<=0;s_ctl_rvalid<=1;s_ctl_rresp<=rd_response;
@@ -300,7 +307,7 @@ module otpu_c2_hbm_kernel #(
       if(fetch_scale)dw_q[c]<=dw_mem[{row_cursor[GW+1:2],scale_index[AW-1:0]}];
       if(result_write)res_mem[core_out_tag[GW+1:2]]<=core_out_decode?
         {core_out_integer[c],core_out_data[c]}:{core_out_integer[0],core_out_data[0]};
-      if(ar_fire&&s_ctl_araddr==12'h02c&&is_result)result_q[c]<=res_mem[mem_addr[GW+1:2]];
+      if(rd_decode&&rd_addr==12'h02c&&is_result)result_q[c]<=res_mem[mem_addr[GW+1:2]];
     end
   end
   for(genvar p=0;p<8;p++)begin:g_return

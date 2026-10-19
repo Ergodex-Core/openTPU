@@ -58,7 +58,9 @@ module tb_c2_hbm;
     logic[1:0] response;
     @(negedge clk);s_ctl_araddr=addr;s_ctl_arvalid=1;
     do @(posedge clk);while(!s_ctl_arready);
-    @(negedge clk);s_ctl_arvalid=0;
+    // ARADDR is not owned by the slave after acceptance. Poison it immediately
+    // so every CSR/result read checks the accepted-address register.
+    @(negedge clk);s_ctl_arvalid=0;s_ctl_araddr=12'hfff;
     do @(posedge clk);while(!s_ctl_rvalid);
     value=s_ctl_rdata;response=s_ctl_rresp;
     repeat($urandom_range(1,4))begin
@@ -66,6 +68,75 @@ module tb_c2_hbm;
     end
     if(response!=expected)$fatal(1,"read %h response %d expected %d",addr,response,expected);
     @(negedge clk);s_ctl_rready=1;@(posedge clk);@(negedge clk);s_ctl_rready=0;
+  endtask
+  task automatic read_blocks_write(input logic[11:0] addr,input logic[31:0] expected_value);
+    logic[31:0] value;
+    // A following MEM_ADDR write must remain unaccepted during address capture,
+    // decode, result fetch, and a stalled R response.
+    @(negedge clk);s_ctl_araddr=addr;s_ctl_arvalid=1;
+    do @(posedge clk);while(!s_ctl_arready);
+    @(negedge clk);s_ctl_arvalid=0;s_ctl_araddr=12'hfff;
+    s_ctl_awaddr=12'h024;s_ctl_awvalid=1;s_ctl_wdata=32'h12345678;
+    s_ctl_wstrb=15;s_ctl_wvalid=1;
+    do begin
+      @(posedge clk);
+      if(s_ctl_awready||s_ctl_wready||s_ctl_arready)$fatal(1,"write/read accepted before R response");
+    end while(!s_ctl_rvalid);
+    value=s_ctl_rdata;
+    if(value!=expected_value||s_ctl_rresp!=0)$fatal(1,"accepted AR address/data changed");
+    repeat(5)begin
+      @(posedge clk);
+      if(!s_ctl_rvalid||s_ctl_rdata!=value||s_ctl_rresp!=0)$fatal(1,"held R response changed");
+      if(s_ctl_awready||s_ctl_wready||s_ctl_arready)$fatal(1,"write/read accepted while R stalled");
+    end
+    @(negedge clk);s_ctl_rready=1;
+    @(posedge clk);
+    if(s_ctl_awready||s_ctl_wready)$fatal(1,"write overlapped R acknowledgement");
+    @(negedge clk);s_ctl_rready=0;
+    do @(posedge clk);while(!(s_ctl_awready&&s_ctl_wready));
+    @(negedge clk);s_ctl_awvalid=0;s_ctl_wvalid=0;
+    do @(posedge clk);while(!s_ctl_bvalid);
+    if(s_ctl_bresp!=0)$fatal(1,"queued write failed");
+    @(negedge clk);s_ctl_bready=1;@(posedge clk);@(negedge clk);s_ctl_bready=0;
+    read_reg(12'h024,value);
+    if(value!=32'h12345678)$fatal(1,"queued write lost or reordered");
+  endtask
+  task automatic reset_read(input logic[11:0] addr,input int elapsed);
+    logic[31:0] value;
+    write_reg(12'h024,32'h701ff);
+    @(negedge clk);s_ctl_araddr=addr;s_ctl_arvalid=1;
+    do @(posedge clk);while(!s_ctl_arready);
+    @(negedge clk);s_ctl_arvalid=0;s_ctl_araddr=12'hfff;
+    // elapsed 0: accepted address; 1: decode/RAM fetch; 2: held response.
+    repeat(elapsed)@(negedge clk);
+    rst=1;
+    repeat(2)@(negedge clk);
+    rst=0;
+    repeat(5)begin
+      @(posedge clk);
+      if(s_ctl_rvalid||s_ctl_bvalid)$fatal(1,"reset leaked a stale response");
+    end
+    read_reg(12'h024,value);
+    if(value!=0)$fatal(1,"reset leaked a read-side increment");
+    read_reg(12'h000,value);
+    if(value!=32'h43324d42)$fatal(1,"read pipeline did not recover after reset");
+  endtask
+  task automatic result_boundary(input logic[31:0] window,input logic[31:0] expected_value);
+    logic[31:0] value;
+    write_reg(12'h024,window+511);
+    read_reg(12'h02c,value);
+    if(value!=expected_value)$fatal(1,"last result-window word selected wrong bank/kind");
+    read_reg(12'h024,value);
+    if(value!=window+512)$fatal(1,"result read did not increment exactly once");
+    repeat(2)begin
+      read_reg(12'h02c,value,2);
+      if(value!=0)$fatal(1,"invalid result read returned stale data");
+      read_reg(12'h024,value);
+      if(value!=window+512)$fatal(1,"invalid boundary read advanced MEM_ADDR");
+    end
+    // The queued write may not change the word selected by an accepted read.
+    write_reg(12'h024,window+511);
+    read_blocks_write(12'h02c,expected_value);
   endtask
   task automatic wait_done(output logic[31:0] status);
     do begin
@@ -96,6 +167,11 @@ module tb_c2_hbm;
     end
     repeat(4)@(negedge clk);rst=0;
     read_reg(0,v);if(v!=32'h43324d42)$fatal(1,"identity");
+    read_blocks_write(12'h000,32'h43324d42);
+    for(int elapsed=0;elapsed<3;elapsed++)begin
+      reset_read(12'h000,elapsed);
+      reset_read(12'h02c,elapsed);
+    end
     // ABI rejection and autoincrement checks before loading valid data.
     write_reg(12'h024,32'hdeadbeef);write_reg(12'h028,42,2);
     read_reg(12'h024,v);if(v!=32'hdeadbeef)$fatal(1,"bad write advanced MEM_ADDR");
@@ -148,6 +224,11 @@ module tb_c2_hbm;
       write_reg(12'h024,32'h60000+32'(r));read_reg(12'h02c,lo);
       write_reg(12'h024,32'h70000+32'(r));read_reg(12'h02c,hi);
       $fwrite(resfd,"R %0d %08x %04x%08x\n",r,bits,hi[15:0],lo);
+    end
+    if(rows==512)begin
+      result_boundary(32'h50000,bits);
+      result_boundary(32'h60000,lo);
+      result_boundary(32'h70000,hi);
     end
     read_reg(12'h038,v);if(v!=before_cycles)$fatal(1,"DONE cycles changed during readback");
     $fclose(resfd);$fclose(evfd);$finish;

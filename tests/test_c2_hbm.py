@@ -43,6 +43,16 @@ def test_error_or_abort_drains_then_replays_without_reset(mode, fault):
 
 
 @pytest.mark.parametrize('mode', [0, 1])
+def test_read_pipeline_full_result_windows(mode):
+    # The RTL harness poisons ARADDR after acceptance, holds a following AW/W
+    # behind a stalled read, and resets each read phase before loading fixtures.
+    # All 512 rows populate the final word of each fp32/int48 readback window;
+    # the harness checks that word, its queued-write isolation, and repeated
+    # invalid reads immediately after the exactly-once MEM_ADDR increment.
+    run(make_fixture(512, 1, seed=194), mode, latency=30, stall=35, seed=29+mode)
+
+
+@pytest.mark.parametrize('mode', [0, 1])
 def test_scale_special_values_and_signed_integer_endpoints(mode):
     f = make_fixture(4, 65, seed=81)
     f.weights[0] = -128
