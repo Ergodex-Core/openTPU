@@ -120,6 +120,12 @@ def validate_memory_override(old,new,old_coverage,new_coverage,ignored_status,ex
     except Exception:issues.append('effective_coverage_numeric_bound')
     check(type(old_coverage.get('Endpoints')) is int and old_coverage['Endpoints']>0 and old_coverage.get('Endpoints')==new_coverage.get('Endpoints'),'nonempty_same_covered_endpoint_count')
     check(new_coverage.get('Through','')=='','replacement_has_no_unreviewed_through')
+    selected=new.get('destination_selector',{})
+    if selected.get('cells'):
+        match=re.fullmatch(r'([0-9]+) cells',new_coverage.get('To',''))
+        count=int(match[1]) if match else 0
+        check(count==new_coverage.get('Endpoints'),'literal_destination_effective_coverage')
+        check(len(selected['cells'])==count if selected['mode']=='explicit_cells' else len(selected['cells'])<=count,'literal_destination_selected_coverage')
     return issues
 
 
@@ -208,13 +214,35 @@ def parse_export(text):
     return rows
 
 
+def memory_destination(selector):
+    """Recognize only the vendor filter and its literal routed-cell export forms.
+
+    This parses data; no Tcl substitutions are evaluated. Literal endpoints stay
+    visible in canonical facts instead of being relabeled as the filter text.
+    """
+    if selector == MEMORY_TO:return {'mode':'vendor_filter','cells':[]}
+    mode='explicit_cells'
+    prefix='[list '+MEMORY_TO+' '
+    if selector.startswith(prefix) and selector.endswith(']'):
+        mode='vendor_filter_plus_explicit_cells';selector=selector[len(prefix):-1]
+    match=re.fullmatch(r'\[get_cells \[list (.+)\]\]',selector)
+    require(match is not None,'Unknown vendor memory selector')
+    name=r'xpm_memory_base_inst/gen_rd_b\.gen_rd_b_synth_template\.gen_rf_narrow_reg\.doutb_reg_reg\[[0-9]+\]'
+    literal=match[1]
+    require(re.fullmatch(r'(?:\{'+name+r'\}\s*)+',literal) is not None,'Unsafe/nonlocal vendor memory destination')
+    cells=_list(literal)
+    require(0<len(cells)<=4096 and len(cells)==len(set(cells)),'Empty/duplicate/oversized vendor memory destination')
+    return {'mode':mode,'cells':sorted(cells)}
+
+
 def memory_clause(row):
     result=dict(row);command=row['command'];prefix='set_max_delay -datapath_only -from '+MEMORY_FROM
     require(command.startswith(prefix+' '),'Nonstandard vendor memory source clause')
     match=re.fullmatch(re.escape(prefix)+r' -(through|to) (.+) ([0-9]+\.[0-9]+)',command)
     require(match is not None,'Malformed vendor memory bound/selector')
     option,selector,value=match.groups()
-    require((option,selector) in (('through',MEMORY_THROUGH),('to',MEMORY_TO)),'Unknown vendor memory selector')
+    if option=='through':require(selector==MEMORY_THROUGH,'Unknown vendor memory selector')
+    else:result['destination_selector']=memory_destination(selector)
     result.update(datapath_only=True,value=value,**{'from':MEMORY_FROM},vendor_clka_leaf_source=True,
                   vendor_lutram_through=option=='through',vendor_doutb_destination=option=='to')
     return result
@@ -270,7 +298,10 @@ def review_exceptions(export_text,ignored_text,coverage_text,*,fifo_write_period
     byid={r['id']:r for r in rows if r['id']};issues=[];facts=[];memory={};handshake={};other=[]
     for row in rows:
         try:
-            if row['source']=='xpm_memory_xdc.tcl':memory[row['id']]=memory_clause(row)
+            if row['source']=='xpm_memory_xdc.tcl':
+                memory[row['id']]=memory_clause(row)
+                selected=memory[row['id']].get('destination_selector')
+                if selected and selected['cells']:facts.append(('memory_destination',row['scope'],row['id'],selected))
             elif row['source']=='xpm_cdc_handshake.tcl':
                 require(row['kind'] in ('set_max_delay','set_bus_skew'),'Unknown handshake exception')
                 prefix=('set_max_delay -datapath_only' if row['kind']=='set_max_delay' else 'set_bus_skew')+' '+HANDSHAKE_SELECTORS+' '

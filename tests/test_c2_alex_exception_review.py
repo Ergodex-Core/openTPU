@@ -204,3 +204,40 @@ def test_exact_protected_pcie_clock_buffer_advisory(cell):
     assert m.finding_family('methodology',row)=='exact_inherited_shell_clock_buffer_placement'
     assert m.finding_family('methodology',{**row,'body':row['body'].replace('bufg_gt_sysclk','unreviewed_buffer')}) is None
     assert m.finding_family('methodology',{**row,'severity':'Critical Warning'}) is None
+
+
+def literal_memory_selector(n=132):
+ cells=['xpm_memory_base_inst/gen_rd_b.gen_rd_b_synth_template.gen_rf_narrow_reg.doutb_reg_reg['+str(i)+']' for i in range(n)]
+ return '[get_cells [list '+' '.join('{'+x+'}' for x in cells)+']]'
+
+
+@pytest.mark.parametrize('union',[False,True])
+def test_routed_literal_memory_selectors_keep_exact_endpoint_facts(union):
+ text,fifo=export();ignored,coverage=reports()
+ selector=literal_memory_selector(23 if union else 132)
+ if union:selector='[list '+m.MEMORY_TO+' '+selector+']'
+ result=m.review_exceptions(text.replace(m.MEMORY_TO,selector),ignored,coverage,fifo_write_periods={fifo:'5.000'})
+ assert result['issues']==[]
+ selected=next(row[3] for row in result['canonical_facts']['facts'] if row[0]=='memory_destination')
+ assert selected['mode']==('vendor_filter_plus_explicit_cells' if union else 'explicit_cells')
+ assert len(selected['cells'])==(23 if union else 132)
+
+
+@pytest.mark.parametrize('mutation',[
+ lambda s:s.replace('doutb_reg_reg[0]','doutb_reg_reg[*]'),
+ lambda s:s.replace('xpm_memory_base_inst/','../xpm_memory_base_inst/'),
+ lambda s:s.replace('xpm_memory_base_inst/','WRAPPER/CL/other/'),
+ lambda s:s.replace('doutb_reg_reg','unreviewed_reg'),
+ lambda s:s.replace('{xpm_memory_base_inst/','{[exec dangerous]/'),
+ lambda s:s.replace('doutb_reg_reg[1]','doutb_reg_reg[0]'),
+ lambda s:s.replace('[get_cells','[get_pins'),
+ lambda s:s.replace('[list ','[list $unknown '),
+])
+def test_unknown_or_mutated_literal_memory_selectors_reject(mutation):
+ with pytest.raises(ValueError):m.memory_destination(mutation(literal_memory_selector(2)))
+
+
+def test_pure_literal_selector_cannot_use_larger_coverage_count():
+ text,fifo=export();ignored,coverage=reports()
+ result=m.review_exceptions(text.replace(m.MEMORY_TO,literal_memory_selector(23)),ignored,coverage,fifo_write_periods={fifo:'5.000'})
+ assert any(x['reason']=='literal_destination_selected_coverage' for x in result['issues'])
