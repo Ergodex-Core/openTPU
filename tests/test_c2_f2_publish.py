@@ -82,6 +82,9 @@ def test_qualified_fixture_bound_to_all_artifacts(qualified):
     # constant: a newly committed builder automatically becomes the required one.
     inputs=P.read_json(qualified['run']/'inputs.json')
     assert inputs['builder_sha256']==P.sha(P.ROOT/'boards/c2_f2/build.py')
+    # Severity rejection is a transitive route-gate dependency, alongside the
+    # methodology classifier and its baseline data; it must never be omitted.
+    assert 'check_rule_severity.tcl' in P.QUALIFICATION_SOURCES
     for name, reviewed in P.QUALIFICATION_SOURCES.items():
         assert inputs['sources']['build/scripts/'+name]==P.sha(P.ROOT/reviewed)
 

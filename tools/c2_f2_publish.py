@@ -41,6 +41,7 @@ QUALIFICATION_SOURCES = {
     'validate_route.tcl': 'boards/c2_f2/validate_hbm_route.tcl',
     'classify_methodology.tcl': 'boards/c2_f2/classify_methodology.tcl',
     'check_scoped_clocks.tcl': 'boards/c2_f2/check_scoped_clocks.tcl',
+    'check_rule_severity.tcl': 'boards/c2_f2/support/boards/f2/build/scripts/check_rule_severity.tcl',
     'check_shell_baseline.tcl': 'boards/c2_f2/support/boards/f2/build/scripts/check_shell_baseline.tcl',
     'shell_baseline_2025_2.tcl': 'boards/c2_f2/support/boards/f2/build/scripts/shell_baseline_2025_2.tcl',
 }
