@@ -335,7 +335,16 @@ device tok/s; **decode 46 tokens at 22.2 device tok/s (9.00 Mcycles a token at 2
 16.3 wall tok/s** through the BAR4 host path. Against the RTL's 8.03 M cycles a token on the
 8-channel model (24.9 tok/s) the hardware token is 12% longer: the two-channel fabric's
 share at 89% port utilization, Alex's measured 22.1 GB/s of 25.6. Same as his burst200
-image's 22.3 tok/s: the fabric, not the compute, sets the rate.
+image's 22.3 tok/s: the fabric, not the compute, sets the rate. The ISA simulator's first 8
+greedy tokens for the same prompt match the hardware's. Hardware Lens trace
+(`/home/ubuntu/rachit/lens/g3-hw.otpuprof`, two steps at positions 19 and 20: 8,773,634 and
+8,773,864 cycles, 16,384 records each with 0 dropped, i.e. the trace buffer holds the token's
+first 656 of 5,391 instructions): the board counters say **b_reads 7,823,321 chunks in
+8,773,634 cycles = port B streaming 89.2% of the token**, b_stall 29,251; the token is the
+int8 weight stream at 89% of 128 B a cycle, which is exactly the two-channel fabric's 22.1 of
+25.6 GB/s. Same image, 4-bit weights with the int8 head (`--wformat fp4` / `int4`): **31.1
+device tok/s, 6.43 Mcycles a token** (1.4x, not 2x: the head, the attention and the
+inter-matmul gaps do not shrink), 21.3 / 23.4 wall tok/s, coherent text.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
