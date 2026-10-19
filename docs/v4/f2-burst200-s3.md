@@ -223,10 +223,13 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   interface headers and `lib_pipe`, and stubs of the vendor IP with the right port directions
   (`test_generated_top_lints_under_verilator[s1,s3]`: no error, no width truncation in the
   wiring).
-- Alex's `tb_native_axi` under Verilator and Icarus: PASS (unchanged adapter).
+- Alex's `tb_native_axi` (the adapter is his, unchanged) under Verilator 5.048 (`--binary
+  --timing`, BURST 16, OUT 32, seeds 1 / 42 / 2026 / 4700): PASS, 297 reads and 267 masked
+  writes each; his `simulate.py` under Icarus: PASS, 16 trials.
 - The tiny Gemma 3 at S = 3 on `tb_board` (otpu_board S = 3, the native memory model, target
-  f2-burst200-s3, platform 3): logits bit-identical to the ISA simulator, every slice's DRAM
-  the ISA simulator's (`test_tiny_gemma3_three_slices_on_board_model`).
+  f2-burst200-s3, platform 3): logits bit-identical to the ISA simulator over three tokens,
+  every slice's DRAM the ISA simulator's (`test_tiny_gemma3_three_slices_on_board_model`;
+  `pytest tests/test_f2_burst200_s3.py -q`: 10 passed).
 - Gemma 3 1B at S = 3 on the ISA simulator: S = 1's tokens and HF statistics (above).
 
 ## Risks

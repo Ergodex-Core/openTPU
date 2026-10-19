@@ -354,6 +354,7 @@ def test_tiny_gemma3_three_slices_on_board_model(have_verilator, tmp_path):
         assert np.array_equal(a.view(np.uint32), b.view(np.uint32))
         st = brd.stats[-1]
         assert st['cycles'] > 0 and st['instructions'] == isa.stats[-1]['instructions']
+        print(f"token {tok}: {st['cycles']} cycles, {st['instructions']} instructions a slice")
     n = isa.image.nbytes
     for s in range(3):
         assert np.array_equal(brd.backend.read(s, 0, n), isa.backend.machine.slices[s].dram[:n])
