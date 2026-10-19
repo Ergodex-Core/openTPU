@@ -1,6 +1,6 @@
 # Alex-based C2 build status
 
-Recorded 2026-10-19 18:50 UTC. There are no C2 hardware measurements or qualified
+Recorded 2026-10-19 20:04 UTC. There are no C2 hardware measurements or qualified
 C2 AFIs yet. Lens still contains the prior 128 profiles; none is a successful
 C2 hardware run.
 
@@ -31,7 +31,114 @@ intact. A fresh synthesis attempt against the completed private IP started at
 `6fecc7771d65463ba2daa40d6c6a9649`. The new audit accepts scalar or singleton-bit
 handshakes with strict cardinality checks and preserves exact pin names plus an
 explicitly unqualified diagnostic checkpoint. The earlier failure's exact
-netlist spelling was not captured, so the new attempt must establish the outcome.
+netlist spelling was not captured. The retry failed the same interface assertion
+at 18:50:05 UTC, after RTL synthesis completed. Its diagnostic checkpoint is
+preserved with SHA256
+`cbdfff5e76f5c211d29be6e1268ac8684086c0a8d127b871d857f183b4542871`.
+The actual pin inventory shows rebuilt hierarchy: some inputs are renamed or
+removed and constant address bits are pruned. The audit's assumption that all
+declared boundary pins survive optimization is invalid. Connectivity diagnosis
+and a full corrected audit against this checkpoint are next, before another
+fresh synthesis. The failed attempt and synchronous wrapper failure remain
+unchanged; neither is a successful synthesis receipt.
+
+A read-only Vivado probe completed successfully at 18:59:42 UTC, invocation
+`7b93334ca02f479a9d3a3a3db6989ad8`. It confirms the intended clock domains and
+no consumers on the unused 400 MHz output. The 146 retained handshake paths
+have one driver each and the expected per-port owners. Native B/R ready signals
+share a reset-gated network; eight native BVALID boundary names require further
+internal connectivity checks. The 16-file diagnostic archive is preserved at
+`s3://cg-rachit-afi-438374459156-us-east-1/opentpu/c2/2026-10-19/alex-d1c20797-opentpu-f2/diagnostics/probe-0885b6f3c841.tar.gz`,
+SHA256 `85332c327bc6b55bcfff68c66f0bf7580d80fae3d00b36f310e55f630ad70996`.
+These observations are netlist diagnostics, not routed timing qualification.
+
+A focused write-response/shared-ready probe completed at 19:14:21 UTC on the
+same preserved checkpoint, invocation `c01eeed4f1b149aa84cf4eb7f5050198`. Its
+10-file archive was uploaded and downloaded through the AWS CLI, with every
+file and the full archive verified against SHA256. It is preserved at
+`s3://cg-rachit-afi-438374459156-us-east-1/opentpu/c2/2026-10-19/alex-d1c20797-opentpu-f2/diagnostics/write-slim-probe-1caee1894edf.tar.gz`,
+SHA256 `216595213a5e94362f0418e6afd7ff5471e0eddbe5291bc877e3b93084283a9a`.
+The earlier, redundant focused probe was explicitly stopped and its partial
+output plus stop reason preserved separately; it is not a completed probe.
+Review confirms all eight BVALID paths reach only their own native write
+counters/error state plus the correct SmartConnect response channel. The shared
+ready signal is a LUT1 inverter of the core reset register, with all sixteen
+native B/R channel sinks present. A Vivado net-query mismatch in the draft audit
+was corrected. The complete audit replay started at 19:22:34 UTC with reviewed audit SHA256
+`1833a5919b249dd550b05182b097dfe58934c65fa25e468d3b07e02c774b4c40`,
+unit `otpu-c2-alex-d1c20797-audit-c616b7b12036.service`, invocation
+`0d6e04c36de8496db7d48c8e6c609f24`. It opens the original checkpoint unchanged
+and writes separate diagnostic evidence. It failed at 19:26:24 UTC because
+Vivado rejected a reconstructed pin collection passed to `get_property`.
+The helper is being corrected to re-resolve typed objects after name selection.
+This is an audit API failure, not a completed structural audit or evidence of a
+hardware connection defect. The failed replay is preserved at
+`s3://cg-rachit-afi-438374459156-us-east-1/opentpu/c2/2026-10-19/alex-d1c20797-opentpu-f2/diagnostics/audit-c616b7b12036.tar.gz`,
+SHA256 `8249358371e511ec31cff90864ca34cc4d47aa6d5471877d81e1f29eb2e87055`.
+The next synthesis source will be committed only after the full replay passes.
+
+The corrected typed-object helper (SHA256
+`609c7c39a2e6751d596dd75a91b20618556cb963cc5c6793edda25b48fdee54b`)
+passed the focused actual Vivado check at 19:32:23 UTC: all 154 individual paths
+and sixteen shared B/R-ready connections pass, with zero failed audit checks.
+Invocation `5a04f91fd8f24c71916e5f7d4865a92b` and its ten evidence files are
+preserved at
+`s3://cg-rachit-afi-438374459156-us-east-1/opentpu/c2/2026-10-19/alex-d1c20797-opentpu-f2/diagnostics/flow-f31e4f0ae9fa.tar.gz`,
+SHA256 `ce726ad3cfd7bcde32c590cc8d694544be6aac582a74bfe5e77ebf9de342f139`.
+The full audit replay restarted at 19:32:52 UTC, unit
+`otpu-c2-alex-d1c20797-audit-2ab32bac0504.service`, invocation
+`7e22061697414033bd778b24126c9d7f`. It failed at 19:36:57 UTC on a
+`HD_IDF_PR_InsertedInst_S_HOST_awready` buffer absent from the passing focused
+flow check. The full audit writes a diagnostic checkpoint before topology
+inspection; checkpoint serialization was the first hypothesis tested for this
+insertion side effect. No timing or route qualification has passed.
+
+The ordering change moves diagnostic serialization after the live audit and reports,
+and preserves the original failure if subsequent diagnostic capture also fails.
+Audit SHA256 `0c45443615a0586a4a18221dd155b3422209e45bf93d2789fb1b4dbfd83b9706`
+started replay at 19:40:35 UTC, unit
+`otpu-c2-alex-d1c20797-audit-9826d16760f1.service`, invocation
+`a6d8bbaf52c2497fa977219e757bb340`. It failed on the same inserted buffer at
+19:44:01 UTC before serialization, so the ordering change does not resolve the
+underlying observation difference. A separate checkpoint probe completed at 19:45:34 UTC, invocation
+`d23dd465d6f4480aa2fd7a51cf7afc62`. It records zero inserted cells and all 154
+individual flows passing before saving, after saving, and after reopening the
+copy; serialization alone is ruled out. Its archive is preserved at
+`diagnostics/checkpoint-1929fb94e062.tar.gz` under the same diagnostic prefix,
+SHA256 `14987ef151004db917fc37ac1e0c63df7272e993c10999e04dd3991022bdd436`.
+The ordered prefix probe launched at 19:50:14 UTC, invocation
+`201edeeb29bb4214b3c72d0d78a488b9`, completed at 19:52:32 UTC on the unchanged
+original checkpoint. Immediately before `list_property` on `u_mem`, no inserted
+buffers are visible under that hierarchy; immediately afterward 87 are visible.
+The subsequent checks report 77 failed individual flows and one failed
+shared-ready check. The global inventory contains 608 pass-through LUT1 buffers;
+other hierarchies had also been enumerated earlier in the prefix. Its ten verified files are preserved at
+`diagnostics/prefix-86424527a580.tar.gz` under the same prefix, SHA256
+`abe08b67c09d851c830ba8a63821d5989d217c7389b25f979dd06e204139ec7d`.
+This localizes the discrepancy to hierarchical property enumeration before clock
+queries or serialization. The corrected helper reads required properties directly
+and retains all reference, black-box, port-ownership and clock checks. Audit SHA256
+`a9d91bef071f935089dc8cbc157d053253f00fe7dd667d5e6dca7ccb8cd4d349`
+started full replay at 19:54:31 UTC, invocation
+`26c77a21f1f8453592fd5596cfd42497`, and completed successfully at 20:03:23 UTC.
+All 154 individual handshake paths and all sixteen shared-ready connections pass.
+The full report inventory was generated; there are no unresolved vendor roots,
+deferred clocks, or custom HBM-clock registers. The original checkpoint hash is
+unchanged. This successful diagnostic replay does not repair the earlier failed
+synthesis receipt or qualify routing. A fresh synthesis with synchronous
+dependency capture is next. The updated audit/qualification suite passes 192 tests.
+The collect-only linked/final qualifier adds bounded per-bit gray, synchronizer,
+finding and waiver evidence with explicit incomplete/unsupported states. The
+evidence verifier requires this supplemental report; 83 evidence tests and 127
+collector/package/publisher/session integration tests pass.
+The previous failed replay is preserved in S3 as
+`diagnostics/audit-2ab32bac0504.tar.gz` under the same diagnostic prefix, SHA256
+`d4a0ae3cf7296e8350b9251c964afa51403bb1e75514149e22e4dd626aa99d0e`.
+
+Lens now labels C2 operand counters as overlapping fill occupancy, the optimistic native-interface
+bound as a lower bound rather than HBM efficiency, and unavailable unit and
+instruction measurements as unmeasured. Its scoped host/session/viewer tests
+pass (83 tests); no measured profiles have been added.
 
 A supplemental dependency observer captured all generated `.srcs`/`.gen` files
 before synthesis at 18:19:01 UTC. It correctly recorded failure when the build
@@ -81,10 +188,10 @@ failure and the unlaunched R5 alternative remain preserved in the original
 `opentpu-v4-c2-dual-mode-mxu` worktree. No work was performed on fpga-dev-f2 for
 this Alex integration.
 
-The latest Codex trace snapshot captured at 18:35 UTC contains 374 verified files
-(356,041,443-byte archive), uploaded through the AWS CLI to
-`s3://opentpu-agent-traces/codex/snapshots/20261019T183511.263781Z/` with SHA256,
+The latest Codex trace snapshot captured at 19:52 UTC contains 374 verified files
+(363,229,012-byte archive), uploaded through the AWS CLI to
+`s3://opentpu-agent-traces/codex/snapshots/20261019T195201.475727Z/` with SHA256,
 private access, encryption and versioning verified. Its local receipt is
-`/Users/rachittibrewal/ergodex-04/codex-session-archives/s3-upload-receipt-20261019T183631.062531Z.json`.
+`/Users/rachittibrewal/ergodex-04/codex-session-archives/s3-upload-receipt-20261019T195320.198905Z.json`.
 Earlier snapshots remain preserved. This is an individually timed snapshot of
 each file, not a globally atomic or continuously synchronized archive.

@@ -60,7 +60,7 @@ REVIEWED_HISTORICAL = {('link', 'boards/c2_f2_alex/qualify_c2_alex.tcl'):
 DEPENDENCY_TREES = tuple(f'{stage}/ip_project/{project}.{suffix}'
                         for stage, project in (('ip', 'f2_ip'), ('pcis', 'pcis'), ('clocks', 'clocks'))
                         for suffix in ('srcs', 'gen'))
-FINAL_REPORTS = ('objects.tcldata', 'summary.tcldata', 'timing.rpt', 'route_status.rpt',
+FINAL_REPORTS = ('objects.tcldata', 'summary.tcldata', 'supplemental.tcldata', 'timing.rpt', 'route_status.rpt',
                  'setup.rpt', 'hold.rpt', 'drc.rpt', 'methodology.rpt', 'cdc.rpt', 'bus_skew.rpt',
                  'clock_interaction.rpt', 'exception_coverage.rpt', 'ignored_exceptions.rpt',
                  'waivers.rpt', 'utilization.rpt', 'timing_all_ids.xdc')

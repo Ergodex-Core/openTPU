@@ -126,7 +126,7 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
     put(run('synth') / 'synth/synth_done.txt', 'C2_ALEX_SYNTH_ONLY_COMPLETE\n')
     put(run('synth') / 'synth/command.json', ['vivado', 'synthetic-test'])
     put(run('synth') / 'synth/console.log', 'SYNTHETIC synthesis log\n')
-    reports = set(e.FINAL_REPORTS) - {'route_status.rpt', 'setup.rpt', 'hold.rpt'} | {'REQUIRED_NEXT_STEPS.txt'}
+    reports = set(e.FINAL_REPORTS) - {'route_status.rpt', 'setup.rpt', 'hold.rpt', 'supplemental.tcldata'} | {'REQUIRED_NEXT_STEPS.txt'}
     for name in reports: put(run('synth') / 'synth/synth_audit' / name, 'SYNTHETIC report\n')
     put(run('synth') / 'synth-complete.json', {'schema': 1, 'kind': 'c2-alex-synthesis-only',
         'qualification': 'not-qualified', 'inputs_sha256': e.sha(run('synth') / 'inputs.json'),
@@ -227,6 +227,8 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
         if stage == 'link':
             put(dest/'audit-result.txt','structural_pass=1\nroute_qualified=0\n')
             put(dest/'link_done.txt','C2_ALEX_LINK_COMPLETE_NOT_ROUTE_QUALIFIED\n')
+            put(dest/'linked_audit/supplemental.tcldata',
+                'schema 1 kind SYNTHETIC_parser_test_only route_qualified 0 review pending\n')
         if stage in ('implement','refine'):
             receipt['timing']={'setup_slack_ns':-4.024 if stage=='implement' else .1,'hold_slack_ns':.02}
             put(dest/'implementation_result.txt','\n'.join(f'{key}={value}' for key,value in receipt['timing'].items())+'\n')
@@ -295,7 +297,7 @@ def update_last_receipt(root,m):
 
 
 @pytest.mark.parametrize('change',['pending_receipt','raw_pending','raw_dcp','summary_pending','summary_dcp','explicit_pending',
- 'missing_report','missing_executor','changed_executor','missing_prepared','wrong_ancestry','missing_simulation','wrong_simulation'])
+ 'missing_report','missing_supplemental','missing_executor','changed_executor','missing_prepared','wrong_ancestry','missing_simulation','wrong_simulation'])
 def test_final_qualification_semantics_reject_self_consistent_outer(bundle,change):
     root,m,_=bundle;run=root/'runs/qualify';p=run/'stage-result.json';r=read(p)
     inp=read(run/'stage-inputs.json')
@@ -307,6 +309,7 @@ def test_final_qualification_semantics_reject_self_consistent_outer(bundle,chang
         put(p2,text.replace('pending_reviews {}','pending_reviews {vendor_CDC}') if change=='summary_pending' else text.replace(r['checkpoint_sha256'],'0'*64))
     elif change=='explicit_pending':put(run/'qualification/NOT_QUALIFIED.txt','review required')
     elif change=='missing_report':(run/'qualification/bus_skew.rpt').unlink()
+    elif change=='missing_supplemental':(run/'qualification/supplemental.tcldata').unlink()
     elif change=='missing_executor':inp['executor_sources'].pop('boards/c2_f2_alex/qualify_c2_alex.tcl')
     elif change=='changed_executor':
         name='boards/c2_f2_alex/qualify_c2_alex.tcl';put(root/'sources/qualify'/name,'route_qualified 1')
@@ -317,6 +320,15 @@ def test_final_qualification_semantics_reject_self_consistent_outer(bundle,chang
     else:inp['simulation']['receipt_sha256']='0'*64
     put(p,r);put(run/'stage-inputs.json',inp)
     with pytest.raises((ValueError,KeyError)):e.verify_bundle(root,update_last_receipt(root,m))
+
+
+def test_linked_supplemental_is_bound_by_stage_output_inventory(bundle):
+    root,m,_=bundle
+    put(root/'runs/link/linked_audit/supplemental.tcldata','SYNTHETIC changed report\n')
+    # Rehash the outer collection, but preserve the actual stage receipt. The
+    # new collect-only report must be covered just like every other output.
+    with pytest.raises(ValueError,match='Frozen inventory mismatch: link/linked_audit/supplemental.tcldata'):
+        e.verify_bundle(root,refresh_manifest(root,m))
 
 
 @pytest.mark.parametrize('change',['missing','failed','wrong_observer','changed_include','late','wrong_invocation','missing_before_sha'])
@@ -427,11 +439,23 @@ def test_manifest_mutation_during_semantic_replay_is_rejected(bundle,monkeypatch
     with pytest.raises(ValueError,match='Manifest changed while verifying'):e.verify_bundle(root,digest)
 
 
+def synthetic_historical_link(root,monkeypatch):
+    """Model an older LINK helper without treating current bytes as history."""
+    name='boards/c2_f2_alex/qualify_c2_alex.tcl'
+    assert e.REVIEWED_HISTORICAL['link',name]=={
+        '6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c'}
+    # The entire bundle is parser-only synthetic evidence. Give its LINK
+    # bytes a test-local historical role; never widen the production pins or
+    # add a QUALIFY exception. This works after the current helper changes.
+    historical=dict(e.REVIEWED_HISTORICAL)
+    historical['link',name]={rec(root/'sources/link'/name)['sha256']}
+    monkeypatch.setattr(e,'REVIEWED_HISTORICAL',historical)
+    return name
+
+
 def test_pinned_historical_link_survives_new_final_helper(bundle,monkeypatch):
     root,m,_=bundle
-    name='boards/c2_f2_alex/qualify_c2_alex.tcl'
-    old=rec(root/'sources/link'/name)['sha256']
-    assert old in e.REVIEWED_HISTORICAL['link',name]
+    name=synthetic_historical_link(root,monkeypatch)
     replacement=b'# SYNTHETIC later reviewed final helper; parser fixture only\n'
     new_sha=hashlib.sha256(replacement).hexdigest()
     put(root/'sources/qualify'/name,replacement)
@@ -466,7 +490,8 @@ def test_unreviewed_historical_link_is_not_accepted(bundle):
 
 
 def test_historical_link_pin_never_qualifies_final_helper(bundle,monkeypatch):
-    root,_,trusted=bundle;name='boards/c2_f2_alex/qualify_c2_alex.tcl'
+    root,_,trusted=bundle;name=synthetic_historical_link(root,monkeypatch)
+    assert rec(root/'sources/link'/name)==rec(root/'sources/qualify'/name)
     original=e.sha
     monkeypatch.setattr(e,'sha',lambda p:'0'*64 if Path(p)==ROOT/name else original(p))
     with pytest.raises(ValueError,match='reviewed local validator: qualify'):e.verify_bundle(root,trusted)

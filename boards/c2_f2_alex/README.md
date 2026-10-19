@@ -57,6 +57,18 @@ or touch an FPGA. Only the dedicated `opentpu-f2` instance is authorized for F2
 work. Hardware execution requires current qualification, device ownership and
 original-image restore.
 
+The synthesis audit reads required hierarchy properties directly; enumerating all
+properties on `u_mem` is avoided because an actual Vivado 2025.2 probe showed that
+query materializing internal boundary objects. The synthesis audit checks actual
+leaf connectivity and per-port clock consumers.
+It covers all 170 AXI handshakes, including optimized native write-response paths
+and the shared reset-gated B/R-ready network. Declared widths, protocols and
+address windows are checked against the generated BD: Vivado can remove constant
+bits and rebuild boundary names. The audit preserves an explicitly unqualified
+diagnostic checkpoint after inspecting the live design, including on failure.
+Capture ordering is recorded explicitly. Post-implementation object changes still
+require review against that checkpoint's actual topology and timing reports.
+
 ## Vendor simulation and checkpoint continuation
 
 `simulate.py` consumes an independently recorded SHA256 of `ip-complete.json`.
@@ -82,7 +94,11 @@ Refinement must pass setup and hold timing. Qualification additionally requires
 `--simulation-run` and `--simulation-receipt-sha256`.
 
 The current independent qualifier collects current-design timing, CDC, exception,
-bus-skew, routing, methodology and DRC evidence. It deliberately returns
+bus-skew, routing, methodology and DRC evidence. Linked and final checkpoints
+also retain `supplemental.tcldata`: current finding relationships, gray-bit data
+drivers and synchronizer stages, bounded per-bit timing queries, and live waiver
+queries. Unsupported, missing, and capped observations remain explicitly pending.
+Final evidence verification requires this report. The qualifier deliberately returns
 `pending-review` (exit 3) until the actual C2 reports support reviewed acceptance
 rules. Alex's historical counts are not acceptance rules. A later executor-only
 commit may consume an older hardware build only while all synthesized source
@@ -90,8 +106,8 @@ bytes still match; its executor revision is recorded separately from the hardwar
 build ID.
 
 The first synthesis attempt (`264d8413`) failed its interface audit. Its
-supplemental dependency observer preserved the failure. Retry `d1c20797` reuses
-the completed private IP and captures its complete generated `.srcs` and `.gen`
+supplemental dependency observer preserved the failure. Retry `d1c20797` also failed the boundary-pin assertion; its preserved netlist
+revealed the rebuilt hierarchy. Fresh retries reuse the completed private IP and capture its complete generated `.srcs` and `.gen`
 trees synchronously before synthesis, comparing them afterward. This binds
 include files omitted by the original IP product suffix inventory without
 changing the original IP receipts. See `STATUS.md` for the actual run.

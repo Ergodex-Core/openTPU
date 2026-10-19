@@ -61,7 +61,7 @@ proc ::c2_alex_route::structure {audit} {
         if {[string first "$cl/" $pin] != 0} {error "C2 Alex route: interface pin outside CL"}
         lappend interface_pins [string range $pin [expr {[string length $cl]+1}] end]
     }
-    ::c2_alex::interfaces $interface_pins
+    puts $audit [list memory_interface_pins $interface_pins]
     set sc [get_cells -quiet $cl/u_mem/f2_mem_i/memory_sc]
     if {[names $sc] ne [list $cl/u_mem/f2_mem_i/memory_sc] || [prop $sc IS_BLACKBOX]} {error "C2 Alex route: missing concrete SmartConnect"}
     puts $audit [list smartconnect $sc reference [prop $sc REF_NAME] slave_interfaces 9 master_interfaces 8 address_map_validation executor_generated_BD_required]
@@ -73,8 +73,6 @@ proc ::c2_alex_route::structure {audit} {
         puts $audit [list clock $label $data]
     }
     foreach label {host core hbm} {
-        set connected [get_clocks -quiet -of_objects [get_pins -quiet $cl/u_mem/${label}_clk]]
-        if {[names $connected] ne [names [dict get $clocks $label]]} {error "C2 Alex route: $label fabric clock disconnected"}
         set registers [all_registers -clock [dict get $clocks $label] -cells]
         if {![llength $registers]} {error "C2 Alex route: empty $label clock domain"}
         puts $audit [list clock_registers $label count [llength $registers]]
@@ -84,6 +82,8 @@ proc ::c2_alex_route::structure {audit} {
             }
         }
     }
+    set fabric [::c2_alex::fabric_topology $cl $clocks {} $audit]
+    puts $audit [list interface_topology $fabric address_map_evidence generated_BD_required]
     # No actual consumer may hide behind a removed/renamed unused wizard pin.
     foreach object [get_clocks -quiet *] {
         if {"SOURCE_PINS" ni [list_property $object]} {continue}
@@ -161,6 +161,202 @@ proc ::c2_alex_route::gray_witnesses {groups audit} {
         }
     }
 }
+# Supplemental evidence only: unknown APIs and missing objects remain explicit
+# pending data. These routines never change exceptions, severity, or acceptance.
+proc ::c2_alex_route::capture {audit label command} {
+    variable capture_queries;variable capture_pending
+    incr capture_queries
+    set code [catch {uplevel 1 $command} value options]
+    if {$code} {
+        incr capture_pending
+        puts $audit [list query $label status error message $value options $options review pending]
+        return [dict create ok 0 value {}]
+    }
+    puts $audit [list query $label status observed value $value review pending]
+    return [dict create ok 1 value $value]
+}
+proc ::c2_alex_route::capture_missing {audit label detail} {
+    variable capture_pending;incr capture_pending
+    puts $audit [list incomplete $label detail $detail review pending]
+}
+proc ::c2_alex_route::capture_properties {audit kind object keys} {
+    # Never list_property a cell: use only explicit known primitive properties.
+    set data {}
+    foreach key $keys {
+        set result [capture $audit [list $kind property $key] [list get_property $key $object]]
+        dict set data $key $result
+    }
+    puts $audit [list object_properties $kind $data review pending]
+    return $data
+}
+proc ::c2_alex_route::capture_cells {audit label objects} {
+    variable captured_cells
+    set selected [names $objects];set captured 0;set cached 0;set skipped 0
+    foreach name $selected {
+        if {[dict exists $captured_cells $name]} {incr cached;continue}
+        if {$captured>=256 || [dict size $captured_cells]>=4096} {incr skipped;continue}
+        dict set captured_cells $name 1;incr captured
+        set cell [get_cells -quiet [list $name]]
+        capture_properties $audit [list $label cell $name] $cell {NAME REF_NAME ORIG_REF_NAME IS_SEQUENTIAL ASYNC_REG LOC BEL}
+    }
+    puts $audit [list cell_detail_coverage $label selected [llength $selected] captured $captured cached $cached skipped $skipped per_call_cap 256 global_cap 4096]
+    if {$skipped} {capture_missing $audit $label cell_detail_cap_reached}
+}
+proc ::c2_alex_route::capture_pin {audit label name {fanin 0} {require_clock 0}} {
+    set selected [capture $audit [list $label pin_selection $name] [list get_pins -quiet [list $name]]]
+    if {![dict get $selected ok] || [names [dict get $selected value]] ne [list $name]} {
+        capture_missing $audit $label [list missing_or_ambiguous_pin $name];return {}
+    }
+    set pin [dict get $selected value]
+    capture_properties $audit [list $label pin $name] $pin {NAME REF_PIN_NAME DIRECTION IS_CLOCK}
+    set cells [capture $audit [list $label owning_cells] [list get_cells -quiet -of_objects $pin]]
+    if {[dict get $cells ok]} {capture_cells $audit $label [dict get $cells value]}
+    set clocks [capture $audit [list $label associated_clocks] [list get_clocks -quiet -of_objects $pin]]
+    if {[dict get $clocks ok]} {
+        if {$require_clock && ![llength [dict get $clocks value]]} {capture_missing $audit $label missing_required_clock}
+        foreach clock [dict get $clocks value] {
+            capture_properties $audit [list $label clock] $clock {NAME PERIOD WAVEFORM MASTER_CLOCK SOURCE_PINS}
+        }
+    }
+    if {$fanin} {
+        set roots [capture $audit [list $label fanin_roots] [list all_fanin -flat -startpoints_only -trace_arcs all -to $pin]]
+        if {[dict get $roots ok]} {
+            set root_names [names [dict get $roots value]]
+            puts $audit [list root_detail_coverage $label selected [llength $root_names] cap 64]
+            foreach root [lrange $root_names 0 63] {capture_pin $audit [list $label root] $root 0}
+            if {[llength $root_names]>64} {capture_missing $audit $label fanin_root_detail_cap_reached}
+            if {![llength [dict get $roots value]]} {capture_missing $audit $label empty_fanin_roots}
+        }
+    }
+    return $pin
+}
+proc ::c2_alex_route::capture_findings {audit} {
+    foreach {kind command} {methodology get_methodology_violations drc get_drc_violations} {
+        set result [capture $audit [list $kind finding_inventory] [list $command -quiet]]
+        if {![dict get $result ok]} {continue}
+        foreach finding [dict get $result value] {
+            set rule [capture $audit [list $kind finding_check] [list get_property CHECK $finding]]
+            set label [list $kind finding [names $finding]]
+            foreach type {pins cells} {
+                set selected [capture $audit [list $label related_$type] [list get_$type -quiet -of_objects $finding]]
+                if {![dict get $selected ok]} {continue}
+                if {$type eq "cells"} {capture_cells $audit $label [dict get $selected value]}
+                if {$type eq "pins" && [dict get $rule ok] && [dict get $rule value] eq "TIMING-17"} {
+                    if {![llength [dict get $selected value]]} {capture_missing $audit $label no_clock_finding_without_related_pins}
+                    set pin_names [names [dict get $selected value]]
+                    puts $audit [list no_clock_pin_detail_coverage $label selected [llength $pin_names] cap 128]
+                    foreach pin [lrange $pin_names 0 127] {capture_pin $audit $label $pin 1}
+                    if {[llength $pin_names]>128} {capture_missing $audit $label no_clock_pin_detail_cap_reached}
+                }
+            }
+        }
+    }
+}
+proc ::c2_alex_route::capture_data_driver {audit label pin} {
+    if {![llength $pin]} {return}
+    set nets [capture $audit [list $label data_nets] [list get_nets -quiet -segments -of_objects $pin]]
+    if {![dict get $nets ok]} {return}
+    if {![llength [dict get $nets value]]} {capture_missing $audit $label missing_data_nets;return}
+    set leaves [capture $audit [list $label data_leaf_pins] [list get_pins -quiet -leaf -of_objects [dict get $nets value]]]
+    if {![dict get $leaves ok]} {return}
+    if {![llength [dict get $leaves value]]} {capture_missing $audit $label missing_data_leaf_pins;return}
+    set drivers {}
+    foreach leaf [dict get $leaves value] {
+        set direction [capture $audit [list $label data_leaf_direction [names $leaf]] [list get_property DIRECTION $leaf]]
+        if {[dict get $direction ok] && [dict get $direction value] eq "OUT"} {lappend drivers {*}[names $leaf]}
+    }
+    puts $audit [list data_driver $label drivers $drivers driver_count [llength $drivers] review pending_exact_bit_and_stage_pairing]
+    if {[llength $drivers]!=1} {capture_missing $audit $label missing_or_multiple_data_drivers}
+}
+proc ::c2_alex_route::capture_gray {groups audit} {
+    # Each bit gets its own bounded query, so one worst path cannot hide another
+    # bit. Four paths cover typical edge variants; reaching that cap is pending.
+    set all_stages [capture $audit gray_destination_stage_inventory [list get_cells -quiet -hierarchical -filter {NAME =~ WRAPPER/CL/u_mem/f2_mem_i/memory_sc/*dest_graysync_ff_reg*}]]
+    set stages {}
+    if {[dict get $all_stages ok]} {
+        foreach name [names [dict get $all_stages value]] {
+            if {[regexp {^(.*)/dest_graysync_ff_reg\[([0-9]+)\]\[([0-9]+)\]$} $name -> root stage bit] && [dict exists $groups $root]} {
+                if {![dict exists $groups $root source $bit]} {capture_missing $audit $name unexpected_gray_bit;continue}
+                if {[dict exists $stages $root $bit $stage]} {capture_missing $audit $name duplicate_gray_stage;continue}
+                dict set stages $root $bit $stage $name
+            } else {capture_missing $audit $name unmatched_destination_stage_object}
+        }
+    }
+    dict for {root group} $groups {
+        foreach bit [lsort -integer [dict keys [dict get $group source]]] {
+            set source [dict get $group source $bit];set destination [dict get $group destination $bit]
+            set label [list gray $root bit $bit]
+            set q [capture_pin $audit [list $label source] $source/Q]
+            capture_pin $audit [list $label source_clock] $source/C 0 1
+            set d [capture_pin $audit [list $label first_destination] $destination/D]
+            capture_data_driver $audit [list $label first_destination] $d
+            if {![dict exists $stages $root $bit]} {capture_missing $audit $label missing_synchronizer_stage_inventory} else {
+                set actual_stages [dict get $stages $root $bit]
+                if {![dict exists $actual_stages 0] || [dict get $actual_stages 0] ne $destination} {capture_missing $audit $label missing_or_mismatched_stage_zero}
+                set highest [lindex [lsort -integer [dict keys $actual_stages]] end]
+                for {set stage 0} {$stage<=$highest} {incr stage} {
+                    if {![dict exists $actual_stages $stage]} {capture_missing $audit [list $label stage $stage] missing_synchronizer_stage}
+                }
+                puts $audit [list gray_stage_inventory $label stages $actual_stages review pending_contiguous_stage_and_same_clock_proof]
+                foreach stage [lsort -integer [dict keys $actual_stages]] {
+                    set cell [dict get $actual_stages $stage]
+                    set stage_d [capture_pin $audit [list $label stage $stage data] $cell/D]
+                    capture_data_driver $audit [list $label stage $stage] $stage_d
+                    capture_pin $audit [list $label stage $stage output] $cell/Q
+                    capture_pin $audit [list $label stage $stage clock] $cell/C 0 1
+                }
+            }
+            foreach ignored {0 1} {
+                if {![llength $q] || ![llength $d]} {capture_missing $audit [list $label timing $ignored] missing_timing_pin_selection;continue}
+                set command [list get_timing_paths -quiet -setup -from $q -to $d -max_paths 4 -nworst 4]
+                if {$ignored} {lappend command -user_ignored}
+                set result [capture $audit [list $label timing user_ignored $ignored] $command]
+                if {![dict get $result ok]} {continue}
+                set paths [dict get $result value];set count [llength $paths]
+                puts $audit [list gray_bit_timing $label user_ignored $ignored expected_source $source/Q expected_destination $destination/D \
+                    max_paths 4 nworst 4 returned $count capped [expr {$count>=4}] normal_path_observed [expr {!$ignored && $count>0}] review pending_effective_exception_and_vendor_bound]
+                if {$count>=4 || (!$ignored && !$count)} {capture_missing $audit [list $label timing $ignored] capped_or_missing_normal_paths}
+                foreach path $paths {
+                    capture_properties $audit [list $label path user_ignored $ignored] $path {STARTPOINT_PIN ENDPOINT_PIN STARTPOINT_CLOCK ENDPOINT_CLOCK REQUIREMENT EXCEPTION DATAPATH_DELAY SLACK}
+                }
+            }
+        }
+    }
+}
+proc ::c2_alex_route::capture_waivers {audit} {
+    foreach command {get_waivers report_pulse_width} {
+        set available [expr {[llength [info commands $command]]>0}]
+        puts $audit [list api_available $command $available review pending]
+        if {$available} {capture $audit [list installed_help $command] [list help $command]}
+    }
+    capture $audit installed_help_check_timing {help check_timing}
+    capture $audit installed_help_get_timing_paths {help get_timing_paths}
+    puts $audit [list installed_pulse_commands [info commands *pulse*] review pending_protected_endpoint_identity]
+    if {![llength [info commands get_waivers]]} {capture_missing $audit waivers unsupported_live_waiver_inventory;return}
+    set selected [capture $audit waiver_inventory {get_waivers -quiet}]
+    if {![dict get $selected ok]} {return}
+    foreach waiver [dict get $selected value] {
+        set keys [capture $audit waiver_property_names [list list_property $waiver]]
+        if {[dict get $keys ok]} {capture_properties $audit waiver $waiver [dict get $keys value]}
+        foreach kind {pins cells nets clocks} {
+            capture $audit [list waiver [names $waiver] selected_$kind] [list get_$kind -quiet -of_objects $waiver]
+        }
+    }
+}
+proc ::c2_alex_route::supplemental {directory groups} {
+    variable capture_queries 0;variable capture_pending 0;variable captured_cells {}
+    set audit [open $directory/supplemental.tcldata {WRONLY CREAT EXCL}]
+    puts $audit [list schema 1 kind current_checkpoint_supplemental_evidence route_qualified 0 review pending]
+    foreach {label command} [list findings [list capture_findings $audit] gray [list capture_gray $groups $audit] waivers [list capture_waivers $audit]] {
+        # A collector/API defect must remain visible without discarding all the
+        # other independent evidence or implying structural/physical acceptance.
+        capture $audit [list collector $label] $command
+    }
+    set summary [dict create queries $capture_queries incomplete_or_error $capture_pending review pending]
+    puts $audit [list supplemental_summary $summary];close $audit
+    return $summary
+}
+
 proc ::c2_alex_route::report_set {directory} {
     report_methodology -file $directory/methodology.rpt
     report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -file $directory/timing.rpt
@@ -313,13 +509,21 @@ proc ::c2_alex_route::audit_linked {run} {
         gray_witnesses $groups $audit
         write_xdc -type timing -constraints all -write_id $directory/timing_all_ids.xdc
         set exceptions [constraints $directory/timing_all_ids.xdc $audit]
+        report_methodology -file $directory/methodology.rpt
+        report_drc -file $directory/drc.rpt
+        report_timing_summary -delay_type min_max -report_unconstrained -check_timing_verbose -file $directory/timing.rpt
+        report_waivers -file $directory/waivers.rpt
         report_cdc -details -show_waiver -all_checks_per_endpoint -file $directory/cdc.rpt
         report_clock_interaction -file $directory/clock_interaction.rpt
         report_exceptions -coverage -file $directory/exception_coverage.rpt
         report_exceptions -ignored -file $directory/ignored_exceptions.rpt
-        foreach name {timing_all_ids.xdc cdc.rpt clock_interaction.rpt exception_coverage.rpt ignored_exceptions.rpt} {if {![file isfile $directory/$name] || [file size $directory/$name]==0} {error "C2 Alex route: missing linked evidence $name"}}
+        set linked_findings [findings $audit]
+        set supplemental [supplemental $directory $groups]
+        set inventory {objects.tcldata timing_all_ids.xdc methodology.rpt drc.rpt timing.rpt waivers.rpt cdc.rpt clock_interaction.rpt exception_coverage.rpt ignored_exceptions.rpt supplemental.tcldata}
+        flush $audit
+        foreach name $inventory {if {![file isfile $directory/$name] || [file size $directory/$name]==0} {error "C2 Alex route: missing linked evidence $name"}}
         set result [dict create schema 1 stage linked structural_pass 1 route_qualified 0 report_directory $directory \
-            reason linked_structure_only_pending_current_vendor_CDC_and_physical_review gray_bus_groups [dict size $groups] exception_counts [dict get $exceptions counts]]
+            reason linked_structure_only_pending_current_vendor_CDC_and_physical_review supplemental_evidence $supplemental report_inventory $inventory findings $linked_findings gray_bus_groups [dict size $groups] exception_counts [dict get $exceptions counts]]
         write_data $directory/summary.tcldata $result
     } message options]
     close $audit
@@ -346,6 +550,8 @@ proc ::c2_alex_route::qualify {run checkpoint} {
         set cdc [cdc_rows [read_text $directory/cdc.rpt]]
         foreach row $cdc {puts $audit [list cdc $row]}
         set findings [findings $audit]
+        set supplemental [supplemental $directory $groups]
+        lappend inventory supplemental.tcldata
         set blockers [concat [dict get $timing blockers] [dict get $findings blockers]]
         if {![dict get $route pass]} {lappend blockers routing_incomplete}
         set bad_nets [get_nets -quiet -hierarchical -filter {ROUTE_STATUS == UNROUTED || ROUTE_STATUS == PARTIAL || ROUTE_STATUS == UNPLACED || ROUTE_STATUS == UNPLACED_ALL || ROUTE_STATUS == CONFLICTS || ROUTE_STATUS == GAPS || ROUTE_STATUS == ANTENNAS || ROUTE_STATUS == NODRIVER || ROUTE_STATUS == MULTI_DRIVER}]
@@ -365,7 +571,7 @@ proc ::c2_alex_route::qualify {run checkpoint} {
         set pending {current_vendor_CDC_and_gray_max_delay_scope current_exception_coverage_and_ignored_paths current_DRC_methodology_and_severity_configuration exact_shell_inherited_witnesses current_9SI_8MI_vendor_simulation_and_generated_IP_binding}
         set result [dict create schema 1 stage final_route route_qualified 0 hardware_measured 0 checkpoint $checkpoint checkpoint_sha256 $digest \
             report_directory $directory reason [expr {[llength $blockers] ? "physical_checks_failed_and_review_required" : "review_required"}] \
-            blockers [lsort -unique $blockers] pending_reviews $pending timing $timing routing $route \
+            blockers [lsort -unique $blockers] pending_reviews $pending supplemental_evidence $supplemental timing $timing routing $route \
             gray_bus_groups [dict size $groups] bus_skew_constraints [dict size $rows] cdc_records [llength $cdc] findings $findings report_inventory $inventory]
         if {[sha256 $checkpoint] ne $digest} {error "C2 Alex route: checkpoint changed during audit"}
         write_data $directory/summary.tcldata $result

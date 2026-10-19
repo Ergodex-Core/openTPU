@@ -1,5 +1,6 @@
 """Offline qualifier parser/control tests. Fixtures are not FPGA evidence."""
 from pathlib import Path
+import re
 import importlib.util
 import shutil
 import subprocess
@@ -138,7 +139,7 @@ set p {};foreach name $mem_pins {lappend p WRAPPER/CL/$name};set mem_pins $p
 foreach name [dict keys $members] {
     set p {};foreach member [dict get $members $name] {lappend p WRAPPER/CL/$member};dict set members $name $p
 }
-dict set members clk_main_a0 {WRAPPER/CL/u_pcis_pipe/reg}
+fabric_build WRAPPER/CL
 foreach name {core unused400 hbm} {
     if {[dict exists $clocks $name]} {dict set clocks $name SOURCE_PINS WRAPPER/CL/[dict get $clocks $name SOURCE_PINS]}
 }
@@ -191,7 +192,11 @@ proc emit_report {args} {
 }
 proc report_timing {args} {emit_report {*}$args}
 proc report_route_status {args} {emit_report {*}$args}
-proc get_nets {args} {return [expr {$::fault eq "unresolved_nets" ? "WRAPPER/CL/unrouted" : ""}]}
+rename get_nets fabric_get_nets
+proc get_nets {args} {
+ if {"-filter" in $args} {return [expr {$::fault eq "unresolved_nets" ? "WRAPPER/CL/unrouted" : ""}]}
+ return [fabric_get_nets {*}$args]
+}
 proc get_timing_paths {args} {
     if {"-user_ignored" in $args} {return {}}
     if {"-slack_lesser_than" in $args} {return [expr {$::fault eq "negative_path" ? "mock_path" : ""}]}
@@ -248,7 +253,7 @@ def test_complete_physical_reports_still_require_current_review(tmp_path):
                                   'missing_clock', 'wrong_clock', 'wrong_hbm_clock', 'wrong_host_clock',
                                   'wrong_reference_clock', 'disconnected_core', 'disconnected_hbm',
                                   'disconnected_host', 'missing_clock_pin', 'custom_hclk', 'lookalike_hclk',
-                                  'missing_interface', 'wrong_width', 'tmem_cell', 'tmem_exception',
+                                  'sc_clock_swap', 'pcis_on_core', 'tmem_cell', 'tmem_exception',
                                   'missing_gray', 'missing_sc', 'extra_clock_consumer', 'missing_report'])
 def test_linked_or_final_invalid_evidence_fails_closed(tmp_path, fault):
     result = run_mock(tmp_path, fault=fault)
@@ -296,3 +301,241 @@ def test_disabled_rule_configuration_cannot_hide_in_empty_finding_list(tmp_path)
     assert 'route_qualified 0' in result.stdout
     assert 'current_DRC_methodology_and_severity_configuration' in result.stdout
     assert 'IS_ENABLED 0' in (tmp_path / 'qualification/objects.tcldata').read_text()
+
+
+@pytest.mark.parametrize('fault',['pruned_boundary_interface','pruned_boundary_bit','pruned_boundary_handshake'])
+def test_linked_optimized_boundary_inventory_is_not_declared_axi_width(tmp_path,fault):
+    result=run_mock(tmp_path,fault=fault)
+    assert result.returncode==0,result.stderr
+    assert 'route_qualified 0' in result.stdout
+    assert 'C2_ALEX_ROUTE_NOT_QUALIFIED' in result.stdout
+
+
+SUPPLEMENTAL_MOCK = r'''
+source [lindex $argv 0]
+set out [lindex $argv 1];set fault [lindex $argv 2]
+set root WRAPPER/CL/u_mem/f2_mem_i/memory_sc/fifo
+set groups {};set stages {};set timing_queries 0
+for {set bit 0} {$bit<2} {incr bit} {
+ dict set groups $root source $bit [format {%s/src_gray_ff_reg[%d]} $root $bit]
+ dict set groups $root destination $bit [format {%s/dest_graysync_ff_reg[0][%d]} $root $bit]
+ foreach stage {0 1} {lappend stages [format {%s/dest_graysync_ff_reg[%d][%d]} $root $stage $bit]}
+}
+if {$fault eq {missing_stage_zero}} {set stages [lrange $stages 1 end]}
+if {$fault eq {gapped_stage}} {lappend stages [format {%s/dest_graysync_ff_reg[3][0]} $root]}
+if {$fault eq {unexpected_bit}} {lappend stages [format {%s/dest_graysync_ff_reg[0][9]} $root]}
+if {$fault eq {duplicate_stage}} {lappend stages [lindex $stages 0]}
+proc get_cells {args} {
+ if {"-filter" in $args} {return $::stages}
+ if {"-of_objects" in $args} {return [list [file dirname [lindex [lindex $args end] 0]]]}
+ return [lindex $args end]
+}
+proc get_pins {args} {
+ if {"-of_objects" ni $args} {return [lindex $args end]}
+ set net [lindex [lindex $args end] 0]
+ if {$net eq {}} {error {unscoped empty-net query}}
+ if {$::fault eq {empty_leaves}} {return {}}
+ set destination [string range $net 4 end]
+ regexp {^(.*)/dest_graysync_ff_reg\[([0-9]+)\]\[([0-9]+)\]/D$} $destination -> root stage bit
+ set source [expr {$stage==0 ? [format {%s/src_gray_ff_reg[%d]/Q} $root $bit] : [format {%s/dest_graysync_ff_reg[%d][%d]/Q} $root [expr {$stage-1}] $bit]}]
+ return [list $source $destination]
+}
+proc get_nets {args} {
+ if {$::fault eq {empty_nets}} {return {}}
+ return [list net:[lindex [lindex $args end] 0]]
+}
+proc get_clocks {args} {
+ set pin [lindex [lindex $args end] 0]
+ if {$::fault eq {missing_clock} || ![string match */C $pin]} {return {}}
+ return [expr {[string first src_gray $pin]>=0 ? {source_clock} : {destination_clock}}]
+}
+proc get_property {key objects} {
+ set result {}
+ foreach object $objects {
+  switch $key {
+   NAME {lappend result $object}
+   DIRECTION {lappend result [expr {[string match */Q $object] ? {OUT} : {IN}}]}
+   REF_PIN_NAME {lappend result [file tail $object]}
+   IS_CLOCK {lappend result [expr {[string match */C $object]}]}
+   REF_NAME - ORIG_REF_NAME {lappend result FDRE}
+   IS_SEQUENTIAL - ASYNC_REG {lappend result 1}
+   PERIOD {lappend result 5.000}
+   WAVEFORM {lappend result {0 2.5}}
+   MASTER_CLOCK - SOURCE_PINS {lappend result source_clock}
+   LOC - BEL {lappend result {}}
+   STARTPOINT_PIN {lappend result $::last_from}
+   ENDPOINT_PIN {lappend result $::last_to}
+   STARTPOINT_CLOCK {lappend result source_clock}
+   ENDPOINT_CLOCK {lappend result destination_clock}
+   REQUIREMENT {lappend result 5.0}
+   EXCEPTION {lappend result {MaxDelay Path 5.000ns -datapath_only}}
+   DATAPATH_DELAY {lappend result 1.0}
+   SLACK {lappend result 4.0}
+   default {error "unexpected property $key"}
+  }
+ }
+ return [expr {[llength $objects]==1 ? [lindex $result 0] : $result}]
+}
+proc list_property {args} {error {cell property enumeration forbidden}}
+proc get_timing_paths {args} {
+ incr ::timing_queries
+ if {[lindex $args [expr {[lsearch -exact $args -max_paths]+1}]]!=4} {error {timing query not bounded}}
+ set ::last_from [lindex [lindex $args [expr {[lsearch -exact $args -from]+1}]] 0]
+ set ::last_to [lindex [lindex $args [expr {[lsearch -exact $args -to]+1}]] 0]
+ if {$::fault eq {unsupported_paths}} {error {mock unsupported timing API}}
+ if {"-user_ignored" in $args} {return {}}
+ if {$::fault eq {missing_normal} && [regexp {\[1\]/D$} $::last_to]} {return {}}
+ if {$::fault eq {capped}} {return {path0 path1 path2 path3}}
+ return path0
+}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0;set ::c2_alex_route::captured_cells {}
+set f [open $out w]
+::c2_alex_route::capture_gray $groups $f
+puts $f [list test_summary timing_queries $timing_queries pending $::c2_alex_route::capture_pending route_qualified 0]
+close $f
+'''
+
+
+@pytest.mark.parametrize(('fault', 'required'), [
+    ('none', 'pending 0'),
+    ('missing_normal', 'capped_or_missing_normal_paths'),
+    ('capped', 'capped 1'),
+    ('unsupported_paths', 'mock unsupported timing API'),
+    ('empty_nets', 'missing_data_nets'),
+    ('empty_leaves', 'missing_data_leaf_pins'),
+    ('missing_clock', 'missing_required_clock'),
+    ('missing_stage_zero', 'missing_or_mismatched_stage_zero'),
+    ('gapped_stage', 'missing_synchronizer_stage'),
+    ('unexpected_bit', 'unexpected_gray_bit'),
+    ('duplicate_stage', 'duplicate_gray_stage'),
+])
+def test_gray_supplement_preserves_each_bit_and_truthful_incompleteness(tmp_path, fault, required):
+    report = tmp_path / 'supplemental.tcldata'
+    result = tcl(tmp_path, SUPPLEMENTAL_MOCK, report, fault)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert required in raw
+    assert 'timing_queries 4' in raw
+    assert 'route_qualified 0' in raw
+    assert 'unscoped empty-net query' not in raw
+    if fault == 'none':
+        assert raw.count('gray_bit_timing ') == 4
+        assert raw.count('user_ignored 1 expected_source') == 2
+        assert 'data_driver ' in raw and 'driver_count 1' in raw
+        assert raw.count('gray_stage_inventory ') == 2
+    else:
+        assert not re.search(r'test_summary .*pending 0 ', raw)
+
+
+@pytest.mark.parametrize('fault', ['none', 'unsupported_fanin'])
+def test_no_clock_finding_preserves_exact_pin_cell_and_fanin_root(tmp_path, fault):
+    report = tmp_path / 'relationships.tcldata'
+    script = r'''
+source [lindex $argv 0]
+set fault [lindex $argv 2]
+proc get_methodology_violations {args} {return finding17}
+proc get_drc_violations {args} {return {}}
+proc get_pins {args} {
+ if {"-of_objects" in $args} {return shell/register/C}
+ return [lindex $args end]
+}
+proc get_cells {args} {
+ if {"-of_objects" in $args} {
+  set input [lindex $args end]
+  return [expr {$input eq {finding17} ? {shell/register} : [file dirname $input]}]
+ }
+ return [lindex $args end]
+}
+proc get_clocks {args} {return {}}
+proc get_property {key object} {
+ switch $key {
+  NAME {return $object} CHECK {return TIMING-17}
+  REF_NAME - ORIG_REF_NAME {return [expr {[string match *bufg* $object] ? {BUFG_GT} : {FDRE}}]}
+  REF_PIN_NAME {return [file tail $object]}
+  DIRECTION {return [expr {[string match */O $object] ? {OUT} : {IN}}]}
+  IS_CLOCK - IS_SEQUENTIAL {return 1}
+  default {return {}}
+ }
+}
+proc all_fanin {args} {
+ if {"-to" ni $args || [lindex $args end] ne {shell/register/C}} {error {fanin must use exact -to pin}}
+ if {$::fault eq {unsupported_fanin}} {error {mock fanin unsupported}}
+ return shell/bufg/O
+}
+proc list_property {args} {error {hierarchical enumeration forbidden}}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0;set ::c2_alex_route::captured_cells {}
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_findings $f
+puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close $f
+'''
+    result = tcl(tmp_path, script, report, fault)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert 'shell/register/C' in raw and 'shell/register' in raw
+    if fault == 'none':
+        assert 'shell/bufg/O' in raw and 'BUFG_GT' in raw
+        assert 'pending 0 route_qualified 0' in raw
+    else:
+        assert 'mock fanin unsupported' in raw
+        assert 'pending 1 route_qualified 0' in raw
+
+
+def test_supplemental_is_in_linked_and_final_report_inventories(tmp_path):
+    for action in ('link', 'qualify'):
+        directory = tmp_path / action
+        directory.mkdir()
+        result = run_mock(directory, action=action)
+        assert result.returncode == 0, result.stderr
+        stage = directory / ('linked_audit' if action == 'link' else 'qualification')
+        assert 'supplemental.tcldata' in (stage / 'summary.tcldata').read_text()
+        raw = (stage / 'supplemental.tcldata').read_text()
+        assert 'route_qualified 0' in raw and 'supplemental_summary' in raw
+        assert 'unsupported_live_waiver_inventory' in raw
+        for name in ('methodology.rpt', 'timing.rpt', 'waivers.rpt'):
+            assert (stage / name).is_file()
+
+
+def test_live_waiver_relationship_errors_remain_pending_without_losing_other_sets(tmp_path):
+    report = tmp_path / 'waiver.tcldata'
+    script = r'''
+source [lindex $argv 0]
+proc get_waivers {args} {return waiver0}
+proc help {args} {return {MOCK INSTALLED API HELP}}
+proc list_property {object} {if {$object ne {waiver0}} {error {unexpected enumeration}};return {NAME FROM TO}}
+proc get_property {key object} {switch $key {NAME {return $object} FROM {return source/Q} TO {return destination/D}}}
+proc get_pins {args} {return {source/Q destination/D}}
+proc get_cells {args} {error {mock unsupported waiver cell relationship}}
+proc get_nets {args} {return actual_net}
+proc get_clocks {args} {return {source_clock destination_clock}}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_waivers $f
+puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close $f
+'''
+    result = tcl(tmp_path, script, report)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    for field in ('waiver_inventory', 'waiver_property_names', 'selected_pins', 'selected_cells', 'selected_nets', 'selected_clocks'):
+        assert field in raw
+    assert 'mock unsupported waiver cell relationship' in raw
+    assert 'pending 1 route_qualified 0' in raw
+
+
+@pytest.mark.parametrize(('initial', 'count', 'captured', 'skipped'), [(0, 300, 256, 44), (4096, 1, 0, 1)])
+def test_cell_detail_expansion_caps_preserve_exact_skipped_count(tmp_path, initial, count, captured, skipped):
+    report = tmp_path / 'caps.tcldata'
+    script = r'''
+source [lindex $argv 0]
+proc get_property {key objects} {return [expr {$key eq {NAME} ? $objects : {FDRE}}]}
+proc get_cells {args} {return [lindex $args end]}
+proc list_property {args} {error {hierarchical enumeration forbidden}}
+set ::c2_alex_route::capture_queries 0;set ::c2_alex_route::capture_pending 0;set ::c2_alex_route::captured_cells {}
+for {set i 0} {$i<[lindex $argv 2]} {incr i} {dict set ::c2_alex_route::captured_cells existing$i 1}
+set cells {};for {set i 0} {$i<[lindex $argv 3]} {incr i} {lappend cells selected$i}
+set f [open [lindex $argv 1] w];::c2_alex_route::capture_cells $f test $cells
+puts $f [list pending $::c2_alex_route::capture_pending route_qualified 0];close $f
+'''
+    result = tcl(tmp_path, script, report, initial, count)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert f'selected {count} captured {captured} cached 0 skipped {skipped}' in raw
+    assert 'cell_detail_cap_reached' in raw
+    assert 'pending 1 route_qualified 0' in raw
