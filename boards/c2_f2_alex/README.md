@@ -53,10 +53,64 @@ The IP receipt hashes generated source, constraints, XCI, BD and DCP products;
 changed, added or missing products invalidate it. Synthesis copies the C2 RTL,
 records its source revision/build ID and binds the exact IP receipt. The initial
 `--stage synth` stops at `post_synth.dcp`; it does not link, route, package, publish
-or touch an FPGA. Generated link/implementation/refinement recipes remain for
-review before subsequent build gates are enabled. Only the dedicated `opentpu-f2`
-instance is authorized for later F2 work. Hardware execution remains separately
-subject to actual new qualification, device ownership and original-image restore.
+or touch an FPGA. Only the dedicated `opentpu-f2` instance is authorized for F2
+work. Hardware execution requires current qualification, device ownership and
+original-image restore.
+
+## Vendor simulation and checkpoint continuation
+
+`simulate.py` consumes an independently recorded SHA256 of `ip-complete.json`.
+It copies the private IP before opening Vivado and checks all copied dependencies,
+including generated headers, before and after four seed/clock-phase scenarios.
+The bench exercises all eight native channels, PCIS narrow and sparse writes,
+burst boundaries, response ordering, backpressure and reset with reads in flight.
+Its behavioral HBM model establishes protocol correctness, not silicon bandwidth.
+
+```bash
+python3 boards/c2_f2_alex/simulate.py --ip-run /own/alex-c2-ip \
+  --ip-receipt-sha256 "$IP_RECEIPT_SHA256" --out /own/fresh/alex-c2-simulation
+python3 boards/c2_f2_alex/implement.py --stage link --hdk /opt/aws-fpga \
+  --synth-run /own/alex-c2-synth --synth-receipt-sha256 "$SYNTH_RECEIPT_SHA256" \
+  --out /own/fresh/alex-c2-link
+```
+
+`implement.py` provides separate `link`, `implement`, `refine` and `qualify` stages.
+Every stage uses a fresh directory and preserves its input checkpoint and receipt
+chain. Later stages require `--from-run` and `--from-receipt-sha256`; they never
+resynthesize RTL. An implementation with negative timing is retained as a candidate.
+Refinement must pass setup and hold timing. Qualification additionally requires
+`--simulation-run` and `--simulation-receipt-sha256`.
+
+The current independent qualifier collects current-design timing, CDC, exception,
+bus-skew, routing, methodology and DRC evidence. It deliberately returns
+`pending-review` (exit 3) until the actual C2 reports support reviewed acceptance
+rules. Alex's historical counts are not acceptance rules. A later executor-only
+commit may consume an older hardware build only while all synthesized source
+bytes still match; its executor revision is recorded separately from the hardware
+build ID.
+
+The first synthesis attempt (`264d8413`) failed its interface audit. Its
+supplemental dependency observer preserved the failure. Retry `d1c20797` reuses
+the completed private IP and captures its complete generated `.srcs` and `.gen`
+trees synchronously before synthesis, comparing them afterward. This binds
+include files omitted by the original IP product suffix inventory without
+changing the original IP receipts. See `STATUS.md` for the actual run.
+
+## Evidence, publication and physical sessions
+
+`collect.py` copies the explicitly identified receipts, source snapshots and
+required products into a portable bundle. `evidence.py` verifies that bundle
+without running bundled code or relying on the original absolute paths. Both
+require completed physical qualification; a pending review cannot become a
+publishable image. `package.py` invokes the pinned installed AWS packaging script
+and checks the resulting archive against the qualified checkpoint.
+
+`tools/c2_f2_alex_publish.py` uploads the package and its complete evidence through
+the AWS CLI, verifies stored checksums, and records an idempotent AFI request.
+`tools/c2_f2_alex_session.py` uses the existing exclusive device lock, verifies
+the candidate's provenance, runs the C2 benchmark, and restores the original
+image. These tools are prepared for the current build; their local tests are not
+evidence that an AFI was created or an FPGA benchmark succeeded.
 
 C2 still uses its existing host fixture/bit-check contract. Before a physical run,
 the host must complete a PCIS write visibility fence/readback before OCL START;
