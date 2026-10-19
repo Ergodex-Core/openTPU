@@ -311,6 +311,17 @@ write-buffer enable into the tree (+0.037). Checkpoint
 `f2burst200-run1/audit/`. Packaging (`boards/f2/burst200/scripts/package_f2.py`) needs a
 review JSON attesting the six gates; that sign-off is the user's (see the session notes), then
 `create_fpga_image` and the slot-0 load (slot 0 holds Alex's agfi-0d06cb48544a02106 now).
+**Signed off and packaged (20:45 UTC):** the user signed the six gates off; `package_f2.py`
+wrote `otpu_burst200_f85ac03c.Developer_CL.tar` (125,798,400 B, manifest dcp_hash =
+the checkpoint's SHA-256) under `f2burst200-run1/package/cl/build/checkpoints/`, uploaded to
+`s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu/f2/v4/afi/`; the AFI is
+**afi-07e20bf5679cf37d7 / agfi-00c2d61ec51bd89aa** (`otpu-burst200-f85ac03c`, logs under
+`opentpu/f2/v4/afi-logs/`). Next: load it on slot 0 (`fpga-load-local-image -S 0 -I
+agfi-00c2d61ec51bd89aa`), run Gemma 3 (`OTPU_DEVICE=f2:0 python -m opentpu.host.chat
+--backend board --model gemma3 --prompt ...`, decode tok/s on the status line) and the
+hardware Lens trace (`python -m opentpu.host.hwlens record --dev f2:0 --model
+models/gemma-3-1b-it -o g3-hw.otpuprof`; hwlens' `--dev` now goes through `open_transport`,
+b5495079).
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
