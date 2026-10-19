@@ -644,6 +644,12 @@ def main() -> None:
     ap.add_argument("--adapter-latency", type=int, default=None, help="cycles of path over --lat (default 14 on the native path, 4 behavioral)")
     ap.add_argument("--channel-depth", type=int, default=None, help="B read beats in flight a channel (default otpu_board NRD: 64 at NCH > 2)")
     ap.add_argument("--window", type=int, default=None, help="the dispatch window (default the target's WIN)")
+    ap.add_argument("--fifo-chunks", type=int, default=None,
+                    help="the model's prefetch FIFO (default the target's FIFO_DEPTH). Upstream's matrix engine prefetches "
+                         "in batches of --batch-rows rows that must fit it; the RTL issues advances continuously up to "
+                         "FIFO_DEPTH entries, so a target whose FIFO_DEPTH is below batch x advances (the v5 slice's 256 "
+                         "against the down projection's 8 x 54) is modelled at 1024, the setting the S = 4 receipt "
+                         "calibrates (+3.8 percent) where 256 reads +68 percent (docs/full_hbm.md \"LPN\")")
     ap.add_argument("--epilogue-lanes", type=int, default=None, help="default the target's MXU_E")
     ap.add_argument("--batch-rows", type=int, default=8, help="upstream's validated rows a prefetch event")
     ap.add_argument("--mhz", type=float, default=200.0)
@@ -676,7 +682,7 @@ def main() -> None:
     nch = a.nch
     WpTiming, WpCompact, plan_mm = model_classes(wide, I)
     timing = WpTiming(dram_latency=a.lat, dram_bytes_per_cycle=cfg.D,
-                      window=a.window or ua.get("WIN", 32), fifo_chunks=ua.get("FIFO_DEPTH", 128),
+                      window=a.window or ua.get("WIN", 32), fifo_chunks=a.fifo_chunks or ua.get("FIFO_DEPTH", 128),
                       chain_length=16, epilogue_lanes=a.epilogue_lanes or ua.get("MXU_E", 2),
                       quant_buffer_chunks=1024, batch_rows=a.batch_rows,
                       port_chunks=cfg.PORTB, nch=nch, chash=ua.get("CHASH", True),
