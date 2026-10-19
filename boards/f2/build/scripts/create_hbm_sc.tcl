@@ -45,6 +45,7 @@ proc otpu_config {obj} {
 set ref_sc [get_bd_cells -filter {VLNV =~ *:smartconnect:*}]
 if {[llength $ref_sc] != 1} { error "openTPU SmartConnect: cl_axi_sc_1x1 holds [llength $ref_sc] SmartConnects, expected 1" }
 set sc_cfg [otpu_config $ref_sc]
+set ref_vlnv [get_property VLNV $ref_sc]   ;# (read while the reference is open: a closed design's object crashes get_property)
 set ref_s [get_bd_intf_ports -filter {MODE == Slave}]
 set ref_m [get_bd_intf_ports -filter {MODE == Master}]
 if {[llength $ref_s] != 1 || [llength $ref_m] != 1} { error "openTPU SmartConnect: cl_axi_sc_1x1's interface ports: [llength $ref_s] slave, [llength $ref_m] master" }
@@ -77,7 +78,7 @@ set_property CONFIG.POLARITY ACTIVE_LOW $r
 set busn {}
 set busm {}
 for {set p 0} {$p < $nport} {incr p} {
-  set sc [create_bd_cell -type ip -vlnv [get_property VLNV $ref_sc] sc_c$p]
+  set sc [create_bd_cell -type ip -vlnv $ref_vlnv sc_c$p]
   otpu_apply $sc $sc_cfg {CONFIG.Component_Name}
   connect_bd_net [get_bd_ports core_clk] [get_bd_pins sc_c$p/aclk]
   connect_bd_net [get_bd_ports hbm_clk] [get_bd_pins sc_c$p/aclk1]

@@ -614,7 +614,7 @@ proc create_pblock {name} { lappend ::pblocks $name }
 proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
 proc get_clock_regions {args} {
   set o [lindex $args end]
-  if {[regexp {HBM_SNGLBLI_INTF_AXI_X(\d+)Y0} $o -> p]} { return "X[expr {$p / 4}]Y0" }
+  if {[regexp {BLI_HBM_AXI_INTF_X(\d+)Y0} $o -> p]} { return "X[expr {$p / 4}]Y0" }
   return $o
 }
 proc get_slrs {args} { return SLR1 }
