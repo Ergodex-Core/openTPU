@@ -1,21 +1,22 @@
 // Unit test of the F2 HBM build's memory fabric (rtl/boards/f2/otpu_f2_hbm_mem.sv: NPORT channel
-// bridges otpu_f2_hbm_nch, the host's PCIS path otpu_f2_hbm_host, a port arbiter otpu_f2_hbm_port
-// each; tests/test_f2_rtl.py) on a model of the HBM's AXI3 ports: one 16 GiB memory, each port
-// taking AW / W / AR with random readies, executing transactions after a random latency in any
-// order that keeps each ID's reads in order and its writes in order (nothing else ordered: the
-// controller's reorder), and returning read data of different IDs interleaved beat by beat, as an
-// AXI3 slave may. NPORT native masters (core clock; S slices x NCH channels) and the host (aclk)
-// run random traffic. Checked:
+// masters otpu_native_axi, the host's PCIS path otpu_f2_hbm_host, a port arbiter otpu_f2_hbm_port
+// each, all at the core clock; tests/test_f2_rtl.py) through a behavioural stand-in for the
+// HDK's cl_axi_sc_1x1 SmartConnect per port (tb_f2hbm_sc.sv: the crossing into the HBM clock,
+// 512 -> 256 bits, AXI4 -> AXI3, in-order responses) onto a model of the HBM's AXI3 ports: one
+// 16 GiB memory, each port taking AW / W / AR with random readies, executing transactions after
+// a random latency in any order that keeps the reads in order and the writes in order (nothing
+// else ordered: the controller's reorder between its read and write channels). NPORT native
+// masters (core clock; S slices x NCH channels) and the host (aclk) run random traffic. Checked:
 //   - the native port's contract (otpu_native_dram): every read returns the beat as the
 //     channel's own earlier commands left it, whatever the HBM's order; n_wdone reaches the
 //     writes' count; after it, every write is in the HBM at BASE p x 512 MiB + beat x 64;
-//   - every bridge's transaction stays in its port's 512 MiB (no switch crossing), bursts are
+//   - every port's transaction stays in its port's 512 MiB (no switch crossing), bursts are
 //     INCR of 32-byte beats within 4 KiB, and runs of beats did go out as bursts of several;
 //   - the host's PCIS: its writes land in every port's memory (BAR4 offset = HBM address), its
 //     reads (issued once its writes are delivered: PCIe order) return its own writes, B's and R's
 //     in its order with its IDs, reads past the last port return zeros.
-// HAZ = 0 (no same-beat waits in the bridges) fails. Plusargs: +seed=, +cycles=, +nb= (beats per
-// channel). Prints the counts and PASS, or the first errors and FAIL.
+// HAZ = 0 (no direction barrier in the masters) fails. Plusargs: +seed=, +cycles=, +nb= (beats
+// per channel). Prints the counts and PASS, or the first errors and FAIL.
 module tb_f2hbm;
   parameter int NPORT = 8;
   parameter bit HAZ = 1'b1;
@@ -68,7 +69,16 @@ module tb_f2hbm;
   logic [511:0] h_wdata, h_rdata;
   logic [63:0]  h_wstrb;
   logic [1:0]   h_bresp, h_rresp;
-  logic [NPORT-1:0][5:0]   m_awid, m_arid, m_bid, m_rid;
+  // the ports' AXI4 sides (core clock) into the SmartConnect stand-ins, their AXI3 sides (hclk)
+  // into the HBM model
+  logic [NPORT-1:0][15:0]  a_awid, a_arid, a_bid, a_rid;
+  logic [NPORT-1:0][33:0]  a_awaddr, a_araddr;
+  logic [NPORT-1:0][7:0]   a_awlen, a_arlen;
+  logic [NPORT-1:0]        a_awvalid, a_awready, a_wvalid, a_wready, a_wlast, a_bvalid, a_bready;
+  logic [NPORT-1:0]        a_arvalid, a_arready, a_rvalid, a_rready, a_rlast;
+  logic [NPORT-1:0][511:0] a_wdata, a_rdata;
+  logic [NPORT-1:0][63:0]  a_wstrb;
+  logic [NPORT-1:0][1:0]   a_bresp, a_rresp;
   logic [NPORT-1:0][33:0]  m_awaddr, m_araddr;
   logic [NPORT-1:0][3:0]   m_awlen, m_arlen;
   logic [NPORT-1:0]        m_awvalid, m_awready, m_wvalid, m_wready, m_wlast, m_bvalid, m_bready;
@@ -77,7 +87,7 @@ module tb_f2hbm;
   logic [NPORT-1:0][31:0]  m_wstrb;
   logic [NPORT-1:0][1:0]   m_bresp, m_rresp;
   otpu_f2_hbm_mem #(.NPORT(NPORT), .HAZ(HAZ)) u_dut (
-    .clk, .rst, .aclk, .arst, .hclk, .hrst,
+    .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
     .pcis_awid(h_awid), .pcis_awaddr(h_awaddr), .pcis_awlen(h_awlen), .pcis_awsize(3'd6),
@@ -88,15 +98,37 @@ module tb_f2hbm;
     .pcis_arsize(3'd6), .pcis_arburst(2'b01), .pcis_arvalid(h_arvalid),
     .pcis_arready(h_arready), .pcis_rid(h_rid), .pcis_rdata(h_rdata), .pcis_rresp(h_rresp),
     .pcis_rlast(h_rlast), .pcis_rvalid(h_rvalid), .pcis_rready(h_rready), .pcis_wbusy,
-    .hbm_awid(m_awid), .hbm_awaddr(m_awaddr), .hbm_awlen(m_awlen), .hbm_awvalid(m_awvalid),
-    .hbm_awready(m_awready), .hbm_wdata(m_wdata), .hbm_wstrb(m_wstrb), .hbm_wlast(m_wlast),
-    .hbm_wvalid(m_wvalid), .hbm_wready(m_wready), .hbm_bid(m_bid), .hbm_bresp(m_bresp),
-    .hbm_bvalid(m_bvalid), .hbm_bready(m_bready), .hbm_arid(m_arid), .hbm_araddr(m_araddr),
-    .hbm_arlen(m_arlen), .hbm_arvalid(m_arvalid), .hbm_arready(m_arready), .hbm_rid(m_rid),
-    .hbm_rdata(m_rdata), .hbm_rresp(m_rresp), .hbm_rlast(m_rlast), .hbm_rvalid(m_rvalid),
-    .hbm_rready(m_rready));
+    .m_awid(a_awid), .m_awaddr(a_awaddr), .m_awlen(a_awlen), .m_awvalid(a_awvalid),
+    .m_awready(a_awready), .m_wdata(a_wdata), .m_wstrb(a_wstrb), .m_wlast(a_wlast),
+    .m_wvalid(a_wvalid), .m_wready(a_wready), .m_bid(a_bid), .m_bresp(a_bresp),
+    .m_bvalid(a_bvalid), .m_bready(a_bready), .m_arid(a_arid), .m_araddr(a_araddr),
+    .m_arlen(a_arlen), .m_arvalid(a_arvalid), .m_arready(a_arready), .m_rid(a_rid),
+    .m_rdata(a_rdata), .m_rresp(a_rresp), .m_rlast(a_rlast), .m_rvalid(a_rvalid),
+    .m_rready(a_rready));
+  for (genvar p = 0; p < NPORT; p++) begin : g_sc
+    tb_f2hbm_sc u_sc (
+      .clk, .rst, .hclk,
+      .s_awid(a_awid[p]), .s_awaddr(a_awaddr[p]), .s_awlen(a_awlen[p]), .s_awvalid(a_awvalid[p]),
+      .s_awready(a_awready[p]), .s_wdata(a_wdata[p]), .s_wstrb(a_wstrb[p]), .s_wlast(a_wlast[p]),
+      .s_wvalid(a_wvalid[p]), .s_wready(a_wready[p]), .s_bid(a_bid[p]), .s_bresp(a_bresp[p]),
+      .s_bvalid(a_bvalid[p]), .s_bready(a_bready[p]), .s_arid(a_arid[p]), .s_araddr(a_araddr[p]),
+      .s_arlen(a_arlen[p]), .s_arvalid(a_arvalid[p]), .s_arready(a_arready[p]), .s_rid(a_rid[p]),
+      .s_rdata(a_rdata[p]), .s_rresp(a_rresp[p]), .s_rlast(a_rlast[p]), .s_rvalid(a_rvalid[p]),
+      .s_rready(a_rready[p]),
+      .m_awaddr(m_awaddr[p]), .m_awlen(m_awlen[p]), .m_awvalid(m_awvalid[p]),
+      .m_awready(m_awready[p]), .m_wdata(m_wdata[p]), .m_wstrb(m_wstrb[p]), .m_wlast(m_wlast[p]),
+      .m_wvalid(m_wvalid[p]), .m_wready(m_wready[p]), .m_bresp(m_bresp[p]), .m_bvalid(m_bvalid[p]),
+      .m_bready(m_bready[p]), .m_araddr(m_araddr[p]), .m_arlen(m_arlen[p]),
+      .m_arvalid(m_arvalid[p]), .m_arready(m_arready[p]), .m_rdata(m_rdata[p]),
+      .m_rresp(m_rresp[p]), .m_rlast(m_rlast[p]), .m_rvalid(m_rvalid[p]), .m_rready(m_rready[p]));
+  end
 
   // ---------------------------------------------------------------- the HBM (hclk)
+  // (the AXI3 side has no IDs: the SmartConnect returns one port's responses in order; the
+  // model keeps the reads in order and the writes in order and reorders between them)
+  logic [NPORT-1:0][5:0] m_awid, m_arid, m_bid, m_rid;
+  assign m_awid = '0;
+  assign m_arid = '0;
   logic [255:0] mem [logic [28:0]];          // 32-byte units of the 16 GiB
   function automatic logic [255:0] rd(input logic [28:0] u);
     return mem.exists(u) ? mem[u] : init(u);
@@ -122,20 +154,16 @@ module tb_f2hbm;
       m_arready[p] <= $urandom % 4 != 0;
       if (!hrst) begin
         if (m_awvalid[p] && m_awready[p]) begin
-          if (m_awid[p][0] == 1'b0) begin
-            nburst[p]++; if (m_awlen[p] > 1) nlong[p]++;
-            if (m_awaddr[p][33:29] != 5'(p)) fail($sformatf("port %0d: a bridge's write outside its pseudo-channel", p));
-          end
+          nburst[p]++; if (m_awlen[p] > 1) nlong[p]++;
+          if (m_awaddr[p][33:29] != 5'(p)) fail($sformatf("port %0d: a write outside its pseudo-channel", p));
           if (m_awaddr[p][4:0] != 0 || (m_awaddr[p][11:5] + m_awlen[p]) > 127)
             fail($sformatf("port %0d: AW unaligned or across 4 KiB", p));
           awq.push_back('{m_awid[p], m_awaddr[p], m_awlen[p], now + 4 + $urandom % 40});
         end
         if (m_wvalid[p] && m_wready[p]) begin wd.push_back(m_wdata[p]); ws.push_back(m_wstrb[p]); end
         if (m_arvalid[p] && m_arready[p]) begin
-          if (m_arid[p][0] == 1'b0) begin
-            nburst[p]++; if (m_arlen[p] > 1) nlong[p]++;
-            if (m_araddr[p][33:29] != 5'(p)) fail($sformatf("port %0d: a bridge's read outside its pseudo-channel", p));
-          end
+          nburst[p]++; if (m_arlen[p] > 1) nlong[p]++;
+          if (m_araddr[p][33:29] != 5'(p)) fail($sformatf("port %0d: a read outside its pseudo-channel", p));
           if (m_araddr[p][4:0] != 0 || (m_araddr[p][11:5] + m_arlen[p]) > 127)
             fail($sformatf("port %0d: AR unaligned or across 4 KiB", p));
           arq.push_back('{m_arid[p], m_araddr[p], m_arlen[p], now + 8 + $urandom % 60});
@@ -177,21 +205,28 @@ module tb_f2hbm;
             end
           end
         end
+        // the responses are registers: the beat shown is popped once taken, the next loaded
+        // (a continuous assignment from a queue would race the blocks that pop it)
         if (m_bvalid[p] && m_bready[p]) void'(bq.pop_front());
+        if (!m_bvalid[p] || m_bready[p]) begin
+          m_bvalid[p] <= bq.size() > 0;
+          m_bid[p] <= bq.size() ? bq[0] : '0;
+        end
         if (m_rvalid[p] && m_rready[p]) void'(rq[rsel].pop_front());
-        // the next beat from either ID's queue (beat-level interleaving)
-        if (!(m_rvalid[p] && !m_rready[p]))
-          rsel <= (rq[0].size() && rq[1].size()) ? 1'($urandom) : rq[1].size() != 0;
+        if (!m_rvalid[p] || m_rready[p]) begin
+          // the next beat from either ID's queue (beat-level interleaving)
+          automatic logic nsel = (rq[0].size() && rq[1].size()) ? 1'($urandom) : rq[1].size() != 0;
+          rsel <= nsel;
+          m_rvalid[p] <= rq[nsel].size() > 0;
+          m_rid[p] <= rq[nsel].size() ? rq[nsel][0].id : '0;
+          m_rdata[p] <= rq[nsel].size() ? rq[nsel][0].d : '0;
+          m_rlast[p] <= rq[nsel].size() ? rq[nsel][0].last : 1'b0;
+        end
+      end else begin
+        m_bvalid[p] <= 1'b0; m_rvalid[p] <= 1'b0;
       end
     end
-    assign m_bvalid[p] = bq.size() > 0;
-    assign m_bid[p] = bq.size() ? bq[0] : '0;
     assign m_bresp[p] = 2'b00;
-    // (rsel picks a queue only once its head is shown: the beat stays until taken)
-    assign m_rvalid[p] = rq[rsel].size() > 0;
-    assign m_rid[p] = rq[rsel].size() ? rq[rsel][0].id : '0;
-    assign m_rdata[p] = rq[rsel].size() ? rq[rsel][0].d : '0;
-    assign m_rlast[p] = rq[rsel].size() ? rq[rsel][0].last : 1'b0;
     assign m_rresp[p] = 2'b00;
   end
 
@@ -369,7 +404,7 @@ module tb_f2hbm;
       if (hb_exp.size() || hr_exp.size()) fail("host: responses missing");
       foreach (hsh[a]) if (rd64(a) !== hsh[a]) fail("host: a write is not in the HBM");
       if (HAZ && longs * 20 < bursts) fail($sformatf("few bursts: %0d of %0d transactions", longs, bursts));
-      $display("NPORT %0d: %0d bridge transactions, %0d of them bursts of several beats; host %0d writes %0d reads",
+      $display("NPORT %0d: %0d port transactions, %0d of them bursts of several beats; host %0d writes %0d reads",
                NPORT, bursts, longs, hwr, hrd);
     end
     for (int c = 0; c < NPORT; c++) $display("ch%0d %0d writes %0d reads", c, nwr[c], nrd[c]);
