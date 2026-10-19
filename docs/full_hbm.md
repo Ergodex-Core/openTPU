@@ -64,6 +64,18 @@ flight a channel (the v4 point at RD 64 for reference):
 | **S 3, RD 128 (`v5s3`)** | **883,739** | **226.3** | channel | 451,502 / 210,456 / 221,780 |
 | **S 4, RD 128 (`v5`)** | **673,252** | **297.1** | channel (508,631) | 366,337 / 157,883 / 149,032 |
 
+The same on the engine path's round trip (`--lat 56`, the HBM's 280 ns, `--adapter-latency 28`:
+the native path's 14 plus the chains' 6 and the engine's 8 structural cycles from
+otpu_hbmeng_mem's header; RD 128 over 84: the channel at 1.0): S 4 **674,558 (296.5 tok/s)**, S 3
+885,045 (226.0), S 2 1,160,590 (172.3), S 1 2,158,177 (92.7); 4 layers + head at S 4 237,377, 1
+layer + head 177,760 (the whole-token numbers move 0.2% between the two round trips: the token
+is not latency-bound at RD 128). One caveat of the model: upstream's matrix engine prefetches
+in batches of 8 rows that must fit its FIFO, where the RTL issues advances continuously up to
+FIFO_DEPTH entries; the v5 slice's FIFO_DEPTH 256 against the down projection's 8 x 54
+advances a batch makes the model read 1,134,656 a token at 256 where 1024 reads 673,252, and
+the S = 4 receipt (the RTL at 256) calibrates the latter (+3.8%): every engine-path point is
+quoted at `--fifo-chunks 1024`.
+
 What the model says about S = 4: the port-bound token is 506K cycles (the slice's 1,957,551 chunks
 at 4 a cycle); the MLP phase sits 15% over its roofline (the two gathers a layer of 3,584 words
 and the twelve MMs' tails), the head 6% over, and the **attention phase is 149K cycles against
