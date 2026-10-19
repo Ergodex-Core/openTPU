@@ -82,6 +82,28 @@ checkpoint, generated address map, source bytes and private IP products. Shell
 linking, placement, routing and independent qualification remain separate gates.
 No builder function publishes or loads an image.
 
+## Host adapter
+
+`opentpu/c1_f2.py` prepares canonical fixtures and checks the C1 ABI, arithmetic,
+per-PC traffic, both halves of every native beat, and the two-engine receive
+reservation limit. `opentpu/host/c1_f2.py` retains the canonical exclusive F2 lock,
+checks C1 image identity before writes, and uses WC writes followed by MFENCE
+and an uncached PCIS read. The client also reads back every uploaded weight bank
+before START. Its clock field describes the configured clock, not a measurement.
+
+```bash
+python3 tools/c1_f2_bench.py --fixture /path/to/fresh/c1-matrix.npz --rows 17 --kb 9
+python -m pytest -q tests/test_c1_f2_host.py
+```
+
+This CLI only prepares fixtures. Its `checked_runs` library function accepts a
+transport supplied by a future qualified session controller; it has no image
+loader or standalone hardware execution command. Host tests compare all native
+bank bytes and OCL preload words against the actual RTL simulation fixture,
+including row tails and negative/exceptional arithmetic. Raw counter records
+retain their transport evidence kind. Hardware Lens/session integration remains
+behind current physical qualification; test records cannot claim FPGA results.
+
 ## Checkpoint continuation and vendor simulation
 
 `implement.py` consumes explicit SHA-256 values for the completed synthesis and
