@@ -149,6 +149,20 @@ The post-opt checkpoint was written at 15:19:50 UTC, and placement started at
 15:20:35 UTC with zero errors. The corrected build has advanced beyond the
 previous clock-configuration failure; routed closure remains pending.
 
+At 15:32:20 UTC, the reviewed continuation controller was started locally with
+idle-sleep prevention. Its first two live polls confirmed the exact dedicated
+build invocation is still running. It will qualify and preserve the finished
+build, publish and wait for its AFI, execute the reviewed load/benchmark/restore
+session, preserve the raw results, and validate/append/open the 30 hardware Lens
+profiles. Every later stage depends on the preceding checks; any failed or
+ambiguous operation halts continuation without automatically retrying a mutation.
+The controller passed 14 offline tests and independent review. Its SHA256 is
+`14265ee830e11513eabcb602ff324fa356968221509719fab318511faad37745`.
+Live state and evidence are in
+`build/c2-fpga/remote/continuation-7028e35e-r2/`, with launch receipt
+`build/c2-fpga/remote/continuation-7028e35e-r2.launch-receipt.json`.
+Controller execution is not evidence that any physical benchmark has completed.
+
 Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
 routing, DRC and methodology gates remain required. No AFI is published or loaded
 unless those gates pass. The planned execution host is the dedicated
