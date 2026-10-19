@@ -83,7 +83,7 @@ def check_hbm_ip(hdk: Path) -> None:
             'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE',
             'USER_MON_APB_EN': 'TRUE'}
     for k, v in want.items():
-        if p.get(k, [{}])[0].get('value') != v:
+        if str(p.get(k, [{}])[0].get('value')).upper() != v:   # (the HDK writes 'true' / 'TRUE')
             near = sorted(n for n in p if 'APB' in n or 'SWITCH' in n)
             raise RuntimeError(f'{ip}: {k} is not {v} (the IP\'s APB / switch parameters: {near})')
     gen = hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_hbm/synth/cl_hbm.v'
