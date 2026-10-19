@@ -57,7 +57,7 @@ puts "OTPU_HBM_CDC fifos=[llength $fifos] counters=[llength $counters] core=$t_c
 # Nothing of openTPU's on the HBM clock: every sequential cell it clocks is the vendor IP's (the
 # SmartConnects g_sc[*].u_sc, the HBM wrapper u_hbm) or the wrapper's reset synchronizer
 # (hbm_reset_n_reg*: three flip-flops, cl_pnr_user.tcl's linked-reset exception covers them)
-set on_hclk [get_cells -quiet -of_objects $c_hbm -filter {IS_SEQUENTIAL}]
+set on_hclk [all_registers -clock $c_hbm]
 set otpu_on_hclk {}
 foreach c $on_hclk {
   set n [get_property NAME $c]
