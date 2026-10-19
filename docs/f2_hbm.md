@@ -20,14 +20,20 @@ programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
 ## Architecture
 
 ```
-            core clock (200 MHz; clk_f 400)            |  hclk (450 MHz)              | HBM
- slice s -- otpu_native_dram (NCH) --+-- ch 0: otpu_f2_hbm_nch ==afifo==> bursts -- port NCH s     (PC NCH s)
-                                     +-- ch 1: otpu_f2_hbm_nch ==afifo==> bursts -- port NCH s + 1
-                                     ...                                     |          ^
-                                                                otpu_f2_hbm_port (2 masters, ID 0/1)
- PCIS (aclk 250 MHz) -- otpu_f2_hbm_host ==afifo==> one 64 B beat at a time ----+ (master 1 of every port)
+            core clock (200 MHz; clk_f 400)                              | 450 MHz (vendor IP)        | HBM
+ slice s -- otpu_native_dram (NCH) --+-- ch 0: otpu_native_axi --+-- otpu_f2_hbm_port --> cl_axi_sc_1x1 --> port NCH s     (PC NCH s)
+                                     +-- ch 1: otpu_native_axi --+-- otpu_f2_hbm_port --> cl_axi_sc_1x1 --> port NCH s + 1
+                                     ...                   host's |
+ PCIS (aclk 250 MHz) -- otpu_f2_hbm_host ==afifo==> one 64 B beat at a time, per port ----+ (master 1 of every port)
  OCL  (aclk) -- otpu_axil_cdc (held while PCIS writes are in flight) -- otpu_ctrl (core)
 ```
+
+Since round 5 ([v4/f2-round5.md](v4/f2-round5.md)) nothing of openTPU's runs on the HBM's 450
+MHz clock: every block of the fabric is at the core clock, and the HDK's `cl_axi_sc_1x1`
+SmartConnect block design, one per port, does the crossing into 450 MHz, the 512 -> 256 width
+conversion and the AXI4 -> AXI3 conversion into the HBM wrapper's port (as the HDK's
+cl_mem_perf and cl_dram_hbm_dma use it). Alex's burst200 image, the only openTPU F2 image that
+closed 200 MHz, has this structure on two channels.
 
 - `rtl/mem/otpu_native_dram.sv` (the slice's DRAM adapter) takes `NCH` channels (a power of two,
   2 to 32). At NCH = 2 it is the two-channel adapter in every bit and every cycle (below).
@@ -35,15 +41,17 @@ programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
   `channels_per_slice`, `channel_bytes`, the arch's `DRAM_BYTES` or the platform's `slice_bytes`)
   instead of hardcoding 2 / 31 / 32; slice s is on channels NCH s .. NCH s + NCH - 1, CFG_DRAM
   reports them, CALIB0 / CALIB1 are the even / odd channels' ready.
-- `rtl/boards/f2/otpu_f2_hbm_nch.sv`: one channel's native port onto one HBM port (below).
-- `rtl/boards/f2/otpu_f2_hbm_port.sv`: a port shared by its bridge (ID 0) and the host (ID 1):
-  AW round-robin with W locked to the granted AW to WLAST, AR round-robin, R and B by ID.
+- `rtl/boards/f2/otpu_native_axi.sv`: one channel's native port as an AXI4 master of 512 bits
+  at the core clock (below).
+- `rtl/boards/f2/otpu_f2_hbm_port.sv`: a port's AXI4 slave side (the SmartConnect's) shared by
+  its channel's master (ID 0) and the host (ID 1): AW round-robin with W locked to the granted
+  AW to WLAST, AR round-robin, R and B by ID.
 - `rtl/boards/f2/otpu_f2_hbm_host.sv`: PCIS (BAR4 offset = HBM address) onto the port that owns
   the address.
 - `rtl/boards/f2/otpu_f2_hbm_mem.sv` (the fabric), `otpu_f2_hbm_sys.sv` (otpu_board + fabric +
-  OCL), `boards/f2/design/cl_opentpu_hbm.sv` (the CL: clocks, resets, the HDK's
-  `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`, `AXI4_INTERFACE = 0`, the unused-DDR
-  template for the DIMM's pins).
+  OCL), `boards/f2/design/cl_opentpu_hbm.sv` (the CL: clocks, resets, a `cl_axi_sc_1x1_wrapper`
+  per port, the HDK's `cl_mem_hbm_wrapper` with `NUM_OF_AXI_PORTS = S x NCH`, `AXI4_INTERFACE =
+  0`, the unused-DDR template for the DIMM's pins).
 
 ### Address map
 
@@ -80,87 +88,75 @@ bits deep) would otherwise run at the end of the slice's grant chain into every 
 b_rdy reserves room for it (QD - 1, OD - 1). One cycle on port B's reads against the HBM's
 hundreds of nanoseconds.
 
-### The channel bridge (otpu_f2_hbm_nch)
+### The channel bridge (otpu_native_axi)
 
-Core side (200 MHz): the native port's commands and write data into two 4-entry FIFOs (readies
-from flip-flops), then in command order through the **order check** into an asynchronous FIFO
-(`otpu_afifo`, 16 x 602 bits: we, beat, mask, data) to hclk:
+Alex's burst200 adapter, taken as it closed and ran on his card (the channel's size a
+parameter, the read return registered). Commands and write data enter two 16-entry LUT RAM
+queues; **reads of adjacent beats are coalesced** into one AXI4 burst of up to 16 x 64 B (1 KiB;
+the burst goes when it is full, when the head command does not continue it, or after 4 idle
+cycles), **writes are single-beat**; a **direction barrier** keeps the native port's
+read-after-write contract (otpu_native_dram: a read after a write to its beat sees it) whatever
+the port reorders between its read and write channels: a read is collected only while no
+earlier write is unanswered (its B means the HBM holds it), a write goes only while no earlier
+read is outstanding. All reads use ID 0 and return in order; a lengths FIFO checks RLAST; 128
+beats of read credit bound the return storage the adapter reserves (the response is never
+stalled). The SmartConnect behind the port splits a 1 KiB burst into two AXI3 bursts of 16 x 32
+B. The barrier is coarser than the per-beat hazard tables of the retired `otpu_f2_hbm_nch`: a
+direction change drains the outstanding reads (~hundreds of ns), which Alex's measured 22 GB/s
+on the Gemma decode includes.
 
-- a read waits while a write to its beat is in flight (issued, not yet counted in n_wdone),
-- a write waits while a read of its beat is in flight (issued, data not yet returned),
-
-so accesses to one beat reach the HBM one at a time in command order whatever the AXI port
-reorders (its read and write channels are independent; the controller reorders for open pages),
-which is the native port's contract (otpu_native_dram: a read after a write to its beat sees it).
-This is otpu_f2_nch's rule, moved to the core clock: 16 write and 64 read entries compared at 200
-MHz instead of at 450. Reads in flight are at most RD = 64 (the return FIFO's depth), so R is
-never stalled; the HBM's B count steps by one an hclk cycle toward the bursts' beat totals and
-crosses back gray-coded (n_wdone).
-
-HBM side (450 MHz): the crossing's head is held in a register (its LUT RAM read off the compare),
-then **joins the open burst** when it continues it (same direction, next beat, below BMAX = 8
-native beats = 16 AXI beats, AXI3's longest, not across a BMAX boundary so never across 4 KiB),
-else the open burst closes into a 2-deep AR or AW queue and the head opens the next. An open
-burst also closes after GATHER = 4 hclk cycles (~9 ns) without a command: the core sends at most
-one command per 2.25 hclk cycles, so the wait lets a stream's beats join. Write data waits in a
-32-entry W FIFO until its burst's AW is accepted; W follows in AW order. R beats pair into native
-beats (low half first) and cross back (64 x 512 bits).
-
-Little's law: from issue to data in the core clock ~300-400 ns (the crossings, the gather, the
-HBM's latency under load). 64 reads in flight per channel sustain 64 x 64 B / 400 ns = 10 GB/s
-per channel, three times a stream's share at NCH = 8 (3.2 GB/s) and 1.6 times at NCH = 4; one
-channel alone at the core's full rate (12.8 GB/s) would need ~80.
+Little's law: from issue to data in the core clock ~300-400 ns (the SmartConnect's entry and
+exit pipelines and crossing, the HBM's latency under load). 128 beats in flight per channel
+sustain 128 x 64 B / 400 ns = 20 GB/s per channel, above the port's 12.8 GB/s and six times a
+stream's share at NCH = 8 (3.2 GB/s).
 
 ### The host path (otpu_f2_hbm_host)
 
-PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> hclk) and goes to the
-port of its address (`addr[33:29]`) as one two-beat AXI3 burst, one at a time (~7 hclk cycles a
-beat through the ports' registers: 4 GB/s, above BAR4 write combining's ~2 GB/s). The host's
-master at every port is registered there (`otpu_f2_hbm_hreg` in otpu_f2_hbm_mem: a one-entry
-register for AW, W and AR whose ready is its own emptiness, the W the host's whole 64-byte beat
-sent as its two AXI beats, R and B registered back), reached through a link of register stages
-per channel (`otpu_f2_hbm_hlink`, `HNS` = 2 each way), and the host block shows its AW / W valids
-and the beat from flip-flops, so every hclk net between the host block and a port is a stage's
-wire ([v4/f2-timing.md](v4/f2-timing.md)). The
-host's B for a burst goes back when the
-host write count (every port's ID-1 B's, gray-coded back to aclk) reaches the burst's last beat;
-`pcis_wbusy` (an AW / W in its skid buffer, link or queue, a B not given back: registers only)
-holds the host's reads and the OCL's writes (a RUN after data finds the data in the HBM) as on
-the DDR build. The PCIS side: AW, W and AR enter two-entry skid buffers (`otpu_skidbuf`), B and
-R leave through output registers, and an `otpu_link` per channel (a registered take, a
-registered stage, a registered credit pulse back) joins those registers, which the floorplan
-puts beside the shell, to the queues in SLR0: +2 aclk cycles each way, every net across the
-boundary a flip-flop to a flip-flop ([v4/f2-timing.md](v4/f2-timing.md) "Round 3"). PCIS reads: a beat at a
-time crosses as a two-beat read on its port, RQ = 16 in flight, one port at a time (a read to
-another port waits for the last port's reads: one ID's reads come back in order on a port, not
-across ports), so the data returns in PCIS order. Addresses past the last used port: writes
-dropped, reads return zeros. The host transport maps BAR4 for S x NCH x 512 MiB.
+PCIS writes: each 64-byte W beat crosses with its address (afifo, aclk -> the core clock) and
+goes to the port of its address (`addr[33:29]`) as one single-beat AXI4 write of the whole 512
+bits with the PCIS beat's strobes (a narrow PCIS write is a beat with the lanes it covers; the
+address goes out 64-byte aligned, so the SmartConnect's downsizer sends two aligned 32-byte
+beats), one at a time (a beat per ~5 core cycles: 2.5 GB/s, above BAR4 write combining's ~2
+GB/s). The host's B for a burst goes back when the host write count (every port's ID-1 B's,
+gray-coded back to aclk) reaches the burst's last beat; `pcis_wbusy` (an AW / W in its skid
+buffer, link or queue, a B not given back: registers only) holds the host's reads and the OCL's
+writes (a RUN after data finds the data in the HBM) as on the DDR build. The PCIS side: AW, W
+and AR enter two-entry skid buffers (`otpu_skidbuf`), B and R leave through output registers,
+and an `otpu_link` per channel (a registered take, a registered stage, a registered credit
+pulse back) joins those registers, which the floorplan puts beside the shell, to the queues in
+SLR0: +2 aclk cycles each way, every net across the boundary a flip-flop to a flip-flop
+([v4/f2-timing.md](v4/f2-timing.md) "Round 3"). PCIS reads: a beat at a time crosses as a
+single-beat read on its port, RQ = 16 in flight, one port at a time (a read to another port
+waits for the last port's reads: one ID's reads come back in order on a port, not across
+ports), so the data returns in PCIS order. Addresses past the last used port: writes dropped,
+reads return zeros. The host transport maps BAR4 for S x NCH x 512 MiB.
 
 ### Clocks and CDC
 
 | clock | source | used by |
 |---|---|---|
 | clk_main_a0 250 MHz (aclk) | shell | OCL, PCIS, the HBM wrapper's 250 MHz side |
-| clk 200 MHz, clk_f 400 MHz | `u_mmcm` from clk_main_a0: VCO 1200, /6, /3 | the slices, the bridges' core side |
-| hclk 450 MHz | `u_hmmcm` from clk_hbm_ref (100 MHz): VCO 900, /2 | the HBM AXI ports, the bridges' and host's HBM side |
+| clk 200 MHz, clk_f 400 MHz | `u_mmcm` from clk_main_a0: VCO 1200, /6, /3 | the slices, the fabric (masters, arbiters, the host path's back half), the SmartConnects' `aclk_250` pins |
+| hclk 450 MHz | `u_hmmcm` from clk_hbm_ref (100 MHz): VCO 900, /2 | the HBM AXI ports, the SmartConnects' `aclk_450` sides (vendor IP only; the wrapper's reset synchronizer `hbm_reset_n` is the one openTPU register on it) |
 | clk_hbm_ref 100 MHz | shell | the HBM's reference and APB clock |
 
 `boards/f2/build/constraints/cl_timing_user_hbm.tcl` (applied after synthesis, in place of the
 DDR build's): max delay, datapath only, between every pair of {core, main, hclk} at the
 destination clock's period (a crossing's word is read only after its pointer or count has gone
-through the destination's two synchronizer flip-flops; [v4/f2-timing.md](v4/f2-timing.md)); bus
-skew on every otpu_afifo's gray pointers and on every write count's gray bus (bridges and host
-path) at the smallest period; the MMCMs' lock false-pathed to reset pins only. The bridges' write
-counts and error bits reach the adapter through a register stage in otpu_f2_hbm_mem. otpu_clk2x.tcl (the
-pumped TMEM's multicycles) as on the DDR build. The clocks are not grouped asynchronously.
+through the destination's two synchronizer flip-flops; the SmartConnects' own, more specific
+constraints take precedence on their crossings); bus skew on the host path's three otpu_afifos'
+gray pointers and on its write count's gray bus at the smallest period; a check that no openTPU
+cell is clocked by hclk (`OTPU_HBM_NO_HCLK_RTL`), failing closed; the MMCMs' lock false-pathed
+to reset pins only. otpu_clk2x.tcl (the pumped TMEM's multicycles) as on the DDR build. The
+clocks are not grouped asynchronously.
 
 ## Bandwidth
 
 | | per port | per slice, NCH = 8 | per slice, NCH = 16 | 32 ports |
 |---|---|---|---|---|
 | HBM peak (256 b x 450 MHz) | 14.4 GB/s | 115 GB/s | 230 GB/s | 460 GB/s |
-| native port limit (64 B per core cycle per channel) | 12.8 GB/s | 102 GB/s | 205 GB/s | |
-| bridge reads in flight (64 x 64 B / ~400 ns) | ~10 GB/s | ~80 GB/s | ~160 GB/s | |
+| native port and SmartConnect slave limit (64 B per core cycle per channel) | 12.8 GB/s | 102 GB/s | 205 GB/s | |
+| master's reads in flight (128 x 64 B / ~400 ns) | ~20 GB/s | | | |
 | what the slice consumes at 200 MHz: port B, a 128 B chunk a cycle | | 25.6 GB/s | 25.6 GB/s | |
 
 A slice streams at most 25.6 GB/s (port B; port A's scale lines are a small fraction, held in
@@ -216,8 +212,8 @@ change, or split over slices (f2-hbm:s2, 3.65 GiB a slice) once its FFN is padde
 | `OTPU_NCH=4 OTPU_AXI=1 OTPU_BOOT=1` | MLP / attention decode / two-slice fuzz / scoreboard stress through the adapter: 14 tests | pass |
 | `OTPU_NCH=16` | the same 58 as at 8 (rtlsim's per-channel statistics now parse two-digit channels) | pass |
 | no `OTPU_NCH` (NCH = 2) | the same 58, on the generalized adapter, top and model | pass |
-| `tests/test_f2_rtl.py::test_f2_hbm_fabric` (`tb_f2hbm`) | 4 / 8 / 16 / 32 ports, three clock ratios: every channel's native contract on an HBM model that reorders across IDs, runs transactions in any per-ID order and interleaves two IDs' read beats; bridges inside their pseudo-channels, bursts formed (~18% of transactions multi-beat under the mixed traffic), INCR within 4 KiB; host writes / reads on every port in PCIS order, B / R IDs, zeros past the last port | pass |
-| `test_f2_hbm_fabric_detects_missing_hazards` | HAZ = 0 returns stale data | pass |
+| `tests/test_f2_rtl.py::test_f2_hbm_fabric` (`tb_f2hbm`) | 4 / 8 / 16 / 32 ports, three clock ratios, through `tb_f2hbm_sc` (a behavioural stand-in per port for the HDK's SmartConnect, which has no Verilator model: the crossing, 512 -> 256, the AXI3 split, in-order responses) onto an HBM model that reorders reads against writes: every channel's native contract; every port's traffic inside its pseudo-channel, INCR within 4 KiB, runs of reads as bursts; host writes / reads on every port in PCIS order, B / R IDs, zeros past the last port | pass |
+| `test_f2_hbm_fabric_detects_missing_hazards` | HAZ = 0 (no direction barrier in the masters) returns stale data | pass |
 | `tests/test_f2_host.py` | S x NCH geometry (1x8, 2x8, 1x16, 4x8): bases, Board.write / read round trip with unaligned edges, every byte at beat_at's place; beat_at is the testbench's (RTL's) inverse | pass |
 | `tests/test_f2_build.py` | the HBM snapshot (top, scripts, constraints, wrapper, geometry, parameters, sources) for f2-hbm, :s2, :s4, f2-hbm16; the DDR snapshot without HBM files | pass |
 | existing F2 tests (DDR: tb_f2nch_protocol, tb_f2mem, tb_f2axil, build, host) | unchanged | pass |
@@ -238,13 +234,19 @@ python boards/f2/build.py --hdk /home/ubuntu/aws-fpga --target f2-hbm16 --out RU
 python boards/f2/build.py --hdk /home/ubuntu/aws-fpga --target f2-hbm16 --out RUN2 --flow BuildAll --package
 ```
 
-build.py checks the HDK and the cl_hbm IP (both stacks, 450 MHz, switch on, generated), copies the
-design and build directories, puts `cl_opentpu_hbm.sv`, `synth_cl_opentpu_hbm.tcl` and
-`cl_timing_user_hbm.tcl` in the DDR files' places, copies the HDK's `cl_mem_hbm_wrapper.sv`,
-writes `opentpu_geometry.vh` (S, NCH) and `opentpu_params.vh` (otpu_f2_hbm_sys's parameters), and
-runs the HDK's build_all.tcl with the clock recipes A1 B2 C0 H2 (H2: the HBM recipe the
-manifest records, as Alex's image). `--package` produces the Developer_CL tar for
-`aws ec2 create-fpga-image`.
+build.py checks the HDK, the cl_hbm IP (both stacks, 450 MHz, switch on, generated) and the
+cl_axi_sc_1x1 block design with its wrapper (`check_hbm_sc`: the interfaces' protocols, widths,
+ID widths and clock pins as the CL instantiates them), copies the design and build directories,
+puts `cl_opentpu_hbm.sv`, `synth_cl_opentpu_hbm.tcl` and `cl_timing_user_hbm.tcl` in the DDR
+files' places, appends the chosen floorplan (`--floorplan five | slr0 | none`) to
+`cl_pnr_user.tcl`, copies the HDK's `cl_mem_hbm_wrapper.sv`, writes `opentpu_geometry.vh` (S,
+NCH) and `opentpu_params.vh` (otpu_f2_hbm_sys's parameters), and runs the HDK's build_all.tcl
+with the directives (`--place-directive`, `--phys-directive`, `--route-directive`, `--retime`;
+`--recommended` = Alex's ExtraNetDelay_high / AggressiveExplore / Explore / retime) and the clock
+recipes A1 B2 C0 H2 (H2: the HBM recipe the manifest records, as Alex's image). `--package`
+produces the Developer_CL tar for `aws ec2 create-fpga-image`. The synthesis script reads the
+block design and its wrapper from the HDK's `HDK_BD_SRC_DIR` / `HDK_BD_GEN_DIR` as cl_mem_perf's
+does ([v4/f2-round5.md](v4/f2-round5.md)).
 
 ### Synthesis (f2-hbm16: S = 1, NCH = 16; f2-hbm: S = 1, NCH = 8)
 
@@ -285,12 +287,14 @@ FIFO's tail written every cycle (4bef3758) every clock meets setup.
 
 ## Remaining steps to a full build
 
-1. Place and route (`--flow BuildAll --package` above, hours). Expected timing risks: the 450 MHz
-   side of 16-32 bridges and port arbiters spread from the HBM's ports in SLR0 to slices in SLR1 /
-   SLR2 (the crossing FIFOs are the natural SLR boundary: a pblock per slice with its bridges'
-   core sides, the hclk sides and the port arbiters next to the HBM; AXI register slices before
-   the ports if needed); the core clock at 200 MHz with the adapter's NCH-wide B merge (a 4:1 or
-   8:1 mux after the B FIFO's LUT RAM read) and the order check's 64-entry compare.
+1. Place and route (`--flow BuildAll --package` above, hours): builds 1-4 failed timing in the
+   fabric's 450 MHz RTL ([v4/f2-timing.md](v4/f2-timing.md)); round 5 moved every openTPU block
+   to the core clock behind the HDK's SmartConnects ([v4/f2-round5.md](v4/f2-round5.md): the
+   build command with Alex's tuning). What remains at 200 MHz is the slice's own (the TMEM pump's
+   paths, the MXU's request registers: the TMEM box of the five-pblock floorplan) and the
+   adapter's NCH-wide B merge; the SmartConnects' size per port is read from the first
+   synthesis (for 16-32 ports the SLR0 box overflows and the slices spill into SLR1 / SLR2, the
+   SmartConnects staying by the ports).
 2. On the card: the vLED (bit 0 MMCMs locked, bit 1 HBM ready), CFG_DRAM / CFG_SLICES, a BAR4
    write / read of every port, `otpu-diag --mem`, then the token-exact checks (f2 docs).
 3. The word-address ISA change above, for an 8 GiB slice (the 27B in one slice).

@@ -451,3 +451,10 @@ only, the fabric is not in tb_top).
 The commits: 45ec6579 (the fabric: host, mem, port, nch), ea4ac41e and 3686f79e (the units'
 request registers; the DMA's is `t_ra_q`, `t_rq` being its port-B request register), 9ef46073
 (the CDC bound, `--place-directive`, docs/f2_hbm.md), and this document.
+
+## Round 5
+
+Structural: every openTPU block of the fabric moved to the core clock and the HDK's
+cl_axi_sc_1x1 SmartConnect put in front of every HBM port for the 450 MHz side, the way Alex's
+burst200 image did it: [f2-round5.md](f2-round5.md) (the comparison of the two fabrics, the
+plan, the tuning and floorplan options, the build command on opentpu-f2).
