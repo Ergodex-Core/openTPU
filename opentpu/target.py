@@ -56,8 +56,12 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
 # platform keys a [variants.<name>] table may set (a board build at another core clock: the
-# F2 HBM build's c150, docs/wide_port.md "Alex's shell")
-VARIANT_PLATFORM_KEYS = ("core_mhz",)
+# F2 HBM build's c150, docs/wide_port.md "Alex's shell"; mem_path "engine": the v5 memory
+# path, a 450 MHz engine per HBM port, docs/full_hbm.md)
+VARIANT_PLATFORM_KEYS = ("core_mhz", "mem_path")
+# optional uarch keys (absent: the RTL's default): NRD, the adapter's B read beats in flight
+# a channel (otpu_board NRD: 64 at NCH > 2; the v5 variants' 128, docs/full_hbm.md)
+UARCH_OPT_KEYS = ("MXU_E", "NRD")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
@@ -187,7 +191,7 @@ def load(name: str | None = None) -> Target:
                 raw["platform"][k] = v
             elif k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + UARCH_OPT_KEYS + TMEM3_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key "

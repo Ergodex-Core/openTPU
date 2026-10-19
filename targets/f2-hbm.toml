@@ -122,3 +122,26 @@ MCOLS = 8                       # build.py --target f2-hbm:p2rl8
 [variants.p2m8]                 # PORTB 2 on MCOLS 8 without row lanes: t2 QUAD at M = 2 (a
 PORTB = 2                       # verify's two rows or two sequences a chunk a cycle: MTP on
 MCOLS = 8                       # the t2 images, docs/ternary.md 9). build.py --target f2-hbm:p2m8
+
+[variants.v5]                   # v5, the full HBM (docs/full_hbm.md, the 2026-10-20 spec):
+S = 4                           # four slices, one per SLR and two in SLR2, each the p4rl slice
+PORTB = 4                       # (PORTB 4, int8 row lanes of 4, MCOLS 4, ALINE 64) on its 8
+ROWLANES = true                 # pseudo-channels: 32 HBM ports at a beat a core cycle each
+ALINE = 64                      # (2,048 B a cycle, 409.6 GB/s); the model sharded by rows over
+ACT_ROWS = 8                    # the slices (the collective's GATHER). Per channel a 450 MHz
+NRD = 128                       # engine (otpu_hbm_ch: bursts of 8 beats, 64 outstanding) and
+FIFO_DEPTH = 256                # 128 read beats in flight a channel in the adapter (NRD). The
+TRACE_DEPTH = 4096              # host shares port 31 through a 2 x 1 (mem_path engine, HOST_MUX).
+mem_path = "engine"             # Trimmed for two slices in one SLR: the chunk FIFO 256 entries
+                                # of 4 chunks, ACT RAM 8 rows, the trace 4K. build.py --target f2-hbm:v5
+
+[variants.v5s3]                 # v5 on three slices (24 channels, 307 GB/s): the host on its
+S = 3                           # own port 24, no 2 x 1 at 450 MHz; the attention's 4 query
+PORTB = 4                       # heads do not split three ways, so wq is replicated (+9% of a
+ROWLANES = true                 # slice's bytes). build.py --target f2-hbm:v5s3
+ALINE = 64
+ACT_ROWS = 8
+NRD = 128
+FIFO_DEPTH = 256
+TRACE_DEPTH = 4096
+mem_path = "engine"
