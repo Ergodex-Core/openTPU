@@ -388,6 +388,8 @@ def finding_family(kind,row):
         return 'c2_bram_output_register_recommendations'
     if check in ('CLKC-40','CLKC-56') and re.search(r'WRAPPER/CL/u_(?:core|hbm)_clk/inst/mmcme4_adv_inst',body):
         return 'source_bound_clock_wizard_placement_recommendations'
+    if check=='LUTAR-1' and re.search(r'LUT cell WRAPPER/CL/u_rst_(?:core|hbm)_i_1,',body):
+        return 'source_bound_reset_gate_review_required'
     if check=='LUTAR-1' and 'LUT cell WRAPPER/CL/SH_DDR/CCF_DDR_STAT_REQ/' in body:
         return 'disabled_ddr_stub_reset_support'
     if check=='LUTAR-1' and re.search(r'LUT cell WRAPPER/(?:HBM_SHIM/PIPE_WDATA_[01]/|IO_SHIM/CDC_ASYNC_CLK_EN_N_i_1)',body):
@@ -395,6 +397,10 @@ def finding_family(kind,row):
     if check=='CKLD-2' and 'Clock net WRAPPER/IO_SHIM/IBUF_SCK/O' in body:
         return 'exact_inherited_shell_spi_clock'
     if check=='CLKC-3' and 'WRAPPER/IO_SHIM/' in body and 'has a LOC constraint' in body:
+        return 'exact_inherited_shell_clock_buffer_placement'
+    if check=='CLKC-3' and any('The BUFG_GT cell '+name+' has a LOC constraint' in body for name in (
+        'SL/UC_PCIE4_BRIDGE/inst/pcie4_ip_i/inst/bufg_gt_sysclk',
+        'WRAPPER/RL/HOST_PCIE4C/inst/bufg_gt_sysclk')):
         return 'exact_inherited_shell_clock_buffer_placement'
     if check=='CLKC-40' and 'WRAPPER/IO_SHIM/MMCM_CLK_HBM_REF/inst/mmcme4_adv_inst' in body:
         return 'exact_inherited_shell_hbm_reference_mmcm'
@@ -405,6 +411,31 @@ def finding_family(kind,row):
     if check=='TIMING-9' and 'report_cdc' in body:
         return 'complete_current_cdc_review_required'
     return None
+
+
+def reset_gate_findings(findings,reset):
+    """Bind the warning to the observed reset gate and its four clear pins.
+
+    This is a reviewed prototype warning, not a proof of glitch freedom or of
+    reset-event minimum pulse width. The raw reset predicate proves the gate
+    inputs, primitive polarity, asynchronous assertion and synchronized release.
+    """
+    selected=[row for row in findings if finding_family('methodology',row)=='source_bound_reset_gate_review_required']
+    if not selected:return {}
+    require(reset.get('issues')==[] and bool(reset.get('canonical_facts')),'Missing raw reset-gate proof')
+    resets=reset['canonical_facts'].get('resets',{});facts={}
+    for row in selected:
+        match=re.search(r'LUT cell (WRAPPER/CL/u_rst_(core|hbm)_i_1),',row['body'])
+        require(match is not None,'Unrecognized reset gate')
+        gate=match[1];root='WRAPPER/CL/u_rst_'+match[2];proof=resets.get(root,{})
+        require(root not in facts and proof.get('gate',{}).get('cell')==gate,'Reset warning gate differs from raw proof')
+        pins={v.get('pins',{}).get('CLR') for v in proof.get('registers',{}).values()}
+        require(len(pins)==4 and None not in pins,'Incomplete raw reset clear inventory')
+        names=re.findall(r'WRAPPER/CL/[^\s,]+',row['body'])
+        require(len(names)==5 and {name.rstrip('.') for name in names}=={gate,*pins},'Reset warning endpoint inventory differs')
+        facts[root]={'gate':gate,'clear_pins':sorted(pins),'raw_topology_sha256':digest(proof),
+                     'finding':row,'glitch_freedom_asserted':False,'reset_event_minimum_pulse_asserted':False}
+    return facts
 
 
 def review_methodology(drc_text,methodology_text,*,witnesses=None):
@@ -686,7 +717,9 @@ def review_artifact(*,reports,auxiliary,checkpoint_sha256,prerequisites=None):
         objects=[g.td(row[1]) for row in g.records(reports['objects.tcldata']) if row and row[0]=='cdc']
         facts['cdc_inventory']=current_cdc_inventory(Path(reports['cdc.rpt']).read_text(),objects)
         no_clock=prerequisites.get('no_clock',{});reset=prerequisites.get('reset_status',{})
+        facts['reset_gate_warnings']=reset_gate_findings(parse_findings_report(method),reset)
         witnesses={'unused_net_topology_required':facts.get('unused_output_review',{}).get('issues')==[] and bool(facts.get('unused_output_review',{}).get('canonical_facts')),
+            'source_bound_reset_gate_review_required':bool(facts['reset_gate_warnings']),
             'exact_shell_no_clock_witness_required':no_clock.get('predicate_satisfied') is True and no_clock.get('canonical_current_sha256')==no_clock.get('canonical_shell_sha256') and no_clock.get('unresolved_count')==0,
             'complete_current_cdc_review_required':facts['cdc_inventory'] and reset.get('issues')==[] and bool(reset.get('canonical_facts'))}
         result=review_methodology(drc,method,witnesses=witnesses)

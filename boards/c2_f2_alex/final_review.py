@@ -25,6 +25,7 @@ CLASSES = {
     'reviewed-vendor-fifo-cdc': {'cdc'},
     'reviewed-vendor-handshake-cdc': {'cdc'},
     'reviewed-reset-status-cdc': {'cdc'},
+    'reviewed-reset-gate-warning': {'methodology'},
     'reviewed-memory-output-register-suggestion': {'methodology'},
     'reviewed-clock-placement-suggestion': {'methodology'},
     'reviewed-dsp-pipeline-suggestion': {'drc'},

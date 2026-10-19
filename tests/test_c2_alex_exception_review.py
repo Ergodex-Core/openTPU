@@ -178,3 +178,29 @@ def test_cdc_report_inventory_must_match_raw_objects():
 def test_wrapper_missing_raw_prerequisite_never_accepts():
     result=m.review_artifact(reports={},auxiliary={},checkpoint_sha256='a'*64)
     assert result['issues'] and result['route_qualified'] is False
+def test_reset_gate_warning_requires_exact_raw_gate_and_clear_pins():
+    import copy
+    root='WRAPPER/CL/u_rst_core';gate=root+'_i_1'
+    pins=[root+f'/arststages_ff_reg[{i}]/CLR' for i in range(4)]
+    row={'name':'LUTAR-1#1','check':'LUTAR-1','severity':'Warning',
+         'body':'LUT drives async reset alert\nLUT cell '+gate+', with 2 or more inputs, drives asynchronous preset/clear pin(s) '+',\n'.join(pins)+'. The LUT may glitch.'}
+    proof={'issues':[],'canonical_facts':{'resets':{root:{'gate':{'cell':gate},
+        'registers':{pin.rsplit('/',1)[0]:{'pins':{'CLR':pin}} for pin in pins}}}}}
+    result=m.reset_gate_findings([row],proof)
+    assert result[root]['clear_pins']==pins
+    assert result[root]['glitch_freedom_asserted'] is False
+    assert result[root]['reset_event_minimum_pulse_asserted'] is False
+    broken=copy.deepcopy(proof);broken['issues']=[{'reason':'polarity failure'}]
+    with pytest.raises(ValueError,match='raw reset'):m.reset_gate_findings([row],broken)
+    broken=copy.deepcopy(proof);broken['canonical_facts']['resets'][root]['gate']['cell']='other'
+    with pytest.raises(ValueError,match='gate differs'):m.reset_gate_findings([row],broken)
+    changed={**row,'body':row['body'].replace(pins[0],root+'/unexpected/CLR')}
+    with pytest.raises(ValueError,match='endpoint inventory'):m.reset_gate_findings([changed],proof)
+@pytest.mark.parametrize('cell',[
+    'SL/UC_PCIE4_BRIDGE/inst/pcie4_ip_i/inst/bufg_gt_sysclk',
+    'WRAPPER/RL/HOST_PCIE4C/inst/bufg_gt_sysclk'])
+def test_exact_protected_pcie_clock_buffer_advisory(cell):
+    row={'check':'CLKC-3','severity':'Advisory','body':'The BUFG_GT cell '+cell+' has a LOC constraint, but using the CLOCK_REGION property instead would give more flexibility.'}
+    assert m.finding_family('methodology',row)=='exact_inherited_shell_clock_buffer_placement'
+    assert m.finding_family('methodology',{**row,'body':row['body'].replace('bufg_gt_sysclk','unreviewed_buffer')}) is None
+    assert m.finding_family('methodology',{**row,'severity':'Critical Warning'}) is None
