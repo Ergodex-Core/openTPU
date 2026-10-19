@@ -772,13 +772,28 @@ module otpu_native_dram #(
   logic [PW-1:0] wq_n;
   logic [NCH+2:0] wacc_q;
   logic [15:0]   iss_w [NCH];
-  logic iss_all;                       // every channel's writes gone out are counted in n_wdone
+  logic iss_all;                       // every channel's writes gone out are counted in n_wdone:
+                                       //   a register (round 8): next cycle's issued counts
+                                       //   against the counts as they are now. Exact or a cycle
+                                       //   late on its rise (a count that arrives next cycle);
+                                       //   never high with a write uncounted: n_wdone cannot pass
+                                       //   the issued count, so n_wdone now == issued next means
+                                       //   nothing more arrives (round 7's placement ran n_wdone
+                                       //   from the chain's register through this compare, the
+                                       //   slice's halt and its trace counter's reset, 8 levels,
+                                       //   docs/wide_port.md "Round 8 RTL")
   always_comb begin
     iss_all = 1'b1;
     for (int c = 0; c < NCH; c++) iss_all &= iss_w[c] == n_wdone[c];
   end
+  logic iss_all_q;
+  always_ff @(posedge clk) begin
+    iss_all_q <= 1'b1;
+    for (int c = 0; c < NCH; c++)
+      if ((iss_w[c] + 16'(wiss[c])) != n_wdone[c]) iss_all_q <= 1'b0;
+  end
   // (at BREG the registered B request too: its write, or its read, is in neither count yet)
-  assign wr_idle = (wq_n == 0) && (wacc_q == '0) && (gv == '0) && iss_all &&
+  assign wr_idle = (wq_n == 0) && (wacc_q == '0) && (gv == '0) && iss_all_q &&
                    !(BREG && bq_take && bq_we);
   assign rd_idle = (bt_n == 0) && (ao_n == 0) && !(BREG && bq_go && !bq_we);
 

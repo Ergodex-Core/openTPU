@@ -25,7 +25,9 @@ def _ref(tmp_path):
 @pytest.mark.parametrize("chash", [1, 0])
 def test_native_nch2_matches_two_channel(have_verilator, tmp_path, chash):
     """NCH = 2: every output equals the two-channel adapter's in every cycle, on random traffic
-    of all three ports with random native readies, latencies and a_flush."""
+    of all three ports with random native readies, latencies and a_flush; wr_idle (since round
+    8 a register's compare) never high where the reference's is low and at most a cycle late on
+    a rise."""
     exe = rtlsim.build("tb_native_nch", [rtlsim.RTL / "mem/otpu_native_dram.sv", _ref(tmp_path),
                                          rtlsim.TB / "tb_native_nch.sv"],
                        {"NCH": 2, "REF": 1, "CHASH": chash})

@@ -100,9 +100,17 @@ module tb_native_nch;
       .n_cvalid(r_cvalid), .n_cready(n_cready[1:0]), .n_cwe(r_cwe), .n_caddr(r_caddr),
       .n_wvalid(r_wvalid), .n_wready(n_wready[1:0]), .n_wdata(r_wdata), .n_wmask(r_wmask),
       .n_rvalid(n_rvalid[1:0]), .n_rdata(n_rdata[1:0]), .n_wdone(n_wdone[1:0]));
+    // wr_idle: never high where the reference's is low; low where it is high only in the cycle
+    // the reference's rises (round 8: the adapter's every-write-counted compare is a register,
+    // so its wr_idle rises a cycle after a count that completes it arrives, never early;
+    // docs/wide_port.md "Round 8 RTL"). Every other output is identical every cycle
+    logic r_wr_idle_d;
+    always_ff @(posedge clk) r_wr_idle_d <= rst ? 1'b0 : r_wr_idle;
     always_ff @(negedge clk) if (!rst) begin
-      if ({r_a_rdy, r_sw_rdy, r_b_rdy, r_wr_idle, r_rd_idle} !== {a_rdy, sw_rdy, b_rdy, wr_idle, rd_idle})
+      if ({r_a_rdy, r_sw_rdy, r_b_rdy, r_rd_idle} !== {a_rdy, sw_rdy, b_rdy, rd_idle})
         fail("ref: a readiness or idle output differs");
+      if (wr_idle && !r_wr_idle) fail("ref: wr_idle high where the reference's is low");
+      if (!wr_idle && r_wr_idle && r_wr_idle_d) fail("ref: wr_idle low a cycle after the reference's rose");
       if (r_a_rvalid !== a_rvalid || (a_rvalid && r_a_rdata !== a_rdata)) fail("ref: port A data differs");
       if (r_b_rvalid !== b_rvalid || (b_rvalid && (r_b_rtag !== b_rtag || r_b_rdata !== b_rdata)))
         fail("ref: port B data differs");
