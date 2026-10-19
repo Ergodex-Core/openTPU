@@ -3,9 +3,11 @@
 **No C2 FPGA execution or physical HBM performance result is available yet.**
 The first integrated build, from frozen commit
 `4f7509123fdd2cf1eba5a2c88289a3e3c2709439`, was stopped after a clock DRC failure.
-The corrected full build is running from frozen commit
+The corrected full build from frozen commit
 `7028e35e8720cb70d7b38d65010813dd23d88bcf` on **`opentpu-f2`
-(`i-0c78de2253f66519d`) only**. RTL Lens results remain simulations.
+(`i-0c78de2253f66519d`) only** completed routing but **failed setup timing**
+at 16:25:56 UTC (21:55:56 IST). The continuation controller halted before
+publication or FPGA loading. RTL Lens results remain simulations.
 
 ## Standalone core synthesis and route
 
@@ -163,9 +165,47 @@ Live state and evidence are in
 `build/c2-fpga/remote/continuation-7028e35e-r2.launch-receipt.json`.
 Controller execution is not evidence that any physical benchmark has completed.
 
-Shell placement/routing and the separate setup, hold, bus-skew, CDC-witness,
-routing, DRC and methodology gates remain required. No AFI is published or loaded
-unless those gates pass. The planned execution host is the dedicated
+### Dedicated build's routed result
+
+Routing finished and a `.post_route.VIOLATED` checkpoint was retained. The full
+run took approximately **85 minutes 44 seconds**, from 15:00:12 to 16:25:56 UTC.
+The retained unit reports `Result=exit-code`, `ExecMainStatus=1`. The controller
+halted at 16:26:04 UTC; its durable state must not be reset to resume this failed
+image.
+
+| Routed gate | Result |
+|---|---:|
+| Setup WNS / TNS | **−4.024 ns / −6,933.125 ns** |
+| Setup failing endpoints, global summary | **11,841** |
+| Hold WNS / failing endpoints | +0.011 ns / 0 |
+| Bus-skew failures / unrouted nets / DRC blockers | 0 / 0 / 0 |
+| Gray groups / directional CDC witnesses | 47 / 6 |
+| Methodology blockers after existing classifications | 0 |
+
+The same-clock failures include 8,289 endpoints on the 450 MHz HBM fabric
+(worst −2.065 ns), 3,206 on the 200 MHz core (−4.024 ns), and 344 on the
+250 MHz host domain (−0.327 ns). The destination-period-bounded crossing groups
+also have setup violations: host→HBM −0.795 ns and host→core −0.162 ns. Endpoint
+counts across these tables are not additive to the global summary because the
+same endpoint can appear in more than one clock relationship.
+
+The worst core path is `u_ocl/m_araddr_reg[5]_replica_15` →
+`u_board/rd_value_reg[0]`: a same-core-clock SLR crossing followed by CSR decode,
+8.674 ns data delay, of which 8.361 ns is routing. The worst HBM path is
+`u_host/ar_sel_reg[3]` → `u_host/h_out_reg[4]`: 4.440 ns data delay, of which
+4.040 ns is routing. The host-domain worst path is `u_host/b_n_reg[0]` →
+`u_ocl/x_wdata_reg[28]/CE`. Fixing the single worst CSR path will not by itself
+qualify this image. Timing exceptions and clock frequencies remain unchanged.
+
+Local SSM receipts are `build/c2-fpga/remote/read-dedicated-timing-summary-result.json`,
+`read-dedicated-path-groups-result.json`, and `read-dedicated-clock-tables-result.json`.
+Full reports and checkpoints remain in the dedicated build directory above.
+No qualified archive, AFI, hardware session or hardware Lens profiles resulted
+from this failed build. Another full implementation will require a fresh source
+revision, output directory and continuation provenance.
+
+No AFI is published or loaded unless every qualification gate passes.
+The planned execution host remains the dedicated
 `i-0c78de2253f66519d`, with a fresh ownership/idle check and canonical device lock
 before loading; the previous image is restored afterward.
 
