@@ -32,9 +32,11 @@ module otpu_naxi_mem #(
   parameter int COPY       = 0,          // the lane memory's copy (otpu_native_mem COPY)
   parameter bit HASH       = 1'b0,       // the image's hash at the dump (otpu_native_mem HASH)
   parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket
-  parameter int NXF        = 0           // the chain pumped on clk_f (otpu_f2_hbm_axi NXF: the
+  parameter int NXF        = 0,          // the chain pumped on clk_f (otpu_f2_hbm_axi NXF: the
                                          //   build's otpu_xr2 itself, NXF clk_f stages, latency
                                          //   NXF / 2 + 2 core cycles each way); 0: NXR stages
+  parameter int QD         = 0           // otpu_native_axi's queues (0: the build's, otpu_f2_hbm_axi
+                                         //   QDX: 16, deeper with NXF)
 ) (
   input  logic                  clk,
   input  logic                  clk_f,       // NXF > 0: 2 x clk, rising with it (tb_top)
@@ -72,6 +74,16 @@ module otpu_naxi_mem #(
   // for the reads in flight to drain (wwait), cycles a read at the head waits for the writes'
   // responses (rwait), and write episodes (a write taking the head after reads: switches)
   longint wwait [NCH], rwait [NCH], nswitch [NCH];
+  // the chain's latency each way and otpu_native_axi's queues as otpu_f2_hbm_axi sizes them (LX,
+  // QDX: the slots NXR's 3-stage chain leaves usable, kept at the pumped chain's round trip)
+  localparam int LX = (NXF > 0) ? NXF / 2 + 2 : NXR;
+  function automatic int pow2ceil(input int x);
+    int v;
+    v = 1;
+    while (v < x) v = v * 2;
+    return v;
+  endfunction
+  localparam int QDN = (QD > 0) ? QD : (NXF > 0) ? pow2ceil(16 - 2 * 3 + 2 * LX) : 16;
   for (genvar c = 0; c < NCH; c++) begin : g_ch
     // ---- the SLR chain: down the takes with their payloads, up the readies and responses
     localparam int DW = 1 + 1 + 25 + 1 + 512 + 64, UW = 1 + 1 + 1 + 512 + 16;
@@ -107,8 +119,7 @@ module otpu_naxi_mem #(
     logic awvalid, awready, wvalid, wready, bvalid, bready, arvalid, arready, rvalid, rlast, rready;
     logic [511:0] wdata;
     logic [63:0] wstrb;
-    otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(16),
-                      .XL(2 * ((NXF > 0) ? NXF / 2 + 2 : NXR)), .MAX_OUT(128),
+    otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(QDN), .XL(2 * LX), .MAX_OUT(128),
                       .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER)) u_naxi (
       .clk, .rst,
       .n_cvalid(b_cvalid), .n_cready(b_cready), .n_cwe(b_cwe), .n_caddr(b_caddr),

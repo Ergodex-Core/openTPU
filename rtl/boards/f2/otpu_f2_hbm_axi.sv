@@ -148,8 +148,19 @@ module otpu_f2_hbm_axi #(
   logic [NPORT-1:0][511:0] b_wdata, b_rdata;
   logic [NPORT-1:0][63:0]  b_wmask;
   logic [NPORT-1:0][15:0]  b_wdone;
-  // the chain's latency each way, core cycles (u_naxi's XL: its readies' round trip)
+  // the chain's latency each way, core cycles (u_naxi's XL: its readies' round trip), and u_naxi's
+  // queues: XL of their slots stay free for the takes in the chain (n_cready = cn < QD - XL), so the
+  // pumped chain's longer round trip gets deeper queues, the next power of two that keeps the
+  // slots NXR's chain leaves usable (16 - 6 = 10: the bursts' coalescing needs them; at 16 - 10 =
+  // 6 the F2 path's token ran 23% longer, docs/v4/p3-status.md)
   localparam int LX = (NXF > 0) ? NXF / 2 + 2 : NXR;
+  function automatic int pow2ceil(input int x);
+    int v;
+    v = 1;
+    while (v < x) v = v * 2;
+    return v;
+  endfunction
+  localparam int QDX = (NXF > 0) ? pow2ceil(QD - 2 * NXR + 2 * LX) : QD;
   if (NXF > 0) begin : g_xf
     localparam int DW = 1 + 1 + 25 + 1 + 512 + 64;   // down: take, we, beat, take, data, mask
     localparam int UW = 1 + 1 + 1 + 512 + 16 + 1;    // up: readies, rvalid, data, wdone, err
@@ -192,7 +203,7 @@ module otpu_f2_hbm_axi #(
   end
 
   for (genvar p = 0; p < NPORT; p++) begin : g_port
-    otpu_native_axi #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .QD(QD), .XL(2 * LX),
+    otpu_native_axi #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .QD(QDX), .XL(2 * LX),
                       .MAX_OUT(MAX_OUT), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
                       .READ_WAIT(READ_WAIT), .ORDER(ORDER), .PORDER(PORDER)) u_naxi (
       .clk, .rst(rst_q),

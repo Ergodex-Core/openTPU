@@ -294,7 +294,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
         # the SLR chain and otpu_native_axi per channel; the lane memory's copies each)
         p["NAXI"] = 1
-        for k in ("XR", "BURST", "IDLE", "WAIT", "OT", "PORDER", "XF"):
+        for k in ("XR", "BURST", "IDLE", "WAIT", "OT", "PORDER", "XF", "QD"):
             if os.environ.get("OTPU_NAXI_" + k):
                 p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
