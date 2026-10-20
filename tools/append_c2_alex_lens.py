@@ -189,6 +189,25 @@ def checked_result(result,fixture,expected,qualification,device,repeat,mode):
     require(result['measured_window']==
         'START acceptance through final core commit; excludes preload and host readback','Unexpected measurement interval')
 
+def restoration_baseline(directory,plan,report,qualification):
+    """Replay an explicit restoration target without changing legacy captures."""
+    path=Path(directory)/'baseline-record.json'
+    if 'baseline' not in qualification:
+        require('baseline_record_sha256' not in qualification and 'baseline' not in plan and
+                'baseline' not in report and not path.exists(),'Unbound restoration baseline')
+        return None
+    descriptor=S.validate_baseline_descriptor(qualification['baseline'])
+    digest=qualification.get('baseline_record_sha256')
+    E.digest(digest);regular(path)
+    require(sha(path)==digest and read(path)==descriptor,'Frozen restoration baseline differs')
+    require(plan.get('baseline')==report.get('baseline')==descriptor,'Selected restoration baseline differs')
+    require(qualification.get('agfi_id')!=descriptor['agfi_id'],'Candidate equals restoration baseline')
+    wanted=dict(agfi=descriptor['agfi_id'],state='loaded',status_code=0,error='ok',error_code=0)
+    require(report.get('original_image')==report.get('restored_image')==wanted,
+            'Original/restored image differs from selected baseline')
+    return descriptor
+
+
 def checked_session(directory,manifest,manifest_sha256,evidence_dir,evidence_manifest_sha256,
                     image_record,image_record_sha256):
     directory=Path(os.path.abspath(directory))
@@ -205,11 +224,15 @@ def checked_session(directory,manifest,manifest_sha256,evidence_dir,evidence_man
             report.get('initial_bdf')==S.INITIAL_BDF,'Unexpected hardware session target')
     for key in ('candidate_bdf','restored_bdf'):
         require(S.BDF_RE.fullmatch(report.get(key,'')),'Missing checked BDF: '+key)
+    q=plan['qualification'];require(report.get('qualification')==q,'Session/plan qualification differs')
+    selected=restoration_baseline(directory,plan,report,q)
     before,after=report['original_identity'],report['restored_identity']
-    S.require_baseline(before);S.require_baseline(after)
+    if selected is None:
+        S.require_baseline(before);S.require_baseline(after)
+    else:
+        S.require_baseline(before,selected);S.require_baseline(after,selected)
     require({k:v for k,v in before.items() if k!='status'}=={k:v for k,v in after.items() if k!='status'},
             'Restored baseline identity differs from the original')
-    q=plan['qualification'];require(report.get('qualification')==q,'Session/plan qualification differs')
     require(q.get('schema')==1 and q.get('kind')=='c2-alex-session-qualification' and
             q.get('route_qualified') is True and q.get('hardware_measured') is False,
             'Wrong Alex qualification record')

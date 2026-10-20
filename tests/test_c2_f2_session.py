@@ -320,3 +320,78 @@ def test_default_plan_freezes_multiple_inputs_without_external_operations(tmp_pa
     assert not plan["execute"] and len(plan["fixtures"])==2
     assert all(Path(f["frozen_path"]).is_file() for f in plan["fixtures"])
     assert Path(plan["qualification"]["build_manifest"])==out/"build-inputs.json"
+
+
+def reviewed_baseline():
+    return dict(schema=1,kind='c2-f2-restoration-baseline',instance_id=S.INSTANCE,
+        agfi_id='agfi-00c2d61ec51bd89aa',afi_id='afi-07e20bf5679cf37d7',
+        owner='438374459156',shell_version='0x10212415',
+        identity=dict(id=1330925653,version=8389640,regmap=5,build_id=2118297126,platform=3,core_khz=200000))
+
+
+class CurrentBaselineOps(FakeOps):
+    def __init__(self,fail=None,move=True):
+        super().__init__(fail,move);self.image=reviewed_baseline()['agfi_id'];self.after_restore=False
+    def baseline(self,bdf,*,wait=False):
+        values=dict(reviewed_baseline()['identity'],status=104)
+        if self.fail=='baseline_identity' or self.fail=='restored_identity' and self.after_restore:
+            values['build_id']^=1
+        if self.fail=='baseline_busy':values['status']=0
+        return values
+    def load(self,image,restoring=False):
+        super().load(image,restoring)
+        if restoring:
+            self.after_restore=True
+            if self.fail=='restored_image':self.image=S.ORIGINAL
+
+
+def run_current(ops,**extra):
+    return S.session(ops,dict(agfi_id=AGFI,build_id='4f750912',baseline=reviewed_baseline(),**extra),['one','two'])
+
+
+@pytest.mark.parametrize('failure',[None,'load','candidate','benchmark','cancel','restore','restored_image','restored_identity'])
+def test_explicit_current_baseline_restores_same_image_before_unlock(failure):
+    ops=CurrentBaselineOps(failure)
+    if failure:
+        with pytest.raises(RuntimeError):run_current(ops)
+        report=ops.report
+    else:report=run_current(ops)
+    assert [e for e in ops.events if e[0]=='load']==[('load',AGFI),('load',reviewed_baseline()['agfi_id'])]
+    assert report['baseline']==reviewed_baseline() and report['original_image']['agfi']==reviewed_baseline()['agfi_id']
+    assert not ops.held
+    assert max(i for i,e in enumerate(ops.events) if e[0]=='load')<min(i for i,e in enumerate(ops.events) if e[0]=='release')
+    if failure in ('restore','restored_image','restored_identity'):
+        assert not report['restored'] and 'restore_error' in report
+    else:
+        assert report['restored'] and report['restored_image']==report['original_image']
+        assert report['restored_identity']==report['original_identity']
+
+
+@pytest.mark.parametrize('failure',['baseline_identity','baseline_busy','initial_image','candidate_is_baseline'])
+def test_explicit_baseline_mismatch_refuses_before_any_load(failure):
+    ops=CurrentBaselineOps(failure)
+    q=dict(agfi_id=AGFI,build_id='4f750912',baseline=reviewed_baseline())
+    if failure=='initial_image':ops.image=S.ORIGINAL
+    if failure=='candidate_is_baseline':q['agfi_id']=reviewed_baseline()['agfi_id']
+    with pytest.raises(RuntimeError):S.session(ops,q,['one'])
+    assert not any(e[0]=='load' for e in ops.events) and not ops.held
+
+
+@pytest.mark.parametrize('key,value',[('schema',True),('kind','other'),('instance_id','other'),
+    ('agfi_id',S.ORIGINAL),('afi_id','afi-00000000000000000'),('owner','other'),('shell_version','0x0')])
+def test_baseline_descriptor_is_exact_reviewed_image(key,value):
+    baseline=reviewed_baseline();baseline[key]=value
+    with pytest.raises(ValueError):S.validate_baseline_descriptor(baseline)
+
+
+@pytest.mark.parametrize('key',['id','version','regmap','build_id','platform','core_khz'])
+def test_baseline_descriptor_requires_exact_bar_identity(key):
+    baseline=reviewed_baseline();baseline['identity'][key]^=1
+    with pytest.raises(ValueError):S.validate_baseline_descriptor(baseline)
+
+
+def test_baseline_descriptor_cannot_add_fields_or_substitute_source_build():
+    baseline=reviewed_baseline();baseline['identity']['build_id']=int('f85ac03c',16)
+    with pytest.raises(ValueError):S.validate_baseline_descriptor(baseline)
+    baseline=reviewed_baseline();baseline['unreviewed']=True
+    with pytest.raises(ValueError):S.validate_baseline_descriptor(baseline)

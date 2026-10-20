@@ -170,6 +170,72 @@ def test_complete_schema_exact_results_and_all_30_profiles(parser_case):
     assert [p['board']['mode'] for p in profiles[:6]]==[0,1,1,0,0,1]
 
 
+def explicit_baseline_case(parser_case):
+    """Extend the synthetic parser fixture; never actual hardware evidence."""
+    directory,manifest,run=parser_case
+    descriptor=dict(schema=1,kind='c2-f2-restoration-baseline',instance_id=L.S.INSTANCE,
+        agfi_id='agfi-00c2d61ec51bd89aa',afi_id='afi-07e20bf5679cf37d7',owner=L.D.ACCOUNT,
+        shell_version='0x10212415',identity=dict(id=0x4f545055,version=0x800408,regmap=5,
+            build_id=0x7e42a626,platform=3,core_khz=200000))
+    put(directory/'baseline-record.json',descriptor)
+    frozen=L.read(directory/'qualification.json')
+    frozen.update(baseline=descriptor,baseline_record_sha256=L.sha(directory/'baseline-record.json'))
+    put(directory/'qualification.json',frozen)
+    plan=L.read(directory/'plan.json')
+    planq=dict(frozen,qualification_file=plan['qualification']['qualification_file'],
+        qualification_sha256=L.sha(directory/'qualification.json'))
+    plan.update(qualification=planq,baseline=descriptor);put(directory/'plan.json',plan)
+    report=L.read(directory/'session.json')
+    identity=dict(descriptor['identity'],status=L.S.R.ST_WR_IDLE|L.S.R.ST_CALIB0|L.S.R.ST_CALIB1)
+    image=dict(agfi=descriptor['agfi_id'],state='loaded',status_code=0,error='ok',error_code=0)
+    report.update(qualification=planq,baseline=descriptor,original_identity=identity,restored_identity=identity,
+                  original_image=image,restored_image=image)
+    put(directory/'session.json',report)
+    for bench in sorted(directory.glob('benchmark-*')):
+        provenance=L.read(bench/'provenance.json')
+        provenance.update(qualification=frozen,qualification_sha256=planq['qualification_sha256'])
+        put(bench/'provenance.json',provenance)
+        results=L.read(bench/'results.json')
+        for result in results:
+            result['source']=provenance
+            put(bench/f"result-{result['repeat']}-{result['mode']}.json",result)
+        put(bench/'results.json',results)
+        L.lens.save([C.lens_data(result,
+                    f"C2 Alex {'decode' if result['mode'] else 'legacy M1'} N{result['rows']} KB{result['kb']} repeat{result['repeat']}")
+                    for result in results],
+                    bench/'c2-f2.otpuprof')
+    capture(directory,manifest)
+    return directory,manifest,run
+
+
+def test_explicit_restoration_baseline_keeps_all_thirty_profiles(parser_case):
+    _,_,run=explicit_baseline_case(parser_case)
+    profiles,_=run()
+    assert len(profiles)==30
+
+
+@pytest.mark.parametrize('change',['selected','original_image','restored_image','before_identity',
+    'after_identity','baseline_bytes','missing_baseline_file','plan_baseline','missing_image','unbound'])
+def test_explicit_restoration_baseline_rejects_mismatch_after_transfer_rehash(parser_case,change):
+    directory,manifest,run=explicit_baseline_case(parser_case)
+    path=directory/'session.json';report=L.read(path)
+    if change=='selected':report['baseline']['agfi_id']='agfi-'+'3'*17
+    elif change in ('original_image','restored_image'):report[change]['agfi']='agfi-'+'4'*17
+    elif change in ('before_identity','after_identity'):
+        report['original_identity' if change=='before_identity' else 'restored_identity']['build_id']+=1
+    elif change=='baseline_bytes':
+        p=directory/'baseline-record.json';p.write_text(p.read_text()+' ')
+    elif change=='missing_baseline_file':(directory/'baseline-record.json').unlink()
+    elif change=='plan_baseline':
+        p=directory/'plan.json';plan=L.read(p);del plan['baseline'];put(p,plan)
+    elif change=='missing_image':del report['restored_image']
+    elif change=='unbound':
+        p=directory/'plan.json';plan=L.read(p);del plan['qualification']['baseline']
+        report['qualification']=plan['qualification'];put(p,plan)
+    put(path,report);capture(directory,manifest)
+    with pytest.raises((ValueError,RuntimeError,FileNotFoundError)):run()
+
+
 @pytest.mark.parametrize('change,reason',[
     ('not_restored','incomplete'),('logging_error','failure'),('wrong_tag','five-tag'),
     ('wrong_manifest','qualification'),('candidate','Candidate identity'),('dirty_host','not clean'),('wrong_host','trusted session'),

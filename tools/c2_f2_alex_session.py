@@ -8,8 +8,10 @@ and the thin Alex benchmark entrypoint. Default planning never touches hardware.
 from __future__ import annotations
 import argparse
 import importlib.util
+import hashlib
 import json
 import os
+import stat
 from pathlib import Path
 import sys
 
@@ -87,15 +89,38 @@ class AlexLocalOps(S.LocalOps):
             env=env,timeout=900,cancellable=True)
 
 
+def load_baseline_record(path, digest):
+    """Read bounded, independently pinned data; never infer a baseline from hardware."""
+    if (path is None) != (digest is None):
+        raise ValueError('Baseline record and independently pinned SHA256 are both required')
+    if path is None: return None, None
+    E.digest(digest)
+    path=Path(os.path.abspath(path));E.no_symlink(path)
+    info=path.stat()
+    if not stat.S_ISREG(info.st_mode) or info.st_nlink!=1 or not 0<info.st_size<=65536:
+        raise ValueError('Unsafe or oversized baseline record')
+    with path.open('rb') as stream: raw=stream.read(65537)
+    if len(raw)>65536 or hashlib.sha256(raw).hexdigest()!=digest:
+        raise ValueError('Baseline record differs from independently pinned SHA256')
+    return S.validate_baseline_descriptor(E.decode(raw)),raw
+
+
 def prepare(args):
     if not 1<=args.repeats<=100:raise ValueError('repeats must be1..100')
+    baseline,baseline_raw=load_baseline_record(args.baseline_record,args.baseline_record_sha256)
     q=qualify(args.evidence_dir,args.evidence_manifest_sha256,args.image_record,args.image_record_sha256)
+    if baseline is not None:
+        if q['agfi_id']==baseline['agfi_id']:raise ValueError('Candidate must differ from the selected restoration baseline')
+        q.update(baseline=baseline,baseline_record_sha256=args.baseline_record_sha256)
     loaded=[];fixtures=[]
     for path in args.fixture:
         f=C.Fixture.load(path);f.reference();loaded.append(f)
         fixtures.append(dict(fixture=str(path.resolve()),fixture_sha256=f.digest(),
             fixture_file_sha256=S.sha(path),rows=f.rows,kb=f.kb))
     out=args.out.resolve();out.mkdir(parents=True,exist_ok=False)
+    if baseline_raw is not None:
+        baseline_path=out/'baseline-record.json';baseline_path.write_bytes(baseline_raw)
+        if S.sha(baseline_path)!=q['baseline_record_sha256']:raise RuntimeError('Frozen baseline record changed')
     (out/'fixtures').mkdir()
     for idx,(entry,f) in enumerate(zip(fixtures,loaded)):
         path=out/'fixtures'/f'{idx:02d}.npz';f.save(path)
@@ -106,6 +131,7 @@ def prepare(args):
     frozen=out/'qualification.json';S.write_json(frozen,q)
     q=dict(q,qualification_file=str(frozen),qualification_sha256=S.sha(frozen))
     S.write_json(out/'plan.json',dict(qualification=q,fixtures=fixtures,repeats=args.repeats,execute=args.execute,
+        **({'baseline':baseline} if baseline is not None else {}),
         stages=['fresh AWS evidence/image binding','dedicated host and canonical lock',
                 'baseline image/idle check','load candidate','rescan and rediscover BDF',
                 'canonical C2 benchmark with inherited lock','restore original image and identity'],
@@ -117,6 +143,7 @@ def main(argv=None):
     p=argparse.ArgumentParser(description=__doc__)
     p.add_argument('--evidence-dir',type=Path,required=True);p.add_argument('--evidence-manifest-sha256',required=True)
     p.add_argument('--image-record',type=Path,required=True);p.add_argument('--image-record-sha256',required=True)
+    p.add_argument('--baseline-record',type=Path);p.add_argument('--baseline-record-sha256')
     p.add_argument('--fixture',type=Path,action='append',required=True)
     p.add_argument('--out',type=Path,required=True);p.add_argument('--python',default=sys.executable)
     p.add_argument('--repeats',type=int,default=3);p.add_argument('--execute',action='store_true')

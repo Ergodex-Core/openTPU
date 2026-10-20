@@ -211,3 +211,44 @@ def test_failed_prepublication_record_need_not_have_an_image(tmp_path):
     r['state']='failed';r.pop('image_id');r.pop('global_image_id')
     D.validate_record(r,v)
     with pytest.raises(ValueError,match='not available'):D.verify_deployment(r,v)
+
+
+def test_explicit_baseline_plan_freezes_exact_pinned_bytes(tmp_path,monkeypatch):
+    root,v,r,path=verified_fixture(tmp_path);monkeypatch.setattr(A.E,'verify_bundle',lambda *a:v)
+    fixture=tmp_path/'fixture.npz';A.C.make_fixture(5,3).save(fixture)
+    baseline=tmp_path/'baseline.json';raw=(json.dumps(F.reviewed_baseline(),indent=3)+'\n').encode();baseline.write_bytes(raw)
+    monkeypatch.setattr(A,'AlexLocalOps',lambda *a:pytest.fail('plan must not construct physical operations'))
+    out=tmp_path/'session'
+    A.main(['--evidence-dir',str(root),'--evidence-manifest-sha256',v['manifest_sha256'],
+        '--image-record',str(path),'--image-record-sha256',A.S.sha(path),'--fixture',str(fixture),'--out',str(out),
+        '--baseline-record',str(baseline),'--baseline-record-sha256',A.S.sha(baseline)])
+    plan=json.loads((out/'plan.json').read_text());q=plan['qualification']
+    assert (out/'baseline-record.json').read_bytes()==raw
+    assert plan['baseline']==q['baseline']==F.reviewed_baseline()
+    assert q['baseline_record_sha256']==A.S.sha(baseline)
+    assert B.read_qualification(Path(q['qualification_file']),q['qualification_sha256'])['baseline']==F.reviewed_baseline()
+    baseline.write_text('{}')
+    assert (out/'baseline-record.json').read_bytes()==raw
+
+
+@pytest.mark.parametrize('change',['hash','bytes','symlink','ancestor','missing_hash','missing_path','extra_field','source_build_id'])
+def test_baseline_file_rejects_unpinned_or_unreviewed_data(tmp_path,change):
+    p=tmp_path/'baseline.json';p.write_text(json.dumps(F.reviewed_baseline()));sha=A.S.sha(p)
+    if change=='hash':sha='0'*64
+    elif change=='bytes':p.write_text('{}')
+    elif change in ('extra_field','source_build_id'):
+        data=F.reviewed_baseline()
+        if change=='extra_field':data['accepted']=True
+        else:data['identity']['build_id']=int('f85ac03c',16)
+        p.write_text(json.dumps(data));sha=A.S.sha(p)
+    elif change=='symlink':
+        alias=tmp_path/'alias';alias.symlink_to(p);p=alias
+    elif change=='ancestor':
+        alias=tmp_path/'alias';alias.symlink_to(tmp_path,target_is_directory=True);p=alias/'baseline.json'
+    elif change=='missing_hash':sha=None
+    else:p=None
+    with pytest.raises(ValueError):A.load_baseline_record(p,sha)
+
+
+def test_baseline_absence_preserves_legacy_mode():
+    assert A.load_baseline_record(None,None)==(None,None)

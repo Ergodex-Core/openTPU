@@ -140,13 +140,37 @@ def require_image(image, agfi):
         raise RuntimeError(f"unexpected slot image/status: {image}")
 
 
-def require_baseline(values):
+def validate_baseline_descriptor(record):
+    """Only the explicitly reviewed current F2 baseline is selectable.
+
+    Its image source revision is f85ac03c; the frozen wrapper's BAR build ID is
+    0x7e42a626. These are different identities and must not be substituted.
+    """
+    expected = dict(schema=1, kind="c2-f2-restoration-baseline", instance_id=INSTANCE,
+        agfi_id="agfi-00c2d61ec51bd89aa", afi_id="afi-07e20bf5679cf37d7",
+        owner="438374459156", shell_version="0x10212415",
+        identity=dict(id=1330925653, version=8389640, regmap=5,
+                      build_id=2118297126, platform=3, core_khz=200000))
+    if (not isinstance(record, dict) or record != expected or
+            type(record.get("schema")) is not int or
+            not isinstance(record.get("identity"), dict) or
+            any(type(v) is not int for v in record["identity"].values())):
+        raise ValueError("Unreviewed restoration baseline descriptor")
+    return expected
+
+
+def require_baseline(values, descriptor=None):
     status = values["status"]
     ready = R.ST_WR_IDLE | R.ST_CALIB0 | R.ST_CALIB1
     if (values["id"] != R.ID_OTPU or values["platform"] != 3 or values["core_khz"] != 200000 or
             status & ready != ready or (status & R.ST_RUN and not status & R.ST_HALTED) or
             status & (R.ST_ERROR | R.ST_LOADING | R.ST_AXI_ERR | R.ST_ECC_DED)):
         raise RuntimeError(f"original image is not a healthy idle openTPU baseline: {values}")
+    if descriptor is not None:
+        expected = validate_baseline_descriptor(descriptor)["identity"]
+        if ({k:v for k,v in values.items() if k != "status"} != expected or
+                any(type(values.get(k)) is not int for k in expected)):
+            raise RuntimeError("Original/restored BAR identity differs from pinned baseline")
 
 
 def stderr_fallback(message):
@@ -181,10 +205,15 @@ def foreign_handles(bdf, *, proc_root=Path("/proc"), sysfs_root=Path("/sys/bus/p
 
 def session(ops, qualification, fixtures, *, repeats=3):
     """Injectable control flow. `ops` owns locks, subprocesses and atomic evidence."""
+    baseline = validate_baseline_descriptor(qualification["baseline"]) if "baseline" in qualification else None
+    original = baseline["agfi_id"] if baseline is not None else ORIGINAL
+    if qualification.get("agfi_id") == original:
+        raise RuntimeError("Candidate must differ from the selected restoration baseline")
     if ops.instance_id() != INSTANCE:
         raise RuntimeError("refusing hardware access outside the dedicated F2 instance")
     report = dict(instance_id=INSTANCE, slot=SLOT, qualification=qualification,
                   phase="preflight", restored=False, load_attempted=False)
+    if baseline is not None: report["baseline"] = baseline
     ops.record(report)
     report["aws_image_binding"] = ops.verify_image_binding(qualification)
     ops.record(report)
@@ -201,10 +230,11 @@ def session(ops, qualification, fixtures, *, repeats=3):
         if initial != INITIAL_BDF:
             raise RuntimeError("dedicated slot topology changed before acquiring the expected canonical lock")
         own(initial)
-        require_image(ops.describe(), ORIGINAL)
+        original_image = ops.describe()
+        require_image(original_image, original)
         before = ops.baseline(initial)
-        require_baseline(before)
-        report.update(original_identity=before, initial_bdf=initial)
+        require_baseline(before, baseline)
+        report.update(original_image=original_image, original_identity=before, initial_bdf=initial)
         ops.record(report)
         failure, load_attempted = None, False
         logging_errors = []
@@ -257,13 +287,14 @@ def session(ops, qualification, fixtures, *, repeats=3):
                 try:
                     ops.wait_terminal()
                     own(ops.discover(allow_unconfigured=True))
-                    ops.load(ORIGINAL, restoring=True)
+                    ops.load(original, restoring=True)
                     ops.rescan()
                     restored_bdf = ops.discover()
                     own(restored_bdf)
-                    require_image(ops.describe(), ORIGINAL)
+                    report["restored_image"] = ops.describe()
+                    require_image(report["restored_image"], original)
                     after = ops.baseline(restored_bdf, wait=True)
-                    require_baseline(after)
+                    require_baseline(after, baseline)
                     if {k:v for k,v in after.items() if k != "status"} != {k:v for k,v in before.items() if k != "status"}:
                         raise RuntimeError("restored image identity differs from the original snapshot")
                     report.update(restored=True, restored_bdf=restored_bdf, restored_identity=after)
