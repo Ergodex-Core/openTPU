@@ -52,12 +52,15 @@ module otpu_top
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
   parameter bit LMEM       = 1'b1,    // AXI = 1, MXU_C > 1: the lane memory (see the top)
+  parameter bit SWFILL     = 1'b1,    // AXI = 1: SW partial beats with a fill read (otpu_native_dram;
+                                      //   0: with their byte masks, the F2 build's; OTPU_SWFILL)
   parameter bit NAXI       = 1'b0,    // AXI = 1: the F2 HBM build's channel path in front of the
   parameter int NAXI_XR    = 3,       //   model (sim/verilator/otpu_naxi_mem.sv: NAXI_XR SLR
   parameter int NAXI_BURST = 8,       //   stages each way, otpu_native_axi with its read bursts,
   parameter int NAXI_IDLE  = 1,       //   gather timeout and wait, the SmartConnect's
   parameter bit NAXI_WAIT  = 1'b1,    //   transactions; the build's settings: otpu_f2_hbm_sys;
-  parameter int NAXI_OT    = 32       //   rtlsim OTPU_NAXI)
+  parameter int NAXI_OT    = 32,      //   rtlsim OTPU_NAXI)
+  parameter bit NAXI_PORDER = 1'b0    //   otpu_native_axi's barriers per page bucket (OTPU_NAXI_PORDER)
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -119,7 +122,7 @@ module otpu_top
       logic [2*MXU_C-1:0][511:0] wdata, rdata;
       logic [2*MXU_C-1:0][63:0] wmask;
       logic [2*MXU_C-1:0][15:0] wdone;
-      otpu_lane_mem #(.D(D), .C(MXU_C)) u_lmem (
+      otpu_lane_mem #(.D(D), .C(MXU_C), .SWFILL(SWFILL)) u_lmem (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -135,7 +138,7 @@ module otpu_top
         if (NAXI) begin : g_naxi
           otpu_naxi_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(2), .NXR(NAXI_XR),
                           .READ_BURST(NAXI_BURST), .READ_IDLE(NAXI_IDLE), .READ_WAIT(NAXI_WAIT),
-                          .OT(NAXI_OT), .COPY(l), .HASH(1'b1)) u_mem (
+                          .OT(NAXI_OT), .COPY(l), .HASH(1'b1), .PORDER(NAXI_PORDER)) u_mem (
             .clk, .rst(sys_rst), .run_rst(rst),
             .n_cvalid(cvalid[2*l +: 2]), .n_cready(cready[2*l +: 2]), .n_cwe(cwe[2*l +: 2]),
             .n_caddr(caddr[2*l +: 2]), .n_wvalid(wvalid[2*l +: 2]), .n_wready(wready[2*l +: 2]),
@@ -184,7 +187,7 @@ module otpu_top
       logic [1:0][511:0] wdata, rdata;
       logic [1:0][63:0] wmask;
       logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .APS(MXU_C > 1)) u_adapt (
+      otpu_native_dram #(.D(D), .APS(MXU_C > 1), .SWFILL(SWFILL)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,

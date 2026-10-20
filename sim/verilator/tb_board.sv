@@ -224,7 +224,7 @@ module tb_board;
     logic [1:0] pv;
     if (s == 0) begin : g_0
       assign fl = dut.x_rst[0] || dut.x_ld_start[0] || dut.a_inval;
-      assign al_v = dut.u_mem.al_v; assign pv = dut.u_mem.pv;
+      assign al_v = dut.u_mem.g_cp[0].u_adapt.al_v; assign pv = dut.u_mem.g_cp[0].u_adapt.pv;
     end else begin : g_s
       assign fl = dut.x_rst[s] || dut.x_ld_start[s] || dut.g_slice[s].a_inval;
       assign al_v = dut.g_slice[s].u_mem.al_v; assign pv = dut.g_slice[s].u_mem.pv;

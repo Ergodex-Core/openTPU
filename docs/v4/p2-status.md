@@ -180,6 +180,11 @@ token_on_board --runslow` (C 1 and 4), the three real-token runs. Each Verilator
 
 ## What remains (M3-M7)
 
+**Update (2026-10-20, branch p2-f2): M4 and M5 are in [p2-f2.md](p2-f2.md)**: the lane memory (an
+image copy and two-channel adapter a lane, rtl/mem/otpu_lane_mem.sv) in place of the behavioural lane
+ports, the F2 target (targets/f2-p2.toml) on the wide-port-alexshell HBM path, the build, and the
+receipts on the m8a. The items below are as of M2.
+
 - **M3** VPU 16 lanes / VPU_CL 4, quantizer 16 + XD 512, TMEM 128K x 16 banks in URAM, ACT_ROWS 16:
   not started. Without it the vector work is not widened: see "exposed" above.
 - **M4** `otpu_hbm_dram`: the 32-PC HBM adapter (async FIFOs, group muxes, the 4 x 4 lane

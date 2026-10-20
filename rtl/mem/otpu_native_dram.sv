@@ -112,7 +112,12 @@ module otpu_native_dram #(
   // between the scale stream and the others
   parameter int APF = 32,
   // A runs take forward skips (see the top; the chunk lanes' lane memory): 0, today's adapter
-  parameter bit APS = 1'b0
+  parameter bit APS = 1'b0,
+  // SW partial beats (a transposed V column: one byte a beat): 1, a fill read first and the
+  // beat written whole (LiteDRAM's controller would read-modify-write a masked beat, holding the
+  // channel for a read's latency); 0, written with their byte mask, no fill read (a controller
+  // that takes byte masks at full rate: the F2's HBM, its ECC off, docs/v4/p2-f2.md "SWFILL")
+  parameter bit SWFILL = 1'b1
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -481,7 +486,7 @@ module otpu_native_dram #(
       if (src[c] == S_WW) begin
         for (int k = 0; k < 64; k++)
           n_wdata[c][8 * k +: 8] = hw[c].strb[k] ? hw[c].data[8 * k +: 8] : wr_head[c][8 * k +: 8];
-        n_wmask[c] = '1;
+        n_wmask[c] = SWFILL ? '1 : hw[c].strb;   // (SWFILL 0: the beat's own bytes alone)
       end else if (src[c] == S_A) begin
         n_wdata[c][32 * ha[c].idx +: 32] = ha[c].data;
         n_wmask[c][4 * ha[c].idx +: 4] = ha[c].be;
@@ -606,7 +611,7 @@ module otpu_native_dram #(
         if (!qw_n[c][WW]) begin                // the tail slot, as qwm (see g_mem)
           logic [WW-1:0] t;
           t = WW'(qw_f[c] + qw_n[c]);
-          wpart[c][t] <= !(&gb[c].strb);
+          wpart[c][t] <= SWFILL && !(&gb[c].strb);
           wgot[c][t] <= 1'b0;
         end
         // ---- the command stream: a shown command is shown again until taken, a write until
@@ -748,7 +753,7 @@ module otpu_native_dram #(
       logic tw;
       tw = !qw_n[c][WW] && qw_rn[c] == (h_inc[c] ? (WW + 1)'(1) : (WW + 1)'(0));
       if (tw) begin
-        wadr_r[c] <= gb[c].m; wh_r[c] <= whash(gb[c].m); wp_r[c] <= !(&gb[c].strb);
+        wadr_r[c] <= gb[c].m; wh_r[c] <= whash(gb[c].m); wp_r[c] <= SWFILL && !(&gb[c].strb);
       end else if (h_inc[c]) begin
         wadr_r[c] <= wadr_n[c]; wh_r[c] <= wh_n[c]; wp_r[c] <= wpart[c][WW'(qw_r[c] + 1'b1)];
       end
@@ -858,7 +863,7 @@ module otpu_native_dram #(
       if (qw_push[c]) begin
         qwr[c][WW'(qw_f[c] + qw_n[c])] <= gb_ref[c];
         war[c][WW'(qw_f[c] + qw_n[c])] <= gb[c].m;
-        wpr[c][WW'(qw_f[c] + qw_n[c])] <= !(&gb[c].strb);
+        wpr[c][WW'(qw_f[c] + qw_n[c])] <= SWFILL && !(&gb[c].strb);
         wgr[c][WW'(qw_f[c] + qw_n[c])] <= 1'b0;
       end
       if (n_rvalid[c] && tgh[c].k == K_W) wgr[c][tgh[c].slot] <= 1'b1;

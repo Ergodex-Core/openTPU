@@ -40,7 +40,8 @@ module otpu_lane_mem #(
   parameter int APF = 32,
   // the adapters' A runs take forward skips (otpu_native_dram APS): each lane's scale rows are C
   // rows apart (P3, docs/v4/p3-status.md "lane 0's scale beats")
-  parameter bit APS = (C > 1)
+  parameter bit APS = (C > 1),
+  parameter bit SWFILL = 1'b1          // SW partial beats with a fill read (otpu_native_dram)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -96,7 +97,9 @@ module otpu_lane_mem #(
   input  logic [2*C-1:0][511:0] n_rdata,
   input  logic [2*C-1:0][15:0]  n_wdone
 );
-  initial if (C < 2 || C > 16) $fatal(1, "otpu_lane_mem: C must be 2 to 16 (a copy per lane)");
+  // (C 1: one copy, the slice's ports on one adapter, cycle for cycle the adapter alone: otpu_board
+  // keeps its memory's name, u_mem, for every build)
+  initial if (C < 1 || C > 16) $fatal(1, "otpu_lane_mem: C must be 1 to 16 (a copy per lane)");
 
   // each copy's adapter ports
   logic [C-1:0]          ca_rdy, ca_req, ca_we, ca_rvalid;
@@ -155,7 +158,7 @@ module otpu_lane_mem #(
     assign ca_be[l]    = a_be_x;
     assign cs_req[l]   = sw_req && sw_rdy;
     otpu_native_dram #(.D(D), .QD(QD), .WQD(WQD), .CHASH(CHASH), .WGATHER(WGATHER), .RD(RD),
-                       .AD(AD), .APF(APF), .APS(APS)) u_adapt (
+                       .AD(AD), .APF(APF), .APS(APS), .SWFILL(SWFILL)) u_adapt (
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),

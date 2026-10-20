@@ -31,6 +31,8 @@ module otpu_board #(
   parameter int DRAM_LOG2  = 32,        // log2 DRAM bytes per slice (CFG_DRAM)
   parameter int MXU_C      = 1,         // the MXU's lock-step chunk lanes (otpu_mxu_lanes; > 1: S 1,
                                         //   the lane memory, see the top)
+  parameter bit SWFILL     = 1'b1,      // SW partial beats: a fill read first (otpu_native_dram;
+                                        //   0 where the memory takes byte masks: the F2's HBM)
   parameter int D          = 128,
   parameter int MCOLS      = 2,
   parameter int ACT_BLOCKS = 128,
@@ -394,37 +396,22 @@ module otpu_board #(
     m_rv <= !x_srst[0] && b_rvalid;
     m_lrv <= !x_srst[0] && (|lb_rvalid || |la_rvalid);
   end
-  if (LM) begin : g_lmem
-    // the lane memory: copy l (lane l's chunks and scale lines; copy 0 the slice's ports A / B)
-    // on channels 2 l, 2 l + 1, every write to every copy
-    otpu_lane_mem #(.D(D), .C(MXU_C), .CHASH(CHASH)) u_mem (
-      .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
-      .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
-      .a_be_x(a_be), .a_rvalid, .a_rdata,
-      .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-      .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
-      .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
-      .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
-      .n_cvalid(n_cvalid[NCH-1:0]), .n_cready(n_cready[NCH-1:0]), .n_cwe(n_cwe[NCH-1:0]),
-      .n_caddr(n_caddr[NCH-1:0]), .n_wvalid(n_wvalid[NCH-1:0]), .n_wready(n_wready[NCH-1:0]),
-      .n_wdata(n_wdata[NCH-1:0]), .n_wmask(n_wmask[NCH-1:0]), .n_rvalid(n_rvalid[NCH-1:0]),
-      .n_rdata(n_rdata[NCH-1:0]), .n_wdone(n_wdone[NCH-1:0]));
-  end else begin : g_mem1
-    assign lb_rdy = '0; assign lb_rvalid = '0; assign lb_rdata = '0;
-    assign la_rdy = '0; assign la_rvalid = '0; assign la_rdata = '0;
-    otpu_native_dram #(.D(D), .CHASH(CHASH)) u_mem (
-      .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
-      .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
-          .a_be_x(a_be), .a_rvalid, .a_rdata,
-      .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-      .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
-      .n_cvalid(n_cvalid[1:0]), .n_cready(n_cready[1:0]), .n_cwe(n_cwe[1:0]),
-      .n_caddr(n_caddr[1:0]), .n_wvalid(n_wvalid[1:0]), .n_wready(n_wready[1:0]),
-      .n_wdata(n_wdata[1:0]), .n_wmask(n_wmask[1:0]), .n_rvalid(n_rvalid[1:0]),
-      .n_rdata(n_rdata[1:0]), .n_wdone(n_wdone[1:0]));
-  end
+  // the slice's memory (otpu_lane_mem): at MXU_C > 1 the lane memory, copy l (lane l's chunks and
+  // scale lines; copy 0 the slice's ports A / B) on channels 2 l, 2 l + 1, every write to every
+  // copy; at MXU_C 1 the one adapter on the slice's two channels, as before
+  otpu_lane_mem #(.D(D), .C(MXU_C), .CHASH(CHASH), .SWFILL(SWFILL)) u_mem (
+    .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
+    .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
+    .a_be_x(a_be), .a_rvalid, .a_rdata,
+    .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
+    .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
+    .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
+    .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
+    .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
+    .n_cvalid(n_cvalid[NCH-1:0]), .n_cready(n_cready[NCH-1:0]), .n_cwe(n_cwe[NCH-1:0]),
+    .n_caddr(n_caddr[NCH-1:0]), .n_wvalid(n_wvalid[NCH-1:0]), .n_wready(n_wready[NCH-1:0]),
+    .n_wdata(n_wdata[NCH-1:0]), .n_wmask(n_wmask[NCH-1:0]), .n_rvalid(n_rvalid[NCH-1:0]),
+    .n_rdata(n_rdata[NCH-1:0]), .n_wdone(n_wdone[NCH-1:0]));
 
   // ---- slices 1 .. S-1, each on its two channels
   for (genvar s = 1; s < S; s++) begin : g_slice

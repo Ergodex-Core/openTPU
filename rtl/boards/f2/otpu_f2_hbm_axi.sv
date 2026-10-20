@@ -26,7 +26,8 @@ module otpu_f2_hbm_axi #(
                                         //   (0: only what is queued; under the SmartConnect's
                                         //   32 transactions 8-beat waiting bursts measured best)
   parameter int MAX_OUT    = 128,       // u_naxi's reads in flight (the adapter keeps <= 64)
-  parameter bit ORDER      = 1'b1       // the read / write order rules (0: tests only)
+  parameter bit ORDER      = 1'b1,      // the read / write order rules (0: tests only)
+  parameter bit PORDER     = 1'b0       // ... per page bucket (otpu_native_axi PORDER)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -168,7 +169,7 @@ module otpu_f2_hbm_axi #(
   for (genvar p = 0; p < NPORT; p++) begin : g_port
     otpu_native_axi #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .QD(QD), .XL(2 * NXR),
                       .MAX_OUT(MAX_OUT), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
-                      .READ_WAIT(READ_WAIT), .ORDER(ORDER)) u_naxi (
+                      .READ_WAIT(READ_WAIT), .ORDER(ORDER), .PORDER(PORDER)) u_naxi (
       .clk, .rst(rst_q),
       .n_cvalid(b_cvalid[p]), .n_cready(b_cready[p]), .n_cwe(b_cwe[p]), .n_caddr(b_caddr[p]),
       .n_wvalid(b_wvalid[p]), .n_wready(b_wready[p]), .n_wdata(b_wdata[p]), .n_wmask(b_wmask[p]),

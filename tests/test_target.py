@@ -467,9 +467,8 @@ def test_the_board_counts_the_port_registers_as_requests_pending():
     the adapter's wr_idle and rd_idle (m_wr_idle, m_rd_idle) go to the slice alone, for slice 0 and
     the others. sim/verilator/tb_board.sv checks the same in every board simulation."""
     code = re.sub(r"//.*", "", (ROOT / "rtl/shell/otpu_board.sv").read_text())
-    # (slice 0's memory is the lane memory at MXU_C > 1, otpu_lane_mem: one instance more)
-    assert re.findall(r"\.wr_idle\(([^)]*)\)", code) == ["m_wr_idle"] * 5
-    assert re.findall(r"\.rd_idle\(([^)]*)\)", code) == ["m_rd_idle"] * 5
+    assert re.findall(r"\.wr_idle\(([^)]*)\)", code) == ["m_wr_idle"] * 4
+    assert re.findall(r"\.rd_idle\(([^)]*)\)", code) == ["m_rd_idle"] * 4
     assert re.findall(r"assign\s+q_wr_idle\[(\w+)\]\s*=\s*([^;]*);", code) == \
         [(k, "m_wr_idle && !sw_req && !(b_req && b_we)") for k in ("0", "s")]
     # (slice 0 also waits for its chunk lanes' registers at MXU_C > 1: the lane memory's reads)

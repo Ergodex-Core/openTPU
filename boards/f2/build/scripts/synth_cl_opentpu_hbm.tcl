@@ -44,6 +44,9 @@ if {[get_msg_config -count -severity {CRITICAL WARNING}] > $otpu_constraint_crit
     [get_msg_config -count -severity WARNING] > $otpu_constraint_warnings} {
   error "openTPU timing constraints produced a warning"
 }
+# (this tree's otpu_clk2x.tcl, boards/ypcb-00338/constraints, names the pumped RAMs' read-request
+# pins c2x_rp; wide-port-alexshell's, the RAM primitives' input pins c2x_ip: either is the check's)
+if {![info exists c2x_ip] && [info exists c2x_rp]} { set c2x_ip $c2x_rp }
 if {![llength $c2x_pb] || ![info exists c2x_ip] || ![llength $c2x_ip] ||
     ![info exists c2x_qp] || ![llength $c2x_qp]} {
   error "openTPU pumped TMEM timing constraints were not applied"

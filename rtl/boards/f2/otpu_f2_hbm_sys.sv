@@ -13,7 +13,9 @@
 // P2 (targets/f2-p2.toml, docs/v4/p2-f2.md): one slice with MXU_C lock-step chunk lanes on the
 // lane memory (otpu_board MXU_C: an image copy a lane, NCH = 2 MXU_C channels, copy l on 2 l and
 // 2 l + 1), each channel a 1 GiB window (CH_LOG2 30: two pseudo-channels, HBM port 2 p and its
-// neighbour PC through the port's mini-switch; the CL's port map, cl_opentpu_hbm).
+// neighbour PC through the port's mini-switch; the CL's port map, cl_opentpu_hbm). SWFILL 0: the
+// HBM (cl_hbm, ECC correction off) takes byte masks, so the adapters write SW partial beats with
+// their masks instead of a fill read first (docs/v4/p2-f2.md "SWFILL").
 //
 // The floorplan (boards/f2/build/constraints/cl_pnr_user_hbm.tcl; docs/wide_port.md
 // "Placement"): u_mem's channels (u_naxi) with the SmartConnects in SLR0 by the HBM's ports, the
@@ -73,7 +75,8 @@ module otpu_f2_hbm_sys #(
                                          //   SLRs; 0: wired, no floorplan)
   parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
   parameter int READ_IDLE  = 1,          //   gather timeout,
-  parameter bit READ_WAIT  = 1'b1        //   and wait (docs/f2_hbm.md "The memory path")
+  parameter bit READ_WAIT  = 1'b1,       //   and wait (docs/f2_hbm.md "The memory path")
+  parameter bit PORDER     = 1'b0        // otpu_native_axi's barriers per page bucket (P2: see the top)
 ) (
   input  logic          clk,
   input  logic          clk_f,
@@ -245,7 +248,7 @@ module otpu_f2_hbm_sys #(
   logic [NPORT-1:0][15:0]  n_wdone;
   // the slices' channels and the host onto the SmartConnect fabric's slaves
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .CH_LOG2(CH_LOG2), .READ_BURST(READ_BURST),
-                    .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT)) u_mem (
+                    .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER)) u_mem (
     .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
@@ -270,7 +273,8 @@ module otpu_f2_hbm_sys #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
-               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .MXU_C(MXU_C), .MXU_PACK(MXU_PACK), .PLATFORM(PLATFORM),
+               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .MXU_C(MXU_C), .MXU_PACK(MXU_PACK),
+               .SWFILL(1'b0), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
