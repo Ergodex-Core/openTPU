@@ -104,8 +104,9 @@ Receipts: `/home/ubuntu/lens-runs/p3/p3-gemma3-c8p-stall0-8a9d75d3.{txt,json,otp
 `-prefix-6fa8aed2` pair before APS), `p3-gemma3-c8p-stall5-92fcae38.*`,
 `p3-gemma3-c8p-naxi-xr3-lat49-150mhz-92fcae38.*` (OTPU_NAXI=1 OTPU_NAXI_XR=3 OTPU_NAXI_BURST=8
 OTPU_NAXI_IDLE=1 OTPU_NAXI_WAIT=0 OTPU_NAXI_OT=32 OTPU_LAT=49, P2's F2-path settings; P2's C 4
-receipts there: `/home/ubuntu/opt/logs/p2-tok-naxi150*.log`). On the F2 path the VPU wait grows
-to 10.0% of the cycles. With APS, `lens summary`: port B streaming 80.5%, MXU computing
+receipts there: `/home/ubuntu/opt/logs/p2-tok-naxi150*.log`). On the F2 path the wait on the
+quantizer grows to 10.6% of the cycles (4.3% on the lane memory alone): its QST stores go to every
+copy, through the path's direction barriers. With APS, `lens summary`: port B streaming 80.5%, MXU computing
 not streaming 6.4% (each lane's command is an eighth of the MM: the start and drain per command
 weigh 8x), waiting on the VPU 4.8% and on the quantizer 4.3% (the card's 8-lane vector units
 against an 8x faster stream: the proposal's M4), TMEM arbitration 1.4% (the drain lost 15.5% of
@@ -182,14 +183,53 @@ The proposal's estimate for the full design (VPU 32, URAM FIFOs and TMEM) was ~2
 and 85% of the DSPs; the eight adapters' LUT-RAM response FIFOs alone are 45 K LUTs (the notes'
 "LUT-RAM-dense adapters congest").
 
-**Placement** (`--flow ImplCL --from-synth synth150 --package`, SSI_SpreadLogic_high, P2's
-floorplan; unit `opt-p3-impl`, log `/home/ubuntu/opt/logs/p3-impl.log`, run
-`/home/ubuntu/opt/hwloop-nightly/p3-92fcae38/impl150-1`): the first attempt stopped at 17:02 UTC
-writing the post-link checkpoint (the m8a's disk was full); the second linked, applied the
-floorplan (16 port boxes, host port 15) and finished opt_design at 17:22, and has been in global
-placement since ~17:40 with "[Place 30-356] ... 19708 Super Long Lines (SLLs) out of 23040 for
-the crossing of SLR# 0 to SLR# 1"; still in Global Place Phase 1 at 18:08. Its MMCM is the old
-M 4.8 (DRC AVAL-168, see `boards/f2/build.py`'s HBM_CORE_MMCM).
+**Placement** (`--flow ImplCL --from-synth synth150`, SSI_SpreadLogic_high, P2's floorplan;
+`/home/ubuntu/opt/hwloop-nightly/p3-92fcae38/impl150-1`, stopped after place_design as the
+coordinator asked, before phys_opt and routing; reports `impl150-1/placed-report/`): placed
+completely (global, detail, post-placement optimization) at 18:33 UTC.
+
+| | |
+|:--|:--|
+| SLLs, SLR2 <-> SLR1 | 18,295 of 23,040 (79.4%) |
+| SLLs, SLR1 <-> SLR0 | 19,707 of 23,040 (85.5%) |
+| SLR2 (the board) | CLB 88.4%, LUT 67.7% (LUT-RAM / SRL 50.0%), BRAM 73.2%, DSP 82.9% |
+| SLR0 / SLR1 | LUT 12.8% / 1.5% |
+| placer congestion | global level 7 north and east in SLR2: the lane memory's adapters (g_cp[*].u_adapt), the MXU lanes, the VPU, the DMA |
+| placed timing at 150 MHz | WNS -2.752 ns, TNS -12,604 ns, 18,278 failing endpoints; WHS -0.558 ns |
+
+The worst placed paths are the eight lanes' own (each ~-2.7 ns at 6.667 ns): lane 0's RMAX fold of
+the other lanes' keys into the TMEM write (29-33 levels: a combinational max over 8 lanes), the
+lock-step pop (each lane's c_left enable depends on every lane's want, 12 levels, 93% route) and
+an enable of fanout 7,968 across the lanes. They need RTL: the fold pipelined as a registered
+tree, the pop decision a cycle early and replicated per lane (the notes' "compute enables a cycle
+early"). Its MMCM is the old M 4.8 (DRC AVAL-168; the analysis is at 6.667 ns).
+
+**The pumped chain** (the coordinator's pick, 2026-10-20): `otpu_xr2` (rtl/shell/otpu_xr.sv),
+`otpu_f2_hbm_axi` NXF, `f2-p2:p3c*` hbm_chain_nxf 6: each channel's 604 / 532-bit native word
+crosses as two halves on clk_f (2x, phase aligned) through 6 clk_f stages (two per SLR), latency
+NXF / 2 + 2 = 5 core cycles each way (3 before), 9.1 K SLLs a boundary for the 16 channels instead
+of 18.2 K. Every crossing between the clocks is local and takes half a core period (no multicycle
+path); each end has its own self-aligning phase. otpu_native_axi keeps XL = 2 x 5 = 10 of its queue
+slots for the chain's round trip, so its queues go to the next power of two keeping NXR's 10
+usable slots (QD 32: 22 usable). The NAXI model and the fabric test run the same RTL.
+
+| F2 channel path, C 8 packed, 150 MHz, latency 49 | cycles | tok/s | vs NXR 3 |
+|:--|--:|--:|--:|
+| NXR 3, QD 16 (10 usable) (92fcae38) | 1,524,984 | 98.4 | |
+| NXF 6, QD 16 (6 usable) (3530bf77) | 1,874,316 | 80.0 | +22.9% |
+| **NXF 6, QD 32 (22 usable)** (2d90f987) | **1,523,024** | **98.5** | **-0.13%** |
+| NXR 3, QD 32 (26 usable) (2d90f987) | 1,515,733 | 99.0 | -0.6% |
+
+All four bit-exact (logits and DRAM; receipts `p3-gemma3-c8p-naxi-*-lat49-150mhz-*.txt:7-9`). The
+23% was u_naxi's usable queue slots (6 of 16), not the latency: at the same queue the pumped
+chain's 4 more cycles of round trip cost 0.5%. Lens on the pumped run: port B streaming 80.5%,
+waiting on the quantizer 10.6%, on the VPU 3.9%, MXU start / drain 2.8%. The LPN at the round
+trip's latency (lat 53) reads 1,316,280, -13.6% (outside the 10% rule on this path: quote the RTL).
+Tests at 7f191bb6: tests/test_f2_rtl.py 26 passed (the pumped chain at 16 / 8 channels, NXF 6 /
+4 / 2, PORDER, two core clocks); the 8-lane board tests and P2's on the NAXI path with the pumped
+chain 8 passed; test_rtl -k "packed or chunk_lanes" 30 passed; test_f2_p2_build (the p3c150
+variant prepares NCH 16, NXF 6, the exact MMCM, the floorplan's pumped branch), test_target,
+test_tech, test_f2_copies 35 passed.
 
 ## Risks found on the real part
 
