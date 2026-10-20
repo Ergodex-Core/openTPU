@@ -95,6 +95,11 @@ was a re-timing of the one-slice instruction stream, this is the split's own.
 
 ## What remains (proposal section 7, milestones 2-5)
 
+Status 2026-10-20 (below, "On the F2"): item 2 is done (S = 4 bit-exact on the board model
+and on the RTL with the real model); item 4 is the burst200 fabric instead of a new bridge,
+built at S = 4; item 1 is deferred to the S = 4 card trace (0.6% of the RTL token); item 3 is
+not taken (4.5% "row's scales not all in" is its share now).
+
 1. **The collective hub.** The ISA simulator resolves a GATHER instantly once every slice
    reaches it; the RTL's `otpu_coll_hub` moves one beat per ~7-cycle round trip (the BCU1525's:
    ~245 K cycles a token here, 12%), and the proposal's pipelined hub (8 reads in flight, 8
@@ -116,6 +121,117 @@ tpubench (016e953a), unrelated to this branch:
 `tests/test_gemma4.py::test_resident_gathers_are_bit_exact[fp4]` fails with "TMEM exhausted"
 in `_gathered_rows` (the fp4 one-hot operand of 33,280 words); it fails identically on an
 extract of 016e953a.
+
+## On the F2: four slices on the burst200 fabric (branch p4-f2, 2026-10-20)
+
+**The base.** The ergodex-04 session's build 11 (e04/tpubench 23f3f77d, taken here by
+fast-forward: P4's milestone 1 is its ancestor) put three of today's slices on Alex's burst200
+fabric at 175 MHz and decoded Gemma 3 1B on the card at **48.3 int8 device tok/s** (3.62 M
+cycles a token), the one-slice image's text word for word ([f2-burst200-s3.md](f2-burst200-s3.md),
+[README.md](README.md)'s build 11 notes). P4 on the F2 is that design at S = 4: target
+`f2-burst200-s4` (200 MHz, the design point) and its build variants `f2-burst200-s4-175` and
+`f2-burst200-s4-162` (the core clock alone differs), commit af7dddf5.
+
+**Decisions, and why.**
+
+1. *S = 4 on burst200* rather than the v5 engines (full_hbm, placed at -1.803 ns at 150 MHz) or
+   the proposal's own HBM bridge (section 2's `otpu_hbm_ch` / NCH 8): burst200 is the only F2
+   fabric that has run Gemma on the card (one slice at 200 MHz, three at 175) and its two HBM
+   ports a slice feed the slice's 128 B a cycle at 86-89% ([hbm-integration.md](hbm-integration.md)
+   rule 3). The ISA split (every matrix by output rows) is P4's milestone 1 unchanged; the S = 3
+   build's uneven split is not used at S = 4.
+2. *Two slices share SLR2* (`slice_slr = [0, 1, 2, 2]`). At S = 3 SLR0 holds slice 0, three
+   SmartConnects, the HBM wrapper and the register slices' SLR0 ends (~64% of its CL LUTs,
+   f2-burst200-s3.md) and gains a fourth SmartConnect here; SLR1 holds slice 1, the control
+   block, the hub, the trace, the host crossbar and the shell-facing paths in the 23 CL clock
+   regions beside the shell; SLR2 holds one slice in 32 regions (~23%). Two slices (~99K LUT
+   each) are ~46% of SLR2. The SLL budget (23,040 a boundary, the v5 checkpoint's report):
+   SLR1 <-> SLR2 ~7.9K (four native channel hops at ~1,226 signals, two board crossings at
+   ~1.5K), SLR0 <-> SLR1 ~14.2K (six native hops, four host channels at ~1.3K, slice 0's
+   crossing): 34% and 62%.
+3. *SLR2 in halves*, slice 2 in X0-X3, slice 3 in X4-X7 (`pblock_CL_SLR2_S2/3`): v5 placed two
+   slices loose in one SLR2 pblock and its MXU's DSP-to-DSP hops took 6.6 ns of route
+   ([../full_hbm.md](../full_hbm.md) on branch full-hbm).
+4. *Slice 3 on HBM ports 26 / 28* (windows 6 / 7 = pseudo-channels 24-27 / 28-31), both in
+   clock region X6Y0. The HDK's `cl_hbm.xci` has the AXI switch on (`USER_SWITCH_ENABLE_00/01
+   TRUE`), so a port reaches every pseudo-channel of its stack and 26 / 28 sit inside windows 6
+   and 7's mini-switches. Build 11's lesson is a SmartConnect beside its ports
+   (`pblock_CL_SLR0_MEM<s>`): u_mem2 X4Y0:X5Y0 + X5Y1 (ports 16 / 20), u_mem3 X6Y0:X7Y0 + X6Y1;
+   ports 24 / 28 would have put slices 2 and 3's SmartConnects in the same region X5Y0.
+5. *No pipelined collective hub in this image.* The RTL token waits 0.6% on collectives (below;
+   0.4% at S = 3): the hub's one beat per ~7 cycles hides behind the MXU's prefetch when the
+   slices run in step. On the card the S = 3 trace shows 8.8% waiting on collectives, which a
+   memory model that never stalls cannot show (the slices' skew), so the RTL profile does not
+   confirm a gain and the rule (Lens before FPGA) keeps the new hub out of this build; the S = 4
+   card trace decides it.
+6. *Clocks.* At S = 3, 200 MHz routed at -0.436 ns on intra-slice paths (build 8) and 175 MHz
+   closed at +0.010 ns (build 11), so the image is built at 175 MHz with 162.5 MHz as the hedge,
+   both from one tree, side by side. The 200 MHz work on those paths is the ergodex-04
+   session's (build 12) and is not touched here.
+
+**What changed** (af7dddf5): `generate_f2_top.py` takes each slice's SLR from the target
+(`slice_slrs`: the native register-slice hops and the reset per SLR; S = 1 and S = 3
+regenerate byte-identical); `targets/f2-burst200-s4{,-175,-162}.toml` and their generated tops
+`rtl/boards/f2/burst200-s4*/cl_opentpu.sv` (eight adapters, four `f2_mem` SmartConnects, the
+1 x 4 host crossbar, ten native register slices, `cl_mem_hbm_wrapper` on 29 ports, an 11-bit
+status; ARCH_HASH 0x2f01ab9b); `boards/f2/burst200/constraints/floorplan_s4.tcl`;
+`tests/test_f2_burst200_s4.py`. The core RTL (`rtl/`) is unchanged: `otpu_board` and
+`otpu_top` were already S-parameterized.
+
+### Milestone 1 at S = 4: gates, Lens, LPN
+
+On the m8a (54.174.195.152), worktree `/home/ubuntu/work/p4`, receipts (each with its command
+on top) in `/home/ubuntu/lens-runs/p4/`.
+
+| Check | Result | Receipt |
+|:--|:--|:--|
+| `test_f2_burst200_s4.py` / `_s3.py` / `test_target.py` without the two RTL gates (the generator, tops, floorplan names, build plans, the Verilator lint of the four-slice top) | 50 passed | |
+| tiny Gemma 3 (2 layers, hidden 256, MLP 512) at S = 4 on the four-slice board model (`tb_board`, `otpu_board` S = 4, the f2-burst200-s4 target, two native channels a slice, stall 0) | logits bit-identical to the ISA simulator on 3 tokens, every slice's DRAM equal; 20,588 / 20,589 / 20,618 cycles, 263 instructions a slice; 286 s | `p4-tiny-s4-board.txt` |
+| Gemma 3 1B int8 (int8 head), the decode step at pos 14 after the chat prompt, on the Verilator RTL (`otpu_top` S = 4, the hub, the AXI adapter, stall 0, `OTPU_LAT=30`) and on the ISA simulator from the same DRAM | **logits equal bit for bit, all four slices' DRAM equal**; **2,301,972 cycles**, next token 19058 'Okay'; 18 min | `p4-gemma3-1b-s4-rtl-gate.txt` |
+
+**Lens, the same RTL token** (`OTPU_LAT=30 lens record model --model gemma3 --slices 4 --axi
+--stall 0 --mhz 175`, `p4-gemma3-s4-rtl.otpuprof`; the same 2,301,972 cycles; every slice
+alike under a memory that never stalls):
+
+| | S = 3, RTL (f2-burst200-s3.md) | **S = 4, RTL** |
+|:--|--:|--:|
+| cycles a token (the slowest slice) | 2,993,389 | **2,301,972** |
+| its DRAM bound (port B chunks a slice) | 2,668,691 | 1,986,791 |
+| port B streaming | 89.2% | 86.3% |
+| MXU not consuming: a row's scales not all in | 3.0% | 4.5% |
+| MXU computing, not streaming | 2.4% | 2.6% |
+| waiting on VPU / quantizer work | 2.0% / 2.0% | 2.7% / 2.4% |
+| waiting on collectives | 0.4% | 0.6% |
+| unit busy: MXU / VPU / quantizer / COLL | | 99.6% / 8.4% / 5.1% / 1.6% |
+| tok/s at 175 / 200 MHz | 58.5 / 66.8 | **76.0 / 86.9** |
+
+Labels: RTL, whole model (26 layers and the head), one decode token at pos 14, int8 weights
+and head, the HBM-like memory model (stall 0, 30-cycle reads; not the SmartConnect fabric),
+bit-exact against the ISA simulator. The ISA model's analytic S = 4 token is 2,248,050 (the
+RTL +2.4%). **Prediction for the card** (not a measurement): build 11's ratio of card to RTL
+(3.62 M / 2.993 M = 1.21) on 2.302 M gives ~2.78 M cycles a token: **~63 tok/s at 175 MHz**,
+~58 at 162.5, ~72 at 200 (build 11: 48.3).
+
+**LPN.** The VLA track (pi0.5, the vla tree e896ab4f's `tools/pi05_lpn.py --backend lpnlang
+--full`, f2-vla MCOLS 32 / LANES 64 / PACK): 295,472,463 cycles = **1.477 s, 0.68 Hz at 200
+MHz**, docs/pi05.md 5.5's number exactly (P4 changes no slice RTL; `p4-vla-pi05-lpn.txt`). The
+Gemma track, per slice (`tools/p4_lpn.py`: that lpnlang net on P4's slice programs with the m4
+slice's constants): 2,750,209 cycles against the RTL's 2,301,972, **+19.5%: above the rule's
+~10%, so no tok/s is quoted from it** (`p4-gemma3-s4-lpn.txt`). No constant moves it by more
+than 0.6% (L_MM, the write arbitration, the quantizer latency, VPU_CL, the load latency, the
+window, the DMA's lookahead): the net, built and calibrated for the packed 64-lane f2-vla
+slice, charges 0.75 M cycles of dependent vector / quantizer / collective work between the
+matmuls where the RTL has 0.32 M. The model validated on this slice (LPNDialect's
+CompactOpenTPU, +0.9% on Gemma decode at PORTB 1) needs the LLVM 20 / lpn-compile build, which
+the m8a does not have.
+
+### Milestones 2-4: the F2 image
+
+Builds on the m8a from a `git archive` of af7dddf5 (`/home/ubuntu/opt/hwloop-nightly/p4-af7dddf5/`,
+units `opt-p4-viv-s4-175` / `opt-p4-viv-s4-162`, logs `/home/ubuntu/opt/logs/p4-viv-s4-*.log`):
+`boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target targets/f2-burst200-s4-175.toml
+--output .../f2-burst200-s4-175` (ip, pcis, clocks, synth_link: the synthesis and shell link;
+implement and refine: place, phys_opt, route and the post-route rounds; audit), started 15:43 UTC.
 
 ## Commands to reproduce
 
