@@ -600,6 +600,16 @@ class SimTransport:
 
 
 # ------------------------------------------------------------------------------ the board
+def open_transport(dev: str | None = None, dma: bool = True):
+    """Open OTPU_DEVICE (default /dev/xdma0), or an explicit XDMA prefix / f2:slot / f2:BDF (the
+    AWS F2's OCL / PCIS BARs: opentpu/host/f2.py, e04/tpubench's)."""
+    dev = os.environ.get("OTPU_DEVICE", "/dev/xdma0") if dev is None else dev
+    if dev.startswith("f2:"):
+        from .f2 import F2Transport
+        return F2Transport(dev, dma=dma)
+    return XdmaTransport(dev) if dma else XdmaTransport(dev, dma=False)
+
+
 def _lock(t) -> DeviceLock | None:
     """The device lock, shared by every Board on the same transport object (a transport is one
     open of the device); a second transport on the same device, in this process or another,
@@ -662,7 +672,7 @@ class Board:
         """check: the card must answer as openTPU; calibrate: then calibrate its DDR3 if the
         bitstream wants the host to (LiteDRAM, CAPS bit27: memcal.ensure; once per
         configuration, as the STATUS calibration bits say)."""
-        self.t = transport or XdmaTransport()
+        self.t = transport or open_transport(dma=lock)
         self.lock = _lock(self.t) if lock else None
         self._info = None
         self._trace = None              # (depth, keep_first) of a started traced run

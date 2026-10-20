@@ -3,6 +3,7 @@
 Every test runs the same program on the same DRAM images through both and requires identical
 DRAM and TMEM contents in every slice.
 """
+import os
 import re
 import subprocess
 
@@ -1518,6 +1519,17 @@ def test_chunk_lanes_board_memory_path(have_verilator, prog, seed, stall, lat):
                                   uarch={"MXU_C": 4, "MXU_E": 4})
     assert np.array_equal(tmems[0], m.slices[0].tmem)
     assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 4)
+
+
+def _assert_lane_copies(st, C):
+    """The lane memory (otpu_lane_mem, docs/v4/p2-f2.md) ran: C image copies with equal hashes at
+    the dump (rtlsim raises when they differ), and copies 1 .. C-1 read their lanes' chunks."""
+    if os.environ.get("OTPU_LMEM", "1") == "0":
+        return
+    assert sorted(st["lmem_hash"][0]) == list(range(C)), st.get("lmem_hash")
+    for l in range(1, C):
+        assert sum(d["b_rd"] for d in st["native_copies"] if d["copy"] == l) > 0, l
 
 
 def test_chunk_lanes_on_the_board_uarch(have_verilator):
@@ -1529,10 +1541,11 @@ def test_chunk_lanes_on_the_board_uarch(have_verilator):
     p = _hazard_program(rng, cfg, gather=False)
     imgs = _images(rng, 1)
     m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
-    drams, tmems, _ = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
-                                 stall=50, seed=2, uarch={**rtlsim.BOARD_UARCH, "MXU_C": 4})
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=50, seed=2, uarch={**rtlsim.BOARD_UARCH, "MXU_C": 4})
     assert np.array_equal(tmems[0], m.slices[0].tmem)
     assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 4)
 
 
 # ------------------------------------------------------------------- packed PEs (MXU_PACK)
@@ -1625,6 +1638,7 @@ def test_eight_packed_lanes_board_memory_path(have_verilator, prog, seed, stall,
                                   uarch={"MXU_C": 8, "MXU_E": 4, "MXU_PACK": 1})
     assert np.array_equal(tmems[0], m.slices[0].tmem)
     assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 8)
 
 
 def test_eight_packed_lanes_on_the_board_uarch(have_verilator):
@@ -1638,10 +1652,11 @@ def test_eight_packed_lanes_on_the_board_uarch(have_verilator):
     m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
     u = {**rtlsim.BOARD_UARCH, **_target.sim_uarch("ypcb-00338:c8p")}
     assert u["MXU_C"] == 8 and u["MXU_PACK"] == 1
-    drams, tmems, _ = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
-                                 stall=50, seed=2, uarch=u)
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=50, seed=2, uarch=u)
     assert np.array_equal(tmems[0], m.slices[0].tmem)
     assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 8)
 
 
 def test_chunk_lanes_stream_c_chunks_a_cycle(have_verilator):

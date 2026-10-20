@@ -64,6 +64,9 @@ TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_
               "TMEM_PRK", "TMEM_SDM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
+# platform keys a [variants.<name>] table may set (a board build at another core clock: the
+# F2 HBM builds' 150 / 175 / 200 MHz, wide-port-alexshell docs/wide_port.md "Alex's shell")
+VARIANT_PLATFORM_KEYS = ("core_mhz",)
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
 # (OTPU_LANES=16): RPB = 0 ("every read lane": TMEM replicated per read port) simulates as
 # NRP x 16, the board build as NRP x LANES; both select the slice's write-mask arbiter.
@@ -85,12 +88,19 @@ TECH = {"generic": ["tech/generic/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram
         "xilinxus": ["tech/xilinxus/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         # the RAMs on SRAM macros: the leaves (otpu_sram_*) come from tools/asic/flow.py
         "asic": ["tech/generic/otpu_tech_dsp.sv", "tech/asic/otpu_tech_ram.sv"]}
-SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
-         "mem/otpu_native_dram.sv", "shell/otpu_afifo.sv", "shell/otpu_mem_ch.sv",
-         "shell/otpu_axi_split2.sv"]
+SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_xr.sv", "shell/otpu_board.sv",
+         "mem/otpu_native_dram.sv", "mem/otpu_lane_mem.sv", "shell/otpu_afifo.sv",
+         "shell/otpu_mem_ch.sv", "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                          "boards/ypcb-00338/otpu_fpga_top_ld.sv"],
-          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"]}
+          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"],
+          # the F2 slot with the HBM (board f2, mem "hbm": targets/f2-p2.toml; its top,
+          # boards/f2/design/cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: the
+          # wide-port-alexshell memory path, docs/f2_hbm.md there, docs/v4/p2-f2.md here)
+          "f2-hbm": ["shell/otpu_skidbuf.sv", "boards/f2/otpu_axil_cdc.sv",
+                     "boards/f2/otpu_axil_xr.sv", "boards/f2/otpu_native_axi.sv",
+                     "boards/f2/otpu_f2_pcis_gate.sv", "boards/f2/otpu_f2_hbm_axi.sv",
+                     "boards/f2/otpu_hbm_geometry.sv", "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -163,7 +173,7 @@ def load(name: str | None = None) -> Target:
         if base not in variants:
             raise TargetError(f"{path}: [target] variant {base!r} has no [variants.{base}]")
         diff = sorted(k for k, v in variants[base].items()
-                      if raw["arch"].get(k, raw["uarch"].get(k)) != v)
+                      if raw["arch"].get(k, raw["uarch"].get(k, raw["platform"].get(k))) != v)
         if diff:
             raise TargetError(f"{path}: [arch] / [uarch] {diff} differ from the default variant "
                               f"{base!r}'s")
@@ -173,13 +183,17 @@ def load(name: str | None = None) -> Target:
             raise TargetError(f"{path}: no variant {var!r} (its variants: "
                               f"{', '.join(sorted(variants)) or 'none'})")
         raw["arch"], raw["uarch"] = dict(raw["arch"]), dict(raw["uarch"])
+        raw["platform"] = dict(raw["platform"])
         for k, v in variants[var].items():
-            if k in raw["arch"]:
+            if k in VARIANT_PLATFORM_KEYS:
+                raw["platform"][k] = v
+            elif k in raw["arch"]:
                 raw["arch"][k] = v
             elif k in raw["uarch"] or k in UARCH_KEYS + MXU_OPT_KEYS + TMEM3_KEYS:
                 raw["uarch"][k] = v
             else:
-                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
+                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key "
+                                  f"(or a platform key a variant may set: {VARIANT_PLATFORM_KEYS})")
     cf = _config_fields()
     bad = sorted(set(raw["arch"]) - set(cf))
     if bad:
@@ -321,7 +335,10 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    board = t.platform["board"]
+    if board == "f2" and t.platform.get("mem") == "hbm":
+        board = "f2-hbm"
+    return core + SHELL + BOARDS.get(board, [])
 
 
 def build_config(t: Target | str | None = None, **knobs):

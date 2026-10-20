@@ -41,13 +41,19 @@
 // (+axi_lat) cycles later plus 0..7 cycles of jitter and random bubbles. A stand-in for an
 // HBM pseudo-channel group a lane: no bandwidth limit (+axi_bw) and no DDR3 bank model apply
 // to them; the real adapter is the proposal's M4. l_idle: no lane read in flight (rd_idle).
+// COPY > 0: one of the lane memory's image copies (otpu_lane_mem, docs/v4/p2-f2.md): it loads the
+// same image and the same pokes (the host writes every copy), counts its channels as "MEM cp<COPY>
+// ch<c>" and writes no image at the dump. HASH: the image's hash at the dump, "MEM s<SID> copy<COPY>
+// hash=<16 hex digits>" (FNV-1a over the words; rtlsim requires the copies' hashes equal).
 module otpu_native_mem #(
   parameter int WORDS = 1 << 18,
   parameter int PHYS  = 0,
   parameter int LAT   = 20,              // minimum read latency (performed -> data)
   parameter int SID   = 0,
   parameter bit CHASH = 1'b1,            // otpu_native_dram's address map
-  parameter int NL    = 1                // chunk lanes (the lane ports [NL-1:1])
+  parameter int NL    = 1,               // chunk lanes (the lane ports [NL-1:1])
+  parameter int COPY  = 0,               // the lane memory's copy (see the top)
+  parameter bit HASH  = 1'b0             // the image's hash at the dump (see the top)
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -423,12 +429,24 @@ module otpu_native_mem #(
       if (nw != 0 || wq_d[c].size() != 0)
         $display("MEM ch%0d: %0d write commands and %0d write beats not performed at the dump",
                  c, nw, wq_d[c].size());
-      $display("MEM ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", c, n_rd[c], n_wr[c], n_miss[c],
-               n_rmw[c]);
+      if (COPY == 0)
+        $display("MEM ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", c, n_rd[c], n_wr[c], n_miss[c],
+                 n_rmw[c]);
+      else
+        $display("MEM cp%0d ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", COPY, c, n_rd[c], n_wr[c],
+                 n_miss[c], n_rmw[c]);
     end
     for (int l = 1; l < NL; l++)
       $display("MEM lane%0d rd=%0d ard=%0d", l, n_lrd[l], n_lard[l]);
-    if (PHYS == 0) begin
+    if (HASH) begin
+      longint unsigned h;
+      h = 64'hcbf29ce484222325;
+      for (int i = 0; i < WORDS; i++) h = (h ^ 64'(rdw(i))) * 64'h00000100000001b3;
+      $display("MEM s%0d copy%0d hash=%016x", SID, COPY, h);
+    end
+    if (COPY != 0) begin
+      // (no image file: the copy's hash stands for it)
+    end else if (PHYS == 0) begin
       fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
       for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", rdw(i));
       $fclose(fd);

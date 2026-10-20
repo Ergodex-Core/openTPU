@@ -1,0 +1,89 @@
+# v4 candidate P2 on the AWS F2 (docs/v4/proposal-2-four-lanes.md, docs/v4/p2-f2.md): one slice of
+# the YPCB card's m4 arch with four lock-step MXU chunk lanes (MXU_C 4: 512 B a cycle through port B
+# and the lane ports), each lane on its own copy of the slice's DRAM image behind its own two-channel
+# adapter (the lane memory, rtl/mem/otpu_lane_mem.sv), the eight channels on the wide-port-alexshell
+# HBM path (per channel otpu_native_axi -> AWS's register slice -> a 1 x 1 SmartConnect -> its 450 MHz
+# register slice -> HBM port), the host on its own HBM port.
+#
+# The geometry: copy l on channels 2 l, 2 l + 1; channel c a 1 GiB window, HBM [c GiB, (c + 1) GiB)
+# = pseudo-channels 2 c and 2 c + 1 (one memory channel), reached through HBM AXI port 2 c (its own
+# pseudo-channel directly, the other through the port's mini-switch: hbm_port_stride 2); the host's
+# PCIS on HBM port 15 (hbm_host_port) through the global switch. A copy holds 2 GiB (DRAM_BYTES: what
+# the slice's programs address; Gemma 3 1B int8's image is ~1.05 GB), the four copies 8 GiB of the
+# 16 GiB. CFG_DRAM reports two channels a copy and the four copies; the host writes every copy and
+# reads copy 0 (opentpu/host/f2.py).
+[target]
+name = "f2-p2"
+kind = "fpga"
+platform_id = 3                 # the F2 platform (opentpu/host/f2.py PLATFORM)
+description = "AWS F2: xcvu47p (small shell), one slice with 4 lock-step MXU chunk lanes on 4 image copies x 2 HBM channels, 150 MHz core, OCL + PCIS"
+variant = "c150"                # the default build (below)
+
+[arch]                          # the YPCB card's m4 arch but for the DRAM a copy holds
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 2147483648         # a copy: two channels of 1 GiB
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+
+[uarch]                         # the card's m4 with MXU_C 4 (its c4 variant)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+MXU_C = 4                       # lock-step chunk lanes: 4 chunks a cycle, the lane memory's 4 copies
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x on the core MMCM's second output
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 150.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 8 (TMEM: / 4)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0
+hostcal = false
+channels_per_slice = 8          # the fabric's: 4 copies x 2 (the host sees 2 a copy, CFG_DRAM)
+channel_bytes = 1073741824      # a channel's window: two pseudo-channels
+hbm_port_stride = 2             # channel c on HBM AXI port 2 c (its first pseudo-channel's)
+hbm_host_port = 15              # the host's PCIS (the global switch reaches every window)
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"
+
+[variants.c150]                 # the first build: 150 MHz core (TMEM 300), docs/v4/p2-f2.md "Clock"
+core_mhz = 150.0
+[variants.c175]                 # VCO 1050 (PFD 50) / 6 (TMEM / 3)
+core_mhz = 175.0
+[variants.c200]                 # VCO 1200 / 6 (TMEM / 3)
+core_mhz = 200.0

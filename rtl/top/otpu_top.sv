@@ -5,6 +5,11 @@
 // adapter's counters. AXI = 2: the same adapter in front of the card's channels as they are
 // (sim/verilator/otpu_ldc_mem.sv: per channel the bridge otpu_mem_ch and LiteDRAM's own
 // controller, generated with the production core's settings, in the controller clock).
+// AXI = 1 with MXU_C > 1 and LMEM (the default): the lane memory of the F2 build (otpu_lane_mem,
+// docs/v4/p2-f2.md "M4"): MXU_C image copies, copy l behind its own adapter on its own model
+// (otpu_native_mem COPY l, or with NAXI the build's per-channel path: otpu_naxi_mem's SLR chain
+// and otpu_native_axi), lane l reading copy l; at the dump every copy is compared with copy 0.
+// LMEM 0: lanes 1 .. MXU_C-1 on the model's behavioural lane ports (P2's M2 stand-in).
 module otpu_top
   import otpu_pkg::*;
 #(
@@ -44,8 +49,15 @@ module otpu_top
   parameter int TMEM_PRK   = 0,       // TMEM_IMPL 3: the read ports' ranks (otpu_slice)
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (otpu_slice)
-  parameter bit COLL_GATHER = 1'b1    // 0 (S = 1 only): the collective unit runs BAR alone
+  parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
+  parameter bit LMEM       = 1'b1,    // AXI = 1, MXU_C > 1: the lane memory (see the top)
+  parameter bit NAXI       = 1'b0,    // AXI = 1: the F2 HBM build's channel path in front of the
+  parameter int NAXI_XR    = 3,       //   model (sim/verilator/otpu_naxi_mem.sv: NAXI_XR SLR
+  parameter int NAXI_BURST = 8,       //   stages each way, otpu_native_axi with its read bursts,
+  parameter int NAXI_IDLE  = 1,       //   gather timeout and wait, the SmartConnect's
+  parameter bit NAXI_WAIT  = 1'b1,    //   transactions; the build's settings: otpu_f2_hbm_sys;
+  parameter int NAXI_OT    = 32       //   rtlsim OTPU_NAXI)
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -100,6 +112,70 @@ module otpu_top
         .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
         .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
         .dump);
+    end else if (AXI == 1 && MXU_C > 1 && LMEM) begin : g_lmem
+      // the lane memory: MXU_C copies, each an adapter on its own channel pair and model
+      logic [2*MXU_C-1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
+      logic [2*MXU_C-1:0][24:0] caddr;
+      logic [2*MXU_C-1:0][511:0] wdata, rdata;
+      logic [2*MXU_C-1:0][63:0] wmask;
+      logic [2*MXU_C-1:0][15:0] wdone;
+      otpu_lane_mem #(.D(D), .C(MXU_C)) u_lmem (
+        .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
+        .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
+        .a_be_x(a_be), .a_rvalid, .a_rdata,
+        .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
+        .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
+        .b_rdata, .wr_idle, .rd_idle,
+        .lb_req, .lb_addr, .lb_rdy, .lb_rvalid, .lb_rdata,
+        .la_req, .la_addr, .la_rdy, .la_rvalid, .la_rdata,
+        .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
+        .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
+        .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone));
+      for (genvar l = 0; l < MXU_C; l++) begin : g_cp
+        if (NAXI) begin : g_naxi
+          otpu_naxi_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(2), .NXR(NAXI_XR),
+                          .READ_BURST(NAXI_BURST), .READ_IDLE(NAXI_IDLE), .READ_WAIT(NAXI_WAIT),
+                          .OT(NAXI_OT), .COPY(l), .HASH(1'b1)) u_mem (
+            .clk, .rst(sys_rst), .run_rst(rst),
+            .n_cvalid(cvalid[2*l +: 2]), .n_cready(cready[2*l +: 2]), .n_cwe(cwe[2*l +: 2]),
+            .n_caddr(caddr[2*l +: 2]), .n_wvalid(wvalid[2*l +: 2]), .n_wready(wready[2*l +: 2]),
+            .n_wdata(wdata[2*l +: 2]), .n_wmask(wmask[2*l +: 2]), .n_rvalid(rvalid[2*l +: 2]),
+            .n_rdata(rdata[2*l +: 2]), .n_wdone(wdone[2*l +: 2]), .dump);
+        end else begin : g_mod
+          otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .COPY(l), .HASH(1'b1)) u_mem (
+            .clk, .rst(sys_rst), .run_rst(rst),
+            .n_cvalid(cvalid[2*l +: 2]), .n_cready(cready[2*l +: 2]), .n_cwe(cwe[2*l +: 2]),
+            .n_caddr(caddr[2*l +: 2]), .n_wvalid(wvalid[2*l +: 2]), .n_wready(wready[2*l +: 2]),
+            .n_wdata(wdata[2*l +: 2]), .n_wmask(wmask[2*l +: 2]), .n_rvalid(rvalid[2*l +: 2]),
+            .n_rdata(rdata[2*l +: 2]), .n_wdone(wdone[2*l +: 2]),
+            .lb_req(1'b0), .lb_addr('0), .lb_rdy(), .lb_rvalid(), .lb_rdata(),
+            .la_req(1'b0), .la_addr('0), .la_rdy(), .la_rvalid(), .la_rdata(), .l_idle(), .dump);
+        end
+      end
+      // the adapters' counters, copy 0 as "NATIVE ch<c>" (the one-adapter path's lines), the
+      // others "NATIVE cp<l> ch<c>"; each copy's model prints its image's hash at the dump
+      // ("MEM copy<l> hash=": otpu_native_mem HASH), which rtlsim requires equal over the copies
+      // (a write that missed a copy, or a copy's fill read of other data, shows there)
+      always @(posedge clk) if (dump) begin
+        for (int c = 0; c < 2; c++) begin
+          $write("NATIVE ch%0d a_runs=%0d a_rd=%0d b_rd=%0d sw_rd=%0d ", c,
+                 u_lmem.g_cp[0].u_adapt.st_arun[c], u_lmem.g_cp[0].u_adapt.st_ard[c],
+                 u_lmem.g_cp[0].u_adapt.st_brd[c], u_lmem.g_cp[0].u_adapt.st_srd[c]);
+          $display("b_wr=%0d a_wr=%0d sw_wr=%0d part_b=%0d part_a=%0d part_sw=%0d",
+                   u_lmem.g_cp[0].u_adapt.st_bwr[c], u_lmem.g_cp[0].u_adapt.st_awr[c],
+                   u_lmem.g_cp[0].u_adapt.st_swr[c], u_lmem.g_cp[0].u_adapt.st_pb[c],
+                   u_lmem.g_cp[0].u_adapt.st_pa[c], u_lmem.g_cp[0].u_adapt.st_ps[c]);
+        end
+      end
+      for (genvar l = 1; l < MXU_C; l++) begin : g_cnt
+        always @(posedge clk) if (dump)
+          for (int c = 0; c < 2; c++)
+            $display("NATIVE cp%0d ch%0d a_runs=%0d a_rd=%0d b_rd=%0d sw_rd=%0d b_wr=%0d sw_wr=%0d part_sw=%0d",
+                     l, c, u_lmem.g_cp[l].u_adapt.st_arun[c], u_lmem.g_cp[l].u_adapt.st_ard[c],
+                     u_lmem.g_cp[l].u_adapt.st_brd[c], u_lmem.g_cp[l].u_adapt.st_srd[c],
+                     u_lmem.g_cp[l].u_adapt.st_bwr[c], u_lmem.g_cp[l].u_adapt.st_swr[c],
+                     u_lmem.g_cp[l].u_adapt.st_ps[c]);
+      end
     end else begin : g_native
       logic ad_idle, l_idle;              // the adapter's reads, the lane ports' reads
       assign rd_idle = ad_idle && l_idle;
