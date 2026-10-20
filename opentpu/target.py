@@ -54,9 +54,12 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 # above MCOLS: MCOLS); MXU_C, the MXU's lock-step chunk lanes (1: today's MXU; C: C copies of
 # the MCOLS x D array, lane l streaming row n + l of every MM, C chunks a cycle through port B;
 # timing only, the rows' sums and the ISA, image and programs unchanged: docs/v4/
-# proposal-2-four-lanes.md, otpu_mxu_lanes); with TMEM_IMPL 3 the one copy's knobs (otpu_slice
-# TMEM_<K>, docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
-MXU_OPT_KEYS = ("MXU_E", "MXU_C")
+# proposal-2-four-lanes.md, otpu_mxu_lanes); MXU_PACK, packed PEs (0: one row a DSP; 1: MCOLS / 2
+# physical columns of DSP48E2s, two stationary rows a DSP sharing its weight, w * (x1 2^19 + x0),
+# exact for the quantizer's activations: timing only, docs/v4/proposal-3-eight-lanes-packed.md,
+# otpu_pe_pk; an FPGA build needs the xilinxus cells); with TMEM_IMPL 3 the one copy's knobs
+# (otpu_slice TMEM_<K>, docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
+MXU_OPT_KEYS = ("MXU_E", "MXU_C", "MXU_PACK")
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
@@ -201,6 +204,9 @@ def load(name: str | None = None) -> Target:
         raise TargetError(f"{path}: bad arch (S >= 1, D a multiple of 32, LANES a power of two)")
     if int(raw["uarch"].get("MXU_C", 1)) < 1:
         raise TargetError(f"{path}: MXU_C (the MXU's chunk lanes) is at least 1")
+    if int(raw["uarch"].get("MXU_PACK", 0)) not in (0, 1) or (
+            int(raw["uarch"].get("MXU_PACK", 0)) and a["MCOLS"] % 2):
+        raise TargetError(f"{path}: MXU_PACK is 0 or 1, and packs two rows a DSP: an even MCOLS")
     if raw["arch"]["SEQ_WC"] and raw["uarch"]["WIN"] > 16:
         raise TargetError(f"{path}: SEQ_WC (otpu_seq's wait entries) needs WIN <= 16: 4-bit "
                           f"counts name a unit's last 15 instructions")
@@ -272,6 +278,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d["MXU_E"] = u["MXU_E"]
     if int(u.get("MXU_C", 1)) != 1:             # the chunk lanes (1: left out, today's MXU)
         d["MXU_C"] = int(u["MXU_C"])
+    if int(u.get("MXU_PACK", 0)):               # packed PEs (0: left out, one row a DSP)
+        d["MXU_PACK"] = 1
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     return d
@@ -290,7 +298,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
         "IMEM_WORDS": a["IMEM_WORDS"], "LANES": a["LANES"], "DSTEP": int(a["DSTEP"]),
         "MXU_IMPL": u["MXU_IMPL"], "MXU_CL": u["MXU_CL"], "MXU_E": u.get("MXU_E", 0),
-        "MXU_C": int(u.get("MXU_C", 1)),
+        "MXU_C": int(u.get("MXU_C", 1)), "MXU_PACK": int(u.get("MXU_PACK", 0)),
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],

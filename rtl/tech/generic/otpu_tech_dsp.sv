@@ -41,6 +41,48 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
 endmodule
 
 
+// A packed position of the systolic MXU (otpu_mxu PACK, docs/v4/proposal-3-eight-lanes-packed.md):
+// two stationary rows share one DSP. Their activations x0 (the low row) and x1 (the high row) are
+// registered (a DSP48E2's D and A registers) and summed as x1 * 2^19 + x0 in a 27-bit pre-adder;
+// the weight is the select's pick of wlo / whi, registered (the B register: the pick is in
+// fabric, the pre-adder holds the activations). The product w * (x1 * 2^19 + x0) is registered
+// (M) and the chain's running sum P = PCIN + M (FIRST: P = M) is registered at every position,
+// a chain's last too (otpu_mxu splits it in fabric). x0, x1, wlo, whi and sel are next values,
+// as otpu_pe's WREG weights. Exact while the activations are in [-127, 127] (QACT saturates,
+// docs/isa.md "Quantization") and a chain has at most 16 positions: |sum x0 w| <= 16 * 127 * 128
+// < 2^18, so the low row's sum is P's low 19 bits sign-extended and the high row's
+// P[47:19] + P[18]; the pre-adder (27 bits, wrapping like the DSP's) does not overflow either.
+module otpu_pe_pk #(parameter bit FIRST = 1'b0) (
+  input  logic               clk,
+  input  logic               en,
+  input  logic [7:0]         x0,
+  input  logic [7:0]         x1,
+  input  logic [7:0]         wlo,
+  input  logic [7:0]         whi,
+  input  logic               sel,
+  input  logic [47:0]        pcin,
+  output logic [47:0]        pcout,
+  output logic [47:0]        p
+);
+  logic signed [7:0]  x0r, x1r, wr;
+  logic signed [47:0] m;
+  logic signed [26:0] ad;
+  logic signed [44:0] pr;
+  always_comb begin
+    ad = $signed({x1r, 19'd0}) + 27'($signed(x0r));     // the pre-adder: 27 bits
+    pr = ad * wr;                                        // 27 x 8 (B: 18) bits, signed
+  end
+  always_ff @(posedge clk) if (en) begin
+    x0r <= x0;
+    x1r <= x1;
+    wr <= sel ? whi : wlo;
+    m <= 48'(pr);
+    p <= (FIRST ? 48'd0 : pcin) + m;
+  end
+  assign pcout = p;
+endmodule
+
+
 // The MX column end (otpu_mxu, docs/mx_mxu.md): a column's eight group sums, each one chain end
 // (a[g], the LAST position's unregistered sum) or, at two chains a group (CPG 2), two (a[g] +
 // d[g]), times the group's B = m << sh (bm[g], unsigned, < 2^17), summed and accumulated over the

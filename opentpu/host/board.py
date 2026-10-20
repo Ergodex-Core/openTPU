@@ -551,6 +551,8 @@ class SimTransport:
              "MXU_IMPL": rtlsim.UARCH.get("MXU_IMPL", 2),
              # the MXU's epilogue lanes as the target builds them (OTPU_MXU_E overrides)
              "MXU_E": rtlsim.UARCH.get("MXU_E", self.target.uarch.get("MXU_E", 0)),
+             # packed PEs as the target builds them (OTPU_MXU_PACK overrides)
+             "MXU_PACK": int(rtlsim.UARCH.get("MXU_PACK", self.target.uarch.get("MXU_PACK", 0))),
              "MEM_NATIVE": 2 if native == "ld" else 1}
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1

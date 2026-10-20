@@ -92,3 +92,11 @@ TMEM_WORDS = 65536
 MXU_C = 4                       # arch with 4 lock-step chunk lanes (4 chunks a cycle through port
                                 # B, the memory model's lane ports in simulation); the same
                                 # CFG_HASH as m4 (a uarch key: the programs and images do not change)
+
+[variants.c8]                   # v4 candidate P3 (docs/v4/proposal-3-eight-lanes-packed.md): the m4
+MXU_C = 8                       # arch with 8 lock-step chunk lanes (1 KiB a cycle through port B),
+                                # unpacked; the same CFG_HASH as m4
+
+[variants.c8p]                  # v4 candidate P3: c8 with packed PEs (two rows a DSP48E2, MCOLS / 2
+MXU_C = 8                       # physical columns a lane: 8 x 256 PE DSPs). Simulation and the F2's
+MXU_PACK = 1                    # xilinxus cells only: the card's DSP48E1s cannot pack (otpu_pe_pk)

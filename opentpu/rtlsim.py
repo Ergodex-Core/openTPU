@@ -188,6 +188,10 @@ if os.environ.get("OTPU_MXU_E"):
 # 1 unless the target states it: the card's c4 variant is 4)
 if os.environ.get("OTPU_MXU_C"):
     UARCH["MXU_C"] = BOARD_UARCH["MXU_C"] = int(os.environ["OTPU_MXU_C"])
+# OTPU_MXU_PACK=1: packed PEs (otpu_mxu PACK, two stationary rows a DSP sharing its weight; timing
+# only, docs/v4/proposal-3-eight-lanes-packed.md). Default the target's (MXU_PACK, 0 unless stated)
+if os.environ.get("OTPU_MXU_PACK"):
+    UARCH["MXU_PACK"] = BOARD_UARCH["MXU_PACK"] = int(os.environ["OTPU_MXU_PACK"])
 # OTPU_QUANT_XD: the quantizer's row buffer in chunks (otpu_quant XD; timing only, 0: QACT reads
 # its rows from TMEM twice)
 if os.environ.get("OTPU_QUANT_XD"):
