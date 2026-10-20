@@ -120,13 +120,14 @@ def dot(a, w: QTensor, acc: Tile | None = None, out: Tile | None = None,
     return current().dot(a, w, acc, out, temp, rowmax, acc_scale)
 
 
-def all_gather(x: Tile) -> Tile:
+def all_gather(x: Tile, out: Tile | None = None) -> Tile:
     """Concatenate every slice's `x` along the last axis, replicated in all slices.
-    With a single slice this is `x` itself."""
+    With a single slice this is `x` itself. out: a destination allocated where every slice's
+    allocations agree (one address in all slices; Builder.all_gather)."""
     b = current()
     if b.S == 1:
         return x
-    return b.all_gather(x, b.S)
+    return b.all_gather(x, b.S, out)
 
 
 def all_reduce(x: Tile) -> Tile:

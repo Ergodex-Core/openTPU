@@ -1507,6 +1507,7 @@ class Image:
                         self.head[1] + self.v_ranges[sid][0] * Q.scale_bytes(H, self.head_format, D),
                         self.v_ranges[sid][1], H, D, self.head_format),
             v_loc=self.v_ranges[sid][1], v_off=self.v_ranges[sid][0],
+            v_max=max(n for _, n in self.v_ranges),     # the samplers' tiles: one size in all
             head_tab=GA.table(self.head[0], self.head_gs, spec.vocab, H, self.head_format, D),
             ple=GA.record_table(self.ple, R if self.ple_host else spec.vocab, self.ple_S,
                                 self.ple_format, D) if P else None)

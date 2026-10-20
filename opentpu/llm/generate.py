@@ -233,10 +233,17 @@ class Greedy:
 
     raw = True
 
-    def __init__(self, b, vocab: int, chunk: int):
+    def __init__(self, b, vocab: int, chunk: int, vmax: int | None = None):
+        """vocab: this slice's LM head rows; vmax: the largest slice's (an uneven split's,
+        gemma4.split_ranges; default vocab). A GATHER names one destination in every slice (the
+        RTL writes all of them at slice 0's), so the token's gathers take tiles allocated here,
+        before the LM head's chunks (of different sizes in different slices), and the chunk
+        table is sized by vmax: the slices' allocations stay in step through the step's layers."""
         self.b, self.chunk = b, chunk
         self.nc = -(-vocab // chunk)
-        self.cm = b.alloc((self.nc, 2))              # per chunk (max, id)
+        if b.S > 1:
+            self.g_tok, self.g_best = b.alloc((b.S,)), b.alloc((b.S,))
+        self.cm = b.alloc((max(self.nc, -(-(vmax or vocab) // chunk)), 2))   # per chunk (max, id)
         self.seen = 0
 
     def __call__(self, y, col0: int) -> None:
@@ -251,11 +258,11 @@ class Greedy:
         b = self.b
         if self.seen != self.nc:
             raise CompileError(f"the LM head gave {self.seen} of {self.nc} chunks")
-        best = b.argmax(_col(b, self.cm, 0))          # [max, chunk]
+        best = b.argmax(_col(b, self.cm, 0, self.nc))  # [max, chunk]: this slice's chunks
         tok = _pick(b, best[1:2], 2, self.cm.base + 1, "the best chunk's id")
         if b.S > 1:                                   # the slices' vocabulary rows, in order
-            ix = ol.all_gather(tok)
-            best = b.argmax(ol.all_gather(best[0:1]))
+            ix = ol.all_gather(tok, out=self.g_tok)
+            best = b.argmax(ol.all_gather(best[0:1], out=self.g_best))
             tok = _pick(b, best[1:2], 1, ix.base, "the best slice's id")
         return tok
 
@@ -328,7 +335,12 @@ class Sampler:
         # this slice's first vocabulary row (m.v_off: an uneven split's, gemma4.split_ranges)
         self.o = getattr(m, "v_off", ol.program_id() * v)
         self.nb = -(-v // BLK)
-        self.bm = b.alloc((self.nb,))            # block maxima
+        # the k largest of every slice's (token()): one GATHER destination in all slices, so
+        # allocated here, before the tiles whose size is the slice's (as Greedy's)
+        if b.S > 1:
+            self.g_vals = b.alloc((b.S * samp.kmax,))
+            self.g_ids = b.alloc((b.S * samp.kmax,))
+        self.bm = b.alloc((max(self.nb, -(-getattr(m, "v_max", v) // BLK)),))   # block maxima
         self.pt = None                           # the penalty's tiles (at the first chunk)
 
     @staticmethod
@@ -425,7 +437,7 @@ class Sampler:
         sid.set(0.0)
         _select(b, cand, ids, rk, vals, sid)
         if b.S > 1:                             # the k largest of all slices
-            gv, gi = ol.all_gather(vals), ol.all_gather(sid)
+            gv, gi = ol.all_gather(vals, out=self.g_vals), ol.all_gather(sid, out=self.g_ids)
             vals.set(NEG)
             _select(b, gv, gi, rk, vals, sid)
         b.unscratch(rk)
@@ -533,10 +545,11 @@ def reference_pick(logits, samp: Sampling, context, u, S: int = 1, softcap: floa
     return ids if np.ndim(u) else int(ids[0])
 
 
-def _col(b, t, c: int):
-    """Column c of a [rows, cols] tile as a new contiguous [rows] tile."""
-    out = b.alloc((t.rows,))
-    b.emit(I.vop(I.V_COPY, out.base, t.base + c, 0, t.rows, 1, 1, t.rs, 0, comment="column"))
+def _col(b, t, c: int, rows: int | None = None):
+    """Column c of a [rows, cols] tile (its first `rows` rows) as a new contiguous tile."""
+    rows = t.rows if rows is None else rows
+    out = b.alloc((rows,))
+    b.emit(I.vop(I.V_COPY, out.base, t.base + c, 0, rows, 1, 1, t.rs, 0, comment="column"))
     return out
 
 
@@ -556,7 +569,7 @@ def _pick(b, k, stride: int, base: int, what: str):
 def _sink(b, m, g, samp, st, pos, consts, debug):
     """The LM head's sink (Greedy or Sampler), set on m."""
     chunk = min(8192, b.cfg.TMEM_WORDS // 8)       # qwen3.HEAD_CHUNK, _lm_head's chunks
-    sink = (Greedy(b, m.v_loc, chunk) if samp is None
+    sink = (Greedy(b, m.v_loc, chunk, getattr(m, "v_max", None)) if samp is None
             else Sampler(b, m, g, samp, st, pos, consts))
     m.lm_sink, m.lm_keep = sink, debug
     return sink

@@ -2696,7 +2696,8 @@ class Engine:
         self._write_host_rows([token])
         start = getattr(self.backend, "start", None)
         v_loc = self.image.v_loc
-        vocab = S * v_loc
+        ranges = getattr(self.image, "v_ranges", None)      # an uneven split's (_read_logits)
+        vocab = sum(n for _, n in ranges) if ranges else S * v_loc
         stream = None
         if start is not None and S == 1 and self.stream_logits and \
                 getattr(self.backend, "streams", False):
