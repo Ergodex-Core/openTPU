@@ -180,7 +180,16 @@ The proposal's estimate for the full design (VPU 32, URAM FIFOs and TMEM) was ~2
 ~280 RAMB36, 192 URAM, ~400 K LUTs; the MXU's 2,393 DSPs match its 2,416. In SLR2 (P2's floorplan:
 ~435 K LUTs, 672 RAMB36, 3,008 DSPs a side) the board is ~73% of the LUTs, ~73% of the block RAM
 and 85% of the DSPs; the eight adapters' LUT-RAM response FIFOs alone are 45 K LUTs (the notes'
-"LUT-RAM-dense adapters congest"). Placement and routing: (running, below).
+"LUT-RAM-dense adapters congest").
+
+**Placement** (`--flow ImplCL --from-synth synth150 --package`, SSI_SpreadLogic_high, P2's
+floorplan; unit `opt-p3-impl`, log `/home/ubuntu/opt/logs/p3-impl.log`, run
+`/home/ubuntu/opt/hwloop-nightly/p3-92fcae38/impl150-1`): the first attempt stopped at 17:02 UTC
+writing the post-link checkpoint (the m8a's disk was full); the second linked, applied the
+floorplan (16 port boxes, host port 15) and finished opt_design at 17:22, and has been in global
+placement since ~17:40 with "[Place 30-356] ... 19708 Super Long Lines (SLLs) out of 23040 for
+the crossing of SLR# 0 to SLR# 1"; still in Global Place Phase 1 at 18:08. Its MMCM is the old
+M 4.8 (DRC AVAL-168, see `boards/f2/build.py`'s HBM_CORE_MMCM).
 
 ## Risks found on the real part
 
