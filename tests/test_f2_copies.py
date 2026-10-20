@@ -54,7 +54,7 @@ def test_every_copy_takes_every_write_and_reads_come_from_copy_0(tmp_path, monke
     try:
         assert (t.copies, t.nwin) == (copies, 2)
         assert t.bases == tuple(j * WIN for j in range(2 * copies))
-        assert b.nch == 2 and b.slices == 1
+        assert b.slices == 1 and b.info()["cfg"]["copies"] == copies
         rng = np.random.default_rng(copies)
         n = 2 * WIN - 3 * 64 - 5
         data = rng.integers(0, 256, n, dtype=np.uint8)
