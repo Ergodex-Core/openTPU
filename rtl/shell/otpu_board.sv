@@ -205,6 +205,11 @@ module otpu_board #(
   logic [D*8-1:0] b_wdata, b_rdata;
 
   perf_t pf, pf_c;                   // slice 0's, and as the control block sees it
+  logic [3:0] ac, ac_c;              // slice 0's port activity for the control block's counters
+                                     //   (a_rd, a_wr, b_rd, b_wr: port A read / SW write / port B
+                                     //   read / write beats), and as the control block sees it:
+                                     //   with S > 1 both cross SLRs with pf (build 11's worst
+                                     //   core path was a_rdy's adapter register into n_ard's CE)
   logic        tr_en, tr_stop, tr_clear, tr_busy;
   logic [31:0] tr_addr, tr_count, tr_drop;
   logic [63:0] tr_rdata;
@@ -252,8 +257,7 @@ module otpu_board #(
     .run, .ld_start, .arg, .ld_addr, .ld_n, .ld_busy, .halted, .error, .wait_to, .icount, .wr_idle,
     .axi_err(|n_err),                  // the channels' bridges (otpu_mem_ch)
     .calib(cal_all), .ecc_ded(|ded_s2),
-    .b_rd(b_req && b_rdy && !b_we), .b_wr(b_req && b_rdy && b_we),
-    .a_rd(a_req && a_rdy && !a_we), .a_wr(sw_req && sw_rdy), .b_wait(pf_c.bwait),
+    .b_rd(ac_c[1]), .b_wr(ac_c[0]), .a_rd(ac_c[3]), .a_wr(ac_c[2]), .b_wait(pf_c.bwait),
     .temp_v, .temp(temp_q),
     .mxu_busy(pf_c.sq.busy[U_MXU]), .mxu_mac(pf_c.mac), .mxu_starve(pf_c.starve),
     .vpu_busy(pf_c.sq.busy[U_VPU]),
@@ -367,6 +371,8 @@ module otpu_board #(
   // adapter has none, neither port A's nor port B's output register holds one (a_req: port A
   // reads only) and port B's input register holds no data (a b_rvalid the cycle before, m_rv). A
   // request or data there is in neither the slice's units nor the adapter (otpu_slice)
+  assign ac = {a_req && a_rdy && !a_we, sw_req && sw_rdy, b_req && b_rdy && !b_we,
+               b_req && b_rdy && b_we};
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
@@ -451,6 +457,7 @@ module otpu_board #(
     assign sl_ret = q_ret;
     assign icount = q_icount;
     assign pf_c = pf;
+    assign ac_c = ac;
     always_comb begin
       dram_rd = '0;
       dram_wr = '0;
@@ -552,9 +559,9 @@ module otpu_board #(
               h_pop[s], h_dv[s], h_req[s]} = up_q;
 
       if (s == 0) begin : g_pf          // slice 0's activity (the counters, the trace)
-        logic [PB-1:0] pf_m;
-        otpu_xr #(.W(PB)) u_pf_tx (.clk, .rst(1'b0), .d(pf), .q(pf_m));
-        otpu_xr #(.W(PB)) u_pf_rx (.clk, .rst(1'b0), .d(pf_m), .q(pf_c));
+        logic [PB+3:0] pf_m;
+        otpu_xr #(.W(PB + 4)) u_pf_tx (.clk, .rst(1'b0), .d({ac, pf}), .q(pf_m));
+        otpu_xr #(.W(PB + 4)) u_pf_rx (.clk, .rst(1'b0), .d(pf_m), .q({ac_c, pf_c}));
       end
     end
 

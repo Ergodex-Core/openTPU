@@ -287,6 +287,12 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   (-0.200 over 1824 endpoints, u_mem1's mass in row Y3, u_mem2's in rows Y2-Y3). Build 11 pins
   each SmartConnect beside its ports (`pblock_CL_SLR0_MEM0/1/2`, docs/v4/hbm-integration.md's
   port map).
+- **One unregistered SLR crossing in the board itself**: build 11 run2's placed worst core
+  path was slice 0's `a_rdy` (its adapter's outstanding-count register, SLR0) into the control
+  block's `n_ard` counter enable (SLR1): `otpu_ctrl`'s four activity inputs (a_rd, a_wr, b_rd,
+  b_wr) were the raw port handshakes of slice 0. They now ride the `g_pf` crossing with the
+  perf bundle (`ac` / `ac_c`, two `otpu_xr` stages, two cycles late like `pf_c`; the one-slice
+  board keeps them direct). Counts are unchanged, the path is gone.
 - **The collective links**: the hub's one beat per ~7 cycles would be 8% of the token if
   every gather were exposed; the RTL trace says 0.4% (above), the rest hidden behind the
   MXU's prefetch. On hardware the two `otpu_xr` stages per crossing are the same cycles as in

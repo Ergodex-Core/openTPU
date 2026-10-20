@@ -528,7 +528,10 @@ endpoints (TNS -42; build 8 at 5.0 ns: -0.358 over 2703), TMEM +0.639, core -> T
 (SLR0) into the control block's `u_ctrl/n_ard_reg[0]/CE` (SLR1), two logic levels and 5.12 ns,
 an unregistered SLR crossing in otpu_board's activity / outstanding-count bookkeeping that the
 pblocks' SLR0 rearrangement stretched; the intra-slice MXU-enable class is no longer in the
-listed worst paths. Post-place phys_opt started at -0.370 (08:50); routing follows.
+listed worst paths. Post-place phys_opt started at -0.370 (08:50) and **ended at +0.041
+(08:58)**; routing follows. The crossing is fixed in the RTL for the next build that needs it
+(otpu_board.sv: the four activity bits ride the `g_pf` crossing with the perf bundle; 15 tests
+including the Verilator 1B-token bit-exact three-slice run pass; not in builds 11 / 12).
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
