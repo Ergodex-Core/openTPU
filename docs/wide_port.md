@@ -1723,6 +1723,134 @@ build.py --hdk ... --target f2-hbm:p4rl8a64c150 --out RUN --flow ImplCL \
 - Reuse depends on stable cell names: keep the synthesis settings and hierarchy unchanged
   between the reference and the change.
 
+### SLR2 without the hot spot (2026-10-20; branch wide-port-slr2, Verilator only)
+
+**What ba86b5df's routed checkpoint says** (post_route.VIOLATED.dcp; route_rpt/ on the m7a:
+report_timing, report_design_analysis -timing / -congestion / -complexity, utilization by SLR,
+hierarchy and pblock, every failing endpoint grouped by start / end, report_qor_suggestions).
+Only clk_raw fails: 722 endpoints of 986,509, WNS -0.177 ns, TNS -49.4 ns; hold met; every
+other clock and inter-clock group meets (hclk +0.010, clk_main_a0 +0.207, clk_f +0.376;
+clk_raw -> clk_f +0.018 and clk_f -> clk_raw +0.003: the pumped TMEM, no margin to give away).
+Every failing path runs SLR2 -> SLR2, 86-94% route, 5-14 levels, clock skew -0.36 to -0.50 ns
+(the common path's MMCM pessimism -0.27 to -0.35 of it), its start and end far apart: lo_ad at
+SLICE_X178Y566 -> LUTs at X159, X137, X147, X123, X103 -> rpv at X118Y633; the SW skid's o_d at
+X176Y552 -> X68, X31, X28 -> the gather buffer at X105; the adapter's qa_n at X21Y535 -> X147 ->
+port B's b_wdata at X80Y586.
+
+| family (start -> end) | endpoints | worst (ns) | the cone |
+|---|---|---|---|
+| u_mxu -> u_mxu (lo_ad -> alpha's CE) | 144 | -0.157 | the drain's write address -> the bank decode -> the slice's write-bank arbiter (acf) -> t_gnt -> the RMW pipeline's enables |
+| u_mem/qa_n -> u_slice/b_wdata, b_wmask CE | 109 | -0.173 | a_rdy -> the MXU's issue (go_iss) -> b_req_c -> port B's register enable, 1,089 loads (2.4 ns of the path) |
+| u_slice/a_addr -> u_mem/pnx, qam, qa_n | 105 | -0.165 | port A's register -> the A run compare, the reuse compare and the queue write, 12-14 levels |
+| u_mxu -> u_vpu (t_ren -> g_wbuf.en_r replicas) | 98 | -0.173 | the TMEM's conflict compares -> lost -> rhold -> 394 en_r copies (1.85 ns of the path) |
+| u_slice/sw_reg.u_sw -> u_mem/gb strobes' CE | 71 | -0.174 | the skid's address -> the channel decode -> the gather buffers' enables |
+| u_mem/qa_n -> u_mem/al_beat, al_cb | 69 | -0.127 | a_rdy -> a_take -> the A reuse allocation |
+| g_coll.u_coll asel -> qd | 67 | -0.080 | the GATHER unit's read request -> its grant -> its data register |
+| u_mem/qb_n -> u_slice/u_dma | 27 | -0.165 | b_rdy -> the DMA's grant -> gh |
+| u_seq -> u_seq | 22 | -0.108 | |
+| u_mxu -> u_tmem (lo_ad -> rpv), others | 10 | -0.177 | the worst path: the same cone as the first row into the replay register |
+
+The congestion: the placer's level 5-6 windows over the adapter (u_board/u_mem 61-76% of the
+cells, LUT RAM 58-67%, block RAM 100%) with the MXU's block RAMs and DSPs in the same windows
+(SLR2's Y8-Y9, CLE X 11-55: the west), over the MXU alone (DSP 85-94%) and over the TMEM box's
+west edge (block RAM 100%); the router's initial level-6 South Long window over the chains'
+middle stage in SLR1 (u_sys/u_mem 99%) and level 5 from SLR2's LAGUNA rows into the adapter (LUT
+RAM 75%). pb_otpu_tmem had 97.6% of its CLBs in use (its own 48K LUTs and 34K of other units'). The
+9,208 SLR1 <-> SLR2 nets (the up chain on the Lagunas' TX / RX registers) all crossed in SLR1's
+west half: pb_otpu_mid was X0Y4:X3Y7. The adapter holds 18,076 of SLR2's 27,186 LUT-RAM LUTs.
+
+**The changes** (one commit each; the floorplans place from ba86b5df's synthesis, its design
+sources being 417243f1's; the RTL needs its own synthesis):
+
+1. **V-A, the crossing and the grant cone's units** (12d7d033, floorplan): pb_otpu_mid over the
+   CL's whole SLR1 but pb_otpu_pcis (X0Y4:X4Y7, X5Y4, X5Y7; otpu_contain takes the I/O shim's
+   sites of X4Y5 out), so the crossings use six clock-region columns of Lagunas and their
+   traversal of SLR1 spreads as wide; u_quant and the collective unit into pb_otpu_tmem with
+   the TMEM and the VPU (the units whose requests and grants make the cone). Both of the pumped
+   TMEM's zero-margin paths were the unboxed quantizer's: a piece's RAM -> u_quant's
+   g_pre[4].x2_reg at +0.003 ns (clk_f -> clk, 4.8 ns of route) and u_quant's t_ren -> a piece's
+   ADDR at +0.021 (clk -> clk_f, 5.1 ns of route).
+2. **V-B, SLR2's bottom row for the adapter** (406ecbb5, floorplan): pb_otpu_mem2 =
+   X0Y8:X5Y8, a child of pb_otpu_board over the crossings' columns, holds the adapter
+   (u_board/u_mem), every SLR2 stage of the chains, and the two slice registers whose loads are
+   the adapter's queue logic: the SW skid buffer (sw_reg.u_sw) and port A's request register
+   (a_addr, and a_req when synthesis kept its name: `otpu_cells_opt`, a warning line if not).
+   Six regions give the adapter's LUT RAM ~37K SLICEM LUTs (~49%) instead of ~3 regions of
+   the west; the skid's and the register's outputs stay local, their inputs (the quantizer's,
+   the MXU issuer's registers) arrive register to register.
+3. **RTL, four exact changes** (e5fd4eed; no cycle changes, every one checked
+   by the receipt and the simulation's own assertions):
+   - *Port A / B's fields load whenever the register is free* (otpu_slice `b_ld`, a_rdy_i):
+     b_tag ... b_n with the DMA's write data and mask (1,089 flip-flops) and a_addr no longer
+     load only with a request, so the MXU's issue cone (a_rdy, b_rdy -> go_iss) reaches b_req
+     and a_req alone; what the fields hold while the valid is low is read by nobody (the
+     adapter takes them with b_req / a_req, its BREG stage loads them every cycle and uses them
+     with its take; the idle checks AND them with the valid); the MXU's a_addr is no longer
+     gated by its a_req. (109 + some of the 105.)
+   - *The MXU's write banks from registers* (otpu_mxu `t_wbm`, otpu_slice amk[G_MXU] at ULANES =
+     LANES): lo_bm loaded with lo_ad and lvm from the stage before them, a delay line beside
+     u_rw (r1's banks, its length and enable), the RMAX lanes' from mxm / mxl; their OR is the
+     request's bank set (lo writes only for !c_acc commands, rw only for c_acc ones, RMAX after
+     the drain), which the simulation checks against t_wen / t_waddr every cycle. The arbiter's
+     cone starts at a few flip-flops beside it, not at the drain's 256 address bits. (144 + 3.)
+   - *The VPU's WBUF enable as en_r && !en_h* (otpu_vpu): rhold (the TMEM's lost of VA or VB)
+     is registered in en_h (a few copies) instead of entering the D input of every one of
+     en_r's ~400 replicas; en is the same value every cycle; ren, the arbiter's view, is one
+     register of its own (ren_r, checked equal to en every cycle) so no LUT precedes the
+     grants'. If synthesis folds the AND into the enables' own logic the worst case is the old
+     fan-out. (98.)
+   - *A one-slice F2 HBM build's collective unit runs BAR alone* (otpu_f2_hbm_sys COLL_GATHER S >
+     1): as the card's since release r2 and as every simulation of a one-slice FPGA target
+     builds it (rtlsim BOARD_UARCH); no program compiled for one slice has a GATHER and the host
+     refuses one where CAPS2 bit0 is 0 (check_no_gather). The GATHER unit was dead area inside
+     the grant cone (67). pb_otpu_tmem's pattern takes either unit (`g_coll*.u_coll`).
+
+**Gates** (this Mac, Verilator 5.048; receipts, LPN and Lens under
+~/ergodex-03/lens-runs/wp-slr2/):
+
+- The receipt at 150 MHz (as "The receipt at 150 MHz": OTPU_TARGET=f2-hbm OTPU_NCH=8 OTPU_NAXI=1
+  XR 3, burst 8 waiting, 32 transactions, --lat 49, --check): **1,027,452 cycles before and
+  after** (58.5 tok/s int8 whole-model as before), bit-exact vs the ISA simulator, the run's JSON
+  (phases, unit busy, VOP counts, MXU gaps) identical in every field. Delta 0: the changes move
+  no cycle by construction (the fields' extra loads are never read; the masks and the enable
+  are the same values from other registers).
+- LPN, wide-port (tools/wideport_lpn.py --mhz 150 --lat 62 --measured, the receipt): 1,013,343
+  estimated against 1,027,452 measured, -1.37%, mean phase error 4.2% (calibrated): unchanged,
+  nothing in the model moves. VLA (~/ergodex-03/openTPU-vla tools/pi05_lpn.py --full --backend
+  both, f2-vla32: OTPU_MCOLS=32 OTPU_LANES=32 OTPU_PACK=1, 200 MHz): lpnlang 309,729,493 cycles =
+  1.549 s (0.65 Hz), the dialect 306,305,713 = 1.532 s: docs/vla_frequency_plan.md 6j's numbers,
+  unchanged (the change is no micro-architecture).
+- Lens (perf_qwen.py --dump -> lens): the int8 decode token's profile before (base_406ecbb5,
+  the tree at 406ecbb5) and after (rtl_r1r6r8) is byte-identical: port B streaming 78.8%, the
+  MXU 99.7% busy, its drain's TMEM losses 3.0% (31,171 cycles), "MXU not consuming" 15.5%. No
+  profile gain is claimed: this is a timing change, and its gain is the 150 MHz bitstream.
+- Tests at e5fd4eed (Verilator 5.048, this Mac, six groups in parallel, still running when this
+  was written; no failure): test_f2_build.py 119 and test_target.py 25 passed; test_wide_port_rtl.py
+  39 of 168, tests/test_rtl.py -k "replay or act_reads or attention or lane_count" (OTPU_TARGET=f2-hbm
+  OTPU_NCH=8) 7 of 28, test_t2_rtl.py / test_observability.py / test_native_nch.py / test_f2_rtl.py
+  25 of 85 passed so far (logs ~/ergodex-03/slr2-scratch/tests/). The receipt's run builds the board
+  uarch (TMEM_IMPL 3, replays, ARB_MASK: the VPU's WBUF and the slice's mask arbiter), so R6's and
+  R8's paths and their assertions ran on the whole decode token.
+
+**What to measure on the box**: for V-A (12d7d033) and V-B (406ecbb5) placed from ba86b5df's
+synthesis, and for the RTL commit e5fd4eed with V-B (its own synthesis): the placed WNS / TNS by clock and
+the failing families as above; the placer's final and the router's initial congestion windows
+(levels); report_utilization -pblocks for pb_otpu_mem2 (LUT RAM, CLB occupancy), pb_otpu_tmem
+(CLB occupancy, its foreign cells) and pb_otpu_mid; the SLR1 <-> SLR2 nets by clock-region
+column (report_utilization -slr, and the Laguna sites used per column). Route the best. The
+expected direction: the adapter <-> slice families (~400 endpoints) and the MXU families (~250)
+are the cones these changes shorten; u_seq's 22 and the A reuse allocation's 69 rely on the
+lower congestion only.
+
+**Next levers, not taken**: the adapter's 64-deep LUT-RAM FIFOs (per channel rbm and ram, 64 x
+512 each) in URAM (16 x 8 = 128 of SLR2's 320 unused URAM288: ~9K LUT-RAM LUTs freed, a
+prefetched head register to keep the cycles); the write data across the SLRs at a quarter
+width (a 576-bit beat in four cycles: 8 x 432 fewer SLLs at each boundary, a streamed store
+keeps its rate on the pair rotation); USER_CLOCK_ROOT in SLR2 for clk and clk_f (the core
+tree's root is X3Y5, in SLR1); the MXU's drain (lanes, RMW, result FIFO) into the TMEM box with
+EXCLUDE_PLACEMENT; the adapter in SLR1 behind credit-based ports (SLR2 loses 45K LUTs, the round
+trip gains ~2 cycles, ~+2%).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
