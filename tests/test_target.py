@@ -472,8 +472,12 @@ def test_the_board_counts_the_port_registers_as_requests_pending():
     assert re.findall(r"\.rd_idle\(([^)]*)\)", code) == ["m_rd_idle"] * 5
     assert re.findall(r"assign\s+q_wr_idle\[(\w+)\]\s*=\s*([^;]*);", code) == \
         [(k, "m_wr_idle && !sw_req && !(b_req && b_we)") for k in ("0", "s")]
-    assert re.findall(r"assign\s+q_rd_idle\[(\w+)\]\s*=\s*([^;]*);", code) == \
-        [(k, "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv") for k in ("0", "s")]
+    # (slice 0 also waits for its chunk lanes' registers at MXU_C > 1: the lane memory's reads)
+    assert [(k, " ".join(v.split())) for k, v in
+            re.findall(r"assign\s+q_rd_idle\[(\w+)\]\s*=\s*([^;]*);", code)] == \
+        [("0", "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv && "
+               "!(LM && (|lb_req || |la_req || m_lrv))"),
+         ("s", "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv")]
     assert re.findall(r"m_rv\s*<=\s*([^;]*);", code) == \
         [f"!x_srst[{k}] && b_rvalid" for k in ("0", "s")]
 
