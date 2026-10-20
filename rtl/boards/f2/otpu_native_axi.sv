@@ -37,7 +37,14 @@ module otpu_native_axi #(
   parameter bit READ_WAIT = 1'b1,      // 1 (Alex's): a burst waits for commands still to come
                                        // (up to READ_IDLE cycles); 0: it takes only what is
                                        // queued, closing when the queue runs dry
-  parameter bit ORDER = 1'b1           // the direction barriers (0: tests only, tb_f2hbm_axi)
+  parameter bit ORDER = 1'b1,          // the direction barriers (0: tests only, tb_f2hbm_axi)
+  // with ORDER, the barriers per page (P2, docs/v4/p2-f2.md "Page buckets"): a read waits only for
+  // the unanswered writes of its 4 KiB page's bucket, a write only for the reads in flight of its
+  // page's bucket (NBK buckets, an XOR fold of the page), so a write to one page does not stall a
+  // stream from others; the native contract (a read after a write to its beat sees it, one before
+  // it does not) holds per beat. 0: every read waits for every write and the reverse (Alex's)
+  parameter bit PORDER = 1'b0,
+  parameter int NBK = 32
 )(
   input logic clk, rst,
   input logic n_cvalid, output logic n_cready,
@@ -99,8 +106,24 @@ module otpu_native_axi #(
   wire pushc = n_cvalid && (XL > 0 || n_cready);
   wire pushw = n_wvalid && (XL > 0 || n_wready);
   wire head_we = cq[cr][25];
+  // ---- page buckets (PORDER): per bucket the read beats taken and not yet back, the writes
+  // handed out and not yet answered; their nonzero flags as registers (the take's and the write's
+  // checks select one), the buckets of the bursts in flight (AR order) and of the writes (AW order)
+  localparam int KB = $clog2(NBK);
+  function automatic logic [KB-1:0] bkt(input logic [24:0] a);
+    logic [18:0] pg;
+    logic [KB-1:0] k;
+    pg = a[24:6];
+    k = '0;
+    for (int i = 0; i < 19; i += KB) k ^= KB'(pg >> i);
+    return k;
+  endfunction
+  logic [NBK-1:0] rbz, wbz;                        // the bucket has reads / writes outstanding
+  wire [KB-1:0] head_k = bkt(cq[cr][24:0]);
+  wire rd_clear = !PORDER ? (writes == 0) : !wbz[head_k];
+  wire wr_clear = !PORDER ? (reads == 0) : !rbz[head_k];
   wire adjacent = cq[cr][24:0] == next_addr && cq[cr][24:6] == pending_addr[24:6];
-  wire take_read = !pending_valid && cn != 0 && !head_we && (writes == 0 || !ORDER) &&
+  wire take_read = !pending_valid && cn != 0 && !head_we && (rd_clear || !ORDER) &&
                    reads < MAX_OUT && (pending_count == 0 || adjacent);
   wire [4:0] cnt_t = pending_count + 5'd1;
   wire full_t = cnt_t == 5'(READ_BURST) || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
@@ -117,7 +140,7 @@ module otpu_native_axi #(
   wire ar_fire = m_arvalid && m_arready;
   wire ar_free = !ar_v || ar_fire;
   wire load_ar = (close || pending_valid) && ar_free;
-  wire write_go = cn != 0 && head_we && wn != 0 && reads == 0 && writes < MAX_OUT;
+  wire write_go = cn != 0 && head_we && wn != 0 && (wr_clear || !ORDER) && writes < MAX_OUT;
   wire aw_fire = m_awvalid && m_awready;
   wire w_fire = m_wvalid && m_wready;
   wire popw = write_go && (aw_sent || aw_fire) && (w_sent || w_fire);
@@ -215,5 +238,49 @@ module otpu_native_axi #(
       if (b_fire && (m_bresp != 0 || (writes == 0 && !popw))) n_err <= 1;
       if (pushc && outside) n_err <= 1;
     end
+  end
+
+  if (PORDER) begin : g_pord
+    logic [OW-1:0] rb [NBK];                       // read beats taken, not back, per bucket
+    logic [OW-1:0] wb [NBK];                       // writes handed out, not answered, per bucket
+    (* ram_style = "distributed" *) logic [KB-1:0] rbq [0:(1<<BP)-1];   // bursts' buckets, AR order
+    (* ram_style = "distributed" *) logic [KB-1:0] wbq [0:(1<<OW)-1];   // writes' buckets, in order
+    logic [BP-1:0] rq_p, rq_r;
+    logic [OW-1:0] wq_p, wq_r;
+    wire [KB-1:0] r_k = rbq[rq_r];                 // the returning burst's bucket
+    wire [KB-1:0] b_k = wbq[wq_r];                 // the answered write's bucket
+    always_ff @(posedge clk) begin
+      if (rst) begin
+        rq_p <= '0; rq_r <= '0; wq_p <= '0; wq_r <= '0; rbz <= '0; wbz <= '0;
+        for (int k = 0; k < NBK; k++) begin rb[k] <= '0; wb[k] <= '0; end
+      end else begin
+        if (ar_fire) begin rbq[rq_p] <= bkt(ar_addr); rq_p <= rq_p + 1'b1; end
+        if (r_fire && m_rlast) rq_r <= rq_r + 1'b1;
+        if (popw) begin wbq[wq_p] <= head_k; wq_p <= wq_p + 1'b1; end
+        if (b_fire) wq_r <= wq_r + 1'b1;
+        for (int k = 0; k < NBK; k++) begin
+          automatic logic inc_r = take_read && head_k == KB'(k);
+          automatic logic dec_r = r_fire && r_k == KB'(k);
+          automatic logic inc_w = popw && head_k == KB'(k);
+          automatic logic dec_w = b_fire && b_k == KB'(k);
+          automatic logic [OW-1:0] nr = rb[k] + OW'(inc_r) - OW'(dec_r);
+          automatic logic [OW-1:0] nw = wb[k] + OW'(inc_w) - OW'(dec_w);
+          rb[k] <= nr; rbz[k] <= nr != 0;
+          wb[k] <= nw; wbz[k] <= nw != 0;
+        end
+      end
+    end
+`ifndef SYNTHESIS
+    // the buckets' sums are the totals (every read beat and write in exactly one bucket)
+    always_ff @(posedge clk)
+      if (!rst) begin
+        automatic longint sr = 0, sw = 0;
+        for (int k = 0; k < NBK; k++) begin sr += rb[k]; sw += wb[k]; end
+        if (sr != reads || sw != writes)
+          $fatal(1, "otpu_native_axi: page buckets %0d reads / %0d writes, totals %0d / %0d", sr, sw, reads, writes);
+      end
+`endif
+  end else begin : g_nopord
+    assign rbz = '0; assign wbz = '0;
   end
 endmodule

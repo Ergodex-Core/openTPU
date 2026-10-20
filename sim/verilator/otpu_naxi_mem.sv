@@ -30,7 +30,8 @@ module otpu_naxi_mem #(
                                          //   SmartConnect's S00 / M00 acceptance: AWS's
                                          //   cl_axi_sc_1x1 takes 32; 0: no limit)
   parameter int COPY       = 0,          // the lane memory's copy (otpu_native_mem COPY)
-  parameter bit HASH       = 1'b0        // the image's hash at the dump (otpu_native_mem HASH)
+  parameter bit HASH       = 1'b0,       // the image's hash at the dump (otpu_native_mem HASH)
+  parameter bit PORDER     = 1'b0        // otpu_native_axi's barriers per page bucket
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -92,7 +93,7 @@ module otpu_naxi_mem #(
     logic [511:0] wdata;
     logic [63:0] wstrb;
     otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(16), .XL(2 * NXR), .MAX_OUT(128),
-                      .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT)) u_naxi (
+                      .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER)) u_naxi (
       .clk, .rst,
       .n_cvalid(b_cvalid), .n_cready(b_cready), .n_cwe(b_cwe), .n_caddr(b_caddr),
       .n_wvalid(b_wvalid), .n_wready(b_wready), .n_wdata(b_wdata), .n_wmask(b_wmask),

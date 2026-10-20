@@ -37,6 +37,7 @@ module tb_f2hbm_axi;
   parameter bit READ_WAIT = 1'b1;
   parameter bit ORDER = 1'b1;             // 0: the order rules off (must fail)
   parameter int CH_LOG2 = 29;             // a channel's window (P2's lane memory: 30, 1 GiB)
+  parameter bit PORDER = 1'b0;            // otpu_native_axi's barriers per page bucket
 
   logic clk = 1'b0, aclk = 1'b0, hclk = 1'b0;
   always #(CORE_HALF) clk = !clk;
@@ -102,7 +103,7 @@ module tb_f2hbm_axi;
   logic [NPORT-1:0][63:0]  c_wstrb;
   logic [NPORT-1:0][1:0]   c_bresp, c_rresp;
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
-                  .READ_WAIT(READ_WAIT), .ORDER(ORDER), .CH_LOG2(CH_LOG2)) u_dut (
+                  .READ_WAIT(READ_WAIT), .ORDER(ORDER), .CH_LOG2(CH_LOG2), .PORDER(PORDER)) u_dut (
     .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
