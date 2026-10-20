@@ -254,7 +254,18 @@ VU47P), 539,417 FFs, 932 RAMB36 (46%), 33 RAMB18, 0 URAM, 2,908 DSPs (32%)**; a 
 LUTs (slice 0 100.6K), a memory SmartConnect 16.6K, the host crossbar 12.6K, a native
 register slice 0.63K, the HBM wrapper 1.0K. By SLR: SLR0 ~181K LUTs (slice 0, the four
 SmartConnects, six native and four host register slices: ~2/3 of its CL LUTs), SLR1 ~125K,
-SLR2 ~205K (each half ~103K of ~216K, ~232 RAMB36 of ~336, 727 DSPs).
+SLR2 ~205K (each half ~103K of ~216K, ~232 RAMB36 of ~336, 727 DSPs). After `opt_design`
+the floorplan's Laguna registers are 4,566 on slice 0's crossing and 1,964 on each of slices 2
+and 3's, `otpu_clk2x.tcl` constrains 64 pumped TMEM RAMs, and `pblock_CL_SLR0` holds 179.8K
+LUTs of its 384K (47%), 214K FFs (28%), 233 block-RAM tiles of 600 (39%), 727 DSPs (29%)
+(`implement/slr0_utilization.rpt`).
+
+The m8a's root disk filled at 17:02 UTC for about two minutes (another job's files); the 175
+MHz run's implement process lost its log streams at that moment (`implement/vivado.log` stops
+at 17:02:10 at exactly 64 KiB, the console mid-table) while it kept placing, so the same
+netlist is implemented again from 17:25 (`build.py --from-netlist .../f2-burst200-s4-175
+--output .../f2-burst200-s4-175-r2`, unit `opt-p4-viv-s4-175r2`; the netlist check passed,
+`post_link.dcp` SHA-256 0849213f...). The 162.5 MHz run's logs continued.
 
 ## Commands to reproduce
 
