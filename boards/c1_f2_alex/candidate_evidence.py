@@ -58,7 +58,10 @@ def schema_receipts(schema):
 # Exact historical input bytes retain the original IP/link receipts. This is
 # receipt provenance, not CDC/exception/physical acceptance of another design.
 REVIEWED_HISTORICAL = {('ip', 'boards/c1_f2_alex/audit_c1_alex.tcl'): {'fae454cd8bf093cdc8645c7a00882c1bfd3fd1d7905e6226c5c7ee2c32587d9f'},
-                      ('link', 'boards/c1_f2_alex/qualify_c1_alex.tcl'): {'ce648794052006ce6ac791452ef150d1c8553d65492405c874b5527221851df1'}}
+                      ('link', 'boards/c1_f2_alex/qualify_c1_alex.tcl'): {'ce648794052006ce6ac791452ef150d1c8553d65492405c874b5527221851df1'},
+                      # Exact original LINK executor; its default flow preceded
+                      # the explicit post-LINK physical-strategy tooling option.
+                      ('link', 'boards/c1_f2_alex/implement.py'): {'649a50b9338e8ca911661b7fa417f2257e9a98db698f270329f89efd79b50fb7'}}
 
 DEPENDENCY_TREES = tuple(f'{stage}/ip_project/{project}.{suffix}'
                         for stage, project in (('ip', 'f2_ip'), ('pcis', 'pcis'), ('clocks', 'clocks'))
@@ -496,6 +499,14 @@ def verify_bundle(root, manifest_sha256):
         require(set(stage_inputs['executor_sources']) == executors, 'Incomplete executor source inventory')
         x.source(stage, stage_inputs['executor_revision'], stage_inputs['executor_sources'], current=executors)
         x.inventory(stage, stage_inputs['prepared_files'], exact=prepared)
+        if stage == 'implement':
+            implementation = local_module('implement')
+            expected_script = implementation.physical_script(
+                x.text('synth', 'implement/build.tcl'), stage_inputs.get('physical_strategy', 'default'))
+            require(x.text(stage, 'run.tcl') == expected_script, 'Physical strategy/script binding differs')
+            for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
+                require(x.record(stage, name) == x.record('synth', 'implement/' + name),
+                        'Physical strategy changed frozen constraints')
         if stage in ('link', 'qualify'):
             helpers = ('qualify_c1_alex.tcl', 'audit_c1_alex.tcl')
             if stage == 'qualify': helpers += ('routed_host_ready.tcl',)

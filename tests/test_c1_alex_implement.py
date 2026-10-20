@@ -161,6 +161,57 @@ def test_link_is_existing_dcp_only(context):
     assert 'clk_out1 1.0 clk_out2 2.0' not in script
 
 
+def test_explicit_skip_strategy_changes_only_pre_route_physical_pass(context, monkeypatch):
+    stage_run(context, monkeypatch, 'link')
+    out = context.tmp / 'skip-phys-opt'
+    inputs = m.prepare(out, 'implement', context.origin, context.previous, context.hdk,
+                       physical_strategy='skip-pre-route-phys-opt')
+    original = (context.run / 'implement/build.tcl').read_text()
+    actual = (out / 'run.tcl').read_text()
+    assert actual == original.replace('  phys_opt_design -directive AggressiveExplore\n',
+                                     '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
+    assert inputs['physical_strategy'] == 'skip-pre-route-phys-opt'
+    assert inputs['source_revision'] != inputs['executor_revision']
+    for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
+        assert (out / name).read_bytes() == (context.run / 'implement' / name).read_bytes()
+    fake_tool(context, monkeypatch, 'implement')
+    m.execute(out, 'implement', context.origin, context.previous, inputs, context.hdk, 'vivado')
+    m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
+
+
+@pytest.mark.parametrize('strategy', ['unknown', 'Explore', '', None])
+def test_unknown_physical_strategy_rejected(context, strategy):
+    with pytest.raises(RuntimeError, match='strategy'):
+        m.physical_script((context.run / 'implement/build.tcl').read_text(), strategy)
+
+
+def test_skip_strategy_requires_exact_anchor(context):
+    script = (context.run / 'implement/build.tcl').read_text()
+    for changed in (script.replace('AggressiveExplore', 'Explore'), script + '  phys_opt_design -directive AggressiveExplore\n'):
+        with pytest.raises(RuntimeError, match='anchor'):
+            m.physical_script(changed, 'skip-pre-route-phys-opt')
+
+
+def test_skip_strategy_cannot_change_refine_or_link(context):
+    for stage in ('link', 'refine'):
+        with pytest.raises(RuntimeError, match='only to implementation'):
+            m.prepare(context.tmp / stage, stage, context.origin, context.previous, context.hdk,
+                      physical_strategy='skip-pre-route-phys-opt')
+
+
+def test_strategy_mismatch_rejected_despite_rebound_receipt(context, monkeypatch):
+    stage_run(context, monkeypatch, 'link')
+    out, _ = stage_run(context, monkeypatch, 'implement')
+    inputs = json.loads((out / 'stage-inputs.json').read_text())
+    inputs['physical_strategy'] = 'skip-pre-route-phys-opt'
+    b.write_json(out / 'stage-inputs.json', inputs)
+    result = json.loads((out / 'stage-result.json').read_text())
+    result['inputs_sha256'] = b.sha(out / 'stage-inputs.json')
+    b.write_json(out / 'stage-result.json', result)
+    with pytest.raises(RuntimeError, match='strategy/script'):
+        m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
+
+
 def test_full_stage_chain_preserves_candidate_and_pending_review(context, monkeypatch):
     c = context
     link, linked = stage_run(c, monkeypatch, 'link')

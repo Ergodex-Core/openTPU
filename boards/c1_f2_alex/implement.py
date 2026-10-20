@@ -24,6 +24,7 @@ STAGES = ('link', 'implement', 'refine', 'qualify')
 PREVIOUS = {'implement': 'link', 'refine': 'implement', 'qualify': 'refine'}
 CHECKPOINTS = {'link': 'post_link.dcp', 'implement': 'post_route.dcp', 'refine': 'post_route.dcp'}
 FORBIDDEN_CONTROLS = ('tuning.tcl', 'incremental_reference.txt', 'incremental_reference.sha256')
+PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt')
 
 
 def require(ok, message):
@@ -123,6 +124,14 @@ def verify_previous(run, expected_sha256, expected_stage, origin):
             'Upstream stage belongs to different synthesized inputs')
     verify_files(run, inputs['prepared_files'])
     verify_files(run, result['outputs'])
+    if expected_stage == 'implement':
+        strategy = inputs.get('physical_strategy', 'default')
+        require((run / 'run.tcl').read_text() ==
+                physical_script((origin['run'] / 'implement/build.tcl').read_text(), strategy),
+                'Physical strategy/script binding differs')
+        for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
+            require((run / name).read_bytes() == (origin['run'] / 'implement' / name).read_bytes(),
+                    'Physical strategy changed frozen constraints')
     checkpoint = run / CHECKPOINTS[expected_stage]
     require(result.get('checkpoint') == CHECKPOINTS[expected_stage] and
             b.sha(checkpoint) == result.get('checkpoint_sha256'), 'Upstream checkpoint binding mismatch')
@@ -310,8 +319,26 @@ def executor_inputs(stage):
     return b.inventory(paths, ROOT)
 
 
-def prepare(out, stage, origin, previous, hdk, simulation=None):
+def physical_script(script, strategy):
+    """Select one explicit implementation flow without changing its constraints."""
+    require(strategy in PHYSICAL_STRATEGIES, 'Unknown physical implementation strategy')
+    require('synth_design' not in script, 'Physical continuation unexpectedly requests synthesis')
+    require(not re.search(r'general\.maxThreads (?!4\b)\d+', script), 'Thread limit changed')
+    if strategy == 'skip-pre-route-phys-opt':
+        # The first packed C1 route failed on two CARRY8 cascade pins after
+        # AggressiveExplore. Keep placement/routing and every timing constraint;
+        # this explicit alternative omits only that pre-route optimization pass.
+        old = '  phys_opt_design -directive AggressiveExplore\n'
+        require(script.count(old) == 1, 'Physical optimization anchor changed')
+        script = script.replace(old, '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
+    return script
+
+
+def prepare(out, stage, origin, previous, hdk, simulation=None, physical_strategy='default'):
     require(not out.exists(), f'Refusing existing stage output: {out}')
+    require(physical_strategy in PHYSICAL_STRATEGIES and
+            (stage == 'implement' or physical_strategy == 'default'),
+            'Physical strategy applies only to implementation')
     executor_revision = b.require_clean_source()
     tools = executor_inputs(stage)
     require((stage == 'qualify') == bool(simulation), 'Only qualification requires verified vendor simulation')
@@ -322,8 +349,7 @@ def prepare(out, stage, origin, previous, hdk, simulation=None):
         script = render_link(origin)
     elif stage in ('implement', 'refine'):
         script = (origin['run'] / stage / 'build.tcl').read_text()
-        require('synth_design' not in script, 'Physical continuation unexpectedly requests synthesis')
-        require(not re.search(r'general\.maxThreads (?!4\b)\d+', script), 'Thread limit changed')
+        script = physical_script(script, physical_strategy)
         if stage == 'implement':
             for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
                 shutil.copy2(origin['run'] / 'implement' / name, out / name)
@@ -353,6 +379,8 @@ source $run/qualify_c1_alex.tcl
               'source_checkpoint': source, 'previous_run': str(previous['run']) if previous else None,
               'previous_receipt_sha256': previous['receipt_sha256'] if previous else None,
               'max_threads': 4, 'resynthesis': False, 'hardware_actions': False}
+    if stage == 'implement':
+        inputs['physical_strategy'] = physical_strategy
     if simulation:
         inputs['simulation'] = {**simulation, 'run': str(simulation['run'])}
     inputs['prepared_files'] = b.inventory([out], out)
@@ -455,8 +483,12 @@ def main(argv=None):
     parser.add_argument('--simulation-run', type=Path)
     parser.add_argument('--simulation-receipt-sha256')
     parser.add_argument('--vivado', default='vivado')
+    parser.add_argument('--physical-strategy', choices=PHYSICAL_STRATEGIES, default='default',
+                        help='Explicit implementation-only strategy; timing/constraints remain frozen')
     parser.add_argument('--plan', action='store_true')
     args = parser.parse_args(argv)
+    if args.stage != 'implement' and args.physical_strategy != 'default':
+        parser.error('--physical-strategy applies only to implement')
     if args.stage == 'link':
         if args.from_run or args.from_receipt_sha256:
             parser.error('link consumes synthesis directly; do not specify --from-run')
@@ -475,6 +507,7 @@ def main(argv=None):
     if args.plan:
         print(json.dumps({'stage': args.stage, 'out': str(out), 'synth_run': str(synth),
               'source': str(args.from_run) if args.from_run else str(synth),
+              'physical_strategy': args.physical_strategy,
               'max_threads': 4, 'resynthesis': False, 'hardware_actions': False,
               'route_qualified': False}, indent=2))
         return 0
@@ -486,7 +519,7 @@ def main(argv=None):
                                    origin) if args.stage == 'qualify' else None
     version = b.command(args.vivado, '-version')
     b.check_vivado(version)
-    inputs = prepare(out, args.stage, origin, previous, hdk, simulation)
+    inputs = prepare(out, args.stage, origin, previous, hdk, simulation, args.physical_strategy)
     (out / 'vivado_version.txt').write_text(version + '\n')
     result = execute(out, args.stage, origin, previous, inputs, hdk, args.vivado)
     print(json.dumps({'stage': args.stage, 'status': result['status'],

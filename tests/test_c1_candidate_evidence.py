@@ -25,6 +25,7 @@ def load(name, path):
 e = load('portable_evidence', ROOT / 'boards/c1_f2_alex/candidate_evidence.py')
 b = e.local_module('build')
 sim = e.local_module('simulate')
+implementation = e.local_module('implement')
 f = load('portable_build_fixture', ROOT / 'tests/test_c1_alex_build.py')
 
 
@@ -87,7 +88,7 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
     shell = 'hdk/common/shell_stable/build/checkpoints/from_aws/cl_bb_routed.small_shell.dcp'
     put(run('installed') / shell, 'SYNTHETIC SHELL DCP FOR PARSER TEST ONLY')
     monkeypatch.setattr(b, 'SHELL_SHA256', e.sha(run('installed') / shell))
-    monkeypatch.setattr(e, 'local_module', lambda name: {'build': b, 'simulate': sim}[name])
+    monkeypatch.setattr(e, 'local_module', lambda name: {'build': b, 'simulate': sim, 'implement': implementation}[name])
     base_inputs = dict(schema=1, kind='c1-alex-burst200-build-inputs', source_status='',
                        source_revision='a'*40, build_id='a'*8, part=b.PART,
                        core_khz=200000, hbm_mhz=450, hbm_ports=8, channel_bytes=2**29,
@@ -178,6 +179,10 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
         for name in prepared:
             source = e.HERE / name
             put(dest / name, source.read_bytes() if name in ('qualify_c1_alex.tcl','audit_c1_alex.tcl','routed_host_ready.tcl') else '# SYNTHETIC stage recipe\n')
+        if stage == 'implement':
+            for name in prepared:
+                original = 'build.tcl' if name == 'run.tcl' else name
+                put(dest / name, (run('synth') / 'implement' / original).read_bytes())
         inp = {'schema': 1, 'kind': 'c1-alex-checkpoint-stage-inputs', 'stage': stage,
                'executor_revision': 'd'*40, 'executor_sources': sources, **m['hardware'],
                'synth_run': old('synth'), 'synth_receipt_sha256': e.sha(run('synth')/'synth-complete.json'),
