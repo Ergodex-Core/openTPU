@@ -233,7 +233,7 @@ def record_sim(a) -> list:
         pos0 = 3 if a.pos is None else a.pos
         cap = max(256, -(-(pos0 + a.tokens + 1) // 128) * 128)
         cfg = sim_config(spec, cap)
-        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
+        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // (2 * getattr(cfg, "CPC", 1)))   # 2 CPC channels
         eng = Engine(spec, W, cap=cap, cfg=cfg, pipeline="thread",
                      backend=lambda c, imgs: BoardBackend(c, imgs, transport=tr))
         ids = [int(t) for t in np.random.default_rng(1).integers(0, spec.vocab, pos0 + 1)]

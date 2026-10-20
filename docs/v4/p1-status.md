@@ -241,3 +241,88 @@ the regression log.
 The build host's `models/gemma-3-1b-it` is a symlink to the checkpoint. Each RTL run of the
 token is 10-25 minutes on the Verilator board model (the Python side holds the fp32 weights,
 the ISA machine's DRAM and the RTL's: about 10 GB).
+
+## 6. On the AWS F2: P1 on Alex's burst200 fabric (2026-10-20)
+
+Branch `p1-f2` (this tree: `v4-p1-wide-port` bdc32a03 plus the commits below), built and run on
+the m8a.16xlarge build box (Verilator 5.048, Vivado 2025.2, AWS HDK 2.3.0 small shell
+0x10212415). Everything here is simulation and timing; nothing has run on the card yet.
+
+### 6.1 The decision: the burst200 fabric, not a new 32-PC adapter
+
+Two proven F2 paths could carry the slice. **(a) Alex's burst200 fabric** (`boards/f2/burst200`,
+imported byte-identical from `e04/tpubench` 23f3f77d, commit 135cdda6): the only openTPU F2
+design that has decoded on the card (build 6: one slice at 200 MHz on two HBM ports, 22.2 int8
+device tok/s; build 11: three slices at 175 MHz on six ports, 48.3 int8 device tok/s, text
+identical to build 6; docs/v4/f2-burst200.md, f2-burst200-s3.md). Each native channel of
+`otpu_native_dram` (one command a 64-byte beat) is one `otpu_native_axi` (16-beat read
+bursts, single-beat writes, a direction barrier) on its own 2 GiB HBM window and port, two
+windows and the host per `f2_mem` SmartConnect (3 SI x 2 MI); P1's base descends from Alex's
+7e42a626, so the native interface is the one his adapter was written for. **(b) The Alex-shell
+flow** (`wide-port-alexshell`: a 1x1 SmartConnect per channel, NCH configurable, full build
+and route-qualification tooling): never decoded on a card; its PORTB 4 build is stuck at
+-0.064 ns.
+
+(a) is taken. P1 at CPC 2 needs 256 B a cycle: its adapter already runs 2 CPC = 4 native
+channels (milestone 2), so on burst200 the slice is four adapters on four HBM ports (0, 4, 8,
+12: four distinct HBM memory channels) in two `f2_mem` groups, the host reaching both through
+an `f2_host` crossbar: exactly the per-slice structure of the three-slice build, with P1's one
+slice owning two groups. No new memory adapter: the slot-reserved reorder FIFO and the 32-PC
+interleave of milestone 5 are not needed while four ports carry the port (4 x 64 B x 200 MHz =
+51.2 GB/s at the native ports; an HBM port is 32 B x 450 MHz = 14.4 GB/s raw, and build 6
+measured 89% of the native port rate on the weight stream).
+
+### 6.2 What was built
+
+| piece | files |
+|:--|:--|
+| the board at CPC 2: NCH = 2 CPC native channels a slice, CFG_DRAM four channels of 1 GiB, CAPS2 [3:1] = CPC (the wide-port line's PORTB field) | `rtl/shell/otpu_board.sv`, `rtl/shell/otpu_ctrl.sv` |
+| the target's F2 geometry (channels_per_slice 4, channel_bytes 1 GiB, hbm_ports 0 / 4 / 8 / 12, rtl_board f2-burst200-p1, floorplan_p1.tcl, BUILD_ID 0x50310002) | `targets/f2.toml`, `opentpu/target.py` (rtl_board) |
+| the CL top, generated: one otpu_board at CPC 2, four otpu_native_axi (BASE_ADDR j x 2 GiB), `f2_mem_s0` (ports 0 / 4) and `f2_mem_s1` (8 / 12), `f2_host` 1 x 2 and a register slice per group, SLR0's own reset synchronizers and pipes | `boards/f2/burst200/scripts/generate_f2_top.py` (grouped mode; one slice of two channels still gives Alex's top byte for byte), `rtl/boards/f2/burst200-p1/cl_opentpu.sv` |
+| the flow on groups (otpu_G in geometry.tcl), the floorplan (the board, the adapters and both SmartConnects in SLR0, each SmartConnect in a grandchild by its ports, the crossbar in SLR1) | `build.py`, `create_f2_ip.tcl`, `build_f2.tcl`, `constraints/floorplan_p1.tcl` |
+| build 6's two cycle-exact timing fixes in the core (the TMEM read requests replicated per 16 loads; the TMEM's rank select a register) | `rtl/dma/otpu_dma.sv`, `rtl/mxu/otpu_mxu.sv`, `rtl/vpu/otpu_vpu.sv`, `rtl/mem/otpu_tmem.sv` (3275eee5) |
+| the host: the CPC 2 channel map (chunk m on pair m mod CPC, no pair hash; beat_at / split / join / Board.write / read / scrub), device_config's CPC from CAPS2 (CFG_HASH has it), the F2 transport's windows (each channel in its own 2 GiB window), `--dev f2:<slot>` for chat and hwlens | `opentpu/host/board.py`, `regs.py`, `f2.py`, `chat.py`, `hwlens.py` |
+| the F2 memory path in simulation: per channel otpu_native_axi and an AXI slave model of the SmartConnect / HBM side (outstanding limits, stalls, B after the write is performed, AXI-obligation checks) in front of the native memory model: `otpu_top` AXI 3 (`OTPU_F2MEM=1`, or a run's `axi=3`), `tb_board` MEM_NATIVE 3 (the board model's transport: `SimTransport(native="f2")`) | `sim/verilator/otpu_axi_native.sv`, `rtl/top/otpu_top.sv`, `sim/verilator/tb_board.sv`, `opentpu/rtlsim.py` |
+| P1's LPN (the wide-port-lpn tool with CPC as the port credit, int8 advances of CPC chunks, P1's unhashed pairs) and the packaging review | `tools/wideport_lpn.py`, `boards/f2/burst200/scripts/review_gates.py` |
+| tests | `tests/test_p1_f2.py` (15), `tests/test_cpc.py` (the F2 path), `tests/test_gemma3.py` (cpc2-f2) |
+
+### 6.3 Gates (Verilator, on the box)
+
+Receipts are the logs under `/home/ubuntu/opt/logs/p1-*.log` (each opens with the commit and
+the exact command) and the profiles under `/home/ubuntu/lens-runs/p1/`.
+
+| gate | commit | result | log |
+|:--|:--|:--|:--|
+| tests/test_p1_f2.py (target, flow plan, generated top and floorplan, Alex's top regenerated byte for byte, CAPS2, the host map against the adapter's, the F2 windows, device_config; the MLP on the F2 path at CPC 1; the board model at CPC 2 reports CPC 2 / four 1 GiB channels; the tiny Gemma 3 on the board model through the host's map and the F2 path, three tokens bit-exact, DRAM equal) | 3328f88f / 17cab46d | 12 + 3 passed | p1-f2tests1.log |
+| tests/test_cpc.py + tests/test_p1_f2.py (kernels at CPC 2 on the fixed, native and F2 paths; the 13 MX MM cases) | 3275eee5 | 36 passed | p1-cpcb.log |
+| tests/test_gemma3.py -k token_on_rtl --runslow (the odd-block tiny model at position 600: cpc1, cpc2, cpc2-f2) | 17cab46d | 3 passed | p1-g3tiny.log |
+| Gemma 3 1B int8 (weights and head), one decode token at position 14 after the 15-token chat prompt, the resident program, whole model (26 layers + head), the F2 path never withholding a handshake (stall 0, LAT 30), `--check`: the whole DRAM image against the ISA simulator | 3275eee5 | **bit-exact, next token 'Okay', 4,838,409 cycles** (17cab46d: the same count) | p1-g3f2s0b.log, p1-g3f2s0.log |
+| the same token, per-position program, tools/perf_qwen.py `--check` (the LPN's calibration receipt) | 3275eee5 | bit-exact, 4,623,290 cycles | p1-pqf2pp.log |
+
+Throughput, all **RTL whole-model simulation at 200 MHz, not FPGA inference**: on the F2 path
+41.3 tok/s (4,838,409 cycles, resident, stall 0 / LAT 30); with each channel capped at 89% of a
+beat a cycle (build 6's measured port utilization; `OTPU_BW=89`) 40.9 tok/s (4,887,567 cycles,
+p1-g3f2bw89.log); per-position program 43.3 tok/s. The same token on the native path
+(section 2.1) was 4,639,029 cycles (43.1 tok/s): the F2 path costs 4.3%, the adapter's 16-beat
+read coalescing showing as rows whose chunks arrive later (Lens: "MXU not consuming" 4.4%
+against 2.1%) and longer QACT waits (2.9% against 1.5%).
+
+### 6.4 Lens and LPN
+
+Lens (`lens summary /home/ubuntu/lens-runs/p1/p1f2b-gemma3-f2-stall0.otpuprof`): 87.8% of the
+roofline (4,249,632: the MXU's advances with the half pairs), port B streaming 88.1%, chunk
+FIFO starved 0.8%, MXU not consuming 4.4%, MXU computing not streaming 2.0%, waiting on the
+quantizer 2.9% and the VPU 1.4%, TMEM arbitration 0.3%; the drain lost 231,076 cycles to TMEM
+bank arbitration. The four channels' read beats are balanced (3.99 M, 3.99 M, 4.10 M, 4.10 M).
+
+LPN, all **lpn-estimate** (tools/wideport_lpn.py on LPNDialect b06f42d, the hwloop wide model
+ac048e4a, built on the box with conda-forge's LLVM / MLIR 20): the whole model at position 14,
+per-position program, against the F2-path receipt: **4,412,249 cycles, -4.6%** (MLP -3.9%, LM
+head -1.7%, attention -16.3%; mean |error| 7.3%, under the 10% gate: calibrated), 45.3 tok/s
+at 200 MHz against the RTL's 43.3; at the F2 path's adapter latency (32 cycles over --lat
+instead of the native path's 14) 4,415,543 (-4.5%) (`/home/ubuntu/opt/logs/p1-wplpn2.log`,
+`/home/ubuntu/lens-runs/p1/p1-wplpn-perpos-al{14,32}.json`). The VLA's pi0.5 LPN
+(openTPU-vla e896ab4f tools/pi05_lpn.py at its f2-vla target, which P1's change does not touch):
+the whole chunk 1.477 s / 0.68 Hz (lpnlang) and 1.414 s / 0.71 Hz (dialect) at 200 MHz, the
+cut phases within -17.9..+5.5% of their Verilator cycles (`/home/ubuntu/opt/logs/p1-pi05lpn.log`,
+`/home/ubuntu/lens-runs/p1/pi05-lpn-{phases,full}.json`).

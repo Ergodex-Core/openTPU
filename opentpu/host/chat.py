@@ -948,7 +948,7 @@ def make_backend(name: str, spec, cap: int, dev: str | None, model: str | None =
     if name == "board-sim":
         from opentpu.host.board import BoardBackend, SimTransport, sim_config
         cfg = sim_config(spec, cap, lookup=lookup, wformat=wformat, head_format=head_format)
-        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
+        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // (2 * getattr(cfg, "CPC", 1)))   # 2 CPC channels
         return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
     if name == "rtl":
         from opentpu.llm.rtl_backend import RtlBackend
