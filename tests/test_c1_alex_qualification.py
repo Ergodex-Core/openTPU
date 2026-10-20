@@ -650,8 +650,31 @@ puts [::c1_alex_route::supplemental [lindex $argv 1] {}]
     assert raw.index('cell_detail_budget section gray') < raw.index('cell_detail_budget section findings')
     assert 'cell_detail_coverage exhausted_gray selected 1 captured 0 cached 0 skipped 1' in raw
     assert 'cell_detail_coverage fresh_finding selected 1 captured 1 cached 0 skipped 0' in raw
-    assert 'section_cap 4096 section gray' in raw and 'section_cap 4096 section findings' in raw
+    assert 'section_cap 4096 section gray' in raw and 'section_cap 8192 section findings' in raw
     assert 'incomplete_or_error 1' in result.stdout
+
+
+@pytest.mark.parametrize(('initial', 'captured', 'skipped'), [(4597, 1, 0), (8192, 0, 1)])
+def test_c1_findings_capacity_covers_observed_link_inventory_but_stays_bounded(tmp_path, initial, captured, skipped):
+    report = tmp_path / 'findings-cap.tcldata'
+    script = r'''
+source [lindex $argv 0]
+proc get_property {key objects} {return [expr {$key eq {NAME} ? $objects : {FDRE}}]}
+proc get_cells {args} {return [lindex $args end]}
+set ::c1_alex_route::capture_queries 0;set ::c1_alex_route::capture_pending 0
+set ::c1_alex_route::captured_cells {};set ::c1_alex_route::capture_cell_section findings
+for {set i 0} {$i<[lindex $argv 2]} {incr i} {dict set ::c1_alex_route::captured_cells existing$i 1}
+set f [open [lindex $argv 1] w]
+::c1_alex_route::capture_cells $f actual_finding {last_finding_cell}
+puts $f [list pending $::c1_alex_route::capture_pending route_qualified 0];close $f
+'''
+    result = tcl(tmp_path, script, report, initial)
+    assert result.returncode == 0, result.stderr
+    raw = report.read_text()
+    assert f'selected 1 captured {captured} cached 0 skipped {skipped}' in raw
+    assert 'per_call_cap 256 section_cap 8192 section findings' in raw
+    assert f'pending {skipped} route_qualified 0' in raw
+    assert ('cell_detail_cap_reached' in raw) == bool(skipped)
 
 
 @pytest.mark.parametrize(('fault', 'required'), [

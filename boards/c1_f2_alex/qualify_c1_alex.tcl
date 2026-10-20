@@ -236,15 +236,18 @@ proc ::c1_alex_route::capture_properties {audit kind object keys} {
 }
 proc ::c1_alex_route::capture_cells {audit label objects} {
     variable captured_cells;variable capture_cell_section
+    # C1's linked design has 4096 SYNTH-9 findings before the other related
+    # cells are visited. Keep this finite and report every skipped observation.
+    set section_cap [expr {$capture_cell_section eq "findings" ? 8192 : 4096}]
     set selected [names $objects];set captured 0;set cached 0;set skipped 0
     foreach name $selected {
         if {[dict exists $captured_cells $name]} {incr cached;continue}
-        if {$captured>=256 || [dict size $captured_cells]>=4096} {incr skipped;continue}
+        if {$captured>=256 || [dict size $captured_cells]>=$section_cap} {incr skipped;continue}
         dict set captured_cells $name 1;incr captured
         set cell [get_cells -quiet [list $name]]
         capture_properties $audit [list $label cell $name] $cell {NAME REF_NAME ORIG_REF_NAME IS_SEQUENTIAL ASYNC_REG LOC BEL}
     }
-    puts $audit [list cell_detail_coverage $label selected [llength $selected] captured $captured cached $cached skipped $skipped per_call_cap 256 section_cap 4096 section $capture_cell_section]
+    puts $audit [list cell_detail_coverage $label selected [llength $selected] captured $captured cached $cached skipped $skipped per_call_cap 256 section_cap $section_cap section $capture_cell_section]
     if {$skipped} {capture_missing $audit $label cell_detail_cap_reached}
 }
 proc ::c1_alex_route::capture_pin {audit label name {fanin 0} {require_clock 0}} {
@@ -482,10 +485,10 @@ proc ::c1_alex_route::supplemental {directory groups} {
     puts $audit [list schema 1 kind current_checkpoint_supplemental_evidence route_qualified 0 review pending]
     # Separate bounded caches let findings neither consume gray's detail budget
     # nor silently reuse incomplete gray captures. The two cell-collecting
-    # sections together visit at most 8192 cells, with explicit cap diagnostics.
+    # sections together visit at most 12288 cells, with explicit cap diagnostics.
     foreach {label command} [list gray_ancestors [list capture_gray_ancestors $groups $audit] gray [list capture_gray $groups $audit] findings [list capture_findings $audit] waivers [list capture_waivers $audit] pulse [list capture_pulse $audit]] {
         set captured_cells {};set capture_cell_section $label
-        if {$label in {gray findings}} {puts $audit [list cell_detail_budget section $label per_call_cap 256 section_cap 4096]}
+        if {$label in {gray findings}} {puts $audit [list cell_detail_budget section $label per_call_cap 256 section_cap [expr {$label eq "findings" ? 8192 : 4096}]]}
         # A collector/API defect must remain visible without discarding all the
         # other independent evidence or implying structural/physical acceptance.
         capture $audit [list collector $label] $command
