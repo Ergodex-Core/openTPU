@@ -57,6 +57,19 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
 
 ## The numbers
 
+### The gates (Verilator 5.048 on this Mac, tree 1a315aa4 and after; every count a full pass)
+
+| suite | result |
+|---|---|
+| tests/test_f2_rtl.py -k hbm_eng (the engine: 1x8 at NXR 3 and 0, 2x8 with and without the host mux, 4x8 with the mux = `f2-hbm:v5`, a 150 MHz core; ORDER 0 detects stale reads) | 7 passed |
+| tests/test_native_nch.py | 10 passed |
+| tests/test_full_hbm.py --runslow (the sharding on the ISA simulator, the real 1B at S = 4) | 6 passed |
+| tests/test_f2_build.py (the snapshots incl. v5 / v5s3, both floorplans under the Tcl mock) | 104 passed |
+| tests/test_target.py | 25 passed |
+| OTPU_TARGET=f2-hbm OTPU_NCH=8 tests/test_rtl.py -k "replay or act_reads or attention or lane_count" | 27 passed, 1 skipped (759 s) |
+| tests/test_wide_port_rtl.py (168 cases, every format, reuse and lane mode on the behavioural DRAM and the native path) | 168 passed (1:50 h, paused for the receipts) |
+| ISA suites touched by the compiler change (test_gemma4, test_prefill_gemma4, test_gemma3, test_offload, test_compiler, test_row_lanes) | 16 passed, 10 skipped (no transformers in the venv) |
+
 ### ISA simulator: the token-exact gate
 
 `tests/test_full_hbm.py`: a tiny random Gemma 3 on 2 and 4 slices against one (bit-identical
