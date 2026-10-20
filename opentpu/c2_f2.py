@@ -207,6 +207,52 @@ class Benchmark:
                 raise TimeoutError("C2 abort did not drain; benchmark/image recovery required")
             time.sleep(0.001)
 
+    def failure_snapshot(self):
+        """Bounded, read-only observations; live counters are not an atomic profile."""
+        snapshot = dict(kind="c2-f2-failure-snapshot", bit_exact=False,
+                        profile_eligible=False, atomic=False,
+                        observed_at_utc=datetime.now(timezone.utc).isoformat(),
+                        identity={}, registers={}, counters={}, pcs=[], read_errors=[])
+        def read(target, name, address):
+            try:
+                target[name] = self.t.reg_read(address)
+            except Exception as exc:
+                snapshot["read_errors"].append(dict(address=address, name=name,
+                    error_type=type(exc).__name__, error=str(exc)))
+        for name, address in (("id", R_ID), ("abi", R_ABI), ("build_id", R_BUILD),
+                              ("core_khz", R_CORE_KHZ), ("max_rows", R_MAX_ROWS),
+                              ("depth", R_DEPTH), ("credits", R_CREDITS)):
+            read(snapshot["identity"], name, address)
+        for name, address in (("status_before", R_STATUS), ("error", R_ERROR),
+                              ("count", R_COUNT), ("mode", R_MODE), ("kb", R_KB),
+                              ("rows", R_ROWS), ("base_beat", R_BASE),
+                              ("hbm_ready", R_HBM_READY)):
+            read(snapshot["registers"], name, address)
+        snapshot["cycle_samples"] = []
+        for _ in range(3):
+            sample = {}
+            for name, address in (("high_before", R_CYCLES_HI),
+                                  ("low", R_CYCLES_LO), ("high_after", R_CYCLES_HI)):
+                read(sample, name, address)
+            snapshot["cycle_samples"].append(sample)
+            if len(sample) == 3 and sample["high_before"] == sample["high_after"]:
+                snapshot["cycles"] = sample["low"] | (sample["high_after"] << 32)
+                break
+        for name, address in COUNTERS.items():
+            read(snapshot["counters"], name, address)
+        for pc in range(8):
+            values = {}
+            for name, offset in PC_COUNTERS.items():
+                read(values, name, 0x100+pc*0x20+offset)
+            snapshot["pcs"].append(values)
+        read(snapshot["registers"], "status_after", R_STATUS)
+        snapshot["counters_may_wrap"] = snapshot.get("cycles", 1 << 32) >= 1 << 32
+        snapshot["limitations"] = [
+            "Sequential live register observations, not a coherent counter profile.",
+            "32-bit counters may wrap during a timeout; no derived rates or success claim.",
+            "Read count is bounded; an individual MMIO access remains subject to host/device behavior."]
+        return snapshot
+
     def run(self, mode, *, timeout=30.0):
         if mode not in (0, 1) or self.fixture is None or timeout <= 0:
             raise ValueError("preload a fixture, select mode 0/1 and a positive timeout")
@@ -227,8 +273,23 @@ class Benchmark:
                 if time.monotonic() >= deadline:
                     raise TimeoutError("C2 benchmark completion timeout")
                 time.sleep(0.001)
-        except BaseException:
-            self.abort()
+        except BaseException as exc:
+            failure = dict(kind="c2-f2-run-failure", bit_exact=False, profile_eligible=False,
+                           mode=mode, rows=f.rows, kb=f.kb, base_beat=f.base_beat,
+                           fixture_sha256=self.fixture_sha, timeout_s=timeout,
+                           error_type=type(exc).__name__, error=str(exc))
+            exc.c2_failure = failure
+            try:
+                failure["before_abort"] = self.failure_snapshot()
+            except BaseException as snapshot_error:
+                failure["snapshot_error"] = dict(error_type=type(snapshot_error).__name__,
+                                                error=str(snapshot_error))
+            try:
+                self.abort()
+                failure["abort"] = dict(attempted=True, drained=True)
+            except BaseException as abort_error:
+                failure["abort"] = dict(attempted=True, drained=False,
+                                       error_type=type(abort_error).__name__, error=str(abort_error))
             raise
         error = self.t.reg_read(R_ERROR)
         if error or status & (ERROR | ABORTED):

@@ -206,6 +206,36 @@ def test_canonical_corruption_checks_survive_adapter(bad):
     with pytest.raises(RuntimeError):list(B.checked_runs(tr,A.C.make_fixture(5,3),1234,1,1.))
 
 
+def test_adapter_persists_preabort_failure_without_profile(tmp_path,monkeypatch):
+    tr=H.Fake();tr.hang=True
+    def bad_abort(self,timeout=5.0):
+        raise RuntimeError('test abort failure')
+    monkeypatch.setattr(A.C.Benchmark,'abort',bad_abort)
+    provenance={'qualification_sha256':'a'*64}
+    with pytest.raises(TimeoutError,match='completion'):
+        list(B.checked_runs(tr,A.C.make_fixture(1,1),1234,1,.001,
+             failure_callback=lambda failure:B.write_failure(tmp_path/'failure.json',failure,provenance)))
+    record=json.loads((tmp_path/'failure.json').read_text())
+    assert record['repeat']==0 and record['mode']==0
+    assert record['before_abort']['registers']['status_before']==A.C.BUSY
+    assert record['abort']['drained'] is False
+    assert record['source']==provenance
+    assert record['bit_exact'] is False and record['profile_eligible'] is False
+    assert list(tmp_path.iterdir())==[tmp_path/'failure.json']
+    with pytest.raises(ValueError,match='physical F2'):A.C.lens_data(record,'failed')
+
+
+def test_adapter_failure_write_does_not_replace_timeout():
+    tr=H.Fake();tr.hang=True
+    def fail_write(_):
+        raise OSError('disk unavailable')
+    with pytest.raises(TimeoutError,match='completion') as caught:
+        list(B.checked_runs(tr,A.C.make_fixture(1,1),1234,1,.001,failure_callback=fail_write))
+    notes=getattr(caught.value,'__notes__',[getattr(caught.value,'c2_failure_write_error','')])
+    assert any('disk unavailable' in note for note in notes)
+    assert not tr.reg_read(A.C.R_STATUS)&(A.C.BUSY|A.C.DRAINING)
+
+
 def test_failed_prepublication_record_need_not_have_an_image(tmp_path):
     _,v,r,_=verified_fixture(tmp_path)
     r['state']='failed';r.pop('image_id');r.pop('global_image_id')

@@ -38,17 +38,45 @@ def read_qualification(path,digest):
     return q
 
 
-def checked_runs(transport,fixture,build_id,repeats,timeout):
+def checked_runs(transport,fixture,build_id,repeats,timeout, failure_callback=None):
     """The canonical client owns preload fences/readback, numerics and counters."""
     bench=C.Benchmark(transport,expected_build_id=build_id)
+    repeat=mode=None
     try:
         bench.preload(fixture)
         for repeat in range(repeats):
             for mode in ((0,1) if repeat%2==0 else (1,0)):
                 result=bench.run(mode,timeout=timeout)
                 yield dict(result,repeat=repeat)
-    finally:
-        if transport.reg_read(C.R_STATUS)&(C.BUSY|C.DRAINING):bench.abort()
+    except BaseException as exc:
+        failure=getattr(exc,'c2_failure',None)
+        if failure is None:
+            failure=dict(kind='c2-f2-run-failure',bit_exact=False,profile_eligible=False,
+                         error_type=type(exc).__name__,error=str(exc))
+            try:
+                if transport.reg_read(C.R_STATUS)&(C.BUSY|C.DRAINING):
+                    bench.abort()
+                    failure['abort']=dict(attempted=True,drained=True)
+            except BaseException as cleanup_error:
+                failure['cleanup_error']=dict(error_type=type(cleanup_error).__name__,error=str(cleanup_error))
+        failure.update(repeat=repeat,mode=mode)
+        if failure_callback is not None:
+            try:
+                failure_callback(failure)
+            except BaseException as write_error:
+                message=f'Could not persist failure evidence: {type(write_error).__name__}: {write_error}'
+                if hasattr(exc,'add_note'):
+                    exc.add_note(message)
+                else:  # Python 3.10 is supported; reporting must preserve the original failure.
+                    exc.c2_failure_write_error=message
+        raise
+
+
+def write_failure(path, failure, provenance):
+    """Failure evidence is separate from successful results and Lens profiles."""
+    record=dict(failure,source=provenance,bit_exact=False,profile_eligible=False)
+    with Path(path).open('x') as stream:
+        stream.write(json.dumps(record,indent=2)+'\n')
 
 
 def run(args):
@@ -73,7 +101,8 @@ def run(args):
     (args.out/'provenance.json').write_text(json.dumps(provenance,indent=2)+'\n')
     profiles=[];results=[]
     with C2F2Transport(bdf,expected_build_id=args.expected_build_id) as transport:
-        for result in checked_runs(transport,fixture,args.expected_build_id,args.repeats,args.timeout):
+        for result in checked_runs(transport,fixture,args.expected_build_id,args.repeats,args.timeout,
+                                   failure_callback=lambda failure:write_failure(args.out/'failure.json',failure,provenance)):
             result['source']=provenance
             name=f"C2 Alex {'decode' if result['mode'] else 'legacy M1'} N{fixture.rows} KB{fixture.kb} repeat{result['repeat']}"
             # Canonical exporter refuses injected/model data and non-bit-exact output.

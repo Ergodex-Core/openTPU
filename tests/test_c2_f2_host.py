@@ -181,10 +181,70 @@ def test_mutated_preload_is_rejected_before_start():
 def test_completion_timeout_aborts_and_drains():
     tr, b = bench()
     tr.hang = True
-    with pytest.raises(TimeoutError, match="completion"):
+    with pytest.raises(TimeoutError, match="completion") as caught:
         b.run(1, timeout=0.001)
+    record = caught.value.c2_failure
+    assert record["before_abort"]["registers"]["status_before"] == C.BUSY
+    assert record["before_abort"]["registers"]["mode"] == 1
+    assert record["before_abort"]["identity"] == b.identity
+    assert set(record["before_abort"]["counters"]) == set(C.COUNTERS)
+    assert len(record["before_abort"]["pcs"]) == 8
+    assert all(set(pc) == set(C.PC_COUNTERS) for pc in record["before_abort"]["pcs"])
+    assert record["abort"] == dict(attempted=True, drained=True)
+    assert record["profile_eligible"] is False
     assert (C.R_CTRL, C.ABORT) in tr.writes
     assert not tr.reg_read(C.R_STATUS) & (C.BUSY | C.DRAINING)
+
+
+def test_timeout_preserved_when_snapshot_and_abort_fail(monkeypatch):
+    tr, b = bench()
+    tr.hang = True
+    def bad_snapshot():
+        raise OSError("diagnostic read failed")
+    def bad_abort():
+        raise RuntimeError("abort failed")
+    monkeypatch.setattr(b, "failure_snapshot", bad_snapshot)
+    monkeypatch.setattr(b, "abort", bad_abort)
+    with pytest.raises(TimeoutError, match="completion") as caught:
+        b.run(0, timeout=0.001)
+    record = caught.value.c2_failure
+    assert record["snapshot_error"]["error"] == "diagnostic read failed"
+    assert record["abort"]["drained"] is False
+    assert record["abort"]["error"] == "abort failed"
+
+
+def test_failure_snapshot_handles_rollover_partial_read_and_is_read_only(monkeypatch):
+    tr, b = bench()
+    before = tr.writes.copy()
+    original = tr.reg_read
+    highs = iter([0, 1, 1, 1])
+    reads = []
+    def read(address):
+        reads.append(address)
+        if address == C.R_CYCLES_HI:
+            return next(highs)
+        if address == C.R_ERROR:
+            raise OSError("one register unavailable")
+        return original(address)
+    monkeypatch.setattr(tr, "reg_read", read)
+    snap = b.failure_snapshot()
+    assert snap["cycles"] == 1 << 32 and snap["counters_may_wrap"] is True
+    assert len(snap["cycle_samples"]) == 2
+    assert len(snap["read_errors"]) == 1
+    assert len(snap["pcs"]) == 8
+    assert tr.writes == before and len(reads) <= 87
+    assert snap["atomic"] is False and snap["profile_eligible"] is False
+
+
+def test_failure_cycle_sampling_is_bounded_when_never_coherent(monkeypatch):
+    tr, b = bench()
+    original = tr.reg_read
+    highs = iter(range(6))
+    monkeypatch.setattr(tr, "reg_read",
+                        lambda address: next(highs) if address == C.R_CYCLES_HI else original(address))
+    snap = b.failure_snapshot()
+    assert len(snap["cycle_samples"]) == 3 and "cycles" not in snap
+    assert snap["counters_may_wrap"] is True
 
 
 def test_busy_device_is_not_reconfigured():
