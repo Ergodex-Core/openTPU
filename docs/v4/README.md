@@ -583,6 +583,18 @@ package, the S3 upload, `create-fpga-image`, the slot-0 load and the three-slice
 for the user (commands in the session notes; the laptop's AWS session also needs `aws login`).
 Build 12 run2 (162.5 MHz) was routing on the m7a at 11:47 with a +0.106 pre-route estimate.
 
+**Packaged and submitted (12:29 UTC).** The user lifted the block (Bash allow rules) and said
+continue: `package_f2.py` wrote `otpu_burst200_s3_175_97af3c29.Developer_CL.tar` (355,133,440
+B, SHA-256 `32f85950d92e09e2b083eb968fdea6014fb29eca4d826fd3f372532907eb076f`; manifest
+dcp_hash = the checkpoint's SHA-256, shell 0x10212415, HDK 2.3.0, Vivado v2025.2) in 21 s; the
+tar went to the laptop (hash verified) and to
+`s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu/f2/v4/afi/`; the AFI is
+**afi-0ef6aa78ffbcbcf10 / agfi-07bbf03753aaa85c4** (`otpu-burst200-s3-175-97af3c29`, logs
+under `opentpu/f2/v4/afi-logs/`). Next, once available: `fpga-load-local-image -S 0 -I
+agfi-07bbf03753aaa85c4` on opentpu-f2, then `OTPU_TARGET=f2-burst200-s3-175 OTPU_DEVICE=f2:0
+python -m opentpu.host.chat --backend board --dev f2:0 --model gemma3 --slices 3 --greedy
+--prompt ...` (int8, then `--wformat fp4`), predicted 51-53 device tok/s against build 6's 22.2.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
