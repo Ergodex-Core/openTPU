@@ -1040,6 +1040,7 @@ def test_hbm_sc_block_design_is_per_channel(tmp_path, nport, khz, sc_fault):
 # chains' register vectors answered as r_reg[i] cells for a `-hierarchical -filter` query
 FLOORPLAN5_HARNESS = FLOORPLAN_HARNESS + r'''
 dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y2 {s0a}
+dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y3 {s0a}
 dict set sites CLOCKREGION_X1Y5:CLOCKREGION_X3Y6 {s1a}
 dict set sites CLOCKREGION_X0Y9:CLOCKREGION_X3Y10 {s2a}
 dict set sites CLOCKREGION_X4Y9:CLOCKREGION_X7Y10 {s2b}
@@ -1107,7 +1108,10 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's chain and mux)
     assert all(f'WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng{p}' in hbm for p in range(8))
     assert 'WRAPPER/CL/u_sys/u_mem/g_mux.u_mux' in cells['pb_otpu_hbmx1'] and 'WRAPPER/CL/u_hsc' in cells['pb_otpu_hbmx1']
-    assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng') in cells['pb_otpu_hbmx1']
+    # (an engine joins its port box as its non-BRAM leaf cells: the mock answers one fake leaf,
+    # '<engine>/*', per engine; the engine's RAMs float in pb_otpu_hbm)
+    assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng/*') in cells['pb_otpu_hbmx1']
+    assert not any(c.endswith('.u_eng') for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
     # the hub links: slice 2's rx / tx / port in SLR2, the hub's tx / rx in SLR1
     assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in board and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in board
     assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid

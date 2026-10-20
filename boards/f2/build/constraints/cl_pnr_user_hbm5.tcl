@@ -43,8 +43,10 @@ proc otpu_leaves_no_bram {cell} {
   return $out
 }
 proc otpu_engine_cells {pattern x} {
-  if {$x < 4} { return [otpu_cells $pattern] }
-  set cells [otpu_leaves_no_bram [otpu_cells $pattern]]
+  # (every column since the third v5 ImplCL: the macro placer found the left half's boxes at
+  # 102-126% of their block RAM too, four engines' 28 RAMB36 in two bottom-row clock regions)
+  set cells {}
+  foreach e [otpu_cells $pattern] { lappend cells {*}[otpu_leaves_no_bram $e] }
   if {[llength $cells] == 0} { error "openTPU floorplan: no leaf cells under '$pattern' (the hierarchy moved?)" }
   return $cells
 }
@@ -177,9 +179,9 @@ for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
 ########################################
 # the pumped TMEM beside its VPU, one box a slice (within the slice's pblock)
 ########################################
-# SLR0: X2Y1:X3Y2 (the HBM columns' upper rows); SLR1: X1Y5:X3Y6; SLR2: X0Y9:X3Y10 (slice 2),
+# SLR0: X2Y1:X3Y3 (the HBM columns' upper rows); SLR1: X1Y5:X3Y6; SLR2: X0Y9:X3Y10 (slice 2),
 # X4Y9:X7Y10 (slice 3). The slice's MXU wraps around the box as v4's did (pb_otpu_tmem).
-set otpu_tboxes [list {CLOCKREGION_X2Y1:CLOCKREGION_X3Y2} {CLOCKREGION_X1Y5:CLOCKREGION_X3Y6} {CLOCKREGION_X0Y9:CLOCKREGION_X3Y10} {CLOCKREGION_X4Y9:CLOCKREGION_X7Y10}]
+set otpu_tboxes [list {CLOCKREGION_X2Y1:CLOCKREGION_X3Y3} {CLOCKREGION_X1Y5:CLOCKREGION_X3Y6} {CLOCKREGION_X0Y9:CLOCKREGION_X3Y10} {CLOCKREGION_X4Y9:CLOCKREGION_X7Y10}]   ;# slice 0's box three rows tall: at X2Y1:X3Y2 its 68 RAMB36 were 119% of the box
 set otpu_tmems {}
 for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
   set otpu_pb pb_otpu_tmem$otpu_s
