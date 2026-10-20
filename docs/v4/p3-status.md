@@ -85,8 +85,24 @@ the card's m4 arch, quoted at 200 MHz. The DRAM bound at 8 chunks a cycle is 981
 | P2 C 4 (P2's receipt) | lane ports, lane 0 through the adapter | 2,292,283 | 85.6% of 1.96 M | 87.2 | bit-exact |
 | C 8 packed, before APS (6fa8aed2) | lane ports, lane 0 through the adapter | 2,271,800 | 43.2% | 88.0 | bit-exact |
 | C 8 unpacked, before APS (6fa8aed2) | the same | 2,271,800 | 43.2% | 88.0 | bit-exact |
-| C 8 packed, APS (8a9d75d3) | the lane memory (8 copies, 8 adapters) | (pending) | | | |
-| C 8 unpacked, APS (8a9d75d3) | the same | (pending) | | | |
+| **C 8 packed, APS (8a9d75d3)** | the lane memory (8 copies, 8 adapters) | **1,299,884** | **75.5%** | **153.9** | bit-exact |
+| C 8 unpacked, APS (8a9d75d3) | the same | 1,299,884 | 75.5% | 153.9 | bit-exact |
+| C 8 packed, stall 5 (92fcae38) | the lane memory, 5% of the handshakes withheld | 1,356,709 | 72.3% | 147.4 | bit-exact |
+| C 8 packed, the F2 channel path (92fcae38) | + per channel the SLR chain (XR 3) and otpu_native_axi (bursts of 8, 32 in flight), latency 49 at 150 MHz | 1,524,984 | 64.4% | **98.4 at 150 MHz** | bit-exact |
+| P2 C 4, the F2 channel path (P2's receipts) | the same model, P2's settings | 2,571,208-2,667,016 | 73.6-76.3% of 1.96 M | 56.2-58.3 at 150 MHz | bit-exact |
+
+Receipts: `/home/ubuntu/lens-runs/p3/p3-gemma3-c8p-stall0-8a9d75d3.{txt,json,otpuprof}` (and the
+`-prefix-6fa8aed2` pair before APS), `p3-gemma3-c8p-stall5-92fcae38.*`,
+`p3-gemma3-c8p-naxi-xr3-lat49-150mhz-92fcae38.*` (OTPU_NAXI=1 OTPU_NAXI_XR=3 OTPU_NAXI_BURST=8
+OTPU_NAXI_IDLE=1 OTPU_NAXI_WAIT=0 OTPU_NAXI_OT=32 OTPU_LAT=49, P2's F2-path settings; P2's C 4
+receipts there: `/home/ubuntu/opt/logs/p2-tok-naxi150*.log`). On the F2 path the VPU wait grows
+to 10.0% of the cycles. With APS, `lens summary`: port B streaming 80.5%, MXU computing
+not streaming 6.4% (each lane's command is an eighth of the MM: the start and drain per command
+weigh 8x), waiting on the VPU 4.8% and on the quantizer 4.3% (the card's 8-lane vector units
+against an 8x faster stream: the proposal's M4), TMEM arbitration 1.4% (the drain lost 15.5% of
+the cycles, mostly absorbed), not consuming 1.4%, starved 0.9%; 780 MACs a cycle of 4,096. The LM
+head's 32 chunks run at 1.16x their stream, the MLP's 768-row chunks at 1.68x, the attention's
+256- / 1,024-row projections at 2.6-3.4x (`/home/ubuntu/opt/p3/mmshape.py`).
 
 Before APS, Lens: port B "streaming" 68.9% but the lanes moved only 0.98 M chunk-cycles of work in
 those 1.56 M cycles; every long stream ran at 2.3-2.5x its ideal time (`/home/ubuntu/opt/p3/
@@ -96,13 +112,15 @@ mmshape.py`). A 2,048-row int8 MM on the board path (`/home/ubuntu/opt/p3/p3_lan
 beats: saturated, and the lock step held every lane to lane 0. With APS: C 8 2,997 cycles (2,304
 + the same 693 fixed cycles as C 1 and C 4), 256 scale beats a channel, the 8 copies' hashes equal.
 
-**LPN** (`tools/p3_lpn.py`, lpn-estimate; the vla tree e896ab4f's lpnlang net, lpnlang c55ef8d):
+**LPN** (`tools/p3_lpn.py`, lpn-estimate; the vla tree e896ab4f's lpnlang net, lpnlang c55ef8d;
+receipts `p3-gemma3-c{1,4,8}-lpn.{txt,json}`, `p3-vla-pi05-lpn.{txt,json}`; mean |error| 2.7%
+over the three graded points, under the 10% rule):
 
 | | lanes | lpn-estimate | RTL (measured) | error |
 |:--|--:|--:|--:|--:|
 | Gemma 3 1B token, pos 14, lat 30 | 1 | 8,755,262 | 8,221,777 (P2's C 1 stall 0) | +6.5% |
 | | 4 | 2,307,854 | 2,292,283 (P2's C 4 stall 0) | +0.7% |
-| | 8 | 1,312,435 = 6.56 ms = **152.4 tok/s** at 200 MHz | (pending) | |
+| | 8 | 1,312,435 = 6.56 ms = **152.4 tok/s** at 200 MHz | 1,299,884 (C 8 packed, APS) | +1.0% |
 | pi0.5 chunk, f2-vla as it is | - | 295,472,463 = 1.477 s = 0.68 Hz | | |
 | pi0.5 chunk, f2-vla with P3's MXU (8 lanes x MCOLS 4, weights unpacked) | 8 | 582,586,902 = 2.913 s = 0.34 Hz | | |
 
@@ -126,8 +144,65 @@ Both close 200 MHz out of context on the F2's part (the proposal's 167-220 MHz w
 xcku5p stand-in). Packing a lane: -256 DSPs (-46%), -2.0 K flip-flops, +2.3 K LUTs (the fabric
 weight picks, 2 x 128 x 8 bits, and the splits). Eight lanes: ~2,400 MXU DSPs packed against
 ~4,450 unpacked; P2's floorplan holds the board in SLR2 (3,008 DSPs), which the unpacked eight
-lanes would not fit. Whole-CL synthesis / placement on the F2: (pending).
+lanes would not fit.
+
+**The whole CL, synthesized** (`boards/f2/build.py --target f2-p2:p3c150 --flow SynthCL` at
+92fcae38, 30 minutes, `OTPU_STAGE_SYNTHESIS_PASSED`; post_synth.dcp sha256 1aaca920...; the report
+`/home/ubuntu/opt/hwloop-nightly/p3-92fcae38/synth-util/util{,_hier}.txt`). The resource budget
+the proposal's section 4 estimated, now measured (at the card's arch: the VPU / quantizer / TMEM
+not yet widened, the chunk FIFOs in block RAM):
+
+| block | LUT | LUT-RAM | SRL | FF | RAMB36 | RAMB18 | DSP |
+|:--|--:|--:|--:|--:|--:|--:|--:|
+| the CL (of the VU47P) | 381,851 (29.3%) | 75,318 | 53,364 | 424,685 (16.3%) | 488 | 16 | 2,546 (28.2%) |
+| u_sc: 16 SmartConnects | 37,088 | 12,192 | 784 | 46,624 | 0 | 0 | 0 |
+| u_sys/u_mem: 16 otpu_native_axi + SLR chains | 9,418 | 5,824 | 0 | 60,722 | 0 | 0 | 0 |
+| u_board (SLR2's pblock) | 315,717 | 56,612 | 52,531 | 248,973 | 484 | 16 | 2,546 |
+| .. u_mem: the lane memory (8 adapters) | 77,600 | 45,224 | 0 | 23,103 | 0 | 0 | 0 |
+| .. u_slice | 233,683 | 10,638 | 52,396 | 218,557 | 456 | 15 | 2,546 |
+| .. .. u_mxu: 8 packed lanes | 149,759 | 5,472 | 49,184 | 151,125 | 264 | 8 | 2,393 |
+| .. .. .. one lane | 20,493 | 684 | 6,148 | 19,581 | 33 | 1 | 300 |
+| .. .. u_vpu | 36,016 | 1,554 | 2,760 | 29,551 | 4 | 0 | 86 |
+| .. .. u_tmem | 11,828 | 0 | 0 | 5,123 | 64 | 0 | 0 |
+| .. .. u_quant | 9,447 | 100 | 444 | 8,921 | 7 | 5 | 64 |
+
+The proposal's estimate for the full design (VPU 32, URAM FIFOs and TMEM) was ~2,910 DSPs,
+~280 RAMB36, 192 URAM, ~400 K LUTs; the MXU's 2,393 DSPs match its 2,416. In SLR2 (P2's floorplan:
+~435 K LUTs, 672 RAMB36, 3,008 DSPs a side) the board is ~73% of the LUTs, ~73% of the block RAM
+and 85% of the DSPs; the eight adapters' LUT-RAM response FIFOs alone are 45 K LUTs (the notes'
+"LUT-RAM-dense adapters congest"). Placement and routing: (running, below).
+
+## Risks found on the real part
+
+- **SLR crossings at 16 channels.** P2's floorplan (wide-port-alexshell's) keeps the board in SLR2
+  and the HBM fabric in SLR0, every channel's native port across two boundaries in 3-stage
+  register chains (`otpu_f2_hbm_axi` DW 604 + UW 532 = 1,136 signals a channel). The VU47P has
+  3,840 LAGUNA sites a side of each boundary (Vivado on the part: SLR0 3,840, SLR1 7,680, SLR2
+  3,840; ~23 K SLLs a boundary). Sixteen channels need ~18.2 K a boundary plus the host's and the
+  control chains, ~80% of the boundary before the shell takes its share: unlikely to route.
+  Ways down: the lane memories' adapters in SLR0 (the lane ports cross instead, ~12 K), the
+  write data crossing once and fanned out in SLR0 (every write goes to every copy: the 8 copies'
+  576-bit write ports carry the same data), the chains at clk_f with half the width, or the
+  proposal's floorplan (the lanes, their chunk FIFOs and the ACT RAM in SLR0 beside the HBM, the
+  rest in SLR2: only the ACT writes, the commands and the results cross; the vla branch's
+  `otpu_mxu_arr` registered cut is the starting point, but the drain's same-cycle TMEM grant
+  needs a credit scheme across the SLRs).
+- **DSPs in SLR2**: ~2,400 packed MXU DSPs + ~170 VPU / quantizer of SLR2's 3,008 (85%): the
+  packing is what lets eight lanes stay in one SLR (unpacked: ~4,450).
 
 ## What is next
 
-(written at the end of the session)
+1. **Place and route the F2 CL** (`boards/f2/build.py --target f2-p2:p3c150`, ImplCL from the
+   synthesis above) on P2's floorplan, and read the SLR crossings first; then the floorplan or
+   RTL change the crossings need (the list under "Risks"). A packaged Developer_CL tar for the
+   coordinator only after a routed, qualified build.
+2. **The cycles Lens names** (C 8 packed, 1.30 M against the 0.98 M bound): the MXU's start and
+   drain per command (6.4%: each lane's command is an eighth of the MM; a third command held, or
+   the MLP's 768-row chunks merged), the vector units (9.1%: the proposal's M4, VPU 32 lanes / CL 8
+   and the quantizer at 32, or the MLP's software pipelining), the TMEM drain's arbitration.
+3. **Memory capacity**: eight 2 GiB copies are the whole 16 GiB, so the copies hold Gemma 3 1B
+   (~1.05 GB) and nothing larger; the proposal's laned layout (one image, lane l's rows on its own
+   channels, group scale rows) is the way past that, an ISA change (Config.CLANES, MM LANE / bs).
+4. Receipts still to take: the tokens at stall 5 and on the F2 channel path (OTPU_NAXI, the SLR
+   chain and otpu_native_axi at 150 MHz: P2's latency 49), `tools/perf_qwen.py --layers 0 --pos 14
+   --check` at c8p.
