@@ -171,10 +171,12 @@ module otpu_mxu
   initial if (D % 16 != 0 || (D / 8) % CLS != 0 || CPG > 2)
     $fatal(1, "otpu_mxu: D a multiple of 16, D/8 a multiple of CLS, at most two chains a group");
   initial if (EL > LANES) $fatal(1, "otpu_mxu: E %0d > LANES", EL);
-  // packed: two rows a DSP (an even MCOLS), the low row's sum in P's low 19 bits (chains of at
-  // most 16: |sum| <= 16 * 127 * 128 < 2^18)
-  initial if (SPACK && (MCOLS % 2 != 0 || CLS > 16))
-    $fatal(1, "otpu_mxu: SPACK needs an even MCOLS (%0d) and chains of at most 16 (%0d)", MCOLS, CLS);
+  // packed: two rows a DSP, the low row's sum in P's low 19 bits (chains of at most 16: |sum| <=
+  // 16 * 127 * 128 < 2^18); MCOLS a multiple of 4, so that PAIR at an odd M (always below MCOLS / 2
+  // then) has a slot above 2M for its high columns to move up into (qent_t sh)
+  initial if (SPACK && (MCOLS % 4 != 0 || CLS > 16))
+    $fatal(1, "otpu_mxu: SPACK needs MCOLS a multiple of 4 (%0d) and chains of at most 16 (%0d)",
+           MCOLS, CLS);
   initial if (ROWS < MCOLS || ROWS > 255) $fatal(1, "otpu_mxu: MCOLS <= ROWS < 256");
 
   // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL. With C

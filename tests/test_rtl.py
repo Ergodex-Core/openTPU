@@ -1556,7 +1556,7 @@ def test_chunk_lanes_on_the_board_uarch(have_verilator):
 # bit the ISA simulator's, alone and on P3's 8 chunk lanes (1 KiB a cycle).
 @pytest.mark.parametrize("seed,C,pack,mcols", [(20, 1, 1, 8), (21, 8, 1, 8), (22, 8, 0, 8),
                                                (23, 3, 1, 8), (24, 8, 1, 4), (25, 1, 1, 4),
-                                               (26, 8, 1, 2)])
+                                               (26, 4, 1, 8)])
 def test_packed_pes_fuzz(have_verilator, seed, C, pack, mcols):
     """Random programs (PAIR at odd and even M among them, every weight format, RMAX, ACC,
     ASCALE, RSC, k0) on packed PEs at 1, 3 and 8 chunk lanes."""

@@ -277,9 +277,10 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
-    if p.get("MXU_PACK") and cfg.MCOLS % 2:
-        # packed PEs pair the stationary rows (otpu_mxu SPACK): an odd MCOLS builds unpacked (a
-        # suite run under OTPU_MXU_PACK=1 keeps its odd-MCOLS configurations)
+    if p.get("MXU_PACK") and cfg.MCOLS % 4:
+        # packed PEs pair the stationary rows, and PAIR at an odd M moves its high columns up a
+        # slot (otpu_mxu SPACK): MCOLS a multiple of 4, other configurations build unpacked (a
+        # suite run under OTPU_MXU_PACK=1 keeps them: MCOLS 2's PAIR at M 1 has no slot to move to)
         p["MXU_PACK"] = 0
     if axi == 1 and int(p.get("MXU_C", 1)) > 1 and os.environ.get("OTPU_LMEM", "1") == "0":
         # the lanes on the model's behavioural lane ports (P2's M2 stand-in) instead of the lane

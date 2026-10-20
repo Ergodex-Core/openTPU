@@ -21,7 +21,10 @@ Against the proposal's section 7 plan, the parts that give a bit-exact P3 RTL no
   < 2^18, and the pre-adder cannot overflow; `otpu_mxu_lanes` checks every consumed ACT byte is
   not -128 in simulation. PAIR at an odd M would put columns M - 1 (low block) and M (high block)
   on one DSP and one weight, so the command moves the high columns up a slot (`qent_t` sh / hs,
-  the ACT block and record picked per slot, the PAIR partner at j + M + 1). Names chosen apart
+  the ACT block and record picked per slot, the PAIR partner at j + M + 1). That needs a slot
+  above 2M, so packing takes MCOLS a multiple of 4 (P3's 4, the card's 8): at MCOLS 2, PAIR at M
+  1 puts both columns on the one DSP (the whole RTL suite under OTPU_MXU_PACK=1 found it: 5 tests
+  at MCOLS 2 differed; those configurations now build unpacked). Names chosen apart
   from the vla branch's `otpu_pe_pk` / `PACK`, which pack two *weight* rows a DSP (CAPS2 bit6, an
   arch key): a different feature.
 - **The uarch key `MXU_PACK`** (opentpu/target.py MXU_OPT_KEYS, sim_uarch, rtl_params;
@@ -63,7 +66,7 @@ Against the proposal's section 7 plan, the parts that give a bit-exact P3 RTL no
   3,984 cycles of random operands over the whole byte range and random enables: identical traces;
   `tests/test_tech.py::test_xilinxus_packed_pe_equals_the_generic_model`).
 - **RTL tests** (6fa8aed2): `tests/test_rtl.py -k "packed or chunk_lanes"` 31 passed (random
-  programs packed at C 1 / 3 / 8 and MCOLS 2 / 4 / 8 with PAIR at odd and even M, every format;
+  programs packed at C 1 / 3 / 4 / 8 and MCOLS 4 / 8 with PAIR at odd and even M, every format;
   PAIR at every M on packed lanes at C 1 and 8; packed = unpacked cycles at MCOLS 4 at C 1 and 8;
   8 packed lanes on the board memory path at stalls 0 / 40 / 60 and latency 20-120; the card's
   uarch at c8p; the decode stream at 8 chunks a cycle); `tests/test_tech.py tests/test_target.py`

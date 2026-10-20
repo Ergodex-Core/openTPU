@@ -219,8 +219,9 @@ def load(name: str | None = None) -> Target:
     if int(raw["uarch"].get("MXU_C", 1)) < 1:
         raise TargetError(f"{path}: MXU_C (the MXU's chunk lanes) is at least 1")
     if int(raw["uarch"].get("MXU_PACK", 0)) not in (0, 1) or (
-            int(raw["uarch"].get("MXU_PACK", 0)) and a["MCOLS"] % 2):
-        raise TargetError(f"{path}: MXU_PACK is 0 or 1, and packs two rows a DSP: an even MCOLS")
+            int(raw["uarch"].get("MXU_PACK", 0)) and a["MCOLS"] % 4):
+        raise TargetError(f"{path}: MXU_PACK is 0 or 1, and packs two rows a DSP: MCOLS a multiple "
+                          f"of 4 (PAIR at an odd M moves its high columns up a slot)")
     if raw["arch"]["SEQ_WC"] and raw["uarch"]["WIN"] > 16:
         raise TargetError(f"{path}: SEQ_WC (otpu_seq's wait entries) needs WIN <= 16: 4-bit "
                           f"counts name a unit's last 15 instructions")
