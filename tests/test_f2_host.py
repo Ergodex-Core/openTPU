@@ -260,12 +260,14 @@ def test_native_helper_copies_bytes_and_reads_back():
     assert dst.raw[:3] == bytes(3) and dst.raw[131:] == bytes(125)
 
 
-@pytest.mark.parametrize("slices,nch", [(1, 8), (2, 8), (1, 16), (4, 8)])
+@pytest.mark.parametrize("slices,nch", [(1, 8), (2, 8), (1, 16), (4, 8), (3, 2), (4, 2)])
 def test_hbm_geometry_maps_every_slice_channel_and_beat(pci, slices, nch):
     """The HBM build's geometry (docs/f2_hbm.md): S slices x NCH pseudo-channels at BAR4 offset
     (NCH s + c) x channel bytes; Board.write / read interleave a slice's logical bytes over its
     NCH channels by the adapter's map (beat_at: the pair rotation and its CHASH fold), edges and
-    whole groups alike, and read them back. A miniature 4 KiB per channel stands in for 512 MiB."""
+    whole groups alike, and read them back. A miniature 4 KiB per channel stands in for 512 MiB.
+    NCH 2 at S = 3 and 4 are the burst200 images' two 2 GiB windows a slice (f2-burst200-s3,
+    f2-burst200-s4: window j = 2 s + c at BAR4 offset j x 2 GiB)."""
     root, _ = pci
     regs = bytearray((root / "resource0").read_bytes())
     struct.pack_into("<I", regs, R.R_CFG_SLICES, slices)
