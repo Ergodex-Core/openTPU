@@ -44,6 +44,24 @@ of `102.4 * 16 / 17 = 96.38 GB/s` before row tails, memory, credits or compute
 stalls. These are source-derived ceilings, not measured HBM bandwidth or
 complete-model token throughput.
 
+Native response tags use packed vectors in per-port and per-engine arrays so
+Vivado can infer distributed RAM. The packed field layout and queue behavior
+are unchanged. Before adoption, Vivado 2025.2 standalone synthesis reduced the
+adapter from 29,892 to 8,362 LUTs and from 82,363 to 4,601 flip-flops, with the
+same 112 RAMB36 and 16 RAMB18 blocks. Both generated netlists passed the independent
+tag/payload test: 32,768 groups, 16,384 native reads and 64 rows in exactly 3,966
+cycles. This is isolated synthesis and functional evidence, not a routed timing
+or bandwidth result. `rtl/c1/tb_native_tags.sv` retains the stress test, including
+all engines, changing tags, backpressure and queue pointer wrap.
+
+The packed-tag structural audit requires the complete current engine RAM
+inventory to equal the tag write-enable endpoints in the receive-gate fanout.
+It checks each actual RAMD32/RAMS32 WE and CLK pin, control polarity, unique
+driver and core-clock identity. Port issue-tag memories are outside that receive
+scope. Unknown cells and missing endpoints remain errors. The existing audit
+retains a diagnostic checkpoint after a structural failure; only a successful
+full audit permits a synthesis completion receipt.
+
 C1's native ports only read weights; host PCIS retains write access for preload.
 The structural audit therefore proves all 16 native AW/W valid inputs are tied
 to GND at the actual SmartConnect input slices, while checking live AR/R and

@@ -4,7 +4,7 @@ namespace eval ::c1_native_capture {
     variable out; variable gaps 0; variable queries 0
     variable max_bytes 134217728; variable written 0; variable exhausted 0
     variable max_names 20000; variable max_cells 256; variable max_depth 12
-    variable seen_cells; variable seen_details; variable seen_networks; variable seen_properties; variable seen_owners
+    variable seen_cells; variable seen_details; variable seen_networks; variable seen_properties; variable seen_owners; variable seen_tag
 }
 proc ::c1_native_capture::emit {args} {
     variable out;variable max_bytes;variable written;variable exhausted
@@ -203,9 +203,37 @@ proc ::c1_native_capture::endpoint_facts {pc output endpoints} {
     set selected_cells [qnames [list receive_endpoint_cells $pc $output] {get_cells -quiet -of_objects [get_pins -quiet $endpoints]}]
     foreach object [get_cells -quiet -of_objects [get_pins -quiet $endpoints]] {
         set name [get_property NAME $object]
+        set ref [get_property REF_NAME $object]
         emit property cell $name NAME status observed value $name
-        emit property cell $name REF_NAME status observed value [get_property REF_NAME $object]
+        emit property cell $name REF_NAME status observed value $ref
+        if {$ref in {RAMD32 RAMS32} && [regexp {^WRAPPER/CL/u_board/adapter/engines\[([0-9]+)\]\.tag_q} $name -> engine]} {
+            tag_memory $engine
+        }
     }
+}
+proc ::c1_native_capture::tag_memory {engine} {
+    variable seen_tag
+    if {[info exists seen_tag($engine)]} {return}
+    set seen_tag($engine) 1
+    if {$engine<0 || $engine>=16} {gap [list tag_memory $engine] outside_engine_scope;return}
+    set pattern [format {^WRAPPER/CL/u_board/adapter/engines\[%d\]\.tag_q.*$} $engine]
+    set cells [qnames [list tag_memory_inventory $engine] {get_cells -quiet -hierarchical -regexp -filter "NAME =~ \"$pattern\""}]
+    if {![llength $cells] || [llength $cells]>256} {gap [list tag_memory $engine] inventory_bound;return}
+    foreach name $cells {
+        set cp [properties cell $name {NAME REF_NAME IS_PRIMITIVE}]
+        if {![dict exists $cp REF_NAME]} {continue}
+        set ref [dict get $cp REF_NAME]
+        if {$ref in {RAM32M RAM32M16}} {continue}
+        if {$ref ni {RAMD32 RAMS32}} {gap [list tag_memory $engine $name] unknown_tag_object reference $ref;continue}
+        foreach terminal {WE CLK} {
+            set pin $name/$terminal
+            properties pin $pin {NAME REF_PIN_NAME DIRECTION IS_INVERTED}
+            owners $pin
+            emit cone_edge [list tag_memory $engine] cell $name input $pin network [input_drivers $pin]
+            qnames [list tag_memory_clock $pin] {get_clocks -quiet -of_objects [get_pins -quiet [list $pin]]}
+        }
+    }
+    qnames tag_memory_reference_clock {get_clocks -quiet -of_objects [get_pins -quiet WRAPPER/CL/core_rst_reg/C]}
 }
 # The exact relocated read-accounting LUT is already observed in the full
 # native RVALID leaf inventory. Preserve its endpoint observation, but do not
@@ -299,13 +327,13 @@ proc ::c1_native_capture::hash {path} {
     return $digest
 }
 proc ::c1_native_capture::capture {run checkpoint expected_sha256} {
-    variable out;variable gaps;variable queries;variable seen_cells;variable seen_details;variable seen_networks;variable seen_properties;variable seen_owners;variable written;variable exhausted
+    variable out;variable gaps;variable queries;variable seen_cells;variable seen_details;variable seen_networks;variable seen_properties;variable seen_owners;variable seen_tag;variable written;variable exhausted
     if {![regexp {^[0-9a-f]{64}$} $expected_sha256] || ![file isfile $checkpoint] || [hash $checkpoint] ne $expected_sha256} {error "Checkpoint binding mismatch"}
     if {[version -short] ne "2025.2" || [llength [get_designs -quiet]]} {error "Fresh Vivado 2025.2 process required"}
     if {[file exists $run]} {error "Refusing existing raw capture output"}
     file mkdir $run;set out [open [file join $run topology.tcldata] {WRONLY CREAT EXCL}]
     fconfigure $out -encoding utf-8 -translation lf
-    set gaps 0;set queries 0;set written 0;set exhausted 0;array unset seen_cells;array unset seen_details;array unset seen_networks;array unset seen_properties;array unset seen_owners
+    set gaps 0;set queries 0;set written 0;set exhausted 0;array unset seen_cells;array unset seen_details;array unset seen_networks;array unset seen_properties;array unset seen_owners;array unset seen_tag
     emit header schema 1 kind c1_native_topology checkpoint_sha256 $expected_sha256 checkpoint $checkpoint route_qualified 0 hardware_measured 0
     set status [catch {set_param general.maxThreads 4;open_checkpoint $checkpoint;body} message options]
     if {$status} {gap capture api_error message $message}

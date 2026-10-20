@@ -100,10 +100,60 @@ proc ::c1_alex::receive_endpoint_class {root p endpoint ref} {
         } elseif {[regexp {^tag_q_reg\[([0-9]+)\]\[(slot|row|group_id|generation)\]\[([0-9]+)\]/CE$} $tail -> entry field bit]} {
             set limit [dict get {slot 2 row 32 group_id 10 generation 32} $field]
             if {$entry < 32 && $bit < $limit} {set family engine_${engine}_tag}
+        } elseif {[regexp {^tag_q_reg_0_31_([0-9]+)_([0-9]+)/RAM[A-H](_D1)?/WE$} $tail -> low high duplicate]} {
+            # RD32, 77-bit packed tags. Exact current primitive inventory and
+            # every leaf WE are independently checked below, never by count.
+            if {$low <= $high && $high < 77 && $ref in {RAMD32 RAMS32}} {
+                set family engine_${engine}_tag;set expected $ref
+            }
         }
     }
     if {$family eq "" || $ref ne $expected} {error "C1 Alex audit: unreviewed receive sink $endpoint ($ref)"}
     return $family
+}
+proc ::c1_alex::tag_ram_inventory {root engine endpoints audit} {
+    set base [format {%su_board/adapter/engines[%d].tag_q} $root $engine]
+    set packed {}
+    foreach endpoint $endpoints {
+        if {[string first $base $endpoint] == 0 && [file tail $endpoint] eq "WE"} {lappend packed $endpoint}
+    }
+    if {![llength $packed]} {return}
+    set pattern [format {^%su_board/adapter/engines\[%d\]\.tag_q.*$} $root $engine]
+    set inventory [names [get_cells -quiet -hierarchical -regexp -filter "NAME =~ \"$pattern\""]]
+    if {![llength $inventory] || [llength $inventory]>256} {error "C1 Alex audit: invalid tag RAM inventory $engine"}
+    set observed {};set macros {};set leaves {}
+    set clock_pin [exact_pin ${root}core_rst_reg/C]
+    set clock_names [names [get_clocks -quiet -of_objects $clock_pin]]
+    if {[llength $clock_names]!=1} {error "C1 Alex audit: ambiguous tag clock reference"}
+    foreach name $inventory {
+        set c [get_cells -quiet [list $name]]
+        set ref [property $c REF_NAME]
+        if {![property $c IS_PRIMITIVE]} {error "C1 Alex audit: unresolved tag object $name"}
+        if {$ref in {RAM32M RAM32M16}} {lappend macros $name;continue}
+        set we $name/WE
+        if {$ref ni {RAMD32 RAMS32}} {error "C1 Alex audit: unexpected packed tag object $name ($ref)"}
+        receive_endpoint_class $root [expr {$engine/2}] $we $ref
+        lappend leaves $name
+        foreach terminal {WE CLK} {
+            set pin [exact_pin $name/$terminal]
+            if {[property $pin REF_PIN_NAME] ne $terminal || [property $pin DIRECTION] ne "IN" || [property $pin IS_INVERTED]} {
+                error "C1 Alex audit: incorrect tag control $name/$terminal"
+            }
+            set nets [get_nets -quiet -of_objects $pin]
+            set drivers [names [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]]
+            if {[llength $drivers]!=1 || [llength [get_ports -quiet -of_objects $nets]]} {error "C1 Alex audit: unbound tag control $name/$terminal"}
+            if {$terminal eq "CLK" && [names [get_clocks -quiet -of_objects $pin]] ne $clock_names} {error "C1 Alex audit: tag clock domain differs"}
+            puts $audit [list tag_ram_control engine $engine cell $name reference $ref pin $name/$terminal drivers $drivers clocks [names [get_clocks -quiet -of_objects $pin]]]
+        }
+        lappend observed $we
+    }
+    foreach macro $macros {
+        set contained 0
+        foreach leaf $leaves {if {[string first "$macro/" $leaf] == 0} {incr contained}}
+        if {!$contained} {error "C1 Alex audit: tag macro has no captured leaves $macro"}
+    }
+    if {[lsort $observed] ne [lsort $packed]} {error "C1 Alex audit: receive fanout omits or adds tag RAM WE"}
+    puts $audit [list tag_ram_inventory engine $engine cells $inventory write_enable_pins [lsort $observed] clock_reference ${root}core_rst_reg/C clocks $clock_names]
 }
 proc ::c1_alex::native_receive_gate {root p input audit} {
     set name [lindex [names $input] 0]
@@ -141,6 +191,7 @@ proc ::c1_alex::native_receive_gate {root p input audit} {
         for {set bit 0} {$bit < $width} {incr bit} {lappend required [format {%su_native%d/%s_reg[%d]/CE} $root $p $reg $bit]}
     }
     foreach engine [list [expr {2*$p}] [expr {2*$p+1}]] {
+        tag_ram_inventory $root $engine $endpoints $audit
         for {set ram 0} {$ram < 8} {incr ram} {
             set width [expr {$ram == 7 ? 4 : 8}]
             for {set bit 0} {$bit < $width} {incr bit} {lappend required [format {%su_board/adapter/engines[%d].data_q_reg_%d/WEBWE[%d]} $root $engine $ram $bit]}

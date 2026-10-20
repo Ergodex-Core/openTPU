@@ -220,3 +220,60 @@ def test_scope_never_discharges_existing_incomplete_markers(tmp_path):
     sha=serialize(e,path,scope_lines(e)+['incomplete old reason unsupported_combinational reference CARRY8'],1)
     r=n.review_artifact(topology_path=path,topology_sha256=sha,checkpoint_sha256=DCP)
     assert r['issues'] and r['canonical_facts']=={} and not r['route_qualified']
+
+
+def packed_fixture():
+    e=fixture();e.queries[('tag_memory_reference_clock',)]=['core_clk']
+    for pc in range(8):
+        gate=n.ROOT+f'u_mem/synthetic_gate_{pc}';key=(pc,gate,gate+'/O')
+        endpoints=e.receives[key]
+        endpoints[:]=[v for v in endpoints if '.tag_q_reg[' not in v]
+        for engine in (2*pc,2*pc+1):
+            macro=f'{n.ROOT}u_board/adapter/engines[{engine}].tag_q_reg_0_31_0_13'
+            leaf=macro+'/RAMA';cell(e,macro,'RAM32M16');cell(e,leaf,'RAMD32')
+            e.queries['tag_memory_inventory',str(engine)]=[macro,leaf]
+            for terminal in ('WE','CLK'):
+                driver=gate+'/O' if terminal=='WE' else n.ROOT+'synthetic_core_clock/O'
+                if terminal=='CLK':cell(e,driver.rsplit('/',1)[0],'BUFGCE')
+                e.edges[('tag_memory',str(engine)),leaf,leaf+'/'+terminal]=input_row(e,leaf+'/'+terminal,driver)
+                e.queries['tag_memory_clock',leaf+'/'+terminal]=['core_clk'] if terminal=='CLK' else []
+            endpoints.append(leaf+'/WE')
+    return e
+
+
+def test_packed_tag_full_inventory_and_clock_replay(tmp_path):
+    e=packed_fixture();path=tmp_path/'raw';sha=serialize(e,path)
+    r=n.review_artifact(topology_path=path,topology_sha256=sha,checkpoint_sha256=DCP)
+    assert not r['issues'] and not r['route_qualified']
+    assert len(r['canonical_facts']['receive_gates'])==8
+    assert all(g['tag_memories'][str(2*g['pc'])]['leaves'] for g in r['canonical_facts']['receive_gates'])
+
+
+@pytest.mark.parametrize('mutation',['missing_inventory','omitted_we','extra_we','wrong_clock','inversion','wrong_owner','unknown_ref','empty_macro','wrong_pc','port_tags','data_pin'])
+def test_packed_tag_scope_mutations(mutation):
+    e=packed_fixture();engine=0;label=('tag_memory_inventory','0');macro=e.queries[label][0];leaf=macro+'/RAMA';gate=n.ROOT+'u_mem/synthetic_gate_0';endpoints=e.receives[0,gate,gate+'/O']
+    if mutation=='missing_inventory':del e.queries[label]
+    elif mutation=='omitted_we':endpoints.remove(leaf+'/WE')
+    elif mutation=='extra_we':e.queries[label].remove(leaf)
+    elif mutation=='wrong_clock':e.queries['tag_memory_clock',leaf+'/CLK']=['hbm_clk']
+    elif mutation=='inversion':e.objects['pin',leaf+'/CLK']['IS_INVERTED']='1'
+    elif mutation=='wrong_owner':e.queries['pin_owner',leaf+'/WE']=[macro]
+    elif mutation=='unknown_ref':e.objects['cell',leaf]['REF_NAME']='RAMD64E'
+    elif mutation=='empty_macro':
+        extra=macro+'_unrelated';cell(e,extra,'RAM32M');e.queries[label].append(extra)
+    elif mutation=='wrong_pc':
+        endpoints.append(n.ROOT+'u_board/adapter/engines[2].tag_q_reg_0_31_0_13/RAMA/WE')
+    elif mutation=='port_tags':
+        extra=n.ROOT+'u_board/adapter/ports[0].tags_reg_0_63_0_7/RAMA/WE';pin(e,extra,'IN');cell(e,extra.rsplit('/',1)[0],'RAMD32');endpoints.append(extra)
+    else:endpoints.append(leaf+'/I');pin(e,leaf+'/I','IN')
+    with pytest.raises(ValueError):n.receive_review(e)
+
+
+@pytest.mark.parametrize('ref',['RAMD32','RAMS32'])
+def test_packed_family_matches_tcl_and_rejects_other_engine(tmp_path,ref):
+    endpoint=n.ROOT+'u_board/adapter/engines[1].tag_q_reg_0_31_70_75/RAMD_D1/WE'
+    assert n.endpoint_family(0,endpoint,ref)=='engine_1_tag'
+    audit=PATH.with_name('audit_c1_alex.tcl');script=tmp_path/'family.tcl'
+    script.write_text('source {'+str(audit)+'}\nputs [::c1_alex::receive_endpoint_class {'+n.ROOT+'} 0 {'+endpoint+'} '+ref+']\nif {![catch {::c1_alex::receive_endpoint_class {'+n.ROOT+'} 1 {'+endpoint+'} '+ref+'}]} {error "wrong PC accepted"}\n')
+    run=subprocess.run(['tclsh',str(script)],capture_output=True,text=True,check=True)
+    assert run.stdout.strip()=='engine_1_tag'

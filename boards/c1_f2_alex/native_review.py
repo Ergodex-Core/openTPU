@@ -299,8 +299,44 @@ def endpoint_family(pc, endpoint, reference):
             elif n := re.fullmatch(r'tag_q_reg\[([0-9]+)\]\[(slot|row|group_id|generation)\]\[([0-9]+)\]/CE',tail):
                 entry,field,bit=n.groups()
                 if int(entry)<32 and int(bit)<{'slot':2,'row':32,'group_id':10,'generation':32}[field]: family=f'engine_{engine}_tag'
+            elif n := re.fullmatch(r'tag_q_reg_0_31_([0-9]+)_([0-9]+)/RAM[A-H](_D1)?/WE',tail):
+                if int(n[1])<=int(n[2])<77 and reference in ('RAMD32','RAMS32'):
+                    family=f'engine_{engine}_tag';expected=reference
     require(family is not None and reference==expected, 'unreviewed receive sink: '+endpoint+' ('+reference+')')
     return family
+
+
+def tag_memory_review(e, engine, endpoints):
+    """Bind all packed tag leaf writes to full receive fanout and core clocks."""
+    base=f'{ROOT}u_board/adapter/engines[{engine}].tag_q'
+    packed={p for p in endpoints if p.startswith(base) and p.endswith('/WE')}
+    if not packed:
+        require(('tag_memory_inventory',str(engine)) not in e.queries, 'RAM inventory without receive WE')
+        return None
+    inventory=e.query('tag_memory_inventory',str(engine))
+    require(0<len(inventory)<=256, 'tag memory inventory bound')
+    clocks=e.query('tag_memory_reference_clock');require(len(clocks)==1,'tag memory reference clock')
+    leaves={};macros=[];controls={}
+    for name in inventory:
+        require(name.startswith(base), 'tag memory inventory escapes engine')
+        e.selected('cell',name)
+        reference=e.prop('cell',name,'REF_NAME')
+        require(e.prop('cell',name,'IS_PRIMITIVE').lower() in ('1','true'),'tag memory not primitive')
+        if reference in ('RAM32M','RAM32M16'):
+            macros.append(name);continue
+        require(reference in ('RAMD32','RAMS32'), 'unknown packed tag object')
+        endpoint_family(engine//2,name+'/WE',reference);leaves[name]=reference
+        for terminal in ('WE','CLK'):
+            pin=name+'/'+terminal;e.pin(pin,'IN')
+            require(e.prop('pin',pin,'REF_PIN_NAME')==terminal and e.prop('pin',pin,'IS_INVERTED').lower() in ('0','false'), 'tag memory control polarity')
+            driver=e.input(e.edges.get((('tag_memory',str(engine)),name,pin),{}),pin)
+            actual=e.query('tag_memory_clock',pin)
+            if terminal=='CLK':require(actual==clocks, 'tag memory clock domain differs')
+            controls[pin]={'driver':driver,'clocks':actual}
+    require(set(name+'/WE' for name in leaves)==packed, 'tag RAM receive fanout inventory mismatch')
+    for macro in macros:
+        require(any(leaf.startswith(macro+'/') for leaf in leaves), 'tag macro without actual leaves')
+    return {'inventory':inventory,'leaves':leaves,'controls':controls,'clocks':clocks}
 
 
 def required_endpoints(pc):
@@ -366,9 +402,11 @@ def receive_review(e):
         require(required_endpoints(pc)<=set(endpoints), 'missing required receive state/payload sink')
         for engine in (2*pc,2*pc+1):
             require(all(f'engine_{engine}_{reg}' in families for reg in ('queued','wp','tag')), 'missing paired-engine bookkeeping sink')
+        tag_memories={str(engine):tag_memory_review(e,engine,endpoints) for engine in (2*pc,2*pc+1)}
         facts.append({'pc':pc,'gate':gate,'init':"4'h2",'rvalid_driver':rvalid,'reset_driver':reset,
                       'endpoints':sorted(endpoints),'cell_references':references,'sink_families':dict(sorted(families.items())),
-                      'equation':'RVALID && !core_rst','scope':'source_backed_linked_receive_shape'})
+                      'equation':'RVALID && !core_rst','scope':'source_backed_linked_receive_shape',
+                      'tag_memories':tag_memories})
     return facts
 
 

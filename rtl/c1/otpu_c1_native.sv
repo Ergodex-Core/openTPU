@@ -44,7 +44,7 @@ module otpu_c1_native #(
   logic [7:0][TW:0] outstanding;
   logic [7:0][TW-1:0] tp,tr;
   logic [7:0] issue,receive;
-  tag_t tags[8][TQ];
+  localparam int TAG_W=$bits(tag_t);
   tag_t front[8];
   logic [15:0] sent,arrived,pop;
   logic [15:0] buffer_valid,upper;
@@ -60,7 +60,6 @@ module otpu_c1_native #(
     drained=1;
     for(int p=0;p<8;p++) begin
       drained &= outstanding[p]==0;
-      front[p]=tags[p][tr[p]];
       n_cvalid[p]=enable && active[2*p+int'(selected[p])] &&
                   reserved[2*p+int'(selected[p])]<RD && outstanding[p]<TQ;
       n_caddr[p]={2'b0,row_base[2*p+int'(selected[p])]}+
@@ -83,7 +82,8 @@ module otpu_c1_native #(
   end
   for(genvar e=0;e<16;e++) begin: engines
     (* ram_style="block" *) logic [511:0] data_q[RD];
-    (* ram_style="distributed" *) tag_t tag_q[RD];
+    // Packed vectors infer distributed RAM in Vivado; tags retain their full bit layout.
+    (* ram_style="distributed" *) logic [TAG_W-1:0] tag_q[RD];
     wire fetch=queued[e]!=0&&(!buffer_valid[e]||pop[e]);
     always_ff @(posedge clk) begin
       if(arrived[e]) begin data_q[wp[e]]<=n_rdata[e/2];tag_q[wp[e]]<=front[e/2];end
@@ -122,10 +122,12 @@ module otpu_c1_native #(
     end
   end
   for(genvar p=0;p<8;p++) begin: ports
+    (* ram_style="distributed" *) logic [TAG_W-1:0] tags[TQ];
+    assign front[p]=tags[tr[p]];
     wire [3:0] e={3'(p),selected[p]};
     wire other_eligible=active[{3'(p),!selected[p]}]&&reserved[{3'(p),!selected[p]}]<RD;
     always_ff @(posedge clk) begin
-      if(issue[p])tags[p][tp[p]]<='{engine:selected[p],slot:slot[e],row:row[e],generation:generation[e],group_id:group_id[e]};
+      if(issue[p])tags[tp[p]]<={selected[p],slot[e],row[e],generation[e],group_id[e]};
       if(rst)begin
         selected[p]<=0;quantum[p]<=0;tp[p]<=0;tr[p]<=0;outstanding[p]<=0;
         pc_issued[p]<=0;pc_returned[p]<=0;pc_peak[p]<=0;pc_blocked[p]<=0;pc_credit[p]<=0;
