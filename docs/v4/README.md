@@ -421,6 +421,14 @@ log `/home/ubuntu/rachit/logs/f2burst200-s3-build3.log`, output
 `/home/ubuntu/rachit/f2burst200-s3-run3/`). A first start on the stale tree (00:14, the bundle
 download had failed on a malformed URL) was stopped within a minute and its output removed.
 Whichever of builds 8 and 9 closes first is packaged; the other is stopped.
+`boards/f2/burst200/scripts/gate_summary.sh <run dir>` prints a run's six-gate profile from
+Alex's stage files and audit reports (slack, checkpoint SHA-256, route status, DRC by severity,
+CDC criticals and whether each sits under an exception, bus-skew rows with negative slack,
+check_timing's no_clock and unconstrained counts); on build 6's run directory it reproduces the
+reviewed profile exactly (+0.035/+0.010, 271,602 routed / 0 errors, DRC 0/0/791, 6 CDC
+criticals all under False Path, 49 bus-skew rows / 0 negative, no_clock 35, unconstrained 0).
+The laptop's `aws login` session expired at ~01:00 UTC (only the user can renew it); both
+builds are watched over SSH meanwhile and packaging waits for the renewal.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4

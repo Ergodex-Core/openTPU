@@ -1,0 +1,13 @@
+#!/bin/bash
+# usage: gate_summary.sh <run dir>  — prints the six-gate profile of a burst200 run
+R="$1"; A="$R/audit"
+echo "== run: $R"
+echo "-- stage results"; for f in "$R/implement/implementation_result.txt" "$R/refine/implementation_result.txt" "$R/refine/progress.txt" "$A/audit.txt"; do [ -f "$f" ] && { echo "[$f]"; tail -8 "$f"; }; done
+echo "-- checkpoint"; [ -f "$R/refine/post_route.dcp" ] && { ls -la "$R/refine/post_route.dcp" | awk '{print $5" bytes"}'; sha256sum "$R/refine/post_route.dcp" | cut -c1-64; } || echo "no refine/post_route.dcp"
+echo "-- timing (audit/timing.rpt summary)"; grep -E -m4 "WNS|TNS|WHS|THS|WPWS|Timing constraints are (not )?met|All user specified timing constraints" "$A/timing.rpt" 2>/dev/null | head -6; grep -E -A2 "^\s*WNS\(ns\)" "$A/timing.rpt" 2>/dev/null | head -3
+echo "-- route status"; grep -E "fully routed nets|nets with routing errors|nets with some unrouted|nets with fixed routing|Routing errors" "$A/route_status.rpt" 2>/dev/null | head -6
+echo "-- drc summary (rule table by severity: rows / violations)"; awk -F'|' '/^\| [A-Z]+-[0-9]+ +\| (Error|Critical Warning|Warning|Advisory) +\|/ {gsub(/^ +| +$/,"",$3); n[$3]++; v[$3]+=$5} END {for (k in n) printf "%s: %d rules / %d violations; ", k, n[k], v[k]; print ""}' "$A/drc.rpt" 2>/dev/null; grep -E "^\| [A-Z]+-[0-9]+ +\| (Error|Critical Warning) " "$A/drc.rpt" 2>/dev/null | head -5
+echo "-- cdc summary (ID Severity Count)"; grep -E "^CDC-[0-9]+ +(Critical|Warning|Info) " "$A/cdc.rpt" 2>/dev/null | awk '{printf "%s %s x%s; ", $1, $2, $3} END {print ""}'; echo "critical total=$(grep -E '^CDC-[0-9]+ +Critical ' "$A/cdc.rpt" 2>/dev/null | awk '{s+=$3} END {print s+0}')  rows not under an exception=$(grep -E '^ +[0-9]+ +CDC-[0-9]+ +Critical' "$A/cdc.rpt" 2>/dev/null | grep -v -c 'False Path\|Asynch Clock Groups\|Max Delay')"
+echo "-- bus skew (summary rows: total / negative slack)"; sed -n '/^1. Bus Skew Report Summary/,/^2. Bus Skew Report Per Constraint/p' "$A/bus_skew.rpt" 2>/dev/null | awk '/^ +(Slow|Fast) +-?[0-9.]+ +-?[0-9.]+ +-?[0-9.]+ *$/ {n++; if ($4+0 < 0) v++} END {printf "rows=%d negative=%d\n", n, v+0}'
+echo "-- check_timing (unconstrained / no_clock)"; grep -E "^[0-9]+\. checking (no_clock|unconstrained_internal_endpoints|multiple_clock|generated_clocks|loops|partial_input_delay|partial_output_delay|latch_loops|no_input_delay|no_output_delay|pulse_width_clock)" "$A/timing.rpt" 2>/dev/null | head -12; grep -E "(no_clock|unconstrained_internal_endpoints|multiple_clock|generated_clocks|loops|partial_input_delay|partial_output_delay|latch_loops|pulse_width_clock) \([0-9]+\)" "$A/timing.rpt" 2>/dev/null | head -12
+echo "-- audit console tail"; tail -3 "$A/console.log" 2>/dev/null | cut -c1-160
