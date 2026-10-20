@@ -77,9 +77,10 @@ module tb_top;
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 
-  // TMEM_PMP 1: clk_f (2 x clk) rises with each edge of clk, in clk's own process (no race between
-  // the two domains); clk's edges stay where they are (the memory models' clocks are absolute)
-  if (TMEM_PMP == 1) begin : g_clkf
+  // TMEM_PMP 1 (and the NAXI chain pumped on clk_f, NAXI_XF): clk_f (2 x clk) rises with each edge
+  // of clk, in clk's own process (no race between the two domains); clk's edges stay where they are
+  // (the memory models' clocks are absolute)
+  if (TMEM_PMP == 1 || (NAXI && NAXI_XF > 0)) begin : g_clkf
     initial forever begin
       #2 clk_f = 1'b0;
       #3 begin clk = ~clk; clk_f = 1'b1; end
