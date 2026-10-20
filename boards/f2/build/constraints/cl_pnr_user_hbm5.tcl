@@ -26,6 +26,28 @@ proc otpu_cells {pattern} {
   }
   return $cells
 }
+# an engine's leaf cells without its block RAMs: the right half's port columns (X4..X7) hold one
+# clock region of CL area beside the HBM ports (AWS's SLR0 outline: X4Y0:X7Y0, X5Y1:X5Y3, X6Y1),
+# and 4-5 engines' 28-35 RAMB36 do not fit in one (the first v5 ImplCL: DRC UTLZ-1 in
+# pb_otpu_hbmx4/5/6), so those engines' FIFO RAMs float in pb_otpu_hbm and their logic stays by
+# the port. Fails closed on an engine with no leaf cells.
+proc otpu_leaves_no_bram {cell} {
+  set out {}
+  foreach c [get_cells -quiet "$cell/*"] {
+    if {[get_property IS_PRIMITIVE $c]} {
+      if {![string match BLOCKRAM* [get_property PRIMITIVE_TYPE $c]]} { lappend out $c }
+    } else {
+      lappend out {*}[otpu_leaves_no_bram $c]
+    }
+  }
+  return $out
+}
+proc otpu_engine_cells {pattern x} {
+  if {$x < 4} { return [otpu_cells $pattern] }
+  set cells [otpu_leaves_no_bram [otpu_cells $pattern]]
+  if {[llength $cells] == 0} { error "openTPU floorplan: no leaf cells under '$pattern' (the hierarchy moved?)" }
+  return $cells
+}
 # the leaf registers r_reg[i] of an otpu_xr stage with lo <= i < hi (a stage's register vector
 # holds every port's bits: port p's are p * W .. (p + 1) * W - 1)
 proc otpu_bits {stage lo hi} {
@@ -194,7 +216,7 @@ set otpu_host_port [expr {$otpu_host_mux ? $otpu_nport - 1 : $otpu_nport}]
 set otpu_cols {}
 for {set otpu_p 0} {$otpu_p < $otpu_nport} {incr otpu_p} {
   set otpu_x [otpu_hbm_port_x $otpu_p]
-  dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_port\[$otpu_p\].u_eng"]
+  dict lappend otpu_cols $otpu_x [otpu_engine_cells "WRAPPER/CL/u_sys/u_mem/g_port\[$otpu_p\].u_eng" $otpu_x]
   dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\[$otpu_p\].u_rs256"]
 }
 set otpu_x [otpu_hbm_port_x $otpu_host_port]

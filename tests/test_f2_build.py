@@ -647,6 +647,8 @@ proc get_clock_regions {args} {
 proc get_slrs {args} { return SLR1 }
 proc get_property {prop name} {
   if {$prop eq "NAME"} { return $name }
+  if {$prop eq "IS_PRIMITIVE"} { return 1 }                   ;# (the engine walk: every child a leaf)
+  if {$prop eq "PRIMITIVE_TYPE"} { return [expr {[string match *bram* $name] ? "BLOCKRAM.BRAM.RAMB36E2" : "REGISTER.SDR.FDRE"}] }
   foreach p $::props { if {[lindex $p 0] eq $name && [lindex $p 1] eq $prop} { return [lindex $p 2] } }
   error "no $prop on $name"
 }
