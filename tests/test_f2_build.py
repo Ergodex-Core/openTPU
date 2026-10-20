@@ -619,7 +619,7 @@ set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_
            CLOCKREGION_X1Y0:CLOCKREGION_X1Y3 {s0b}
            CLOCKREGION_X5Y1:CLOCKREGION_X5Y3 {s0a} CLOCKREGION_X6Y1:CLOCKREGION_X6Y1 {s0b}
            {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119} {s0c}
-           CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
+           CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell} CLOCKREGION_X0Y8:CLOCKREGION_X5Y8 {s2a shell}
            CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b s0c} P1 {s1a s1b s1c s1d} P2 {s2a s2b}}
 set ranges {{pblock_CL P0} {pblock_CL P1} {pblock_CL P2}}
 proc create_pblock {name} { lappend ::pblocks $name }
@@ -650,6 +650,7 @@ proc get_sites {flag name} {
 proc get_cells {args} {
   set pattern [lindex $args end]
   if {$::fault eq "missing" && [string match *u_board* $pattern]} { return {} }
+  if {$::fault eq "no_areq" && [string match *a_req_reg* $pattern]} { return {} }
   if {[string match {*g_port\[\*\]*} $pattern]} { return [list ${pattern}0 ${pattern}1 ${pattern}2 ${pattern}3] }
   return [list $pattern]
 }
@@ -669,7 +670,7 @@ proc get_nets {args} { set out {}; foreach p [lindex $args end] { lappend out ne
 '''
 
 
-@pytest.mark.parametrize('fault', ['none', 'missing'])
+@pytest.mark.parametrize('fault', ['none', 'missing', 'no_areq'])
 def test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed(fault):
     tclsh = shutil.which('tclsh')
     if not tclsh:
@@ -692,9 +693,13 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert result.returncode == 0, result.stderr
     out = result.stdout
     # 4 channel ports (the mock) in X0Y0 and the host's port 4 in X1Y0: two boxes by the ports
-    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=9' in out
-    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem pb_otpu_hbmx0 pb_otpu_hbmx1 pb_otpu_hsc pb_otpu_hxs' in out
-    assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=10' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_mem2 pb_otpu_tmem pb_otpu_hbmx0 pb_otpu_hbmx1 pb_otpu_hsc pb_otpu_hxs' in out
+    assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out
+    # port A's valid register is optional (synthesis may merge it): a warning, not a stop
+    warns = [l for l in out.splitlines() if l.startswith('OTPU_FLOORPLAN_WARNING')]
+    assert warns == ([] if fault == 'none' else
+                     ['OTPU_FLOORPLAN_WARNING no cells match WRAPPER/CL/u_sys/u_board/u_slice/a_req_reg* (left unplaced)'])
     ranges = {}
     for line in out.splitlines():
         if line.startswith('RANGE ') and not line.startswith('RANGE pblock_CL'):
@@ -714,6 +719,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
                         'CLOCKREGION_X5Y7:CLOCKREGION_X5Y7'],
         'pb_otpu_pcis': ['CLOCKREGION_X5Y5:CLOCKREGION_X5Y6'],
         'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
+        'pb_otpu_mem2': ['CLOCKREGION_X0Y8:CLOCKREGION_X5Y8'],     # SLR2's bottom row over the crossings
         'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10'],
         'pb_otpu_hbmx0': ['CLOCKREGION_X0Y0:CLOCKREGION_X0Y1'],
         'pb_otpu_hbmx1': ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y1'],
@@ -724,7 +730,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         if line.startswith('CELL '):
             _, pb, cell = line.split(' ', 2)
             cells.setdefault(pb, []).append(cell)
-    hbm, mid, pcis, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem'))
+    hbm, mid, pcis, board, mem2, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis',
+                                                            'pb_otpu_board', 'pb_otpu_mem2', 'pb_otpu_tmem'))
     # the PCIS gate (Alex's shell: otpu_f2_pcis_gate, every output a register) and the OCL's
     # crossing beside the shell, SLR1
     # (and the host chain's first register slice: the shell's PCIS SLR, the spec's crossing rule)
@@ -745,9 +752,15 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # the channels' otpu_native_axi and the SmartConnect fabric by the HBM's ports
     assert len([c for c in hbm if '.u_naxi' in c]) == 4 and 'WRAPPER/CL/u_sc' in hbm
     assert not any('u_nch' in c or 'u_host' in c or 'u_hreg' in c or 'u_port' in c for c in hbm)
-    assert 'WRAPPER/CL/u_sys/u_board' in board
-    # the crossing chains: stage k in SLR k, the control path's two sides with their SLRs
-    for k, pb in enumerate((hbm, mid, board)):
+    assert sorted(board) == ['WRAPPER/CL/u_sys/u_board', 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s']
+    # SLR2's bottom row: the adapter, the slice's SW skid and port A register (a_req when found)
+    areq = [] if fault == 'no_areq' else ['WRAPPER/CL/u_sys/u_board/u_slice/a_req_reg*']
+    assert sorted(c for c in mem2 if 'g_x[' not in c and 'g_rs[' not in c) == sorted(
+        ['WRAPPER/CL/u_sys/u_board/u_mem', 'WRAPPER/CL/u_sys/u_board/u_slice/sw_reg.u_sw',
+         'WRAPPER/CL/u_sys/u_board/u_slice/a_addr_reg*'] + areq)
+    # the crossing chains: stage k in SLR k (SLR2's beside the adapter), the control path's two
+    # sides with their SLRs
+    for k, pb in enumerate((hbm, mid, mem2)):
         for chain in ('u_mem/g_xr', 'u_cx/g_xr'):
             for d in ('u_dn', 'u_up'):
                 assert f'WRAPPER/CL/u_sys/{chain}.g_x[{k}].{d}' in pb
@@ -760,20 +773,22 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
                             'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']
     # the middle stage spans no PCIS site (pb_otpu_pcis's X5Y5:X5Y6 stays its own)
     assert 'CLOCKREGION_X5Y5:CLOCKREGION_X5Y6' not in ranges['pb_otpu_mid']
-    assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
-    assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
+    groups = (hbm, mid, pcis, board, mem2, tmem)
+    assert all(not (set(a) & set(b)) for i, a in enumerate(groups) for b in groups[i + 1:])
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
-    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem',
-               'pb_otpu_hbmx0', 'pb_otpu_hbmx1', 'pb_otpu_hsc', 'pb_otpu_hxs'):
+    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_mem2',
+               'pb_otpu_tmem', 'pb_otpu_hbmx0', 'pb_otpu_hbmx1', 'pb_otpu_hsc', 'pb_otpu_hxs'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
         assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
-        assert props[(pb, 'PARENT')] == {'pb_otpu_tmem': 'pb_otpu_board', 'pb_otpu_hbmx0': 'pb_otpu_hbm',
+        assert props[(pb, 'PARENT')] == {'pb_otpu_tmem': 'pb_otpu_board', 'pb_otpu_mem2': 'pb_otpu_board',
+                                         'pb_otpu_hbmx0': 'pb_otpu_hbm',
                                          'pb_otpu_hbmx1': 'pb_otpu_hbm', 'pb_otpu_hsc': 'pb_otpu_hbm', 'pb_otpu_hxs': 'pb_otpu_hbm'}.get(pb, 'pblock_CL')
     # containment: the one site of SLR2's clock regions that pblock_CL does not hold leaves
-    # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board), the I/O
+    # pb_otpu_board, and pb_otpu_mem2 (checked against the trimmed board: parent first), the I/O
     # shim's site of X4Y5 leaves pb_otpu_mid
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
-    assert removed == [['pb_otpu_mid', 'shim'], ['pb_otpu_board', 'shell']]
+    assert removed == [['pb_otpu_mid', 'shim'], ['pb_otpu_board', 'shell'], ['pb_otpu_mem2', 'shell']]
+    assert 'OTPU_FLOORPLAN pb_otpu_mem2 parent=pb_otpu_board held=2 removed=1' in out
     assert 'OTPU_FLOORPLAN pb_otpu_mid parent=pblock_CL held=9 removed=1' in out
     assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=9 removed=1' in out
     assert 'OTPU_FLOORPLAN pb_otpu_tmem parent=pb_otpu_board held=2 removed=0' in out

@@ -27,6 +27,9 @@
 #                 adapter's readies into the units, the TMEM's grants into the MXU and the pumped
 #                 banks' addresses never cross an SLR. (SLR1's 23 clock regions, ~313K LUTs,
 #                 would hold it at 72%: too full for 200 MHz routing.)
+#   pb_otpu_mem2  (a child of pb_otpu_board, X0Y8:X5Y8, SLR2's bottom row over the crossings):
+#                 the slice's memory adapter (u_board/u_mem) and the chains' SLR2 stages, with
+#                 the slice's SW skid buffer and port A register (the SLR2 rework).
 #   pb_otpu_tmem  (a child of pb_otpu_board, X2Y9:X5Y10, 8 clock regions, ~109K LUTs): the TMEM
 #                 and the VPU together (48K LUTs, 68 RAMB36): the pumped banks' address paths
 #                 (clk -> clk_f, one core period: otpu_clk2x.tcl) come from the VPU's ta_addr
@@ -60,6 +63,13 @@
 proc otpu_cells {pattern} {
   set cells [get_cells -quiet $pattern]
   if {![llength $cells]} { error "openTPU floorplan: no cells match $pattern" }
+  return $cells
+}
+# a register synthesis may have merged or renamed (no hierarchy of its own): placed when found,
+# a warning line when not (the cells around it are boxed fail-closed)
+proc otpu_cells_opt {pattern} {
+  set cells [get_cells -quiet $pattern]
+  if {![llength $cells]} { puts "OTPU_FLOORPLAN_WARNING no cells match $pattern (left unplaced)" }
   return $cells
 }
 set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]]
@@ -141,12 +151,35 @@ create_pblock pb_otpu_board
 set_property PARENT pblock_CL [get_pblocks pb_otpu_board]
 resize_pblock pb_otpu_board -add {CLOCKREGION_X0Y8:CLOCKREGION_X7Y11}
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_board}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_dn}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_up}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_s}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
+
+########################################
+# pb_otpu_mem2: the slice's memory adapter and the chains' SLR2 stages along SLR2's bottom row
+########################################
+# Above the crossings' six clock-region columns (pb_otpu_mid): the adapter (u_board/u_mem:
+# otpu_native_dram, 45K LUTs of which 18K LUT RAM, its 8 channels' queues and FIFOs) with every
+# SLR2 stage of the chains, so its LUT RAM spreads over six clock regions' SLICEMs (~37K) instead
+# of the ~3 regions of SLR2's west it took in ba86b5df (LUT RAM 56-80%, block RAM 100% of the
+# level-5 windows from the LAGUNA rows up, the MXU's block RAMs and DSPs in the same windows).
+# With it the slice's two adapter-side registers whose loads are the adapter's queue logic: the
+# SW skid buffer (sw_reg.u_sw: its output into the gather buffers' enables, 71 failing endpoints
+# from the skid placed 100+ columns away) and port A's request register (a_req, a_addr: into the
+# A run compare and queue, 105 endpoints, 12-14 levels); their inputs come from the quantizer and
+# the MXU's issuer as register-to-register paths, their readies (the skid's second slot free, the
+# adapter's a_rdy into the register's enable) local. pb_otpu_tmem sits above X2-X5 of it.
+create_pblock pb_otpu_mem2
+set_property PARENT pb_otpu_board [get_pblocks pb_otpu_mem2]
+resize_pblock pb_otpu_mem2 -add {CLOCKREGION_X0Y8:CLOCKREGION_X5Y8}
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_board/u_mem}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_dn}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_up}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/sw_reg.u_sw}]
+add_cells_to_pblock pb_otpu_mem2 [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/a_addr_reg*}]
+set otpu_areq [otpu_cells_opt {WRAPPER/CL/u_sys/u_board/u_slice/a_req_reg*}]
+if {[llength $otpu_areq]} { add_cells_to_pblock pb_otpu_mem2 $otpu_areq }
 
 ########################################
 # pb_otpu_tmem: the TMEM beside the VPU, the quantizer and the collective unit, within the slice
@@ -265,13 +298,13 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb [concat {pb_otpu_hbm} $otpu_portbox {pb_otpu_hsc pb_otpu_hxs pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem}] {
+foreach pb [concat {pb_otpu_hbm} $otpu_portbox {pb_otpu_hsc pb_otpu_hxs pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_mem2 pb_otpu_tmem}] {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {7 + [llength $otpu_portbox]}]"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {8 + [llength $otpu_portbox]}]"
 
 ########################################
 # the core clock and the pump clock on one insertion delay (round 8)
