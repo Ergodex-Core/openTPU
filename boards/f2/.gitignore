@@ -1,0 +1,4 @@
+# Build templates are source files. Actual runs belong in a fresh build/ path
+# outside this directory (boards/f2/build.py --out).
+!build/
+!build/**
