@@ -953,6 +953,90 @@ def test_incremental_reference_is_pinned_copied_and_recorded(tmp_path, case):
     assert record['inputs_sha256'] == flow.sha(run / 'inputs.json')
     assert record['directive'] == 'TimingClosure' and record['copy'] == str(copy)
 
+
+# build_level_1_cl.tcl with QoR suggestions (build.py --qor-suggestions): the pinned .rqs read
+# inside the opt_design wrapper, after the placement Tcl and before opt_design; a wrong digest
+# stops the run before opt_design
+@pytest.mark.parametrize('fault', ['none', 'bad_hash'])
+def test_qor_suggestions_are_read_once_before_opt_design(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    (hdk / 'build_level_1_cl.tcl').write_text('opt_design -directive Explore\nplace_design\n')
+    cons = tmp_path / 'constraints'
+    cons.mkdir()
+    (cons / 'cl_pnr_user.tcl').write_text('')
+    (cons / 'otpu_clk2x.tcl').write_text('')
+    rqs = tmp_path / 'ref.rqs'
+    rqs.write_text('# suggestions\n')
+    good = 'c' * 64
+    env = {k: v for k, v in os.environ.items() if not k.startswith('OTPU_')}
+    env.update(OTPU_RQS=str(rqs), OTPU_RQS_SHA256=good)
+    digest = 'd' * 64 if fault == 'bad_hash' else good
+    harness = f"""
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set reports_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set log {{}}
+rename exec otpu_test_exec
+proc exec {{args}} {{
+  if {{[lindex $args 0] eq "sha256sum"}} {{ return "{digest}  [lindex $args end]" }}
+  otpu_test_exec {{*}}$args
+}}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
+proc read_qor_suggestions {{args}} {{ lappend ::log "read_qor_suggestions $args" }}
+proc get_qor_suggestions {{args}} {{ return {{RQS_TIMING-3-1 RQS_NETLIST-26-1}} }}
+proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc place_design {{args}} {{ lappend ::log "place_design" }}
+proc close_project {{}} {{ error "stop" }}
+if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
+  puts "STOPPED $result"
+}}
+foreach l $log {{ puts "LOG $l" }}
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
+    if fault == 'none':
+        assert log == ['read_xdc -unmanaged', 'read_xdc -unmanaged',
+                       f'read_qor_suggestions {rqs}', 'opt_design', 'place_design']
+        assert 'OTPU_QOR_SUGGESTIONS ref.rqs 2' in out
+    else:
+        assert 'STOPPED openTPU: QoR suggestions file hash mismatch' in out
+        assert 'opt_design' not in log
+
+
+@pytest.mark.parametrize('case', ['ok', 'digest', 'suffix'])
+def test_qor_suggestions_file_is_pinned_copied_and_recorded(tmp_path, case):
+    shell = tmp_path / 'shell'
+    (shell / 'build/scripts').mkdir(parents=True)
+    (shell / 'build/scripts/build_all.tcl').write_text('# pinned HDK driver\n')
+    out = tmp_path / 'impl'
+    flow.prepare(out, shell, T.load('f2'), '89abcdef')
+    rqs = tmp_path / ('ref.rqs' if case != 'suffix' else 'ref.txt')
+    rqs.write_text('# suggestions\n')
+    digest = '0' * 64 if case == 'digest' else flow.sha(rqs)
+    if case != 'ok':
+        with pytest.raises(RuntimeError):
+            flow.attach_qor_suggestions(out, rqs, digest)
+        return
+    env = flow.attach_qor_suggestions(out, rqs, digest)
+    copy = out / 'qor_suggestions/ref.rqs'
+    assert copy.read_text() == '# suggestions\n'
+    assert env == {'OTPU_RQS': str(copy), 'OTPU_RQS_SHA256': digest}
+    record = json.loads((out / 'inputs.json').read_text())['qor_suggestions']
+    assert record == {'file': str(rqs), 'sha256': digest, 'copy': str(copy)}
+
 # The SmartConnect fabric's instance (hbm_sc_inst.tcl, sourced by create_hbm_sc.tcl after
 # make_wrapper): a wrapper's ports as Vivado declares them, mapped onto the CL's signals
 def _sc_wrapper(nport, *, mid=False, drop=None, wide=None, extra=None, sid=16):
