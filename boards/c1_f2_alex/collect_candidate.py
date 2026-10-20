@@ -2,7 +2,8 @@
 """Collect pending C1/Alex candidate evidence locally; no cloud or hardware operations.
 
 CLI requires an independently trusted SHA256 for the collection specification.
-Schema1/kind c1-alex-candidate-collection-inputs contains instance_id, roots (every
+Schema1 (qualifier) or schema2 (independent raw captures), kind
+c1-alex-candidate-collection-inputs contains instance_id, roots (every
  evidence.ROLES key -> original absolute directory), receipt_sha256 (every
  evidence.RECEIPTS key -> independently recorded hash), and source_checkouts
 (every evidence.SOURCE_ROLES key -> {path, revision}). Source revisions are full
@@ -209,7 +210,7 @@ class Plan:
 def checked_spec(spec):
     e.require(isinstance(spec, dict) and set(spec) == {'schema', 'kind', 'instance_id', 'roots', 'receipt_sha256', 'source_checkouts'},
               'Invalid collection specification fields')
-    e.require(type(spec['schema']) is int and spec['schema'] == 1 and spec['kind'] == 'c1-alex-candidate-collection-inputs'
+    e.require(type(spec['schema']) is int and spec['schema'] in (1, 2) and spec['kind'] == 'c1-alex-candidate-collection-inputs'
               and spec['instance_id'] == e.INSTANCE, 'Wrong collection schema/dedicated instance')
     e.require(set(spec['roots']) == set(e.schema_roles(spec['schema'])) and set(spec['receipt_sha256']) == set(e.schema_receipts(spec['schema']))
               and set(spec['source_checkouts']) == set(e.schema_sources(spec['schema'])), 'Incomplete collection roles/trusted receipt hashes')
@@ -225,9 +226,11 @@ def checked_spec(spec):
 
 def make_plan(spec):
     p = Plan(spec); b, sim = e.local_module('build'), e.local_module('simulate')
-    final = p.receipt('qualify')
-    e.require(final.get('status') == 'pending-review' and final.get('route_qualified') is False and final.get('returncode') == 0,
-              'Raw C1 collection requires the preserved pending-review receipt')
+    final = None
+    if spec['schema'] == 1:
+        final = p.receipt('qualify')
+        e.require(final.get('status') == 'pending-review' and final.get('route_qualified') is False and final.get('returncode') == 0,
+                  'Raw C1 collection requires the preserved pending-review receipt')
     ip, synth, simulation = (p.receipt(role) for role in ('ip', 'synth', 'simulation'))
     ipi = p.read('ip', 'inputs.json', e.digest(ip['inputs_sha256']))
     syni = p.read('synth', 'inputs.json', e.digest(synth['inputs_sha256']))
@@ -263,12 +266,24 @@ def make_plan(spec):
         p.add('synth', 'synth/pre_audit.NOT_QUALIFIED.dcp')
     for role in ('ip', 'synth'):
         if (p.roots[role] / 'vivado_version.txt').exists(): p.add(role, 'vivado_version.txt')
-    for stage in ('link', 'implement', 'refine', 'qualify'):
+    for stage in (('link', 'implement', 'refine', 'qualify') if spec['schema'] == 1
+                  else ('link', 'implement', 'refine')):
         receipt = final if stage == 'qualify' else p.receipt(stage)
         inputs = p.read(stage, 'stage-inputs.json', e.digest(receipt['inputs_sha256']))
         p.inventory(stage, receipt['outputs'])
         p.source(stage, inputs['executor_revision'], inputs['executor_sources'])
         p.exact_tree(stage, '', set(receipt['outputs']) | {'stage-inputs.json', 'stage-result.json'})
+    if spec['schema'] == 2:
+        for role in e.RAW_ROLES:
+            receipt = p.receipt(role)
+            p.inventory(role, receipt['files'])
+            source_records = {'boards/c1_f2_alex/' + name: receipt['files'][name]
+                              for name in e.RAW_HELPERS[role]}
+            p.source(role, receipt['source_revision'], source_records)
+            # These independent captures deliberately exclude live console and
+            # tool backup files. Copy only the complete frozen receipt inventory,
+            # then recheck every selected byte; never promote omitted logs to
+            # observations made by the collector.
     p.inventory('simulation', simulation['evidence'])
     p.inventory('simulation_private', si['simulation_ip_files'])
     for name in ('inputs.json', 'ip-complete.json'): p.add('simulation_private', name)
@@ -339,7 +354,7 @@ def collect(spec, out, *, spec_raw=None):
         archived = archive_bundle(bundle, archive, manifest_sha)
         plan.recheck()
         e.require(e.verify_bundle(bundle, manifest_sha) == verified, 'Bundle changed during archive creation')
-        receipt = {'schema': 1, 'kind': 'c1-alex-candidate-evidence-collection', 'state': 'complete',
+        receipt = {'schema': spec['schema'], 'kind': 'c1-alex-candidate-evidence-collection', 'state': 'complete',
                    'instance_id': e.INSTANCE, 'started_utc': started, 'finished_utc': now(),
                    'inputs_sha256': hashlib.sha256(raw).hexdigest(), 'manifest_sha256': manifest_sha,
                    'collector_sha256': e.sha(Path(__file__)), 'verifier_sha256': e.sha(HERE / 'candidate_evidence.py'),

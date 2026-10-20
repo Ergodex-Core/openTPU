@@ -156,6 +156,13 @@ ancestry and the four vendor-simulation scenarios. Both preserve the original
 an image for packaging or FPGA use. Generated dependency trees are captured at
 collection time; they are not claimed as a pre-synthesis observation.
 
+Schema 2 preserves the independent final raw capture and the linked native and
+ready baselines as separate receipt-bound roles. It checks their exact helper
+sources and checkpoint ancestry alongside the existing synthesis, physical-build
+and simulation evidence. A structural error in the raw final summary remains a
+blocker. Collection does not supply a successful qualifier receipt or resolve any
+pending semantic review.
+
 `capture_native.tcl` records C1 native handshakes, disabled write-input drivers,
 ready cones, receive endpoints and host-ready topology from a hash-bound
 checkpoint. It preserves missing objects, API errors and collection caps as raw

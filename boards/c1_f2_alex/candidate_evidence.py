@@ -4,7 +4,7 @@ Adapted from the reviewed C2 byte/receipt/path transport mechanics only. C1 kind
 RTL inventory, generated BD, four vendor-simulation scenarios and stage ancestry
 are replayed with local C1 validators; no bundled code or Tcl is executed.
 
-Only schema1 pending raw candidates are accepted. Existing NOT_QUALIFIED files,
+Schema1 qualifier captures and schema2 independent raw captures are accepted. Existing NOT_QUALIFIED files,
 physical blockers and semantic pending categories are preserved. An external
 trusted manifest SHA256 is required. These checks cannot approve packaging or
 hardware, and no C2 disposition or historical qualification is imported.
@@ -36,11 +36,24 @@ SOURCE_ROLES = ('hardware', 'ip', 'link', 'implement', 'refine', 'qualify', 'sim
 RECEIPTS = {'ip': 'ip-complete.json', 'synth': 'synth-complete.json',
             **{stage: 'stage-result.json' for stage in ('link', 'implement', 'refine', 'qualify')},
             'simulation': 'simulation-complete.json'}
-def schema_roles(schema): return ROLES
+RAW_ROLES = ('capture', 'linked_native', 'linked_ready')
+RAW_HELPERS = {
+    'capture': ('capture_final.tcl', 'qualify_c1_alex.tcl', 'audit_c1_alex.tcl',
+                'routed_host_ready.tcl', 'capture_native.tcl', 'capture_reset_status.tcl',
+                'capture_handshake.tcl', 'capture_ready.tcl', 'capture_unused.tcl'),
+    'linked_native': ('capture_native.tcl',),
+    'linked_ready': ('capture_native.tcl', 'capture_ready.tcl'),
+}
 
-def schema_sources(schema): return SOURCE_ROLES
+def schema_roles(schema):
+    return ROLES if schema == 1 else tuple(role for role in ROLES if role != 'qualify') + RAW_ROLES
 
-def schema_receipts(schema): return RECEIPTS
+def schema_sources(schema):
+    return SOURCE_ROLES if schema == 1 else tuple(role for role in SOURCE_ROLES if role != 'qualify') + RAW_ROLES
+
+def schema_receipts(schema):
+    return RECEIPTS if schema == 1 else {**{k: v for k, v in RECEIPTS.items() if k != 'qualify'},
+                                       **{role: 'capture-receipt.json' for role in RAW_ROLES}}
 
 # Exact historical input bytes retain the original IP/link receipts. This is
 # receipt provenance, not CDC/exception/physical acceptance of another design.
@@ -110,7 +123,7 @@ def manifest_data(raw, expected_sha256):
     m = decode(raw)
     require(set(m) == {'schema', 'kind', 'instance_id', 'hardware', 'roots', 'source_snapshots', 'receipts', 'files'},
             'Unknown/missing manifest fields')
-    require(type(m['schema']) is int and m['schema'] == 1 and m['kind'] == 'c1-alex-portable-candidate-evidence' and m['instance_id'] == INSTANCE,
+    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c1-alex-portable-candidate-evidence' and m['instance_id'] == INSTANCE,
             'Wrong evidence schema or dedicated instance')
     hardware = m['hardware']
     require(set(hardware) == {'source_revision', 'build_id'} and
@@ -219,11 +232,10 @@ class Bundle:
         require(0 < self.record(role, name)['bytes'] <= MAX_MANIFEST, 'Empty/oversized raw evidence: ' + name)
         return self.path(role, name).read_text()
 
-    def supplemental_text(self):
+    def supplemental_text(self, role='qualify', name='qualification/supplemental.tcldata'):
         # Actual per-bit linked evidence exceeds the 64 MiB JSON/small-report
         # limit. Validate this one bounded report incrementally; never raise the
         # manifest/JSON parsing limit or materialize its entire text in memory.
-        role, name = 'qualify', 'qualification/supplemental.tcldata'
         row = self.record(role, name)
         require(0 < row['bytes'] <= MAX_SUPPLEMENTAL_TEXT, 'Empty/oversized supplemental evidence')
         decoder = codecs.getincrementaldecoder('utf-8')('strict')
@@ -342,6 +354,69 @@ def prepared_names(b):
     return result | {stage + '/config.tcl' for stage in ('synth', 'link')}
 
 
+def verify_raw_captures(x, final_sha):
+    """Authenticate completed observations; do not accept any semantic finding.
+
+    A retained structural error or pending predicate is expected here. Receipt
+    identity, source bytes, complete output inventories and DCP ancestry are
+    independently checked before any later semantic reviewer consumes the raw
+    captures. The original error records are never rewritten.
+    """
+    m = x.manifest
+    for role in RAW_ROLES:
+        r = x.receipt(role)
+        final = role == 'capture'
+        kind = 'c1-final-raw-capture' if final else 'c1-linked-' + role.removeprefix('linked_') + '-raw-capture'
+        require(r.get('kind') == kind and r.get('inputs_unchanged') is True and
+                r.get('route_qualified') is False and r.get('hardware_measured') is False and
+                r.get('hardware_actions') is False, 'Wrong/approved raw capture receipt: ' + role)
+        require(re.fullmatch('[0-9a-f]{40}', r.get('source_revision', '')), 'Invalid raw collector revision')
+        parent = 'refine' if final else 'link'
+        expected_sha = final_sha if final else x.record('link', 'post_link.dcp')['sha256']
+        require(r.get('checkpoint_sha256') == expected_sha and
+                r.get(('refine' if final else 'linked') + '_receipt_sha256') == m['receipts'][parent]['sha256'],
+                'Raw capture is detached from current checkpoint ancestry: ' + role)
+        if final:
+            require(r.get('schema') == 1 and set(r.get('stages', {})) ==
+                    {'final', 'native', 'reset', 'handshake', 'ready'}, 'Incomplete final raw stages')
+            require(all(type(s) is dict and type(s.get('returncode')) is int and s['returncode'] == 0
+                        for s in r['stages'].values()), 'Failed raw capture stage')
+            require(r.get('excluded_mutating_output') == ['console.log'], 'Unreviewed raw output exclusion')
+        else:
+            require(type(r.get('returncode')) is int and r['returncode'] == 0, 'Failed linked raw capture')
+        required = set(RAW_HELPERS[role])
+        if final:
+            required |= {'final/' + name for name in FINAL_REPORTS}
+            required |= {'final/NOT_QUALIFIED.txt', 'final/unused_outputs.tcldata',
+                         'native/topology.tcldata', 'ready/ready.tcldata', 'handshake.tcldata',
+                         'final.tcl', 'native.tcl', 'reset.tcl', 'handshake.tcl', 'ready.tcl', 'driver.py'}
+            required |= {'reset/' + name for name in ('topology.tcldata', 'timing.rpt',
+                         'u_rst_core_pulse.rpt', 'u_rst_hbm_pulse.rpt', 'u_status_cdc_pulse.rpt')}
+            required |= {stage + '.log' for stage in r['stages']}
+        else:
+            required |= {'raw/' + ('topology' if role == 'linked_native' else 'ready') + '.tcldata',
+                         'run.tcl', 'driver.py', 'vivado.log'}
+        x.inventory(role, r.get('files'), required=required,
+                    exact=x.names(role) - {'capture-receipt.json'})
+        source_records = {'boards/c1_f2_alex/' + name: x.record(role, name) for name in RAW_HELPERS[role]}
+        x.source(role, r['source_revision'], source_records, current=source_records)
+        if final:
+            require(r.get('helpers') == {name: x.record(role, name)['sha256'] for name in RAW_HELPERS[role]},
+                    'Final capture helper inventory differs')
+            for name in FINAL_REPORTS:
+                if name == 'supplemental.tcldata': x.supplemental_text(role, 'final/' + name)
+                else: x.text(role, 'final/' + name)
+    summary = tcl_dict(x.text('capture', 'final/summary.tcldata'))
+    require(summary.get('schema') == '1' and summary.get('kind') == 'c1_final_raw_capture' and
+            summary.get('stage') == 'final_raw' and summary.get('hardware_measured') == '0' and
+            summary.get('checkpoint_sha256') == final_sha and
+            summary.get('checkpoint') == x.original('refine', 'post_route.dcp'),
+            'Final independent raw capture has mismatched identity or DCP')
+    require(summary.get('route_qualified') == '0' and summary.get('pending_reviews'),
+            'Raw candidate collection was changed to approved')
+    return summary
+
+
 def verify_bundle(root, manifest_sha256):
     """Replay frozen evidence under a new root; no commands or bundled imports."""
     x = Bundle(root, manifest_sha256)
@@ -393,7 +468,8 @@ def verify_bundle(root, manifest_sha256):
     for name in ('objects.tcldata', 'summary.tcldata', 'timing_all_ids.xdc', 'timing.rpt', 'drc.rpt', 'cdc.rpt', 'bus_skew.rpt', 'clock_interaction.rpt', 'exception_coverage.rpt', 'ignored_exceptions.rpt', 'methodology.rpt', 'waivers.rpt', 'utilization.rpt', 'REQUIRED_NEXT_STEPS.txt'):
         x.text('synth', 'synth/synth_audit/' + name)
     previous_role, previous_checkpoint = 'synth', 'synth/post_synth.dcp'
-    for stage in ('link', 'implement', 'refine', 'qualify'):
+    for stage in (('link', 'implement', 'refine', 'qualify') if m['schema'] == 1
+                  else ('link', 'implement', 'refine')):
         receipt = x.receipt(stage); stage_inputs = x.read(stage, 'stage-inputs.json', receipt['inputs_sha256'])
         require(receipt.get('schema') == 1 and receipt.get('kind') == 'c1-alex-checkpoint-stage' and receipt.get('stage') == stage and receipt.get('returncode') == 0 and receipt.get('hardware_actions') is False, 'Failed/wrong checkpoint stage')
         reviewed_collection = stage == 'qualify'
@@ -447,16 +523,20 @@ def verify_bundle(root, manifest_sha256):
             previous_role, previous_checkpoint = stage, checkpoint
         stages[stage] = stage_inputs
     final_sha = x.record('refine', 'post_route.dcp')['sha256']
-    require('qualification/NOT_QUALIFIED.txt' in x.names('qualify'), 'Original pending collector evidence was removed')
-    for name in FINAL_REPORTS:
-        if name == 'supplemental.tcldata': x.supplemental_text()
-        else: x.text('qualify', 'qualification/' + name)
-    summary = tcl_dict(x.text('qualify', 'qualification/summary.tcldata'))
-    require(summary.get('schema') == '1' and summary.get('stage') == 'final_route' and summary.get('hardware_measured') == '0' and summary.get('checkpoint_sha256') == final_sha and summary.get('checkpoint') == x.original('refine', 'post_route.dcp'), 'Final raw collection has mismatched identity or DCP')
-    require(summary.get('route_qualified') == '0' and summary.get('pending_reviews'), 'Raw candidate collection was changed to approved')
+    if m['schema'] == 1:
+        require('qualification/NOT_QUALIFIED.txt' in x.names('qualify'), 'Original pending collector evidence was removed')
+        for name in FINAL_REPORTS:
+            if name == 'supplemental.tcldata': x.supplemental_text()
+            else: x.text('qualify', 'qualification/' + name)
+        summary = tcl_dict(x.text('qualify', 'qualification/summary.tcldata'))
+        require(summary.get('schema') == '1' and summary.get('stage') == 'final_route' and summary.get('hardware_measured') == '0' and summary.get('checkpoint_sha256') == final_sha and summary.get('checkpoint') == x.original('refine', 'post_route.dcp'), 'Final raw collection has mismatched identity or DCP')
+        require(summary.get('route_qualified') == '0' and summary.get('pending_reviews'), 'Raw candidate collection was changed to approved')
+    else:
+        summary = verify_raw_captures(x, final_sha)
     simulation = x.receipt('simulation'); si = x.read('simulation', 'inputs.json', simulation['inputs_sha256'])
     require(simulation.get('schema') == 1 and simulation.get('kind') == 'c1-alex-vendor-fabric-simulation' and simulation.get('state') == 'passed' and simulation.get('hardware_actions') is False and simulation.get('qualification') == 'protocol-simulation-only-not-physical-timing', 'Vendor simulation not passed')
-    require(stages['qualify'].get('simulation') == {'run': x.original('simulation'), 'receipt_sha256': m['receipts']['simulation']['sha256'], 'inputs_sha256': simulation['inputs_sha256']}, 'Qualification did not bind this vendor simulation')
+    if m['schema'] == 1:
+        require(stages['qualify'].get('simulation') == {'run': x.original('simulation'), 'receipt_sha256': m['receipts']['simulation']['sha256'], 'inputs_sha256': simulation['inputs_sha256']}, 'Qualification did not bind this vendor simulation')
     expected_sim = {'schema': 1, 'kind': 'c1-alex-vendor-fabric-simulation', 'ip_receipt_sha256': m['receipts']['ip']['sha256'], 'build_inputs_sha256': ip['inputs_sha256'], 'ip_source_revision': ip_inputs['source_revision'], 'ip_products': products, 'clocks_mhz': {'core': 200, 'host': 250, 'hbm_nominal': 450}, 'hbm_simulated_period_ps': 2222, 'hbm_model': 'functional-not-silicon-timing', 'hardware_actions': False, 'qualification': 'protocol-simulation-only-not-physical-timing', 'scenarios': [list(pair) for pair in sim.SCENARIOS]}
     require(all(si.get(key) == value for key, value in expected_sim.items()), 'Wrong simulation/IP/clock contract')
     require(si.get('runner_sha256') == sha(HERE / 'simulate.py') and si.get('builder_sha256') == sha(HERE / 'build.py') and si.get('sources') == {name: sha(path) for name, path in sim.SOURCES.items()}, 'Simulation source differs from reviewed files')
@@ -487,7 +567,7 @@ def verify_bundle(root, manifest_sha256):
     for name, row in x.files.items():
         require(sha(x.root / name) == row['sha256'], 'Bundle changed while verifying')
     require(sha(x.root / MANIFEST) == manifest_sha256, 'Manifest changed while verifying')
-    return {'schema': 1, 'kind': 'verified-c1-alex-portable-candidate-evidence', 'instance_id': INSTANCE,
+    return {'schema': m['schema'], 'kind': 'verified-c1-alex-portable-candidate-evidence', 'instance_id': INSTANCE,
             'manifest_sha256': digest(manifest_sha256), **hardware, 'route_qualified': False, 'review_required': True,
             'hardware_measured': False, 'final_dcp_sha256': final_sha,
             'pending_reviews': tcl_list(summary['pending_reviews']), 'blockers': tcl_list(summary.get('blockers', '')),
@@ -497,7 +577,8 @@ def verify_bundle(root, manifest_sha256):
             'synth_inputs_relative_path': x.path('synth', 'inputs.json').relative_to(x.root).as_posix(),
             'ip_receipt_sha256': m['receipts']['ip']['sha256'],
             'simulation_receipt_sha256': m['receipts']['simulation']['sha256'],
-            'qualification_receipt_sha256': m['receipts']['qualify']['sha256'],
+            'qualification_receipt_sha256': m['receipts']['qualify']['sha256'] if m['schema'] == 1 else None,
+            'raw_capture_receipt_sha256': {role: m['receipts'][role]['sha256'] for role in RAW_ROLES} if m['schema'] == 2 else {},
             'files': len(x.files), 'bytes': sum(row['bytes'] for row in x.files.values())}
 
 
