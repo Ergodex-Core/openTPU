@@ -249,7 +249,11 @@ Synthesis and link (both clocks, 0 errors; the critical warnings are the shell's
 ones every F2 build has, and the IP stage's read-only block-design parameters; Vivado 2025.2's
 parallel-synthesis workers segfaulted five times in the 175 MHz build's IP stage and it
 recovered, as build 11's did): the link stage verified the core / TMEM periods 5.714 / 2.857 ns
-and 6.154 / 3.077 ns. `synth_link/synth_utilization.rpt`: the CL **548,455 LUTs (42% of the
+and 6.154 / 3.077 ns. The core MMCM is clk_wiz's own legal choice (`clocks/console.log`:
+CORE_CLOCK_ACTUAL M 21.000 / D 5 / O 6.000 and 3, VCO 1050 MHz at 175; M 26.000 / D 5 / O 8.000
+and 4, VCO 1300 MHz at 162.5), and no report of either run has DRC AVAL-168 (the fractional
+multiplier the coordinator found in boards/f2/build.py's hand-set HBM_CORE_MMCM, which this
+flow does not use). `synth_link/synth_utilization.rpt`: the CL **548,455 LUTs (42% of the
 VU47P), 539,417 FFs, 932 RAMB36 (46%), 33 RAMB18, 0 URAM, 2,908 DSPs (32%)**; a slice 99.6K
 LUTs (slice 0 100.6K), a memory SmartConnect 16.6K, the host crossbar 12.6K, a native
 register slice 0.63K, the HBM wrapper 1.0K. By SLR: SLR0 ~181K LUTs (slice 0, the four
