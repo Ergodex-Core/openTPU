@@ -481,6 +481,17 @@ opentpu-f2. The fixed `path_analysis.sh` also shows build 8's inter-clock table:
 -> core -0.334 ns over 347 endpoints and core -> TMEM -0.211 over 305, a second core-domain
 class (the TMEM / core handoff) that the 175 / 350 MHz pair relaxes by the same 12.5%.
 
+**Build 10 routed at -0.277 ns (06:30 UTC; TNS -194, 3029 failing endpoints, hold +0.010).**
+Per clock: core (5.714 ns) -0.277 over 1204 endpoints (TNS -101), the HBM AXI 450 MHz domain
+-0.200 over 1824 (TNS -93), TMEM 350 MHz +0.209 (closed), TMEM -> core -0.003 on one endpoint.
+The worst 50 are again slice 1's control-port run / fetch signals into the MXU's enables (47 of
+50), now with 5.4-5.6 ns of data path against 5.7: the placer spent most of the extra 0.71 ns.
+TNS is 8x smaller than build 8's, the regime in which the refine stage closed build 6 (from
+-0.217). The HBM domain got worse rather than better (build 8: -0.087 over 1095 endpoints), so
+build 11's pblock is needed whatever the core does; a side Vivado session on the checkpoint
+(`scratch/b10_hbm_paths.tcl` on the m7a) lists the failing HBM-domain paths by SmartConnect and
+the clock regions each SmartConnect landed in.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
