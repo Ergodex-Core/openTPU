@@ -188,6 +188,7 @@ on top) in `/home/ubuntu/lens-runs/p4/`.
 | `test_f2_burst200_s4.py` / `_s3.py` / `test_target.py` without the two RTL gates (the generator, tops, floorplan names, build plans, the Verilator lint of the four-slice top) | 50 passed | |
 | tiny Gemma 3 (2 layers, hidden 256, MLP 512) at S = 4 on the four-slice board model (`tb_board`, `otpu_board` S = 4, the f2-burst200-s4 target, two native channels a slice, stall 0) | logits bit-identical to the ISA simulator on 3 tokens, every slice's DRAM equal; 20,588 / 20,589 / 20,618 cycles, 263 instructions a slice; 286 s | `p4-tiny-s4-board.txt` |
 | Gemma 3 1B int8 (int8 head), the decode step at pos 14 after the chat prompt, on the Verilator RTL (`otpu_top` S = 4, the hub, the AXI adapter, stall 0, `OTPU_LAT=30`) and on the ISA simulator from the same DRAM | **logits equal bit for bit, all four slices' DRAM equal**; **2,301,972 cycles**, next token 19058 'Okay'; 18 min | `p4-gemma3-1b-s4-rtl-gate.txt` |
+| the card's own generate loop at S = 4 (HALT CHAIN, the (max, id) combine over the slices; `test_four_slices_generate_on_the_card`, the path `chat --slices 4` runs on the image), with the S = 3 and slice-split tests | the S = 1 tokens, greedy and sampled; 6 passed | `p4-gemma3-s4-generate-card.txt` |
 
 **Lens, the same RTL token** (`OTPU_LAT=30 lens record model --model gemma3 --slices 4 --axi
 --stall 0 --mhz 175`, `p4-gemma3-s4-rtl.otpuprof`; the same 2,301,972 cycles; every slice
