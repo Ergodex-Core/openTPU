@@ -125,6 +125,7 @@ module otpu_native_dram #(
   output logic              a_rvalid,
   output logic [255:0]      a_rdata,    // the aligned 32 bytes holding word a_addr (half a beat)
   output logic              sw_rdy,
+  output logic              sw_rdy2,    // room for two SW beats in every channel's queue (otpu_lane_mem)
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,    // word address
   input  logic [31:0]       sw_wdata,
@@ -287,6 +288,7 @@ module otpu_native_dram #(
   assign a_rdy = (qa_n[0] < QD) && (qa_n[1] < QD) && (ao_n < OD);
   assign a_rdy_x = a_rdy;
   assign sw_rdy = (qw_n[0] < WQD) && (qw_n[1] < WQD);
+  assign sw_rdy2 = (qw_n[0] < WQD - 1) && (qw_n[1] < WQD - 1);
   wire sw_take = sw_req && sw_rdy;
   wire sw_ch = chan_of(sw_addr);
   wire [24:0] sw_m = sw_addr[29:5];

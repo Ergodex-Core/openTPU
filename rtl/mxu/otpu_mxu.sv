@@ -224,6 +224,11 @@ module otpu_mxu
   logic        i_swn;                       // the next row's Sw is in the advance's line
   logic        i_sws;                       // a request for the row's Sw alone comes first
   logic [PW:0] occ;                         // chunks issued and not yet popped (<= DEPTH)
+  // C > 1 (lock-step lanes): occ takes a pop's decrement a cycle late (fpop_q), off the lanes'
+  // pop_ok cone (every lane's pop_w gathered and broadcast back: the F2 build's worst core path,
+  // docs/v4/p2-f2.md); occ then counts at most one chunk too many for a cycle, so the issue credit
+  // is only conservative. C = 1: as before, cycle for cycle
+  logic fpop_q;
   logic [TDW:0] tg_n;                       // port A requests in flight
 
   // ================================================================== command queue (2)
@@ -1294,7 +1299,7 @@ module otpu_mxu
     if (rst) begin
       i_act <= 1'b0; i_ini <= 1'b0;
       q_n <= '0; pn <= 1'b0; rows_p <= '0;
-      occ <= '0; tg_n <= '0; tg_t <= '0; tg_h <= '0;
+      occ <= '0; tg_n <= '0; tg_t <= '0; tg_h <= '0; fpop_q <= 1'b0;
       f_head <= '0; f_tail <= '0; f_count <= '0; f_rd <= '0; f_tl <= '0; f_rdl <= '0;
       s_head <= '0; s_tail <= '0; s_count <= '0; s_rd <= '0;
       ck <= '0; cg <= '0; dg <= '0; dg1 <= 8'd1; c_left <= '0; cl_ld <= 1'b0; rows_live <= '0;
@@ -1430,7 +1435,8 @@ module otpu_mxu
       tg_n <= tg_n + (a_req ? 1'b1 : 1'b0) - (rv1 ? 1'b1 : 1'b0);
       if (r_cpl) s_tail <= s_tail + 1'b1;
       f_count <= f_count + (b_rvalid ? 1 : 0) - (fpop ? 1 : 0);
-      occ <= occ + (b_req ? 1'b1 : 1'b0) - (fpop ? 1'b1 : 1'b0);
+      fpop_q <= fpop;
+      occ <= occ + (b_req ? 1'b1 : 1'b0) - ((C > 1 ? fpop_q : fpop) ? 1'b1 : 1'b0);
       s_count <= s_count + (r_cpl ? 1 : 0) - ((fpop && !c_unit) ? 1 : 0);
       // ---- pop one advance (the row's last group frees its chunk and scale entry)
       if (fpop) begin

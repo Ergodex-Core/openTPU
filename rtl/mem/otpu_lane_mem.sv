@@ -103,7 +103,7 @@ module otpu_lane_mem #(
   logic [C-1:0][31:0]    ca_addr, ca_wdata;
   logic [C-1:0][3:0]     ca_be;
   logic [C-1:0][255:0]   ca_rdata;
-  logic [C-1:0]          cs_rdy, cs_req;
+  logic [C-1:0]          cs_rdy, cs_rdy2, cs_req;
   logic [C-1:0]          cb_rdy, cb_req, cb_tag, cb_we, cb_par, cb_rvalid, cb_rtag;
   logic [C-1:0][31:0]    cb_addr;
   logic [C-1:0][D*8-1:0] cb_rdata;
@@ -116,7 +116,13 @@ module otpu_lane_mem #(
   wire b_all = &cb_rdy;
   assign a_rdy_x = a_we_x ? a_all : ca_rdy[0];
   assign b_rdy   = b_we ? b_all : cb_rdy[0];
-  assign sw_rdy  = &cs_rdy;
+  // SW: C > 1, a register of "every copy has room for two" (a copy's queue grows by one beat a
+  // cycle at most, so a write taken on it finds room in every copy): the copies' readies stay off
+  // the quantizer's store path into every adapter's queue enables (the F2 build's placement:
+  // docs/v4/p2-f2.md); C 1: the adapter's own
+  logic sw_rdy_q;
+  always_ff @(posedge clk) sw_rdy_q <= !rst && (&cs_rdy2);
+  assign sw_rdy  = (C > 1) ? sw_rdy_q : cs_rdy[0];
   assign wr_idle = &c_wr_idle;
   assign rd_idle = &c_rd_idle;
 
@@ -159,7 +165,7 @@ module otpu_lane_mem #(
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),
-      .sw_rdy(cs_rdy[l]), .sw_req(cs_req[l]), .sw_addr, .sw_wdata, .sw_be,
+      .sw_rdy(cs_rdy[l]), .sw_rdy2(cs_rdy2[l]), .sw_req(cs_req[l]), .sw_addr, .sw_wdata, .sw_be,
       .b_rdy(cb_rdy[l]), .b_req(cb_req[l]), .b_tag(cb_tag[l]), .b_we(cb_we[l]), .b_wmask,
       .b_wdata, .b_addr(cb_addr[l]), .b_par(cb_par[l]), .b_rvalid(cb_rvalid[l]),
       .b_rtag(cb_rtag[l]), .b_rdata(cb_rdata[l]), .wr_idle(c_wr_idle[l]), .rd_idle(c_rd_idle[l]),
