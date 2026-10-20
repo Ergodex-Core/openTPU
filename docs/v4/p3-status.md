@@ -57,8 +57,8 @@ Against the proposal's section 7 plan, the parts that give a bit-exact P3 RTL no
 - **Old settings cycle-exact** (`tools/p3_cycle_probe.py`, base 72eb4b4c vs 04b4848d at MXU_PACK
   0, C 1): 10 of 10 records equal in cycles and DRAM / TMEM hashes (mlp 7,508, attn 2,275, fuzz
   2,102 / 1,744, replay 3,468, mcols4 3,117, board 5,973 / 5,116, card 5,778, card at MCOLS 4
-  5,665). Receipts: `p3-04b4848d/probe/{base,up}.json`. After the merge: (pending,
-  `p3-8a9d75d3/probe-up.json`).
+  5,665). Receipts: `p3-04b4848d/probe/{base,up}.json`; after the merge with P2's memory side and
+  APS, 10 of 10 equal again (`p3-8a9d75d3/probe-up.json`).
 - **Packed, C 1**: the same 10 runs bit-exact; at MCOLS 4 the same cycles (a packed lane's row
   latency LROW is 25 either way: two physical columns, each PKL = 2 later), at MCOLS 8 1-10 cycles
   fewer (LROW 27 against 29). `p3-04b4848d/probe/pk.json`.
@@ -70,7 +70,13 @@ Against the proposal's section 7 plan, the parts that give a bit-exact P3 RTL no
   PAIR at every M on packed lanes at C 1 and 8; packed = unpacked cycles at MCOLS 4 at C 1 and 8;
   8 packed lanes on the board memory path at stalls 0 / 40 / 60 and latency 20-120; the card's
   uarch at c8p; the decode stream at 8 chunks a cycle); `tests/test_tech.py tests/test_target.py`
-  24 passed, 1 skipped (no yosys DSP48E1 model). After the merge (8a9d75d3): (pending).
+  24 passed, 1 skipped (no yosys DSP48E1 model).
+- **The whole RTL suite packed** (`OTPU_MXU_PACK=1 pytest tests/test_rtl.py`, e44c9104: every
+  configuration with MCOLS a multiple of 4 packed, the rest unpacked): 206 passed, 1 skipped (the
+  suite's own PAIR skip); log `/home/ubuntu/opt/logs/p3-t13.log`. After the merges (8a9d75d3 and
+  92fcae38): `-k "packed or chunk_lanes"` 30 passed each, the old settings' probe 10 / 10 equal
+  again (`p3-8a9d75d3/probe-up.json`), test_tech / test_target / test_f2_copies / test_f2_rtl 55
+  passed, test_f2_p2_build 3 passed (in a git worktree: it calls git).
 - **Tiny Gemma 3** (`tests/test_gemma3.py -k token_on_board --runslow`, the board memory path,
   position 600): logits and the whole DRAM image bit-exact at (MXU_C, MXU_PACK) = (1, 0), (4, 0),
   (8, 0), (8, 1): 4 passed.
