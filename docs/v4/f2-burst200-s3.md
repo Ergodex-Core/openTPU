@@ -210,8 +210,8 @@ grandchild `pblock_CL_SLR1_XBAR` (`X0Y4:X4Y7`) for the host crossbar:
 
 | pblock | cells |
 |:--|:--|
-| `pblock_CL_SLR0` | `u_board/u_slice`, `u_board/u_mem`, slice 0's `g_xs.g_x[0]` rx / tx / port stages and the activity bundle's tx, `u_native0/1`, `u_npipe2/3/4/5_slr0`, `u_host_pipe0/1/2`, `u_mem0/1`, `u_hbm`, the SLR0 resets |
-| `pblock_CL_SLR0_MEM2` | `u_mem2` (hard grandchild, `X4Y0:X6Y0` + `X5Y1:X6Y1`, the clock regions of HBM ports 16 / 20; build 11, after build 8 left it 2.1 ns of wire from its ports at 450 MHz) |
+| `pblock_CL_SLR0` | `u_board/u_slice`, `u_board/u_mem`, slice 0's `g_xs.g_x[0]` rx / tx / port stages and the activity bundle's tx, `u_native0/1`, `u_npipe2/3/4/5_slr0`, `u_host_pipe0/1/2`, `u_hbm`, the SLR0 resets |
+| `pblock_CL_SLR0_MEM0/1/2` | `u_mem0` in `X0Y0:X1Y1` (ports 0 / 4), `u_mem1` in `X2Y0:X3Y1` (ports 8 / 12), `u_mem2` in `X4Y0:X6Y0` + `X5Y1:X6Y1` (ports 16 / 20): hard grandchildren holding each SmartConnect in the clock regions of its ports, after builds 8 and 10 placed them two or three rows up and the 450 MHz port-to-exit-pipeline paths failed (build 11) |
 | `pblock_CL_SLR1` | `g_slice[1].u_slice / u_mem`, `g_x[1]`'s four stages and port, the hub-side stages of slices 0 and 2 (`u_dn_tx`, `u_up_rx`, `u_pf_rx`), `g_xs.u_chub`, `u_ctrl`, `u_iso`, `g_trace.u_trace`, `g_coll.u_coll`, `u_native2/3`, `u_npipe4/5_slr1`, `u_pcis_pipe`, `u_ocl_cdc`, `u_status_cdc` |
 | `pblock_CL_SLR1_XBAR` | `u_host` |
 | `pblock_CL_SLR2` | `g_slice[2].u_slice / u_mem`, `g_x[2]`'s rx / tx / port, `u_native4/5`, the SLR2 resets |
@@ -283,8 +283,10 @@ Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 -
   round-3 floorplan (pb_otpu_tmem) is the next lever. Build 8 placed and routed it, but the
   placer put slice 2's SmartConnect in SLR0's roomy left half, 2.1 ns of wire from its ports
   16 / 20 on the right (X4Y0 / X5Y0): the 450 MHz port-to-exit-pipeline paths failed by
-  -0.087 ns over ~1100 endpoints. Build 11 pins `u_mem2` beside its ports
-  (`pblock_CL_SLR0_MEM2`, docs/v4/hbm-integration.md's port map).
+  -0.087 ns over ~1100 endpoints; build 10 (175 MHz) did the same for all three SmartConnects
+  (-0.200 over 1824 endpoints, u_mem1's mass in row Y3, u_mem2's in rows Y2-Y3). Build 11 pins
+  each SmartConnect beside its ports (`pblock_CL_SLR0_MEM0/1/2`, docs/v4/hbm-integration.md's
+  port map).
 - **The collective links**: the hub's one beat per ~7 cycles would be 8% of the token if
   every gather were exposed; the RTL trace says 0.4% (above), the rest hidden behind the
   MXU's prefetch. On hardware the two `otpu_xr` stages per crossing are the same cycles as in

@@ -143,11 +143,18 @@ X5Y1:X5Y3, X6Y1 and X4Y3 — build 10's post-placement worst path at 450 MHz is 
 optimization). Build 8 (200 MHz) routed with exactly this class failing: the 450 MHz domain at
 -0.087 ns over 1095 endpoints, every one a port 16 / 20 interface clock into u_mem2's exit
 pipelines, with one logic level and ~2.1 ns of wire, because the placer had put u_mem2 in
-SLR0's roomy left half. The remedy, in floorplan_s3.tcl from build 11 on, is a hard child
-pblock per far-away SmartConnect next to its ports: `pblock_CL_SLR0_MEM2` = X4Y0:X6Y0 +
-X5Y1:X6Y1 for u_mem2 (15K LUTs in five clock regions; its SLR0 register-slice ends and host
-pipe follow it, unconstrained). u_mem0 / u_mem1 (ports 0 / 4, 8 / 12) were not on the failing
-list and stay free in the left half. The alternative is ports on the left for all three
+SLR0's roomy left half. Build 10 (175 MHz) showed it is not a slice-2 quirk: all three
+SmartConnects landed two or three rows above their ports (by the Laguna columns where their
+slices' register slices arrive: u_mem0's mass in X0Y0-X0Y2, u_mem1's in row Y3, u_mem2's in
+X3-X5 rows Y2-Y3) and all three failed, -0.200 ns over 1824 endpoints (u_mem2 658, u_mem1 633,
+u_mem0 524; sources ports 20 / 12 / 8 / 16 / 4 / 0 and the SmartConnects' own 450 MHz logic;
+the worst path port 16's ACLK into u_mem2's `m00_exit` register enable, 2.02 ns with one
+logic level). The remedy, in floorplan_s3.tcl from build 11 on, is a hard child pblock per
+SmartConnect holding it in the clock regions of its two ports plus the row above:
+`pblock_CL_SLR0_MEM0` = X0Y0:X1Y1, `MEM1` = X2Y0:X3Y1, `MEM2` = X4Y0:X6Y0 + X5Y1:X6Y1 (15K
+LUTs / 25K FFs each in four or five clock regions; the slices' SLR0 register-slice ends and
+host pipes stay free and reach them with two or three regions of wire at the core clock).
+The alternative is ports on the left for all three
 slices (e.g. 0 / 4, 8 / 12, 1 / 5 — distinct memory channels are ports 2k / 2k+1 pairs, so 1 /
 5 share channels with 0 / 4 and that pairing costs the switch path, rule 6).
 

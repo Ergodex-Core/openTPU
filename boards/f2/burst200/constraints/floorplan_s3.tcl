@@ -6,8 +6,8 @@
 # pblock_CL must already exist.
 #
 #   SLR0 (the HBM's AXI ports at its bottom edge): slice 0 and its adapters, every SmartConnect
-#        (u_mem0/1/2; u_mem2 in the grandchild pblock_CL_SLR0_MEM2 beside its ports 16 / 20),
-#        the HBM wrapper, the SLR0 ends of the host and native register slices, the SLR0 resets
+#        (u_mem0/1/2, each in a grandchild pblock_CL_SLR0_MEM<s> beside its two ports), the HBM
+#        wrapper, the SLR0 ends of the host and native register slices, the SLR0 resets
 #   SLR1 (the shell's PCIS / OCL columns X6-X7): slice 1 and its adapters, the control block,
 #        the trace, the collective unit and its hub, the OCL converter, the PCIS pipe, the
 #        host crossbar (pblock_CL_SLR1_XBAR), the SLR1 ends of slice 2's native register slices
@@ -97,24 +97,37 @@ add_cells_to_pblock pblock_CL_SLR0 [otpu_s3_cells [list \
     $cl/u_native0 $cl/u_native1 \
     $cl/u_npipe2_slr0 $cl/u_npipe3_slr0 $cl/u_npipe4_slr0 $cl/u_npipe5_slr0 \
     $cl/u_host_pipe0 $cl/u_host_pipe1 $cl/u_host_pipe2 \
-    $cl/u_mem0 $cl/u_mem1 $cl/u_hbm \
+    $cl/u_hbm \
     $cl/u_rst_core_slr0 $cl/u_rstpipe_core_slr0 $cl/u_rst_main_slr0 $cl/u_rstpipe_main_slr0]]
 set_property IS_SOFT false [get_pblocks pblock_CL_SLR0]
 
-# ---- SLR0, by HBM ports 16 / 20: slice 2's SmartConnect. The HBM AXI port interfaces are the
-# sites BLI_HBM_AXI_INTF_X<k>Y0 in clock-region row Y0: ports 0-3 X0Y0, 4-7 X1Y0, 8-12 X2Y0,
-# 13-15 X3Y0, 16-19 X4Y0, 20-24 X5Y0, 25-29 X6Y0, 30-31 X7Y0 (docs/v4/hbm-integration.md).
-# Slices 0 and 1 (ports 0 / 4, 8 / 12) sit under pblock_CL_SLR0's whole left half and the
-# placer keeps their SmartConnects by their ports; slice 2's ports are on the right, where the
-# SLR0 pblock is only the bottom row plus X5Y1:X5Y3 / X6Y1, and build 8 left its SmartConnect's
-# exit pipelines 2.1 ns of wire from ports 16 / 20 (the 450 MHz domain at -0.087 / -0.069 ns
-# after route / refine, ~800-1100 endpoints = the two ports' exit registers). This grandchild
-# keeps u_mem2 in the clock regions next to its ports (all within the parent's ranges).
-create_pblock pblock_CL_SLR0_MEM2
-resize_pblock pblock_CL_SLR0_MEM2 -add {CLOCKREGION_X4Y0:CLOCKREGION_X6Y0 CLOCKREGION_X5Y1:CLOCKREGION_X6Y1}
-set_property parent pblock_CL_SLR0 [get_pblocks pblock_CL_SLR0_MEM2]
-add_cells_to_pblock pblock_CL_SLR0_MEM2 [otpu_s3_cells [list $cl/u_mem2]]
-set_property IS_SOFT false [get_pblocks pblock_CL_SLR0_MEM2]
+# ---- SLR0, by the HBM ports: one grandchild pblock per SmartConnect. The HBM AXI port
+# interfaces are the sites BLI_HBM_AXI_INTF_X<k>Y0 in clock-region row Y0: ports 0-3 X0Y0, 4-7
+# X1Y0, 8-12 X2Y0, 13-15 X3Y0, 16-19 X4Y0, 20-24 X5Y0, 25-29 X6Y0, 30-31 X7Y0
+# (docs/v4/hbm-integration.md). Left to itself the placer puts the SmartConnects two or three
+# rows up, by the Laguna columns where their slices' register slices land (build 10: u_mem0's
+# mass in X0Y0-X0Y2, u_mem1's in row Y3, u_mem2's in X3-X5 rows Y2-Y3), and the port-to-exit-
+# pipeline paths at 450 MHz (2.222 ns) fail with one logic level and ~2 ns of wire: build 8
+# -0.087 ns over 1095 endpoints, build 10 -0.200 over 1824 spread over all three (u_mem2 658,
+# u_mem1 633, u_mem0 524 destinations; sources ports 20 / 12 / 8 / 16 / 4 / 0 and the
+# SmartConnects' own 450 MHz logic). Each SmartConnect (15K LUTs, 25K FFs) is held in the
+# clock regions of its two ports plus the row above (all within the parent's ranges); the
+# core-clock paths from its slice's SLR0 register-slice ends get two or three regions of wire
+# at 5.7 ns, which is fine.
+#   u_mem0: ports 0 (X0Y0) and 4 (X1Y0)   -> X0Y0:X1Y1
+#   u_mem1: ports 8 and 12 (both X2Y0)    -> X2Y0:X3Y1
+#   u_mem2: ports 16 (X4Y0) and 20 (X5Y0) -> X4Y0:X6Y0 + X5Y1:X6Y1 (X4Y1 is the shell's)
+foreach {s ranges} {
+  0 {CLOCKREGION_X0Y0:CLOCKREGION_X1Y1}
+  1 {CLOCKREGION_X2Y0:CLOCKREGION_X3Y1}
+  2 {CLOCKREGION_X4Y0:CLOCKREGION_X6Y0 CLOCKREGION_X5Y1:CLOCKREGION_X6Y1}
+} {
+  create_pblock pblock_CL_SLR0_MEM$s
+  resize_pblock pblock_CL_SLR0_MEM$s -add $ranges
+  set_property parent pblock_CL_SLR0 [get_pblocks pblock_CL_SLR0_MEM$s]
+  add_cells_to_pblock pblock_CL_SLR0_MEM$s [otpu_s3_cells [list $cl/u_mem$s]]
+  set_property IS_SOFT false [get_pblocks pblock_CL_SLR0_MEM$s]
+}
 
 # ---- SLR1: slice 1, the control block, the collective, the shell-facing host and OCL paths
 add_cells_to_pblock pblock_CL_SLR1 [otpu_s3_cells [list \
