@@ -52,3 +52,19 @@ def test_xilinx7_cells_equal_the_generic_models(tmp_path):
     x7 = _trace(tmp_path, "xilinx7", [model], seeds)
     for s, a, b in zip(seeds, gen, x7):
         assert len(a) == 3984 and a == b, f"seed {s}"
+
+
+@pytest.mark.skipif(shutil.which("xvlog") is None and not Path("/opt/Xilinx/2025.2/Vivado").exists(),
+                    reason="no Vivado simulator")
+def test_xilinxus_packed_pe_equals_the_generic_model():
+    """otpu_pe_pk (otpu_mxu PACK) on the DSP48E2 (Vivado's unisim model, xsim) equals the generic
+    model cycle for cycle under random operands (the whole byte range) and enables
+    (sim/tech/run_xsim_pk.sh: sim/tech/tb_tech_pk.sv)."""
+    seeds = ["3", "7", "11"]
+    run = lambda fam: subprocess.run(["bash", str(ROOT / "sim/tech/run_xsim_pk.sh"), fam, *seeds],
+                                     capture_output=True, text=True, timeout=1800)
+    gen, us = run("generic"), run("xilinxus")
+    assert gen.returncode == 0, gen.stderr[-2000:]
+    assert us.returncode == 0, us.stderr[-2000:]
+    a, b = gen.stdout.splitlines(), us.stdout.splitlines()
+    assert len(a) == 3 * (1 + 3984) and a == b
