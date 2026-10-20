@@ -533,6 +533,18 @@ listed worst paths. Post-place phys_opt started at -0.370 (08:50) and **ended at
 (otpu_board.sv: the four activity bits ride the `g_pf` crossing with the perf bundle; 15 tests
 including the Verilator 1B-token bit-exact three-slice run pass; not in builds 11 / 12).
 
+**Build 12's first run died in synthesis (found 09:35 UTC).** Its `synth_link/console.log`
+stopped at 08:13 right after "Starting RTL Elaboration": Vivado's parallel synthesis workers
+(`task_work`, HARTSWorker) segfaulted four times with a tcmalloc abort ("Attempt to free
+invalid pointer 0xffffffffffffffff" in `HARTSWorker::~HARTSWorker()`, four `hs_err_pid*.log`
+files), and the parent Vivado sat in a futex wait at 0% CPU for 80 minutes with the unit still
+"active". Build 10 synthesized the same RTL on the same host without it, so it is taken as a
+transient tool crash: killed, the crash log kept in `/home/ubuntu/rachit/crashes/`, and
+**restarted as run2 at 09:37** (unit `otpu-f2burst200-s3-162-build2`, output
+`f2burst200-s3-162-run2`, log `logs/f2burst200-s3-162-build2.log`; gate result ~15:30). The
+monitors now flag a stage whose console.log has not changed for 25 minutes and count
+"segfault" / "hs_err" / "tcmalloc" lines, which the plain ERROR count missed.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
