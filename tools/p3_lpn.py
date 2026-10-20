@@ -55,6 +55,10 @@ def load_net(vla_tree: Path, lpn_src: Path, own_opentpu: bool):
     for name in ("F_T",):                   # the vla ISA's QST T flag: none of ours carries it
         if not hasattr(I, name):
             setattr(I, name, 0)
+    if not hasattr(I, "mm_format"):         # the vla ISA's (format, PAIR, QUAD): ours has no
+        def mm_format(ins):                 # t2 / QUAD (flags[5:4] the format, F_PAIR)
+            return (ins.flags >> 4) & 3, bool(ins.flags & I.F_PAIR), False
+        I.mm_format = mm_format
     if not hasattr(np, "Inf"):
         np.Inf = np.inf                     # lpnlang's simulator is NumPy 1.x's
     sys.path.insert(0, str(lpn_src))
