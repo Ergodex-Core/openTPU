@@ -10,7 +10,7 @@ from opentpu.host.board import Board, SimTransport
 from opentpu.host.checks import masked_program, run_demo
 from conftest import sim_board_config
 
-CFG = sim_board_config()
+CFG = sim_board_config(DRAM_BYTES=1 << 22)   # (a small DRAM: the model holds 4 copies)
 
 
 @pytest.mark.parametrize("seed,swfill", [(3, 1), (4, 0)])
