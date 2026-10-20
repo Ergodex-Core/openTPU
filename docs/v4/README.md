@@ -520,6 +520,16 @@ the step has to be bigger than the deficit. Unit `otpu-f2burst200-s3-162-build1`
 `/home/ubuntu/rachit/f2burst200-s3-162-run1`, log `logs/f2burst200-s3-162-build1.log`.
 Predicted 58-60 x 162.5 / 200 = **47-49 tok/s** (2.1-2.2x build 6).
 
+**Build 11 run2 placed (08:43 UTC): the SmartConnect pblocks work.** `place_timing.rpt` per
+clock, before physical optimization: HBM AXI 450 MHz **+0.059 ns, 0 failing endpoints** (builds
+8 and 10 at the same point: -0.336 / -0.338 over ~2800); core (5.714 ns) -0.315 over 305
+endpoints (TNS -42; build 8 at 5.0 ns: -0.358 over 2703), TMEM +0.639, core -> TMEM -0.137 over
+62. The core's worst listed path is new: slice 0's native adapter `u_board/u_mem/ao_n_reg[8]`
+(SLR0) into the control block's `u_ctrl/n_ard_reg[0]/CE` (SLR1), two logic levels and 5.12 ns,
+an unregistered SLR crossing in otpu_board's activity / outstanding-count bookkeeping that the
+pblocks' SLR0 rearrangement stretched; the intra-slice MXU-enable class is no longer in the
+listed worst paths. Post-place phys_opt started at -0.370 (08:50); routing follows.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
