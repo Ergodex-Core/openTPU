@@ -16,8 +16,9 @@
 #                 (u_sys/u_mem/g_port[*].u_naxi) and the SmartConnect fabric (u_sc) by the HBM's
 #                 AXI ports, and the SLR0 side of every crossing register chain (rounds 1-8: the
 #                 bridges, arbiters and host path, ~30K LUTs at 450 MHz).
-#   pb_otpu_mid   (SLR1, X0Y4:X3Y7, 16 clock regions): the middle stage of every chain (~18K
-#                 flip-flops, no logic).
+#   pb_otpu_mid   (SLR1, the CL's whole SLR1 but pb_otpu_pcis: X0Y4:X4Y7, X5Y4, X5Y7; until the
+#                 SLR2 rework X0Y4:X3Y7): the middle stage of every chain (~18K flip-flops, no
+#                 logic), so the SLR1 <-> SLR2 crossings use six clock-region columns of Lagunas.
 #   pb_otpu_pcis  (SLR1, X5Y5:X5Y6, beside the shell's PCIS column): the PCIS gate's skid buffers
 #                 (u_mem/u_pcis) and the OCL's crossing (u_ocl; rounds 4-8: u_host's registers).
 #   pb_otpu_board (SLR2, all 32 clock regions, ~435K LUTs): u_sys/u_board, the slice with its
@@ -29,7 +30,9 @@
 #   pb_otpu_tmem  (a child of pb_otpu_board, X2Y9:X5Y10, 8 clock regions, ~109K LUTs): the TMEM
 #                 and the VPU together (48K LUTs, 68 RAMB36): the pumped banks' address paths
 #                 (clk -> clk_f, one core period: otpu_clk2x.tcl) come from the VPU's ta_addr
-#                 and the MXU's t_raddr; the MXU (97K) wraps around the box.
+#                 and the MXU's t_raddr; the MXU (97K) wraps around the box. Since the SLR2
+#                 rework also the quantizer and the collective unit (their TMEM requests and
+#                 grants are the same cone).
 # Since the alex-shell rework (Alex's burst200 memory path, ergodex-openTPU 06c169cb, at 8
 # channels; docs/f2_hbm.md): pb_otpu_hbm holds the eight otpu_native_axi (u_mem/g_port[*].u_naxi)
 # and the SmartConnect fabric (WRAPPER/CL/u_sc: the eight channel SmartConnects and the host's
@@ -88,9 +91,19 @@ add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/g_rs[0].u_x}]
 ########################################
 # pb_otpu_mid: the chains' middle stage, SLR1
 ########################################
+# The whole of the CL's SLR1 (AWS's pblock_CL there: X0-X3, X4Y4, X4Y6:X4Y7, the CL's part of
+# X4Y5 beside the I/O shim, X5Y4:X5Y7) except pb_otpu_pcis's X5Y5:X5Y6, so the ~9.2K nets
+# between SLR1 and SLR2 (8 channels x (604 down + 532 up), the control path, the reset) cross on
+# the Laguna columns of six clock-region columns instead of four, and their traversal of SLR1
+# spreads over as many. ba86b5df (X0Y4:X3Y7) routed with every SLR1 -> SLR2 crossing in SLR2's
+# west half, the router's level-6 South Long window over the stage in SLR1 (u_sys/u_mem 99%) and
+# level-5 windows from SLR2's LAGUNA rows into the adapter (docs/wide_port.md "SLR2 without
+# the hot spot"). otpu_contain takes out the sites pblock_CL does not hold (the shim's).
 create_pblock pb_otpu_mid
 set_property PARENT pblock_CL [get_pblocks pb_otpu_mid]
-resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
+resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X4Y7}
+resize_pblock pb_otpu_mid -add {CLOCKREGION_X5Y4:CLOCKREGION_X5Y4}
+resize_pblock pb_otpu_mid -add {CLOCKREGION_X5Y7:CLOCKREGION_X5Y7}
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_dn}]
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_up}]
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_dn}]
@@ -136,13 +149,21 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 
 ########################################
-# pb_otpu_tmem: the TMEM beside the VPU, within the slice
+# pb_otpu_tmem: the TMEM beside the VPU, the quantizer and the collective unit, within the slice
 ########################################
+# Every unit whose TMEM request enters the grant / replay cone (requests -> the TMEM's conflict
+# compares and the slice's arbiter -> the grants, lost / rpv, the units' enables) with the
+# TMEM: the VPU (ba86b5df: u_mxu -> u_vpu's WBUF enable through tm_lost, 98 failing endpoints),
+# the quantizer (its t_ren -> the pumped pieces' ADDR, clk -> clk_f at +0.021 ns over 5.1 ns of
+# route from outside the box) and the collective (g_coll.u_coll asel -> qd through its grant, 67
+# endpoints, outside the box).
 create_pblock pb_otpu_tmem
 set_property PARENT pb_otpu_board [get_pblocks pb_otpu_tmem]
 resize_pblock pb_otpu_tmem -add {CLOCKREGION_X2Y9:CLOCKREGION_X5Y10}
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_tmem}]
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_quant}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/g_coll.u_coll}]
 
 ########################################
 # the memory path's 450 MHz ends beside their HBM ports, SLR0 (since the first placed build)

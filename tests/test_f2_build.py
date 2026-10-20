@@ -609,16 +609,18 @@ set ranges {}
 set removed {}
 set cells {}
 set props {}
-# the sites of a range; pblock_CL's own ranges are the HDK's site ranges (P0 P1 P2 here)
+# the sites of a range; pblock_CL's own ranges are the HDK's site ranges (P0 P1 P2 here); SLR1's
+# X0Y4:X4Y7 holds "shim", the I/O shim's site of X4Y5 that pblock_CL leaves out
 set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_X7Y0 {s0b}
-           CLOCKREGION_X0Y4:CLOCKREGION_X3Y7 {s1a} CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
+           CLOCKREGION_X0Y4:CLOCKREGION_X4Y7 {s1a shim} CLOCKREGION_X5Y4:CLOCKREGION_X5Y4 {s1c}
+           CLOCKREGION_X5Y7:CLOCKREGION_X5Y7 {s1d} CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
            CLOCKREGION_X4Y3:CLOCKREGION_X4Y3 {s0c}
            CLOCKREGION_X0Y0:CLOCKREGION_X0Y1 {s0a} CLOCKREGION_X1Y0:CLOCKREGION_X1Y1 {s0b}
            CLOCKREGION_X1Y0:CLOCKREGION_X1Y3 {s0b}
            CLOCKREGION_X5Y1:CLOCKREGION_X5Y3 {s0a} CLOCKREGION_X6Y1:CLOCKREGION_X6Y1 {s0b}
            {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119} {s0c}
            CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
-           CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b s0c} P1 {s1a s1b} P2 {s2a s2b}}
+           CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b s0c} P1 {s1a s1b s1c s1d} P2 {s2a s2b}}
 set ranges {{pblock_CL P0} {pblock_CL P1} {pblock_CL P2}}
 proc create_pblock {name} { lappend ::pblocks $name }
 proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
@@ -706,7 +708,10 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
                         'CLOCKREGION_X6Y1:CLOCKREGION_X6Y1',
                         'SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 '
                         'SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119'],
-        'pb_otpu_mid': ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'],
+        # the whole of the CL's SLR1 but the PCIS box: the SLR1 <-> SLR2 crossings on six
+        # clock-region columns' Laguna sites, not four (docs/wide_port.md "SLR2 without the hot spot")
+        'pb_otpu_mid': ['CLOCKREGION_X0Y4:CLOCKREGION_X4Y7', 'CLOCKREGION_X5Y4:CLOCKREGION_X5Y4',
+                        'CLOCKREGION_X5Y7:CLOCKREGION_X5Y7'],
         'pb_otpu_pcis': ['CLOCKREGION_X5Y5:CLOCKREGION_X5Y6'],
         'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
         'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10'],
@@ -748,7 +753,13 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
                 assert f'WRAPPER/CL/u_sys/{chain}.g_x[{k}].{d}' in pb
         assert f'WRAPPER/CL/u_sys/g_rs[{k}].u_x' in pb
     assert 'WRAPPER/CL/u_sys/u_cx/g_xr.u_m' in hbm and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
-    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/u_slice/u_tmem', 'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']
+    # the TMEM with every unit of its grant / replay cone: the VPU, the quantizer, the collective
+    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/g_coll.u_coll',
+                            'WRAPPER/CL/u_sys/u_board/u_slice/u_quant',
+                            'WRAPPER/CL/u_sys/u_board/u_slice/u_tmem',
+                            'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']
+    # the middle stage spans no PCIS site (pb_otpu_pcis's X5Y5:X5Y6 stays its own)
+    assert 'CLOCKREGION_X5Y5:CLOCKREGION_X5Y6' not in ranges['pb_otpu_mid']
     assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
     assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
@@ -759,10 +770,12 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         assert props[(pb, 'PARENT')] == {'pb_otpu_tmem': 'pb_otpu_board', 'pb_otpu_hbmx0': 'pb_otpu_hbm',
                                          'pb_otpu_hbmx1': 'pb_otpu_hbm', 'pb_otpu_hsc': 'pb_otpu_hbm', 'pb_otpu_hxs': 'pb_otpu_hbm'}.get(pb, 'pblock_CL')
     # containment: the one site of SLR2's clock regions that pblock_CL does not hold leaves
-    # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board)
+    # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board), the I/O
+    # shim's site of X4Y5 leaves pb_otpu_mid
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
-    assert removed == [['pb_otpu_board', 'shell']]
-    assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=7 removed=1' in out
+    assert removed == [['pb_otpu_mid', 'shim'], ['pb_otpu_board', 'shell']]
+    assert 'OTPU_FLOORPLAN pb_otpu_mid parent=pblock_CL held=9 removed=1' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_board parent=pblock_CL held=9 removed=1' in out
     assert 'OTPU_FLOORPLAN pb_otpu_tmem parent=pb_otpu_board held=2 removed=0' in out
 
 
