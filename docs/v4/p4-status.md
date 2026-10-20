@@ -289,7 +289,28 @@ edge, and the far ports' recovery checks at 450 MHz miss with 2.3 ns of route (t
 "single PIPE_HBM_AXI_RST to 32 ports" lesson). Post-place phys_opt replicates it (162.5 MHz
 run: `Processed net WRAPPER/CL/u_hbm/PIPE_HBM_AXI_RST/AXI_00_ARESET_N. Replicated 6 times`).
 Both runs place every clock with positive slack, the 175 MHz core with 0.35 ns more than the
-three-slice build had at this point.
+three-slice build had at this point. After post-place phys_opt the 162.5 MHz run estimated
+setup +0.177 ns, TNS 0 (`implement/console.log` line 1557).
+
+**Routing, and the SLR0 / SLR1 boundary.** The route did not keep that: the 162.5 MHz router
+reached -0.631 ns (TNS -185 ns) after its first global iteration (console line ~1800 onward;
+build 11 was at -0.038 at that point) and its second iteration ripped back up to 130,693
+overlapping nodes. Placement had left level 5-6 long North / South congestion in SLR0's columns
+X0-X3, rows Y1-Y3 (`implement/place_congestion.rpt`), and the placed checkpoint's SLR report
+(`f2-burst200-s4-162/place_rpt/slr_util.rpt`, `report_utilization -slr` on post_phys_opt.dcp)
+says why: **SLR1 <-> SLR0 14,370 SLLs** (SLR0 -> SLR1 6,885, SLR1 -> SLR0 7,485) of 23,040,
+SLR2 <-> SLR1 6,618. Only the Laguna columns X0-X5 serve the CL at that boundary (SLR0's
+X6-X7 top rows are not the CL's and SLR1's are the shell's), so it is ~14.4K of ~17.3K usable,
+83%, all of it crossing over slice 0's region to reach the SmartConnects on row Y0. Per SLR the
+LUTs are SLR0 39.6%, SLR1 30.6%, SLR2 49.6%, block RAM SLR2 68%: not a logic-capacity problem.
+~5.1K of those SLLs are the host's four 512-bit channels (the 1 x 4 crossbar in SLR1, then a
+register slice per slice in SLR0). Commit 866c920e moves the crossbar into SLR0 behind one
+register slice at the crossing (`host_xbar_slr = 0`, `u_pcis_hop`), so one host channel
+crosses: ~10.5K SLLs at the boundary, ~61% of the usable columns. The address map and the core
+RTL are unchanged (the RTL gates above stand; the 50 fast tests pass on the new tops). Its
+175 MHz build runs from 20:16 UTC (`/home/ubuntu/opt/hwloop-nightly/p4-866c920e/f2-burst200-s4-175`,
+unit `opt-p4-viv-s4x-175`); the duplicate 175 MHz implementation (r2) was stopped for it, the
+original 175 MHz run (logs silent since 17:02, still routing) and the 162.5 MHz run continue.
 
 ## Commands to reproduce
 
