@@ -312,6 +312,15 @@ RTL are unchanged (the RTL gates above stand; the 50 fast tests pass on the new 
 unit `opt-p4-viv-s4x-175`); the duplicate 175 MHz implementation (r2) was stopped for it, the
 original 175 MHz run (logs silent since 17:02, still routing) and the 162.5 MHz run continue.
 
+The original af7dddf5 175 MHz run then failed in its implement stage at 22:21 UTC without
+writing `post_route.dcp` (`/home/ubuntu/opt/logs/p4-viv-s4-175.log`: "implement failed"); its
+console and Vivado log had been dead since the 17:02 disk-full, so the cause is not on record.
+The SLR0-crossbar build (866c920e, 175 MHz) placed (`implement/place_timing.rpt`) with core
++0.067 ns (line 185), TMEM +0.143 (186), HBM AXI 450 MHz +0.066 (183), shell +0.063 (184) and
+the vendor HBM reset recovery at -0.372 over 6 endpoints (213), which phys_opt again
+replicated: after phys_opt +0.063 ns / TNS 0 (`implement/console.log` line 1613), router
+initialization +0.058 / TNS 0 (line 1735).
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
