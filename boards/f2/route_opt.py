@@ -22,6 +22,9 @@ RECOVERY_SCRIPTS = ('opt_route.tcl', 'validate_route.tcl',
                     'classify_methodology.tcl', 'check_shell_baseline.tcl',
                     'shell_baseline_2025_2.tcl', 'check_scoped_clocks.tcl')
 VALIDATION_SCRIPTS = ('validate_only.tcl', *RECOVERY_SCRIPTS[1:])
+# post-route phys_opt_design directives opt_route.tcl may run, in the order given
+PHYS_OPT_DIRECTIVES = ('Explore', 'AggressiveExplore', 'AggressiveFanoutOpt',
+                       'AlternateReplication', 'Default')
 
 
 def cl_kind(info: dict) -> str:
@@ -97,7 +100,8 @@ def load_parent(run: Path, checkpoint: Path, expected_sha: str) -> tuple[dict, d
 
 
 def prepare(out: Path, run: Path, checkpoint: Path, expected_sha: str,
-            *, validate_only: bool = False) -> tuple[Path, dict]:
+            *, validate_only: bool = False,
+            directives: tuple[str, ...] = ('Explore',)) -> tuple[Path, dict]:
     if out.exists():
         raise RuntimeError(f'{out} already exists; choose a new run directory')
     info, parent = load_parent(run, checkpoint, expected_sha)
@@ -126,7 +130,10 @@ def prepare(out: Path, run: Path, checkpoint: Path, expected_sha: str,
     info['sources'] = {str(p.relative_to(cl)): flow.sha(p)
                        for p in sorted(cl.rglob('*')) if p.is_file()}
     info['parent_implementation'] = parent
-    info['route_recovery'] = {'directive': None if validate_only else 'Explore', 'constraints_resourced': False,
+    if not validate_only and (not directives or set(directives) - set(PHYS_OPT_DIRECTIVES)):
+        raise RuntimeError(f'Unknown post-route phys_opt directives: {directives}')
+    info['route_recovery'] = {'directive': None if validate_only else ' '.join(directives),
+                              'constraints_resourced': False,
                               'parent_checkpoint_copy': str(inherited),
                               'driver_sources': {str(p.relative_to(out)): flow.sha(p)
                                                  for p in sorted(driver_dir.iterdir())}}
@@ -150,7 +157,13 @@ def main() -> None:
     parser.add_argument('--validate-only', action='store_true',
                         help='qualify and copy the unchanged routed parent; do not optimize or route')
     parser.add_argument('--prepare-only', action='store_true')
+    parser.add_argument('--phys-opt-directive', action='append', choices=PHYS_OPT_DIRECTIVES,
+                        help='post-route phys_opt_design directive; repeat for passes in order '
+                             '(default: Explore once); the passes stop once setup is met')
     args = parser.parse_args()
+    if args.validate_only and args.phys_opt_directive:
+        parser.error('--phys-opt-directive does not apply to --validate-only')
+    directives = tuple(args.phys_opt_directive or ('Explore',))
     out, run, checkpoint = args.out.resolve(), args.from_run.resolve(), args.checkpoint.resolve()
     parent_info, _ = load_parent(run, checkpoint, args.checkpoint_sha256)
     # the parent's own target (f2, or an HBM target: f2-hbm:p4rl8a64c150), as this tree defines
@@ -162,11 +175,12 @@ def main() -> None:
     shell = flow.check_hdk(args.hdk.resolve(), target, shell=True)
     flow.check_vivado_version(flow.command('vivado', '-version'), target.platform['vivado'])
     cl, info = prepare(out, run, checkpoint, args.checkpoint_sha256,
-                       validate_only=args.validate_only)
+                       validate_only=args.validate_only, directives=directives)
     env = dict(os.environ, BUILD_TAG=info['build_id'], HDK_SHELL_DIR=str(shell),
                OTPU_PARENT_DCP=info['route_recovery']['parent_checkpoint_copy'],
                OTPU_PARENT_SHA256=args.checkpoint_sha256.lower(),
-               OTPU_EXPECTED_DDR_INIT=info['parent_implementation']['ddr_init_2c'])
+               OTPU_EXPECTED_DDR_INIT=info['parent_implementation']['ddr_init_2c'],
+               OTPU_PHYS_OPT_DIRECTIVES=' '.join(directives))
     driver = 'validate_only.tcl' if args.validate_only else 'opt_route.tcl'
     operation = 'Route validation' if args.validate_only else 'Route recovery'
     cmd = ['vivado', '-mode', 'batch', '-source', driver,
@@ -174,7 +188,7 @@ def main() -> None:
     (out / 'invocation.json').write_text(json.dumps({'command': cmd,
         'cwd': str(cl / 'build/scripts'), 'environment': {k: env[k] for k in
         ('BUILD_TAG', 'HDK_SHELL_DIR', 'OTPU_PARENT_DCP', 'OTPU_PARENT_SHA256',
-         'OTPU_EXPECTED_DDR_INIT')}}, indent=2) + '\n')
+         'OTPU_EXPECTED_DDR_INIT', 'OTPU_PHYS_OPT_DIRECTIVES')}}, indent=2) + '\n')
     if args.prepare_only:
         print(f'Prepared {operation.lower()}: {out}')
         return

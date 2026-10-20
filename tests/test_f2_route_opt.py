@@ -190,6 +190,57 @@ proc write_debug_probes {args} {set f [open [lindex $args end] w]; close $f}
             assert "differs from the parent run's target" in result.stderr
 
 
+
+# opt_route.tcl's post-route passes (route_opt.py --phys-opt-directive): the directives in order,
+# the setup slack read between passes, stopping at the first pass that meets timing
+@pytest.mark.parametrize('slacks,ran', [
+    (['-0.073', '0.004'], ['Explore', 'AggressiveExplore']),
+    (['-0.073', '-0.020', '-0.010'], ['Explore', 'AggressiveExplore', 'AggressiveFanoutOpt']),
+    (['0.001'], ['Explore'])])
+def test_recovery_runs_the_post_route_passes_in_order_until_timing_is_met(tmp_path, slacks, ran):
+    tclsh = shutil.which('tclsh')
+    if not tclsh or not shutil.which('sha256sum'):
+        pytest.skip('Tcl or SHA256 utility unavailable')
+    scripts = tmp_path / 'build/scripts'
+    scripts.mkdir(parents=True)
+    (tmp_path / 'build/reports').mkdir()
+    (tmp_path / 'build/checkpoints').mkdir()
+    shutil.copy2(ROOT / 'boards/f2/build/scripts/opt_route.tcl', scripts / 'opt_route.tcl')
+    (scripts / 'validate_route.tcl').write_text('puts "QUALIFICATION_RUN"\n')
+    parent = tmp_path / 'parent.dcp'
+    parent.write_bytes(b'immutable parent fixture')
+    harness = f"""
+set env(BUILD_TAG) 01234567
+set env(OTPU_PARENT_DCP) {{{parent}}}
+set env(OTPU_PARENT_SHA256) {recovery.flow.sha(parent)}
+set env(OTPU_EXPECTED_DDR_INIT) none_hbm
+set env(OTPU_PHYS_OPT_DIRECTIVES) {{Explore AggressiveExplore AggressiveFanoutOpt}}
+set slacks {{{' '.join(slacks)}}}
+set passes {{}}
+proc set_param {{args}} {{}}
+proc open_checkpoint {{path}} {{}}
+proc close_design {{}} {{}}
+proc get_cells {{args}} {{ return WRAPPER/CL/u_sc }}
+proc report_timing_summary {{args}} {{}}
+proc report_timing {{args}} {{}}
+proc phys_opt_design {{args}} {{ lappend ::passes [lindex $args 1] }}
+proc get_timing_paths {{args}} {{ return worst }}
+proc get_property {{property object}} {{
+  if {{$property ne "SLACK"}} {{ error "unexpected property $property" }}
+  return [lindex $::slacks [expr {{[llength $::passes] - 1}}]]
+}}
+proc get_nets {{args}} {{ return {{}} }}
+proc route_design {{args}} {{ error "unexpected reroute" }}
+proc write_checkpoint {{path}} {{ set f [open $path w]; puts $f candidate; close $f }}
+proc write_debug_probes {{args}} {{ set f [open [lindex $args end] w]; close $f }}
+if {{[catch {{source {{{scripts / 'opt_route.tcl'}}}}} err]}} {{ puts stderr $err; exit 1 }}
+puts "PASSES $passes"
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert f'PASSES {" ".join(ran)}' in result.stdout
+    assert 'QUALIFICATION_RUN' in result.stdout
+
 def test_validation_only_preparation_preserves_parent_design_and_selects_read_only_driver(tmp_path):
     run, dcp = routed_parent(tmp_path)
     cl, info = recovery.prepare(tmp_path / 'validation', run, dcp, recovery.flow.sha(dcp),

@@ -30,7 +30,22 @@ if {$otpu_expect_hbm} {
   }
 }
 report_timing_summary -delay_type min_max -file ${reports_dir}/${CL}.${TAG}.before_route_opt.rpt
-phys_opt_design -directive Explore
+# Post-route physical optimization: the directives in order (route_opt.py --phys-opt-directive,
+# default Explore alone), each pass from the previous one's result, stopping once setup is met
+set otpu_popt {Explore}
+if {[info exists ::env(OTPU_PHYS_OPT_DIRECTIVES)] && $::env(OTPU_PHYS_OPT_DIRECTIVES) ne ""} {
+  set otpu_popt $::env(OTPU_PHYS_OPT_DIRECTIVES)
+}
+set otpu_left [llength $otpu_popt]
+foreach otpu_d $otpu_popt {
+  phys_opt_design -directive $otpu_d
+  incr otpu_left -1
+  if {$otpu_left > 0} {
+    set otpu_wns [get_property SLACK [get_timing_paths -setup -max_paths 1 -nworst 1]]
+    puts "OTPU_ROUTE_OPT_PASS $otpu_d WNS=$otpu_wns"
+    if {$otpu_wns >= 0} { break }
+  }
+}
 
 # Physical optimization can alter routes. Complete any resulting unfinished or
 # erroneous routes with the supported router, then requalify all timing paths.
