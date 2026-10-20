@@ -12,6 +12,10 @@ report_bus_skew -warn_on_violation -file ${prefix}_bus_skew.rpt
 set skew_failed [expr {[get_msg_config -count -severity {CRITICAL WARNING}] > $skew_criticals}]
 report_drc -file ${prefix}_drc.rpt
 report_methodology -file ${prefix}_methodology.rpt
+# The HBM CL (WRAPPER/CL/u_sc, the SmartConnect fabric; boards/f2/design/cl_opentpu_hbm.sv) or
+# the DDR CL: the methodology classifier finds the CL on its own and must agree
+set otpu_hbm [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
+set otpu_cl [expr {$otpu_hbm ? "hbm" : "ddr"}]
 source ${scripts_dir}/check_rule_severity.tcl
 source ${scripts_dir}/classify_methodology.tcl
 set severity_audit [open ${prefix}_rule_severities.rpt w]
@@ -22,6 +26,9 @@ set severity_failed [catch {
   }
   set methodology [otpu_qualify_methodology $shell_dcp $prefix $severity_audit]
   set methodology_bad [dict get $methodology blockers]
+  if {[dict get $methodology kind] ne $otpu_cl} {
+    error "openTPU: the methodology classifier found a [dict get $methodology kind] CL, the design is the $otpu_cl CL"
+  }
 } severity_error]
 close $severity_audit
 if {$severity_failed} {error $severity_error}
@@ -46,11 +53,10 @@ set c_core [get_clocks -of_objects [get_pins WRAPPER/CL/u_clk/O]]
 if {[llength $c_main] != 1 || [llength $c_core] != 1} {
   error "openTPU: shell/core clocks missing after shell linking"
 }
-# The HBM CL (WRAPPER/CL/u_sc, the SmartConnect fabric): cl_timing_user_hbm.tcl bounds each
-# direction at the destination's period (core -> main 4.000 ns, main -> core the core period:
-# 5.000 at 200 MHz, 6.667 at 150), its own crossings have no gray buses (the SmartConnects carry
-# their own constraints) and there is no DIMM firmware; the DDR CL: 4 ns both ways, 14 gray buses
-set otpu_hbm [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
+# The HBM CL: cl_timing_user_hbm.tcl bounds each direction at the destination's period
+# (core -> main 4.000 ns, main -> core the core period: 5.000 at 200 MHz, 6.667 at 150), its own
+# crossings have no gray buses (the SmartConnects carry their own constraints) and there is no
+# DIMM firmware; the DDR CL: 4 ns both ways, 14 gray buses
 set t_core [format %.3f [get_property PERIOD $c_core]]
 set t_main_core [if {$otpu_hbm} {set t_core} {set _ 4.000}]
 foreach {src dst direction want} [list $c_main $c_core main_to_core $t_main_core \

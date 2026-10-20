@@ -256,7 +256,8 @@ def test_package_only_rejects_unverified_runs(tmp_path, fault):
 @pytest.mark.parametrize('fault', ['none', 'timing', 'skew', 'setup', 'hold', 'route',
                                  'drc', 'methodology', 'drc_fatal', 'methodology_fatal',
                                  'drc_schema', 'methodology_schema', 'classification',
-                                 'gray', 'crossing', 'firmware', 'hbm', 'hbm_crossing', 'hbm_gray'])
+                                 'gray', 'crossing', 'firmware', 'hbm', 'hbm200', 'hbm_crossing',
+                                 'hbm_period', 'hbm_gray', 'hbm_kind', 'ddr_kind'])
 def test_route_qualification_never_marks_a_failed_design_passed(tmp_path, fault):
     """Exercise gate failures without claiming to simulate Vivado timing itself."""
     tclsh = shutil.which('tclsh')
@@ -269,11 +270,15 @@ def test_route_qualification_never_marks_a_failed_design_passed(tmp_path, fault)
     scripts.mkdir()
     for name in ('check_rule_severity.tcl', 'inspect_ddr_init.tcl'):
         shutil.copy2(script.parent / name, scripts / name)
+    # (the classifier names the CL it found: the gate requires it to be the design's)
     (scripts / 'classify_methodology.tcl').write_text('''
 proc otpu_qualify_methodology {shell prefix audit} {
   if {$::fault eq "classification"} {error "classification failed"}
   set bad [otpu_blocking_violations methodology [get_methodology_violations] $audit]
-  return [dict create raw_blockers $bad inherited {} context {} blockers $bad]
+  set kind [expr {[string match hbm* $::fault] ? "hbm" : "ddr"}]
+  if {$::fault eq "hbm_kind"} {set kind ddr}
+  if {$::fault eq "ddr_kind"} {set kind hbm}
+  return [dict create raw_blockers $bad inherited {} context {} blockers $bad kind $kind]
 }
 ''')
     harness = r'''
@@ -308,9 +313,11 @@ proc get_pins {args} {return [lindex $args end]}
 proc get_clocks {args} {return [lindex $args end]}
 proc report_timing {args} {
   if {$::fault eq "crossing"} {return "No paths found"}
-  # the HBM CL: main -> core at the core period (150 MHz here), core -> main 4 ns
+  # the HBM CL: main -> core at the core period (150 MHz; hbm200: 200), core -> main 4 ns;
+  # hbm_crossing / hbm_period: the report shows another bound than the period
   if {[string match hbm* $::fault] && [lindex $args [expr {[lsearch $args -to] + 1}]] eq "WRAPPER/CL/u_clk/O"} {
     if {$::fault eq "hbm_crossing"} {return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"}
+    if {$::fault in {hbm200 hbm_period}} {return "Requirement: 5.000ns (MaxDelay Path 5.000ns)"}
     return "Requirement: 6.667ns (MaxDelay Path 6.667ns)"
   }
   return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"
@@ -325,7 +332,7 @@ proc get_cells {args} {
 }
 proc get_property {prop obj} {
   if {$prop eq "NAME"} {return $obj}
-  if {$prop eq "PERIOD"} {return [expr {[string match hbm* $::fault] ? 6.66666 : 10.0}]}
+  if {$prop eq "PERIOD"} {return [expr {$::fault eq "hbm200" ? 5.0 : [string match hbm* $::fault] ? 6.66666 : 10.0}]}
   if {$prop eq "SEVERITY"} {
     if {[string match *_fatal $::fault]} {return Fatal}
     return Error
@@ -341,9 +348,11 @@ proc get_property {prop obj} {
                f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n')
     result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
     marker = tmp_path / 'test.12345678.route_validation.passed'
-    if fault in ('none', 'hbm'):
+    if fault in ('none', 'hbm', 'hbm200'):
         assert result.returncode == 0, result.stderr
         assert marker.is_file()
+        assert (tmp_path / 'test.12345678.route_validation.txt').read_text().count(
+            'ddr_init_2c=none_hbm') == (fault != 'none')
     else:
         assert result.returncode != 0
         assert not marker.exists()

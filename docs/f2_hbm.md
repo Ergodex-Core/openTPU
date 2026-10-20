@@ -519,6 +519,16 @@ FIFO's tail written every cycle (4bef3758) every clock meets setup.
    or 8:1 mux after the B FIFO's LUT RAM read); u_naxi's AW address (its queue's LUT RAM read
    into SmartConnect's input, Alex's structure); the PCIS gate's SLR1 -> SLR0 hop into sc_host at
    250 MHz (Alex's register slice made the same hop).
+   Route qualification (validate_route.tcl, also route_opt.py --validate-only on a routed
+   checkpoint) knows the HBM CL by WRAPPER/CL/u_sc: the methodology classifier
+   (check_scoped_clocks.tcl) names the CL it finds (fail closed: the DDR4 MMCM pin and UI clock
+   absent, the fabric present) and reviews two TIMING-54 context findings, cl_timing_user_hbm.tcl's
+   pair as write_xdc renders it, `set_max_delay -datapath_only -from [get_clocks clk_main_a0] -to
+   [get_clocks -of_objects [get_pins u_clk/O]] <core period>` (6.667 at 150 MHz, 5.000 at 200)
+   and the reverse at 4.000, with the main -> core path bound checked at the core period; the 35
+   inherited shell findings stay the exact match against the shell checkpoint; anything else in
+   TIMING-54 stops it. No DIMM sentinel on the HBM CL (route_opt.py passes none_hbm; the drivers
+   require the fabric in the checkpoint).
 2. On the card: the vLED (bit 0 MMCMs locked, bit 1 HBM ready), CFG_DRAM / CFG_SLICES, a BAR4
    write / read of every port, `otpu-diag --mem`, then the token-exact checks (f2 docs), and the
    streaming bandwidth per channel with single-beat (64-byte) reads (READ_WAIT 0's decode
