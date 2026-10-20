@@ -473,7 +473,13 @@ only a fallback (the HBM IP's xci carries no AXI clock frequency, every port sha
 `axi_clk` net, `USER_CLK_SEL_LIST0/1` pick AXI_07 / AXI_23's clock for the stacks). Unit
 `otpu-f2burst200-s3-175-mem2-build1`, output `/home/ubuntu/rachit/f2burst200-s3-175-mem2-run1`,
 log `logs/f2burst200-s3-175-mem2-build1.log`; its script waits for build 8's unit to end, then
-runs `build.py --target targets/f2-burst200-s3-175.toml` on the tree at 20f31463.
+runs `build.py --target targets/f2-burst200-s3-175.toml` on the tree at 20f31463. **Build 8's
+refine ended at 06:03 UTC: Explore round -0.350, AggressiveExplore round -0.315 ns (hold
+0.000), gate failed** (`refine/implementation_result.txt`; the core clock's intra-slice paths,
+0.12 ns better than the implement stage, nowhere near 0). **Build 11 started 06:03 UTC** on
+opentpu-f2. The fixed `path_analysis.sh` also shows build 8's inter-clock table: TMEM (400 MHz)
+-> core -0.334 ns over 347 endpoints and core -> TMEM -0.211 over 305, a second core-domain
+class (the TMEM / core handoff) that the 175 / 350 MHz pair relaxes by the same 12.5%.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
