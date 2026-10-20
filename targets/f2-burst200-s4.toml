@@ -1,0 +1,79 @@
+# P4 on F2: four openTPU slices on Alex's burst200 fabric (docs/v4/p4-status.md "On the F2"):
+# the f2-burst200-s3 target (docs/v4/f2-burst200-s3.md, build 11 on the card) at S = 4, each
+# slice on its own pair of 2 GiB HBM windows behind its own f2_mem SmartConnect (3 SI x 2 MI,
+# Alex's), eight HBM ports in all = the HBM's 16 GiB, 102.4 GB/s of slice ports at 200 MHz.
+# Gemma 3 1B is split over the four slices evenly (proposal-4-four-slices.md section 3: every
+# matrix by output rows, the inputs all-gathered). The VU47P has three SLRs, so two slices
+# share one (slice_slr): slices 0 | 1 | 2 and 3 in SLR0 | SLR1 | SLR2, SLR2 being the one with
+# room (the S = 3 build's SLR0 holds slice 0, the SmartConnects, the HBM wrapper and the host
+# and native register slices; SLR1 slice 1, the control block, the hub and the shell-facing
+# paths beside the shell's two columns); floorplan_s4.tcl gives slices 2 and 3 a half of SLR2
+# each (v5's lesson: two slices loose in one SLR scattered their MXUs, full_hbm.md).
+# Window j = 2 s + c of slice s's channel c on port hbm_ports[j]: ports 4k head the 2 GiB
+# window k for windows 0-5 as at S = 3; slice 3's windows 6 / 7 (pseudo-channels 24-27 /
+# 28-31) on ports 26 / 28, both in clock region X6Y0 inside those windows' mini-switches
+# (cl_hbm.xci: USER_SWITCH_ENABLE_00/01 TRUE, so a port reaches every pseudo-channel of its
+# stack), which lets slice 3's SmartConnect sit in X6Y0:X7Y0 + X6Y1 beside both of its ports
+# and slice 2's in X4Y0:X5Y0 + X5Y1 beside 16 / 20 (build 11's SmartConnect pblocks).
+
+[target]
+name = "f2-burst200-s4"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2 VU47P: Small Shell, HBM, four openTPU m4 slices on eight HBM ports (burst200 fabric)"
+[arch]
+S = 4
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: its two 2 GiB windows
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = false
+[uarch]
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+[tech]
+family = "xilinxus"
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+[platform]
+board = "f2"
+rtl_board = "f2-burst200-s4"    # opentpu.target.sources: core + shell only; the flow reads its
+                                #   top from rtl/boards/f2/burst200-s4 and the adapters from
+                                #   rtl/boards/f2/burst200 (boards/f2/burst200/build.py)
+core_mhz = 200.0
+mem = "hbm"
+mem_ctrl = "amd_hbm"
+hostcal = false
+channels_per_slice = 2
+channel_bytes = 2147483648
+hbm_ports = [0, 4, 8, 12, 16, 20, 26, 28]   # window j (slice j // 2, channel j % 2) on this HBM AXI port
+slice_slr = [0, 1, 2, 2]            # slice s in this SLR (generate_f2_top.slice_slrs)
+floorplan = "floorplan_s4.tcl"      # boards/f2/burst200/constraints/: a pblock per SLR, SLR2 halved
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 8
