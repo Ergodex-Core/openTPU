@@ -75,10 +75,14 @@ def plan(target_path: Path) -> dict:
         raise SystemExit(f'{target_path}: floorplan {floorplan} does not exist')
     S, nch = t.arch['S'], t.platform['channels_per_slice']
     ports = list(t.platform.get('hbm_ports', [0, 4]))
-    if nch != 2 or len(ports) != 2 * S or len(set(ports)) != len(ports):
-        raise SystemExit(f'{target_path}: two channels a slice on {2 * S} distinct HBM ports')
-    geometry = (f'# {target_path.name}: {S} slice(s), window j = 2 s + c on HBM AXI port otpu_ports[j]\n'
-                f'set otpu_S {S}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n')
+    if (nch != 2 * t.arch.get('CPC', 1) or (nch > 2 and S != 1) or len(ports) != nch * S
+            or len(set(ports)) != len(ports)):
+        raise SystemExit(f'{target_path}: 2 CPC channels a slice (four on one slice at CPC 2) '
+                         f'on {nch * S} distinct HBM ports')
+    groups = nch * S // 2               # f2_mem block designs, two windows each
+    geometry = (f'# {target_path.name}: {S} slice(s) of {nch} channels, window j = {nch} s + c on HBM '
+                f'AXI port otpu_ports[j], windows 2g and 2g + 1 in f2_mem group g\n'
+                f'set otpu_S {S}\nset otpu_G {groups}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n')
     core_mhz = float(t.platform['core_mhz'])
     core_clock = (f'# {target_path.name}: the core clock (MHz); the TMEM clock is twice it\n'
                   f'set otpu_core_mhz {core_mhz}\n')

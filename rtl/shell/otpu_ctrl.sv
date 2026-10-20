@@ -58,7 +58,10 @@
 //   0x58 ACT_ROWS  RO  ACT RAM rows: the most rows of one MM (build parameter; CAPS bit24)
 //   0x5C CAPS2     RO  (version 5; CAPS is full) bit0 GATHER: the collective unit runs GATHER
 //                      (always at S > 1; at S = 1 unless built without it, otpu_board COLL_GATHER:
-//                      then BAR alone, and a GATHER raises ERROR)
+//                      then BAR alone, and a GATHER raises ERROR), [3:1] CPC: the D-byte chunks a
+//                      cycle DRAM port B and the MXU take (Config.CPC, docs/v4/p1-status.md; 0:
+//                      one, every build before; the same field as the wide-port line's PORTB),
+//                      with CFG_DRAM's channels 2 CPC a slice
 //   0x60 + 4k      RW  ARG0..ARG7: the run's arguments, R8..R15 when RUN rises (CAPS bit25;
 //                      docs/isa.md "Arguments"); reset 0
 //   0x80 CFG_SLICES   RO  slices S (version 4: the configuration the target file built,
@@ -107,6 +110,7 @@ module otpu_ctrl #(
   parameter bit DSTEP = 1'b1,            // CAPS bit6 and bit26: the stream engine (DSTEP, STREAM)
   parameter bit HOSTCAL = 1'b0,          // CAPS bit27: the host calibrates the DDR3 controllers
   parameter bit COLL_GATHER = 1'b1,      // CAPS2 bit0 (with S > 1): the collective unit runs GATHER
+  parameter int CPC = 1,                 // CAPS2 [3:1] (0 at 1): chunks a cycle on DRAM port B
   parameter int LDP = 2,                 // cycles after LOAD before the loaders' busy shows (>= 2)
   // the configuration registers (CFG_*, register map 4): the target's values
   parameter int S          = 1,
@@ -193,7 +197,8 @@ module otpu_ctrl #(
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  localparam logic [31:0] CAPS2 = {31'd0, COLL_GATHER || S > 1};   // bit0 GATHER
+  localparam logic [31:0] CAPS2 = {28'd0, 3'((CPC > 1) ? CPC : 0),      // [3:1] CPC
+                                  COLL_GATHER || S > 1};                // bit0 GATHER
 
   logic [63:0] cycles;
   logic [31:0] n_brd, n_bwr, n_ard, n_awr, n_bst, scratch;

@@ -35,6 +35,8 @@ SYSFS = Path("/sys/bus/pci/devices")
 BAR0_BYTES = 4096
 PCI_VENDOR, PCI_DEVICE = 0x1D0F, 0xF001
 PLATFORM = 3
+WINDOW_LOG2 = 31                        # a channel's HBM window (otpu_native_axi BASE_ADDR)
+HBM_BYTES = 16 << 30
 _BDF = re.compile(r"(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-1][0-9a-fA-F]\.[0-7]")
 
 
@@ -59,6 +61,23 @@ def resolve_device(device: str = "f2:0") -> str:
     if not _BDF.fullmatch(value):
         raise ValueError(f"invalid F2 PCI address: {value!r}")
     return ("0000:" + value if value.count(":") == 1 else value).lower()
+
+
+def windows(dram: int, slices: int, dev: str = "f2") -> tuple[int, tuple[int, ...]]:
+    """(the bytes of a channel, each channel's BAR4 offset) of an image whose CFG_DRAM is `dram`
+    and CFG_SLICES `slices`. The burst200 fabric's builds (docs/v4/f2-burst200.md, -s3.md; this
+    tree's P1 wide port, docs/v4/p1-status.md section 6): S slices of NCH = 2 CPC channels, each channel
+    j = NCH s + c in its own 2 GiB HBM window at BAR4 offset j x 2 GiB (otpu_native_axi's
+    BASE_ADDR, 2 GiB aligned), the slice's 4 GiB spread over its channels (4 GiB / NCH at the
+    start of each window: 2 GiB at CPC 1, 1 GiB at CPC 2), up to the HBM's 16 GiB."""
+    channel_shift, channels, total_shift = (dram >> 16) & 255, (dram >> 8) & 255, dram & 255
+    nch_log2 = channels.bit_length() - 1
+    if (not 1 <= slices <= 8 or channels not in (2, 4)
+            or not 6 <= channel_shift <= WINDOW_LOG2
+            or total_shift != channel_shift + nch_log2
+            or slices * channels << WINDOW_LOG2 > HBM_BYTES):
+        raise RuntimeError(f"{dev}: unsupported F2 memory geometry {dram:#x} ({slices} slices)")
+    return 1 << channel_shift, tuple(j << WINDOW_LOG2 for j in range(slices * channels))
 
 
 def _require_host() -> None:
@@ -122,6 +141,7 @@ def _address(mapping: mmap.mmap) -> int:
 class F2Transport:
     """One loaded openTPU F2 image; dma=False opens registers for a monitor only."""
     ecc = True                          # conservatively scrub the exposed 4 GiB after a load
+    fixed_bases = True                  # the windows are the fabric's (Board.info keeps them)
     threaded = True
     streams = True
     host_idle = 50e-6
@@ -153,28 +173,11 @@ class F2Transport:
                 raise RuntimeError(f"{self.dev}: no openTPU image in BAR0")
             if R.regmap(self.reg_read(R.R_REGMAP)) < R.CFG_SINCE or self.reg_read(R.R_CFG_PLATFORM) != PLATFORM:
                 raise RuntimeError(f"{self.dev}: image is not the F2 openTPU platform")
-            dram = self.reg_read(R.R_CFG_DRAM)
-            channel_shift, channels, total_shift = (dram >> 16) & 255, (dram >> 8) & 255, dram & 255
-            # the DDR build: one slice, two 2 GiB windows of the DIMM; the HBM build
-            # (docs/f2_hbm.md): S slices of NCH 512 MiB pseudo-channels, S x NCH <= 32, slice s's
-            # channel c at BAR4 offset (NCH s + c) x 512 MiB (= its HBM address); the burst200
-            # builds (docs/v4/f2-burst200-s3.md): S slices of two 2 GiB windows each, window
-            # j = 2 s + c at BAR4 offset j x 2 GiB, up to the HBM's 16 GiB (S <= 4)
-            slices = self.reg_read(R.R_CFG_SLICES)
-            nch_log2 = channels.bit_length() - 1
-            if (not 1 <= slices <= 32 or channels < 2 or channels & (channels - 1)
-                    or slices * channels > 32 or not 6 <= channel_shift <= 31
-                    or total_shift > channel_shift + nch_log2
-                    or (channels == 2 and (total_shift != channel_shift + 1
-                                           or slices << (channel_shift + 1) > 1 << 34))
-                    or (channels > 2 and channel_shift > 29)):
-                raise RuntimeError(f"{self.dev}: unsupported F2 memory geometry {dram:#x} "
-                                   f"({slices} slices)")
-            self.channel_bytes = 1 << channel_shift
-            self.bases = tuple(j * self.channel_bytes for j in range(slices * channels))
+            self.channel_bytes, self.bases = windows(self.reg_read(R.R_CFG_DRAM),
+                                                     self.reg_read(R.R_CFG_SLICES), self.dev)
             if dma:
                 self._lib = _mmio()
-                size = slices * channels * self.channel_bytes
+                size = len(self.bases) << WINDOW_LOG2
                 self._uc = _map(root / "resource4", size)
                 self._wc = _map(root / "resource4_wc", size)
                 self._uc_addr, self._wc_addr = _address(self._uc), _address(self._wc)

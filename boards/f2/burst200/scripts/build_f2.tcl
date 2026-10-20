@@ -38,14 +38,18 @@ foreach ip {f2_core_clk f2_hbm_clk} {
   read_ip $clockrun/ip_project/clocks.srcs/sources_1/ip/$ip/$ip.xci
 }
 read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_pcis_pipe/f2_pcis_pipe.xci
-# the geometry's block designs (create_f2_ip.tcl): f2_mem at one slice; f2_mem_s<s> per slice
-# and the host crossbar f2_host at more, with the native register slice (create_pcis_ip.tcl)
+# the geometry's block designs (create_f2_ip.tcl): f2_mem at one group; f2_mem_s<g> per group
+# and the host crossbar f2_host at more; the native register slice (create_pcis_ip.tcl) at more
+# than one slice
 if {[file exists $run/geometry.tcl]} {source $run/geometry.tcl} else {set otpu_S 1}
+if {![info exists otpu_G]} {set otpu_G $otpu_S}
 set bds f2_mem
 if {$otpu_S > 1} {
   read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_native_pipe/f2_native_pipe.xci
+}
+if {$otpu_G > 1} {
   set bds {}
-  for {set s 0} {$s < $otpu_S} {incr s} {lappend bds f2_mem_s$s}
+  for {set s 0} {$s < $otpu_G} {incr s} {lappend bds f2_mem_s$s}
   lappend bds f2_host
 }
 foreach name $bds {

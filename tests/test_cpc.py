@@ -32,12 +32,13 @@ def _uarch2():
     return dict(rtlsim.BOARD_UARCH, FIFO_DEPTH=512)
 
 
-@pytest.mark.parametrize("axi", [False, True], ids=["fixed", "axi"])
+@pytest.mark.parametrize("axi", [False, True, 3], ids=["fixed", "axi", "f2"])
 @pytest.mark.parametrize("kernel", ["mlp", "attn"])
 def test_kernels_cpc2(have_verilator, kernel, axi):
     """MLP decode at KB 9 (hidden 1152: every row a half pair) and KB 36, and flash attention
     at d = 128 (KB 1 rows: half pairs alone): the RTL at CPC 2 equals the ISA simulator, DRAM
-    and TMEM, on the behavioural DRAM and on the native memory path (random stalls, boot)."""
+    and TMEM, on the behavioural DRAM, on the native memory path (random stalls, boot) and on
+    the F2 path (axi 3: per channel otpu_native_axi and the AXI side's model in front of it)."""
     cfg = _cfg2()
     if kernel == "mlp":
         args, want = mlp_args(np.random.default_rng(2), M=1, H=1152, Fd=4608)
@@ -49,7 +50,7 @@ def test_kernels_cpc2(have_verilator, kernel, axi):
     comp, imgs = compile_kernel(k, cfg, **args)
     ri = run(comp, [i.copy() for i in imgs], "isa")
     drams, tmems, st = rtlsim.run(cfg, comp.programs, [i.copy() for i in imgs],
-                                  uarch=_uarch2(), axi=axi, boot=axi)
+                                  uarch=_uarch2(), axi=axi, boot=bool(axi))
     rr = collect(comp, drams, tmems, st)
     assert_same_state(ri, rr)
     assert rel(rr.outputs["out"], want) < 0.03

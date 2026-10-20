@@ -113,13 +113,15 @@ def test_resident_and_prefill_are_bit_exact(tiny):
 
 
 @pytest.mark.slow
-@pytest.mark.parametrize("cpc", [1, 2], ids=["cpc1", "cpc2"])
-def test_token_on_rtl_is_bit_exact(have_verilator, tiny_odd, cpc):
+@pytest.mark.parametrize("cpc,axi", [(1, True), (2, True), (2, 3)], ids=["cpc1", "cpc2", "cpc2-f2"])
+def test_token_on_rtl_is_bit_exact(have_verilator, tiny_odd, cpc, axi):
     """A decode token at position 600 (past the sliding window) of the odd-block tiny model
     (half pairs on every KB 3 / 5 row at CPC 2) on the Verilator RTL through the board's memory
     path (the native adapter at CPC chunks a request, random stalls, the boot loader) equals
     the ISA simulator bit for bit, logits and the whole DRAM image (the caches), at one and at
-    two chunks a cycle (Config.CPC; docs/v4/p1-status.md). Resident, as otpu-chat runs."""
+    two chunks a cycle (Config.CPC; docs/v4/p1-status.md), and at two through the F2 path (axi 3:
+    per channel otpu_native_axi and the AXI side's model; docs/v4/p1-status.md section 6). Resident, as
+    otpu-chat runs."""
     from dataclasses import replace
 
     from opentpu import rtlsim
@@ -132,7 +134,7 @@ def test_token_on_rtl_is_bit_exact(have_verilator, tiny_odd, cpc):
     n, isa = eng.image.nbytes, eng.backend
     # the chunk FIFO holds 1024 chunks either way (the f2 target's 512 entries of 2)
     uarch = dict(rtlsim.BOARD_UARCH, FIFO_DEPTH=rtlsim.BOARD_UARCH["FIFO_DEPTH"] // cpc)
-    rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in isa.machine.slices], uarch=uarch, axi=True,
+    rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in isa.machine.slices], uarch=uarch, axi=axi,
                      boot=True)
     want = eng.step(toks[-1])
     eng.backend, eng.pos = rtl, eng.pos - 1

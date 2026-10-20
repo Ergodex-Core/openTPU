@@ -16,10 +16,12 @@ set_property -dict [list CONFIG.PRIM_SOURCE {No_buffer} CONFIG.PRIM_IN_FREQ {100
 # Control CDC: standard AXI-Lite converter, separate reset per domain.
 create_ip -name axi_clock_converter -vendor xilinx.com -library ip -module_name f2_ocl_cdc
 set_property -dict [list CONFIG.PROTOCOL {AXI4LITE} CONFIG.ADDR_WIDTH {32} CONFIG.DATA_WIDTH {32}] [get_ips f2_ocl_cdc]
-# The target's geometry (build.py writes geometry.tcl: otpu_S slices, otpu_ports the HBM AXI
-# port of each 2 GiB window j = 2 s + c); without it Alex's one slice on ports 0 and 4.
+# The target's geometry (build.py writes geometry.tcl: otpu_S slices, otpu_G f2_mem groups of two
+# windows, otpu_ports the HBM AXI port of each 2 GiB window j); without it Alex's one slice on
+# ports 0 and 4. (otpu_G is otpu_S at two channels a slice; P1's one slice of four: two groups.)
 if {[file exists $run/geometry.tcl]} {source $run/geometry.tcl} else {set otpu_S 1; set otpu_ports {0 4}}
-# One memory block design per slice (3 SI x 2 MI): the host and the slice's two native masters
+if {![info exists otpu_G]} {set otpu_G $otpu_S}
+# One memory block design per group (3 SI x 2 MI): the host and the group's two native masters
 # onto its two HBM ports, at the windows' absolute HBM addresses (window j at j x 2 GiB).
 proc otpu_mem_bd {name w0 p0 p1} {
   create_bd_design $name
@@ -62,8 +64,9 @@ proc otpu_mem_bd {name w0 p0 p1} {
   save_bd_design
   return [get_files $name.bd]
 }
-# The host's fan-out at S > 1 (docs/v4/f2-burst200-s3.md): a SmartConnect crossbar on the host
-# clock alone, one master port per slice at its 4 GiB (HBM address 4 s GiB), full PCIS IDs.
+# The host's fan-out over more than one group (docs/v4/f2-burst200-s3.md): a SmartConnect crossbar
+# on the host clock alone, one master port per group at its 4 GiB (HBM address 4 g GiB), full
+# PCIS IDs.
 proc otpu_host_bd {S} {
   create_bd_design f2_host
   set p [create_bd_port -dir I -type clk host_clk]
@@ -93,13 +96,13 @@ proc otpu_host_bd {S} {
   return [get_files f2_host.bd]
 }
 set bds {}
-if {$otpu_S == 1} {
+if {$otpu_G == 1} {
   lappend bds [otpu_mem_bd f2_mem 0 [lindex $otpu_ports 0] [lindex $otpu_ports 1]]
 } else {
-  for {set s 0} {$s < $otpu_S} {incr s} {
+  for {set s 0} {$s < $otpu_G} {incr s} {
     lappend bds [otpu_mem_bd f2_mem_s$s [expr {2 * $s}] [lindex $otpu_ports [expr {2 * $s}]] [lindex $otpu_ports [expr {2 * $s + 1}]]]
   }
-  lappend bds [otpu_host_bd $otpu_S]
+  lappend bds [otpu_host_bd $otpu_G]
 }
 set standalone_ips [get_ips {cl_hbm f2_core_clk f2_hbm_clk f2_ocl_cdc}]
 generate_target all $standalone_ips

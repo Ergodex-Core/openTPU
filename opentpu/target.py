@@ -310,7 +310,9 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    # a board flow with its own CL top names it (rtl_board: the burst200 fabric's F2 tops under
+    # rtl/boards/f2/burst200*, which its build.py reads itself): the core and the shell alone
+    return core + SHELL + BOARDS.get(t.platform.get("rtl_board", t.platform["board"]), [])
 
 
 def build_config(t: Target | str | None = None, **knobs):
