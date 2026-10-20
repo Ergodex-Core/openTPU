@@ -15,7 +15,9 @@
 // 2 l + 1), each channel a 1 GiB window (CH_LOG2 30: two pseudo-channels, HBM port 2 p and its
 // neighbour PC through the port's mini-switch; the CL's port map, cl_opentpu_hbm). SWFILL 0: the
 // HBM (cl_hbm, ECC correction off) takes byte masks, so the adapters write SW partial beats with
-// their masks instead of a fill read first (docs/v4/p2-f2.md "SWFILL").
+// their masks instead of a fill read first (docs/v4/p2-f2.md "SWFILL"). PORDER 1, ZB 1: every
+// channel's otpu_native_axi with its barriers per page bucket and the zero-bubble burst switch
+// (docs/v4/p2-f2.md: with SWFILL 0 the F2 path's cost on the Gemma 3 token from +15% to +1.7%).
 //
 // The floorplan (boards/f2/build/constraints/cl_pnr_user_hbm.tcl; docs/wide_port.md
 // "Placement"): u_mem's channels (u_naxi) with the SmartConnects in SLR0 by the HBM's ports, the
@@ -74,8 +76,8 @@ module otpu_f2_hbm_sys #(
   parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
   parameter int READ_IDLE  = 1,          //   gather timeout,
   parameter bit READ_WAIT  = 1'b1,       //   and wait (docs/f2_hbm.md "The memory path")
-  parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket (P2: see the top)
-  parameter bit ZB         = 1'b0        // otpu_native_axi's zero-bubble burst switch (P2)
+  parameter bit PORDER     = 1'b1,       // otpu_native_axi's barriers per page bucket (P2: see the top)
+  parameter bit ZB         = 1'b1        // otpu_native_axi's zero-bubble burst switch (P2)
 ) (
   input  logic          clk,
   input  logic          clk_f,
