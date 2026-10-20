@@ -93,19 +93,24 @@ core_mhz = 200.0
 # rows a DSP48E2, 256 PE DSPs a lane instead of 512) on eight image copies, the geometry above at
 # 16 channels: copy l on channels 2 l, 2 l + 1, channel c on HBM port 2 c (the even ports 0 .. 30),
 # the host on port 15 (odd: no channel's); the eight copies of 2 GiB are the whole 16 GiB. The
-# same arch (CFG_HASH): the programs and images are P2's.
+# same arch (CFG_HASH): the programs and images are P2's. hbm_chain_nxf 6: the 16 channels' native
+# ports cross the SLRs pumped on clk_f, half as wide (otpu_f2_hbm_axi NXF: the first placement at
+# NXR 3 needed 19,708 of the 23,040 SLR0 / SLR1 super long lines)
 [variants.p3c150]
 MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
+hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
 core_mhz = 150.0
 [variants.p3c175]
 MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
+hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
 core_mhz = 175.0
 [variants.p3c200]
 MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
+hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
 core_mhz = 200.0

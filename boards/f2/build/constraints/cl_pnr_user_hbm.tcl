@@ -61,6 +61,9 @@ proc otpu_cells {pattern} {
 }
 set otpu_nport [llength [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]]
 puts "OTPU_FLOORPLAN ports=$otpu_nport"
+# the native ports' chains pumped on clk_f (otpu_f2_hbm_axi NXF > 0, otpu_xr2 g_xf.g_ch[p].u_dn /
+# u_up: P3's 16 channels at half the SLR crossings) instead of NXR's core-clock stages (g_xr)
+set otpu_xf [get_cells -quiet {WRAPPER/CL/u_sys/u_mem/g_xf.g_ch[*].u_dn}]
 
 ########################################
 # pb_otpu_hbm: the HBM fabric, SLR0
@@ -78,8 +81,10 @@ resize_pblock pb_otpu_hbm -add {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLIC
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_naxi}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sc}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/g_ch[*].u_rs512}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
+if {![llength $otpu_xf]} {
+  add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_dn}]
+  add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[0].u_up}]
+}
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_dn}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_up}]
@@ -91,8 +96,10 @@ add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/g_rs[0].u_x}]
 create_pblock pb_otpu_mid
 set_property PARENT pblock_CL [get_pblocks pb_otpu_mid]
 resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
-add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_dn}]
-add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_up}]
+if {![llength $otpu_xf]} {
+  add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_dn}]
+  add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_up}]
+}
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_dn}]
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_up}]
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/g_rs[1].u_x}]
@@ -128,12 +135,38 @@ create_pblock pb_otpu_board
 set_property PARENT pblock_CL [get_pblocks pb_otpu_board]
 resize_pblock pb_otpu_board -add {CLOCKREGION_X0Y8:CLOCKREGION_X7Y11}
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_board}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_dn}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_up}]
+if {![llength $otpu_xf]} {
+  add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_dn}]
+  add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[2].u_up}]
+}
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_s}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
+
+########################################
+# the pumped chains (NXF > 0): each chain's serializer end in its source's SLR, its NXF clk_f stages
+# a third of them an SLR from the serializer's end (two each at NXF 6), its deserializer end in the
+# destination's SLR. u_dn: the adapter (pb_otpu_board) -> u_naxi (pb_otpu_hbm); u_up the reverse.
+# (Brackets: Vivado takes them literally, so a pattern's are escaped from Tcl, not from get_cells)
+########################################
+if {[llength $otpu_xf]} {
+  set otpu_nxf [llength [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[0\].u_dn/g_x\[*\].u_s"]]
+  foreach {otpu_dir otpu_spb otpu_dpb} {u_dn pb_otpu_board pb_otpu_hbm u_up pb_otpu_hbm pb_otpu_board} {
+    set otpu_b "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[*\].$otpu_dir"
+    foreach otpu_c {ser_reg* tg_s_reg tgf_s_reg sel_s_reg*} {
+      add_cells_to_pblock $otpu_spb [otpu_cells "$otpu_b/$otpu_c"]
+    }
+    foreach otpu_c {lo_c_reg* hi_f_reg* o_reg* tg_d_reg tgf_d_reg sel_d_reg*} {
+      add_cells_to_pblock $otpu_dpb [otpu_cells "$otpu_b/$otpu_c"]
+    }
+    for {set otpu_k 0} {$otpu_k < $otpu_nxf} {incr otpu_k} {
+      set otpu_pb [lindex [list $otpu_spb pb_otpu_mid $otpu_dpb] [expr {$otpu_k * 3 / $otpu_nxf}]]
+      add_cells_to_pblock $otpu_pb [otpu_cells "$otpu_b/g_x\[$otpu_k\].u_s"]
+    }
+  }
+  puts "OTPU_FLOORPLAN pumped chains: NXF $otpu_nxf, [llength $otpu_xf] channels"
+}
 
 ########################################
 # pb_otpu_tmem: the TMEM beside the VPU, within the slice

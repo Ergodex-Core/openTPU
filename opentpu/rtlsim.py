@@ -294,7 +294,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
         # the SLR chain and otpu_native_axi per channel; the lane memory's copies each)
         p["NAXI"] = 1
-        for k in ("XR", "BURST", "IDLE", "WAIT", "OT", "PORDER"):
+        for k in ("XR", "BURST", "IDLE", "WAIT", "OT", "PORDER", "XF"):
             if os.environ.get("OTPU_NAXI_" + k):
                 p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
@@ -323,7 +323,8 @@ def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool = Fal
     mem = ([shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv", TB / LDC_MODELS[ldc],
             TB / "otpu_ldc_mem.sv"] if ldc else [TB / "otpu_native_mem.sv"] if axi else [])
     if axi and not ldc and os.environ.get("OTPU_NAXI", "0") == "1":
-        mem += [RTL / "boards/f2/otpu_native_axi.sv", TB / "otpu_naxi_mem.sv"]
+        mem += [RTL / "shell/otpu_xr.sv", RTL / "boards/f2/otpu_native_axi.sv",
+                TB / "otpu_naxi_mem.sv"]
     return build("tb_top", [RTL / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
                  top_params(cfg, dram_lat, uarch, 2 if ldc else axi, dram_bytes))
 

@@ -60,7 +60,8 @@ module otpu_top
   parameter int NAXI_IDLE  = 1,       //   gather timeout and wait, the SmartConnect's
   parameter bit NAXI_WAIT  = 1'b1,    //   transactions; the build's settings: otpu_f2_hbm_sys;
   parameter int NAXI_OT    = 32,      //   rtlsim OTPU_NAXI)
-  parameter bit NAXI_PORDER = 1'b0    //   otpu_native_axi's barriers per page bucket (OTPU_NAXI_PORDER)
+  parameter bit NAXI_PORDER = 1'b0,   //   otpu_native_axi's barriers per page bucket (OTPU_NAXI_PORDER)
+  parameter int NAXI_XF    = 0        //   the chain pumped on clk_f (otpu_xr2; OTPU_NAXI_XF: NXF stages)
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -138,8 +139,9 @@ module otpu_top
         if (NAXI) begin : g_naxi
           otpu_naxi_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(2), .NXR(NAXI_XR),
                           .READ_BURST(NAXI_BURST), .READ_IDLE(NAXI_IDLE), .READ_WAIT(NAXI_WAIT),
-                          .OT(NAXI_OT), .COPY(l), .HASH(1'b1), .PORDER(NAXI_PORDER)) u_mem (
-            .clk, .rst(sys_rst), .run_rst(rst),
+                          .OT(NAXI_OT), .COPY(l), .HASH(1'b1), .PORDER(NAXI_PORDER),
+                          .NXF(NAXI_XF)) u_mem (
+            .clk, .clk_f, .rst(sys_rst), .run_rst(rst),
             .n_cvalid(cvalid[2*l +: 2]), .n_cready(cready[2*l +: 2]), .n_cwe(cwe[2*l +: 2]),
             .n_caddr(caddr[2*l +: 2]), .n_wvalid(wvalid[2*l +: 2]), .n_wready(wready[2*l +: 2]),
             .n_wdata(wdata[2*l +: 2]), .n_wmask(wmask[2*l +: 2]), .n_rvalid(rvalid[2*l +: 2]),

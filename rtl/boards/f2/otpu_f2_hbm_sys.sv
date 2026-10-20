@@ -76,7 +76,9 @@ module otpu_f2_hbm_sys #(
   parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
   parameter int READ_IDLE  = 1,          //   gather timeout,
   parameter bit READ_WAIT  = 1'b1,       //   and wait (docs/f2_hbm.md "The memory path")
-  parameter bit PORDER     = 1'b0        // otpu_native_axi's barriers per page bucket (P2: see the top)
+  parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket (P2: see the top)
+  parameter int NXF        = 0           // the native ports' chain pumped on clk_f (otpu_f2_hbm_axi
+                                         //   NXF: half the SLR crossings; P3's 16 channels): 0, NXR's
 ) (
   input  logic          clk,
   input  logic          clk_f,
@@ -248,8 +250,8 @@ module otpu_f2_hbm_sys #(
   logic [NPORT-1:0][15:0]  n_wdone;
   // the slices' channels and the host onto the SmartConnect fabric's slaves
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .CH_LOG2(CH_LOG2), .READ_BURST(READ_BURST),
-                    .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER)) u_mem (
-    .clk, .rst, .aclk, .arst,
+                    .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER), .NXF(NXF)) u_mem (
+    .clk, .clk_f, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
     .pcis_awid, .pcis_awaddr, .pcis_awlen, .pcis_awsize, .pcis_awburst, .pcis_awvalid,

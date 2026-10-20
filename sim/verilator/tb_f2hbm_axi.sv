@@ -38,9 +38,20 @@ module tb_f2hbm_axi;
   parameter bit ORDER = 1'b1;             // 0: the order rules off (must fail)
   parameter int CH_LOG2 = 29;             // a channel's window (P2's lane memory: 30, 1 GiB)
   parameter bit PORDER = 1'b0;            // otpu_native_axi's barriers per page bucket
+  parameter int NXF = 0;                  // the chain pumped on clk_f (otpu_f2_hbm_axi NXF; P3)
 
-  logic clk = 1'b0, aclk = 1'b0, hclk = 1'b0;
-  always #(CORE_HALF) clk = !clk;
+  logic clk = 1'b0, clk_f = 1'b0, aclk = 1'b0, hclk = 1'b0;
+  // NXF > 0: clk_f (2 x clk) rises with each edge of clk, in clk's own process (as tb_top's
+  // TMEM_PMP clock: no race between the domains); CORE_HALF even
+  if (NXF > 0) begin : g_clkf
+    initial if (CORE_HALF % 2 != 0) $fatal(1, "tb_f2hbm_axi: NXF needs an even CORE_HALF");
+    initial forever begin
+      #(CORE_HALF / 2) clk_f = 1'b0;
+      #(CORE_HALF / 2) begin clk = !clk; clk_f = 1'b1; end
+    end
+  end else begin : g_clk
+    always #(CORE_HALF) clk = !clk;
+  end
   always #(AXI_HALF) aclk = !aclk;
   always #(HBM_HALF) hclk = !hclk;
   logic rst = 1'b1, arst = 1'b1;
@@ -103,8 +114,9 @@ module tb_f2hbm_axi;
   logic [NPORT-1:0][63:0]  c_wstrb;
   logic [NPORT-1:0][1:0]   c_bresp, c_rresp;
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
-                  .READ_WAIT(READ_WAIT), .ORDER(ORDER), .CH_LOG2(CH_LOG2), .PORDER(PORDER)) u_dut (
-    .clk, .rst, .aclk, .arst,
+                  .READ_WAIT(READ_WAIT), .ORDER(ORDER), .CH_LOG2(CH_LOG2), .PORDER(PORDER),
+                  .NXF(NXF)) u_dut (
+    .clk, .clk_f, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
     .pcis_awid(s_awid), .pcis_awaddr(s_awaddr), .pcis_awlen(s_awlen), .pcis_awsize(3'd6),

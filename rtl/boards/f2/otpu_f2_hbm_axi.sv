@@ -27,9 +27,14 @@ module otpu_f2_hbm_axi #(
                                         //   32 transactions 8-beat waiting bursts measured best)
   parameter int MAX_OUT    = 128,       // u_naxi's reads in flight (the adapter keeps <= 64)
   parameter bit ORDER      = 1'b1,      // the read / write order rules (0: tests only)
-  parameter bit PORDER     = 1'b0       // ... per page bucket (otpu_native_axi PORDER)
+  parameter bit PORDER     = 1'b0,      // ... per page bucket (otpu_native_axi PORDER)
+  // the pumped chain (otpu_xr2: each core cycle's word as two halves on clk_f, NXF clk_f stages,
+  // half the SLR crossings of NXR's at the same bandwidth; P3's 16 channels, docs/v4/p3-status.md
+  // "SLR crossings"): 0, NXR's core-clock chain; NXF even, the latency NXF / 2 + 2 core cycles
+  parameter int NXF        = 0
 ) (
   input  logic                    clk,
+  input  logic                    clk_f,       // NXF > 0: 2 x clk, phase aligned (the CL's MMCM)
   input  logic                    rst,
   input  logic                    aclk,
   input  logic                    arst,
@@ -143,7 +148,27 @@ module otpu_f2_hbm_axi #(
   logic [NPORT-1:0][511:0] b_wdata, b_rdata;
   logic [NPORT-1:0][63:0]  b_wmask;
   logic [NPORT-1:0][15:0]  b_wdone;
-  if (NXR == 0) begin : g_wire
+  // the chain's latency each way, core cycles (u_naxi's XL: its readies' round trip)
+  localparam int LX = (NXF > 0) ? NXF / 2 + 2 : NXR;
+  if (NXF > 0) begin : g_xf
+    localparam int DW = 1 + 1 + 25 + 1 + 512 + 64;   // down: take, we, beat, take, data, mask
+    localparam int UW = 1 + 1 + 1 + 512 + 16 + 1;    // up: readies, rvalid, data, wdone, err
+    // a chain a channel and direction (each end's phase drives ~300 picks; the floorplan can
+    // keep a channel's SLR0 end by its port): u_dn's serializer by the adapter (SLR2), u_up's by
+    // u_naxi (SLR0); the floorplan places their stages g_x[k] by SLR from the serializer's end
+    // (cl_pnr_user_hbm.tcl)
+    for (genvar p = 0; p < NPORT; p++) begin : g_ch
+      logic [DW-1:0] dn_a, dn_n;            // the adapter's side, u_naxi's
+      logic [UW-1:0] up_n, up_a;
+      assign dn_a = {n_cvalid[p] && n_cready[p], n_cwe[p], n_caddr[p], n_wvalid[p] && n_wready[p],
+                     n_wdata[p], n_wmask[p]};
+      assign {b_cvalid[p], b_cwe[p], b_caddr[p], b_wvalid[p], b_wdata[p], b_wmask[p]} = dn_n;
+      assign up_n = {b_cready[p], b_wready[p], b_rvalid[p], b_rdata[p], b_wdone[p], b_err[p]};
+      assign {n_cready[p], n_wready[p], n_rvalid[p], n_rdata[p], n_wdone[p], n_err[p]} = up_a;
+      otpu_xr2 #(.W(DW), .NXF(NXF)) u_dn (.clk, .clk_f, .d(dn_a), .q(dn_n));
+      otpu_xr2 #(.W(UW), .NXF(NXF)) u_up (.clk, .clk_f, .d(up_n), .q(up_a));
+    end
+  end else if (NXR == 0) begin : g_wire
     assign b_cvalid = n_cvalid; assign b_cwe = n_cwe; assign b_caddr = n_caddr;
     assign b_wvalid = n_wvalid; assign b_wdata = n_wdata; assign b_wmask = n_wmask;
     assign n_cready = b_cready; assign n_wready = b_wready; assign n_rvalid = b_rvalid;
@@ -167,7 +192,7 @@ module otpu_f2_hbm_axi #(
   end
 
   for (genvar p = 0; p < NPORT; p++) begin : g_port
-    otpu_native_axi #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .QD(QD), .XL(2 * NXR),
+    otpu_native_axi #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .QD(QD), .XL(2 * LX),
                       .MAX_OUT(MAX_OUT), .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE),
                       .READ_WAIT(READ_WAIT), .ORDER(ORDER), .PORDER(PORDER)) u_naxi (
       .clk, .rst(rst_q),

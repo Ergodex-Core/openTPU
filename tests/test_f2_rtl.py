@@ -64,6 +64,24 @@ def test_f2_hbm_axi(have_verilator, nport, core_half, axi_half, hbm_half, nxr, b
             r.stdout[-3000:] + r.stderr[-3000:]
 
 
+@pytest.mark.parametrize("nport,core_half,nxf,ch_log2,porder", [
+    (16, 8, 6, 30, 0),   # P3 (f2-p2:p3c150): 16 channels of 1 GiB windows, the chain on clk_f
+    (16, 6, 6, 30, 1),   # ... a faster core, with the barriers per page bucket
+    (8, 8, 4, 29, 0),    # four clk_f stages
+    (8, 6, 2, 30, 0)])   # two
+def test_f2_hbm_axi_pumped_chain(have_verilator, nport, core_half, nxf, ch_log2, porder):
+    """The native ports' SLR chain pumped on clk_f (otpu_f2_hbm_axi NXF, otpu_xr2: each core
+    cycle's word as two halves, NXF clk_f stages, the latency NXF / 2 + 2 core cycles each way,
+    otpu_native_axi's XL from it): every channel's native contract as with NXR's chain."""
+    exe = _hbm_axi_exe(NPORT=nport, CORE_HALF=core_half, AXI_HALF=4, HBM_HALF=2, NXR=3, NXF=nxf,
+                       READ_BURST=8, READ_WAIT=1, READ_IDLE=1, CH_LOG2=ch_log2, PORDER=porder)
+    for seed, nb in [(1, 1), (7, 6), (31, 64)]:
+        r = subprocess.run([str(exe), f"+seed={seed}", f"+nb={nb}", "+cycles=8000"],
+                           capture_output=True, text=True, timeout=900)
+        assert r.returncode == 0 and "PASS" in r.stdout and "FAIL" not in r.stdout, \
+            r.stdout[-3000:] + r.stderr[-3000:]
+
+
 def test_f2_hbm_axi_detects_missing_order(have_verilator):
     """Without otpu_native_axi's direction barriers and the gate's read hold, the model's reads
     overtaking writes return stale data, on the channels and on the host."""

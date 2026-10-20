@@ -31,9 +31,13 @@ module otpu_naxi_mem #(
                                          //   cl_axi_sc_1x1 takes 32; 0: no limit)
   parameter int COPY       = 0,          // the lane memory's copy (otpu_native_mem COPY)
   parameter bit HASH       = 1'b0,       // the image's hash at the dump (otpu_native_mem HASH)
-  parameter bit PORDER     = 1'b0        // otpu_native_axi's barriers per page bucket
+  parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket
+  parameter int NXF        = 0           // the chain pumped on clk_f (otpu_f2_hbm_axi NXF: the
+                                         //   build's otpu_xr2 itself, NXF clk_f stages, latency
+                                         //   NXF / 2 + 2 core cycles each way); 0: NXR stages
 ) (
   input  logic                  clk,
+  input  logic                  clk_f,       // NXF > 0: 2 x clk, rising with it (tb_top)
   input  logic                  rst,
   input  logic                  run_rst,
   input  logic [NCH-1:0]            n_cvalid,
@@ -71,20 +75,31 @@ module otpu_naxi_mem #(
   for (genvar c = 0; c < NCH; c++) begin : g_ch
     // ---- the SLR chain: down the takes with their payloads, up the readies and responses
     localparam int DW = 1 + 1 + 25 + 1 + 512 + 64, UW = 1 + 1 + 1 + 512 + 16;
-    logic [NXR:0][DW-1:0] dn;
-    logic [NXR:0][UW-1:0] up;
+    logic [DW-1:0] dn_a, dn_n;              // the adapter's side, u_naxi's
+    logic [UW-1:0] up_n, up_a;
     logic b_cvalid, b_cready, b_cwe, b_wvalid, b_wready, b_rvalid, b_err;
     logic [24:0] b_caddr;
     logic [511:0] b_wdata, b_rdata;
     logic [63:0] b_wmask;
     logic [15:0] b_wdone;
-    assign dn[NXR] = {n_cvalid[c] && n_cready[c], n_cwe[c], n_caddr[c], n_wvalid[c] && n_wready[c],
-                      n_wdata[c], n_wmask[c]};
-    assign {b_cvalid, b_cwe, b_caddr, b_wvalid, b_wdata, b_wmask} = dn[0];
-    assign up[0] = {b_cready, b_wready, b_rvalid, b_rdata, b_wdone};
-    assign {n_cready[c], n_wready[c], n_rvalid[c], n_rdata[c], n_wdone[c]} = up[NXR];
-    for (genvar k = 0; k < NXR; k++) begin : g_x
-      always_ff @(posedge clk) begin dn[k] <= dn[k + 1]; up[k + 1] <= up[k]; end
+    assign dn_a = {n_cvalid[c] && n_cready[c], n_cwe[c], n_caddr[c], n_wvalid[c] && n_wready[c],
+                   n_wdata[c], n_wmask[c]};
+    assign {b_cvalid, b_cwe, b_caddr, b_wvalid, b_wdata, b_wmask} = dn_n;
+    assign up_n = {b_cready, b_wready, b_rvalid, b_rdata, b_wdone};
+    assign {n_cready[c], n_wready[c], n_rvalid[c], n_rdata[c], n_wdone[c]} = up_a;
+    if (NXF > 0) begin : g_xf
+      otpu_xr2 #(.W(DW), .NXF(NXF)) u_dn (.clk, .clk_f, .d(dn_a), .q(dn_n));
+      otpu_xr2 #(.W(UW), .NXF(NXF)) u_up (.clk, .clk_f, .d(up_n), .q(up_a));
+    end else begin : g_xc
+      logic [NXR:0][DW-1:0] dn;
+      logic [NXR:0][UW-1:0] up;
+      assign dn[NXR] = dn_a;
+      assign dn_n = dn[0];
+      assign up[0] = up_n;
+      assign up_a = up[NXR];
+      for (genvar k = 0; k < NXR; k++) begin : g_x
+        always_ff @(posedge clk) begin dn[k] <= dn[k + 1]; up[k + 1] <= up[k]; end
+      end
     end
     // ---- the build's channel adapter
     logic [33:0] awaddr, araddr;
@@ -92,7 +107,8 @@ module otpu_naxi_mem #(
     logic awvalid, awready, wvalid, wready, bvalid, bready, arvalid, arready, rvalid, rlast, rready;
     logic [511:0] wdata;
     logic [63:0] wstrb;
-    otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(16), .XL(2 * NXR), .MAX_OUT(128),
+    otpu_native_axi #(.BASE_ADDR(34'd0), .CH_LOG2(31), .QD(16),
+                      .XL(2 * ((NXF > 0) ? NXF / 2 + 2 : NXR)), .MAX_OUT(128),
                       .READ_BURST(READ_BURST), .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT), .PORDER(PORDER)) u_naxi (
       .clk, .rst,
       .n_cvalid(b_cvalid), .n_cready(b_cready), .n_cwe(b_cwe), .n_caddr(b_caddr),

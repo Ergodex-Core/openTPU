@@ -234,6 +234,8 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     if hbm:                             # otpu_f2_hbm_sys takes the geometry; no DIMM
         params.pop('DDR_MTS')
         params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16))
+        if int(t.platform.get('hbm_chain_nxf', 0)):   # the native ports' chains pumped on clk_f
+            params['NXF'] = int(t.platform['hbm_chain_nxf'])   # (otpu_f2_hbm_axi NXF, P3)
         sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_hbm_sys.sv'
     else:
         for name in ('S', 'NCH', 'CH_LOG2', 'DRAM_LOG2'):
