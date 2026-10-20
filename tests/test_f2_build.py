@@ -256,9 +256,12 @@ def test_package_only_rejects_unverified_runs(tmp_path, fault):
 @pytest.mark.parametrize('fault', ['none', 'timing', 'skew', 'setup', 'hold', 'route',
                                  'drc', 'methodology', 'drc_fatal', 'methodology_fatal',
                                  'drc_schema', 'methodology_schema', 'classification',
-                                 'gray', 'crossing', 'firmware', 'hbm', 'hbm_crossing', 'hbm_gray'])
+                                 'gray', 'crossing', 'firmware', 'hbm', 'hbm_crossing', 'hbm_gray',
+                                 'eng', 'eng_crossing', 'eng_gray'])
 def test_route_qualification_never_marks_a_failed_design_passed(tmp_path, fault):
-    """Exercise gate failures without claiming to simulate Vivado timing itself."""
+    """Exercise gate failures without claiming to simulate Vivado timing itself (the DDR CL, the
+    SmartConnect HBM CL (hbm*), the engine HBM CL (eng*: two engines, core <-> hclk bounded,
+    16 gray buses of its own))."""
     tclsh = shutil.which('tclsh')
     if not tclsh:
         pytest.skip('Tcl is unavailable')
@@ -285,8 +288,10 @@ proc report_bus_skew {args} {
   if {$::fault eq "skew"} {incr ::criticals}
   set f [open [lindex $args end] w]
   puts $f "1. Bus Skew Report Summary"
-  set count [expr {$::fault eq "gray" ? 13 : [string match hbm* $::fault] ? ($::fault eq "hbm_gray" ? 1 : 0) : 14}]
-  for {set i 0} {$i < $count} {incr i} {puts $f "$i 100 u_sys/g_ch"}
+  set own [expr {[string match eng* $::fault] ? "u_sys/u_mem/g_port" : "u_sys/g_ch"}]
+  set count [expr {$::fault eq "gray" ? 13 : $::fault eq "eng_gray" ? 15 : [string match eng* $::fault] ? 16 :
+                   [string match hbm* $::fault] ? ($::fault eq "hbm_gray" ? 1 : 0) : 14}]
+  for {set i 0} {$i < $count} {incr i} {puts $f "$i 100 $own"}
   puts $f "2. Bus Skew Report Per Constraint"
   close $f
 }
@@ -308,24 +313,39 @@ proc get_pins {args} {return [lindex $args end]}
 proc get_clocks {args} {return [lindex $args end]}
 proc report_timing {args} {
   if {$::fault eq "crossing"} {return "No paths found"}
-  # the HBM CL: main -> core at the core period (150 MHz here), core -> main 4 ns
-  if {[string match hbm* $::fault] && [lindex $args [expr {[lsearch $args -to] + 1}]] eq "WRAPPER/CL/u_clk/O"} {
+  set to [lindex $args [expr {[lsearch $args -to] + 1}]]
+  # the SmartConnect HBM CL: main -> core at the core period (150 MHz here), core -> main 4 ns
+  if {[string match hbm* $::fault] && $to eq "WRAPPER/CL/u_clk/O"} {
     if {$::fault eq "hbm_crossing"} {return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"}
     return "Requirement: 6.667ns (MaxDelay Path 6.667ns)"
+  }
+  # the engine HBM CL (200 MHz): into the core at 5 ns, into hclk at 2.222 ns, into main 4 ns
+  if {[string match eng* $::fault] && $to eq "WRAPPER/CL/u_clk/O"} {return "Requirement: 5.000ns (MaxDelay Path 5.000ns)"}
+  if {[string match eng* $::fault] && $to eq "WRAPPER/CL/u_hclk/O"} {
+    if {$::fault eq "eng_crossing"} {return "No paths found"}
+    return "Requirement: 2.222ns (MaxDelay Path 2.222ns)"
   }
   return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"
 }
 proc get_cells {args} {
-  if {[lindex $args end] eq "WRAPPER/CL/u_sc"} {
+  set last [lindex $args end]
+  if {$last eq "WRAPPER/CL/u_sc"} {
     if {[string match hbm* $::fault]} {return WRAPPER/CL/u_sc}
     return {}
   }
-  if {[string match hbm* $::fault]} {return {}}
+  if {[string match {*u_mem/g_port*} $last]} {
+    if {[string match eng* $::fault]} {return {WRAPPER/CL/u_sys/u_mem/g_port[0].u_eng WRAPPER/CL/u_sys/u_mem/g_port[1].u_eng}}
+    return {}
+  }
+  if {[string match hbm* $::fault] || [string match eng* $::fault]} {return {}}
   return {SH_DDR/mcs0/inst/lmb_bram_I/ramloop[0].ram.r/primitive}
 }
 proc get_property {prop obj} {
   if {$prop eq "NAME"} {return $obj}
-  if {$prop eq "PERIOD"} {return [expr {[string match hbm* $::fault] ? 6.66666 : 10.0}]}
+  if {$prop eq "PERIOD"} {
+    if {[string match eng* $::fault]} {return [expr {[string match *u_hclk* $obj] ? 2.22222 : 5.0}]}
+    return [expr {[string match hbm* $::fault] ? 6.66666 : 10.0}]
+  }
   if {$prop eq "SEVERITY"} {
     if {[string match *_fatal $::fault]} {return Fatal}
     return Error
@@ -341,9 +361,14 @@ proc get_property {prop obj} {
                f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n')
     result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
     marker = tmp_path / 'test.12345678.route_validation.passed'
-    if fault in ('none', 'hbm'):
+    if fault in ('none', 'hbm', 'eng'):
         assert result.returncode == 0, result.stderr
         assert marker.is_file()
+        validation = (tmp_path / 'test.12345678.route_validation.txt').read_text()
+        assert f"gray_bus_constraints={ {'none': 14, 'hbm': 0, 'eng': 16}[fault] }" in validation
+        if fault == 'eng':
+            assert (tmp_path / 'test.12345678.route_core_to_hbm.rpt').read_text().startswith('Requirement: 2.222ns')
+            assert (tmp_path / 'test.12345678.route_hbm_to_core.rpt').read_text().startswith('Requirement: 5.000ns')
     else:
         assert result.returncode != 0
         assert not marker.exists()
@@ -524,6 +549,8 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
         (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm.tcl').read_bytes()
     assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
         (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm.tcl').read_bytes()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm5.tcl').exists()
     pnr = (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
     assert 'hbm_reset_n}' in pnr
     # the floorplan after the reset exception, in the one file build_level_1_cl.tcl reads
@@ -1098,6 +1125,133 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
 
 
+# The engine path's post-synthesis CDC script (cl_timing_user_hbm5.tcl) over a mock of the
+# synthesized hierarchy: eight engines (S = 4, NCH = 2), each with its four asynchronous FIFOs
+# (both pointers, both synchronizer stages, the binary twins) and its error level, the mux; the
+# three clocks. Vivado takes a name's brackets literally, so does the mock.
+CDC5_HARNESS = r'''
+set n_eng 8
+set fifos {u_cq 6 u_wq 5 u_rq 9 u_bq 6}
+set cells {u_sys/u_mem/g_mux.u_mux}
+for {set p 0} {$p < $n_eng} {incr p} {
+  set e "u_sys/u_mem/g_port\[$p\].u_eng"
+  lappend cells $e $e/herr_s1_reg $e/herr_s2_reg
+  foreach {f bits} $fifos {
+    lappend cells $e/$f
+    for {set b 0} {$b < $bits} {incr b} {
+      foreach r {wgray wbin rgray rbin wgray_r1 wgray_r2 rgray_w1 rgray_w2} { lappend cells "$e/$f/${r}_reg\[$b\]" }
+    }
+  }
+}
+proc drop {pattern} { set ::cells [lsearch -all -inline -not -glob $::cells $pattern] }
+switch $fault {
+  sc_present     { lappend cells u_sc }
+  no_engines     { drop *.u_eng }
+  fifo_missing   { drop {*g_port\[5\].u_eng/u_bq*} }
+  sync_missing   { drop {*g_port\[3\].u_eng/u_rq/wgray_r1_reg\[8\]} }
+  stage_missing  { drop {*g_port\[3\].u_eng/u_cq/rgray_w2_reg*} }
+  width_mismatch { drop {*u_wq/rgray_w1_reg\[4\]} }
+  herr_missing   { drop {*g_port\[0\].u_eng/herr_s1_reg} }
+}
+proc get_cells {args} {
+  set pats {}
+  for {set i 0} {$i < [llength $args]} {incr i} {
+    set a [lindex $args $i]
+    if {$a in {-quiet -hier -hierarchical}} continue
+    if {$a eq "-filter"} {
+      incr i
+      if {[regexp {NAME =~ (\S+)} [lindex $args $i] -> p]} { lappend pats $p }
+      continue
+    }
+    lappend pats {*}$a
+  }
+  set out {}
+  foreach c $::cells {
+    foreach p $pats {
+      if {[string match [string map [list {[} {\[} {]} {\]}] $p] $c]} { lappend out $c; break }
+    }
+  }
+  return $out
+}
+proc get_clocks {args} {
+  set o [lindex $args end]
+  if {$o eq "u_clk/O"} { return [expr {$::fault eq "two_core_clocks" ? {c_core c_core_f} : {c_core}}] }
+  if {$o eq "u_hclk/O"} { return c_hbm }
+  if {$o eq "clk_main_a0"} { return c_main }
+  error "get_clocks $args"
+}
+proc get_pins {args} { return [lindex $args end] }
+proc get_ports {args} { return [lindex $args end] }
+proc get_property {prop obj} {
+  if {$prop ne "PERIOD"} { error "get_property $prop" }
+  return [dict get {c_core 5.000 c_main 4.000 c_hbm 2.222} $obj]
+}
+set max_delays {}
+set bus_skews {}
+set false_paths {}
+proc set_max_delay {args} { lappend ::max_delays $args }
+proc set_bus_skew {args} {
+  set from [lindex $args [expr {[lsearch -exact $args -from] + 1}]]
+  set to [lindex $args [expr {[lsearch -exact $args -to] + 1}]]
+  if {![llength $from] || ![llength $to]} { error "set_bus_skew: an empty side" }
+  lappend ::bus_skews [list [llength $from] [llength $to] [lindex $args end] [lindex $to 0]]
+}
+proc set_false_path {args} { lappend ::false_paths $args }
+'''
+
+
+@pytest.mark.parametrize('fault', ['none', 'no_engines', 'sc_present', 'fifo_missing', 'sync_missing',
+                                   'stage_missing', 'width_mismatch', 'herr_missing', 'two_core_clocks'])
+def test_hbm5_cdc_bounds_every_engine_crossing_and_fails_closed(fault):
+    """v5: core <-> main and core <-> hclk each bounded at the destination's period, a bus skew
+    per gray pointer of every FIFO of every engine at the shorter period, the counts printed;
+    a missing engine, FIFO, synchronizer flip-flop or stage, an inconsistent pointer width, a
+    missing error level, a SmartConnect fabric or a second core clock stops the build."""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm5.tcl'
+    report = r'''
+foreach m $max_delays { puts "MAXDELAY $m" }
+foreach s $bus_skews { puts "BUSSKEW [join $s]" }
+puts "FALSEPATHS [llength $false_paths]"
+'''
+    harness = (f'set fault {fault}\n' + CDC5_HARNESS +
+               f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if fault != 'none':
+        assert result.returncode != 0 and 'OTPU_HBM_CDC' not in result.stdout
+        assert {'no_engines': 'missing the HBM port engines',
+                'sc_present': 'a SmartConnect fabric u_sc in the engine build',
+                'fifo_missing': 'u_bq: 7 FIFOs for 8 engines',
+                'sync_missing': 'u_rq/wgray_r1: 71 synchronizer flip-flops over 8 engines',
+                'stage_missing': 'u_cq/rgray_w2: 42 synchronizer flip-flops over 8 engines',
+                'width_mismatch': "u_wq/rgray_w1: 32 flip-flops, the write pointer's synchronizer has 40",
+                'herr_missing': '7 engine error synchronizers for 8 engines',
+                'two_core_clocks': 'expected one core, shell and HBM AXI clock'}[fault] in result.stderr
+        assert 'MAXDELAY' not in result.stdout
+        return
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert ('OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=8 fifos=32 bits=cq=6,wq=5,rq=9,bq=6 '
+            'sync_ffs=416 bus_skews=64 err_levels=8 mux=1') in out
+    lines = out.splitlines()
+    assert [l for l in lines if l.startswith('MAXDELAY')] == [
+        'MAXDELAY -datapath_only -from c_main -to c_core 5.000',
+        'MAXDELAY -datapath_only -from c_core -to c_main 4.000',
+        'MAXDELAY -datapath_only -from c_core -to c_hbm 2.222',
+        'MAXDELAY -datapath_only -from c_hbm -to c_core 5.000']
+    skews = [l for l in lines if l.startswith('BUSSKEW')]
+    assert len(skews) == 64 and all(l.split()[3] == '2.222' for l in skews)
+    # the gray and binary twins on the from side, the first stage on the to side, both pointers
+    assert 'BUSSKEW 18 9 2.222 u_sys/u_mem/g_port[3].u_eng/u_rq/wgray_r1_reg[0]' in skews
+    assert 'BUSSKEW 12 6 2.222 u_sys/u_mem/g_port[7].u_eng/u_cq/rgray_w1_reg[0]' in skews
+    assert 'BUSSKEW 10 5 2.222 u_sys/u_mem/g_port[0].u_eng/u_wq/wgray_r1_reg[0]' in skews
+    assert len({l.split()[4] for l in skews}) == 64
+    assert 'FALSEPATHS 3' in out
+    # the bounds come after every check: nothing is applied on a failed one (above)
+
+
 @pytest.mark.parametrize('name,S,nch,host_mux', [('f2-hbm:v5', 4, 8, 1), ('f2-hbm:v5s3', 3, 8, 0)])
 def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out(tmp_path, name, S,
                                                                                 nch, host_mux):
@@ -1127,6 +1281,12 @@ def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out
     assert pnr.endswith('\n' + floorplan) and 'hbm_reset_n}' in pnr
     assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
     assert not (cl / 'build/constraints/cl_pnr_user_hbm5.tcl').exists()
+    # the engine path's CDC script (the SmartConnect one requires u_sc, which this top lacks)
+    assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm5.tcl').read_bytes()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm5.tcl').exists()
+    assert 'u_sc' not in (cl / 'build/scripts/synth_cl_opentpu.tcl').read_text()
     params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
     assert (params['S'], params['NCH'], params['HOST_MUX'], params['NRD']) == (S, nch, host_mux, 128)
     assert params['FIFO_DEPTH'] == 256 and params['ACT_ROWS'] == 8 and params['TRACE_DEPTH'] == 4096

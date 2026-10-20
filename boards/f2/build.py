@@ -172,6 +172,8 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
             (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
             (scripts / 'synth_cl_opentpu_hbm5.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
             (cons / 'cl_pnr_user_hbm.tcl').unlink()
+            (cons / 'cl_timing_user_hbm.tcl').unlink()
+            (cons / 'cl_timing_user_hbm5.tcl').replace(cons / 'cl_timing_user.tcl')
             (scripts / 'create_hbm_sc.tcl').unlink()
             (scripts / 'hbm_sc_inst.tcl').unlink()
         else:
@@ -179,7 +181,8 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
             (scripts / 'synth_cl_opentpu_hbm5.tcl').unlink()
             (scripts / 'synth_cl_opentpu_hbm.tcl').replace(scripts / 'synth_cl_opentpu.tcl')
             (cons / 'cl_pnr_user_hbm5.tcl').unlink()
-        (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
+            (cons / 'cl_timing_user_hbm5.tcl').unlink()
+            (cons / 'cl_timing_user_hbm.tcl').replace(cons / 'cl_timing_user.tcl')
         # the linked-reset exception covers the HBM clock's synchronizer too, and the HBM
         # build's floorplan (its pblocks under the HDK's pblock_CL) follows it in the one file
         # build_level_1_cl.tcl reads unmanaged at placement (docs/wide_port.md "Placement")
@@ -207,6 +210,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (scripts / 'synth_cl_opentpu_hbm5.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
+        (cons / 'cl_timing_user_hbm5.tcl').unlink()
         (cons / 'cl_pnr_user_hbm.tcl').unlink()
         (cons / 'cl_pnr_user_hbm5.tcl').unlink()
         (scripts / 'create_hbm_sc.tcl').unlink()

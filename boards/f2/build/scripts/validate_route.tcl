@@ -46,29 +46,44 @@ set c_core [get_clocks -of_objects [get_pins WRAPPER/CL/u_clk/O]]
 if {[llength $c_main] != 1 || [llength $c_core] != 1} {
   error "openTPU: shell/core clocks missing after shell linking"
 }
-# The HBM CL (WRAPPER/CL/u_sc, the SmartConnect fabric): cl_timing_user_hbm.tcl bounds each
-# direction at the destination's period (core -> main 4.000 ns, main -> core the core period:
-# 5.000 at 200 MHz, 6.667 at 150), its own crossings have no gray buses (the SmartConnects carry
-# their own constraints) and there is no DIMM firmware; the DDR CL: 4 ns both ways, 14 gray buses
-set otpu_hbm [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
+# The HBM CLs: the SmartConnect CL (WRAPPER/CL/u_sc, the fabric; cl_timing_user_hbm.tcl) and
+# the engine CL (WRAPPER/CL/u_sys/u_mem/g_port[p].u_eng, an otpu_hbm_ch a port;
+# cl_timing_user_hbm5.tcl) bound each direction at the destination's period (core -> main
+# 4.000 ns, main -> core the core period: 5.000 at 200 MHz, 6.667 at 150; the engine CL core
+# <-> hclk too: 2.222 and the core period), and there is no DIMM firmware; the DDR CL: 4 ns
+# both ways. The gray buses the CL's own constraints name: the DDR CL's 14 (u_sys/g_ch: 12
+# FIFO pointers, two write-response counters), the engine CL's eight an engine
+# (u_sys/u_mem/g_port: two pointers x four FIFOs), the SmartConnect CL's none (the
+# SmartConnects carry their own)
+set otpu_sc [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
+set otpu_engines [get_cells -quiet -hier -filter {NAME =~ WRAPPER/CL/u_sys/u_mem/g_port*.u_eng}]
+set otpu_hbm [expr {$otpu_sc || [llength $otpu_engines] > 0}]
 set t_core [format %.3f [get_property PERIOD $c_core]]
 set t_main_core [if {$otpu_hbm} {set t_core} {set _ 4.000}]
-foreach {src dst direction want} [list $c_main $c_core main_to_core $t_main_core \
-                                      $c_core $c_main core_to_main 4.000] {
+set crossings [list $c_main $c_core main_to_core $t_main_core $c_core $c_main core_to_main 4.000]
+if {[llength $otpu_engines]} {
+  set c_hbm [get_clocks -of_objects [get_pins WRAPPER/CL/u_hclk/O]]
+  if {[llength $c_hbm] != 1} { error "openTPU: HBM AXI clock missing after shell linking" }
+  set t_hbm [format %.3f [get_property PERIOD $c_hbm]]
+  lappend crossings $c_core $c_hbm core_to_hbm $t_hbm $c_hbm $c_core hbm_to_core $t_core
+}
+foreach {src dst direction want} $crossings {
   set crossing [report_timing -from $src -to $dst -max_paths 1 -return_string]
   set f [open ${prefix}_${direction}.rpt w]; puts $f $crossing; close $f
   if {![regexp "MaxDelay Path [string map {. \.} $want]ns" $crossing]} {
     error "openTPU: expected $want ns datapath constraint for $direction"
   }
 }
-# Require all 12 FIFO pointer constraints plus the two write-response counters.
+# Require every gray-bus constraint of the CL's own.
+set own_pattern [expr {[llength $otpu_engines] ? "u_sys/u_mem/g_port" : "u_sys/g_ch"}]
+set own_want [expr {[llength $otpu_engines] ? 8 * [llength $otpu_engines] : ($otpu_sc ? 0 : 14)}]
 set f [open ${prefix}_bus_skew.rpt r]; set skew_report [read $f]; close $f
 set summary [string range $skew_report [string last "1. Bus Skew Report Summary" $skew_report] end]
 set end_summary [string first "2. Bus Skew Report Per Constraint" $summary]
 if {$end_summary >= 0} {set summary [string range $summary 0 [expr {$end_summary-1}]]}
 set own_skew_count 0
 foreach line [split $summary \n] {
-  if {[regexp {^\s*[0-9]+\s+[0-9]+\s+.*u_sys/g_ch} $line]} {incr own_skew_count}
+  if {[regexp "^\\s*\\d+\\s+\\d+\\s+.*$own_pattern" $line]} {incr own_skew_count}
 }
 if {$otpu_hbm} {
   set ddr_cal_init none_hbm
@@ -87,7 +102,7 @@ foreach {key value} [list setup_failed [llength $setup_bad] hold_failed [llength
 }
 close $summary
 if {[llength $bad_nets] || [llength $setup_bad] || [llength $hold_bad] || $timing_failed ||
-    $skew_failed || $own_skew_count != ($otpu_hbm ? 0 : 14) || [llength $drc_bad] ||
+    $skew_failed || $own_skew_count != $own_want || [llength $drc_bad] ||
     [llength $methodology_bad]} {
   error "openTPU: routed design failed qualification; see ${prefix}_validation.txt and reports"
 }

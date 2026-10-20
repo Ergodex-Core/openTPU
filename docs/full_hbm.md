@@ -44,6 +44,24 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   dropped a beat (the burst closed with its old length); the extend now excludes the timeout.
   `otpu_f2_hbmeng_sys` lints at S = 1 / 3 / 4 (the generic DSP; the DSP48E2 primitive is not on
   this Mac).
+- **The engine path's CDC constraints** (boards/f2/build/constraints/cl_timing_user_hbm5.tcl,
+  put in cl_timing_user.tcl's place for mem_path "engine"; the SmartConnect path's script
+  requires the fabric u_sc, which stopped the first SynthCL of `f2-hbm:v5` right after
+  synth_design): the core and clk_main_a0 bounded each way at the destination's period,
+  datapath only, as v4 (the OCL's held words, the LED and HBM-ready levels); the core and hclk
+  the same way (2.222 ns into hclk, the core period into the core), which meet only in each
+  engine's four asynchronous FIFOs (the command and write-beat FIFOs core -> hclk, the
+  read-beat and B-token FIFOs hclk -> core: a two-flip-flop synchronizer per gray pointer per
+  direction, a RAM written in one clock and read in the other) and in the engine's error level
+  through two core flip-flops; a bus-skew constraint per gray pointer at the shorter period
+  (eight an engine, 256 at 32 ports); the LOCKED and rst_main_n exemptions. The mux, the
+  geometry and the 450 MHz register slices are hclk only; cl_axi_sc_1x1 and the HDK's HBM
+  wrapper carry their own. The script fails closed on what it counts (at S = 4 it must print
+  `OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=32 fifos=128 bits=cq=6,wq=5,rq=9,bq=6
+  sync_ffs=1664 bus_skews=256 err_levels=32 mux=1`) and on a u_sc; validate_route.tcl then
+  requires the four bounds on the routed design and the eight gray buses an engine. Both run
+  under Tcl mocks of the synthesized hierarchy in tests/test_f2_build.py; the first Vivado run
+  of the script is pending (the names it queries are the floorplan's).
 - **The receipt's memory model** (sim/verilator/otpu_hbmeng_mem.sv, `OTPU_HBMENG=1`): the
   engine's behaviour at the core clock behind the three-stage SLR chains, the HBM at 280 ns
   (`--lat 56` at 200 MHz) with 64 bursts outstanding a channel and the port's rate.
@@ -225,10 +243,12 @@ seat is taken, the build is a later, separately approved step). In order of risk
 4. **The build flow**: `boards/f2/build.py` accepts `f2-hbm:v5` / `v5s3` (mem_path "engine":
    the CL top cl_opentpu_hbm5.sv, the floorplan cl_pnr_user_hbm5.tcl, the host's
    cl_axi_sc_1x1 alone from the HDK's prebuilt block design), checked under the Tcl mocks of
-   tests/test_f2_build.py and never against the HDK: the first SynthCL run will find what the
-   mocks do not (the HBM wrapper's port instance for 32 ports, the CDC constraints of the
-   engines' crossings, which cl_timing_user_hbm.tcl must bound by the destination period as
-   the OCL's are).
+   tests/test_f2_build.py and never against the HDK on this Mac. The first SynthCL (full-hbm
+   6214b93b on the m7a box) completed synth_design, applied otpu_clk2x.tcl (256 pumped RAMs)
+   and stopped in the SmartConnect CDC script's u_sc check; cl_timing_user_hbm5.tcl (above)
+   is the engine path's script, its first Vivado run pending: what the mock cannot prove is
+   that the synthesized names match its queries and that report_bus_skew lists its 256
+   constraints (validate_route.tcl counts them).
 5. **The multi-slice control path**: otpu_board at S = 4 (the hub, the four slices' resets and
    starts through the chains) has run only in Verilator; the v4 card ran S = 1.
 6. **The host at S = 4** reaches the HBM through port 31's mux; the ordering rule (a run's
