@@ -70,6 +70,7 @@ module otpu_dma
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
   output logic [LANES-1:0][31:0]  t_wdata,
+  output logic [LANES-1:0]        t_wbanks,
   // the stream engine (otpu_vpu, docs/stream.md 8), held from ss_req until it falls; the fill
   // (ss_fk: SF_*, one step of W words) and the stream (ss_pe, ss_in_*) start after ss_gnt. SE
   // registers these a cycle; the updated segments (ss_y_*) and the row outputs (ss_o_*) come
@@ -537,11 +538,27 @@ module otpu_dma
       lw_data[0] = ww_w;
     end
   end
+  // Decode beside the existing write-port register, one edge before arbitration.
+  // The mask and the request see the same reset and the same next-state inputs.
+  function automatic logic [LANES-1:0] write_banks(
+    input logic [LANES-1:0] en, input logic [LANES-1:0][31:0] addr);
+    logic [LANES-1:0] b;
+    b = '0;
+    for (int l = 0; l < LANES; l++)
+      if (en[l]) b[addr[l][$clog2(LANES)-1:0]] = 1'b1;
+    return b;
+  endfunction
   always_ff @(posedge clk) begin
     t_wen <= rst ? '0 : lw_en;
+    t_wbanks <= rst ? '0 : write_banks(lw_en, lw_addr);
     t_waddr <= lw_addr;
     t_wdata <= lw_data;
   end
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && t_wbanks !== write_banks(t_wen, t_waddr))
+      $fatal(1, "otpu_dma: registered write banks differ from request");
+`endif
 
   // ---- ST: a two-stage read pipeline. The segment read last cycle is in t_rdata (pa: its
   // position, lanes, whether it ends its chunk), the one before in t_rq, a register (st_pend,

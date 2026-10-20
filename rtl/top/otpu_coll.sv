@@ -412,10 +412,19 @@ module otpu_coll_port #(
   output logic [LANES-1:0]        coll_wen,
   output logic [LANES-1:0][31:0]  coll_waddr,
   output logic [LANES-1:0][31:0]  coll_wdata,
+  output logic [LANES-1:0]        coll_wbanks,
   input  logic                    gnt_local,
   output logic                    gnt
 );
   localparam int PW = $clog2(F);         // F a power of two: the pointers wrap
+  localparam int BW = $clog2(LANES);
+  function automatic logic [LANES-1:0] banks(
+    input logic [LANES-1:0] en, input logic [LANES-1:0][31:0] addr);
+    logic [LANES-1:0] b;
+    b = '0;
+    for (int l = 0; l < LANES; l++) if (en[l]) b[addr[l][BW-1:0]] = 1'b1;
+    return b;
+  endfunction
   // hq: hv's second cycle. The held read is asked from it (TMEM's input stage, release r2,
   // docs/tmem_nocopy.md 7: every unit's read goes to TMEM a cycle after it forms, the writes a
   // cycle after their grant), and held there until granted, with no replay
@@ -423,6 +432,7 @@ module otpu_coll_port #(
   logic [LANES-1:0]       hm;
   logic [LANES-1:0][31:0] ha;
   logic [LANES-1:0]       fm [F];
+  logic [LANES-1:0]       fb [F];
   logic [LANES-1:0][31:0] fa [F];
   logic [LANES-1:0][31:0] fd [F];
   logic [PW-1:0]          wp, rp;
@@ -450,6 +460,7 @@ module otpu_coll_port #(
     end
     if (wv) begin
       fm[wp] <= wm;
+      fb[wp] <= banks(wm, wa);
       fa[wp] <= wa;
       fd[wp] <= wd;
     end
@@ -463,12 +474,15 @@ module otpu_coll_port #(
       rp <= '0;
       n <= '0;
       head_m <= '0;
+      coll_wbanks <= '0;
     end else begin
       if (wv && (n == 0 || (n == 1 && wtake))) begin
         head_m <= wm; head_a <= wa; head_d <= wd;
+        coll_wbanks <= banks(wm, wa);
       end else if (wtake) begin
         head_m <= (n > 1) ? fm[rp_next] : '0;
         head_a <= fa[rp_next]; head_d <= fd[rp_next];
+        coll_wbanks <= (n > 1) ? fb[rp_next] : '0;
       end
       got <= hv && hq && gnt_local;
       dv <= got;
@@ -484,6 +498,8 @@ module otpu_coll_port #(
 `ifndef SYNTHESIS
   always @(posedge clk)
     if (!rst) begin
+      if (coll_wbanks !== banks(coll_wen, coll_waddr))
+        $fatal(1, "otpu_coll_port: registered write banks differ from request");
       if (head_m !== ((n != 0) ? fm[rp] : '0))
         $fatal(1, "otpu_coll_port: registered head enables differ from FIFO");
       if (n != 0 && (head_a !== fa[rp] || head_d !== fd[rp]))

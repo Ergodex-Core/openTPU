@@ -67,6 +67,12 @@ module otpu_top
   logic [S-1:0][LANES-1:0]       coll_ren;
   logic [S-1:0][LANES-1:0][31:0] coll_raddr, coll_rdata;
   logic [LANES-1:0]              coll_wen;
+  logic [LANES-1:0]              coll_wbanks;
+  always_comb begin
+    coll_wbanks = '0;
+    for (int l = 0; l < LANES; l++)
+      if (coll_wen[l]) coll_wbanks[coll_waddr[l][$clog2(LANES)-1:0]] = 1'b1;
+  end
   logic [LANES-1:0][31:0]        coll_waddr, coll_wdata;
   wire coll_gnt = &coll_gl;
 
@@ -149,7 +155,8 @@ module otpu_top
       .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,
       .coll_ren(coll_ren[s]), .coll_raddr(coll_raddr[s]), .coll_rdata(coll_rdata[s]),
-      .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl[s]), .coll_gnt,
+      .coll_wen, .coll_waddr, .coll_wdata, .coll_wbanks,
+      .coll_gnt_local(coll_gl[s]), .coll_gnt,
       .halted(halted[s]), .error(error[s]), .wait_to(), .a_inval, .icount(icount[s]), .pf(), .dump);
   end
 

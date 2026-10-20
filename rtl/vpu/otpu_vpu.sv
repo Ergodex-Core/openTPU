@@ -102,6 +102,7 @@ module otpu_vpu
   output logic [LANES-1:0]        tw_en,
   output logic [LANES-1:0][31:0]  tw_addr,
   output logic [LANES-1:0][31:0]  tw_data,
+  output logic [LANES-1:0]        tw_banks,
   // profiling: a cycle after an instruction ends, its cycles frozen by the TMEM grant
   output logic                    pf_u,
   output logic [31:0]             pf_frz,
@@ -1146,6 +1147,18 @@ module otpu_vpu
   logic [LANES-1:0][AW-1:0] cw_addr, tw_a;
   logic [LANES-1:0][31:0]   cw_data;
   logic                     done_i, dpend;
+  function automatic logic [LANES-1:0] write_banks(
+    input logic [LANES-1:0] we, input logic [LANES-1:0][AW-1:0] addr);
+    logic [LANES-1:0] b;
+    b = '0;
+    for (int l = 0; l < LANES; l++) if (we[l]) b[addr[l][LW-1:0]] = 1'b1;
+    return b;
+  endfunction
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && rst_seen && tw_banks !== write_banks(tw_en, tw_a))
+      $fatal(1, "otpu_vpu: registered write banks differ from request");
+`endif
   for (genvar l = 0; l < LANES; l++) begin : g_twa
     assign tw_addr[l] = 32'(tw_a[l]);
   end
@@ -1156,10 +1169,12 @@ module otpu_vpu
     always_ff @(posedge clk) begin
       if (rst) begin
         tw_en <= '0;
+        tw_banks <= '0;
         done <= 1'b0; dpend <= 1'b0;
       end else begin
         if (gnt) begin
           tw_en <= cw_en; tw_a <= cw_addr; tw_data <= cw_data;
+          tw_banks <= write_banks(cw_en, cw_addr);
         end
         done <= (done_i || dpend) && gnt;
         dpend <= (done_i || dpend) && !gnt;
@@ -1178,6 +1193,7 @@ module otpu_vpu
     localparam int WQW = $clog2(NWQ);
     typedef struct packed {
       logic [LANES-1:0]         en;
+      logic [LANES-1:0]         banks;
       logic [LANES-1:0][AW-1:0] a;
       logic [LANES-1:0][31:0]   d;
       logic                     dn;
@@ -1220,20 +1236,25 @@ module otpu_vpu
             $fatal(1, "otpu_vpu: WBUF lane %0d's bank is not hrot + %0d", l, l);
       end
 `endif
-    always_ff @(posedge clk) if (push) wq[wt] <= '{en: cw_en, a: cw_addr, d: cw_data, dn: pdn};
+    always_ff @(posedge clk)
+      if (push) wq[wt] <= '{en: cw_en, banks: write_banks(cw_en, cw_addr),
+                           a: cw_addr, d: cw_data, dn: pdn};
     always_ff @(posedge clk) begin
       if (rst) begin
         wh <= '0; wt <= '0; wn <= '0; en_r <= 1'b0; en_q <= 1'b0;
         done <= 1'b0; dpend <= 1'b0; hen <= '0;
+        tw_banks <= '0;
       end else begin
         if (push) wt <= wt + 1'b1;
         if (pop) wh <= wh + 1'b1;
         if (push && (wn == 0 || (wn == 1 && pop))) begin      // the push is the new head
           hen <= cw_en;
           hrot <= cw_addr[0][LW-1:0];
+          tw_banks <= write_banks(cw_en, cw_addr);
         end else if (pop) begin                                // the next entry, or none
           hen <= (wn > 1) ? nh.en : '0;
           hrot <= nh.a[0][LW-1:0];
+          tw_banks <= (wn > 1) ? nh.banks : '0;
         end
         wn <= wn_nx;
         if (SE) begin

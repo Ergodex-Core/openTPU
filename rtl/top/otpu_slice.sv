@@ -129,6 +129,7 @@ module otpu_slice
   input  logic [LANES-1:0]        coll_wen,
   input  logic [LANES-1:0][31:0]  coll_waddr,
   input  logic [LANES-1:0][31:0]  coll_wdata,
+  input  logic [LANES-1:0]        coll_wbanks,
   output logic                    coll_gnt_local,
   input  logic                    coll_gnt,
   // status
@@ -409,6 +410,7 @@ module otpu_slice
   assign coll_rdata = r_data[P_COLL];
   // the units' TMEM requests
   logic [LANES-1:0]        dma_ren, dma_wen, va_ren, vb_ren, v_wen;
+  logic [LANES-1:0]        dma_wbanks, v_wbanks;
   logic                    v_ren;   // the VPU's lanes take their read data this cycle
   logic [LANES-1:0][31:0]  dma_raddr, dma_waddr, dma_wdata, va_raddr, vb_raddr, v_waddr, v_wdata;
   logic [ULANES-1:0]       mxu_ren, mxu_wen, q_ren, q_ren2;
@@ -491,7 +493,7 @@ module otpu_slice
     .b_req(dma_breq), .b_gnt(b_rdy_i), .b_we(dma_bwe), .b_wmask(dma_bwmask), .b_wdata(dma_bwdata),
     .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i), .wr_idle(wr_idle_i),
     .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rdata(r_data[P_DMA]),
-    .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata),
+    .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata), .t_wbanks(dma_wbanks),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
@@ -528,7 +530,8 @@ module otpu_slice
     .gnt(gnt[G_VPU]), .ren(v_ren), .rhold(tm_lost[P_VA] || tm_lost[P_VB]),
     .ta_en(va_ren), .ta_addr(va_raddr), .ta_data(r_data[P_VA]),
     .tb_en(vb_ren), .tb_addr(vb_raddr), .tb_data(r_data[P_VB]),
-    .tw_en(v_wen), .tw_addr(v_waddr), .tw_data(v_wdata), .pf_u(v_u), .pf_frz(v_frz),
+    .tw_en(v_wen), .tw_addr(v_waddr), .tw_data(v_wdata), .tw_banks(v_wbanks),
+    .pf_u(v_u), .pf_frz(v_frz),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
@@ -634,19 +637,38 @@ module otpu_slice
   logic [NG-1:0][NG-1:0]    acf;
   logic [NG-1:0]            aok;
   always_comb begin
-    logic [NWP-1:0] wp;
-    for (int g = 0; g < NG; g++) begin
-      wp = grp_wports(g);
-      amk[g] = '0;
-      for (int p = 0; p < NWP; p++)
-        if (wp[p])
-          for (int l = 0; l < LANES; l++)
-            if (wq_en[p][l]) amk[g][w_addr[p][l][BW-1:0]] = 1'b1;
-    end
+    // DMA, VPU and the board's collective port register these alongside the
+    // requests they describe. No request-address decode precedes their conflicts.
+    amk = '0;
+    amk[G_DMA] = dma_wbanks;
+    amk[G_VPU] = v_wbanks;
+    amk[G_COLL] = coll_wbanks;
+    // MXU drain / ACC / RMAX still share a combinational write-port select.
+    for (int l = 0; l < LANES; l++)
+      if (wq_en[W_MXU][l]) amk[G_MXU][w_addr[W_MXU][l][BW-1:0]] = 1'b1;
     acf = '0;
     for (int g = 0; g < NG; g++)
       for (int h = 0; h < g; h++) acf[g][h] = (amk[g] & amk[h]) != '0;
   end
+`ifndef SYNTHESIS
+  // Check the complete group masks against the original arbiter decode, including
+  // empty, stalled, reset and bypass transitions. These are active in Verilator
+  // without --assert (procedural $fatal checks).
+  always @(posedge clk)
+    if (!srst) begin
+      logic [NG-1:0][LANES-1:0] ref_mask;
+      logic [NWP-1:0] wp;
+      ref_mask = '0;
+      for (int g = 0; g < NG; g++) begin
+        wp = grp_wports(g);
+        for (int p = 0; p < NWP; p++)
+          if (wp[p])
+            for (int l = 0; l < LANES; l++)
+              if (wq_en[p][l]) ref_mask[g][w_addr[p][l][BW-1:0]] = 1'b1;
+      end
+      if (amk !== ref_mask) $fatal(1, "otpu_slice: write bank masks differ from requests");
+    end
+`endif
   // the guests on the DMA's TMEM copy read only when no port before them there asks (from the
   // requests: the copy's block RAM address does not wait for the grants)
   // (TMEM_IMPL 1: no guests, the banked arbiter counts every copy's banks)

@@ -315,6 +315,7 @@ module otpu_board #(
   logic [S-1:0]                  sc_req, sc_ack, sc_gl, sc_gnt;
   cmd_t                          sc_cmd [S];
   logic [S-1:0][LANES-1:0]       sc_ren, sc_wen;
+  logic [S-1:0][LANES-1:0]       sc_wbanks;
   logic [S-1:0][LANES-1:0][31:0] sc_raddr, sc_rdata, sc_waddr, sc_wdata;
 
   otpu_slice #(.SID(0), .S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS),
@@ -334,6 +335,7 @@ module otpu_board #(
     .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
     .coll_ren(sc_ren[0]), .coll_raddr(sc_raddr[0]), .coll_rdata(sc_rdata[0]),
     .coll_wen(sc_wen[0]), .coll_waddr(sc_waddr[0]), .coll_wdata(sc_wdata[0]),
+    .coll_wbanks(sc_wbanks[0]),
     .coll_gnt_local(sc_gl[0]), .coll_gnt(sc_gnt[0]),
     .halted(q_halted[0]), .error(q_error[0]), .wait_to(q_wait_to[0]), .a_inval,
     .icount(q_icount[0]), .pf, .dump(1'b0));
@@ -418,6 +420,7 @@ module otpu_board #(
       .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
       .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
       .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
+      .coll_wbanks(sc_wbanks[s]),
       .coll_gnt_local(sc_gl[s]), .coll_gnt(sc_gnt[s]),
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
@@ -477,6 +480,13 @@ module otpu_board #(
     assign sc_wen[0] = coll_wen;
     assign sc_waddr[0] = coll_waddr;
     assign sc_wdata[0] = coll_wdata;
+    // The one-slice collective is directly wired; only the multi-slice port has
+    // a FIFO head alongside which its mask can be registered.
+    always_comb begin
+      sc_wbanks[0] = '0;
+      for (int l = 0; l < LANES; l++)
+        if (coll_wen[l]) sc_wbanks[0][coll_waddr[l][$clog2(LANES)-1:0]] = 1'b1;
+    end
     assign coll_gnt = &sc_gl;           // every slice's TMEM grant
     assign sc_gnt = coll_gnt;
   end else begin : g_xs
@@ -538,6 +548,7 @@ module otpu_board #(
         .wd(p_wd), .dv(p_dv), .dd(p_dd), .pop(p_pop),
         .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
         .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
+        .coll_wbanks(sc_wbanks[s]),
         .gnt_local(sc_gl[s]), .gnt(sc_gnt[s]));
 
       // the slice's channels' beats this cycle (DRAM_RD / DRAM_WR), counted on its side

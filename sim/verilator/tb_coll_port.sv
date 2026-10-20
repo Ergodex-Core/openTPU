@@ -8,6 +8,7 @@ module tb_coll_port;
   always #5 clk = !clk;
   logic rst = 1, rv = 0, wv = 0, gnt_local = 0;
   logic [LANES-1:0] rm = '0, wm, coll_ren, coll_wen;
+  logic [LANES-1:0] coll_wbanks;
   logic [LANES-1:0][31:0] ra = '0, wa, wd, coll_rdata = '0;
   logic [LANES-1:0][31:0] dd, coll_raddr, coll_waddr, coll_wdata;
   logic dv, pop, gnt;
@@ -19,6 +20,7 @@ module tb_coll_port;
   entry_t queue[$], item;
   int checks = 0, empty_push = 0, replace_last = 0, replace_full = 0, stalls = 0;
   bit take, expect_pop = 0;
+  logic [LANES-1:0] expect_banks;
   int seed = 32'h326f19;
   initial begin
     seed = $urandom(seed);
@@ -44,6 +46,11 @@ module tb_coll_port;
       end
       #1;
       if (!rst) begin
+        expect_banks = '0;
+        if (queue.size() != 0)
+          for (int l = 0; l < LANES; l++)
+            if (queue[0].m[l]) expect_banks[queue[0].a[l] % LANES] = 1'b1;
+        if (coll_wbanks !== expect_banks) $fatal(1, "write banks at cycle %0d", c);
         if (coll_wen !== ((queue.size() != 0) ? queue[0].m : '0))
           $fatal(1, "head mask at cycle %0d", c);
         if (queue.size() != 0 &&
