@@ -107,6 +107,7 @@ module otpu_slice
   output logic [3:0]    a_be,
   output logic          sw_req,     // scalar (QST) writes: one byte-enabled word per cycle
   output logic [31:0]   sw_addr,
+  output logic          sw_par,     // ^sw_addr[31:5] (the memory's channel hash, from a flip-flop)
   output logic [31:0]   sw_wdata,
   output logic [3:0]    sw_be,
   input  logic          a_rvalid,
@@ -916,6 +917,7 @@ module otpu_slice
     else if (sw_rdy_i) sw_v <= sw_req_c;
     if (sw_rdy_i && sw_req_c) begin
       sw_addr <= q_aaddr; sw_wdata <= q_awdata; sw_be <= q_abe;
+      sw_par <= ^q_aaddr[31:5];       // (the adapter's channel hash: off its SW queue path)
     end
   end : sw_reg
 `ifndef SYNTHESIS

@@ -84,7 +84,7 @@ module otpu_top
     logic [255:0]  a_rdata;
     logic [3:0]    a_be;
     logic [CPC*D*8-1:0] b_rdata;
-    logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, a_inval;
+    logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, sw_par, a_inval;
     logic [31:0]   sw_addr, sw_wdata;
     logic [3:0]    sw_be;
 
@@ -111,7 +111,7 @@ module otpu_top
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
-        .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
+        .sw_rdy, .sw_req, .sw_addr, .sw_par, .sw_wdata, .sw_be,
         .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid,
         .b_rtag, .b_rdata, .wr_idle, .rd_idle,
         .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
@@ -194,7 +194,7 @@ module otpu_top
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
-      .sw_req, .sw_addr, .sw_wdata, .sw_be,
+      .sw_req, .sw_addr, .sw_par, .sw_wdata, .sw_be,
       .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid, .b_rtag,
       .b_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,

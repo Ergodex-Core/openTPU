@@ -134,6 +134,7 @@ module otpu_native_dram #(
   input  logic [31:0]       sw_addr,    // word address
   input  logic [31:0]       sw_wdata,
   input  logic [3:0]        sw_be,
+  input  logic              sw_par,     // ^sw_addr[31:5] (the channel hash; the slice's register)
   output logic              b_rdy,
   input  logic              b_req,
   input  logic              b_tag,
@@ -330,7 +331,11 @@ module otpu_native_dram #(
   logic qw_rq;
   assign sw_rdy = qw_rq;
   wire sw_take = sw_req && sw_rdy;
-  wire [CHW-1:0] sw_ch = chan_of(sw_addr);
+  // the SW write's channel from the slice's registered parity (sw_par), not from a 27-bit XOR of
+  // sw_addr in front of the queue counts (the P1 F2 build's sw_addr -> qw_n, 5 levels, -0.006 ns
+  // after its refine): chan_of's value (checked in simulation)
+  wire sw_h = sw_addr[4] ^ (CHASH && sw_par);
+  wire [CHW-1:0] sw_ch = (CPC > 1) ? CHW'({sw_addr[5], sw_h}) : CHW'(sw_h);
   wire [24:0] sw_m = cbeat_of(sw_addr);
   wire b_take = b_req && b_rdy;
   wire a_take = a_req && a_rdy;
@@ -879,6 +884,9 @@ module otpu_native_dram #(
   always_ff @(posedge clk)
     if (!rst && b_req && b_par != ^b_addr[31:5])
       $fatal(1, "otpu_native_dram: b_par %0d, address %h", b_par, b_addr);
+  always @(posedge clk)
+    if (!rst && sw_req && sw_par != ^sw_addr[31:5])
+      $fatal(1, "otpu_native_dram: sw_par %0d, address %h", sw_par, sw_addr);
   logic [$bits(qb_t)-1:0] qbr [NCH][QD];
   bo_t btr [OD];
   always_ff @(posedge clk) begin
