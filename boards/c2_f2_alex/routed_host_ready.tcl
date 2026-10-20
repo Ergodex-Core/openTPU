@@ -1,4 +1,4 @@
-# Read-only routed host WREADY replication witness. Source as a library.
+# Read-only routed host WREADY direct/replicated witness. Source as a library.
 # This proves only the observed FDRE replication/connectivity transformation;
 # the caller must bind the checkpoint, implementation lineage and other checks.
 namespace eval ::c2_alex_routed_ready {}
@@ -50,13 +50,13 @@ proc ::c2_alex_routed_ready::network {name {clock 0}} {
     dict set result nets [lsort [names $nets]]
     return $result
 }
-proc ::c2_alex_routed_ready::output {name allowed_owner} {
+proc ::c2_alex_routed_ready::output {name allowed_owners} {
     set result [network $name]
     require [expr {[dict get $result drivers] eq [list $name]}] "wrong ready output driver $name"
     set nets [get_nets -quiet -segments -of_objects [one pin $name]]
     set leaf [get_pins -quiet -leaf -of_objects $nets]
     require [expr {[llength $leaf] > 1 && [llength $leaf] <= 256}] "missing/excess ready leaf inventory $name"
-    set all [names $leaf];set sinks {};set owners {}
+    set all [names $leaf];set sinks {};set owners {};set observed_scopes {}
     foreach object $leaf {
         set pname [get_property NAME $object]
         if {$pname eq $name} {continue}
@@ -65,12 +65,16 @@ proc ::c2_alex_routed_ready::output {name allowed_owner} {
         set cn [names $cells]
         require [expr {[llength $cn] == 1 && [lindex $cn 0] eq [file dirname $pname]}] "leaf owner identity $pname"
         set cname [lindex $cn 0]
-        require [expr {[string first "$allowed_owner/" $cname] == 0}] "unexpected ready sink owner $cname"
+        set matches {}
+        foreach scope $allowed_owners {if {[string first "$scope/" $cname] == 0} {lappend matches $scope}}
+        require [expr {[llength $matches] == 1}] "unexpected ready sink owner $cname"
+        lappend observed_scopes [lindex $matches 0]
         set reference [get_property REF_NAME $cells]
         require [expr {$reference ne "" && $reference ni {VCC GND}}] "invalid ready sink primitive $cname"
         lappend sinks $pname;dict set owners $pname [dict create cell $cname reference $reference]
     }
     require [expr {$name in $all && [llength $sinks] > 0}] "ready has no actual leaf receiver"
+    require [expr {[lsort -unique $observed_scopes] eq [lsort $allowed_owners]}] "missing ready sink scope"
     dict set result leaf_pins [lsort $all];dict set result sinks [lsort $sinks];dict set result sink_owners $owners
     return $result
 }
@@ -78,12 +82,26 @@ proc ::c2_alex_routed_ready::host_wready {audit} {
     set scope WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/s00_entry_pipeline/s00_mmu/inst/w_sreg
     set original $scope/state_reg\[s_ready_i\]
     set replica ${original}_replica
+    # Discover the complete ready-register family. A missing replica alone must
+    # not disguise another renamed/extra ready register in this exact scope.
+    set candidates [get_cells -quiet -hierarchical -filter "NAME =~ $scope/* && IS_SEQUENTIAL"]
+    require [expr {[llength $candidates] > 0 && [llength $candidates] <= 10000}] "ready register discovery cap"
+    set registers {}
+    foreach candidate $candidates {
+        set name [get_property NAME $candidate]
+        if {[string first $original $name] == 0} {lappend registers $name}
+    }
+    set registers [lsort $registers]
+    set direct [expr {$registers eq [list $original]}]
+    require [expr {$direct || $registers eq [lsort [list $original $replica]]}] "unreviewed ready register inventory"
     set facts {};set controls {}
-    foreach name [list $original $replica] {
+    foreach name $registers {
         set cell [one cell $name]
         set p [properties $cell {NAME REF_NAME ORIG_REF_NAME INIT IS_SEQUENTIAL ORIG_CELL_NAME PHYS_OPT_MODIFIED}]
         require [expr {[dict get $p NAME] eq $name && [dict get $p REF_NAME] eq "FDRE" && [dict get $p ORIG_REF_NAME] eq "FDRE" && [dict get $p INIT] eq "1'b0" && [dict get $p IS_SEQUENTIAL] eq "1"}] "ready primitive/initial state $name"
-        require [expr {[dict get $p PHYS_OPT_MODIFIED] eq "SLR_CROSSING_OPT"}] "unreviewed physical transformation $name"
+        set expected_transform SLR_CROSSING_OPT
+        if {$direct} {set expected_transform ""}
+        require [expr {[dict get $p PHYS_OPT_MODIFIED] eq $expected_transform}] "unreviewed physical transformation $name"
         if {$name eq $replica} {
             require [expr {[dict get $p ORIG_CELL_NAME] eq [file tail $original]}] "replica origin differs"
         } else {
@@ -103,23 +121,34 @@ proc ::c2_alex_routed_ready::host_wready {audit} {
         dict set facts $name [dict create cell $p pins $pinfacts controls $inputfacts]
         dict set controls $name $inputfacts
     }
-    foreach ref {C CE D R} {
+    if {!$direct} {foreach ref {C CE D R} {
         foreach property {drivers clocks} {
             require [expr {[dict get $controls $original $ref $property] eq [dict get $controls $replica $ref $property]}] "replica $ref $property differs"
         }
+    }
     }
     # These exact observed drivers bind the common controls to the audited
     # SmartConnect ready register, not merely two arbitrary matching registers.
     set expected [dict create C WRAPPER/IO_SHIM/RL_CLKS/BUFG_CLK_A_EXT/O CE $scope/VCC/P D $scope/state\[s_ready_i\]_i_1__3/O R [file dirname $scope]/areset_reg/Q]
     dict for {ref driver} $expected {require [expr {[dict get $controls $original $ref drivers] eq [list $driver]}] "unreviewed common $ref driver"}
-    set original_output [output $original/Q $scope]
-    set replica_output [output $replica/Q WRAPPER/CL/u_pcis_pipe/inst/w.w_pipe]
+    set pcis_scope WRAPPER/CL/u_pcis_pipe/inst/w.w_pipe
+    if {$direct} {
+        set original_output [output $original/Q [list $scope $pcis_scope]]
+    } else {
+        set original_output [output $original/Q [list $scope]]
+        set replica_output [output $replica/Q [list $pcis_scope]]
+    }
     set anchor WRAPPER/CL/u_pcis_pipe/m_axi_wready
     set ap [one pin $anchor]
     require [expr {[get_property DIRECTION $ap] eq "IN"}] "host anchor direction"
     set anchor_network [network $anchor]
     require [expr {[dict get $anchor_network drivers] eq [list $original/Q] && [dict get $anchor_network nets] eq [dict get $original_output nets]}] "host anchor no longer binds original ready network"
-    set result [dict create kind routed_host_wready_replication structural_pass 1 route_qualified 0 original $original replica $replica registers $facts original_output $original_output replica_output $replica_output anchor $anchor anchor_network $anchor_network]
+    set result [dict create kind routed_host_wready_direct structural_pass 1 route_qualified 0 original $original register_inventory $registers registers $facts original_output $original_output anchor $anchor anchor_network $anchor_network]
+    if {!$direct} {
+        dict set result kind routed_host_wready_replication
+        dict set result replica $replica
+        dict set result replica_output $replica_output
+    }
     puts $audit [list routed_host_wready $result]
     return $result
 }

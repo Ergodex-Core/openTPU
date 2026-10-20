@@ -28,6 +28,13 @@ proc list_property {object} {
  return [dict keys [dict get $::properties $kind|$name]]
 }
 proc get_cells {args} {
+ if {[lsearch -exact $args -hierarchical]>=0} {
+  set out {}
+  dict for {key properties} $::properties {
+   if {[string match "cell|*" $key] && [string first "state_reg\[s_ready_i\]" $key]>=0} {lappend out $key}
+  }
+  return $out
+ }
  set oi [lsearch -exact $args -of_objects]
  if {$oi>=0} {
   lassign [object_name [lindex $args [expr {$oi+1}]]] kind name
@@ -70,7 +77,7 @@ proc get_clocks {args} {
 '''
 
 
-def fixture():
+def fixture(direct=False):
  props={};cell_pins={};pin_net={};net_leaf={}
  def cell(name,ref='FDRE',origin=''):
   props['cell|'+name]={'NAME':name,'REF_NAME':ref,'ORIG_REF_NAME':ref,'INIT':"1'b0",'IS_SEQUENTIAL':'1','ORIG_CELL_NAME':origin,'PHYS_OPT_MODIFIED':'SLR_CROSSING_OPT'}
@@ -88,11 +95,20 @@ def fixture():
  for name,net in [(SCOPE+'/skid2vector_q_i_1__3/I2','ready_original'),(PCIS+'/state_i_1/I0','ready_replica')]:
   cell(name.rsplit('/',1)[0],'LUT6');pin(name,'IN',net)
  anchor='WRAPPER/CL/u_pcis_pipe/m_axi_wready';pin(anchor,'IN','ready_original');net_leaf['ready_original'].remove(anchor)
+ if direct:
+  props['cell|'+ORIGINAL]['PHYS_OPT_MODIFIED']=''
+  props.pop('cell|'+REPLICA);cell_pins.pop(REPLICA)
+  for ref in ('C','CE','D','Q','R'):
+   name=REPLICA+'/'+ref;props.pop('pin|'+name);pin_net.pop(name)
+   for leaves in net_leaf.values():
+    if name in leaves:leaves.remove(name)
+  for name in net_leaf.pop('ready_replica'):
+   pin_net[name]=tl(['ready_original']);net_leaf['ready_original'].append(name)
  return props,cell_pins,pin_net,net_leaf
 
 
-def run(tmp_path,mutation=''):
- props,cp,pn,nl=fixture();path=tmp_path/'fixture.tcl';output=tmp_path/'witness.tcldata'
+def run(tmp_path,mutation='',direct=False):
+ props,cp,pn,nl=fixture(direct); path=tmp_path/'fixture.tcl';output=tmp_path/'witness.tcldata'
  declarations='\n'.join('set '+name+' {'+td(value)+'}' for name,value in [
   ('properties',{k:td(v) for k,v in props.items()}),('cell_pins',cp),('pin_net',pn),('net_leaf',{k:tl(v) for k,v in nl.items()})])
  path.write_text(declarations+'\nset ports {}\n'+MOCK+'\n'+mutation+f'\nsource {{{HELPER}}}\nset audit [open {{{output}}} w]\n::c2_alex_routed_ready::host_wready $audit\nclose $audit\n')
@@ -122,5 +138,29 @@ def test_typed_routed_replica_witness_and_real_leaf_sink(tmp_path):
 ])
 def test_rejects_non_equivalent_or_unproved_replica(tmp_path,mutation,reason):
  result,path=run(tmp_path,mutation);assert result.returncode!=0
+ assert reason in result.stderr,result.stderr
+ assert not path.exists() or 'structural_pass 1' not in path.read_text()
+
+
+def test_direct_ready_has_same_control_anchor_and_both_consumer_scopes(tmp_path):
+ result,path=run(tmp_path,direct=True);assert result.returncode==0,result.stderr
+ text=path.read_text();assert 'kind routed_host_wready_direct' in text
+ assert 'structural_pass 1 route_qualified 0' in text and REPLICA not in text
+ assert PCIS+'/state_i_1/I0' in text and SCOPE+'/skid2vector_q_i_1__3/I2' in text
+
+
+@pytest.mark.parametrize('mutation,reason',[
+ (f'dict set properties {{cell|{ORIGINAL}}} PHYS_OPT_MODIFIED SLR_CROSSING_OPT','physical transformation'),
+ (f'dict set properties {{cell|{ORIGINAL}}} ORIG_CELL_NAME other','original is itself'),
+ (f'dict set properties {{cell|{ORIGINAL}}} INIT {{1\'b1}}','primitive/initial state'),
+ (f'dict set properties {{pin|{ORIGINAL}/R}} IS_INVERTED 1','pin inversion'),
+ (f'dict set pin_net {{{ORIGINAL}/D}} {{control_R}}','common D driver'),
+ (f'dict set net_leaf ready_original {{{{{ORIGINAL}/Q}} {{{SCOPE}/skid2vector_q_i_1__3/I2}}}}','missing ready sink scope'),
+ (f'dict set net_leaf ready_original {{{{{ORIGINAL}/Q}} {{{PCIS}/state_i_1/I0}}}}','missing ready sink scope'),
+ (f'dict set properties {{cell|{ORIGINAL}_replica_2}} [dict get $properties {{cell|{ORIGINAL}}}]','register inventory'),
+ ('set ports {port|external}','top port escape'),
+])
+def test_direct_ready_rejects_unknown_transform_or_incomplete_graph(tmp_path,mutation,reason):
+ result,path=run(tmp_path,mutation,direct=True);assert result.returncode!=0
  assert reason in result.stderr,result.stderr
  assert not path.exists() or 'structural_pass 1' not in path.read_text()
