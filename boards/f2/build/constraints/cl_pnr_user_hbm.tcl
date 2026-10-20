@@ -190,7 +190,7 @@ dict for {otpu_x otpu_cl} $otpu_cols {
   resize_pblock $otpu_pb -add "CLOCKREGION_X${otpu_x}Y0:CLOCKREGION_X${otpu_x}Y$otpu_ytop"
   add_cells_to_pblock $otpu_pb [concat {*}$otpu_cl]
   lappend otpu_portbox $otpu_pb
-  puts "OTPU_FLOORPLAN $otpu_pb X${otpu_x}Y0:X${otpu_x}Y1 cells=[llength $otpu_cl]"
+  puts "OTPU_FLOORPLAN $otpu_pb X${otpu_x}Y0:X${otpu_x}Y$otpu_ytop cells=[llength $otpu_cl]"
 }
 # the host chain's second register slice (u_hrs512x) in SLR0's top row under the shell's column:
 # the SLR crossing from u_hrs512 (pb_otpu_pcis, X5Y5:X5Y6) is one hop into it, the descent to
