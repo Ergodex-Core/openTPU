@@ -1662,6 +1662,26 @@ for the bursts' wait) 1,013,343 (-1.4% vs the build's 1,027,452; mean phase erro
 tok/s. The lever stays reads in flight: the adapter's 64 a channel and the SmartConnect's 32
 transactions.
 
+### Alex's shell at 150 MHz, placed on the m7a build box (2026-10-20)
+
+Built from the FPGA Developer AMI on an m7a.8xlarge (Vivado 2025.2, the F2 host's HDK v2.3.0
+copied over; another session kept stopping build units on the F2 host). Target
+f2-hbm:p4rl8a64c150, `--place-directive Default`, the HDK's AggressiveExplore strategies.
+Three placements in one night, each fixing what the previous one measured:
+
+| commit | placed WNS | the failing family |
+|---|---|---|
+| 62b34824 | -1.421 ns | clk_main_a0: every worst path u_hrs512 (SLR1, pb_otpu_pcis) straight into cl_axi_sc_1x1's entry FIFO at the bottom of SLR0, 4.1 ns of route on 4.0; hclk_raw -0.261: AWS's single PIPE_HBM_AXI_RST register fanning out to all 32 ports' ARESET_N across the die's bottom edge (2.25 ns of route on 2.222, a recovery check); clk_raw +0.305, clk_f_raw +0.446, every inter-clock group positive |
+| da7dc503 | -0.041 ns | a second HDK register slice (u_hrs512x, pb_otpu_hxs at X4Y3) splits the host chain's crossing into two hops (clk_main_a0 +0.504); the copied HBM wrapper drives every port's ARESET_N from its own four-stage pipe (build.py `hbm_wrapper_per_port_reset`, fail-closed); the host column box made the full SLR height, which let u_hrs256 (the host's 450 MHz slice) drift up it: HBM port 8's WREADY -> its W pipe CE, 1.9 ns, 131 endpoints |
+| ba86b5df | **+0.089 ns** | the host SmartConnect alone in the column (pb_otpu_hsc, Y0:Y3), u_hrs256 back in the port's Y0:Y1 box: every domain met at placement |
+
+Two floorplan facts learned on the way (also in cl_pnr_user_hbm.tcl): Vivado's get_cells
+takes brackets literally, so `g_ch[0].u_rs256` matches and the escaped form matches nothing
+(the first build boxed one cell of nine); the HBM AXI ports are the sites
+BLI_HBM_AXI_INTF_X<p>Y0, four or five a clock region along the bottom row (ports 0-3 in
+X0Y0, 4-7 in X1Y0, 8-12 in X2Y0, ..., 30-31 in X7Y0). Routing, the route qualification and the
+Developer_CL tar of ba86b5df: pending at the time of writing (see the next entry).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
