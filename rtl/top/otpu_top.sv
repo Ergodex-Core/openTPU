@@ -65,7 +65,7 @@ module otpu_top
   parameter int HBMENG_OT  = 64,
   parameter int HBMENG_RATE = 0,
   parameter int HBMENG_DN  = 3,
-  parameter int HBMENG_UP  = 5
+  parameter int HBMENG_UP  = 7
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)

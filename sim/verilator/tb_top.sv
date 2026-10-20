@@ -61,7 +61,7 @@ module tb_top;
   parameter int HBMENG_OT  = 64;
   parameter int HBMENG_RATE = 0;
   parameter int HBMENG_DN  = 3;
-  parameter int HBMENG_UP  = 5;
+  parameter int HBMENG_UP  = 7;        // (otpu_hbmeng_mem LAT_UP: 7 since the read path's URAM FIFO, otpu_hbm_rpath)
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;

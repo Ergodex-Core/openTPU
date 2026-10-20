@@ -26,14 +26,18 @@ proc otpu_cells {pattern} {
   }
   return $cells
 }
-# an engine's leaf cells without its block RAMs: the right half's port columns (X4..X7) hold one
-# clock region of CL area beside the HBM ports (AWS's SLR0 outline: X4Y0:X7Y0, X5Y1:X5Y3, X6Y1),
-# and 4-5 engines' 28-35 RAMB36 do not fit in one (the first v5 ImplCL: DRC UTLZ-1 in
-# pb_otpu_hbmx4/5/6), so those engines' FIFO RAMs float in pb_otpu_hbm and their logic stays by
-# the port. Fails closed on an engine with no leaf cells.
+# an engine's leaf cells without its RAMs and its read path: the right half's port columns
+# (X4..X7) hold one clock region of CL area beside the HBM ports (AWS's SLR0 outline: X4Y0:X7Y0,
+# X5Y1:X5Y3, X6Y1), and 4-5 engines' 28-35 RAMB36 did not fit in one (the first v5 ImplCL: DRC
+# UTLZ-1 in pb_otpu_hbmx4/5/6; the read FIFOs are in URAM since, otpu_hbm_rpath), so the
+# engines' memories float in pb_otpu_hbm and their logic stays by the port. Fails closed on an
+# engine with no leaf cells.
 proc otpu_leaves_no_bram {cell} {
   set out {}
   foreach c [get_cells -quiet "$cell/*"] {
+    # the read path (otpu_hbm_rpath u_rp: the URAM FIFO, the pairs, the crossing FIFO's
+    # distributed RAM) floats with its URAMs: its input and output are registers
+    if {[string match */u_rp $c]} continue
     if {[get_property IS_PRIMITIVE $c]} {
       if {![string match BLOCKRAM* [get_property PRIMITIVE_TYPE $c]]} { lappend out $c }
     } else {

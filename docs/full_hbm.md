@@ -30,7 +30,7 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   spec's section 3): the native port's commands into an asynchronous FIFO, a registered AR / AW
   generator coalescing consecutive beats into bursts of up to 8 (512 B, never across a 512 B
   group; the `cont` bit computed at the core clock), 64 bursts outstanding, direction barriers,
-  the read data through a 256-beat BRAM asynchronous FIFO to the core clock; the adapter's reads
+  the read data through the read path below to the core clock; the adapter's reads
   in flight raised to 128 a channel (`NRD`). The host keeps AWS's cl_axi_sc_1x1 chain: on its own
   port at S = 3, through a registered 2 x 1 AXI3 mux in front of port 31 at S = 4
   (otpu_hbm_mux2: the channel first, the host after 8 denied cycles; W in AW order through a
@@ -44,6 +44,31 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   dropped a beat (the burst closed with its old length); the extend now excludes the timeout.
   `otpu_f2_hbmeng_sys` lints at S = 1 / 3 / 4 (the generic DSP; the DSP48E2 primitive is not on
   this Mac).
+- **The engines' memories** (rtl/boards/f2/otpu_hbm_rpath.sv, the engine's read path): the first
+  v5 synthesis (full-hbm 6a52448c on the m7a box) put each engine's 512-bit x 256 read FIFO in
+  7 RAMB36 (224 in all, next to slice 0's 249 in SLR0's ~525 of CL area) and ImplCL stopped
+  three times in placement on them: the port boxes' bottom-row clock regions hold few RAM
+  columns (DRC UTLZ-1 at 4-5 engines x 7 RAMB36 a region, then the macro placer at 102-126%
+  of the left half's boxes too). The read beats now go through a synchronous FIFO in
+  UltraRAM at hclk (256 bits wide, the AXI beat, 4K deep: 4 x URAM288 an engine, 128 of
+  SLR0's 320; a URAM has one clock, so it cannot cross by itself) read out at a beat a cycle
+  (1.125 native beats a core cycle: the AXI side's own rate, no new limit) into pairs and a
+  32-entry x 512-bit crossing FIFO in distributed RAM (512 LUT6) to the core clock. The
+  command / write / B FIFOs were distributed RAM already. An engine is therefore 0 RAMB36 /
+  4 URAM / ~2.0K LUT / ~2.9K FF (was 7 RAMB36 / 0 / 1.4K / 1.4K measured); the path's input
+  register and the URAM's two output registers let the URAMs sit a clock region from the
+  port, and the floorplan lets the whole path float in SLR0 with them (the engine's logic
+  stays by its port). The engine's reservation is unchanged (RDEPTH 256 native beats held or
+  in flight, the margin 8 for the longer count path): the in-flight budget stays what the
+  receipts measured; the path adds 5 hclk cycles from the R register to the crossing (the
+  receipt model's LAT_UP 7, was 5: the receipt delta is in "RTL (measured)"). The not-yet-
+  proven assumptions, for the next SynthCL + ImplCL: Vivado infers the four URAM288 from the
+  `ram_style = "ultra"` array with its two output registers (the CDC script now stops a
+  synthesis with any block RAM in an engine or fewer than four URAMs an engine, so a fallback
+  fails at synthesis, not two hours later in placement), and SLR0's CL area holds 128 URAM288
+  sites the placer may use (the VU47P's URAM columns run through every clock-region row;
+  verify with `get_sites -of_objects [get_pblocks pb_otpu_hbm] -filter {SITE_TYPE == URAM288}`
+  on the box).
 - **The engine path's CDC constraints** (boards/f2/build/constraints/cl_timing_user_hbm5.tcl,
   put in cl_timing_user.tcl's place for mem_path "engine"; the SmartConnect path's script
   requires the fabric u_sc, which stopped the first SynthCL of `f2-hbm:v5` right after
@@ -57,11 +82,12 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   (eight an engine, 256 at 32 ports); the LOCKED and rst_main_n exemptions. The mux, the
   geometry and the 450 MHz register slices are hclk only; cl_axi_sc_1x1 and the HDK's HBM
   wrapper carry their own. The script fails closed on what it counts (at S = 4 it must print
-  `OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=32 fifos=128 bits=cq=6,wq=5,rq=9,bq=6
-  sync_ffs=1664 bus_skews=256 err_levels=32 mux=1`) and on a u_sc; validate_route.tcl then
-  requires the four bounds on the routed design and the eight gray buses an engine. Both run
-  under Tcl mocks of the synthesized hierarchy in tests/test_f2_build.py; the first Vivado run
-  of the script is pending (the names it queries are the floorplan's).
+  `OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=32 fifos=128 bits=cq=6,wq=5,rq=6,bq=6
+  sync_ffs=1472 bus_skews=256 err_levels=32 mux=1 urams=128 brams=0`; the first SynthCL with
+  it, at 6a52448c, printed the same with the block-RAM read FIFOs: rq=9, sync_ffs=1664), on a
+  u_sc, on a block RAM in an engine and on fewer than four URAMs an engine; validate_route.tcl
+  then requires the four bounds on the routed design and the eight gray buses an engine. Both
+  run under Tcl mocks of the synthesized hierarchy in tests/test_f2_build.py.
 - **The receipt's memory model** (sim/verilator/otpu_hbmeng_mem.sv, `OTPU_HBMENG=1`): the
   engine's behaviour at the core clock behind the three-stage SLR chains, the HBM at 280 ns
   (`--lat 56` at 200 MHz) with 64 bursts outstanding a channel and the port's rate.
@@ -154,8 +180,18 @@ two-part reads, the 7 GATHERs of the layer 1,434 cycles in all (205 each). LPN (
 | v4: S 1, PORTB 4 / RL 4 / MCOLS 8, native model RD 64 (docs/wide_port.md) | 2,394,257 | 83.5 | 2,441,652 | +2.0% | 1,966,316, 82.1% | 82.4% |
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (native model RD 64, lat 60) | 195,339 | - | 202,690 | +3.8% | 161,635, 82.7% | - |
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model) | 203,697 (396 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
+| v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model, the read path in URAM: LAT_UP 7) | 203,636 (385 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
 | **v5 `f2-hbm:v5`, S 4, whole model (engine model)** | **796,958** (740 s) | **251.0** | 674,558 | -15.4% | 512,938, 64.4% | 64.5% |
 | **v5 `f2-hbm:v5s3`, S 3, whole model (engine model)** | **1,045,874** (604 s) | **191.2** | 885,045 | -15.4% | 724,726, 69.3% | 69.5% |
+
+The read path in URAM (otpu_hbm_rpath, "The engines' memories") costs the receipt nothing:
+with its five more hclk cycles from the port's R to the crossing (the model's LAT_UP 7, the
+defaults of otpu_top / tb_top / otpu_hbmeng_mem since) the 1-layer + head point is 203,636
+cycles, -61 (-0.03%) against 203,697 at LAT_UP 5 (`eng_s4_l1_uram.*`; the same run at LAT_UP 5
+by mistake first, `eng_s4_l1_uram_lat5_stale.log`, gave 203,697 again): the engines' in-flight
+budget (RDEPTH 256, RD 128) is unchanged and the port is demand-bound, so a longer return path
+moves nothing. The whole-model points above stand (their path is the same model at LAT_UP 5:
+within 0.03% by this).
 
 So the S = 4 token is 3.0x v4's on the RTL (251 against 83.5 tok/s) and the S = 3 fallback 2.3x
 (191); the port-bound token at S = 4 would be 409 tok/s, and the RTL sits at 64% of it. Where
@@ -196,25 +232,29 @@ above move nothing); (4) the collectives cost 1.4%: the sharding itself is cheap
 
 Block RAMs and DSPs counted from the RTL's parameters, LUTs and flip-flops scaled from the
 modules Vivado measured on the v4 builds (the script reproduces the v4 board: 222K LUT against
-the measured 226K, 1,275 DSP exactly, 359 RAMB36 against 416). Budgets: SLR0 272K LUT (the HBM
-fabric's SLR), SLR1 230K, SLR2 435K; 672 RAMB36, 3,008 DSP, 320 URAM each; 23K SLLs a
-boundary assumed (the brief's figure: verify on a placed checkpoint). Nothing over 80%, nothing
-far under it.
+the measured 226K, 1,275 DSP exactly, 359 RAMB36 against 416); since the first v5 synthesis
+(full-hbm 6a52448c: 798K LUT, 1,290 RAMB36, 2,908 DSP in all) the script takes the v5 slice as
+measured there, 132K LUT / 249 RAMB36 / 727 DSP (the estimate had 170K / 236), and the engine
+as measured plus its read path in URAM (`otpu_hbm_rpath`: the 32 engines were 44K LUT / 224
+RAMB36 with the block-RAM read FIFOs). Budgets: SLR0 272K LUT (the HBM fabric's SLR), SLR1
+230K, SLR2 435K; 672 RAMB36, 3,008 DSP, 320 URAM each; 23K SLLs a boundary assumed (the
+brief's figure: verify on a placed checkpoint). Nothing over 80%.
 
 | | LUT | FF | RAMB36 | DSP | URAM |
 |---|---|---|---|---|---|
-| a v5 slice (MCOLS 4, PORTB 4, RL 4, FIFO_DEPTH 256, ACT_ROWS 8, TRACE 4096, NRD 128) | 170K (u_mxu 41K, u_vpu 36K, u_tmem 12K, quant / seq / dma 28K, the adapter 51K) | 79K | 236 (chunk FIFO 57, scale FIFOs 7, TMEM 64, ACT RAM 29, IMEM 29, trace 8, the rest 42) | 727 (512 PEs, 36 column ends, 26 epilogue, 153 VPU / quantizer) | 0 |
-| an engine (otpu_hbm_ch) x 32 | 38K | 45K | 256 (the 512 b x 256 read FIFOs, 512 x 72 mode) | 0 | 0 |
+| a v5 slice (MCOLS 4, PORTB 4, RL 4, FIFO_DEPTH 256, ACT_ROWS 8, TRACE 4096, NRD 128), measured | 132K (estimated 170K: u_mxu 41K, u_vpu 36K, u_tmem 12K, quant / seq / dma 28K, the adapter 51K) | 79K (estimated) | 249 (estimated 236: chunk FIFO 57, scale FIFOs 7, TMEM 64, ACT RAM 29, IMEM 29, trace 8, the rest 42) | 727 (512 PEs, 36 column ends, 26 epilogue, 153 VPU / quantizer) | 0 |
+| an engine (otpu_hbm_ch with otpu_hbm_rpath) x 32 | 64K (2.0K each: 1.4K measured + the 512 x 32 crossing FIFO's 512 LUT6 + its control) | 93K | 0 (was 224: 7 each, the 512 b x 256 read FIFOs in 512 x 72 mode) | 0 | 128 (4 each: the 256 b x 4K read FIFOs) |
 | the host chain + mux2 | 7K | 15K | 0 | 0 | 0 |
 | the hub, ctrl, trace; the chain stages | 7K | 8K + 16K a boundary | 8 | 0 | 0 |
 
-| SLR (`f2-hbm:v5`) | contents | LUT | FF | RAMB36 | DSP |
-|---|---|---|---|---|---|
-| SLR0 | slice 0, 32 engines, the host chain, mux2 | **215K (79%)** | 154K | 492 (73%) | 727 (24%) |
-| SLR1 | slice 1, the hub, ctrl, trace, the OCL / PCIS crossings | **177K (77%)** | 103K | 244 (36%) | 727 (24%) |
-| SLR2 | slices 2 and 3 | **340K (78%)** | 157K | 472 (70%) | 1,454 (48%) |
+| SLR (`f2-hbm:v5`) | contents | LUT | FF | RAMB36 | DSP | URAM |
+|---|---|---|---|---|---|---|
+| SLR0 | slice 0, 32 engines, the host chain, mux2 | **203K (75%)** | 202K | 249 (37%; was 473 with the block-RAM read FIFOs) | 727 (24%) | 128 (40%) |
+| SLR1 | slice 1, the hub, ctrl, trace, the OCL / PCIS crossings | **139K (60%)** | 103K | 257 (38%) | 727 (24%) | 0 |
+| SLR2 | slices 2 and 3 | **264K (61%)** | 157K | 498 (74%) | 1,454 (48%) | 0 |
 
-`f2-hbm:v5s3`: SLR0 205K (75%), SLR1 177K (77%), SLR2 170K (39%); RAMB36 428 / 244 / 236.
+`f2-hbm:v5s3`: SLR0 187K (69%), SLR1 139K (60%), SLR2 132K (30%); RAMB36 249 / 257 / 249;
+URAM 96 in SLR0.
 
 SLR crossings (bits, both directions, every one a 3-stage otpu_xr chain): per slice's memory
 8 channels x (27 down + 517 up) + the 580-bit shared write bus = 4,932 (8,960 without the bus);
@@ -238,17 +278,24 @@ seat is taken, the build is a later, separately approved step). In order of risk
    failed at -2.2 ns in rounds 1-8. `f2-hbm:v5s3` has no mux.
 2. **The SLL budget is an assumption** (23K a boundary; 71% / 55% used at S = 4): read the
    count from `report_utilization -slr` on the v4 placed checkpoint before trusting it.
-3. **Every SLR is at 75-79% LUT on the estimate**, SLR0 with 73% of its RAMB36: a synthesis
-   that lands 10% higher needs the levers in "Utilization" (ACT_ROWS 4, the TMEM in URAM).
+3. **Placement in SLR0**: the first synthesis landed the slice under the estimate (132K LUT
+   against 170K) but its RAMB36 over it (249 against 236), and the engines' 224 RAMB36 on top
+   did not place (three ImplCL rounds); the read path in URAM takes SLR0 to 249 RAMB36 (37%),
+   128 URAM (40%) and ~203K LUT (75%) on the estimate, every SLR under the line. The levers
+   if the next placement still fails are in "Utilization" (ACT_ROWS 4, the TMEM in URAM).
 4. **The build flow**: `boards/f2/build.py` accepts `f2-hbm:v5` / `v5s3` (mem_path "engine":
    the CL top cl_opentpu_hbm5.sv, the floorplan cl_pnr_user_hbm5.tcl, the host's
    cl_axi_sc_1x1 alone from the HDK's prebuilt block design), checked under the Tcl mocks of
    tests/test_f2_build.py and never against the HDK on this Mac. The first SynthCL (full-hbm
    6214b93b on the m7a box) completed synth_design, applied otpu_clk2x.tcl (256 pumped RAMs)
-   and stopped in the SmartConnect CDC script's u_sc check; cl_timing_user_hbm5.tcl (above)
-   is the engine path's script, its first Vivado run pending: what the mock cannot prove is
-   that the synthesized names match its queries and that report_bus_skew lists its 256
-   constraints (validate_route.tcl counts them).
+   and stopped in the SmartConnect CDC script's u_sc check; with cl_timing_user_hbm5.tcl
+   (6a52448c) SynthCL passed (`OTPU_HBM_CDC ... engines=32 fifos=128 sync_ffs=1664
+   bus_skews=256 mux=1`; post-synthesis WNS -0.012 ns on the core clock, hclk +0.328, every
+   inter-clock group positive; 798K LUT, 1,290 RAMB36, 2,908 DSP in all) and ImplCL stopped
+   three times in placement on the engines' block RAMs (the floorplan commits dfb41dbe,
+   bd5af5b4, 340c4ed6 and "The engines' memories" above): the next ImplCL is the first with
+   the read path in URAM, and what the mocks cannot prove is the URAM inference and placement
+   and that report_bus_skew lists the 256 constraints (validate_route.tcl counts them).
 5. **The multi-slice control path**: otpu_board at S = 4 (the hub, the four slices' resets and
    starts through the chains) has run only in Verilator; the v4 card ran S = 1.
 6. **The host at S = 4** reaches the HBM through port 31's mux; the ordering rule (a run's

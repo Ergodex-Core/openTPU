@@ -48,8 +48,10 @@ pumped TMEM, NCH 8) and multiplies it: **S = 4 slices, one per SLR with two in S
 HBM pseudo-channels, 32 channels in all, tensor-parallel over the model's rows with the
 collective unit's GATHER**; every HBM port gets **its own 450 MHz engine** (`otpu_hbm_ch`, in
 cl_mem_perf's style: a command FIFO popped into a registered AR/AW generator that coalesces
-consecutive beats into bursts of up to 512 B, the read data into a BRAM asynchronous FIFO to
-the core clock, write data and the B count through small asynchronous FIFOs, nothing else at
+consecutive beats into bursts of up to 512 B, the read data through a URAM FIFO at hclk and a
+small asynchronous FIFO to the core clock [2026-10-20 evening: was a block-RAM asynchronous
+FIFO; the engines' 224 RAMB36 did not place in SLR0, docs/full_hbm.md "The engines'
+memories"], write data and the B count through small asynchronous FIFOs, nothing else at
 450 MHz) in place of the per-channel SmartConnect chain, with 64 bursts outstanding and the
 adapter's reads in flight raised from 64 to 128 beats a channel. The host keeps AWS's
 cl_axi_sc_1x1 chain, on its own port at S = 3 (24 channels, the no-arbiter fallback) or
@@ -112,12 +114,15 @@ behind the chain, 450 MHz side next to the port:
   so the 450 MHz generator never compares addresses; the command FIFO's ready keeps XL = 6 slots
   below full for the chain's late take (as u_naxi's queues).
 - **Asynchronous FIFOs** (`otpu_hbm_afifo`: gray-coded pointers, two-flop synchronizers, a
-  simple dual-port RAM read in the read clock; BRAM for the read data, distributed RAM for the
-  rest; `xpm_fifo_async` is the production drop-in, selected by `OTPU_XPM`): commands 27 bits x
-  32 (core -> hclk), write beats 576 bits x 16 (core -> hclk), read beats 512 bits x 256 (hclk ->
-  core; the adapter's reservation RD + AD + WQD = 128 + 64 + 32 = 224 <= 256 keeps it from ever
-  filling, and the engine checks a beat credit anyway), B tokens 1 bit x 32 (hclk -> core, each
-  one `n_wdone` increment).
+  simple dual-port RAM read in the read clock, distributed RAM throughout; `xpm_fifo_async` is
+  the production drop-in, selected by `OTPU_XPM`): commands 27 bits x 32 (core -> hclk), write
+  beats 576 bits x 16 (core -> hclk), read beats 512 bits x 32 (hclk -> core) behind the read
+  path's synchronous URAM FIFO at hclk (`otpu_hbm_rpath`: 256 bits x 4K, 4 URAM288 an engine; a
+  URAM has one clock; the engine holds or has in flight at most RDEPTH = 256 native beats: the
+  adapter's reservation RD + AD + WQD = 128 + 64 + 32 = 224 <= 256 keeps it from ever filling,
+  and the engine checks a beat credit anyway) [was 512 bits x 256 in block RAM: 7 RAMB36 an
+  engine, which did not place], B tokens 1 bit x 32 (hclk -> core, each one `n_wdone`
+  increment).
 - **450 MHz generator**, registered state only: an open read burst {addr, len <= 8}; the
   command FIFO's head extends it when `cont` and `len < 8`, else closes it into the AR register
   (ARADDR = port base + beat x 64, ARLEN = 2 len - 1, ARSIZE 32 B, INCR, ID 0) and starts a new
@@ -214,7 +219,7 @@ datapath ~7K, the S1 wide select ~3K, the adapter's merge 4.5K, the row lanes ~2
 | u_quant, u_seq, u_dma, ACT RAM, IMEM, misc | 30K | 25K | 29 + 29 + 8 | 0 | measured 9.4K / 9.0K / 9.3K; ACT RAM at ACT_ROWS 8: 29; IMEM 29; trace 4096: 8 |
 | otpu_native_dram (NCH 8, PORTB 4, RD 128) | 48K | 12K | 0 | 0 | 46,717 measured at RD 64, +~1.5K LUT RAM at 128 |
 | **a slice** | **~190K** | **~107K** | **~181** | **~690** | |
-| otpu_hbm_ch x 32 (SLR0) | ~40K | ~45K | 128 (the read FIFOs, 4 each) | 0 | ~1.2K LUT each: the generator ~400, the FIFOs' pointers and the write FIFO's distributed RAM ~600, the front ~200 |
+| otpu_hbm_ch x 32 (SLR0) | ~64K | ~93K | 0 (+128 URAM288: the read FIFOs, 4 each; measured at 6a52448c with block-RAM read FIFOs: 44K LUT, 224 RAMB36, which did not place) | 0 | ~2.0K LUT each: the generator ~400, the FIFOs' pointers and the write FIFO's distributed RAM ~600, the front ~200, the read path's crossing FIFO ~600 |
 | host chain (pcis gate, axi_register_slice, cl_axi_sc_1x1, the 450 MHz slice) + mux2 | ~7K | ~14K | 0 | 0 | docs/wide_port.md "Alex's shell at 150 MHz" IP sizes; mux2 ~0.5K |
 | collective hub, ctrl, trace, OCL / PCIS crossings | ~6K | ~8K | 8 | 0 | |
 | chain stages (otpu_xr) | 0 | ~2 x (16.5K + 12.3K) = 58K | 0 | 0 | one stage per SLR on each crossing bit |
@@ -223,7 +228,7 @@ Per SLR, S = 4:
 
 | SLR | contents | LUT (of budget) | RAMB36 (of 672) | DSP (of 3,008) | flag |
 |---|---|---|---|---|---|
-| SLR0 | slice 0, 32 engines, the host chain, mux2 | ~237K of 272K (**87%**) | ~309 (46%) | ~690 (23%) | **over 80%**: the lever is the engines' write FIFOs in BRAM (-10K LUT) or RD 96 on slice 0; S = 3 drops 8 engines (-10K: 83%) |
+| SLR0 | slice 0, 32 engines, the host chain, mux2 | ~237K of 272K (**87%**) | ~309 (46%) | ~690 (23%) | **over 80%**: the lever is the engines' write FIFOs in BRAM (-10K LUT) or RD 96 on slice 0; S = 3 drops 8 engines (-10K: 83%). [Measured at 6a52448c: the slice 132K LUT / 249 RAMB36, the engines 44K / 224 RAMB36 (which did not place: three ImplCL rounds); with the read FIFOs in URAM ~203K LUT (75%), 249 RAMB36 (37%), 128 URAM (40%): docs/full_hbm.md "Utilization"] |
 | SLR1 | slice 1, the hub, ctrl, trace, the shell-side crossings | ~196K of 230K (**85%**) | ~189 (28%) | ~690 (23%) | **over 80%**: the SLR1 budget is the brief's 230K (the v4 brief said 313K); at 313K it is 63% |
 | SLR2 | slices 2 and 3 | ~380K of 435K (87%) | ~362 (54%) | ~1,380 (46%) | **over 80%** |
 

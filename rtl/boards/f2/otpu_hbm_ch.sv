@@ -12,8 +12,9 @@
 //     and is not the first of an aligned BURST-beat group, so a burst never crosses a 512 B
 //     group (never 4 KiB) and the 450 MHz side compares no addresses;
 //   - commands {cont, we, beat} into a 32-entry FIFO, write beats {mask, data} into a 16-entry
-//     one; read beats out of a RDEPTH-entry block-RAM FIFO (taken every cycle: the adapter
-//     reserved the room, RD + AD + WQD <= RDEPTH); a B token per completed write (n_wdone++,
+//     one; read beats out of the read path (otpu_hbm_rpath: a URAM FIFO at hclk and a 32-entry
+//     crossing FIFO; taken every cycle: the engine holds or has in flight at most RDEPTH beats,
+//     the adapter reserved the room, RD + AD + WQD <= RDEPTH); a B token per completed write (n_wdone++,
 //     n_wdp a pulse for the chain); n_err sticky (an hclk error level, or a beat outside the
 //     window: masked into it, as otpu_native_axi).
 // hclk, every state element a register, at most three LUT levels on any path:
@@ -30,8 +31,9 @@
 //   - direction barriers (ORDER): a read starts only while no write lacks its B, a write only
 //     while no read beat is outstanding, so the native order (a read after a write to its beat
 //     returns it) holds whatever the HBM reorders between its channels.
-//   - R always ready: two 256-bit beats assembled into one 512-bit beat pushed into the read
-//     FIFO; RRESP / BRESP and RLAST (against a length queue in AR order) into the error level.
+//   - R always ready: the 256-bit beats registered into the read path, which assembles the
+//     pairs (one 512-bit native beat) behind its URAM FIFO; RRESP / BRESP and RLAST (against a
+//     length queue in AR order) into the error level.
 module otpu_hbm_ch #(
   parameter logic [33:0] BASE_ADDR = 34'd0,
   parameter int CH_LOG2 = 29,          // the window's bytes, log2 (BASE_ADDR aligned to it)
@@ -147,14 +149,7 @@ module otpu_hbm_ch #(
     .wcount(wq_wcount),
     .rclk(hclk), .rrst(hrst), .rvalid(wq_rvalid), .rready(wq_pop), .rdata({h_mask, h_data}),
     .rcount());
-  // the read beats (hclk -> core; taken every cycle) and the B tokens
-  logic         rq_wvalid, rq_wready;
-  logic [511:0] rq_wdata;
-  logic [RW-1:0] rq_wcount;
-  otpu_hbm_afifo #(.W(512), .DEPTH(RDEPTH), .SLACK(0), .TAKE(1'b1), .STYLE("block")) u_rq (
-    .wclk(hclk), .wrst(hrst), .wvalid(rq_wvalid), .wready(rq_wready), .wdata(rq_wdata),
-    .wcount(rq_wcount),
-    .rclk(clk), .rrst(rst), .rvalid(n_rvalid), .rready(1'b1), .rdata(n_rdata), .rcount());
+  // (the read beats: the read path u_rp below, hclk -> core) and the B tokens
   logic bq_wvalid, bq_rvalid;
   otpu_hbm_afifo #(.W(1), .DEPTH(32), .SLACK(0), .TAKE(1'b1), .STYLE("distributed")) u_bq (
     .wclk(hclk), .wrst(hrst), .wvalid(bq_wvalid), .wready(), .wdata(1'b1), .wcount(),
@@ -186,8 +181,8 @@ module otpu_hbm_ch #(
   logic [OW-1:0] rd_ot;                  // bursts issued, their last beat not yet back
   logic         ot_room;                 // rd_ot < OT
   logic [RW-1:0] rd_res;                 // read beats popped, not yet pushed into the read FIFO
-  logic [RW-1:0] rqc_q, rdr_q;           // the read FIFO's count and rd_res, a cycle old
-  logic         beat_room;               // the read FIFO's room covers them and four more
+  logic [RW-1:0] rqc_q, rdr_q;           // the read path's count and rd_res, a cycle old
+  logic         beat_room;               // the read path's room covers them and eight more
   logic [4:0]   wr_pend;                 // writes popped, their B not yet back
   logic         no_wr, no_rd;
   logic         aw_v, w_v, w_hi, w_busy; // w_busy: aw_v || w_v, one flag
@@ -214,13 +209,16 @@ module otpu_hbm_ch #(
   wire aw_fire = m_awvalid && m_awready;
   wire w_fire  = m_wvalid && m_wready;
   wire b_fire  = m_bvalid && m_bready;
-  // R: taken into registers, assembled in pairs
+  // R: taken into registers; the read path (otpu_hbm_rpath: the URAM FIFO, the pairs, the
+  // crossing FIFO to the core clock) counts the native beats it holds
   logic         r_v, r_last, r_hi;
   logic [1:0]   r_resp;
-  logic [255:0] r_d, r_lo;
-  wire          r_push = r_v && r_hi;
-  assign rq_wvalid = r_push;
-  assign rq_wdata  = {r_d, r_lo};
+  logic [255:0] r_d;
+  wire          r_push = r_v && r_hi;   // a pair's second beat: its native beat is in the path
+  logic [RW-1:0] rp_count;
+  otpu_hbm_rpath #(.RDEPTH(RDEPTH)) u_rp (
+    .hclk, .hrst, .r_valid(r_v), .r_data(r_d), .count(rp_count),
+    .clk, .rst, .n_rvalid, .n_rdata);
   // the lengths in AR order (RLAST's check: the beat count of the burst being returned)
   (* ram_style = "distributed" *) logic [3:0] lens [256];
   logic [7:0]   lp, lr;
@@ -279,10 +277,12 @@ module otpu_hbm_ch #(
       rd_ot <= rd_ot + OW'(ar_fire) - OW'(r_end);
       ot_room <= (rd_ot + OW'(ar_fire) - OW'(r_end)) < OW'(OT);
       rd_res <= rd_res + RW'(ext || start) - RW'(r_push);
-      // (the room flag from copies a cycle old: the counts move by at most three in the two
-      // cycles between them and the pop they gate, the margin is four)
-      rqc_q <= rq_wcount; rdr_q <= rd_res;
-      beat_room <= (rqc_q + rdr_q) < RW'(RDEPTH - 4);
+      // (the room flag from copies a cycle old: a native beat leaves rd_res up to four cycles
+      // before the path counts it (its R register, the path's input register and count
+      // register, this copy: at most two beats at a beat a cycle on R) and the pops between
+      // this flag and the pop it gates add two more; the margin is eight)
+      rqc_q <= rp_count; rdr_q <= rd_res;
+      beat_room <= (rqc_q + rdr_q) < RW'(RDEPTH - 8);
       wr_pend <= wr_pend + 5'(wgo) - 5'(b_fire);
       no_wr <= (wr_pend + 5'(wgo) - 5'(b_fire)) == 5'd0;
       no_rd <= ((rd_res + RW'(ext || start) - RW'(r_push)) == '0) &&
@@ -305,7 +305,6 @@ module otpu_hbm_ch #(
       r_v <= m_rvalid && m_rready; r_d <= m_rdata; r_last <= m_rlast; r_resp <= m_rresp;
       if (r_v) begin
         r_hi <= !r_hi;
-        if (!r_hi) r_lo <= r_d;
         if (rem_z) begin rem <= r_len; rem_z <= (r_len == 4'd0); end
         else begin rem <= rem - 1'b1; rem_z <= (rem == 4'd1); end
         if (r_last_x) lr <= lr + 1'b1;
@@ -317,7 +316,6 @@ module otpu_hbm_ch #(
   end
 `ifndef SYNTHESIS
   always @(posedge hclk) if (!hrst) begin
-    if (rq_wvalid && !rq_wready) $fatal(1, "otpu_hbm_ch: the read FIFO overflowed (the adapter's reservation)");
     if (ext && start) $fatal(1, "otpu_hbm_ch: ext and start together");
     if (cq_pop && !cq_rvalid) $fatal(1, "otpu_hbm_ch: a pop of an empty command FIFO");
     if (wq_pop && !wq_rvalid) $fatal(1, "otpu_hbm_ch: a pop of an empty write FIFO");

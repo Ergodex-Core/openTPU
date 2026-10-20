@@ -213,8 +213,8 @@ def test_f2_hbm_axi_detects_missing_order(have_verilator):
 # behind the SLR chains and the per-slice write bus (otpu_f2_hbm_eng), the host on its own port
 # or through the 2 x 1 mux (otpu_hbm_mux2)
 HBM_ENG = ["shell/otpu_xr.sv", "shell/otpu_skidbuf.sv", "boards/f2/otpu_f2_pcis_gate.sv",
-           "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_ch.sv", "boards/f2/otpu_hbm_mux2.sv",
-           "boards/f2/otpu_f2_hbm_eng.sv"]
+           "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_rpath.sv", "boards/f2/otpu_hbm_ch.sv",
+           "boards/f2/otpu_hbm_mux2.sv", "boards/f2/otpu_f2_hbm_eng.sv"]
 
 
 def _hbm_eng_exe(**params):

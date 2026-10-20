@@ -32,13 +32,34 @@ SLICE_MISC = (2_600, 3_000)        # the slice's own glue (u_slice 174,618 less 
 ADAPTER8 = (46_717, 12_000)        # otpu_native_dram at NCH 8, PORTB 4, RD 64
 ADAPTER8_P1 = (39_000, 10_000)     # at PORTB 1 (docs/f2_hbm.md: 39K at NCH 8)
 CTRL_TRACE = (4_000, 4_000)        # otpu_ctrl, otpu_trace, the board's glue
-ENGINE = (1_200, 1_400)            # otpu_hbm_ch, one channel (the generator, the FIFOs' pointers,
-                                   # the write FIFO's distributed RAM, the front): estimated
+ENGINE = (2_000, 2_900)            # otpu_hbm_ch, one channel: the 6a52448c synthesis measured
+                                   # 1,375 LUT / 1,400 FF (the generator, the FIFOs' pointers, the
+                                   # write FIFO's 576 x 16 distributed RAM, the front); the read
+                                   # path since (otpu_hbm_rpath: the 512 x 32 crossing FIFO in
+                                   # distributed RAM, 512 LUT6; its input, pair and output
+                                   # registers ~1.5K FF) estimated
+ENGINE_URAM = 4                    # otpu_hbm_rpath's read FIFO: 256 bits x 4K in URAM288
 HOST_CHAIN = (6_500, 13_500)       # pcis gate + axi_register_slice + cl_axi_sc_1x1 + the 450 slice
 MUX2 = (500, 1_200)
 HUB = (3_000, 4_000)               # otpu_coll's hub at S > 1 with its links' stages
 SLR_LUT = {0: 272_000, 1: 230_000, 2: 435_000}
 SLR_RAMB, SLR_DSP, SLR_URAM = 672, 3_008, 320
+# ---- the v5 slice as the first synthesis measured it (full-hbm 6a52448c on the m7a box: PORTB 4,
+# MCOLS 4, RL 4, ALINE 64, FIFO_DEPTH 256, ACT_ROWS 8, TRACE_DEPTH 4096, NRD 128): used in place
+# of the estimate for a slice of that shape
+MEASURED_SLICE = {("PORTB", 4), ("MCOLS", 4), ("RL", 4), ("ALINE", 64), ("FIFO_DEPTH", 256),
+                  ("ACT_ROWS", 8), ("TRACE_DEPTH", 4096), ("NRD", 128)}
+MEASURED_SLICE_LUT, MEASURED_SLICE_RAMB, MEASURED_SLICE_DSP = 132_000, 249, 727
+
+
+def measured_slice(t: TG.Target) -> bool:
+    """True when the target's slice is the shape the 6a52448c synthesis measured."""
+    a, u = t.arch, t.uarch
+    rl = TG.rl_streams(TG.config(t))
+    have = {("PORTB", int(a.get("PORTB", 1))), ("MCOLS", a["MCOLS"]), ("RL", rl),
+            ("ALINE", int(a.get("ALINE", 32))), ("FIFO_DEPTH", u["FIFO_DEPTH"]),
+            ("ACT_ROWS", a["ACT_ROWS"]), ("TRACE_DEPTH", u["TRACE_DEPTH"]), ("NRD", int(u.get("NRD", 64)))}
+    return MEASURED_SLICE <= have
 
 
 def mxu_lut_ff(mcols: int, rl: int, portb: int) -> tuple[int, int]:
@@ -122,15 +143,21 @@ def report(name: str, sll: int) -> None:
     e = slice_estimate(t)
     sl, sf = sum(e["lut"].values()), sum(e["ff"].values())
     sb, sd = sum(e["bram"].values()), sum(e["dsp"].values())
+    measured = measured_slice(t)
     print(f"\n== {name}: S {S} x NCH {nch}, MCOLS {t.arch['MCOLS']}, PORTB {t.arch.get('PORTB', 1)}, "
           f"FIFO_DEPTH {t.uarch['FIFO_DEPTH']}, ACT_ROWS {t.arch['ACT_ROWS']}, NRD {t.uarch.get('NRD', 64)}, "
-          f"mem_path {'engine' if engine else 'smartconnect'} (every figure estimated)")
-    print(f"a slice: LUT {sl:,}  FF {sf:,}  RAMB36 {sb}  DSP {sd}")
+          f"mem_path {'engine' if engine else 'smartconnect'} "
+          f"({'the slice as synthesized at 6a52448c, the rest estimated' if measured else 'every figure estimated'})")
+    print(f"a slice (estimated): LUT {sl:,}  FF {sf:,}  RAMB36 {sb}  DSP {sd}")
+    if measured:
+        sl, sb, sd = MEASURED_SLICE_LUT, MEASURED_SLICE_RAMB, MEASURED_SLICE_DSP
+        print(f"a slice (measured): LUT {sl:,}  RAMB36 {sb}  DSP {sd}")
     for k in ("lut", "bram", "dsp"):
         print(f"  {k}: " + ", ".join(f"{m} {v:,}" for m, v in e[k].items()))
     nport = S * nch
     eng_lut, eng_ff = (ENGINE[0] * nport, ENGINE[1] * nport) if engine else (6_100 * nport, 13_000 * nport)
-    eng_bram = 8 * nport if engine else 0          # the 512-bit x 256 read FIFO, 512 x 72 mode
+    eng_bram = 0                                   # (was 8 x 32: the read FIFO in RAMB36, 512 x 72 mode)
+    eng_uram = ENGINE_URAM * nport if engine else 0
     host = HOST_CHAIN
     mux = MUX2 if engine and nport == 32 else (0, 0)
     place = {0: [0], 1: [1], 2: [2, 3]}
@@ -143,10 +170,13 @@ def report(name: str, sll: int) -> None:
             ((HUB[1] if S > 1 else 0) + CTRL_TRACE[1] if slr == 1 else 0) + \
             (16_000 if slr in (0, 1) and S > 1 else 0)    # the chain stages (one per SLR)
         bram = n * sb + (eng_bram if slr == 0 else 0) + (8 if slr == 1 else 0)
+        uram = eng_uram if slr == 0 else 0
         dsp = n * sd
-        flag = " <-- over 80%" if lut / SLR_LUT[slr] > 0.8 or bram / SLR_RAMB > 0.8 or dsp / SLR_DSP > 0.8 else ""
+        flag = " <-- over 80%" if lut / SLR_LUT[slr] > 0.8 or bram / SLR_RAMB > 0.8 or dsp / SLR_DSP > 0.8 \
+            or uram / SLR_URAM > 0.8 else ""
         print(f"  SLR{slr}: {n} slice{'s' if n != 1 else ''}: LUT {lut:,} ({100 * lut / SLR_LUT[slr]:.0f}% of {SLR_LUT[slr] // 1000}K)  "
-              f"FF {ff:,}  RAMB36 {bram} ({100 * bram / SLR_RAMB:.0f}%)  DSP {dsp} ({100 * dsp / SLR_DSP:.0f}%)  URAM 0{flag}")
+              f"FF {ff:,}  RAMB36 {bram} ({100 * bram / SLR_RAMB:.0f}%)  DSP {dsp} ({100 * dsp / SLR_DSP:.0f}%)  "
+              f"URAM {uram} ({100 * uram / SLR_URAM:.0f}%){flag}")
     x = crossing_bits(S, nch)
     print(f"SLR crossings (bits; {sll:,} SLLs a boundary assumed): SLR0-SLR1 {x['SLR0-SLR1']:,} "
           f"({100 * x['SLR0-SLR1'] / sll:.0f}%), SLR1-SLR2 {x['SLR1-SLR2']:,} ({100 * x['SLR1-SLR2'] / sll:.0f}%); "

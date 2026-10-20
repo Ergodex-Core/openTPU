@@ -16,8 +16,10 @@
 //   - the structural cycles of the RTL, LAT_DN from the chain's end to the port's AR (the
 //     command FIFO's crossing and output register, the generator, the AR register, the HDK's
 //     register slice: ~7 hclk) and LAT_UP from the port's R to the chain's start (the slice,
-//     the R register, the second 256-bit beat, the read FIFO's crossing and output register:
-//     ~3 hclk + 4 clk); the HBM's own latency is otpu_native_mem's LAT (+axi_lat) and its
+//     the R register, the read path's input register, URAM write and read a cycle apart, the
+//     URAM's two output registers, the second 256-bit beat, the crossing FIFO's input
+//     register, crossing and output register: ~8 hclk + 4 clk; was ~3 hclk + 4 clk = 5 with
+//     the block-RAM crossing FIFO of 6a52448c); the HBM's own latency is otpu_native_mem's LAT (+axi_lat) and its
 //     write B otpu_native_mem's n_wdone lag plus WLAT (+hbm_wlat, 172 ns = 35 cycles at 200)
 //     less LAT_DN;
 //   - the port's beats: the native port behind the model performs at most a command a cycle,
@@ -39,7 +41,7 @@ module otpu_hbmeng_mem #(
   parameter int OT    = 64,
   parameter int RATE  = 0,               // 0: 9 beats per 8 cycles into the model, 1: one a cycle
   parameter int LAT_DN = 3,              // core cycles, the chain's end to the port's AR
-  parameter int LAT_UP = 5               // core cycles, the port's R to the chain's start
+  parameter int LAT_UP = 7               // core cycles, the port's R to the chain's start
 ) (
   input  logic                  clk,
   input  logic                  rst,

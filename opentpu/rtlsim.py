@@ -290,7 +290,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # latencies; docs/full_hbm.md): only when asked (the cache keys stay)
         p["HBMENG"] = 1
         for k, dflt in (("XR", 3), ("BURST", 8), ("IDLE", 2), ("OT", 64), ("RATE", 0),
-                        ("DN", 3), ("UP", 5)):
+                        ("DN", 3), ("UP", 7)):
             if os.environ.get("OTPU_HBMENG_" + k):
                 p["HBMENG_" + k] = int(os.environ["OTPU_HBMENG_" + k])
     if getattr(cfg, "PORTB", 1) > 1:    # a wide port B (otpu_slice PORTB; only when on: the

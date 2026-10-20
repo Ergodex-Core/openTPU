@@ -647,7 +647,7 @@ proc get_clock_regions {args} {
 proc get_slrs {args} { return SLR1 }
 proc get_property {prop name} {
   if {$prop eq "NAME"} { return $name }
-  if {$prop eq "IS_PRIMITIVE"} { return 1 }                   ;# (the engine walk: every child a leaf)
+  if {$prop eq "IS_PRIMITIVE"} { return [expr {![string match */u_rp $name]}] }   ;# (the engine walk: every child a leaf but the read path)
   if {$prop eq "PRIMITIVE_TYPE"} { return [expr {[string match *bram* $name] ? "BLOCKRAM.BRAM.RAMB36E2" : "REGISTER.SDR.FDRE"}] }
   foreach p $::props { if {[lindex $p 0] eq $name && [lindex $p 1] eq $prop} { return [lindex $p 2] } }
   error "no $prop on $name"
@@ -1059,6 +1059,8 @@ proc get_cells {args} {
   }
   if {[string match {*g_slice\[\*\]*} $pattern]} { return [list ${pattern}1 ${pattern}2 ${pattern}3] }
   if {[string match {*g_x\[\*\]*} $pattern]} { return [list ${pattern}0 ${pattern}1 ${pattern}2 ${pattern}3] }
+  # an engine's children: one fake leaf and its read path (hierarchical: the walk must skip it)
+  if {[string match {*.u_eng/\*} $pattern]} { return [list $pattern "[string range $pattern 0 end-2]/u_rp"] }
   return [list $pattern]
 }
 '''
@@ -1112,6 +1114,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # '<engine>/*', per engine; the engine's RAMs float in pb_otpu_hbm)
     assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng/*') in cells['pb_otpu_hbmx1']
     assert not any(c.endswith('.u_eng') for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
+    # the read path (u_rp: the URAM FIFO and the crossing FIFO) floats with its URAMs in pb_otpu_hbm
+    assert not any('u_rp' in c for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
     # the hub links: slice 2's rx / tx / port in SLR2, the hub's tx / rx in SLR1
     assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in board and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in board
     assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid
@@ -1137,11 +1141,12 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
 # three clocks. Vivado takes a name's brackets literally, so does the mock.
 CDC5_HARNESS = r'''
 set n_eng 8
-set fifos {u_cq 6 u_wq 5 u_rq 9 u_bq 6}
+set fifos {u_cq 6 u_wq 5 u_rp/u_rq 6 u_bq 6}
 set cells {u_sys/u_mem/g_mux.u_mux}
 for {set p 0} {$p < $n_eng} {incr p} {
   set e "u_sys/u_mem/g_port\[$p\].u_eng"
-  lappend cells $e $e/herr_s1_reg $e/herr_s2_reg
+  lappend cells $e $e/herr_s1_reg $e/herr_s2_reg $e/u_rp
+  for {set u 0} {$u < 4} {incr u} { lappend cells $e/u_rp/mem_reg_uram_$u }
   foreach {f bits} $fifos {
     lappend cells $e/$f
     for {set b 0} {$b < $bits} {incr b} {
@@ -1154,25 +1159,36 @@ switch $fault {
   sc_present     { lappend cells u_sc }
   no_engines     { drop *.u_eng }
   fifo_missing   { drop {*g_port\[5\].u_eng/u_bq*} }
-  sync_missing   { drop {*g_port\[3\].u_eng/u_rq/wgray_r1_reg\[8\]} }
+  sync_missing   { drop {*g_port\[3\].u_eng/u_rp/u_rq/wgray_r1_reg\[5\]} }
   stage_missing  { drop {*g_port\[3\].u_eng/u_cq/rgray_w2_reg*} }
   width_mismatch { drop {*u_wq/rgray_w1_reg\[4\]} }
   herr_missing   { drop {*g_port\[0\].u_eng/herr_s1_reg} }
+  uram_missing   { drop {*g_port\[6\].u_eng/u_rp/mem_reg_uram_3} }
+  bram_fallback  { lappend cells "u_sys/u_mem/g_port\[6\].u_eng/u_rp/mem_reg_bram_0" }
+}
+# a cell's primitive type by its name: the read path's RAMs, else a flip-flop
+proc ptype {c} {
+  if {[string match *mem_reg_uram* $c]} { return BLOCKRAM.URAM.URAM288 }
+  if {[string match *mem_reg_bram* $c]} { return BLOCKRAM.BRAM.RAMB36E2 }
+  return REGISTER.SDR.FDRE
 }
 proc get_cells {args} {
   set pats {}
+  set tpat *
   for {set i 0} {$i < [llength $args]} {incr i} {
     set a [lindex $args $i]
     if {$a in {-quiet -hier -hierarchical}} continue
     if {$a eq "-filter"} {
       incr i
       if {[regexp {NAME =~ (\S+)} [lindex $args $i] -> p]} { lappend pats $p }
+      if {[regexp {PRIMITIVE_TYPE =~ (\S+)} [lindex $args $i] -> t]} { set tpat $t }
       continue
     }
     lappend pats {*}$a
   }
   set out {}
   foreach c $::cells {
+    if {![string match $tpat [ptype $c]]} continue
     foreach p $pats {
       if {[string match [string map [list {[} {\[} {]} {\]}] $p] $c]} { lappend out $c; break }
     }
@@ -1207,12 +1223,14 @@ proc set_false_path {args} { lappend ::false_paths $args }
 
 
 @pytest.mark.parametrize('fault', ['none', 'no_engines', 'sc_present', 'fifo_missing', 'sync_missing',
-                                   'stage_missing', 'width_mismatch', 'herr_missing', 'two_core_clocks'])
+                                   'stage_missing', 'width_mismatch', 'herr_missing', 'two_core_clocks',
+                                   'uram_missing', 'bram_fallback'])
 def test_hbm5_cdc_bounds_every_engine_crossing_and_fails_closed(fault):
     """v5: core <-> main and core <-> hclk each bounded at the destination's period, a bus skew
     per gray pointer of every FIFO of every engine at the shorter period, the counts printed;
     a missing engine, FIFO, synchronizer flip-flop or stage, an inconsistent pointer width, a
-    missing error level, a SmartConnect fabric or a second core clock stops the build."""
+    missing error level, a SmartConnect fabric, a second core clock, a missing UltraRAM or a
+    block RAM in an engine (the read path's memory fell back) stops the build."""
     tclsh = shutil.which('tclsh')
     if not tclsh:
         pytest.skip('Tcl is unavailable')
@@ -1230,17 +1248,19 @@ puts "FALSEPATHS [llength $false_paths]"
         assert {'no_engines': 'missing the HBM port engines',
                 'sc_present': 'a SmartConnect fabric u_sc in the engine build',
                 'fifo_missing': 'u_bq: 7 FIFOs for 8 engines',
-                'sync_missing': 'u_rq/wgray_r1: 71 synchronizer flip-flops over 8 engines',
+                'sync_missing': 'u_rp/u_rq/wgray_r1: 47 synchronizer flip-flops over 8 engines',
                 'stage_missing': 'u_cq/rgray_w2: 42 synchronizer flip-flops over 8 engines',
                 'width_mismatch': "u_wq/rgray_w1: 32 flip-flops, the write pointer's synchronizer has 40",
                 'herr_missing': '7 engine error synchronizers for 8 engines',
-                'two_core_clocks': 'expected one core, shell and HBM AXI clock'}[fault] in result.stderr
+                'two_core_clocks': 'expected one core, shell and HBM AXI clock',
+                'uram_missing': '31 UltraRAMs in the engines, expected 4 x 8',
+                'bram_fallback': '1 block RAMs in the engines'}[fault] in result.stderr
         assert 'MAXDELAY' not in result.stdout
         return
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert ('OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=8 fifos=32 bits=cq=6,wq=5,rq=9,bq=6 '
-            'sync_ffs=416 bus_skews=64 err_levels=8 mux=1') in out
+    assert ('OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=8 fifos=32 bits=cq=6,wq=5,rq=6,bq=6 '
+            'sync_ffs=368 bus_skews=64 err_levels=8 mux=1 urams=32 brams=0') in out
     lines = out.splitlines()
     assert [l for l in lines if l.startswith('MAXDELAY')] == [
         'MAXDELAY -datapath_only -from c_main -to c_core 5.000',
@@ -1250,7 +1270,7 @@ puts "FALSEPATHS [llength $false_paths]"
     skews = [l for l in lines if l.startswith('BUSSKEW')]
     assert len(skews) == 64 and all(l.split()[3] == '2.222' for l in skews)
     # the gray and binary twins on the from side, the first stage on the to side, both pointers
-    assert 'BUSSKEW 18 9 2.222 u_sys/u_mem/g_port[3].u_eng/u_rq/wgray_r1_reg[0]' in skews
+    assert 'BUSSKEW 12 6 2.222 u_sys/u_mem/g_port[3].u_eng/u_rp/u_rq/wgray_r1_reg[0]' in skews
     assert 'BUSSKEW 12 6 2.222 u_sys/u_mem/g_port[7].u_eng/u_cq/rgray_w1_reg[0]' in skews
     assert 'BUSSKEW 10 5 2.222 u_sys/u_mem/g_port[0].u_eng/u_wq/wgray_r1_reg[0]' in skews
     assert len({l.split()[4] for l in skews}) == 64
@@ -1300,7 +1320,7 @@ def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out
     vh = (d / 'opentpu_params.vh').read_text()
     assert f".HOST_MUX(1'h{host_mux})" in vh and ".NRD(32'h80)" in vh
     srcs = (d / 'sources.tcl').read_text()
-    for f in ('otpu_hbm_ch.sv', 'otpu_hbm_afifo.sv', 'otpu_hbm_mux2.sv', 'otpu_f2_hbm_eng.sv',
+    for f in ('otpu_hbm_ch.sv', 'otpu_hbm_afifo.sv', 'otpu_hbm_rpath.sv', 'otpu_hbm_mux2.sv', 'otpu_f2_hbm_eng.sv',
               'otpu_f2_hbmeng_sys.sv', 'otpu_f2_pcis_gate.sv', 'otpu_hbm_geometry.sv'):
         assert f'rtl/boards/f2/{f}' in srcs
     for f in ('otpu_native_axi.sv', 'otpu_f2_hbm_axi.sv', 'otpu_f2_hbm_sys.sv'):

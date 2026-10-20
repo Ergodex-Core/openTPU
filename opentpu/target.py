@@ -108,7 +108,8 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           # SmartConnect chain, the host's cl_axi_sc_1x1 kept, muxed onto port 31 at 32 channels
           "f2-hbm5": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
                       "boards/f2/otpu_f2_pcis_gate.sv", "boards/f2/otpu_hbm_geometry.sv",
-                      "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_ch.sv",
+                      "boards/f2/otpu_hbm_afifo.sv", "boards/f2/otpu_hbm_rpath.sv",
+                      "boards/f2/otpu_hbm_ch.sv",
                       "boards/f2/otpu_hbm_mux2.sv", "boards/f2/otpu_f2_hbm_eng.sv",
                       "boards/f2/otpu_f2_hbmeng_sys.sv"]}
 
