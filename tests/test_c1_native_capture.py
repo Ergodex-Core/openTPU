@@ -181,3 +181,35 @@ if {$::c1_native_capture::gaps!=0} {error "typed direct cone failed"}
 ''')
     assert 'cone_terminal ready pin cl/const/G cell cl/const reference GND' in text
     assert 'scope selected_input_and_drivers' in text
+
+
+def test_endpoint_batch_keeps_all_typed_owners_and_required_properties(tmp_path):
+    text=run(tmp_path,r'''
+rename get_pins original_get_pins
+proc get_pins {args} {
+ if {"-of_objects" ni $args && [llength [lindex $args end]]>1} {
+  set result {}
+  foreach name [lindex $args end] {lappend result {*}[original_get_pins -quiet $name]}
+  return $result
+ }
+ return [original_get_pins {*}$args]
+}
+rename get_cells original_get_cells
+proc get_cells {args} {
+ if {"-of_objects" in $args && [llength [lindex $args end]]>1} {
+  set result {}
+  foreach object [lindex $args end] {foreach cell [original_get_cells -quiet -of_objects $object] {if {$cell ni $result} {lappend result $cell}}}
+  return $result
+ }
+ return [original_get_cells {*}$args]
+}
+rename list_property original_list_property
+proc list_property {object} {error "optional endpoint property enumeration forbidden"}
+::c1_native_capture::endpoint_facts 0 cl/gate/O {cl/gate/I0 cl/gate/I1}
+if {$::c1_native_capture::gaps!=0} {error "typed batch endpoint capture failed"}
+''')
+    assert 'property pin cl/gate/I0 DIRECTION status observed value IN' in text
+    assert 'property pin cl/gate/I1 DIRECTION status observed value IN' in text
+    assert 'property cell cl/gate REF_NAME status observed value LUT2' in text
+    assert 'query {pin_owner cl/gate/I0} status observed total 1 names cl/gate' in text
+    assert 'query {pin_owner cl/gate/I1} status observed total 1 names cl/gate' in text

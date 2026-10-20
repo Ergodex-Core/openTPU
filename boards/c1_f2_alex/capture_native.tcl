@@ -185,6 +185,28 @@ proc ::c1_native_capture::anchor {label kind name {walk 0}} {
     if {$walk && [dict exists $n drivers]} {cone $label [dict get $n drivers]}
     return $n
 }
+# Endpoint semantics require direction, exact owner and primitive reference.
+# Iterate typed bulk selections directly instead of re-selecting each register
+# for thirteen unrelated optional properties. Full gate/cone properties remain
+# collected by cell()/cone(); the entire endpoint inventory is still retained.
+proc ::c1_native_capture::endpoint_facts {pc output endpoints} {
+    variable seen_owners
+    set selected [qnames [list receive_endpoint_pins $pc $output] {get_pins -quiet $endpoints}]
+    if {[lsort $selected] ne [lsort $endpoints]} {gap [list receive_endpoints $pc $output] unresolved_endpoint_selection}
+    foreach pin [get_pins -quiet $endpoints] {
+        set name [get_property NAME $pin]
+        emit property pin $name DIRECTION status observed value [get_property DIRECTION $pin]
+        if {![info exists seen_owners($name)]} {
+            set seen_owners($name) [qnames [list pin_owner $name] {get_cells -quiet -of_objects $pin}]
+        }
+    }
+    set selected_cells [qnames [list receive_endpoint_cells $pc $output] {get_cells -quiet -of_objects [get_pins -quiet $endpoints]}]
+    foreach object [get_cells -quiet -of_objects [get_pins -quiet $endpoints]] {
+        set name [get_property NAME $object]
+        emit property cell $name NAME status observed value $name
+        emit property cell $name REF_NAME status observed value [get_property REF_NAME $object]
+    }
+}
 proc ::c1_native_capture::receive {pc n} {
     if {![dict exists $n leaves]} {return}
     set candidates {}
@@ -201,10 +223,7 @@ proc ::c1_native_capture::receive {pc n} {
         set outputs [qnames [list receive_outputs $pc $owner] {get_pins -quiet -of_objects [get_cells -quiet [list $owner]] -filter {DIRECTION == OUT}}]
         foreach output $outputs {
             set endpoints [qnames [list receive_endpoints $pc $output] {all_fanout -flat -endpoints_only -from [get_pins -quiet [list $output]]}]
-            foreach endpoint $endpoints {
-                properties pin $endpoint {DIRECTION}
-                foreach cellname [owners $endpoint] {cell $cellname 0}
-            }
+            endpoint_facts $pc $output $endpoints
             emit receive_candidate $pc cell $owner output $output endpoints $endpoints
             cone [list receive $pc $owner] [list $output]
         }
