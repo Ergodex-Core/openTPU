@@ -43,11 +43,16 @@ module otpu_hbm_rpath #(
     if (AQD != (1 << AW) || AQD < 16) $fatal(1, "otpu_hbm_rpath: AQD a power of two >= 16");
     if (RDEPTH < 16) $fatal(1, "otpu_hbm_rpath: RDEPTH >= 16");
   end
+  // ---- the hclk reset registered here (the engine's own is by the port; this path floats
+  // with its URAMs) and replicated toward its loads; the data registers (i_d, lo, aq_wd) and
+  // the URAM's output registers take no reset
+  (* max_fanout = 32 *) logic hrst_r;
+  always_ff @(posedge hclk) hrst_r <= hrst;
   // ---- the input register (by the URAM; the engine's R register is by the port)
   logic         i_v;
   logic [255:0] i_d;
   always_ff @(posedge hclk) begin
-    i_v <= r_valid && !hrst;
+    i_v <= r_valid && !hrst_r;
     i_d <= r_data;
   end
   // ---- the URAM FIFO: an entry written at wp the cycle after it is registered, counted at
@@ -73,7 +78,7 @@ module otpu_hbm_rpath #(
   logic [511:0]  aq_wd;
   logic [AW:0]   aq_wcount;
   always_ff @(posedge hclk) begin
-    if (hrst) begin
+    if (hrst_r) begin
       wp <= '0; rp <= '0; cnt <= '0; ne <= 1'b0; aq_room <= 1'b0; v1 <= 1'b0; v2 <= 1'b0;
       tog <= 1'b0; aq_wv <= 1'b0;
     end else begin
@@ -85,16 +90,16 @@ module otpu_hbm_rpath #(
       // one more read while this flag is a cycle old: at most four beyond the count
       aq_room <= aq_wcount < (AW + 1)'(AQD - 8);
       v1 <= issue; v2 <= v1;
-      if (v2) begin
-        tog <= !tog;
-        if (!tog) lo <= q2;
-      end
+      if (v2) tog <= !tog;
       aq_wv <= v2 && tog;
-      if (v2 && tog) aq_wd <= {q2, lo};
     end
   end
+  always_ff @(posedge hclk) begin       // the pair's data: no reset on the enables
+    if (v2 && !tog) lo <= q2;
+    if (v2 && tog) aq_wd <= {q2, lo};
+  end
   otpu_hbm_afifo #(.W(512), .DEPTH(AQD), .SLACK(0), .TAKE(1'b1), .STYLE("distributed")) u_rq (
-    .wclk(hclk), .wrst(hrst), .wvalid(aq_wv), .wready(), .wdata(aq_wd), .wcount(aq_wcount),
+    .wclk(hclk), .wrst(hrst_r), .wvalid(aq_wv), .wready(), .wdata(aq_wd), .wcount(aq_wcount),
     .rclk(clk), .rrst(rst), .rvalid(n_rvalid), .rready(1'b1), .rdata(n_rdata), .rcount());
   // ---- the beats held (native: AXI beats rounded up), from this cycle's registers: the
   // URAM's entries, the output registers', lo, the input register's pair, the crossing
@@ -102,10 +107,10 @@ module otpu_hbm_rpath #(
   wire [UW+1:0] held = (UW + 2)'(cnt) + (UW + 2)'(v1) + (UW + 2)'(v2) + (UW + 2)'(tog) +
                        (UW + 2)'({aq_wv, 1'b0}) + (UW + 2)'({aq_wcount, 1'b0}) + (UW + 2)'(1);
   always_ff @(posedge hclk)
-    if (hrst) count <= '0;
+    if (hrst_r) count <= '0;
     else count <= RW'(held >> 1);
 `ifndef SYNTHESIS
-  always @(posedge hclk) if (!hrst) begin
+  always @(posedge hclk) if (!hrst_r) begin
     if (i_v && cnt == (UW + 1)'(UDEPTH)) $fatal(1, "otpu_hbm_rpath: the URAM FIFO overflowed");
     if (issue && cnt == '0) $fatal(1, "otpu_hbm_rpath: a read of an empty URAM FIFO");
     if ((held >> 1) > (UW + 2)'(RDEPTH + 8)) $fatal(1, "otpu_hbm_rpath: %0d native beats held, over RDEPTH %0d (the engine's reservation)", held >> 1, RDEPTH);

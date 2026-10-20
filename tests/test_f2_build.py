@@ -1154,8 +1154,10 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # the read path (u_rp: the URAM FIFO and the crossing FIFO) floats with its URAMs in pb_otpu_hbm
     assert not any('u_rp' in c for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
     # the hub links: slice 2's rx / tx / port in its pblock, the hub's tx / rx in SLR1
-    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in s2 and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in s2
-    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[3].u_up_tx') in s3
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in s2 and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[3].u_up_tx') in s3
+    # the collective's port (it writes the TMEM) in the TMEM box, with the DMA
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in cells['pb_otpu_tmem2'] and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_cport' in cells['pb_otpu_tmem0']
+    assert not any('u_cport' in c for c in s2 + s3 + hbm + mid)
     assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid
     # the chains' bits: port 0 (slice 0) every stage in SLR0; port 2 (slice 1) stage 1 and 2 in
     # SLR1; port 4 (slice 2) stage 1 in SLR1, stage 2 in slice 2's half; port 6 (slice 3) stage 1

@@ -118,6 +118,17 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   | pb_otpu_s3 (board) | X4Y8:X7Y11 | slice 3 likewise | 85% / 69% / 47% |
   | pb_otpu_tmem2 / 3 (s2 / s3) | X0Y9:X3Y10 / X4Y9:X7Y10 | the slice's u_tmem, u_vpu, u_dma | 57K / 109K = 52% |
 
+  The second placed build (20f64ee3 at 200 MHz on the old floorplan, stopped after placement:
+  WNS -2.991, 197,974 of 3.32 M endpoints) added two path families: the collective's port
+  into slice 2's pumped TMEM (`g_xs.g_x[2].u_cport/hv_reg -> u_tmem/...g_pm`, 6.0 of 6.8 ns in
+  route on the pump's 5.0: u_cport now sits in the TMEM box with the DMA and the VPU) and the
+  hclk reset replica far from engine 7's floating read path (`u_mem/hrst_q_reg_rep -> u_rp/
+  aq_wd_reg/CE`, 4.7 ns of route on 2.2: each engine now registers its hclk reset itself,
+  otpu_hbm_ch hrst_i, and its read path once more, otpu_hbm_rpath hrst_r, both max_fanout 32
+  replicas placed with their loads; the read path's data registers lost their reset enables).
+  Its core-clock worst paths were slice 2's MXU DSP-to-DSP hops with 6.6 ns of route (the
+  SLR2 pair scattered, which the halves address); every clk <-> hclk and main <-> hclk group
+  was positive (clk_raw -> hclk +0.514 the tightest).
   What moved: slices 2 and 3 into halves of SLR2 with their adapters (both were loose in
   pb_otpu_board); slice 1's pblock takes the CL's columns beside the shell (16 -> 21 regions;
   slice 1 with its adapter would be 88% of the left half alone); slice 3's chain middle

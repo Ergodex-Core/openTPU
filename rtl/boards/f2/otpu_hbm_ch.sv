@@ -131,6 +131,11 @@ module otpu_hbm_ch #(
       last_v <= 1'b1; last_we <= n_cwe; next_beat <= n_caddr + 1'b1;
     end
   end
+  // the hclk reset registered here, by the engine, and replicated toward its loads (the top's
+  // replicas sat far from a floating read path on the first placed v5 build: 4.7 ns of route
+  // into its registers' enables at 450 MHz); the read path registers it once more for its own
+  (* max_fanout = 32 *) logic hrst_i;
+  always_ff @(posedge hclk) hrst_i <= hrst;
   // the command and write-beat FIFOs (core -> hclk)
   logic        cq_rvalid, cq_pop, h_cont, h_we;
   logic [24:0] h_beat;
@@ -138,7 +143,7 @@ module otpu_hbm_ch #(
   otpu_hbm_afifo #(.W(27), .DEPTH(CQD), .SLACK(XL), .TAKE(1'b1), .STYLE("distributed")) u_cq (
     .wclk(clk), .wrst(rst), .wvalid(pushc), .wready(n_cready), .wdata({cont, n_cwe, n_caddr}),
     .wcount(cq_wcount),
-    .rclk(hclk), .rrst(hrst), .rvalid(cq_rvalid), .rready(cq_pop), .rdata({h_cont, h_we, h_beat}),
+    .rclk(hclk), .rrst(hrst_i), .rvalid(cq_rvalid), .rready(cq_pop), .rdata({h_cont, h_we, h_beat}),
     .rcount());
   logic         wq_rvalid, wq_pop;
   logic [511:0] h_data;
@@ -147,12 +152,12 @@ module otpu_hbm_ch #(
   otpu_hbm_afifo #(.W(576), .DEPTH(WQD), .SLACK(XL), .TAKE(1'b1), .STYLE("distributed")) u_wq (
     .wclk(clk), .wrst(rst), .wvalid(pushw), .wready(n_wready), .wdata({n_wmask, n_wdata}),
     .wcount(wq_wcount),
-    .rclk(hclk), .rrst(hrst), .rvalid(wq_rvalid), .rready(wq_pop), .rdata({h_mask, h_data}),
+    .rclk(hclk), .rrst(hrst_i), .rvalid(wq_rvalid), .rready(wq_pop), .rdata({h_mask, h_data}),
     .rcount());
   // (the read beats: the read path u_rp below, hclk -> core) and the B tokens
   logic bq_wvalid, bq_rvalid;
   otpu_hbm_afifo #(.W(1), .DEPTH(32), .SLACK(0), .TAKE(1'b1), .STYLE("distributed")) u_bq (
-    .wclk(hclk), .wrst(hrst), .wvalid(bq_wvalid), .wready(), .wdata(1'b1), .wcount(),
+    .wclk(hclk), .wrst(hrst_i), .wvalid(bq_wvalid), .wready(), .wdata(1'b1), .wcount(),
     .rclk(clk), .rrst(rst), .rvalid(bq_rvalid), .rready(1'b1), .rdata(), .rcount());
   // n_wdone, n_err (the hclk error level through two flip-flops)
   logic herr;
@@ -189,7 +194,7 @@ module otpu_hbm_ch #(
   logic [511:0] w_d;
   logic [63:0]  w_m;
   logic         hrst_q;
-  always_ff @(posedge hclk) hrst_q <= hrst;
+  always_ff @(posedge hclk) hrst_q <= hrst_i;
   // the head and what it may do this cycle
   wire h_rd  = cq_rvalid && !h_we;
   wire h_wr  = cq_rvalid && h_we;
@@ -217,7 +222,7 @@ module otpu_hbm_ch #(
   wire          r_push = r_v && r_hi;   // a pair's second beat: its native beat is in the path
   logic [RW-1:0] rp_count;
   otpu_hbm_rpath #(.RDEPTH(RDEPTH)) u_rp (
-    .hclk, .hrst, .r_valid(r_v), .r_data(r_d), .count(rp_count),
+    .hclk, .hrst(hrst_i), .r_valid(r_v), .r_data(r_d), .count(rp_count),
     .clk, .rst, .n_rvalid, .n_rdata);
   // the lengths in AR order (RLAST's check: the beat count of the burst being returned)
   (* ram_style = "distributed" *) logic [3:0] lens [256];
@@ -239,7 +244,7 @@ module otpu_hbm_ch #(
   assign m_rready = !hrst_q;
   assign m_bready = !hrst_q;
   always_ff @(posedge hclk) begin
-    if (hrst) begin
+    if (hrst_i) begin
       ob_v <= 1'b0; ob_cl <= 1'b0; ob_full <= 1'b0; ob_open <= 1'b0; ob_len <= '0; ob_lm1 <= '0;
       ob_beat <= '0; rqc_q <= '0; rdr_q <= '0; w_busy <= 1'b0;
       idle <= '0; idle_to <= 1'b0;
@@ -315,7 +320,7 @@ module otpu_hbm_ch #(
     end
   end
 `ifndef SYNTHESIS
-  always @(posedge hclk) if (!hrst) begin
+  always @(posedge hclk) if (!hrst_i) begin
     if (ext && start) $fatal(1, "otpu_hbm_ch: ext and start together");
     if (cq_pop && !cq_rvalid) $fatal(1, "otpu_hbm_ch: a pop of an empty command FIFO");
     if (wq_pop && !wq_rvalid) $fatal(1, "otpu_hbm_ch: a pop of an empty write FIFO");

@@ -26,8 +26,9 @@
 #   go to SLR0 (k = 0), to SLR1 (k = 1, a slice at or above SLR1; slice 3's in SLR1's right
 #   columns, pb_otpu_mid3, under its half) or SLR0 (k = 1, slice 0), to the slice's pblock
 #   (k = 2); the hub links' tx / rx stages with the hub and the slice they serve.
-#   A pumped-TMEM box per slice (pb_otpu_tmem<s>) inside the slice's pblock: the TMEM, the VPU
-#   and the DMA (340c4ed6 placed slice 3's DMA 7 ns from its TMEM: clk -> clk_f at -3.6 ns).
+#   A pumped-TMEM box per slice (pb_otpu_tmem<s>) inside the slice's pblock: the TMEM, the VPU,
+#   the DMA and the collective's port (340c4ed6 placed slice 3's DMA 7 ns from its TMEM: clk ->
+#   clk_f at -3.6 ns; 20f64ee3 slice 2's collective port 6 ns from it, -2.7 ns).
 #   The host chain (wide-port-alexshell deb7ec12 / ba86b5df, which placed at +0.09): u_hrs512
 #   with the PCIS gate in SLR1, u_hrs512x in SLR0's top row beside the crossing (pb_otpu_hxs,
 #   X4Y3), the host SmartConnect boxed toward its port's column (pb_otpu_hsc), its 450 MHz
@@ -124,7 +125,6 @@ if {$otpu_S > 1} {
   # slice 0's hub link: its rx / tx and port with the slice, the hub's ends in SLR1 (below)
   add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_dn_rx}]
   add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_up_tx}]
-  add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_cport}]
   add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].g_pf.u_pf_tx}]
 }
 
@@ -150,7 +150,6 @@ if {$otpu_S > 1} {
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_slice[1].u_mem}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_dn_rx}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_up_tx}]
-  add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_cport}]
 }
 set otpu_mid3 {}
 if {$otpu_S > 3} {
@@ -191,7 +190,6 @@ for {set otpu_s 2} {$otpu_s < $otpu_S} {incr otpu_s} {
   add_cells_to_pblock $otpu_pb [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\[$otpu_s\].u_mem"]
   add_cells_to_pblock $otpu_pb [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_dn_rx"]
   add_cells_to_pblock $otpu_pb [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_up_tx"]
-  add_cells_to_pblock $otpu_pb [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_cport"]
   lappend otpu_sboxes $otpu_pb
   puts "OTPU_FLOORPLAN $otpu_pb $otpu_range slice $otpu_s"
 }
@@ -222,8 +220,10 @@ for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
 ########################################
 # SLR0: X2Y1:X3Y3 (the HBM columns' upper rows); SLR1: X1Y5:X3Y6; SLR2: X0Y9:X3Y10 (slice 2),
 # X4Y9:X7Y10 (slice 3). The slice's MXU wraps around the box as v4's did (pb_otpu_tmem). The
-# DMA is in the box: its registers into the pumped ports are clk -> clk_f paths with one core
-# period (otpu_clk2x.tcl; 340c4ed6 placed slice 3's 7 ns away).
+# DMA and the collective's port (g_xs.g_x[s].u_cport: the hub link's end that writes the
+# gathered rows into the TMEM) are in the box: their registers into the pumped ports are clk
+# -> clk_f paths with one core period (otpu_clk2x.tcl; 340c4ed6 placed slice 3's DMA 7 ns
+# away, 20f64ee3 slice 2's collective port 6 ns away).
 set otpu_tboxes [list {CLOCKREGION_X2Y1:CLOCKREGION_X3Y3} {CLOCKREGION_X1Y5:CLOCKREGION_X3Y6} {CLOCKREGION_X0Y9:CLOCKREGION_X3Y10} {CLOCKREGION_X4Y9:CLOCKREGION_X7Y10}]   ;# slice 0's box three rows tall: at X2Y1:X3Y2 its 68 RAMB36 were 119% of the box
 set otpu_tmems {}
 for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
@@ -234,6 +234,7 @@ for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
   add_cells_to_pblock $otpu_pb [otpu_cells "[otpu_slice_path $otpu_s]/u_tmem"]
   add_cells_to_pblock $otpu_pb [otpu_cells "[otpu_slice_path $otpu_s]/u_vpu"]
   add_cells_to_pblock $otpu_pb [otpu_cells "[otpu_slice_path $otpu_s]/u_dma"]
+  if {$otpu_S > 1} { add_cells_to_pblock $otpu_pb [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_cport"] }
   lappend otpu_tmems $otpu_pb
 }
 
