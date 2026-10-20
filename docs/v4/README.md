@@ -396,7 +396,31 @@ wrappers, a test against unsized literals from 2^31 up) and **build 8** runs on 
 22:59 UTC) while the m7a image is still being created. Build 8 passed RTL elaboration at
 23:09 UTC (0 errors, 0 critical warnings in `synth_link/console.log`: the ID and literal
 errors are gone) and is in synthesis; build 6's one slice took 1 h 51 min end to end, so three
-slices are expected to take two to three times that.
+slices are expected to take two to three times that. Build 8 passed synthesis and link at
+23:38 UTC (30 min, 0 errors) and is in implementation.
+
+**m7a build host (2026-10-20 00:16 UTC): build 9 running there too.** The image
+`ami-0433c6064060ec312` became available at 23:27 and `i-0410cddc1f5ab3852` (m7a.8xlarge,
+us-east-1d, 32 vCPU, 123 GiB, private 172.31.41.162) was launched from it at 23:28 with
+opentpu-f2's subnet, security groups, key and instance profile. Its SSM agent cannot register:
+the role `opentpu-f2-ssm`'s inline policy `OpenTpuSsm` allows `ssm:UpdateInstanceInformation`
+on opentpu-f2's instance ARN only (the agent log: AccessDeniedException on
+UpdateInstanceInformation, then a 25-30 min retry sleep), and the account has no default host
+management role. The fix is one more inline policy on the role in the pattern of
+`ScaleSimM7a8Register20261020` (which registered another m7a build host), allowing
+`ssm:UpdateInstanceInformation` on `arn:aws:ec2:us-east-1:438374459156:instance/i-0410cddc1f5ab3852`;
+the assistant's attempt to put it was refused by the permission classifier, so it waits for the
+user. Meanwhile the host is driven over SSH from the laptop (key `fpga-dev-f2`, a temporary
+port-22 rule for the laptop's /32 in `sg-0106bc98b14b3342f`, description
+`claude-temp-m7a-ssm-fix`, to be removed once SSM works). The image's tree was the pre-fix
+merge 1f4728a3; the tpubench11 bundle brought it to e22c2bfd (clean). Stale run directories from
+the image (f2hbm-run4/5, run5-failed-gate, f2burst200-s3-run1) were removed; build 6's
+`f2burst200-run1` stays. **Build 9** = the same three-slice build as build 8, started 00:15:49
+UTC as unit `otpu-f2burst200-s3-build3` (script `/home/ubuntu/rachit/f2burst200-s3-build3.sh`,
+log `/home/ubuntu/rachit/logs/f2burst200-s3-build3.log`, output
+`/home/ubuntu/rachit/f2burst200-s3-run3/`). A first start on the stale tree (00:14, the bundle
+download had failed on a malformed URL) was stopped within a minute and its output removed.
+Whichever of builds 8 and 9 closes first is packaged; the other is stopped.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
