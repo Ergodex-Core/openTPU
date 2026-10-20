@@ -720,7 +720,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # beside its own (port NPORT)
     assert sorted(cells['pb_otpu_hbmx0']) == sorted(
         [f'WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c{p}' for p in range(4)] +
-        [f'WRAPPER/CL/g_ch\\[{p}\\].u_rs256' for p in range(4)])
+        [f'WRAPPER/CL/g_ch[{p}].u_rs256' for p in range(4)])
     assert sorted(cells['pb_otpu_hbmx1']) == ['WRAPPER/CL/u_hrs256', 'WRAPPER/CL/u_hsc']
     assert 'WRAPPER/CL/g_ch[*].u_rs512' in hbm
     # the channels' otpu_native_axi and the SmartConnect fabric by the HBM's ports
