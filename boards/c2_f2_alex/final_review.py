@@ -365,7 +365,7 @@ def finalize(request_path, request_sha256, output):
     e=module('evidence'); request_path=Path(os.path.abspath(request_path)); output=Path(os.path.abspath(output))
     require(record(request_path)['sha256']==e.digest(request_sha256),'Untrusted review request')
     request=read_json(request_path)
-    require(set(request)=={'schema','kind','instance_id','roots','receipt_sha256','auxiliary','disposition','source_revision'} and request['schema']==1 and request['kind']=='c2-alex-final-review-request' and request['instance_id']==e.INSTANCE,'Malformed review request')
+    require(set(request)=={'schema','kind','instance_id','roots','receipt_sha256','auxiliary','disposition','source_revision'} and request['schema']==1 and request['kind']=='c2-alex-final-review-request' and request['instance_id'] in e.BUILDERS,'Malformed review request')
     require(set(request['roots'])==set(request['receipt_sha256'])=={'qualify','refine','simulation'},'Incomplete review receipt inputs')
     require(re.fullmatch('[0-9a-f]{40}',request['source_revision']),'Review source revision must be full commit')
     roots={k:Path(e.absolute(v)) for k,v in request['roots'].items()};original={};receipts={}

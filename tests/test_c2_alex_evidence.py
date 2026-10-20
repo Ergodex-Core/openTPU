@@ -584,7 +584,9 @@ def test_synchronous_proof_rejects_wrong_bindings(bundle,monkeypatch,change):
 
 def test_historical_ip_audit_pin_does_not_apply_to_hardware(bundle,monkeypatch):
     root,m,trusted=bundle;name='boards/c2_f2_alex/audit_c2_alex.tcl'
-    assert e.REVIEWED_HISTORICAL['ip',name]=={'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e'}
+    assert e.REVIEWED_HISTORICAL['ip',name]=={
+        '5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e',
+        'a9d91bef071f935089dc8cbc157d053253f00fe7dd667d5e6dca7ccb8cd4d349'}
     row=rec(root/'sources/ip'/name)
     # Synthetic old/new digest substitution exercises the role boundary without
     # requiring a historical Git checkout or mutating reviewed local code.

@@ -127,7 +127,7 @@ class Plan:
         self.roots = {role: Path(path) for role, path in spec['roots'].items()}
         self.files, self.source_bytes, self.tree_checks = {}, {}, []
         self.git = {}
-        self.manifest = {'schema': spec['schema'], 'kind': 'c2-alex-portable-evidence', 'instance_id': e.INSTANCE,
+        self.manifest = {'schema': spec['schema'], 'kind': 'c2-alex-portable-evidence', 'instance_id': spec['instance_id'],
                          'hardware': {}, 'roots': {}, 'source_snapshots': {}, 'receipts': {}, 'files': {}}
         for role, path in self.roots.items():
             prefix = 'runs/simulation/private-ip' if role == 'simulation_private' else 'runs/' + role
@@ -160,7 +160,7 @@ class Plan:
         return e.decode(raw)
 
     def receipt(self, role):
-        name = e.schema_receipts(self.spec['schema'])[role]; digest = self.spec['receipt_sha256'][role]
+        name = e.schema_receipts(self.spec['schema'], self.spec['instance_id'])[role]; digest = self.spec['receipt_sha256'][role]
         result = self.read(role, name, digest)
         self.manifest['receipts'][role] = {'relative_path': self.manifest['roots'][role]['bundle_relative_path'] + '/' + name,
                                          'sha256': digest}
@@ -206,7 +206,7 @@ def checked_spec(spec):
     e.require(isinstance(spec, dict) and set(spec) == {'schema', 'kind', 'instance_id', 'roots', 'receipt_sha256', 'source_checkouts'},
               'Invalid collection specification fields')
     e.require(type(spec['schema']) is int and spec['schema'] in (1, 2) and spec['kind'] == 'c2-alex-evidence-collection-inputs'
-              and spec['instance_id'] == e.INSTANCE, 'Wrong collection schema/dedicated instance')
+              and spec['instance_id'] in e.BUILDERS, 'Wrong collection schema/dedicated instance')
     e.require(set(spec['roots']) == set(e.schema_roles(spec['schema'])) and set(spec['receipt_sha256']) == set(e.schema_receipts(spec['schema']))
               and set(spec['source_checkouts']) == set(e.schema_sources(spec['schema'])), 'Incomplete collection roles/trusted receipt hashes')
     for role, path in spec['roots'].items():
@@ -253,12 +253,15 @@ def make_plan(spec):
             records[dest] = row
         p.source(source_role, value['source_revision'], records)
     p.inventory('installed', syni['installed_inputs'])
-    p.inventory('ip', ip['products']); p.inventory('ip', dep['files'])
+    p.inventory('ip', ip['products'])
+    fresh = spec['instance_id'] == e.CPU_BUILDER
+    dep_files = p.read('dependencies', 'dependencies-before.json', dep['dependencies_before']['sha256'])['files'] if fresh else dep['files']
+    p.inventory('ip', dep_files)
     for stage in ('ip', 'pcis', 'clocks'):
         for name in ('ip_done.txt', 'exit.json', 'command.json', 'console.log'): p.add('ip', stage + '/' + name)
         p.exact_tree('ip', stage + '/ip_project', {name for name in ip['products'] if name.startswith(stage + '/ip_project/')}, suffixes=b.PRODUCT_SUFFIXES)
     for tree in e.DEPENDENCY_TREES:
-        p.exact_tree('ip', tree, {name for name in dep['files'] if name.startswith(tree + '/')})
+        p.exact_tree('ip', tree, {name for name in dep_files if name.startswith(tree + '/')})
     for name in ('ip-binding.json', 'synth/post_synth.dcp', 'synth/exit.json', 'synth/synth_done.txt', 'synth/command.json', 'synth/console.log'):
         p.add('synth', name)
     for name in SYNTH_REPORTS: p.add('synth', 'synth/synth_audit/' + name)
@@ -289,16 +292,20 @@ def make_plan(spec):
     # approved Git revision above. Exclude only the exact identity-bound src
     # child, never arbitrary Git directories elsewhere in the evidence tree.
     prune = ('synthesis',) if p.roots['synth'] == p.roots['dependencies'] / 'synthesis' else ()
-    if dep.get('schema') == 2:
+    if not fresh and dep.get('schema') == 2:
         identity = p.read('dependencies', 'attestation/identity.json', e.digest(dep['identity_sha256']))
         source = p.roots['dependencies'] / 'src'
         if identity.get('source') == str(source):
             e.no_symlink(source); e.require(source.is_dir(), 'Missing identity-bound retry source checkout')
             prune += ('src',)
+    if fresh:
+        e.require(p.roots['synth'] == p.roots['dependencies'] / 'synthesis', 'Fresh dependency run ancestry differs')
+        prune = ('synthesis',)
     dep_names = file_names(p.roots['dependencies'], prune=prune)
     helper = 'run_synth_with_attestation.py' if dep.get('schema') == 2 else 'attest_ip_dependencies.py'
-    e.require({helper, 'attestation/complete.json', 'attestation/before.json', 'attestation/identity.json'} <= dep_names
-              and 'attestation/failure.json' not in dep_names, 'Incomplete/failed dependency observer')
+    required = {'driver.py', 'source-record.json', 'complete.json', 'identity.json', 'dependencies-before.json', 'dependencies-after.json',
+                'original-identity.json', 'original-driver.py', 'original-source-record.json', 'synthesis-command.json', 'synthesis-exit.json'} if fresh else {helper, 'attestation/complete.json', 'attestation/before.json', 'attestation/identity.json'}
+    e.require(required <= dep_names and not {'failure.json', 'attestation/failure.json'} & dep_names, 'Incomplete/failed dependency observer')
     for name in dep_names: p.add('dependencies', name)
     p.exact_tree('dependencies', '', dep_names, prune=prune)
     raw = encode(p.manifest); e.manifest_data(raw, hashlib.sha256(raw).hexdigest())
@@ -360,7 +367,7 @@ def collect(spec, out, *, spec_raw=None):
         plan.recheck()
         e.require(e.verify_bundle(bundle, manifest_sha) == verified, 'Bundle changed during archive creation')
         receipt = {'schema': 1, 'kind': 'c2-alex-evidence-collection', 'state': 'complete',
-                   'instance_id': e.INSTANCE, 'started_utc': started, 'finished_utc': now(),
+                   'instance_id': spec['instance_id'], 'started_utc': started, 'finished_utc': now(),
                    'inputs_sha256': hashlib.sha256(raw).hexdigest(), 'manifest_sha256': manifest_sha,
                    'collector_sha256': e.sha(Path(__file__)), 'verifier_sha256': e.sha(HERE / 'evidence.py'),
                    'archive': {'relative_path': 'evidence.tar', 'sha256': archived['archive_sha256'], 'bytes': archive.stat().st_size},

@@ -192,7 +192,7 @@ def review_bundle(tmp_path,monkeypatch):
  receipt=r.finalize(request,r.record(request)['sha256'],out)
  for name in receipt['source_inputs']:f.put(tmp_path/'sources/review'/name,(ROOT/name).read_bytes())
  e=r.module('evidence');x=e.Bundle.__new__(e.Bundle);x.root=tmp_path
- x.manifest={'schema':2,'roots':{role:{'bundle_relative_path':role} for role in ('link',*roots,'review')},'source_snapshots':{'review':{'revision':'d'*40,'bundle_relative_path':'sources/review'}},'receipts':{}}
+ x.manifest={'schema':2,'instance_id':e.INSTANCE,'roots':{role:{'bundle_relative_path':role} for role in ('link',*roots,'review')},'source_snapshots':{'review':{'revision':'d'*40,'bundle_relative_path':'sources/review'}},'receipts':{}}
  x.files=f.inventory(tmp_path)
  for role in (*roots,'review'):
   name=e.schema_receipts(2)[role];x.manifest['receipts'][role]={'relative_path':role+'/'+name,'sha256':r.record(tmp_path/role/name)['sha256']}

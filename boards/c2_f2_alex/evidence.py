@@ -15,6 +15,11 @@ maps each RECEIPTS entry to {relative_path, sha256}. ``hardware`` contains the
 original source_revision and its eight-character build_id. No receipt is edited
 to relocate it. The dependencies role is the observer directory containing the
 reviewed attest_ip_dependencies.py and attestation/{identity,before,complete}.json.
+The authorized CPU builder instead preserves a separate successful synth-retry
+root with complete.json, identity.json, before/after dependency inventories and
+byte-identical original private-IP provenance. A failed original synthesis is
+never promoted to completion. instance_id identifies the build host, not an
+authorized FPGA runtime target.
 
 This is evidence replay under a trusted collection hash, not authentication of
 an unknown submitter's assertions. Archive preflight never grants qualification.
@@ -38,7 +43,17 @@ import tarfile
 HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MANIFEST = 'bundle-manifest.json'
+# INSTANCE remains the sole physical FPGA target; manifests identify the builder.
 INSTANCE = 'i-0c78de2253f66519d'
+CPU_BUILDER = 'i-06cf8792fb8f15534'
+BUILDERS = (INSTANCE, CPU_BUILDER)
+FRESH_SOURCE = '5ad534f62adc53d2a0455e72835affd72dca633f'
+FRESH_DRIVER_SHA256 = '795503db92c74432d09803a4b36b10f73d16d9dc8431e6b9dae52d8847e608ad'
+FRESH_IDENTITY_SHA256 = '5cf454ae2e4f82c5d1f54ec217d1014bf1d50bae6b76d42cf17f4bca2d22fcd7'
+FRESH_SOURCE_RECORD_SHA256 = '8d1d35b750db5404cccb63ba9b29c36ce26d108aaddbbfdf69aa61e48880b72f'
+# Reviewed CPU-only retry: immutable original IP, audit-only source change.
+REVIEWED_CPU_RETRY_DRIVERS = frozenset({'76c9d44d7af3dc0b22e7cb029187d7fb2a1e2665278bd6ce772299765796b2fe'})
+FRESH_IP_RECEIPT = {'bytes': 187446, 'sha256': '86d68a579e3483480baef9f864d841f17d9835443000cdbf39eeb87ff720a553'}
 MAX_FILES, MAX_TOTAL, MAX_FILE, MAX_MANIFEST = 100000, 64 << 30, 16 << 30, 64 << 20
 MAX_SUPPLEMENTAL_TEXT = 256 << 20
 ROLES = ('ip', 'synth', 'link', 'implement', 'refine', 'qualify', 'simulation', 'simulation_private', 'installed', 'dependencies')
@@ -54,8 +69,8 @@ def schema_sources(schema):
     return SOURCE_ROLES + (('review',) if schema == 2 else ())
 
 
-def schema_receipts(schema):
-    return {**RECEIPTS, **({'review': 'review-result.json'} if schema == 2 else {})}
+def schema_receipts(schema, instance=INSTANCE):
+    return {**RECEIPTS, **({'dependencies': 'complete.json'} if instance == CPU_BUILDER else {}), **({'review': 'review-result.json'} if schema == 2 else {})}
 
 
 DEPENDENCY_SOURCE = '264d84134da11630622002cd869cf88b07e49aec'
@@ -72,7 +87,8 @@ REVIEWED_HISTORICAL = {('link', 'boards/c2_f2_alex/qualify_c2_alex.tcl'):
                       {'6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c',
                        'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'},
                       ('ip', 'boards/c2_f2_alex/audit_c2_alex.tcl'):
-                      {'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e'}}
+                      {'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e',
+                       'a9d91bef071f935089dc8cbc157d053253f00fe7dd667d5e6dca7ccb8cd4d349'}}
 # Preserve the executed stage runner only for completed pre-qualification roles.
 for _stage in ('link', 'implement', 'refine'):
     REVIEWED_HISTORICAL[(_stage, 'boards/c2_f2_alex/implement.py')] = {
@@ -141,7 +157,7 @@ def manifest_data(raw, expected_sha256):
     m = decode(raw)
     require(set(m) == {'schema', 'kind', 'instance_id', 'hardware', 'roots', 'source_snapshots', 'receipts', 'files'},
             'Unknown/missing manifest fields')
-    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c2-alex-portable-evidence' and m['instance_id'] == INSTANCE,
+    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c2-alex-portable-evidence' and m['instance_id'] in BUILDERS,
             'Wrong evidence schema or dedicated instance')
     hardware = m['hardware']
     require(set(hardware) == {'source_revision', 'build_id'} and
@@ -181,8 +197,8 @@ def manifest_data(raw, expected_sha256):
         relative(name); metadata(row); total += row['bytes']
         require(any(name.startswith(prefix + '/') for prefix in prefixes.values()), 'File outside mapped evidence roots')
     require(total <= MAX_TOTAL, 'Expanded evidence exceeds size bound')
-    require(set(m['receipts']) == set(schema_receipts(m['schema'])), 'Incomplete receipt inventory')
-    for role, filename in schema_receipts(m['schema']).items():
+    require(set(m['receipts']) == set(schema_receipts(m['schema'], m['instance_id'])), 'Incomplete receipt inventory')
+    for role, filename in schema_receipts(m['schema'], m['instance_id']).items():
         record = m['receipts'][role]
         expected = m['roots'][role]['bundle_relative_path'] + '/' + filename
         require(set(record) == {'relative_path', 'sha256'} and record['relative_path'] == expected and
@@ -293,7 +309,7 @@ class Bundle:
 
     def receipt(self, role):
         record = self.manifest['receipts'][role]
-        return self.read(role, schema_receipts(self.manifest['schema'])[role], record['sha256'])
+        return self.read(role, schema_receipts(self.manifest['schema'], self.manifest['instance_id'])[role], record['sha256'])
 
 
 def local_module(name):
@@ -362,8 +378,99 @@ def tcl_dict(text):
     return unique(zip(words[::2], words[1::2]))
 
 
+def fresh_dependency_attestation(x):
+    """Replay a reviewed CPU retry without relabeling its failed predecessor."""
+    complete = x.receipt('dependencies')
+    require(complete.get('kind') == 'c2-m7a-reused-ip-synthesis-complete-pending-functional-validation'
+            and complete.get('hardware_actions') is False and complete.get('route_qualified') is False
+            and 'failure.json' not in x.names('dependencies'), 'Missing/failed CPU synthesis retry')
+    # Receipt success and dependency equality are replayed, not inferred from
+    # the driver's exit code or its dependencies_unchanged flag.
+    bindings = {'identity': 'identity.json', 'driver': 'driver.py', 'source_record': 'source-record.json',
+                'dependencies_before': 'dependencies-before.json', 'dependencies_after': 'dependencies-after.json'}
+    for key, name in bindings.items():
+        require(complete.get(key) == x.record('dependencies', name), 'CPU retry binding differs: ' + key)
+    require(complete['driver']['sha256'] in REVIEWED_CPU_RETRY_DRIVERS, 'Unreviewed CPU synthesis retry driver')
+    original_files = {name: x.record('dependencies', name) for name in
+                      ('original-identity.json', 'original-driver.py', 'original-source-record.json')}
+    require(complete.get('original_files') == original_files, 'Original private-IP provenance bindings differ')
+    require(original_files['original-identity.json']['sha256'] == FRESH_IDENTITY_SHA256 and
+            original_files['original-driver.py']['sha256'] == FRESH_DRIVER_SHA256 and
+            original_files['original-source-record.json']['sha256'] == FRESH_SOURCE_RECORD_SHA256,
+            'Unreviewed original private-IP executor')
+    identity = x.read('dependencies', 'identity.json')
+    original = x.read('dependencies', 'original-identity.json')
+    source = x.read('dependencies', 'source-record.json')
+    original_source = x.read('dependencies', 'original-source-record.json')
+    before = x.read('dependencies', 'dependencies-before.json')
+    after = x.read('dependencies', 'dependencies-after.json')
+    require(identity.get('original_files') == original_files and identity.get('driver') == complete['driver'],
+            'Retry identity provenance differs')
+    require(source.get('support_verified') is True and original_source.get('support_verified') is True and
+            all(row.get('hardware_actions') is False for row in (source, original_source, identity, original, before)),
+            'CPU source support/hardware-action provenance differs')
+    ipi, syni = (x.read(role, 'inputs.json') for role in ('ip', 'synth'))
+    revision = x.manifest['hardware']['source_revision']
+    require(identity.get('kind') == 'c2-m7a-reused-ip-synthesis-identity' and
+            original.get('kind') == 'c2-m7a-fresh-ip-synthesis-identity', 'Wrong CPU executor identity')
+    require(all(row.get('instance_id') == CPU_BUILDER for row in (complete, identity, original, before)),
+            'CPU dependency builder mismatch')
+    require(complete.get('source_revision') == identity.get('source_revision') == source.get('revision') ==
+            syni.get('source_revision') == revision and source.get('frozen_inputs') == syni.get('source_inputs'),
+            'Retry source differs from synthesized source')
+    require(original.get('source_revision') == original_source.get('revision') == ipi.get('source_revision') == FRESH_SOURCE
+            and original_source.get('frozen_inputs') == ipi.get('source_inputs'), 'Original private-IP source differs')
+    audit = 'boards/c2_f2_alex/audit_c2_alex.tcl'
+    require(set(source['frozen_inputs']) == set(original_source['frozen_inputs']) and
+            all(row == source['frozen_inputs'][name] for name, row in original_source['frozen_inputs'].items() if name != audit),
+            'CPU retry changed hardware inputs beyond its audit')
+    require(original.get('source_record_sha256') == FRESH_SOURCE_RECORD_SHA256 and
+            identity.get('source_record') == complete['source_record'], 'Source record identity differs')
+    require(identity.get('hdk') == original.get('hdk') == x.original('installed') and
+            identity.get('installed_inputs') == original.get('installed_inputs') == syni.get('installed_inputs') == ipi.get('installed_inputs'),
+            'CPU retry changed installed tool inputs')
+    unit, invocation = identity.get('unit'), identity.get('invocation_id')
+    require(unit == f'otpu-c2-{revision[:8]}-synth-retry.service'
+            and isinstance(invocation, str) and re.fullmatch('[0-9a-f]{32}', invocation), 'Invalid CPU retry invocation')
+    state = identity.get('unit_state', {})
+    require(complete.get('unit') == unit and complete.get('invocation_id') == before.get('invocation_id') == invocation
+            and state.get('Id') == unit and state.get('InvocationID') == invocation and
+            state.get('MemoryMax') == str(32 << 30) and state.get('CPUQuotaPerSecUSec') == '4s',
+            'CPU retry unit identity/resource bound changed')
+    require(before.get('kind') == 'c2-reused-generated-dependencies-before-synthesis'
+            and before.get('source_revision') == revision, 'Wrong retry before-synthesis inventory')
+    ip_record = x.record('ip', 'ip-complete.json')
+    require(ip_record == FRESH_IP_RECEIPT, 'Unreviewed fresh private-IP receipt')
+    require(before.get('ip_receipt') == after.get('ip_receipt') == identity.get('ip_receipt') == complete.get('ip_receipt') == ip_record and
+            before.get('ip_run') == identity.get('ip_run') == complete.get('ip_run') == x.original('ip') and
+            complete.get('synth_receipt') == x.record('synth', 'synth-complete.json') and
+            complete.get('checkpoint') == x.record('synth', 'synth/post_synth.dcp') and
+            complete.get('checkpoint_path') == x.original('synth', 'synth/post_synth.dcp'), 'CPU receipt/DCP ancestry differs')
+    require(x.original('synth') == x.original('dependencies') + '/synthesis', 'CPU retry synthesis layout differs')
+    command = x.read('dependencies', 'synthesis-command.json')
+    require(isinstance(command, list) and len(command) == 12, 'Wrong CPU retry command')
+    absolute(command[0]); absolute(source.get('source'))
+    require(command[1:] == [source['source'] + '/boards/c2_f2_alex/build.py', '--hdk', x.original('installed'),
+            '--out', x.original('synth'), '--ip-jobs', '1', '--stage', 'synth', '--ip-run', x.original('ip')],
+            'CPU retry command source/run differs')
+    exit_record = x.read('dependencies', 'synthesis-exit.json')
+    require(exit_record.get('returncode') == 0, 'CPU retry synthesis failed')
+    dates = [datetime.datetime.fromisoformat(row[key]) for row, key in
+             ((identity, 'started_at'), (exit_record, 'finished_at'), (after, 'finished_at'), (complete, 'finished_at'))]
+    require(all(t.utcoffset() == datetime.timedelta(0) for t in dates) and dates == sorted(dates),
+            'CPU retry times out of order/not UTC')
+    names = {name for name in x.names('ip') if any(name.startswith(tree + '/') for tree in DEPENDENCY_TREES)}
+    require(before.get('files') == after.get('files'), 'Generated dependencies changed during CPU retry')
+    x.inventory('ip', before.get('files'), exact=names)
+    require(complete.get('dependency_files') == len(names) and
+            all(any(name.startswith(tree + '/') for name in names) for tree in DEPENDENCY_TREES) and
+            any(name.endswith(('.vh', '.svh')) for name in names), 'Incomplete CPU generated dependencies')
+
+
 def dependency_attestation(x):
     """Replay the separately captured pre-synthesis includes proof, not its code."""
+    if x.manifest['instance_id'] == CPU_BUILDER:
+        return fresh_dependency_attestation(x)
     complete = x.receipt('dependencies')
     identity = x.read('dependencies', 'attestation/identity.json', digest(complete.get('identity_sha256')))
     before = x.read('dependencies', 'attestation/before.json', digest(complete.get('before_sha256')))
@@ -612,7 +719,7 @@ def verify_bundle(root, manifest_sha256):
     for name, row in x.files.items():
         require(sha(x.root / name) == row['sha256'], 'Bundle changed while verifying')
     require(sha(x.root / MANIFEST) == manifest_sha256, 'Manifest changed while verifying')
-    return {'schema': 1, 'kind': 'verified-c2-alex-portable-evidence', 'instance_id': INSTANCE,
+    return {'schema': 1, 'kind': 'verified-c2-alex-portable-evidence', 'instance_id': m['instance_id'],
             'manifest_sha256': digest(manifest_sha256), **hardware, 'route_qualified': True,
             'hardware_measured': False, 'final_dcp_sha256': final_sha,
             'final_dcp_relative_path': x.path('refine', 'post_route.dcp').relative_to(x.root).as_posix(),

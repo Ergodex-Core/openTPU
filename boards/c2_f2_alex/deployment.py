@@ -58,9 +58,11 @@ def validate_identity(record, *, require_available=False):
 def validate_record(record, verified):
     """State-independent publisher binding; does not authorize a physical session."""
     validate_identity(record)
+    # Evidence may be built on the dedicated CPU host. The session independently
+    # enforces its sole FPGA runtime target before accessing a device.
     require(verified.get('schema')==1 and verified.get('kind')=='verified-c2-alex-portable-evidence' and
             verified.get('route_qualified') is True and verified.get('hardware_measured') is False and
-            verified.get('instance_id')=='i-0c78de2253f66519d','Portable evidence is not qualified')
+            verified.get('instance_id') in ('i-0c78de2253f66519d', 'i-06cf8792fb8f15534'),'Portable evidence is not qualified')
     expected={'source_revision':verified['source_revision'],'build_id':verified['build_id'],
         'evidence_manifest_sha256':verified['manifest_sha256'],'inputs_sha256':verified['synth_inputs_sha256'],
         'dcp_sha256':verified['final_dcp_sha256'],**{k:verified[k] for k in
