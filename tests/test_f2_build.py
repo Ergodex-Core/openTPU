@@ -1007,3 +1007,21 @@ def test_hbm_sc_block_design_is_per_channel(tmp_path, nport, khz, sc_fault):
     assert (ipdir / 'ip_done.txt').read_text().startswith('IP_DONE')
     inst = (ipdir / 'otpu_hbm_sc_inst.vh').read_text()
     assert f'.S_N{nport - 1}_araddr(cs_araddr[{nport - 1}])' in inst
+
+
+def test_hbm_wrapper_gets_a_reset_pipeline_per_port():
+    """The copied HDK wrapper drives every HBM port's ARESET_N from its own four-stage pipe
+    (62b34824 placed AWS's single pipe at -0.261 ns on the recovery check to port 0); a wrapper
+    whose markers moved stops the build."""
+    src = ("module cl_mem_hbm_wrapper;\n  logic axi_rst_n;\n" + flow.HBM_RST_PIPE +
+           "    `define CONNECT_AXI_HBM_CORE(P)\\\n      .AXI_``P``_ACLK               (axi_clk                        ),\\\n"
+           "      " + flow.HBM_RST_PORT + ",\\\nendmodule\n")
+    out = flow.hbm_wrapper_per_port_reset(src)
+    assert out.count('lib_pipe #(.WIDTH(1), .STAGES(4))') == 2 and 'g_otpu_rst' in out
+    assert '(* DONT_TOUCH = "yes" *)' in out and 'axi_rst_n_p[otpu_rp]' in out
+    assert '(axi_rst_n_p[P]                 )' in out and flow.HBM_RST_PORT not in out
+    assert 'logic [31:0] axi_rst_n_p;' in out and flow.HBM_RST_PIPE in out
+    with pytest.raises(RuntimeError, match='per-port reset patch'):
+        flow.hbm_wrapper_per_port_reset(src.replace('axi_rst_n                      )', 'axi_rst_n)'))
+    with pytest.raises(RuntimeError, match='per-port reset patch'):
+        flow.hbm_wrapper_per_port_reset(src + src)

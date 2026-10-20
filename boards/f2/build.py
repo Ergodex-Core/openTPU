@@ -90,6 +90,37 @@ def check_hbm_ip(hdk: Path) -> None:
             raise RuntimeError(f'Missing HDK IP for the HBM chain: {hdk / rel}')
 
 
+HBM_RST_PIPE = ("  lib_pipe #(.WIDTH(1), .STAGES(4)) PIPE_HBM_AXI_RST (.clk(axi_clk), .rst_n(1'b1), "
+                ".in_bus(i_rst_450m_n), .out_bus(axi_rst_n));\n")
+HBM_RST_PORT = '.AXI_``P``_ARESET_N           (axi_rst_n                      )'
+
+
+def hbm_wrapper_per_port_reset(text: str) -> str:
+    """The HDK's cl_mem_hbm_wrapper with one AXI reset pipeline per HBM port. AWS's single
+    lib_pipe (PIPE_HBM_AXI_RST) fans out to all 32 ports' ARESET_N across the die's bottom edge:
+    placed at a 450 MHz AXI clock its last register reached port 0 2.25 ns of route away on the
+    2.222 ns period (a recovery check, -0.261 ns, the 150 MHz build 62b34824). Each port now has
+    its own four-stage pipe, DONT_TOUCH so synthesis (-keep_equivalent_registers) and opt_design
+    keep the equivalent registers apart; the original pipe stays for the wrapper's own uses.
+    Fails closed: every marker must occur exactly once (a changed HDK wrapper stops the build)."""
+    marks = [('  logic axi_rst_n;\n',
+              '  logic axi_rst_n;\n  logic [31:0] axi_rst_n_p;   // openTPU: a reset pipeline per HBM port (g_otpu_rst)\n'),
+             (HBM_RST_PIPE, HBM_RST_PIPE +
+              "  // openTPU (boards/f2/build.py hbm_wrapper_per_port_reset): a reset pipeline per HBM AXI\n"
+              "  // port, each placed by its port; the single pipe above fans out across the bottom edge\n"
+              "  for (genvar otpu_rp = 0; otpu_rp < 32; otpu_rp++) begin : g_otpu_rst\n"
+              "    (* DONT_TOUCH = \"yes\" *) lib_pipe #(.WIDTH(1), .STAGES(4)) PIPE_HBM_AXI_RST_P "
+              "(.clk(axi_clk), .rst_n(1'b1), .in_bus(i_rst_450m_n), .out_bus(axi_rst_n_p[otpu_rp]));\n"
+              "  end\n"),
+             (HBM_RST_PORT, '.AXI_``P``_ARESET_N           (axi_rst_n_p[P]                 )')]
+    for old, new in marks:
+        if text.count(old) != 1:
+            raise RuntimeError(f'cl_mem_hbm_wrapper.sv: expected exactly one {old.strip()[:60]!r} '
+                               f'({text.count(old)} found): the HDK wrapper changed, review the per-port reset patch')
+        text = text.replace(old, new)
+    return text
+
+
 def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
     for path, wanted in [(hdk, t.platform['hdk_commit']),
                          (hdk / 'hdk/common/ip', t.platform['ip_commit'])]:
@@ -173,6 +204,9 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         if not w.is_file():
             raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
         shutil.copy2(w, cl / 'design/cl_mem_hbm_wrapper.sv')
+        wt = (cl / 'design/cl_mem_hbm_wrapper.sv').read_text()
+        if 'lib_pipe' in wt:          # the HDK's wrapper (tests may pass a stub): per-port resets
+            (cl / 'design/cl_mem_hbm_wrapper.sv').write_text(hbm_wrapper_per_port_reset(wt))
         div, mult, d0, d1 = HBM_CORE_MMCM[t.core_khz]
         (cl / 'design/opentpu_geometry.vh').write_text(
             f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n"
