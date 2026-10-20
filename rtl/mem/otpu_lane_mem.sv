@@ -37,7 +37,8 @@ module otpu_lane_mem #(
   parameter int WGATHER = 4,
   parameter int RD = 128,
   parameter int AD = 64,
-  parameter int APF = 32
+  parameter int APF = 32,
+  parameter bit SWFILL = 1'b1          // SW partial beats with a fill read (otpu_native_dram)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -152,7 +153,7 @@ module otpu_lane_mem #(
     assign ca_be[l]    = a_be_x;
     assign cs_req[l]   = sw_req && sw_rdy;
     otpu_native_dram #(.D(D), .QD(QD), .WQD(WQD), .CHASH(CHASH), .WGATHER(WGATHER), .RD(RD),
-                       .AD(AD), .APF(APF)) u_adapt (
+                       .AD(AD), .APF(APF), .SWFILL(SWFILL)) u_adapt (
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),

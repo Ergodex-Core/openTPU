@@ -31,6 +31,8 @@ module otpu_board #(
   parameter int DRAM_LOG2  = 32,        // log2 DRAM bytes per slice (CFG_DRAM)
   parameter int MXU_C      = 1,         // the MXU's lock-step chunk lanes (otpu_mxu_lanes; > 1: S 1,
                                         //   the lane memory, see the top)
+  parameter bit SWFILL     = 1'b1,      // SW partial beats: a fill read first (otpu_native_dram;
+                                        //   0 where the memory takes byte masks: the F2's HBM)
   parameter int D          = 128,
   parameter int MCOLS      = 2,
   parameter int ACT_BLOCKS = 128,
@@ -396,7 +398,7 @@ module otpu_board #(
   if (LM) begin : g_lmem
     // the lane memory: copy l (lane l's chunks and scale lines; copy 0 the slice's ports A / B)
     // on channels 2 l, 2 l + 1, every write to every copy
-    otpu_lane_mem #(.D(D), .C(MXU_C), .CHASH(CHASH)) u_mem (
+    otpu_lane_mem #(.D(D), .C(MXU_C), .CHASH(CHASH), .SWFILL(SWFILL)) u_mem (
       .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
       .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -412,7 +414,7 @@ module otpu_board #(
   end else begin : g_mem1
     assign lb_rdy = '0; assign lb_rvalid = '0; assign lb_rdata = '0;
     assign la_rdy = '0; assign la_rvalid = '0; assign la_rdata = '0;
-    otpu_native_dram #(.D(D), .CHASH(CHASH)) u_mem (
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .SWFILL(SWFILL)) u_mem (
       .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
           .a_be_x(a_be), .a_rvalid, .a_rdata,

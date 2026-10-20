@@ -105,7 +105,12 @@ module otpu_native_dram #(
   // A read run (prefetch), beats. 32: decode's knee (docs/litedram.md section 11; 8 -> 32 is
   // 0.9-1.3% fewer cycles per token, 64 no better): fewer runs, so fewer row and bank changes
   // between the scale stream and the others
-  parameter int APF = 32
+  parameter int APF = 32,
+  // SW partial beats (a transposed V column: one byte a beat): 1, a fill read first and the
+  // beat written whole (LiteDRAM's controller would read-modify-write a masked beat, holding the
+  // channel for a read's latency); 0, written with their byte mask, no fill read (a controller
+  // that takes byte masks at full rate: the F2's HBM, its ECC off, docs/v4/p2-f2.md "SWFILL")
+  parameter bit SWFILL = 1'b1
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -471,7 +476,7 @@ module otpu_native_dram #(
       if (src[c] == S_WW) begin
         for (int k = 0; k < 64; k++)
           n_wdata[c][8 * k +: 8] = hw[c].strb[k] ? hw[c].data[8 * k +: 8] : wr_head[c][8 * k +: 8];
-        n_wmask[c] = '1;
+        n_wmask[c] = SWFILL ? '1 : hw[c].strb;   // (SWFILL 0: the beat's own bytes alone)
       end else if (src[c] == S_A) begin
         n_wdata[c][32 * ha[c].idx +: 32] = ha[c].data;
         n_wmask[c][4 * ha[c].idx +: 4] = ha[c].be;
@@ -596,7 +601,7 @@ module otpu_native_dram #(
         if (!qw_n[c][WW]) begin                // the tail slot, as qwm (see g_mem)
           logic [WW-1:0] t;
           t = WW'(qw_f[c] + qw_n[c]);
-          wpart[c][t] <= !(&gb[c].strb);
+          wpart[c][t] <= SWFILL && !(&gb[c].strb);
           wgot[c][t] <= 1'b0;
         end
         // ---- the command stream: a shown command is shown again until taken, a write until

@@ -51,6 +51,8 @@ module otpu_top
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
   parameter bit LMEM       = 1'b1,    // AXI = 1, MXU_C > 1: the lane memory (see the top)
+  parameter bit SWFILL     = 1'b1,    // AXI = 1: SW partial beats with a fill read (otpu_native_dram;
+                                      //   0: with their byte masks, the F2 build's; OTPU_SWFILL)
   parameter bit NAXI       = 1'b0,    // AXI = 1: the F2 HBM build's channel path in front of the
   parameter int NAXI_XR    = 3,       //   model (sim/verilator/otpu_naxi_mem.sv: NAXI_XR SLR
   parameter int NAXI_BURST = 8,       //   stages each way, otpu_native_axi with its read bursts,
@@ -118,7 +120,7 @@ module otpu_top
       logic [2*MXU_C-1:0][511:0] wdata, rdata;
       logic [2*MXU_C-1:0][63:0] wmask;
       logic [2*MXU_C-1:0][15:0] wdone;
-      otpu_lane_mem #(.D(D), .C(MXU_C)) u_lmem (
+      otpu_lane_mem #(.D(D), .C(MXU_C), .SWFILL(SWFILL)) u_lmem (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
@@ -183,7 +185,7 @@ module otpu_top
       logic [1:0][511:0] wdata, rdata;
       logic [1:0][63:0] wmask;
       logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D)) u_adapt (
+      otpu_native_dram #(.D(D), .SWFILL(SWFILL)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
