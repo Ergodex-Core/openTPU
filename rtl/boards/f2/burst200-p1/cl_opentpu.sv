@@ -110,44 +110,103 @@ logic [31:0] ctl_rdata;
 logic [1:0] ctl_rresp;
 logic ctl_rvalid;
 logic ctl_rready;
+logic [31:0] ocp_awaddr;
+logic ocp_awvalid;
+logic ocp_awready;
+logic [31:0] ocp_wdata;
+logic [3:0] ocp_wstrb;
+logic ocp_wvalid;
+logic ocp_wready;
+logic [1:0] ocp_bresp;
+logic ocp_bvalid;
+logic ocp_bready;
+logic [31:0] ocp_araddr;
+logic ocp_arvalid;
+logic ocp_arready;
+logic [31:0] ocp_rdata;
+logic [1:0] ocp_rresp;
+logic ocp_rvalid;
+logic ocp_rready;
 f2_ocl_cdc u_ocl_cdc (
   .s_axi_aclk(clk_main_a0),
   .s_axi_aresetn(rst_main_n_sync),
   .m_axi_aclk(core_clk),
   .m_axi_aresetn(core_rst_n),
   .s_axi_awaddr(ocl_cl_awaddr),
-  .m_axi_awaddr(ctl_awaddr),
+  .m_axi_awaddr(ocp_awaddr),
   .s_axi_awvalid(ocl_cl_awvalid),
-  .m_axi_awvalid(ctl_awvalid),
+  .m_axi_awvalid(ocp_awvalid),
   .s_axi_awready(cl_ocl_awready),
-  .m_axi_awready(ctl_awready),
+  .m_axi_awready(ocp_awready),
   .s_axi_wdata(ocl_cl_wdata),
-  .m_axi_wdata(ctl_wdata),
+  .m_axi_wdata(ocp_wdata),
   .s_axi_wstrb(ocl_cl_wstrb),
-  .m_axi_wstrb(ctl_wstrb),
+  .m_axi_wstrb(ocp_wstrb),
   .s_axi_wvalid(ocl_cl_wvalid),
-  .m_axi_wvalid(ctl_wvalid),
+  .m_axi_wvalid(ocp_wvalid),
   .s_axi_wready(cl_ocl_wready),
-  .m_axi_wready(ctl_wready),
+  .m_axi_wready(ocp_wready),
   .s_axi_bresp(cl_ocl_bresp),
-  .m_axi_bresp(ctl_bresp),
+  .m_axi_bresp(ocp_bresp),
   .s_axi_bvalid(cl_ocl_bvalid),
-  .m_axi_bvalid(ctl_bvalid),
+  .m_axi_bvalid(ocp_bvalid),
   .s_axi_bready(ocl_cl_bready),
-  .m_axi_bready(ctl_bready),
+  .m_axi_bready(ocp_bready),
   .s_axi_araddr(ocl_cl_araddr),
-  .m_axi_araddr(ctl_araddr),
+  .m_axi_araddr(ocp_araddr),
   .s_axi_arvalid(ocl_cl_arvalid),
-  .m_axi_arvalid(ctl_arvalid),
+  .m_axi_arvalid(ocp_arvalid),
   .s_axi_arready(cl_ocl_arready),
-  .m_axi_arready(ctl_arready),
+  .m_axi_arready(ocp_arready),
   .s_axi_rdata(cl_ocl_rdata),
-  .m_axi_rdata(ctl_rdata),
+  .m_axi_rdata(ocp_rdata),
   .s_axi_rresp(cl_ocl_rresp),
-  .m_axi_rresp(ctl_rresp),
+  .m_axi_rresp(ocp_rresp),
   .s_axi_rvalid(cl_ocl_rvalid),
-  .m_axi_rvalid(ctl_rvalid),
+  .m_axi_rvalid(ocp_rvalid),
   .s_axi_rready(ocl_cl_rready),
+  .m_axi_rready(ocp_rready),
+  .s_axi_awprot(3'd0),
+  .s_axi_arprot(3'd0),
+  .m_axi_awprot(),
+  .m_axi_arprot()
+);
+f2_ocl_pipe u_ocl_pipe (
+  .aclk(core_clk),
+  .aresetn(core_rst_n_slr0),
+  .s_axi_awaddr(ocp_awaddr),
+  .m_axi_awaddr(ctl_awaddr),
+  .s_axi_awvalid(ocp_awvalid),
+  .m_axi_awvalid(ctl_awvalid),
+  .s_axi_awready(ocp_awready),
+  .m_axi_awready(ctl_awready),
+  .s_axi_wdata(ocp_wdata),
+  .m_axi_wdata(ctl_wdata),
+  .s_axi_wstrb(ocp_wstrb),
+  .m_axi_wstrb(ctl_wstrb),
+  .s_axi_wvalid(ocp_wvalid),
+  .m_axi_wvalid(ctl_wvalid),
+  .s_axi_wready(ocp_wready),
+  .m_axi_wready(ctl_wready),
+  .s_axi_bresp(ocp_bresp),
+  .m_axi_bresp(ctl_bresp),
+  .s_axi_bvalid(ocp_bvalid),
+  .m_axi_bvalid(ctl_bvalid),
+  .s_axi_bready(ocp_bready),
+  .m_axi_bready(ctl_bready),
+  .s_axi_araddr(ocp_araddr),
+  .m_axi_araddr(ctl_araddr),
+  .s_axi_arvalid(ocp_arvalid),
+  .m_axi_arvalid(ctl_arvalid),
+  .s_axi_arready(ocp_arready),
+  .m_axi_arready(ctl_arready),
+  .s_axi_rdata(ocp_rdata),
+  .m_axi_rdata(ctl_rdata),
+  .s_axi_rresp(ocp_rresp),
+  .m_axi_rresp(ctl_rresp),
+  .s_axi_rvalid(ocp_rvalid),
+  .m_axi_rvalid(ctl_rvalid),
+  .s_axi_rready(ocp_rready),
   .m_axi_rready(ctl_rready),
   .s_axi_awprot(3'd0),
   .s_axi_arprot(3'd0),
