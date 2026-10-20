@@ -270,9 +270,20 @@ module otpu_board #(
 
   // ---- hardware trace
   if (TRACE_DEPTH != 0) begin : g_trace
+    // Passive trace state resets one cycle after the board. The control registers
+    // hold tr_en/run low during system reset, before any program can produce an
+    // event. This local source removes the top reset's long route to the trace
+    // counters and queue; RUN resets and trace CLEAR keep their existing timing.
+    (* max_fanout = 64 *) logic rst_local;
+    always_ff @(posedge clk) rst_local <= rst;
     otpu_trace #(.DEPTH(TRACE_DEPTH), .QD(TRACE_QD), .WIN(WIN)) u_trace (
-      .clk, .rst, .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
+      .clk, .rst(rst_local), .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
       .rdata(tr_rdata), .count(tr_count), .drop(tr_drop), .busy(tr_busy));
+`ifndef SYNTHESIS
+    always @(posedge clk)
+      if (!rst && rst_local && tr_en && run)
+        $fatal(1, "otpu_board: trace enabled before local reset released");
+`endif
   end else begin : g_no_trace
     assign tr_rdata = '0;
     assign tr_count = '0;
