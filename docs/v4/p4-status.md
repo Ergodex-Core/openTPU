@@ -245,6 +245,17 @@ units `opt-p4-viv-s4-175` / `opt-p4-viv-s4-162`, logs `/home/ubuntu/opt/logs/p4-
 --output .../f2-burst200-s4-175` (ip, pcis, clocks, synth_link: the synthesis and shell link;
 implement and refine: place, phys_opt, route and the post-route rounds; audit), started 15:43 UTC.
 
+Synthesis and link (both clocks, 0 errors; the critical warnings are the shell's `cl_pins.xdc`
+ones every F2 build has, and the IP stage's read-only block-design parameters; Vivado 2025.2's
+parallel-synthesis workers segfaulted five times in the 175 MHz build's IP stage and it
+recovered, as build 11's did): the link stage verified the core / TMEM periods 5.714 / 2.857 ns
+and 6.154 / 3.077 ns. `synth_link/synth_utilization.rpt`: the CL **548,455 LUTs (42% of the
+VU47P), 539,417 FFs, 932 RAMB36 (46%), 33 RAMB18, 0 URAM, 2,908 DSPs (32%)**; a slice 99.6K
+LUTs (slice 0 100.6K), a memory SmartConnect 16.6K, the host crossbar 12.6K, a native
+register slice 0.63K, the HBM wrapper 1.0K. By SLR: SLR0 ~181K LUTs (slice 0, the four
+SmartConnects, six native and four host register slices: ~2/3 of its CL LUTs), SLR1 ~125K,
+SLR2 ~205K (each half ~103K of ~216K, ~232 RAMB36 of ~336, 727 DSPs).
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
