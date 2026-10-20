@@ -228,9 +228,14 @@ slice's constants): 2,750,209 cycles against the RTL's 2,301,972, **+19.5%: abov
 than 0.6% (L_MM, the write arbitration, the quantizer latency, VPU_CL, the load latency, the
 window, the DMA's lookahead): the net, built and calibrated for the packed 64-lane f2-vla
 slice, charges 0.75 M cycles of dependent vector / quantizer / collective work between the
-matmuls where the RTL has 0.32 M. The model validated on this slice (LPNDialect's
-CompactOpenTPU, +0.9% on Gemma decode at PORTB 1) needs the LLVM 20 / lpn-compile build, which
-the m8a does not have.
+matmuls where the RTL has 0.32 M. The same net on the one-slice token (`--slices 1`,
+`p4-gemma3-s1-lpn.txt`) reads 8,755,262 against the coordinator's S = 1 RTL reference
+8,221,777 (stall 0, `OTPU_LAT=30`): +6.5%, inside the rule. The excess is about the same in
+cycles at both points (0.53 M at S = 1, 0.45 M at S = 4): the net over-charges the norms',
+activations' and quantizations' chains, which are replicated and so do not shrink with S,
+and the error grows with their share. The model validated on this slice (LPNDialect's
+CompactOpenTPU, +0.9% on Gemma decode at PORTB 1) models collectives for one slice only
+(its workload frontend runs a single program), so it cannot take the S = 4 programs either.
 
 ### Milestones 2-4: the F2 image
 
