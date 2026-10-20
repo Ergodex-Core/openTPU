@@ -65,15 +65,109 @@ proc ::c2_alex::relocated_native_loads {root p signal} {
         return [list [format {%su_mem/pending_count[4]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_4${suffix}/I4]
     }
     if {$signal eq "rvalid"} {
-        set lut [lindex {13 19 13 17 13 17 13 18} $p]
-        return [list [format {%su_mem/g_return[%d].memory_reg_0_i_%d/I0} $root $p $lut] \
-            [format {%su_mem/pc_returned[%d][0]_i_2/I0} $root $p] \
+        return [list [format {%su_mem/pc_returned[%d][0]_i_2/I0} $root $p] \
             [format {%su_mem/reads[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_1${suffix}/I1]
     }
     if {$signal eq "bvalid"} {
         return [list [format {%su_mem/writes[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_2${suffix}/I1]
     }
     return {}
+}
+proc ::c2_alex::native_receive_endpoint {root p endpoint} {
+    # Names below are source-backed state and memory families, not arbitrary
+    # descendants of the board. The PC index must remain the receiving port.
+    if {$root ne {} && [string first $root $endpoint] != 0} {return {}}
+    set name [string range $endpoint [string length $root] end]
+    if {[regexp {^u_board/g_return\[([0-7])\]\.memory_reg_([0-7])/WEBWE\[([0-7])\]$} $name -> pc bank bit]} {
+        if {$pc == $p && ($bank < 7 || $bit < 4)} {return return_ram}; return {}
+    }
+    if {[regexp {^u_board/(pc_returned|pc_latency)_reg\[([0-7])\]\[([0-9]+)\]/D$} $name -> field pc bit]} {
+        if {$pc == $p && $bit < 32} {return $field}; return {}
+    }
+    if {[regexp {^u_board/returned_reg\[([0-7])\]\[([0-8])\]/(R|CE)$} $name -> pc bit pin]} {
+        if {$pc == $p} {return returned}; return {}
+    }
+    if {[regexp {^u_native([0-7])/(lr|lp)_reg\[([0-6])\]/CE$} $name -> pc field bit]} {
+        if {$pc == $p} {return native_state}; return {}
+    }
+    if {[regexp {^u_native([0-7])/ln_reg\[([0-7])\]/(D|CE)$} $name -> pc bit pin]} {
+        if {$pc == $p} {return native_state}; return {}
+    }
+    if {[regexp {^u_native([0-7])/lengths_reg_(0_63|64_127)_0_4/RAM[A-H]/WE$} $name -> pc]} {
+        if {$pc == $p} {return native_lengths}; return {}
+    }
+    if {[regexp {^u_board/read_returned_reg\[([0-9]+)\]/D$} $name -> bit] && $bit < 32} {return read_returned}
+    if {[regexp {^u_board/state_reg\[[0-2]\]/(D|CE)$} $name] ||
+        [regexp {^u_board/error_code_reg\[[0-3]\]/(D|CE|R)$} $name] ||
+        [regexp {^u_board/(s_valid|pair_valid)_reg\[[0-3]\]/R$} $name] ||
+        $name eq "u_board/a_valid_reg_reg/D"} {return shared_state}
+    return {}
+}
+proc ::c2_alex::native_return_gate {root p input audit} {
+    # Vivado changes this LUT's numeric suffix when unrelated logic changes.
+    # Prove its function, reset input, full destination scope and RAM clock.
+    set owner [get_cells -quiet -of_objects [exact_pin $input]]
+    set gate [file dirname $input]
+    if {[names $owner] ne [list $gate] || [property $owner REF_NAME] ne "LUT2" ||
+        [property $owner INIT] ne "4'h2"} {error "C2 Alex audit: invalid native receive gate $input"}
+    foreach {pin direction} {I0 IN I1 IN O OUT} {
+        set terminal [exact_pin $gate/$pin]
+        if {[property $terminal REF_PIN_NAME] ne $pin || [property $terminal DIRECTION] ne $direction ||
+            [property $terminal IS_INVERTED] ni {0 false FALSE}} {
+            error "C2 Alex audit: native receive gate pin differs $gate/$pin"
+        }
+    }
+    set reset [exact_pin $gate/I1]
+    set nets [get_nets -quiet -segments -of_objects $reset]
+    set drivers [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]
+    if {[names $drivers] ne [list ${root}core_rst_reg/Q]} {error "C2 Alex audit: native receive reset source differs $input"}
+    set reset_cell [get_cells -quiet -of_objects $drivers]
+    if {[llength $reset_cell] != 1 || [property $reset_cell REF_NAME] ne "FDRE"} {
+        error "C2 Alex audit: native receive reset is not a register"
+    }
+    set core_clocks [names [get_clocks -quiet -of_objects [exact_pin ${root}core_rst_reg/C]]]
+    if {[llength $core_clocks] != 1} {error "C2 Alex audit: ambiguous native receive core clock"}
+    set output [exact_pin $gate/O]
+    set endpoints [names [all_fanout -flat -endpoints_only -from $output]]
+    if {![llength $endpoints] || [llength $endpoints] > 2048 ||
+        [llength $endpoints] != [llength [lsort -unique $endpoints]]} {
+        error "C2 Alex audit: incomplete native receive endpoint inventory"
+    }
+    set families {}; set memory_cells {}
+    foreach endpoint $endpoints {
+        set family [native_receive_endpoint $root $p $endpoint]
+        if {$family eq {}} {error "C2 Alex audit: native receive reaches unreviewed state $endpoint"}
+        set terminal [exact_pin $endpoint]
+        set object [get_cells -quiet -of_objects $terminal]
+        set expected FDRE
+        if {$family eq "native_lengths"} {set expected RAMD64E}
+        if {$family eq "return_ram"} {
+            set expected [expr {[string match {*memory_reg_7} [file dirname $endpoint]] ? "RAMB18E2" : "RAMB36E2"}]
+        }
+        if {[names $object] ne [list [file dirname $endpoint]] ||
+            [property $object REF_NAME] ne $expected || [property $terminal DIRECTION] ne "IN" ||
+            [property $terminal IS_INVERTED] ni {0 false FALSE}} {
+            error "C2 Alex audit: native receive endpoint primitive/pin differs $endpoint"
+        }
+        dict incr families $family
+        if {$family eq "return_ram"} {lappend memory_cells [file dirname $endpoint]}
+    }
+    foreach family {return_ram returned pc_returned pc_latency read_returned native_state native_lengths shared_state} {
+        if {![dict exists $families $family]} {error "C2 Alex audit: native receive lost $family"}
+    }
+    foreach name [lsort -unique $memory_cells] {
+        set object [get_cells -quiet [list $name]]
+        if {[names $object] ne [list $name] || [property $object REF_NAME] ni {RAMB18E2 RAMB36E2}} {
+            error "C2 Alex audit: native return storage is not reviewed BRAM $name"
+        }
+        set clock [exact_pin $name/CLKBWRCLK]
+        if {[names [get_clocks -quiet -of_objects $clock]] ne $core_clocks} {
+            error "C2 Alex audit: native return storage clock differs $name"
+        }
+    }
+    puts $audit [list native_receive_gate $p input $input gate [names $owner] function rvalid_and_not_core_reset \
+        reset_driver [names $drivers] core_clock $core_clocks output [names $output] \
+        endpoints $endpoints endpoint_families $families return_memory_cells [lsort -unique $memory_cells]]
 }
 proc ::c2_alex::native_b_endpoints {root p driver internal audit} {
     set endpoints [names [all_fanout -flat -endpoints_only -from $driver]]
@@ -160,9 +254,16 @@ proc ::c2_alex::flow {prefix iface signal audit} {
     set destination [expr {$forward ? $internal : $external}]
     foreach pin $leaf name $leaf_names direction $directions {
         if {![inside $name $external] && ![inside $name $internal]} {
-            if {$direction ne "IN" || $name ni $relocated} {error "C2 Alex audit: wrong port/owner on $iface/$signal: $name"}
+            set return_gate 0
+            if {[regexp {^S_N([0-7])$} $iface -> p] && $signal eq "rvalid" &&
+                ($root eq {} || [string first $root $name] == 0)} {
+                set local [string range $name [string length $root] end]
+                if {[regexp {^u_mem/g_return\[([0-7])\]\.memory_reg_0_i_[0-9]+/I0$} $local -> pc] && $pc == $p} {set return_gate 1}
+            }
+            if {$direction ne "IN" || ($name ni $relocated && !$return_gate)} {error "C2 Alex audit: wrong port/owner on $iface/$signal: $name"}
             set cell [get_cells -quiet -of_objects [exact_pin $name]]
             if {[llength $cell] != 1 || ![regexp {^LUT[1-6]$} [get_property REF_NAME $cell]]} {error "C2 Alex audit: unreviewed relocated native load $name"}
+            if {$return_gate} {native_return_gate $root $p $name $audit}
             if {$signal eq "bvalid"} {incr receiver_count}
         }
         if {$direction eq "OUT"} {

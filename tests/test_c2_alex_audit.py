@@ -529,7 +529,9 @@ set f [open [lindex $argv 2] r]
 while {[gets $f row]>=0} {
  if {![dict exists $row interface]} continue
  set iface [dict get $row interface];set signal [dict get $row signal]
- if {[string match S_N* $iface] && $signal in {bvalid bready rready}} continue
+ # This historical record lacks receive-gate INIT/reset/fanout/clock facts.
+ # Current receive validation has a separate typed fixture and real replay.
+ if {[string match S_N* $iface] && $signal in {bvalid bready rvalid rready}} continue
  set forward [expr {$signal in {awvalid wvalid arvalid bready rready}}]
  if {$iface eq {S_HOST}} {set direction [expr {$forward ? {OUT} : {IN}}]} else {set direction [expr {$forward ? {IN} : {OUT}}]}
  set ns {};foreach n [dict get $row nets] {lappend ns $root$n;dict set nets $root$n 1}
@@ -574,7 +576,7 @@ puts [llength $todo]
     result=subprocess.run([shutil.which('tclsh'),str(path),str(AUDIT),str(tmp_path/'flows.tcldata'),str(raw),prefix],
                           text=True,capture_output=True,timeout=30)
     assert result.returncode==0,result.stderr
-    assert result.stdout.strip()=='146'
+    assert result.stdout.strip()=='138'
 
 
 @pytest.mark.parametrize('fault',['none','sc_clock_swap','core_on_host','fabric_on_reference','pcis_on_core','custom_hclk','lookalike_hclk'])
