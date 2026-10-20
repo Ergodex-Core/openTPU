@@ -1017,7 +1017,7 @@ dict set sites CLOCKREGION_X4Y9:CLOCKREGION_X7Y10 {s2b}
 proc get_cells {args} {
   set pattern [lindex $args end]
   if {$::fault eq "missing" && [string match *u_chub* $pattern]} { return {} }
-  if {[regexp {^(.*)/r_reg\\\[\*\\\]$} $pattern -> stage]} {
+  if {[regexp {^(.*)/r_reg\[\*\]$} $pattern -> stage]} {
     set out {}
     for {set i 0} {$i < [expr {8 * 517}]} {incr i} { lappend out "$stage/r_reg\[$i\]" }
     return $out
@@ -1069,7 +1069,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
             cells.setdefault(pb, []).append(cell)
     hbm, mid, board = cells['pb_otpu_hbm'], cells['pb_otpu_mid'], cells['pb_otpu_board']
     # (the mock echoes a pattern as the cell: an index built with escaped brackets reads g_x\[2\])
-    e = lambda name: name.replace('[', '\\[').replace(']', '\\]')          # noqa: E731
+    e = lambda name: name                      # noqa: E731 (Vivado names generate indices literally)
     # the slices by SLR
     assert 'WRAPPER/CL/u_sys/u_board/u_slice' in hbm and 'WRAPPER/CL/u_sys/u_board/u_mem' in hbm
     assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.u_chub' in mid

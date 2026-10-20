@@ -30,7 +30,7 @@ proc otpu_cells {pattern} {
 # holds every port's bits: port p's are p * W .. (p + 1) * W - 1)
 proc otpu_bits {stage lo hi} {
   set cells {}
-  foreach c [get_cells -quiet "$stage/r_reg\\\[*\\\]"] {
+  foreach c [get_cells -quiet "$stage/r_reg\[*\]"] {
     if {[regexp {r_reg\[(\d+)\]$} [get_property NAME $c] -> i] && $i >= $lo && $i < $hi} {
       lappend cells $c
     }
@@ -56,7 +56,7 @@ proc otpu_slice_pb {s} {
 }
 # a slice's otpu_slice instance: u_board/u_slice, or u_board/g_slice[s].u_slice
 proc otpu_slice_path {s} {
-  return [expr {$s == 0 ? "WRAPPER/CL/u_sys/u_board/u_slice" : "WRAPPER/CL/u_sys/u_board/g_slice\\\[$s\\\].u_slice"}]
+  return [expr {$s == 0 ? "WRAPPER/CL/u_sys/u_board/u_slice" : "WRAPPER/CL/u_sys/u_board/g_slice\[$s\].u_slice"}]
 }
 
 ########################################
@@ -131,12 +131,12 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 for {set otpu_s 2} {$otpu_s < $otpu_S} {incr otpu_s} {
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\\\[$otpu_s\\\].u_slice"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\\\[$otpu_s\\\].u_mem"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_wb\\\[$otpu_s\\\].*"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\\\[$otpu_s\\\].u_dn_rx"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\\\[$otpu_s\\\].u_up_tx"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\\\[$otpu_s\\\].u_cport"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\[$otpu_s\].u_slice"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\[$otpu_s\].u_mem"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_wb\[$otpu_s\].*"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_dn_rx"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_up_tx"]
+  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_cport"]
 }
 
 ########################################
@@ -150,15 +150,15 @@ for {set otpu_p 0} {$otpu_p < $otpu_nport} {incr otpu_p} {
   set otpu_slr [otpu_slice_slr $otpu_s]
   foreach otpu_k {0 1 2} {
     set otpu_pb [expr {$otpu_k == 0 ? "pb_otpu_hbm" : ($otpu_k == 1 ? ($otpu_slr >= 1 ? "pb_otpu_mid" : "pb_otpu_hbm") : [otpu_slice_pb $otpu_s])}]
-    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xr.g_x\\\[$otpu_k\\\].u_dn" [expr {$otpu_p * $otpu_dw}] [expr {($otpu_p + 1) * $otpu_dw}]]
-    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xr.g_x\\\[$otpu_k\\\].u_up" [expr {$otpu_p * $otpu_uw}] [expr {($otpu_p + 1) * $otpu_uw}]]
+    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xr.g_x\[$otpu_k\].u_dn" [expr {$otpu_p * $otpu_dw}] [expr {($otpu_p + 1) * $otpu_dw}]]
+    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xr.g_x\[$otpu_k\].u_up" [expr {$otpu_p * $otpu_uw}] [expr {($otpu_p + 1) * $otpu_uw}]]
   }
 }
 for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
   set otpu_slr [otpu_slice_slr $otpu_s]
   foreach otpu_k {0 1 2} {
     set otpu_pb [expr {$otpu_k == 0 ? "pb_otpu_hbm" : ($otpu_k == 1 ? ($otpu_slr >= 1 ? "pb_otpu_mid" : "pb_otpu_hbm") : [otpu_slice_pb $otpu_s])}]
-    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xw.g_x\\\[$otpu_k\\\].u_wb" [expr {$otpu_s * $otpu_bw}] [expr {($otpu_s + 1) * $otpu_bw}]]
+    add_cells_to_pblock $otpu_pb [otpu_bits "WRAPPER/CL/u_sys/u_mem/g_xw.g_x\[$otpu_k\].u_wb" [expr {$otpu_s * $otpu_bw}] [expr {($otpu_s + 1) * $otpu_bw}]]
   }
 }
 
@@ -182,12 +182,12 @@ for {set otpu_s 0} {$otpu_s < $otpu_S} {incr otpu_s} {
 ########################################
 # the 450 MHz ends beside their HBM ports, SLR0 (cl_pnr_user_hbm.tcl's columns)
 ########################################
-# Each port's clock region from its site (HBM_SNGLBLI_INTF_AXI_X<p>Y0; else four ports a
+# Each port's clock region from its site (BLI_HBM_AXI_INTF_X<p>Y0; else four ports a
 # region); a box of that column's two clock regions holds the port's engine (its 450 MHz
 # side with its core side: ~1.2K LUTs) and the HDK's 450 MHz register slice; the host's
 # cl_axi_sc_1x1 and slice beside its port, the mux (S x NCH = 32) with port NPORT - 1.
 proc otpu_hbm_port_x {p} {
-  set site [get_sites -quiet HBM_SNGLBLI_INTF_AXI_X${p}Y0]
+  set site [get_sites -quiet BLI_HBM_AXI_INTF_X${p}Y0]
   if {[llength $site] == 1} {
     set cr [get_clock_regions -quiet -of_objects $site]
     if {[regexp {^X(\d+)Y0$} [get_property NAME $cr] -> x]} {
@@ -196,7 +196,7 @@ proc otpu_hbm_port_x {p} {
     }
   }
   set x [expr {$p / 4}]
-  puts "OTPU_FLOORPLAN_WARNING hbm port $p: no site HBM_SNGLBLI_INTF_AXI_X${p}Y0 (or not in row Y0); X${x}Y0 from the VU47P's four ports a clock region"
+  puts "OTPU_FLOORPLAN_WARNING hbm port $p: no site BLI_HBM_AXI_INTF_X${p}Y0 (or not in row Y0); X${x}Y0 from the VU47P's four ports a clock region"
   return $x
 }
 set otpu_host_mux [expr {[llength [get_cells -quiet {WRAPPER/CL/u_sys/u_mem/g_mux.u_mux}]] > 0}]
@@ -204,8 +204,8 @@ set otpu_host_port [expr {$otpu_host_mux ? $otpu_nport - 1 : $otpu_nport}]
 set otpu_cols {}
 for {set otpu_p 0} {$otpu_p < $otpu_nport} {incr otpu_p} {
   set otpu_x [otpu_hbm_port_x $otpu_p]
-  dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_port\\\[$otpu_p\\\].u_eng"]
-  dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\\\[$otpu_p\\\].u_rs256"]
+  dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_port\[$otpu_p\].u_eng"]
+  dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\[$otpu_p\].u_rs256"]
 }
 set otpu_x [otpu_hbm_port_x $otpu_host_port]
 foreach otpu_c {u_hsc u_hrs256} { dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/$otpu_c"] }
