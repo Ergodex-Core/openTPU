@@ -43,6 +43,10 @@ def load_net(vla_tree: Path, lpn_src: Path, own_opentpu: bool = True):
     for name in ("F_T",):                    # (the vla ISA's QST transposed rows: none here)
         if not hasattr(I, name):
             setattr(I, name, 0)
+    if not hasattr(I, "mm_format"):
+        # the vla ISA's (format, PAIR, QUAD); this tree's ISA has no t2 weights and no QUAD
+        I.WT2 = getattr(I, "WT2", 4)
+        I.mm_format = lambda ins: (((ins.flags >> I.WF_SHIFT) & 3), bool(ins.flags & I.F_PAIR), False)
     if not hasattr(np, "Inf"):
         np.Inf = np.inf                      # lpnlang's simulator is NumPy 1.x's
     sys.path.insert(0, str(lpn_src))
