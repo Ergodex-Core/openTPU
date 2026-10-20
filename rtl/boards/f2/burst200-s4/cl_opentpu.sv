@@ -1483,6 +1483,125 @@ f2_pcis_pipe u_pcis_pipe (
   .s_axi_arqos(sh_cl_dma_pcis_arqos),
   .m_axi_arqos(pcis_arqos)
 );
+logic [63:0] ph_araddr;
+logic [1:0] ph_arburst;
+logic [15:0] ph_arid;
+logic [7:0] ph_arlen;
+logic [2:0] ph_arsize;
+logic ph_arvalid;
+logic [63:0] ph_awaddr;
+logic [1:0] ph_awburst;
+logic [15:0] ph_awid;
+logic [7:0] ph_awlen;
+logic [2:0] ph_awsize;
+logic ph_awvalid;
+logic ph_rready;
+logic ph_bready;
+logic [511:0] ph_wdata;
+logic ph_wlast;
+logic [63:0] ph_wstrb;
+logic ph_wvalid;
+logic ph_arready;
+logic ph_awready;
+logic [511:0] ph_rdata;
+logic [15:0] ph_rid;
+logic ph_rlast;
+logic [1:0] ph_rresp;
+logic ph_rvalid;
+logic ph_wready;
+logic [15:0] ph_bid;
+logic [1:0] ph_bresp;
+logic ph_bvalid;
+logic [3:0] ph_awcache;
+logic ph_awlock;
+logic [2:0] ph_awprot;
+logic [3:0] ph_awqos;
+logic [3:0] ph_arcache;
+logic ph_arlock;
+logic [2:0] ph_arprot;
+logic [3:0] ph_arqos;
+f2_pcis_pipe u_pcis_hop (
+  .aclk(clk_main_a0),
+  .aresetn(rst_main_n_slr0),
+  .s_axi_awregion(4'd0),
+  .s_axi_arregion(4'd0),
+  .m_axi_awregion(),
+  .m_axi_arregion(),
+  .s_axi_araddr(pcis_araddr),
+  .m_axi_araddr(ph_araddr),
+  .s_axi_arburst(pcis_arburst),
+  .m_axi_arburst(ph_arburst),
+  .s_axi_arid(pcis_arid),
+  .m_axi_arid(ph_arid),
+  .s_axi_arlen(pcis_arlen),
+  .m_axi_arlen(ph_arlen),
+  .s_axi_arsize(pcis_arsize),
+  .m_axi_arsize(ph_arsize),
+  .s_axi_arvalid(pcis_arvalid),
+  .m_axi_arvalid(ph_arvalid),
+  .s_axi_awaddr(pcis_awaddr),
+  .m_axi_awaddr(ph_awaddr),
+  .s_axi_awburst(pcis_awburst),
+  .m_axi_awburst(ph_awburst),
+  .s_axi_awid(pcis_awid),
+  .m_axi_awid(ph_awid),
+  .s_axi_awlen(pcis_awlen),
+  .m_axi_awlen(ph_awlen),
+  .s_axi_awsize(pcis_awsize),
+  .m_axi_awsize(ph_awsize),
+  .s_axi_awvalid(pcis_awvalid),
+  .m_axi_awvalid(ph_awvalid),
+  .s_axi_rready(pcis_rready),
+  .m_axi_rready(ph_rready),
+  .s_axi_bready(pcis_bready),
+  .m_axi_bready(ph_bready),
+  .s_axi_wdata(pcis_wdata),
+  .m_axi_wdata(ph_wdata),
+  .s_axi_wlast(pcis_wlast),
+  .m_axi_wlast(ph_wlast),
+  .s_axi_wstrb(pcis_wstrb),
+  .m_axi_wstrb(ph_wstrb),
+  .s_axi_wvalid(pcis_wvalid),
+  .m_axi_wvalid(ph_wvalid),
+  .s_axi_arready(pcis_arready),
+  .m_axi_arready(ph_arready),
+  .s_axi_awready(pcis_awready),
+  .m_axi_awready(ph_awready),
+  .s_axi_rdata(pcis_rdata),
+  .m_axi_rdata(ph_rdata),
+  .s_axi_rid(pcis_rid),
+  .m_axi_rid(ph_rid),
+  .s_axi_rlast(pcis_rlast),
+  .m_axi_rlast(ph_rlast),
+  .s_axi_rresp(pcis_rresp),
+  .m_axi_rresp(ph_rresp),
+  .s_axi_rvalid(pcis_rvalid),
+  .m_axi_rvalid(ph_rvalid),
+  .s_axi_wready(pcis_wready),
+  .m_axi_wready(ph_wready),
+  .s_axi_bid(pcis_bid),
+  .m_axi_bid(ph_bid),
+  .s_axi_bresp(pcis_bresp),
+  .m_axi_bresp(ph_bresp),
+  .s_axi_bvalid(pcis_bvalid),
+  .m_axi_bvalid(ph_bvalid),
+  .s_axi_awcache(pcis_awcache),
+  .m_axi_awcache(ph_awcache),
+  .s_axi_awlock(pcis_awlock),
+  .m_axi_awlock(ph_awlock),
+  .s_axi_awprot(pcis_awprot),
+  .m_axi_awprot(ph_awprot),
+  .s_axi_awqos(pcis_awqos),
+  .m_axi_awqos(ph_awqos),
+  .s_axi_arcache(pcis_arcache),
+  .m_axi_arcache(ph_arcache),
+  .s_axi_arlock(pcis_arlock),
+  .m_axi_arlock(ph_arlock),
+  .s_axi_arprot(pcis_arprot),
+  .m_axi_arprot(ph_arprot),
+  .s_axi_arqos(pcis_arqos),
+  .m_axi_arqos(ph_arqos)
+);
 logic [63:0] hx0_araddr;
 logic [1:0] hx0_arburst;
 logic [7:0] hx0_arlen;
@@ -1617,44 +1736,44 @@ logic [2:0] hx3_arprot;
 logic [3:0] hx3_arqos;
 f2_host_wrapper u_host (
   .host_clk(clk_main_a0),
-  .aresetn(rst_main_n_sync),
-  .S_PCIS_araddr(pcis_araddr),
-  .S_PCIS_arburst(pcis_arburst),
-  .S_PCIS_arid(pcis_arid),
-  .S_PCIS_arlen(pcis_arlen),
-  .S_PCIS_arsize(pcis_arsize),
-  .S_PCIS_arvalid(pcis_arvalid),
-  .S_PCIS_awaddr(pcis_awaddr),
-  .S_PCIS_awburst(pcis_awburst),
-  .S_PCIS_awid(pcis_awid),
-  .S_PCIS_awlen(pcis_awlen),
-  .S_PCIS_awsize(pcis_awsize),
-  .S_PCIS_awvalid(pcis_awvalid),
-  .S_PCIS_rready(pcis_rready),
-  .S_PCIS_bready(pcis_bready),
-  .S_PCIS_wdata(pcis_wdata),
-  .S_PCIS_wlast(pcis_wlast),
-  .S_PCIS_wstrb(pcis_wstrb),
-  .S_PCIS_wvalid(pcis_wvalid),
-  .S_PCIS_arready(pcis_arready),
-  .S_PCIS_awready(pcis_awready),
-  .S_PCIS_rdata(pcis_rdata),
-  .S_PCIS_rid(pcis_rid),
-  .S_PCIS_rlast(pcis_rlast),
-  .S_PCIS_rresp(pcis_rresp),
-  .S_PCIS_rvalid(pcis_rvalid),
-  .S_PCIS_wready(pcis_wready),
-  .S_PCIS_bid(pcis_bid),
-  .S_PCIS_bresp(pcis_bresp),
-  .S_PCIS_bvalid(pcis_bvalid),
-  .S_PCIS_awcache(pcis_awcache),
-  .S_PCIS_awlock(pcis_awlock),
-  .S_PCIS_awprot(pcis_awprot),
-  .S_PCIS_awqos(pcis_awqos),
-  .S_PCIS_arcache(pcis_arcache),
-  .S_PCIS_arlock(pcis_arlock),
-  .S_PCIS_arprot(pcis_arprot),
-  .S_PCIS_arqos(pcis_arqos),
+  .aresetn(rst_main_n_slr0),
+  .S_PCIS_araddr(ph_araddr),
+  .S_PCIS_arburst(ph_arburst),
+  .S_PCIS_arid(ph_arid),
+  .S_PCIS_arlen(ph_arlen),
+  .S_PCIS_arsize(ph_arsize),
+  .S_PCIS_arvalid(ph_arvalid),
+  .S_PCIS_awaddr(ph_awaddr),
+  .S_PCIS_awburst(ph_awburst),
+  .S_PCIS_awid(ph_awid),
+  .S_PCIS_awlen(ph_awlen),
+  .S_PCIS_awsize(ph_awsize),
+  .S_PCIS_awvalid(ph_awvalid),
+  .S_PCIS_rready(ph_rready),
+  .S_PCIS_bready(ph_bready),
+  .S_PCIS_wdata(ph_wdata),
+  .S_PCIS_wlast(ph_wlast),
+  .S_PCIS_wstrb(ph_wstrb),
+  .S_PCIS_wvalid(ph_wvalid),
+  .S_PCIS_arready(ph_arready),
+  .S_PCIS_awready(ph_awready),
+  .S_PCIS_rdata(ph_rdata),
+  .S_PCIS_rid(ph_rid),
+  .S_PCIS_rlast(ph_rlast),
+  .S_PCIS_rresp(ph_rresp),
+  .S_PCIS_rvalid(ph_rvalid),
+  .S_PCIS_wready(ph_wready),
+  .S_PCIS_bid(ph_bid),
+  .S_PCIS_bresp(ph_bresp),
+  .S_PCIS_bvalid(ph_bvalid),
+  .S_PCIS_awcache(ph_awcache),
+  .S_PCIS_awlock(ph_awlock),
+  .S_PCIS_awprot(ph_awprot),
+  .S_PCIS_awqos(ph_awqos),
+  .S_PCIS_arcache(ph_arcache),
+  .S_PCIS_arlock(ph_arlock),
+  .S_PCIS_arprot(ph_arprot),
+  .S_PCIS_arqos(ph_arqos),
   .M_S0_araddr(hx0_araddr),
   .M_S0_arburst(hx0_arburst),
   .M_S0_arlen(hx0_arlen),

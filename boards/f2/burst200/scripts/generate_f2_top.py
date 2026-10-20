@@ -50,6 +50,19 @@ def slice_slrs(T):
     return slrs
 
 
+def host_xbar_slr(T):
+    """The SLR of the host crossbar of a multi-slice top: the target's [platform] host_xbar_slr.
+    1 (the default, S = 3's): beside the shell's PCIS in SLR1, then a register slice per slice
+    down to SLR0, so S 512-bit host channels cross SLR1 -> SLR0. 0: in SLR0 beside the
+    SmartConnects behind one register slice at the crossing's SLR0 end (u_pcis_hop), so one
+    channel crosses: the four-slice placement had ~14.4K of the ~17.3K SLLs the CL can use at the
+    SLR0 / SLR1 boundary (columns X0-X5) taken, ~5.1K of them the host's four channels."""
+    v=T.platform.get('host_xbar_slr',1)
+    if v not in (0,1):
+        raise SystemExit('host_xbar_slr: 0 or 1')
+    return v
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--target',type=Path,default=ROOT/'targets/f2-burst200.toml')
@@ -208,11 +221,17 @@ def generate(T,hdk:Path)->str:
             line(f"assign h_awid[{port}] = 6'd0;")
         inst('f2_mem_wrapper','u_mem',c)
     else:
-        # the host's fan-out: the PCIS pipe (SLR1) into the f2_host crossbar (SLR1, master port
-        # s = slice s's 4 GiB at HBM address 4 s GiB), then one register slice per slice in SLR0
-        # (every slice's SmartConnect is there), f2_pcis_pipe again
-        c=dict(host_clk='clk_main_a0',aresetn='rst_main_n_sync')
-        for k in allaxi:c['S_PCIS_'+k]='pcis_'+k
+        # the host's fan-out: the PCIS pipe (SLR1) into the f2_host crossbar (master port s =
+        # slice s's 4 GiB at HBM address 4 s GiB), then one register slice per slice in SLR0
+        # (every slice's SmartConnect is there), f2_pcis_pipe again. The crossbar in SLR1
+        # (host_xbar_slr 1), or in SLR0 behind one more f2_pcis_pipe at the crossing (0)
+        xin={k:'pcis_'+k for k in allaxi}
+        xrst='rst_main_n_sync'
+        if host_xbar_slr(T)==0:
+            xin=register_slice('f2_pcis_pipe','u_pcis_hop','clk_main_a0',main_rst_n(0),xin,host_width,'ph')
+            xrst=main_rst_n(0)
+        c=dict(host_clk='clk_main_a0',aresetn=xrst)
+        for k in allaxi:c['S_PCIS_'+k]=xin[k]
         ids=('arid','awid','rid','bid')
         for sl in range(S):
             # SmartConnect's generated downstream ports omit IDs (one ordered thread), as the

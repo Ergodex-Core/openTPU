@@ -8,11 +8,13 @@
 # ranges); AWS pblock_CL must already exist.
 #
 #   SLR0: slice 0 and its adapters, every SmartConnect (u_mem0..3, each in a grandchild
-#         pblock_CL_SLR0_MEM<s> beside its two HBM ports), the HBM wrapper, the SLR0 ends of the
-#         host and native register slices, the SLR0 resets
+#         pblock_CL_SLR0_MEM<s> beside its two HBM ports), the HBM wrapper, the host crossbar
+#         (u_host) behind its register slice at the crossing (u_pcis_hop; the targets'
+#         host_xbar_slr 0: one host channel crosses SLR1 -> SLR0 instead of four), the SLR0 ends
+#         of the host and native register slices, the SLR0 resets
 #   SLR1: slice 1 and its adapters, the control block, the trace, the collective unit and its
-#         hub, the OCL converter, the PCIS pipe, the host crossbar (pblock_CL_SLR1_XBAR), the
-#         SLR1 ends of slices 2 and 3's native register slices
+#         hub, the OCL converter, the PCIS pipe, the SLR1 ends of slices 2 and 3's native
+#         register slices
 #   SLR2: slices 2 and 3, each with its adapters in a half of the SLR (pblock_CL_SLR2_S2 the left
 #         columns X0-X3, pblock_CL_SLR2_S3 the right X4-X7: the full_hbm (v5) lesson, where two
 #         slices loose in one SLR2 pblock scattered their MXUs' DSP chains and adapters across the
@@ -85,11 +87,6 @@ resize_pblock pblock_CL_SLR1 -add {\
 set_property SNAPPING_MODE ON [get_pblocks pblock_CL_SLR1]
 set_property parent pblock_CL [get_pblocks pblock_CL_SLR1]
 
-# the host crossbar away from the shell interface (the example's grandchild for its PCIS crossbar)
-create_pblock pblock_CL_SLR1_XBAR
-resize_pblock pblock_CL_SLR1_XBAR -add {CLOCKREGION_X0Y4:CLOCKREGION_X4Y7}
-set_property parent pblock_CL_SLR1 [get_pblocks pblock_CL_SLR1_XBAR]
-
 # ---- SLR2 (complete CRs) and its halves, one slice each
 create_pblock pblock_CL_SLR2
 resize_pblock pblock_CL_SLR2 -add {CLOCKREGION_X0Y8:CLOCKREGION_X7Y11}
@@ -110,7 +107,7 @@ add_cells_to_pblock pblock_CL_SLR0 [otpu_s4_cells [list \
     $cl/u_native0 $cl/u_native1 \
     $cl/u_npipe2_slr0 $cl/u_npipe3_slr0 $cl/u_npipe4_slr0 $cl/u_npipe5_slr0 \
     $cl/u_npipe6_slr0 $cl/u_npipe7_slr0 \
-    $cl/u_host_pipe0 $cl/u_host_pipe1 $cl/u_host_pipe2 $cl/u_host_pipe3 \
+    $cl/u_pcis_hop $cl/u_host $cl/u_host_pipe0 $cl/u_host_pipe1 $cl/u_host_pipe2 $cl/u_host_pipe3 \
     $cl/u_hbm \
     $cl/u_rst_core_slr0 $cl/u_rstpipe_core_slr0 $cl/u_rst_main_slr0 $cl/u_rstpipe_main_slr0]]
 set_property IS_SOFT false [get_pblocks pblock_CL_SLR0]
@@ -156,7 +153,6 @@ add_cells_to_pblock pblock_CL_SLR1 [otpu_s4_cells [list \
     $cl/u_native2 $cl/u_native3 \
     $cl/u_npipe4_slr1 $cl/u_npipe5_slr1 $cl/u_npipe6_slr1 $cl/u_npipe7_slr1 \
     $cl/u_pcis_pipe $cl/u_ocl_cdc $cl/u_status_cdc]]
-add_cells_to_pblock pblock_CL_SLR1_XBAR [otpu_s4_cells [list $cl/u_host]]
 set_property IS_SOFT false [get_pblocks pblock_CL_SLR1]
 
 # ---- SLR2: the resets in the parent; slice 2 (left half) and slice 3 (right half), each with its

@@ -70,6 +70,7 @@ def test_target_geometry():
     assert (p['S'], p['NCH'], p['CH_LOG2'], p['DRAM_LOG2']) == (4, 2, 31, 32)
     assert gen.geometry(t4) == (4, 2, PORTS4, 29)
     assert gen.slice_slrs(t4) == [0, 1, 2, 2] and gen.slice_slrs(t3) == [0, 1, 2]
+    assert gen.host_xbar_slr(t4) == 0 and gen.host_xbar_slr(t3) == 1
     # every window on its own memory channel (ports 2k / 2k + 1 share one), all 16 GiB used
     assert len({q // 2 for q in PORTS4}) == 8 and t4.arch['DRAM_BYTES'] * 4 == 1 << 34
     pl = flow.plan(S4)
@@ -114,8 +115,8 @@ def test_four_slice_top_wiring():
     """What the four-slice top instantiates: eight adapters at the windows' bases, four memory
     block designs and the host crossbar, a register slice per SLR hop (slices 2 and 3 two hops
     each from SLR2), the wrapper covering port 28, per-SLR resets (SLR0 and SLR2; SLR1 the
-    shell's), each adapter on its SLR's reset, and an 11-bit status (eight channel errors,
-    three LEDs)."""
+    shell's), each adapter on its SLR's reset, an 11-bit status (eight channel errors, three
+    LEDs), and the host crossbar in SLR0 behind one register slice at the crossing."""
     text = TOP4.read_text()
     inst = _instances(text)
     assert [inst[f'u_native{j}'] for j in range(8)] == ['otpu_native_axi'] * 8
@@ -124,7 +125,13 @@ def test_four_slice_top_wiring():
     assert {inst[f'u_mem{s}'] for s in range(4)} == {f'f2_mem_s{s}_wrapper' for s in range(4)}
     assert inst['u_host'] == 'f2_host_wrapper' and inst['u_pcis_pipe'] == 'f2_pcis_pipe'
     assert {k for k, m in inst.items() if m == 'f2_pcis_pipe'} == {
-        'u_pcis_pipe', 'u_host_pipe0', 'u_host_pipe1', 'u_host_pipe2', 'u_host_pipe3'}
+        'u_pcis_pipe', 'u_pcis_hop', 'u_host_pipe0', 'u_host_pipe1', 'u_host_pipe2',
+        'u_host_pipe3'}
+    # the PCIS pipe (SLR1) -> the hop (SLR0) -> the crossbar (SLR0) -> a pipe per slice
+    hop, xbar = _connections(text, 'u_pcis_hop'), _connections(text, 'u_host')
+    assert hop['s_axi_awaddr'] == 'pcis_awaddr' and hop['s_axi_awid'] == 'pcis_awid'
+    assert hop['aresetn'] == 'rst_main_n_slr0' and hop['aclk'] == 'clk_main_a0'
+    assert xbar['S_PCIS_awaddr'] == 'ph_awaddr' and xbar['aresetn'] == 'rst_main_n_slr0'
     assert {k for k, m in inst.items() if m == 'f2_native_pipe'} == {
         'u_npipe2_slr0', 'u_npipe3_slr0',
         'u_npipe4_slr1', 'u_npipe4_slr0', 'u_npipe5_slr1', 'u_npipe5_slr0',
@@ -205,12 +212,15 @@ def test_floorplan_names_every_cell_of_the_top():
     assert '2 {CLOCKREGION_X4Y0:CLOCKREGION_X5Y0 CLOCKREGION_X5Y1:CLOCKREGION_X5Y1}' in mem
     assert '3 {CLOCKREGION_X6Y0:CLOCKREGION_X7Y0 CLOCKREGION_X6Y1:CLOCKREGION_X6Y1}' in mem
     assert 'IS_SOFT false [get_pblocks pblock_CL_SLR0_MEM$s]' in fp
-    assert 'pblock_CL_SLR1_XBAR' in fp and '$cl/u_host]' in fp
+    assert 'pblock_CL_SLR1_XBAR' not in fp                     # the crossbar is SLR0's
+    slr0 = re.search(r'add_cells_to_pblock pblock_CL_SLR0 \[otpu_s4_cells \[list (.*?)\]\]',
+                     fp, re.S).group(1)
+    assert '$cl/u_pcis_hop $cl/u_host ' in slr0
     assert 'USER_SLL_REG TRUE' in fp and 'foreach s {0 2 3}' in fp
     # the SLR0 parent's ranges are floorplan_s3.tcl's (the legal CL ranges)
     s3 = (BOARD / 'constraints/floorplan_s3.tcl').read_text()
     rng = lambda t, p: re.search(rf'resize_pblock {p} -add \{{(.*?)\}}', t, re.S).group(1)
-    for p in ('pblock_CL_SLR0', 'pblock_CL_SLR1', 'pblock_CL_SLR2', 'pblock_CL_SLR1_XBAR'):
+    for p in ('pblock_CL_SLR0', 'pblock_CL_SLR1', 'pblock_CL_SLR2'):
         assert rng(fp, p) == rng(s3, p), p
 
 

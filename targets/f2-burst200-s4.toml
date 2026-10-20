@@ -72,6 +72,9 @@ channels_per_slice = 2
 channel_bytes = 2147483648
 hbm_ports = [0, 4, 8, 12, 16, 20, 26, 28]   # window j (slice j // 2, channel j % 2) on this HBM AXI port
 slice_slr = [0, 1, 2, 2]            # slice s in this SLR (generate_f2_top.slice_slrs)
+host_xbar_slr = 0                   # the 1 x 4 host crossbar in SLR0 behind one register slice: one host
+                                    #   channel crosses SLR1 -> SLR0, not four (the first placement took ~14.4K
+                                    #   of the ~17.3K SLLs the CL can use there; generate_f2_top.host_xbar_slr)
 floorplan = "floorplan_s4.tcl"      # boards/f2/burst200/constraints/: a pblock per SLR, SLR2 halved
 beat_bytes = 64
 host = "pcie"
