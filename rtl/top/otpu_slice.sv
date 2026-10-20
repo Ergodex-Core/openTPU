@@ -1003,14 +1003,29 @@ module otpu_slice
     if (sys_rst) b_req <= 1'b0;
     else if (b_rdy_i) b_req <= b_req_c;
     if (b_rdy_i && b_req_c) begin
-      b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
+      b_tag <= b_tag_c; b_we <= b_we_c;
       b_addr <= b_addr_c; b_par <= b_par_c;
     end
+    // Payload may change while the register is empty. Take it whenever the
+    // register can accept a request, so the DMA/MXU request priority chain does
+    // not drive every payload CE. A parked request still holds all its bits.
+    if (b_rdy_i) begin b_wmask <= b_wmask_c; b_wdata <= b_wdata_c; end
     b_rvalid_i <= !sys_rst && b_rvalid;
     if (b_rvalid) begin
       b_rtag_i <= b_rtag; b_rdata_i <= b_rdata;
     end
   end : pb_reg
+`ifndef SYNTHESIS
+  // The old, request-qualified registers must agree whenever a payload is valid,
+  // including every cycle of a stalled write.
+  logic [D/4-1:0] b_wmask_ref;
+  logic [D*8-1:0] b_wdata_ref;
+  always_ff @(posedge clk)
+    if (b_rdy_i && b_req_c) begin b_wmask_ref <= b_wmask_c; b_wdata_ref <= b_wdata_c; end
+  always @(posedge clk)
+    if (!sys_rst && b_req && (b_wmask !== b_wmask_ref || b_wdata !== b_wdata_ref))
+      $fatal(1, "otpu_slice: valid port-B payload differs from request-qualified register");
+`endif
 
   // ---- port A's register (docs/asic.md "The ports"): the MXU's scale reads (a_req, a_addr) leave
   // the slice from flip-flops, so the MXU's issue (the DMA's request -> port B's grant -> the
