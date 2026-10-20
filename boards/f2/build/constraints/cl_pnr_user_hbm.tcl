@@ -173,7 +173,7 @@ for {set otpu_p 0} {$otpu_p <= $otpu_nport} {incr otpu_p} {
   set otpu_x [otpu_hbm_port_x $otpu_p]
   if {$otpu_p < $otpu_nport} {
     dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c$otpu_p"]
-    dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\\\[$otpu_p\\\].u_rs256"]
+    dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\[$otpu_p\].u_rs256"]   ;# (Vivado takes brackets literally: g_ch[0].u_rs256)
   } else {
     foreach otpu_c {u_hsc u_hrs256} { dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/$otpu_c"] }
   }
