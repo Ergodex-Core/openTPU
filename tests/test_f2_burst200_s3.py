@@ -24,6 +24,10 @@ TOP1 = ROOT / 'rtl/boards/f2/burst200/cl_opentpu.sv'
 TOP3 = ROOT / 'rtl/boards/f2/burst200-s3/cl_opentpu.sv'
 S3_175 = ROOT / 'targets/f2-burst200-s3-175.toml'
 TOP3_175 = ROOT / 'rtl/boards/f2/burst200-s3-175/cl_opentpu.sv'
+S3_162 = ROOT / 'targets/f2-burst200-s3-162.toml'
+TOP3_162 = ROOT / 'rtl/boards/f2/burst200-s3-162/cl_opentpu.sv'
+# the lower-clock variants of the three-slice target: toml, top, CORE_KHZ, core MHz
+S3_SLOWER = [(S3_175, TOP3_175, 175000, 175.0), (S3_162, TOP3_162, 162500, 162.5)]
 
 
 def _module(name, path):
@@ -198,26 +202,30 @@ def test_build_plan_takes_the_target(tmp_path):
     assert 'Core clock: 175.0 MHz (TMEM 350.0 MHz)' in out.stdout
 
 
-def test_175_target_is_the_s3_target_at_a_lower_core_clock():
-    """targets/f2-burst200-s3-175.toml: the three-slice target with only the core clock changed
-    (175 / 350 MHz; build 8's 200 MHz routed at -0.436 ns on intra-slice core paths): the same
-    arch hash and platform, its own rtl_board whose checked-in top is the s3 top with CORE_KHZ
-    175000 and nothing else, the s3 floorplan, and the driver reports the clock."""
-    t3, t175 = T.load(str(S3)), T.load(str(S3_175))
-    assert t175.core_khz == 175000 and t3.core_khz == 200000
-    assert T.arch_hash(T.config(t175)) == T.arch_hash(T.config(t3))
-    assert t175.platform_id == t3.platform_id
-    assert t175.platform['rtl_board'] == 'f2-burst200-s3-175'
-    assert t175.platform['floorplan'] == t3.platform['floorplan'] == 'floorplan_s3.tcl'
-    assert t175.platform['hbm_ports'] == t3.platform['hbm_ports']
-    a, b = TOP3.read_text().splitlines(), TOP3_175.read_text().splitlines()
-    assert len(a) == len(b)
-    diff = [(x, y) for x, y in zip(a, b) if x != y]
-    assert diff == [('  .CORE_KHZ(200000),', '  .CORE_KHZ(175000),')]
-    pl = flow.plan(S3_175)
-    assert pl['core_mhz'] == 175.0 and 'set otpu_core_mhz 175.0' in pl['core_clock']
-    assert pl['floorplan'].name == 'floorplan_s3.tcl' and pl['S'] == 3
-    assert any(p == TOP3_175 for p in pl['rtl'])
+def test_slower_targets_are_the_s3_target_at_a_lower_core_clock():
+    """targets/f2-burst200-s3-175.toml and -162.toml: the three-slice target with only the core
+    clock changed (175 / 350 and 162.5 / 325 MHz; build 8's 200 MHz routed at -0.436 ns on
+    intra-slice core paths, build 10's 175 at -0.277): the same arch hash and platform, each
+    its own rtl_board whose checked-in top is the s3 top with its CORE_KHZ and nothing else, the
+    s3 floorplan, and the driver reports the clock."""
+    t3 = T.load(str(S3))
+    assert t3.core_khz == 200000
+    for toml, top, khz, mhz in S3_SLOWER:
+        t = T.load(str(toml))
+        assert t.core_khz == khz
+        assert T.arch_hash(T.config(t)) == T.arch_hash(T.config(t3))
+        assert t.platform_id == t3.platform_id
+        assert t.platform['rtl_board'] == toml.stem
+        assert t.platform['floorplan'] == t3.platform['floorplan'] == 'floorplan_s3.tcl'
+        assert t.platform['hbm_ports'] == t3.platform['hbm_ports']
+        a, b = TOP3.read_text().splitlines(), top.read_text().splitlines()
+        assert len(a) == len(b)
+        diff = [(x, y) for x, y in zip(a, b) if x != y]
+        assert diff == [('  .CORE_KHZ(200000),', f'  .CORE_KHZ({khz}),')]
+        pl = flow.plan(toml)
+        assert pl['core_mhz'] == mhz and f'set otpu_core_mhz {mhz}' in pl['core_clock']
+        assert pl['floorplan'].name == 'floorplan_s3.tcl' and pl['S'] == 3
+        assert any(p == top for p in pl['rtl'])
     assert flow.plan(S3)['core_mhz'] == 200.0 and flow.plan(S1)['core_mhz'] == 200.0
 
 
@@ -236,8 +244,8 @@ def test_175_mhz_is_exact_from_the_shell_clock():
                         return m, d, o
         return None
     assert exact(200.0) == (8, 1, 5) or exact(200.0) is not None
-    assert exact(175.0) is not None
-    for t in (S1, S3, S3_175):
+    assert exact(175.0) is not None and exact(162.5) == (26, 5, 8)
+    for t in (S1, S3, *[toml for toml, _, _, _ in S3_SLOWER]):
         assert exact(float(T.load(str(t)).platform['core_mhz'])) is not None
 
 
