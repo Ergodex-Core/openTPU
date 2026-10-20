@@ -197,20 +197,17 @@ column.
 - **Port A at CPC 2**: the Sw-only request (`i_sws`) a row ahead (milestone 2's prefetch), and
   the scale FIFO's entries filled two from one line as the proposal's section 9 says (today one
   entry a request, a pair's bytes in it).
-- **The HBM adapter** (`otpu_hbm_dram`: 32 pseudo-channels, a pair per 8-beat burst on one PC,
-  the slot-reserved reorder FIFO, the async crossings; proposal milestone 5), the F2 shell
-  (`rtl/boards/f2`, `boards/f2`), the host's channel map, `make synthcheck` on the xilinxus
-  cells (`tests/test_tech.py` on DSP48E2 for the second column group), the bitstream and the
-  AFI (milestone 6), Lens on the F2 (milestone 7).
-- **The device's configuration register**: CPC is in `rtl_params` and the arch hash but no
-  CFG_* field reports it yet (`opentpu/host/board.py device_config` builds a CPC 1 Config); an
-  F2 bitstream needs the field (proposal section 3).
-- The native adapter's wide path is a simulation stand-in (four channels, the second chunk's
-  parity computed in the adapter); at CPC 1 (two channels) its B-queue and order entries carry
-  constant-zero `wide` / pair / swap bits that synthesis removes, and the slice's `b_wide`
-  output is constant zero: the card's build is otherwise what it was, and its simulations are
-  cycle-exact to before. The card's netlist has not been re-run through Vivado in this
-  milestone.
+- **The HBM adapter, the F2 shell and flow, the host's channel map, the CFG field**: done on
+  Alex's burst200 fabric instead of a 32-PC `otpu_hbm_dram` (section 6): the slice's four native
+  channels each on an `otpu_native_axi` and its own HBM port, `otpu_board` at CPC 2, CAPS2 [3:1]
+  = CPC, the host's CPC 2 map. What section 6 leaves: the AFI and the card (the coordinator's),
+  Lens on the card (milestone 7), the 32-PC adapter (only if a later point needs more than four
+  HBM ports a slice).
+- The native adapter's wide path at CPC 2 is no longer a stand-in: it is the F2 build's
+  adapter (four channels, the second chunk's parity computed in it). At CPC 1 (two channels)
+  its B-queue and order entries carry constant-zero `wide` / pair / swap bits that synthesis
+  removes, and the slice's `b_wide` output is constant zero: the card's build is otherwise what
+  it was, and its simulations are cycle-exact to before.
 
 ## 5. Reproducing
 
