@@ -267,6 +267,26 @@ netlist is implemented again from 17:25 (`build.py --from-netlist .../f2-burst20
 --output .../f2-burst200-s4-175-r2`, unit `opt-p4-viv-s4-175r2`; the netlist check passed,
 `post_link.dcp` SHA-256 0849213f...). The 162.5 MHz run's logs continued.
 
+**Placed** (`implement/place_timing.rpt`, after `place_design -directive Explore`, before
+phys_opt; setup WNS a clock, 0 failing endpoints unless stated; line numbers of each run's
+report):
+
+| clock | 175 MHz (`f2-burst200-s4-175`) | 162.5 MHz (`f2-burst200-s4-162`) | S = 3 at 175 (build 11 run2, the same point) |
+|:--|--:|--:|--:|
+| core `clk_out1_f2_core_clk` (2.0 M endpoints) | **+0.032** (line 185) | +0.183 (line 185) | -0.315 |
+| TMEM `clk_out2_f2_core_clk` | +0.555 (186) | +0.942 (186) | +0.639 |
+| HBM AXI 450 MHz `clk_out1_f2_hbm_clk` | +0.027 (183) | +0.177 (183) | +0.059 |
+| shell `clk_main_a0` 250 MHz | +0.467 (184) | +0.177 (184) | |
+| HBM AXI reset recovery (`**async_default**`, 32 endpoints) | -0.261, 3 failing (213; path at 2847) | -0.261, 3 failing (213; 2812) | |
+
+The one failure is AWS's own HBM wrapper: `PIPE_HBM_AXI_RST/pipe_reg[3][0]` (a `lib_pipe` in
+`cl_mem_hbm_wrapper.sv` line 193) drives all 32 ports' `ARESET_N` across the die's bottom
+edge, and the far ports' recovery checks at 450 MHz miss with 2.3 ns of route (the learnings'
+"single PIPE_HBM_AXI_RST to 32 ports" lesson). Post-place phys_opt replicates it (162.5 MHz
+run: `Processed net WRAPPER/CL/u_hbm/PIPE_HBM_AXI_RST/AXI_00_ARESET_N. Replicated 6 times`).
+Both runs place every clock with positive slack, the 175 MHz core with 0.35 ns more than the
+three-slice build had at this point.
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
