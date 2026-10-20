@@ -556,7 +556,11 @@ ns) +0.013 over 1.51 M endpoints, HBM AXI 450 MHz +0.028, TMEM 350 MHz +0.128, s
 -0.021 (global iteration 7) -> -0.015 after delay clean-up, and post-route phys_opt +0.010. The
 three-slice image closes at 175 MHz with the SmartConnect pblocks; the refine stage's two
 rounds (the hard gate) and the audit follow (~13:00 UTC). Build 12 (162.5 MHz) continues on
-the m7a as the margin hedge.
+the m7a as the margin hedge. **The hard gate passed at 10:50 UTC**: refine's Explore round
+held setup +0.010 / hold +0.009 and the stage stops at the first passing round
+(`ROUTED_TIMING_PASS_PENDING_REPORT_REVIEW`); `refine/post_route.dcp` SHA-256
+`2f3cc0411f7ceaeebfbbfb8b7a2ec667108460b93cb566021eb886cac40569e5`. The audit stage runs on
+it next.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
