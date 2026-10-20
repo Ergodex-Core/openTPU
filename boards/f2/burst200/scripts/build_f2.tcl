@@ -47,6 +47,9 @@ set bds f2_mem
 if {$otpu_S > 1} {
   read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_native_pipe/f2_native_pipe.xci
 }
+if {[info exists otpu_ocl_pipe] && $otpu_ocl_pipe} {
+  read_ip $pcisrun/ip_project/pcis.srcs/sources_1/ip/f2_ocl_pipe/f2_ocl_pipe.xci
+}
 if {$otpu_G > 1} {
   set bds {}
   for {set s 0} {$s < $otpu_G} {incr s} {lappend bds f2_mem_s$s}

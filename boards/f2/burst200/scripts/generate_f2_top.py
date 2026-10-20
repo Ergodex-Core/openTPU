@@ -115,11 +115,23 @@ def generate(T,hdk:Path)->str:
     for k,w in axil.items():decl('ctl_'+k,w)
     responses={'awready','wready','bresp','bvalid','arready','rdata','rresp','rvalid'}
     c=dict(s_axi_aclk='clk_main_a0',s_axi_aresetn='rst_main_n_sync',m_axi_aclk='core_clk',m_axi_aresetn='core_rst_n')
+    # (grouped: the converter's master into f2_ocl_pipe, a register slice in SLR0 beside the board,
+    # so the board's isolation readies end there and the SLR crossing is register to register)
+    cdc_m='ocp_' if grouped else 'ctl_'
+    if grouped:
+        for k,w in axil.items():decl('ocp_'+k,w)
     for k in axil:
         c['s_axi_'+k]=('cl_ocl_' if k in responses else 'ocl_cl_')+k
-        c['m_axi_'+k]='ctl_'+k
+        c['m_axi_'+k]=cdc_m+k
     c.update(s_axi_awprot="3'd0",s_axi_arprot="3'd0",m_axi_awprot='',m_axi_arprot='')
     inst('f2_ocl_cdc','u_ocl_cdc',c)
+    if grouped:
+        c=dict(aclk='core_clk',aresetn=core_rst_n(0))
+        for k in axil:
+            c['s_axi_'+k]='ocp_'+k
+            c['m_axi_'+k]='ctl_'+k
+        c.update(s_axi_awprot="3'd0",s_axi_arprot="3'd0",m_axi_awprot='',m_axi_arprot='')
+        inst('f2_ocl_pipe','u_ocl_pipe',c)
     # Accelerator native channels.
     native={'cvalid':1,'cready':1,'cwe':1,'caddr':25,'wvalid':1,'wready':1,'wdata':512,'wmask':64,'rvalid':1,'rdata':512,'wdone':16,'err':1}
     for k,w in native.items():line(f'logic [{NW-1}:0]'+(f'[{w-1}:0]' if w>1 else '')+' n_'+k+';')

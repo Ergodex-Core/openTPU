@@ -59,7 +59,7 @@ def test_build_plan_takes_the_p1_target():
     assert [p.name for p in pl["rtl"]] == ["cl_opentpu.sv", "otpu_native_axi.sv",
                                            "otpu_hbm_geometry.sv"]
     assert pl["rtl"][0] == TOP and pl["floorplan"] == FLOORPLAN
-    assert "set otpu_S 1\nset otpu_G 2\nset otpu_ports {0 4 8 12}\n" in pl["geometry"]
+    assert "set otpu_S 1\nset otpu_G 2\nset otpu_ports {0 4 8 12}\nset otpu_ocl_pipe 1\n" in pl["geometry"]
     assert pl["core_mhz"] == 200.0 and "set otpu_core_mhz 200.0" in pl["core_clock"]
 
 
@@ -95,6 +95,11 @@ def test_p1_top_wiring():
     assert inst["u_mem0"] == "f2_mem_s0_wrapper" and inst["u_mem1"] == "f2_mem_s1_wrapper"
     assert inst["u_host"] == "f2_host_wrapper"
     assert inst["u_host_pipe0"] == inst["u_host_pipe1"] == "f2_pcis_pipe"
+    # the control path: the OCL converter's master into f2_ocl_pipe (SLR0), its master the board's
+    assert inst["u_ocl_pipe"] == "f2_ocl_pipe"
+    assert ".m_axi_awvalid(ocp_awvalid)" in text and ".s_axi_awvalid(ocp_awvalid)" in text
+    assert ".m_axi_awvalid(ctl_awvalid)" in text and ".s_ctl_awvalid(ctl_awvalid)" in text
+    assert re.search(r"f2_ocl_pipe u_ocl_pipe \(\n  \.aclk\(core_clk\),\n  \.aresetn\(core_rst_n_slr0\)", text)
     assert "u_npipe" not in text                     # one slice: no SLR hops on the native side
     for j in range(4):
         assert f".BASE_ADDR(34'h{j * 0x80000000:x})" in text
@@ -210,11 +215,13 @@ def test_floorplan_names_every_cell_of_the_top():
     inst = set(_instances(_p1_top()))
     named = set(re.findall(r"\$cl/(u_\w+)(?![\w$])", fp))     # (u_mem$g: below)
     assert named <= inst, named - inst
-    for name in ("u_board", "u_native0", "u_native1", "u_native2", "u_native3", "u_host_pipe0",
-                 "u_host_pipe1", "u_hbm", "u_rst_core_slr0", "u_rstpipe_core_slr0",
-                 "u_rst_main_slr0", "u_rstpipe_main_slr0", "u_pcis_pipe", "u_ocl_cdc",
-                 "u_status_cdc", "u_host"):
+    for name in ("u_board", "u_ocl_pipe", "u_status_cdc", "u_native0", "u_native1", "u_native2",
+                 "u_native3", "u_host_pipe0", "u_host_pipe1", "u_hbm", "u_rst_core_slr0",
+                 "u_rstpipe_core_slr0", "u_rst_main_slr0", "u_rstpipe_main_slr0", "u_pcis_pipe",
+                 "u_ocl_cdc", "u_host"):
         assert f"$cl/{name}" in fp, name
+    slr0 = fp[fp.index("add_cells_to_pblock pblock_CL_SLR0 "):fp.index("set_property IS_SOFT false [get_pblocks pblock_CL_SLR0]")]
+    assert "$cl/u_ocl_pipe" in slr0 and "$cl/u_status_cdc" in slr0     # (b1 / b2's two crossings)
     assert "0 {CLOCKREGION_X0Y0:CLOCKREGION_X1Y1}" in fp and "1 {CLOCKREGION_X2Y0:CLOCKREGION_X3Y1}" in fp
     assert "add_cells_to_pblock pblock_CL_SLR0_MEM$g [otpu_p1_cells [list $cl/u_mem$g]]" in fp
     assert "\\[" not in fp                            # (get_cells takes [] literally)

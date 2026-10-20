@@ -82,7 +82,8 @@ def plan(target_path: Path) -> dict:
     groups = nch * S // 2               # f2_mem block designs, two windows each
     geometry = (f'# {target_path.name}: {S} slice(s) of {nch} channels, window j = {nch} s + c on HBM '
                 f'AXI port otpu_ports[j], windows 2g and 2g + 1 in f2_mem group g\n'
-                f'set otpu_S {S}\nset otpu_G {groups}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n')
+                f'set otpu_S {S}\nset otpu_G {groups}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n'
+                + ('set otpu_ocl_pipe 1\n' if S == 1 and groups > 1 else ''))
     core_mhz = float(t.platform['core_mhz'])
     core_clock = (f'# {target_path.name}: the core clock (MHz); the TMEM clock is twice it\n'
                   f'set otpu_core_mhz {core_mhz}\n')

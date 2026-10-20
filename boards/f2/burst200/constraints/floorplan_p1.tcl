@@ -8,12 +8,15 @@
 #        control block, the trace, the collective), the four native AXI adapters, both
 #        SmartConnects (u_mem0 / u_mem1, each in a grandchild pblock beside its two ports), the
 #        SLR0 ends of the host's register slices, the HBM wrapper, the SLR0 resets
-#   SLR1 (the shell's PCIS / OCL): the OCL converter, the PCIS pipe, the status synchronizer, the
-#        host crossbar (pblock_CL_SLR1_XBAR)
+#   SLR1 (the shell's PCIS / OCL): the OCL converter, the PCIS pipe, the host crossbar
+#        (pblock_CL_SLR1_XBAR)
 # The SLR crossings are the host path's (register slices on both sides: f2_pcis_pipe in SLR1, the
-# crossbar, u_host_pipe<g> in SLR0) and the control path's (the OCL converter's registered master
-# into the board's otpu_axil_iso, as Alex's one slice). Cell lookups fail closed: a missing cell
-# stops the build (a renamed instance would otherwise float free of its SLR).
+# crossbar, u_host_pipe<g> in SLR0), the control path's (the OCL converter's registered master
+# into f2_ocl_pipe in SLR0, then the board's otpu_axil_iso: b1/b2 placed the iso's readies, which
+# its SLR0 reset gates, straight into the converter at -0.74 ns) and the status synchronizer's
+# output (in SLR0 with its source, the board and the adapters: b2 placed its source register in
+# SLR1 at -0.36 ns). Cell lookups fail closed: a missing cell stops the build (a renamed instance
+# would otherwise float free of its SLR).
 
 proc otpu_p1_cells {patterns} {
   set found {}
@@ -83,7 +86,7 @@ set_property parent pblock_CL_SLR1 [get_pblocks pblock_CL_SLR1_XBAR]
 
 # ---- SLR0: the board, the adapters, the host's SLR0 register slices, the HBM wrapper, the resets
 add_cells_to_pblock pblock_CL_SLR0 [otpu_p1_cells [list \
-    $cl/u_board \
+    $cl/u_board $cl/u_ocl_pipe $cl/u_status_cdc \
     $cl/u_native0 $cl/u_native1 $cl/u_native2 $cl/u_native3 \
     $cl/u_host_pipe0 $cl/u_host_pipe1 \
     $cl/u_hbm \
@@ -108,7 +111,7 @@ foreach {g ranges} {
 
 # ---- SLR1: the shell-facing host and OCL paths, the status synchronizer, the crossbar
 add_cells_to_pblock pblock_CL_SLR1 [otpu_p1_cells [list \
-    $cl/u_pcis_pipe $cl/u_ocl_cdc $cl/u_status_cdc]]
+    $cl/u_pcis_pipe $cl/u_ocl_cdc]]
 add_cells_to_pblock pblock_CL_SLR1_XBAR [otpu_p1_cells [list $cl/u_host]]
 set_property IS_SOFT false [get_pblocks pblock_CL_SLR1]
 puts "floorplan_p1.tcl: the board, four adapters and two SmartConnects in SLR0, the host crossbar in SLR1"
