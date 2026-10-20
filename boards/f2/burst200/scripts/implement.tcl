@@ -6,6 +6,13 @@ set shell $hdk/common/shell_stable
 cd $run
 set_param general.maxThreads 8
 set_param sta.enableAutoGenClkNamePersistence 0
+# The directives: the flow's own unless build.py's strategy.tcl names others (--place-directive,
+# --phys-directive, --route-directive; --incremental-directive for read_checkpoint -incremental).
+set place_directive Explore
+set phys_directive AggressiveExplore
+set route_directive Explore
+set incremental_directive RuntimeOptimized
+if {[file exists $run/strategy.tcl]} {source $run/strategy.tcl}
 # Optional later-stage file proves that the source checkpoint has finished writing.
 if {[llength $argv] > 3} {
   set ready [file normalize [lindex $argv 3]]
@@ -44,13 +51,18 @@ if {$incremental} {
   set fp [open $run/incremental_reference.sha256 r]; set expected [string trim [read $fp]]; close $fp
   set actual [lindex [exec sha256sum $ref] 0]
   if {$actual ne $expected} {error "Incremental reference checksum mismatch"}
-  # Default RuntimeOptimized strategy prioritizes reuse of the timing-closed
-  # reference. No clock, shell, pblock or timing-exception changes are introduced.
-  read_checkpoint -incremental $ref
+  # RuntimeOptimized (Vivado's default) targets the reference's WNS and favours reuse of the
+  # timing-closed reference; TimingClosure targets WNS 0 and rips up the failing paths; Quick is
+  # not timing driven. No clock, shell, pblock or timing-exception changes are introduced. The
+  # place, phys_opt and route steps keep their default directives (route_design allows only
+  # Explore, Quick and Default with incremental reuse).
+  puts "IMPLEMENTATION_STRATEGY incremental from $ref directive=$incremental_directive"
+  read_checkpoint -incremental $ref -directive $incremental_directive
   report_incremental_reuse -file $run/incremental_read_reuse.rpt
   place_design -no_bufg_opt
 } else {
-  place_design -directive Explore -no_bufg_opt
+  puts "IMPLEMENTATION_STRATEGY place=$place_directive phys_opt=$phys_directive route=$route_directive"
+  place_design -directive $place_directive -no_bufg_opt
 }
 write_checkpoint -force $run/post_place.dcp
 report_timing_summary -report_unconstrained -file $run/place_timing.rpt
@@ -59,7 +71,7 @@ if {$incremental} {
   phys_opt_design
   report_incremental_reuse -file $run/incremental_place_reuse.rpt
 } else {
-  phys_opt_design -directive AggressiveExplore
+  phys_opt_design -directive $phys_directive
 }
 write_checkpoint -force $run/post_phys_opt.dcp
 if {[llength $argv] > 4 && [lindex $argv 4] eq "phys_opt_only"} {
@@ -77,7 +89,7 @@ if {$incremental} {
   route_design -tns_cleanup
   report_incremental_reuse -file $run/incremental_route_reuse.rpt
 } else {
-  route_design -directive Explore -tns_cleanup
+  route_design -directive $route_directive -tns_cleanup
 }
 # Restore the reference shell value after the placer's bank-74 Vref change.
 set_property INTERNAL_VREF 0.84 [get_iobanks 74]

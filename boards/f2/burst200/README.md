@@ -83,7 +83,11 @@ Use `--output /path/to/new/experiment` to select a fresh directory and
 builds the three-slice variant (one slice per SLR on six HBM ports, its top in
 `rtl/boards/f2/burst200-s3/`, `constraints/floorplan_s3.tcl`; `docs/v4/f2-burst200-s3.md`);
 the default target is this one-slice design and its flow is unchanged. Existing output
-directories are refused. The driver saves source hashes, commands and logs,
+directories are refused. `--floorplan`, `--place-directive`, `--phys-directive` and
+`--route-directive` select an implementation variant; `--from-netlist RUN` implements
+an earlier run's linked netlist and skips stages 1 and 2, refusing a netlist built from
+other sources; `--incremental-from DCP` implements incrementally from a routed checkpoint
+(`docs/v4/f2-burst200-s3.md`). The driver saves source hashes, commands and logs,
 then performs these stages sequentially:
 
 1. Generate memory/HBM, PCIS and clock IP in private projects.

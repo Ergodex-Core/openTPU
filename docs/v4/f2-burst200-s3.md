@@ -235,6 +235,41 @@ python boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target targ
 The stages, the gates and the packaging are the one-slice build's ([f2-burst200.md](f2-burst200.md)).
 The one-slice build is `build.py --hdk ...` as before (the default target).
 
+**Variants without a new netlist.** `--from-netlist RUN` implements an earlier build's
+synthesized, shell-linked netlist (`RUN/synth_link/post_link.dcp`) and runs only the implement,
+refine and audit stages: the IP, clock, synthesis and link stages are about 40 minutes of a
+build (build 11: 41 of 261 on opentpu-f2). It refuses unless the netlist stages' scripts, the
+generated geometry, core clock and link config, the CL top, the RTL the config lists (against
+the run's `inputs.sha256.json`), the HDK and the Vivado build all match, so the floorplan and the
+directives can change and the netlist cannot (checked on build 11's files: accepted from its
+tree 97af3c29, refused for the 200 MHz target and from a tree with the later `otpu_board.sv`
+fix). `--floorplan FILE` and `--place-directive`, `--phys-directive`, `--route-directive`
+(Vivado 2025.2's names; the defaults are the flow's Explore, AggressiveExplore, Explore) pick
+the variant, recorded in `implement/strategy.tcl`; the provenance is `netlist_parent.json`.
+Several variants can run at once on one host: a build averages 2-3 busy cores in place and route
+and peaks under 19 GB.
+
+```bash
+python boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target targets/f2-burst200-s3-175.toml \
+    --from-netlist /home/ubuntu/rachit/f2burst200-s3-175-mem2-run2 --place-directive AggressiveExplore \
+    --output /home/ubuntu/rachit/f2burst200-s3-175-v1
+```
+
+**Incremental implementation.** `--incremental-from DCP` implements incrementally from a routed
+checkpoint of the same design (`read_checkpoint -incremental`, `--incremental-directive`
+RuntimeOptimized by default, or TimingClosure or Quick), for a small RTL change to a closed
+design: the unchanged cells keep their placement and routing. The implement stage reports the
+reuse (`incremental_{read,place,route}_reuse.rpt`); Vivado may fall back to its default
+algorithms when its reuse criteria fail. The place, phys_opt and route directives do not apply
+(route_design allows only Explore, Quick and Default with incremental reuse). For example, the
+SLR-crossing fix (b7ec1adf) on build 11's checkpoint:
+
+```bash
+python boards/f2/burst200/build.py --hdk /home/ubuntu/aws-fpga/hdk --target targets/f2-burst200-s3-175.toml \
+    --incremental-from /home/ubuntu/rachit/f2burst200-s3-175-mem2-run2/refine/post_route.dcp \
+    --output /home/ubuntu/rachit/f2burst200-s3-175-incr1
+```
+
 Then: `OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 --model gemma3
 --slices 3 --prompt ...` (the host transport reads the geometry from CFG_DRAM / CFG_SLICES).
 
