@@ -52,9 +52,12 @@ HBM_CHAIN_IP = ('hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice/
 # The HBM CL's core clocks (cl_opentpu_hbm.sv u_mmcm, from clk_main_a0 = 250 MHz): core kHz ->
 # (DIVCLK_DIVIDE, CLKFBOUT_MULT_F, CLKOUT0_DIVIDE_F = the core clock, CLKOUT1_DIVIDE = the pumped
 # TMEM's, 2x the core); every VCO 800-1600 MHz, multiples of 0.125, integer CLKOUT1
-HBM_CORE_MMCM = {200000: (1, 4.8, 6.0, 3),      # VCO 1200: 200 / 400
+# (CLKFBOUT_MULT_F goes in steps of 0.125: 4.8 is not one; DRC AVAL-168 in P3's first ImplCL,
+# p3-92fcae38/impl150-1: "will be adjusted to the nearest supportable value", 4.75, a VCO of 1187.5:
+# the "150 MHz" core at 148.4 MHz, "200" at 197.9. PFD 50 MHz and M 24 give the VCO 1200 exactly)
+HBM_CORE_MMCM = {200000: (5, 24.0, 6.0, 3),     # PFD 50, VCO 1200: 200 / 400
                  175000: (5, 21.0, 6.0, 3),     # PFD 50, VCO 1050: 175 / 350
-                 150000: (1, 4.8, 8.0, 4)}      # VCO 1200: 150 / 300
+                 150000: (5, 24.0, 8.0, 4)}     # PFD 50, VCO 1200: 150 / 300
 
 
 def is_hbm(t: target.Target) -> bool:

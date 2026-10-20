@@ -121,6 +121,7 @@ over the three graded points, under the 10% rule):
 | Gemma 3 1B token, pos 14, lat 30 | 1 | 8,755,262 | 8,221,777 (P2's C 1 stall 0) | +6.5% |
 | | 4 | 2,307,854 | 2,292,283 (P2's C 4 stall 0) | +0.7% |
 | | 8 | 1,312,435 = 6.56 ms = **152.4 tok/s** at 200 MHz | 1,299,884 (C 8 packed, APS) | +1.0% |
+| the same, lat 49 at 150 MHz | 8 | 1,316,254 | 1,524,984 (the F2 channel path) | **-13.7%**: over the 10% rule; the net has no model of the path's bursts, its 32 transactions in flight, the SLR chain or the direction barriers: quote the RTL there |
 | pi0.5 chunk, f2-vla as it is | - | 295,472,463 = 1.477 s = 0.68 Hz | | |
 | pi0.5 chunk, f2-vla with P3's MXU (8 lanes x MCOLS 4, weights unpacked) | 8 | 582,586,902 = 2.913 s = 0.34 Hz | | |
 
