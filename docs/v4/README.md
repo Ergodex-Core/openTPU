@@ -457,6 +457,24 @@ exactly, since the link stage checks the periods to 0.001 ns). Predicted: 58-60 
 stage, the driver's plan (tests/test_f2_burst200_s3.py). The 200 MHz three-slice image stays
 the goal: the three failing path classes are candidates for RTL pipelining later.
 
+**Build 11 (queued 2026-10-20 05:33 UTC on opentpu-f2 behind build 8's refine): 175 MHz plus
+slice 2's SmartConnect pinned beside its HBM ports.** Build 8's routed report has a second
+failing domain, independent of the core clock: the HBM AXI side at 450 MHz (2.222 ns) at
+-0.087 ns over 1095 endpoints (-0.069 after refine's Explore round), every path a port 16 / 20
+interface clock (`HBM_ONE_STACK_INTF<1>/HBM_SNGLBLI_INTF_AXI<0|4>`: rack 1, clock regions X4Y0 /
+X5Y0) into `u_mem2`'s exit pipelines with one logic level and ~2.1 ns of wire, because the
+placer put slice 2's SmartConnect in SLR0's roomy left half. Build 10's post-placement worst
+path (before phys_opt) is the same class at -0.338 ns, so the 175 MHz build can fail the hard
+gate on it even if the core closes. The fix is `pblock_CL_SLR0_MEM2` (floorplan_s3.tcl, commit
+20f31463: a hard grandchild of SLR0, X4Y0:X6Y0 + X5Y1:X6Y1, for u_mem2's 15K LUTs; the port
+map is in [hbm-integration.md](hbm-integration.md)). The 450 MHz clock stays: 400 MHz would
+leave 12.8 GB/s a port for the 11.2 the slices need at 175 MHz (87% utilization), and it is
+only a fallback (the HBM IP's xci carries no AXI clock frequency, every port shares the one
+`axi_clk` net, `USER_CLK_SEL_LIST0/1` pick AXI_07 / AXI_23's clock for the stacks). Unit
+`otpu-f2burst200-s3-175-mem2-build1`, output `/home/ubuntu/rachit/f2burst200-s3-175-mem2-run1`,
+log `logs/f2burst200-s3-175-mem2-build1.log`; its script waits for build 8's unit to end, then
+runs `build.py --target targets/f2-burst200-s3-175.toml` on the tree at 20f31463.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
