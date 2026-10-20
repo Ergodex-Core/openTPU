@@ -42,7 +42,7 @@ proc ::c1_alex_route::clock {pin period} {
 }
 # Physical optimization can replicate a host-ready register and absorb the
 # shared native-ready inverter into LUT truth tables. Preserve the synthesis
-# audit unchanged. Collect 153 unchanged flows plus the explicit host replica
+# audit unchanged. Collect 121 unchanged active flows plus the explicit host replica
 # proof; the separate native LUT equivalence predicate remains mandatory.
 proc ::c1_alex_route::routed_fabric {prefix clocks audit} {
     if {$prefix ne "WRAPPER/CL"} {error "C1 routed fabric: unexpected CL scope"}
@@ -53,13 +53,15 @@ proc ::c1_alex_route::routed_fabric {prefix clocks audit} {
         incr count
     }
     for {set p 0} {$p<8} {incr p} {
-        foreach signal {awvalid awready wvalid wready bvalid arvalid arready rvalid} {::c1_alex::flow $prefix S_N$p $signal $audit;incr count}
+        foreach signal {bvalid arvalid arready rvalid} {::c1_alex::flow $prefix S_N$p $signal $audit;incr count}
         foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {::c1_alex::flow $prefix M_H$p $signal $audit;incr count}
     }
-    if {$count!=154} {error "C1 routed fabric: incomplete active handshake inventory"}
+    if {$count!=122} {error "C1 routed fabric: incomplete active handshake inventory"}
+    set inactive [::c1_alex::native_disabled_writes $prefix $audit]
+    if {$inactive!=16} {error "C1 routed fabric: incomplete native constant write-input proof"}
     puts $audit [list native_ready_equivalence state pending review current_routed_native_ready_equivalence expected_channels 16 route_qualified 0]
     return [dict create slave_interfaces 9 master_interfaces 8 active_handshake_witnesses $count \
-        shared_reset_ready_connections 0 state pending_native_ready_equivalence declared_width_authority generated_BD_required]
+        native_disabled_write_inputs $inactive shared_reset_ready_connections 0 state pending_native_ready_equivalence declared_width_authority generated_BD_required]
 }
 proc ::c1_alex_route::structure {audit {routed 0}} {
     variable cl

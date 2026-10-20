@@ -178,7 +178,7 @@ switch $fault {
 rename get_cells base_get_cells
 proc get_cells {args} {
     set query [lindex $args end]
-    if {"-filter" ni $args && "-regexp" ni $args && [llength $query]>1} {
+    if {"-filter" ni $args && "-regexp" ni $args && "-of_objects" ni $args && [llength $query]>1} {
         set result {};foreach name $query {if {[dict exists $::cells $name]} {lappend result $name}};return $result
     }
     set selected [base_get_cells {*}$args]
@@ -880,18 +880,23 @@ puts [list pending $::c1_alex_route::capture_pending]
     assert 'object_properties' not in raw
 
 
-def test_routed_fabric_preserves_153_flows_and_requires_native_semantic_review(tmp_path):
+def test_c1_routed_fabric_requires_122_active_16_constant_and_separate_ready_review(tmp_path):
     result = tcl(tmp_path, '''source [lindex $argv 0]
-set flows {};set host_count 0
+set flows {};set host_count 0;set constant_count 0
 proc ::c1_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
 proc ::c1_alex::flow {prefix iface signal audit} {lappend ::flows [list $iface $signal]}
+proc ::c1_alex::native_disabled_writes {prefix audit} {incr ::constant_count;return 16}
 namespace eval ::c1_alex_routed_ready {}
 proc ::c1_alex_routed_ready::host_wready {audit} {incr ::host_count}
 set out [open [lindex $argv 1] w]
 set facts [::c1_alex_route::routed_fabric WRAPPER/CL {} $out]
 close $out
-if {[llength $flows]!=153 || [llength [lsort -unique $flows]]!=153 || $host_count!=1} {error "Flow inventory differs"}
-if {{S_HOST wready} in $flows || [dict get $facts active_handshake_witnesses]!=154 || [dict get $facts shared_reset_ready_connections]!=0 || [dict get $facts state] ne "pending_native_ready_equivalence"} {error "Missing explicit native review"}
+if {[llength $flows]!=121 || [llength [lsort -unique $flows]]!=121 || $host_count!=1 || $constant_count!=1} {error "Flow inventory differs"}
+if {{S_HOST wready} in $flows || [dict get $facts active_handshake_witnesses]!=122 || [dict get $facts native_disabled_write_inputs]!=16 || [dict get $facts shared_reset_ready_connections]!=0 || [dict get $facts state] ne "pending_native_ready_equivalence"} {error "Missing explicit native review"}
+foreach flow $flows {
+ lassign $flow iface signal
+ if {[string match S_N* $iface] && $signal ni {bvalid arvalid arready rvalid}} {error "Inactive native signal treated as active"}
+}
 puts $facts
 ''', tmp_path/'routed.tcldata')
     assert result.returncode == 0, result.stderr

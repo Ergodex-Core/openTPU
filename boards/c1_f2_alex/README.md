@@ -146,6 +146,24 @@ review of the actual C1 records. No historical Alex or C2 qualification result
 is transferred to C1. There is no packaging, publication or hardware loader in
 this continuation.
 
+## Portable candidate evidence
+
+`collect_candidate.py` copies receipt-bound C1 files and approved Git source
+objects into a fresh relocatable bundle. `candidate_evidence.py` independently
+checks that bundle against an externally trusted manifest hash, including stage
+ancestry and the four vendor-simulation scenarios. Both preserve the original
+`NOT_QUALIFIED` marker, pending reviews and physical blockers. Neither accepts
+an image for packaging or FPGA use. Generated dependency trees are captured at
+collection time; they are not claimed as a pre-synthesis observation.
+
+`capture_native.tcl` records C1 native handshakes, disabled write-input drivers,
+ready cones, receive endpoints and host-ready topology from a hash-bound
+checkpoint. It preserves missing objects, API errors and collection caps as raw
+evidence. Its input-cone edges deliberately collect all drivers of the selected
+input without enumerating unrelated constant-net sinks. Full reset fanout and
+semantic equivalence require separate review. The capture does not alter design
+constraints and always leaves `route_qualified=0`.
+
 ## Recorded build milestones
 
 At 2026-10-19 22:51:43 UTC, the isolated E16/S4 synthesis from `de1f5ac5` completed:
@@ -161,3 +179,13 @@ dedicated m7a builder `i-06cf8792fb8f15534`, unit
 `57e2b5eb10fa481c8244496f85144404`. The bound is eight CPU cores, 80 GiB RAM and
 four hours, with one IP synthesis job and four Vivado threads. This entry
 records launch only; completion and FPGA results require later receipts.
+
+At 2026-10-20 12:09:46 UTC, integrated synthesis from `2caa69f3` completed on
+the dedicated m7a builder after the corrected full structural audit passed.
+Shell linking and its structural audit completed at 12:19:01 UTC. The linked
+checkpoint SHA-256 is
+`32239cf512d244204c651ad210d3d471aed6eef2d62aec6c91819ab22203a008`;
+the stage receipt SHA-256 is
+`3f2587370877cb3c6f751ecf93b4d55fb8cac996fdf619f20572d70cd488da5b`.
+The same isolated pipeline then started placement and routing. These milestones
+do not establish routed timing or measured FPGA performance.
