@@ -376,6 +376,27 @@ def attach_incremental(out: Path, run: Path, info: dict, dcp: Path, expected_sha
             'OTPU_INCR_DIRECTIVE': directive, 'OTPU_INCR_FORCE': '1' if force else '0'}
 
 
+def attach_qor_suggestions(out: Path, rqs: Path, expected_sha: str) -> dict:
+    """Copy a pinned .rqs file (write_qor_suggestions of an earlier routed run) into the run,
+    record it in inputs.json and return the environment build_level_1_cl.tcl reads (OTPU_RQS*)."""
+    if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
+        raise RuntimeError('--qor-suggestions-sha256 must be a SHA256 digest')
+    if rqs.suffix != '.rqs' or not rqs.is_file():
+        raise RuntimeError(f'{rqs}: not a QoR suggestions (.rqs) file')
+    digest = expected_sha.lower()
+    if sha(rqs) != digest:
+        raise RuntimeError('QoR suggestions file SHA256 mismatch')
+    dest = out / 'qor_suggestions' / rqs.name
+    dest.parent.mkdir()
+    shutil.copy2(rqs, dest)
+    if sha(dest) != digest:
+        raise RuntimeError('Copied QoR suggestions SHA256 mismatch')
+    current = json.loads((out / 'inputs.json').read_text())
+    current['qor_suggestions'] = {'file': str(rqs), 'sha256': digest, 'copy': str(dest)}
+    (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
+    return {'OTPU_RQS': str(dest), 'OTPU_RQS_SHA256': digest}
+
+
 def load_routed_run(run: Path, expected_sha: str) -> tuple[dict, Path]:
     """Repackage only a completed, qualified run with an explicitly pinned DCP."""
     if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
@@ -504,6 +525,10 @@ def main() -> None:
     p.add_argument('--incremental-force', action='store_true',
         help="read_checkpoint -force_incr: incremental even where Vivado's reuse / reference "
              'quality criteria would fall back to the default algorithms')
+    p.add_argument('--qor-suggestions', type=Path,
+        help='an .rqs file (write_qor_suggestions of an earlier routed run of this netlist) read '
+             'before opt_design; its automatic suggestions apply at opt_design / place_design')
+    p.add_argument('--qor-suggestions-sha256', help="the .rqs file's digest")
     a = p.parse_args()
     t = target.load(a.target)
     if t.platform.get('board') != 'f2':
@@ -512,7 +537,7 @@ def main() -> None:
     if a.package_only:
         if (not a.route_sha256 or a.package or a.prepare_only or a.from_synth or
                 a.synth_sha256 or a.build_id or a.flow != 'SynthCL' or a.incremental_from or
-                a.incremental_sha256 or a.incremental_force):
+                a.incremental_sha256 or a.incremental_force or a.qor_suggestions):
             p.error('--package-only requires --route-sha256 and does not accept build options')
         sh = check_hdk(hdk, t, shell=True)
         check_vivado_version(command('vivado', '-version'), t.platform['vivado'])
@@ -536,6 +561,10 @@ def main() -> None:
         p.error('--incremental-from requires ImplCL or BuildAll')
     if a.incremental_force and not a.incremental_from:
         p.error('--incremental-force requires --incremental-from')
+    if bool(a.qor_suggestions) != bool(a.qor_suggestions_sha256):
+        p.error('--qor-suggestions and --qor-suggestions-sha256 go together')
+    if a.qor_suggestions and a.flow == 'SynthCL':
+        p.error('--qor-suggestions requires ImplCL or BuildAll')
     sh = check_hdk(hdk, t, shell=a.flow != 'SynthCL')
     parent = load_synthesis(a.from_synth.resolve(), a.synth_sha256) if a.from_synth else None
     reference = (load_incremental_reference(a.incremental_from.resolve(), a.incremental_sha256, t)
@@ -552,6 +581,8 @@ def main() -> None:
     incremental = (attach_incremental(out, a.incremental_from.resolve(), *reference,
                                       a.incremental_sha256, a.incremental_directive,
                                       a.incremental_force) if reference else {})
+    rqs = (attach_qor_suggestions(out, a.qor_suggestions.resolve(), a.qor_suggestions_sha256)
+           if a.qor_suggestions else {})
     env = dict(os.environ, CL_DIR=str(cl), CL='cl_opentpu', SHELL_MODE='small_shell',
         BUILD_FLOW=a.flow, BUILD_TAG=build_id, ENCRYPT='0',
         HDK_SHELL_DIR=str(sh), HDK_SHELL_DESIGN_DIR=str(sh / 'design'),
@@ -561,7 +592,8 @@ def main() -> None:
         HDK_BD_GEN_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd'),
         VIVADO_TOOL_VERSION=t.platform['vivado'])
     env.pop('OTPU_INCR_DCP', None)      # never inherited from the caller's shell
-    env.update(incremental)
+    env.pop('OTPU_RQS', None)
+    env.update(incremental | rqs)
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
@@ -569,7 +601,7 @@ def main() -> None:
               if is_hbm(t) and not is_engine(t) and a.flow != 'ImplCL' else None)
     (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),
-        'environment': {k: env[k] for k in env if k.startswith(('HDK_', 'OTPU_INCR_')) or
+        'environment': {k: env[k] for k in env if k.startswith(('HDK_', 'OTPU_INCR_', 'OTPU_RQS')) or
             k in ('CL_DIR', 'CL', 'SHELL_MODE', 'BUILD_FLOW', 'BUILD_TAG', 'ENCRYPT', 'VIVADO_TOOL_VERSION')}}, indent=2) + '\n')
     if a.prepare_only:
         print(f'Prepared {cl}; invocation: {out / "invocation.json"}')
@@ -589,9 +621,12 @@ def main() -> None:
     checkpoint = cl / f'build/checkpoints/cl_opentpu.{build_id}.{stage}.dcp'
     if result.returncode or not checkpoint.is_file():
         raise RuntimeError(f'{a.flow} failed; see {out / "console.log"}')
-    if incremental and not re.search(r'^OTPU_INCREMENTAL_REFERENCE ',
+    if reference and not re.search(r'^OTPU_INCREMENTAL_REFERENCE ',
                                      (out / 'console.log').read_text(), re.M):
         raise RuntimeError('The incremental reference was never loaded')
+    if a.qor_suggestions and not re.search(r'^OTPU_QOR_SUGGESTIONS ',
+                                           (out / 'console.log').read_text(), re.M):
+        raise RuntimeError('The QoR suggestions were never read')
     if a.flow != 'SynthCL' and not (checkpoint.parent /
             f'cl_opentpu.{build_id}.route_validation.passed').is_file():
         raise RuntimeError(f'Post-route validation failed; see {out / "console.log"}')

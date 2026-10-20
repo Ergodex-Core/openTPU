@@ -17,6 +17,16 @@ proc opt_design {args} {
   # they check the netlist; the ones in the out-of-context checkpoint did not survive the link:
   # round 4 placed the TMEM's read requests at the fast period). The file fails closed.
   read_xdc -unmanaged ${::constraints_dir}/otpu_clk2x.tcl
+  # Vivado's QoR suggestions from an earlier routed run of this netlist (build.py
+  # --qor-suggestions: report_qor_suggestions / write_qor_suggestions there), pinned by digest;
+  # opt_design and place_design apply the automatic ones in their stages
+  if {[info exists ::env(OTPU_RQS)] && $::env(OTPU_RQS) ne ""} {
+    if {[lindex [exec sha256sum -- $::env(OTPU_RQS)] 0] ne $::env(OTPU_RQS_SHA256)} {
+      error "openTPU: QoR suggestions file hash mismatch"
+    }
+    read_qor_suggestions $::env(OTPU_RQS)
+    puts "OTPU_QOR_SUGGESTIONS [file tail $::env(OTPU_RQS)] [llength [get_qor_suggestions]]"
+  }
   opt_design {*}$args
 }
 # Incremental implementation (build.py --incremental-from; docs/wide_port.md "Incremental
