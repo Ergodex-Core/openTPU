@@ -71,13 +71,9 @@ resize_pblock pb_otpu_hbm -add {CLOCKREGION_X5Y1:CLOCKREGION_X5Y3}
 resize_pblock pb_otpu_hbm -add {CLOCKREGION_X6Y1:CLOCKREGION_X6Y1}
 resize_pblock pb_otpu_hbm -add {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119}
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_wb[0].*}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/u_mem}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_m}]
 add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_dn}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[0].u_up}]
-add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/g_rs[0].u_x}]
 if {$otpu_S > 1} {
   # slice 0's hub link: its rx / tx and port with the slice, the hub's ends in SLR1 (below)
   add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_dn_rx}]
@@ -93,10 +89,8 @@ create_pblock pb_otpu_mid
 set_property PARENT pblock_CL [get_pblocks pb_otpu_mid]
 resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/u_ctrl}]
-add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/u_trace}]
+add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_trace.u_trace}]
 add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_dn}]
-add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[1].u_up}]
-add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/g_rs[1].u_x}]
 if {$otpu_S > 1} {
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.u_chub}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx}]
@@ -104,7 +98,6 @@ if {$otpu_S > 1} {
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].g_pf.u_pf_rx}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_slice[1].u_mem}]
-  add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_wb[1].*}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_dn_rx}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_up_tx}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_board/g_xs.g_x[1].u_cport}]
@@ -128,12 +121,9 @@ set_property PARENT pblock_CL [get_pblocks pb_otpu_board]
 resize_pblock pb_otpu_board -add {CLOCKREGION_X0Y8:CLOCKREGION_X7Y11}
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_s}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
-add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 for {set otpu_s 2} {$otpu_s < $otpu_S} {incr otpu_s} {
   add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\[$otpu_s\].u_slice"]
   add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_slice\[$otpu_s\].u_mem"]
-  add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_wb\[$otpu_s\].*"]
   add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_dn_rx"]
   add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_up_tx"]
   add_cells_to_pblock pb_otpu_board [otpu_cells "WRAPPER/CL/u_sys/u_board/g_xs.g_x\[$otpu_s\].u_cport"]

@@ -1100,7 +1100,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # the slices by SLR
     assert 'WRAPPER/CL/u_sys/u_board/u_slice' in hbm and 'WRAPPER/CL/u_sys/u_board/u_mem' in hbm
     assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.u_chub' in mid
-    assert 'WRAPPER/CL/u_sys/u_board/u_ctrl' in mid and 'WRAPPER/CL/u_sys/u_board/u_trace' in mid
+    assert 'WRAPPER/CL/u_sys/u_board/u_ctrl' in mid and 'WRAPPER/CL/u_sys/u_board/g_trace.u_trace' in mid
     assert e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_slice') in board and e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_mem') in board
     # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's chain and mux)
     assert all(f'WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng{p}' in hbm for p in range(8))
