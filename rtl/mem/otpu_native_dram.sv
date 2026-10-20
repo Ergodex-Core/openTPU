@@ -743,7 +743,7 @@ module otpu_native_dram #(
       logic tw;
       tw = !qw_n[c][WW] && qw_rn[c] == (h_inc[c] ? (WW + 1)'(1) : (WW + 1)'(0));
       if (tw) begin
-        wadr_r[c] <= gb[c].m; wh_r[c] <= whash(gb[c].m); wp_r[c] <= !(&gb[c].strb);
+        wadr_r[c] <= gb[c].m; wh_r[c] <= whash(gb[c].m); wp_r[c] <= SWFILL && !(&gb[c].strb);
       end else if (h_inc[c]) begin
         wadr_r[c] <= wadr_n[c]; wh_r[c] <= wh_n[c]; wp_r[c] <= wpart[c][WW'(qw_r[c] + 1'b1)];
       end
@@ -853,7 +853,7 @@ module otpu_native_dram #(
       if (qw_push[c]) begin
         qwr[c][WW'(qw_f[c] + qw_n[c])] <= gb_ref[c];
         war[c][WW'(qw_f[c] + qw_n[c])] <= gb[c].m;
-        wpr[c][WW'(qw_f[c] + qw_n[c])] <= !(&gb[c].strb);
+        wpr[c][WW'(qw_f[c] + qw_n[c])] <= SWFILL && !(&gb[c].strb);
         wgr[c][WW'(qw_f[c] + qw_n[c])] <= 1'b0;
       end
       if (n_rvalid[c] && tgh[c].k == K_W) wgr[c][tgh[c].slot] <= 1'b1;

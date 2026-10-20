@@ -71,7 +71,7 @@ if {[file exists $logf]} { set fh [open $logf]; set log [read $fh]; close $fh } 
 set n 0
 foreach line [split $log "\n"] {
   if {[regexp {^(CRITICAL WARNING|WARNING|ERROR): \[Synth 8-} $line] &&
-      [regexp {otpu_fpga_top_ld\.sv|otpu_native_sys\.sv|otpu_mem_ch\.sv|otpu_axi_split2\.sv|otpu_afifo\.sv|otpu_native_dram\.sv|otpu_board\.sv|otpu_litedram\.v|otpu_bd_wrapper\.v} $line]} {
+      [regexp {otpu_fpga_top_ld\.sv|otpu_native_sys\.sv|otpu_mem_ch\.sv|otpu_axi_split2\.sv|otpu_afifo\.sv|otpu_native_dram\.sv|otpu_lane_mem\.sv|otpu_board\.sv|otpu_litedram\.v|otpu_bd_wrapper\.v} $line]} {
     puts "  $line"
     incr n
   }

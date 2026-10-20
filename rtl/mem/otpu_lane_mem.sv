@@ -94,7 +94,9 @@ module otpu_lane_mem #(
   input  logic [2*C-1:0][511:0] n_rdata,
   input  logic [2*C-1:0][15:0]  n_wdone
 );
-  initial if (C < 2 || C > 16) $fatal(1, "otpu_lane_mem: C must be 2 to 16 (a copy per lane)");
+  // (C 1: one copy, the slice's ports on one adapter, cycle for cycle the adapter alone: otpu_board
+  // keeps its memory's name, u_mem, for every build)
+  initial if (C < 1 || C > 16) $fatal(1, "otpu_lane_mem: C must be 1 to 16 (a copy per lane)");
 
   // each copy's adapter ports
   logic [C-1:0]          ca_rdy, ca_req, ca_we, ca_rvalid;
