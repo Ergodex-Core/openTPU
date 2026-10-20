@@ -39,6 +39,54 @@ def test_init_index_lsb_is_i0():
  assert m.truth(f(2),{'rst':1,'valid':0})==1
  assert m.truth(f(2),{'rst':0,'valid':1})==0
 
+
+def replica_fixture():
+ def tl(values):return " ".join("{"+value+"}" for value in values)
+ original='WRAPPER/CL/u_mem/f2_mem_i/memory_sc/inst/s01_entry_pipeline/s01_mmu/inst/r_sreg/m_vector_i[1024]_i_1__4'
+ data={key:{} for key in ('cells','pins','cell_pins','fanout')}
+ for name,sinks in ((original,['receiver_a/CE']),(original+'_replica',['receiver_b/CE'])):
+  p={'NAME':name,'CLASS':'cell','REF_NAME':'LUT2','ORIG_REF_NAME':'LUT2',
+     'IS_SEQUENTIAL':'0','INIT':"4'h4",'PHYS_OPT_MODIFIED':'FANOUT_OPT',
+     'ORIG_CELL_NAME':original.rsplit('/',1)[1] if name!=original else ''}
+  data['cells'][name]={'properties':p}
+  data['cell_pins'][name]={'names':tl([name+'/I0',name+'/I1',name+'/O'])}
+  for ref,driver in (('I0',m.RESET),('I1','valid/Q'),('O',name+'/O')):
+   full=name+'/'+ref
+   data['pins'][full]={'properties':{'NAME':full,'CLASS':'pin','REF_PIN_NAME':ref,
+      'DIRECTION':'OUT' if ref=='O' else 'IN','IS_INVERTED':'0'},'ports':'','drivers':tl([driver])}
+  data['fanout'][name+'/O']={'names':tl([name+'/O']+sinks),'directions':tl(['OUT']+['IN']*len(sinks))}
+ return data,original
+
+
+def test_fanout_copy_proves_function_and_disjoint_complete_partition():
+ data,original=replica_fixture()
+ merged,facts=m.merged_luts(data,[original])
+ assert merged[original]['sinks']==['receiver_a/CE','receiver_b/CE']
+ assert facts[original+'_replica']['truth_assignments']==4
+ with pytest.raises(ValueError,match='sink identity'):
+  m.compare_cell(f(4,[(m.RESET,0),('valid/Q',0)],['receiver_a/CE']),merged[original])
+
+
+@pytest.mark.parametrize('mutation,reason',[
+ ('origin','replica origin'),('transform','replica origin'),('reference','replica origin'),
+ ('init','Truth table'),('input','driver identity'),('polarity','Truth table'),
+ ('overlap','sink partition'),('empty','sink partition'),
+])
+def test_fanout_copy_does_not_waive_unknown_transform_or_connectivity(mutation,reason):
+ def tl(values):return " ".join("{"+value+"}" for value in values)
+ data,original=replica_fixture();replica=original+'_replica'
+ p=data['cells'][replica]['properties']
+ if mutation=='origin':p['ORIG_CELL_NAME']='unrelated'
+ elif mutation=='transform':p['PHYS_OPT_MODIFIED']='UNKNOWN'
+ elif mutation=='reference':p['ORIG_REF_NAME']='LUT3'
+ elif mutation=='init':p['INIT']="4'h8"
+ elif mutation=='input':data['pins'][replica+'/I1']['drivers']='other/Q'
+ elif mutation=='polarity':data['pins'][replica+'/I1']['properties']['IS_INVERTED']='1'
+ elif mutation=='overlap':data['fanout'][replica+'/O']['names']=tl([replica+'/O','receiver_a/CE'])
+ elif mutation=='empty':
+  data['fanout'][replica+'/O']={'names':tl([replica+'/O']),'directions':'OUT'}
+ with pytest.raises(ValueError,match=reason):m.merged_luts(data,[original])
+
 def test_complete_file_binding(tmp_path):
  p=tmp_path/'capture';p.write_text('schema 1 kind linked_native_ready checkpoint_sha256 abc route_qualified 0\ncomplete cells 0 route_qualified 0\n')
  digest=m.file_record(p)['sha256']

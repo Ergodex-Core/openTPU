@@ -148,8 +148,40 @@ def reset_anchor(before, after):
 
 
 
-def scope_closure(before, after, selected, inverters):
-    selected_inputs = {cell+f'/I{i}' for cell in selected for i in range(len(lut(after,cell)['inputs']))}
+def merged_luts(after, selected):
+    """Replay observed FANOUT_OPT LUT copies and their disjoint sink partitions."""
+    values = {name: lut(after, name) for name in selected}
+    replicas = {}
+    for name in sorted(after['cells']):
+        if not name.endswith('_replica') or name[:-8] not in values:
+            continue
+        original = name[:-8]
+        p = properties(after, name)
+        op = properties(after, original)
+        require(p.get('PHYS_OPT_MODIFIED') == 'FANOUT_OPT' and
+                p.get('ORIG_CELL_NAME') == original.rsplit('/', 1)[1] and
+                p.get('REF_NAME') == p.get('ORIG_REF_NAME') == op.get('REF_NAME') and
+                p.get('IS_SEQUENTIAL') == '0', 'Unproven ready LUT replica origin')
+        copy = lut(after, name)
+        source = values[original]
+        # Compare the full observed Boolean functions independently of fanout.
+        function_only = dict(source, sinks=copy['sinks'])
+        truth_proof = compare_cell(function_only, copy)
+        require(source['sinks'] and copy['sinks'] and
+                not set(source['sinks']) & set(copy['sinks']),
+                'Overlapping/empty ready replica sink partition')
+        replicas[name] = {'original': original, 'properties': p,
+                          'truth_assignments': truth_proof['assignments'],
+                          'variables': truth_proof['variables'],
+                          'original_sinks': list(source['sinks']),
+                          'replica_sinks': copy['sinks']}
+        values[original] = dict(source, sinks=sorted(set(source['sinks']) | set(copy['sinks'])))
+    return values, replicas
+
+
+def scope_closure(before, after, selected, inverters, replicas=()):
+    selected_inputs = {cell+f'/I{i}' for cell in list(selected)+list(replicas)
+                       for i in range(len(lut(after,cell)['inputs']))}
     excluded = []
     for cell in inverters:
         for sink in lut(before,cell)['sinks']:
@@ -180,11 +212,12 @@ def review(before, after, removals=None):
     expected_roles = {'m_vector_i[1024]','skid2vector_q','state[m_valid_i]','state[s_ready_i]','state[s_stall_d]'}
     require(len(scope_counts)==16 and all(v==expected_roles for v in scope_counts.values()), 'Channel/role inventory mismatch')
     inverters = set(before['inventories'].get('input_inverters',[]))
-    closure = scope_closure(before, after, selected, inverters)
+    merged, replicas = merged_luts(after, selected)
+    closure = scope_closure(before, after, selected, inverters, replicas)
     used = set()
     for name in selected:
         try:
-            a=lut(before,name); b=lut(after,name)
+            a=lut(before,name); b=merged[name]
             resolved=[]; substitutions=[]
             for driver, polarity in a['inputs']:
                 owner, leaf = driver.rsplit('/',1)
@@ -201,7 +234,7 @@ def review(before, after, removals=None):
         except (ValueError,KeyError) as error:
             issues.append({'cell':name,'reason':str(error)})
     require(used==inverters, 'Unused/unverified input inverter inventory')
-    return {'issues':issues,'canonical_facts':facts,'reset_source_anchor':anchor,'scope_closure':closure,'inputs':{'linked':before['input'],'refined':after['input']},'route_qualified':False,'scope':'Only selected 80 LUT combinational truth functions and output leaf identities; no sequential equivalence claim.'}
+    return {'issues':issues,'canonical_facts':facts,'reset_source_anchor':anchor,'scope_closure':closure,'replica_partitions':replicas,'inputs':{'linked':before['input'],'refined':after['input']},'route_qualified':False,'scope':'Only selected 80 LUT combinational truth functions, proven FANOUT_OPT copies, and complete output leaf identities; no sequential equivalence claim.'}
 
 
 def read_removed(path, phase, checkpoint):
@@ -241,8 +274,9 @@ def unused_removal_review(before, after, linked_path, refined_path, linked_check
     a=read_removed(linked_path,'linked',linked_checkpoint)
     b=read_removed(refined_path,'refined',checkpoint)
     mapping={}
+    merged, _ = merged_luts(after, before['inventories']['comparison_cells'])
     for name in before['inventories']['comparison_cells']:
-        old=set(lut(before,name)['sinks']);new=set(lut(after,name)['sinks'])
+        old=set(lut(before,name)['sinks']);new=set(merged[name]['sinks'])
         require(not new-old, 'Added native-ready sink is not unused-register removal')
         removed=old-new
         if removed:
@@ -312,7 +346,7 @@ def review_artifact(*, reports, auxiliary, checkpoint_sha256, linked_checkpoint_
             require(all(key in auxiliary for key in removal_keys), 'Both removed-register witnesses required')
             removals=unused_removal_review(linked,refined,auxiliary[removal_keys[0]],auxiliary[removal_keys[1]],linked_checkpoint_sha256,checkpoint_sha256)
         result = review(linked, refined, removals)
-        facts = {key:result[key] for key in ('reset_source_anchor','scope_closure','inputs','scope')}
+        facts = {key:result[key] for key in ('reset_source_anchor','scope_closure','replica_partitions','inputs','scope')}
         facts['luts'] = result['canonical_facts']
         if removals is not None:facts['unused_register_removals']=removals
         facts['checkpoint_sha256'] = checkpoint_sha256
