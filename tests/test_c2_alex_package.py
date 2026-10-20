@@ -86,8 +86,14 @@ def package(c):
     return p.package(c.root, c.manifest_sha, c.hdk, c.out, tag=TAG)
 
 
-def test_package_subprocess_and_portable_reverification(context):
-    c=context; result=package(c)
+@pytest.mark.parametrize('banner', ['Vivado v2025.2 (64-bit)',
+    'vivado v2025.2 (64-bit)\nTool Version Limit: 2025.11\n'
+    'SW Build 6299465 on Fri Nov 14 12:34:56 MST 2025\n'
+    'IP Build 6300035 on Fri Nov 14 10:48:45 MST 2025'])
+def test_package_subprocess_and_portable_reverification(context, banner):
+    c=context
+    write(p.VIVADO, "#!/bin/sh\ncat <<'BANNER'\n"+banner+"\nBANNER\n")
+    result=package(c)
     assert result['inputs_sha256']=='a'*64 and result['build_id']=='264d8413'
     assert result['package_sha256']==p.e.sha(Path(result['archive']))
     copied=c.out/f'cl_opentpu/build/checkpoints/cl_opentpu.{TAG}.post_route.dcp'
@@ -102,6 +108,14 @@ def test_package_subprocess_and_portable_reverification(context):
     checked=p.verify_package(relocated,c.root,c.manifest_sha,result['package_receipt_sha256'])
     assert checked['package_sha256']==result['package_sha256']
     assert checked['archive'].startswith(str(relocated))
+
+
+@pytest.mark.parametrize('banner', ['vivado v2024.1', 'vivado v2025.1',
+    'vivado v2025.20', 'vivado v2025.2foo'])
+def test_lowercase_brand_does_not_relax_required_tool_version(context, banner):
+    write(p.VIVADO, "#!/bin/sh\ncat <<'BANNER'\n"+banner+"\nBANNER\n")
+    with pytest.raises(RuntimeError, match='Vivado 2025.2 required'):
+        p.official_inputs(context.hdk)
 
 
 @pytest.mark.parametrize('change',['pending','hardware','wrong_pci','wrong_status','wrong_kernel_id','duplicate_id','dcp'])

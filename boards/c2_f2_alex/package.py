@@ -87,7 +87,7 @@ def official_inputs(hdk):
     need(version_value(release.decode(), 'RELEASE_VERSION') == '2.3.0', 'Wrong HDK release')
     need((hdk / SHELL_VERSION).read_text().strip() == 'small_shell=0x10212415', 'Wrong small-shell version')
     version = subprocess.check_output([str(VIVADO), '-version'], text=True)
-    need(re.search(r'^Vivado v2025\.2(?:\s|$)', version, re.M), 'Vivado 2025.2 required')
+    need(re.search(r'^[Vv]ivado v2025\.2(?:\s|$)', version, re.M), 'Vivado 2025.2 required')
     return {'hdk_revision': HDK_REVISION, 'ip_revision': IP_REVISION, 'sources': files,
             'vivado_version': version, 'vivado_path': str(VIVADO)}
 
@@ -267,7 +267,7 @@ def verify_package(package_run, evidence_root, evidence_manifest_sha256, package
     need(version_value((out / 'official/release_version.txt').read_text(), 'RELEASE_VERSION') == '2.3.0' and
          (out / 'official/shell_version.txt').read_text().strip() == 'small_shell=0x10212415' and
          (out / 'official/vivado_version.txt').read_text() == official['vivado_version'] and
-         re.search(r'^Vivado v2025\.2(?:\s|$)', official['vivado_version'], re.M), 'Preserved official version inputs differ')
+         re.search(r'^[Vv]ivado v2025\.2(?:\s|$)', official['vivado_version'], re.M), 'Preserved official version inputs differ')
     need(e.decode((out / 'exit.json').read_bytes()) == {'returncode': 0}, 'Official process did not succeed')
     archive = out / e.relative(receipt['archive']); copied = out / e.relative(receipt['checkpoint'])
     e.no_symlink(archive); e.no_symlink(copied)
