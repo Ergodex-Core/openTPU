@@ -6,8 +6,8 @@
 # pblock_CL must already exist.
 #
 #   SLR0 (the HBM's AXI ports at its bottom edge): slice 0 and its adapters, every SmartConnect
-#        (u_mem0/1/2), the HBM wrapper, the SLR0 ends of the host and native register slices,
-#        the SLR0 resets
+#        (u_mem0/1/2; u_mem2 in the grandchild pblock_CL_SLR0_MEM2 beside its ports 16 / 20),
+#        the HBM wrapper, the SLR0 ends of the host and native register slices, the SLR0 resets
 #   SLR1 (the shell's PCIS / OCL columns X6-X7): slice 1 and its adapters, the control block,
 #        the trace, the collective unit and its hub, the OCL converter, the PCIS pipe, the
 #        host crossbar (pblock_CL_SLR1_XBAR), the SLR1 ends of slice 2's native register slices
@@ -97,9 +97,24 @@ add_cells_to_pblock pblock_CL_SLR0 [otpu_s3_cells [list \
     $cl/u_native0 $cl/u_native1 \
     $cl/u_npipe2_slr0 $cl/u_npipe3_slr0 $cl/u_npipe4_slr0 $cl/u_npipe5_slr0 \
     $cl/u_host_pipe0 $cl/u_host_pipe1 $cl/u_host_pipe2 \
-    $cl/u_mem0 $cl/u_mem1 $cl/u_mem2 $cl/u_hbm \
+    $cl/u_mem0 $cl/u_mem1 $cl/u_hbm \
     $cl/u_rst_core_slr0 $cl/u_rstpipe_core_slr0 $cl/u_rst_main_slr0 $cl/u_rstpipe_main_slr0]]
 set_property IS_SOFT false [get_pblocks pblock_CL_SLR0]
+
+# ---- SLR0, by HBM ports 16 / 20: slice 2's SmartConnect. The HBM AXI port interfaces are the
+# sites BLI_HBM_AXI_INTF_X<k>Y0 in clock-region row Y0: ports 0-3 X0Y0, 4-7 X1Y0, 8-12 X2Y0,
+# 13-15 X3Y0, 16-19 X4Y0, 20-24 X5Y0, 25-29 X6Y0, 30-31 X7Y0 (docs/v4/hbm-integration.md).
+# Slices 0 and 1 (ports 0 / 4, 8 / 12) sit under pblock_CL_SLR0's whole left half and the
+# placer keeps their SmartConnects by their ports; slice 2's ports are on the right, where the
+# SLR0 pblock is only the bottom row plus X5Y1:X5Y3 / X6Y1, and build 8 left its SmartConnect's
+# exit pipelines 2.1 ns of wire from ports 16 / 20 (the 450 MHz domain at -0.087 / -0.069 ns
+# after route / refine, ~800-1100 endpoints = the two ports' exit registers). This grandchild
+# keeps u_mem2 in the clock regions next to its ports (all within the parent's ranges).
+create_pblock pblock_CL_SLR0_MEM2
+resize_pblock pblock_CL_SLR0_MEM2 -add {CLOCKREGION_X4Y0:CLOCKREGION_X6Y0 CLOCKREGION_X5Y1:CLOCKREGION_X6Y1}
+set_property parent pblock_CL_SLR0 [get_pblocks pblock_CL_SLR0_MEM2]
+add_cells_to_pblock pblock_CL_SLR0_MEM2 [otpu_s3_cells [list $cl/u_mem2]]
+set_property IS_SOFT false [get_pblocks pblock_CL_SLR0_MEM2]
 
 # ---- SLR1: slice 1, the control block, the collective, the shell-facing host and OCL paths
 add_cells_to_pblock pblock_CL_SLR1 [otpu_s3_cells [list \

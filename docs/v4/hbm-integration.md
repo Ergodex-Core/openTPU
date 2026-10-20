@@ -140,11 +140,16 @@ pblock_CL_SLR0 has its whole clock regions X0Y0:X3Y3); f2-burst200-s3's slice 2 
 / 20 = X4Y0 / X5Y0 on the right, where the SLR0 pblock has only the bottom row X4Y0:X7Y0 plus
 X5Y1:X5Y3, X6Y1 and X4Y3 — build 10's post-placement worst path at 450 MHz is exactly port
 16's interface clock into slice 2's SmartConnect exit pipeline (-0.338 ns before physical
-optimization). If a routed three-slice build fails on this class, the remedy is a child pblock
-per SmartConnect next to its ports (u_mem2 and slice 2's native adapters / SLR0 register-slice
-ends in X4Y0:X6Y1; u_mem0 in X0Y0:X1Y1; u_mem1 in X2Y0:X3Y1), or ports on the left for all
-three slices (e.g. 0 / 4, 8 / 12, 1 / 5 — distinct memory channels are ports 2k / 2k+1 pairs,
-so 1 / 5 share channels with 0 / 4 and that pairing costs the switch path, rule 6).
+optimization). Build 8 (200 MHz) routed with exactly this class failing: the 450 MHz domain at
+-0.087 ns over 1095 endpoints, every one a port 16 / 20 interface clock into u_mem2's exit
+pipelines, with one logic level and ~2.1 ns of wire, because the placer had put u_mem2 in
+SLR0's roomy left half. The remedy, in floorplan_s3.tcl from build 11 on, is a hard child
+pblock per far-away SmartConnect next to its ports: `pblock_CL_SLR0_MEM2` = X4Y0:X6Y0 +
+X5Y1:X6Y1 for u_mem2 (15K LUTs in five clock regions; its SLR0 register-slice ends and host
+pipe follow it, unconstrained). u_mem0 / u_mem1 (ports 0 / 4, 8 / 12) were not on the failing
+list and stay free in the left half. The alternative is ports on the left for all three
+slices (e.g. 0 / 4, 8 / 12, 1 / 5 — distinct memory channels are ports 2k / 2k+1 pairs, so 1 /
+5 share channels with 0 / 4 and that pairing costs the switch path, rule 6).
 
 ## What this means for the candidates
 

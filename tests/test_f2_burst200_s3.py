@@ -162,6 +162,10 @@ def test_floorplan_names_every_cell_of_the_top():
         assert f'g_slice\\[{s}\\].u_slice' in fp or (s == 0 and '$cl/u_board/u_slice' in fp)
     assert fp.count('pblock_CL_SLR2') >= 3 and 'CLOCKREGION_X0Y8:CLOCKREGION_X7Y11' in fp
     assert 'pblock_CL_SLR1_XBAR' in fp and '$cl/u_host]' in fp
+    # slice 2's SmartConnect beside HBM ports 16 / 20 (X4Y0 / X5Y0), a hard grandchild of SLR0
+    assert 'pblock_CL_SLR0_MEM2' in fp and '[list $cl/u_mem2]' in fp
+    assert 'CLOCKREGION_X4Y0:CLOCKREGION_X6Y0' in fp and 'IS_SOFT false [get_pblocks pblock_CL_SLR0_MEM2]' in fp
+    assert fp.index('pblock_CL_SLR0_MEM2 [otpu_s3_cells') > fp.index('set_property parent pblock_CL_SLR0 [get_pblocks pblock_CL_SLR0_MEM2]')
     assert 'USER_SLL_REG TRUE' in fp and 'foreach s {0 2}' in fp
     board = (ROOT / 'rtl/shell/otpu_board.sv').read_text()
     for name in ('u_dn_tx', 'u_dn_rx', 'u_up_tx', 'u_up_rx', 'u_cport', 'u_chub', 'u_pf_tx',
