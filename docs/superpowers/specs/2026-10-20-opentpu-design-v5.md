@@ -1,7 +1,9 @@
 # openTPU — architecture design v5 (the full-HBM F2 variant)
 
 Date: 2026-10-20. Status: design + RTL on branch `full-hbm` (worktree openTPU-fullhbm, from
-wide-port-alexshell 71919ae2), verified in Verilator only; no synthesis, no board. Where it
+wide-port-alexshell 71919ae2), verified in Verilator only (bit-exact with the ISA simulator on
+3 and 4 slices; the whole-model receipt **796,958 cycles = 251.0 tok/s int8 at S = 4**,
+1,045,874 = 191.2 at S = 3, against v4's 83.5: docs/full_hbm.md); no synthesis, no board. Where it
 conflicts with `2026-10-18-opentpu-design-v4.md`, v5 wins for the `f2-hbm:v5*` targets; every
 other target is v4 as built. Every number is labelled: **measured** = a Verilator run of this
 tree's RTL, bit-exact with the ISA simulator; **lpn-estimate** = `tools/wideport_lpn.py`;
@@ -299,7 +301,11 @@ new tree (test_native_nch, test_f2_rtl, test_wide_port_rtl, test_rtl selections,
 utilization table, docs/full_hbm.md, the target variants. Synthesis / P&R are a later,
 separately approved step (the brief).
 
-## 9. Results (filled from docs/full_hbm.md at the end of the work)
+## 9. Results
 
-See docs/full_hbm.md "The numbers": the configurations table (RTL cycles / tok/s / LPN / Lens
-roofline %), the utilization table and what blocks the FPGA build.
+Measured on the RTL (Verilator, the engine-path receipt model, bit-exact with the ISA
+simulator): S = 4 whole model 796,958 cycles = 251.0 tok/s int8 (LPN 674,558), S = 3 1,045,874 =
+191.2 (LPN 885,045), the 1 layer + head point at S = 4 203,697; port B streams 64.5% of the
+S = 4 token, the quantizer and VPU waits 20%, the attention phase 25% of the token for 2% of its
+bytes. docs/full_hbm.md "The numbers" has the table, the Lens attribution, the utilization
+table and what blocks the FPGA build.

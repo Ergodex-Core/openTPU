@@ -113,8 +113,48 @@ two-part reads, the 7 GATHERs of the layer 1,434 cycles in all (205 each). LPN (
 202,690 (+3.8%; the head +4.5%, the MLP -1.9%, the attention -1.9%: calibrated at a mean
 2.8%, the v4 model's quality).
 
-(The configurations table with RTL cycles / tok/s / LPN / Lens roofline % on the engine model
-at RD 128 follows below, with the v4 numbers 949,550 / 2,394,257 beside them.)
+**The engine-path receipts** (`~/ergodex-03/lens-runs/gemma3-int8-v5/run.sh`: `OTPU_HBMENG=1`,
+`--lat 56` (the HBM's 280 ns), RD 128 from the target, `--check`, single-threaded; the `.log`,
+`.jsonl`, `.otpuprof`, `.summary.txt` and `.html` of each run are in that directory; every run
+**bit-exact with the ISA simulator on every slice**):
+
+| configuration | RTL cycles (measured) | int8 tok/s at 200 MHz | LPN (lpn-estimate) | LPN gap | core-port roofline, efficiency | Lens: port B streaming |
+|---|---|---|---|---|---|---|
+| v4: S 1, PORTB 4 / RL 4 / MCOLS 8, native model RD 64 (docs/wide_port.md) | 2,394,257 | 83.5 | 2,441,652 | +2.0% | 1,966,316, 82.1% | 82.4% |
+| v5 `f2-hbm:v5`, S 4, 1 layer + head (native model RD 64, lat 60) | 195,339 | - | 202,690 | +3.8% | 161,635, 82.7% | - |
+| v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model) | 203,697 (396 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
+| **v5 `f2-hbm:v5`, S 4, whole model (engine model)** | **796,958** (740 s) | **251.0** | 674,558 | -15.4% | 512,938, 64.4% | 64.5% |
+| **v5 `f2-hbm:v5s3`, S 3, whole model (engine model)** | **1,045,874** (604 s) | **191.2** | 885,045 | -15.4% | 724,726, 69.3% | 69.5% |
+
+So the S = 4 token is 3.0x v4's on the RTL (251 against 83.5 tok/s) and the S = 3 fallback 2.3x
+(191); the port-bound token at S = 4 would be 409 tok/s, and the RTL sits at 64% of it. Where
+the 36% went (Lens, the S = 4 token, slice 0; `eng_s4_whole.summary.txt`):
+
+| port B cycle | share | note |
+|---|---|---|
+| streaming | 64.5% | 506,308 MXU chunks + 7,596 DMA at 4 a cycle |
+| waiting on quantizer work | 10.6% | the MXU waited 72.6K cycles for QACT at attention.py:117 (the queries), 44.8K at gemma4.py `_dense`, 43.3K at `_attention` |
+| waiting on VPU work | 9.7% | the norms (replicated on every slice) and gelu between the MMs; VPU busy 22.4% of the token |
+| MXU not consuming (drain / row credits) | 7.1% | the drain lost 83,705 cycles (10.5%) to TMEM bank arbitration |
+| MXU computing, not streaming | 5.3% | the 476 MMs' prologues / epilogues (a quarter of v4's rows a slice, the same per-MM cost) |
+| waiting on collectives | 1.4% | 182 GATHERs, 43,139 cycles busy in all (237 each): the collective is not the bound |
+| MXU starved (latency) | 0.5% | |
+
+Per phase (cycles; the roofline at 4 chunks a cycle): MLP 417,499 (its port roofline 314,496:
++33%), attention 199,870 (44,356: **4.5x**, 149K of it with no MM streaming), the LM head
+179,587 (147,456: +22%). The channels delivered 0.80 beats a cycle each on the 1-layer run and
+0.65 over the whole token (the attention's and the QACT waits idle them): the engine's bursts
+behind a one-beat-a-cycle stream close as single beats and the 64 bursts in flight then cap a
+channel near 64 / ~85 = 0.75 of a beat a cycle where the LPN's channel model assumed 1.0 at RD
+128 -- the -15% model gap; the experiment below quantifies the lever.
+
+What this says, in order: (1) at S = 4 the token is no longer memory-bound in the layers: the
+**quantizer and the VPU** (20% of the token together, every slice doing the norms and the
+queries' QACT in full) and the **attention phase** (25% of the token for 2% of its bytes) are
+the levers -- ULANES 16 / a wider QACT, or overlapping the attention's VPU work with the MLP's
+streaming; (2) the MXU drain's TMEM arbitration (10.5%) is v4's 8% again; (3) the channel
+engine's outstanding bursts (OT 64 of single beats) leave ~20% of the channel; (4) the
+collectives cost 1.4%: the sharding itself is cheap.
 
 ## Utilization (estimated per SLR; tools/v5_utilization.py)
 
