@@ -184,7 +184,7 @@ module otpu_top
       logic [1:0][511:0] wdata, rdata;
       logic [1:0][63:0] wmask;
       logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D)) u_adapt (
+      otpu_native_dram #(.D(D), .APS(MXU_C > 1)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,

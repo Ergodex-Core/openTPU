@@ -37,7 +37,10 @@ module otpu_lane_mem #(
   parameter int WGATHER = 4,
   parameter int RD = 128,
   parameter int AD = 64,
-  parameter int APF = 32
+  parameter int APF = 32,
+  // the adapters' A runs take forward skips (otpu_native_dram APS): each lane's scale rows are C
+  // rows apart (P3, docs/v4/p3-status.md "lane 0's scale beats")
+  parameter bit APS = (C > 1)
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -152,7 +155,7 @@ module otpu_lane_mem #(
     assign ca_be[l]    = a_be_x;
     assign cs_req[l]   = sw_req && sw_rdy;
     otpu_native_dram #(.D(D), .QD(QD), .WQD(WQD), .CHASH(CHASH), .WGATHER(WGATHER), .RD(RD),
-                       .AD(AD), .APF(APF)) u_adapt (
+                       .AD(AD), .APF(APF), .APS(APS)) u_adapt (
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),

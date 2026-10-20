@@ -53,7 +53,12 @@
 // beat) reuse it without a DRAM access. An A read that misses fetches a run of APF
 // channel-consecutive beats (APF read commands); the A reads that follow the run in order take
 // its beats without a DRAM access, and a read off the run (or after an A write) drops the beats
-// not yet taken.
+// not yet taken. With APS, a read further ahead in its channel's run (within the beats not yet
+// taken) is a hit too and drops the beats it skips: the strided scale stream of an MXU chunk lane
+// (otpu_mxu_lanes: lane l's rows l, l + C, ..., its scale rows C rows apart; at C 8 and int8's
+// 16-byte scale rows every other 64-byte beat, which the channel hash spreads over both channels'
+// runs: without APS each such read missed and started a run of APF beats, ten times the scale
+// beats lane 0 needs, which held its channels and, in lock step, every lane).
 //
 // Ordering. otpu_axi_dram waited for AXI write responses; here the command stream orders instead.
 // Once a command has entered a channel's stream, stream order is memory order. Before that, the
@@ -105,7 +110,9 @@ module otpu_native_dram #(
   // A read run (prefetch), beats. 32: decode's knee (docs/litedram.md section 11; 8 -> 32 is
   // 0.9-1.3% fewer cycles per token, 64 no better): fewer runs, so fewer row and bank changes
   // between the scale stream and the others
-  parameter int APF = 32
+  parameter int APF = 32,
+  // A runs take forward skips (see the top; the chunk lanes' lane memory): 0, today's adapter
+  parameter bit APS = 1'b0
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -301,7 +308,10 @@ module otpu_native_dram #(
   logic [1:0]   pv;
   logic [RNW-1:0] pfl [2];
   wire  [24:0]  a_cb = a_addr[29:5];              // the channel beat
-  wire  a_hit = !a_we && !a_reuse && pv[a_ch] && a_cb == pnx[a_ch] && pfl[a_ch] != 0;
+  wire  [24:0]  a_sk = a_cb - pnx[a_ch];          // APS: the run beats a hit skips (and drops)
+  wire  a_hit = !a_we && !a_reuse && pv[a_ch] && pfl[a_ch] != 0 &&
+                (APS ? a_sk < 25'(pfl[a_ch]) : a_cb == pnx[a_ch]);
+  wire  [RNW-1:0] a_skd = APS ? RNW'(a_sk) : RNW'(0);
 
   // ------------------------------------------------------------------ response FIFOs
   logic [RW:0]  rb_n [2], rb_res [2];          // stored; stored + in flight
@@ -512,7 +522,7 @@ module otpu_native_dram #(
   ao_t          ao_nx1, ao_in;
   assign ao_nx1 = ao_q[OW'(ao_h + 1'b1)];
   assign ao_in = '{c: a_ch, idx: a_addr[3:0], reuse: a_reuse,
-                   drop: (a_reuse || a_hit) ? RNW'(0) : pfl[a_ch]};
+                   drop: a_reuse ? RNW'(0) : a_hit ? a_skd : pfl[a_ch]};
   logic [511:0] a_last;                          // the beat of the last fetched A read
   wire a_out = (ao_n != 0) && (aoh.reuse || ra_n[aoh.c] > (AW_ + 1)'(aoh.drop));
   wire [511:0] a_src = aoh.reuse ? a_last : ra_head[aoh.c];
@@ -686,8 +696,8 @@ module otpu_native_dram #(
       // ---- A runs: a hit takes the next beat, a miss starts a run (dropping the rest)
       if (a_take && !a_we && !a_reuse) begin
         if (a_hit) begin
-          pnx[a_ch] <= pnx[a_ch] + 1;
-          pfl[a_ch] <= pfl[a_ch] - 1;
+          pnx[a_ch] <= a_cb + 1;                 // (pnx + 1 without a skip)
+          pfl[a_ch] <= pfl[a_ch] - a_skd - 1'b1;
         end else begin
           pnx[a_ch] <= a_cb + 1;
           pfl[a_ch] <= RNW'(APF - 1);
