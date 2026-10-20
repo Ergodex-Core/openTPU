@@ -152,3 +152,73 @@ proc ::c2_alex_routed_ready::host_wready {audit} {
     puts $audit [list routed_host_wready $result]
     return $result
 }
+
+# Routed receive-state duplication is checked only while the frozen flow audit
+# runs. Equal INIT, primitive, polarity and all four inputs prove the duplicate
+# Q equals the original on every clock; unrelated endpoint families stay frozen.
+proc ::c2_alex_routed_ready::receive_endpoint {root pc endpoint} {
+    variable receive_audit;variable receive_pairs
+    set family [::c2_alex::native_receive_endpoint_frozen $root $pc $endpoint]
+    if {$family ne ""} {return $family}
+    require [expr {$root eq "WRAPPER/CL/"}] "receive scope"
+    set relative [string range $endpoint [string length $root] end]
+    if {![regexp {^u_board/returned_reg\[([0-7])\]\[([0-8])\]_replica/(R|CE)$} $relative -> port bit terminal] || $port != $pc} {return {}}
+    set replica [file dirname $endpoint]
+    set original [string range $replica 0 end-8]
+    require [expr {[::c2_alex::native_receive_endpoint_frozen $root $pc $original/$terminal] eq "returned"}] "receive original classification"
+    if {[dict exists $receive_pairs $replica]} {return returned}
+    set candidates [get_cells -quiet -hierarchical -filter {NAME =~ WRAPPER/CL/u_board/*returned_reg* && IS_SEQUENTIAL}]
+    require [expr {[llength $candidates] > 0 && [llength $candidates] <= 512}] "receive discovery cap"
+    set family_names {}
+    foreach object $candidates {
+        set name [get_property NAME $object]
+        if {[string first $original $name] == 0} {lappend family_names $name}
+    }
+    require [expr {[lsort $family_names] eq [lsort [list $original $replica]]}] "receive register family"
+    set facts {};set controls {}
+    foreach name [list $original $replica] {
+        set object [one cell $name]
+        set props [properties $object {NAME REF_NAME ORIG_REF_NAME INIT IS_SEQUENTIAL ORIG_CELL_NAME PHYS_OPT_MODIFIED}]
+        require [expr {[dict get $props NAME] eq $name && [dict get $props REF_NAME] eq "FDRE" && [dict get $props ORIG_REF_NAME] eq "FDRE" && [dict get $props INIT] eq "1'b0" && [dict get $props IS_SEQUENTIAL] eq "1"}] "receive primitive/initial state"
+        require [expr {[dict get $props PHYS_OPT_MODIFIED] eq "CRITICAL_CELL_OPT"}] "receive physical transformation"
+        set origin {};if {$name eq $replica} {set origin [file tail $original]}
+        require [expr {[dict get $props ORIG_CELL_NAME] eq $origin}] "receive replica origin"
+        set expected {};foreach ref {C CE D Q R} {lappend expected $name/$ref}
+        require [expr {[lsort [names [get_pins -quiet -of_objects $object]]] eq [lsort $expected]}] "receive pin inventory"
+        set inputs {};set pinfacts {}
+        foreach ref {C CE D Q R} {
+            set direction IN;if {$ref eq "Q"} {set direction OUT}
+            dict set pinfacts $ref [pin $name/$ref $ref $direction $name]
+            if {$ref ne "Q"} {dict set inputs $ref [network $name/$ref [expr {$ref eq "C"}]]}
+        }
+        require [expr {[dict get $inputs C clocks] eq {clk_out1_f2_core_clk} && [dict get $inputs C drivers] eq {WRAPPER/CL/u_core_clk/inst/clkout1_buf/O}}] "receive core clock"
+        foreach ref {CE D R} {require [expr {[dict get $inputs $ref clocks] eq {}}] "receive control clock"}
+        dict set controls $name $inputs
+        dict set facts $name [dict create properties $props pins $pinfacts inputs $inputs output [output $name/Q {WRAPPER/CL/u_board}]]
+    }
+    foreach ref {C CE D R} {
+        foreach key {drivers clocks} {
+            require [expr {[dict get $controls $original $ref $key] eq [dict get $controls $replica $ref $key]}] "receive replica $ref $key differs"
+        }
+    }
+    set original_sinks [dict get $facts $original output sinks]
+    foreach sink [dict get $facts $replica output sinks] {require [expr {$sink ni $original_sinks}] "receive output partition overlaps"}
+    dict set receive_pairs $replica 1
+    puts $receive_audit [list routed_receive_replica original $original replica $replica pc $pc bit $bit registers $facts structural_pass 1 route_qualified 0]
+    return returned
+}
+proc ::c2_alex_routed_ready::receive_flow {prefix interface signal audit} {
+    variable receive_audit;variable receive_pairs
+    require [expr {$prefix eq "WRAPPER/CL" && [regexp {^S_N[0-7]$} $interface] && $signal eq "rvalid"}] "receive flow scope"
+    require [expr {![llength [info commands ::c2_alex::native_receive_endpoint_frozen]]}] "receive classifier already overridden"
+    set receive_audit $audit;set receive_pairs {}
+    rename ::c2_alex::native_receive_endpoint ::c2_alex::native_receive_endpoint_frozen
+    interp alias {} ::c2_alex::native_receive_endpoint {} ::c2_alex_routed_ready::receive_endpoint
+    try {
+        ::c2_alex::flow $prefix $interface $signal $audit
+    } finally {
+        rename ::c2_alex::native_receive_endpoint {}
+        rename ::c2_alex::native_receive_endpoint_frozen ::c2_alex::native_receive_endpoint
+        unset receive_audit;unset receive_pairs
+    }
+}

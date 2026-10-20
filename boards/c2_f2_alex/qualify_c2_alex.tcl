@@ -53,7 +53,10 @@ proc ::c2_alex_route::routed_fabric {prefix clocks audit} {
         incr count
     }
     for {set p 0} {$p<8} {incr p} {
-        foreach signal {awvalid awready wvalid wready bvalid arvalid arready rvalid} {::c2_alex::flow $prefix S_N$p $signal $audit;incr count}
+        foreach signal {awvalid awready wvalid wready bvalid arvalid arready rvalid} {
+            if {$signal eq "rvalid"} {::c2_alex_routed_ready::receive_flow $prefix S_N$p $signal $audit} else {::c2_alex::flow $prefix S_N$p $signal $audit}
+            incr count
+        }
         foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {::c2_alex::flow $prefix M_H$p $signal $audit;incr count}
     }
     if {$count!=154} {error "C2 routed fabric: incomplete active handshake inventory"}

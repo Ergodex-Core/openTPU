@@ -233,6 +233,7 @@ def run_mock(tmp_path, fault='none', action='qualify', overrides=None):
     # replication helper has dedicated positive and adversarial tests.
     (tmp_path / 'routed_host_ready.tcl').write_text('''
 namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::receive_flow {prefix iface signal audit} {::c2_alex::flow $prefix $iface $signal $audit}
 proc ::c2_alex_routed_ready::host_wready {audit} {
     ::c2_alex::flow WRAPPER/CL S_HOST wready $audit
     return [dict create structural_pass 1 route_qualified 0]
@@ -882,16 +883,19 @@ puts [list pending $::c2_alex_route::capture_pending]
 
 def test_routed_fabric_preserves_153_flows_and_requires_native_semantic_review(tmp_path):
     result = tcl(tmp_path, '''source [lindex $argv 0]
-set flows {};set host_count 0
+set flows {};set host_count 0;set receive_calls {}
 proc ::c2_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
 proc ::c2_alex::flow {prefix iface signal audit} {lappend ::flows [list $iface $signal]}
 namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::receive_flow {prefix iface signal audit} {lappend ::receive_calls [list $iface $signal];::c2_alex::flow $prefix $iface $signal $audit}
 proc ::c2_alex_routed_ready::host_wready {audit} {incr ::host_count}
 set out [open [lindex $argv 1] w]
 set facts [::c2_alex_route::routed_fabric WRAPPER/CL {} $out]
 close $out
 if {[llength $flows]!=153 || [llength [lsort -unique $flows]]!=153 || $host_count!=1} {error "Flow inventory differs"}
 if {{S_HOST wready} in $flows || [dict get $facts active_handshake_witnesses]!=154 || [dict get $facts shared_reset_ready_connections]!=0 || [dict get $facts state] ne "pending_native_ready_equivalence"} {error "Missing explicit native review"}
+set expected {};for {set p 0} {$p<8} {incr p} {lappend expected [list S_N$p rvalid]}
+if {$receive_calls ne $expected} {error "Receive wrapper scope differs"}
 puts $facts
 ''', tmp_path/'routed.tcldata')
     assert result.returncode == 0, result.stderr
@@ -906,8 +910,22 @@ def test_routed_fabric_does_not_swallow_host_replica_failure(tmp_path):
 proc ::c2_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
 proc ::c2_alex::flow {prefix iface signal audit} {return {}}
 namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::receive_flow {prefix iface signal audit} {::c2_alex::flow $prefix $iface $signal $audit}
 proc ::c2_alex_routed_ready::host_wready {audit} {error "Changed replica controls"}
 ::c2_alex_route::routed_fabric WRAPPER/CL {} stdout
 ''')
     assert result.returncode != 0
     assert 'Changed replica controls' in result.stderr
+
+
+def test_routed_fabric_does_not_swallow_receive_replica_failure(tmp_path):
+    result = tcl(tmp_path, '''source [lindex $argv 0]
+proc ::c2_alex::fabric_clocks {prefix clocks opaque audit} {return {}}
+proc ::c2_alex::flow {prefix iface signal audit} {return {}}
+namespace eval ::c2_alex_routed_ready {}
+proc ::c2_alex_routed_ready::host_wready {audit} {return {}}
+proc ::c2_alex_routed_ready::receive_flow {prefix iface signal audit} {error "Changed receive controls"}
+::c2_alex_route::routed_fabric WRAPPER/CL {} stdout
+''')
+    assert result.returncode != 0
+    assert 'Changed receive controls' in result.stderr
