@@ -173,3 +173,50 @@ def test_endpoint_family_matches_source_audit(tmp_path):
     script=tmp_path/'compare.tcl';script.write_text('\n'.join(lines)+'\n')
     run=subprocess.run([shutil.which('tclsh'),str(script)],capture_output=True,text=True,check=True)
     assert run.stdout.splitlines()==cases
+
+
+def add_scopes(e):
+    for pc in range(8):
+        suffix='' if pc==0 else f'__{pc-1}'
+        owner=f'{n.ROOT}u_mem/reads[7]_i_1{suffix}';net=f'{n.ROOT}n{pc}_rvalid'
+        cell(e,owner,'LUT2');pin(e,owner+'/I0','IN');pin(e,owner+'/O','OUT')
+        # Fixture inventory shares the exact list stored by the query.
+        e.networks['net',net]['leaves'].append(owner+'/I0')
+        e.queries['receive_outputs',str(pc),owner]=[owner+'/O']
+        endpoint=f'{n.ROOT}u_native{pc}/read_accounting/D'
+        e.receives[pc,owner,owner+'/O']=[endpoint]
+        e.queries['receive_endpoints',str(pc),owner+'/O']=[endpoint]
+        e.scopes[pc]={'cell':owner,'output':owner+'/O','input':owner+'/I0','source_network':net,
+                      'direction':'backward','disposition':'not_collected','purpose':'relocated_read_accounting'}
+    return e
+
+
+def scope_lines(e):
+    return [nested(['cone_scope',pc,*[v for pair in row.items() for v in pair]]) for pc,row in e.scopes.items()]
+
+
+def test_scoped_accounting_is_not_an_arithmetic_or_reset_proof(tmp_path):
+    e=add_scopes(fixture());path=tmp_path/'scoped';sha=serialize(e,path,scope_lines(e))
+    r=n.review_artifact(topology_path=path,topology_sha256=sha,checkpoint_sha256=DCP)
+    assert not r['issues'] and len(r['canonical_facts']['receive_gates'])==8
+    scopes=r['canonical_facts']['collection_scope'];assert len(scopes)==8
+    assert all(not row['arithmetic_proven'] and not row['receive_reset_proven'] for row in scopes)
+    assert 'relocated_read_accounting_arithmetic' in r['pending_reviews'] and not r['route_qualified']
+
+
+@pytest.mark.parametrize('mutation',['purpose','cell','network','missing_leaf','missing_endpoints','wrong_pc'])
+def test_scope_requires_exact_known_source_relationship(mutation):
+    e=add_scopes(fixture());row=e.scopes[0]
+    if mutation in ('purpose','cell'):row[mutation]='unreviewed'
+    elif mutation=='network':row['source_network']=n.ROOT+'n1_rvalid'
+    elif mutation=='missing_leaf':e.networks['net',row['source_network']]['leaves'].remove(row['input'])
+    elif mutation=='missing_endpoints':del e.queries['receive_endpoints','0',row['output']]
+    else:e.scopes[1]=e.scopes.pop(0)
+    with pytest.raises(ValueError):n.scope_review(e)
+
+
+def test_scope_never_discharges_existing_incomplete_markers(tmp_path):
+    e=add_scopes(fixture());path=tmp_path/'still-incomplete'
+    sha=serialize(e,path,scope_lines(e)+['incomplete old reason unsupported_combinational reference CARRY8'],1)
+    r=n.review_artifact(topology_path=path,topology_sha256=sha,checkpoint_sha256=DCP)
+    assert r['issues'] and r['canonical_facts']=={} and not r['route_qualified']

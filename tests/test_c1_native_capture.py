@@ -213,3 +213,21 @@ if {$::c1_native_capture::gaps!=0} {error "typed batch endpoint capture failed"}
     assert 'property cell cl/gate REF_NAME status observed value LUT2' in text
     assert 'query {pin_owner cl/gate/I0} status observed total 1 names cl/gate' in text
     assert 'query {pin_owner cl/gate/I1} status observed total 1 names cl/gate' in text
+
+
+def test_only_exact_accounting_lut_skips_backward_arithmetic(tmp_path):
+    text=run(tmp_path,r'''
+rename ::c1_native_capture::cone ::c1_native_capture::original_cone
+proc ::c1_native_capture::cone {label pins} {::c1_native_capture::emit traversed $label pins $pins}
+for {set pc 0} {$pc<8} {incr pc} {
+ set suffix [expr {$pc==0 ? "" : "__[expr {$pc-1}]"}]
+ set owner [format {WRAPPER/CL/u_mem/reads[7]_i_1%s} $suffix]
+ ::c1_native_capture::receive_cone $pc $owner $owner/O
+}
+::c1_native_capture::receive_cone 0 {WRAPPER/CL/u_mem/reads[7]_i_1_extra} {WRAPPER/CL/u_mem/reads[7]_i_1_extra/O}
+::c1_native_capture::receive_cone 1 {WRAPPER/CL/u_mem/reads[7]_i_1} {WRAPPER/CL/u_mem/reads[7]_i_1/O}
+::c1_native_capture::receive_cone 0 {WRAPPER/CL/u_mem/receive_gate} {WRAPPER/CL/u_mem/receive_gate/O}
+::c1_native_capture::receive_cone 0 {WRAPPER/CL/u_mem/reads[7]_i_1} {WRAPPER/CL/u_mem/reads[7]_i_1/OTHER}
+''')
+    assert text.count('cone_scope ')==8 and text.count('traversed ')==4
+    assert text.count('disposition not_collected purpose relocated_read_accounting')==8

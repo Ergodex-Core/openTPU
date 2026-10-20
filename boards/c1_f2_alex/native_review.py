@@ -138,7 +138,7 @@ class Evidence:
     def __init__(self):
         self.headers = []; self.summaries = []; self.queries = {}; self.objects = {}
         self.unavailable = set(); self.networks = {}; self.edges = {}; self.disabled = {}
-        self.receives = {}; self.cells = {}; self.selections = []; self.incomplete = []
+        self.receives = {}; self.cells = {}; self.selections = []; self.incomplete = []; self.scopes = {}
         self.issues = []; self.counts = Counter(); self.seen_summary = False
 
     def issue(self, reason, where=''):
@@ -208,6 +208,11 @@ class Evidence:
             row = pairs(w[2:], ('cell','output','endpoints')); pc = number(w[1])
             require(pc < 8, 'receive scope')
             self.store(self.receives,(pc,row['cell'],row['output']),names(row['endpoints']))
+        elif tag == 'cone_scope':
+            pc = number(w[1]); require(pc < 8, 'cone scope PC')
+            row = pairs(w[2:], ('cell','output','input','source_network','direction','disposition','purpose'))
+            require(pc not in self.scopes, 'duplicate arithmetic scope')
+            self.scopes[pc] = row
         elif tag == 'cone_terminal': pairs(w[2:], ('pin','cell','reference'))
         elif tag == 'cone':
             row = pairs(w[2:], ('visited','terminals')); td(row['visited']); td(row['terminals'])
@@ -367,6 +372,28 @@ def receive_review(e):
     return facts
 
 
+def scope_review(e):
+    """Validate an observation boundary, never the omitted arithmetic function."""
+    facts=[]
+    for pc,row in sorted(e.scopes.items()):
+        suffix='' if pc==0 else f'__{pc-1}'
+        cell=f'{ROOT}u_mem/reads[7]_i_1{suffix}';pin=cell+'/I0';output=cell+'/O';net=f'{ROOT}n{pc}_rvalid'
+        require(row=={'cell':cell,'output':output,'input':pin,'source_network':net,
+                      'direction':'backward','disposition':'not_collected','purpose':'relocated_read_accounting'},
+                'unreviewed arithmetic observation scope')
+        e.primitive(cell,'LUT2');e.pin(pin,'IN');e.pin(output,'OUT')
+        require(e.prop('pin',pin,'REF_PIN_NAME')=='I0' and e.prop('pin',output,'REF_PIN_NAME')=='O', 'accounting pin reference')
+        e.selected('net',net);network=e.networks.get(('net',net),{})
+        require(network.get('nets')==[net] and pin in network.get('leaves',[]) and
+                set(network['leaves'])==set(e.query('leaves',net)) and not network.get('ports') and not e.query('ports',net),
+                'accounting input not bound to full native RVALID inventory')
+        require(e.query('receive_outputs',str(pc),cell)==[output], 'accounting output inventory differs')
+        endpoints=e.receives.get((pc,cell,output))
+        require(endpoints is not None and endpoints==e.query('receive_endpoints',str(pc),output), 'accounting endpoint observation missing')
+        facts.append({'pc':pc,**row,'endpoints':endpoints,'arithmetic_proven':False,'receive_reset_proven':False})
+    return facts
+
+
 def review_artifact(*, topology_path, topology_sha256, checkpoint_sha256, checkpoint_path=None):
     require(re.fullmatch('[0-9a-f]{64}',checkpoint_sha256 or ''), 'invalid checkpoint hash')
     record=identity(topology_path,topology_sha256); e=Evidence()
@@ -383,11 +410,14 @@ def review_artifact(*, topology_path, topology_sha256, checkpoint_sha256, checkp
     except (ValueError,KeyError,IndexError,UnicodeError) as exc: e.issue('malformed_capture',str(exc))
     facts={}
     if not e.issues:
+        try: facts['collection_scope']=scope_review(e)
+        except (ValueError,KeyError,IndexError) as exc: e.issue('collection_scope_unresolved',str(exc))
+    if not e.issues:
         for name,predicate in (('disabled_write_inputs',disabled_review),('receive_gates',receive_review)):
             try: facts[name]=predicate(e)
             except (ValueError,KeyError,IndexError) as exc: e.issue(name+'_unresolved',str(exc))
     require(identity(topology_path,topology_sha256)==record,'capture changed during replay')
     return {'schema':1,'kind':'c1-native-narrow-semantic-review','capture':record,'checkpoint_sha256':checkpoint_sha256,
             'issues':e.issues,'canonical_facts':facts,'unavailable_properties':[list(v) for v in sorted(e.unavailable)],
-            'missing_selections':e.selections,'pending_reviews':['current_routed_native_ready_equivalence','current_host_wready_equivalence','current_reset_status','physical_timing_and_exceptions'],
+            'missing_selections':e.selections,'pending_reviews':['current_routed_native_ready_equivalence','current_host_wready_equivalence','current_reset_status','physical_timing_and_exceptions']+(['relocated_read_accounting_arithmetic'] if e.scopes else []),
             'route_qualified':False,'hardware_measured':False}

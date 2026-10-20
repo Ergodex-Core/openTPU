@@ -207,6 +207,18 @@ proc ::c1_native_capture::endpoint_facts {pc output endpoints} {
         emit property cell $name REF_NAME status observed value [get_property REF_NAME $object]
     }
 }
+# The exact relocated read-accounting LUT is already observed in the full
+# native RVALID leaf inventory. Preserve its endpoint observation, but do not
+# traverse its unrelated address/counter arithmetic as a receive/reset proof.
+proc ::c1_native_capture::receive_cone {pc owner output} {
+    set suffix [expr {$pc == 0 ? "" : "__[expr {$pc-1}]"}]
+    set accounting [format {WRAPPER/CL/u_mem/reads[7]_i_1%s} $suffix]
+    if {$pc >= 0 && $pc < 8 && $owner eq $accounting && $output eq "$owner/O"} {
+        emit cone_scope $pc cell $owner output $output input $owner/I0 source_network WRAPPER/CL/n${pc}_rvalid direction backward disposition not_collected purpose relocated_read_accounting
+    } else {
+        cone [list receive $pc $owner] [list $output]
+    }
+}
 proc ::c1_native_capture::receive {pc n} {
     if {![dict exists $n leaves]} {return}
     set candidates {}
@@ -225,7 +237,7 @@ proc ::c1_native_capture::receive {pc n} {
             set endpoints [qnames [list receive_endpoints $pc $output] {all_fanout -flat -endpoints_only -from [get_pins -quiet [list $output]]}]
             endpoint_facts $pc $output $endpoints
             emit receive_candidate $pc cell $owner output $output endpoints $endpoints
-            cone [list receive $pc $owner] [list $output]
+            receive_cone $pc $owner $output
         }
     }
 }
