@@ -118,6 +118,34 @@ Consequences for our designs:
 - **Clocks**: `clk_hbm_ref` is 100 MHz and the HBM monitor is synchronous to it; our 450 MHz
   HBM AXI clock is our own `clk_wiz` from it (rule 7).
 
+## Where the HBM AXI ports are on the die (VU47P, measured 2026-10-20)
+
+`link_design -part xcvu47p-fsvh2892-2-e` and `get_sites -filter {SITE_TYPE =~ *HBM*}` (no
+design needed): the 32 AXI port interfaces are the sites `BLI_HBM_AXI_INTF_X<k>Y0`, port k at
+X = k, all in clock-region row Y0 (SLR0's bottom edge), in these clock regions:
+
+| ports | clock region | | ports | clock region |
+|---|---|---|---|---|
+| 0-3 | X0Y0 | | 16-19 | X4Y0 |
+| 4-7 | X1Y0 | | 20-24 | X5Y0 |
+| 8-12 | X2Y0 | | 25-29 | X6Y0 |
+| 13-15 | X3Y0 | | 30-31 | X7Y0 |
+
+(The APB interfaces `BLI_HBM_APB_INTF_X<k>Y0` follow the same map; `HBM_REF_CLK_X0Y0/1` sit in
+X4Y0; the Laguna SLR-crossing columns are in rows Y3/Y4 and Y7/Y8, every column X0-X7.) So
+rack 0 (ports 0-15) spans X0-X3 and rack 1 (16-31) X4-X7, and a port's AXI handshake at 450
+MHz (2.222 ns) has to come from logic placed in or next to its clock region. Our targets:
+f2-burst200's ports 0 / 4 are X0Y0 / X1Y0 (Alex's SmartConnect sits on the left, where
+pblock_CL_SLR0 has its whole clock regions X0Y0:X3Y3); f2-burst200-s3's slice 2 uses ports 16
+/ 20 = X4Y0 / X5Y0 on the right, where the SLR0 pblock has only the bottom row X4Y0:X7Y0 plus
+X5Y1:X5Y3, X6Y1 and X4Y3 — build 10's post-placement worst path at 450 MHz is exactly port
+16's interface clock into slice 2's SmartConnect exit pipeline (-0.338 ns before physical
+optimization). If a routed three-slice build fails on this class, the remedy is a child pblock
+per SmartConnect next to its ports (u_mem2 and slice 2's native adapters / SLR0 register-slice
+ends in X4Y0:X6Y1; u_mem0 in X0Y0:X1Y1; u_mem1 in X2Y0:X3Y1), or ports on the left for all
+three slices (e.g. 0 / 4, 8 / 12, 1 / 5 — distinct memory channels are ports 2k / 2k+1 pairs,
+so 1 / 5 share channels with 0 / 4 and that pairing costs the switch path, rule 6).
+
 ## What this means for the candidates
 
 | target | slices x native width | ports | raw GB/s | fabric |
