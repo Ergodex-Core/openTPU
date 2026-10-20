@@ -430,6 +430,33 @@ criticals all under False Path, 49 bus-skew rows / 0 negative, no_clock 35, unco
 The laptop's `aws login` session expired at ~01:00 UTC (only the user can renew it); both
 builds are watched over SSH meanwhile and packaging waits for the renewal.
 
+**Build 8 routed at -0.436 ns (2026-10-20 03:03 UTC); the 175 MHz variant is build 10.**
+Placement ended at 00:45 (post-place phys_opt estimate -0.322 / TNS -481), the router's global
+iterations went -1.314, -0.966, -0.853, -0.737 and route_design (66 min) ended at **setup
+-0.436 ns, TNS -1530 ns, hold 0.000** after its own phys_opt (build 6 entered the same phase at
+-0.217 and closed in three iterations). `boards/f2/burst200/scripts/path_analysis.sh
+<stage dir>` on `implement/`: every one of the worst 50 paths is a core-clock path at the 5 ns
+requirement **inside a slice**, none crosses an SLR and none is in the fabric: slice 1's
+control-port run signal (`g_xs.g_x[1].u_cport/rp_reg`, replicated) into the MXU's register
+enables / DSP resets (26 of 50, 9 logic levels, 4.9-5.0 ns), slice 2's `rl_pq_reg` into the VPU
+write-buffer enable tree (`g_wbuf.en_r_reg_rep`, the path that closed at +0.037 in build 6),
+the instruction register into IMEM's address (slices 1 and 2), the DMA ack into `b_wdata`'s
+enables. Three copies leave the placer less room than one, and the same paths land 0.45 ns
+short. The refine stage (two phys_opt + reroute rounds) runs on it anyway (from 03:10). Build 9
+on the m7a tracked build 8's estimates to the picosecond at every phase (deterministic) and was
+stopped at 03:08 to free the host. **The fix that matches the diagnosis is a lower core clock**:
+`targets/f2-burst200-s3-175.toml` (175 / 350 MHz, 5.714 ns: 0.28 ns over build 8's routed delay
+before refine; the only exact MMCM output of the shell's 250 MHz near there, 250 x 28 / 5 =
+1400 MHz / 8; 187.5 would leave -0.10, 166.7 gives 6.0 ns), its top
+`rtl/boards/f2/burst200-s3-175/cl_opentpu.sv` = the s3 top with `CORE_KHZ 175000` (the
+generator's, one line differs; same arch hash 0x81365db1 and platform), and the clocks stage now
+takes the core clock from the target (`build.py` writes `core_clock.tcl`; `create_clocks.tcl`
+defaults to Alex's 200 / 400 without it and stops if the clock wizard cannot hit the request
+exactly, since the link stage checks the periods to 0.001 ns). Predicted: 58-60 tok/s x 175 /
+200 = **51-53 tok/s** (2.3-2.4x build 6). Tests: the 175 target's top, exactness, the clocks
+stage, the driver's plan (tests/test_f2_burst200_s3.py). The 200 MHz three-slice image stays
+the goal: the three failing path classes are candidates for RTL pipelining later.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round

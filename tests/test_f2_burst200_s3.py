@@ -22,6 +22,8 @@ S1 = ROOT / 'targets/f2-burst200.toml'
 S3 = ROOT / 'targets/f2-burst200-s3.toml'
 TOP1 = ROOT / 'rtl/boards/f2/burst200/cl_opentpu.sv'
 TOP3 = ROOT / 'rtl/boards/f2/burst200-s3/cl_opentpu.sv'
+S3_175 = ROOT / 'targets/f2-burst200-s3-175.toml'
+TOP3_175 = ROOT / 'rtl/boards/f2/burst200-s3-175/cl_opentpu.sv'
 
 
 def _module(name, path):
@@ -174,7 +176,71 @@ def test_build_plan_takes_the_target(tmp_path):
     assert out.returncode == 0, out.stderr
     assert '3 slice(s), HBM ports [0, 4, 8, 12, 16, 20]' in out.stdout
     assert 'burst200-s3/cl_opentpu.sv' in out.stdout and 'floorplan_s3.tcl' in out.stdout
+    assert 'Core clock: 200.0 MHz (TMEM 400.0 MHz)' in out.stdout
     assert out.stdout.strip().endswith('7. audit')
+    out = subprocess.run([sys.executable, str(BOARD / 'build.py'), '--hdk', '/nonexistent',
+                          '--target', str(S3_175), '--plan'], text=True, capture_output=True,
+                         cwd=tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert 'burst200-s3-175/cl_opentpu.sv' in out.stdout and 'floorplan_s3.tcl' in out.stdout
+    assert 'Core clock: 175.0 MHz (TMEM 350.0 MHz)' in out.stdout
+
+
+def test_175_target_is_the_s3_target_at_a_lower_core_clock():
+    """targets/f2-burst200-s3-175.toml: the three-slice target with only the core clock changed
+    (175 / 350 MHz; build 8's 200 MHz routed at -0.436 ns on intra-slice core paths): the same
+    arch hash and platform, its own rtl_board whose checked-in top is the s3 top with CORE_KHZ
+    175000 and nothing else, the s3 floorplan, and the driver reports the clock."""
+    t3, t175 = T.load(str(S3)), T.load(str(S3_175))
+    assert t175.core_khz == 175000 and t3.core_khz == 200000
+    assert T.arch_hash(T.config(t175)) == T.arch_hash(T.config(t3))
+    assert t175.platform_id == t3.platform_id
+    assert t175.platform['rtl_board'] == 'f2-burst200-s3-175'
+    assert t175.platform['floorplan'] == t3.platform['floorplan'] == 'floorplan_s3.tcl'
+    assert t175.platform['hbm_ports'] == t3.platform['hbm_ports']
+    a, b = TOP3.read_text().splitlines(), TOP3_175.read_text().splitlines()
+    assert len(a) == len(b)
+    diff = [(x, y) for x, y in zip(a, b) if x != y]
+    assert diff == [('  .CORE_KHZ(200000),', '  .CORE_KHZ(175000),')]
+    pl = flow.plan(S3_175)
+    assert pl['core_mhz'] == 175.0 and 'set otpu_core_mhz 175.0' in pl['core_clock']
+    assert pl['floorplan'].name == 'floorplan_s3.tcl' and pl['S'] == 3
+    assert any(p == TOP3_175 for p in pl['rtl'])
+    assert flow.plan(S3)['core_mhz'] == 200.0 and flow.plan(S1)['core_mhz'] == 200.0
+
+
+def test_175_mhz_is_exact_from_the_shell_clock():
+    """The link stage checks the clock wizard's periods against CORE_KHZ to 0.001 ns, so the
+    core clock must be an exact MMCM output of the shell's 250 MHz: integer M <= 128 and D <= 106
+    with the VCO in 800..1600 MHz and integer output dividers O and O / 2 for the TMEM clock."""
+    def exact(mhz):
+        for m in range(2, 129):
+            for d in range(1, 107):
+                vco = 250.0 * m / d
+                if not 800.0 <= vco <= 1600.0:
+                    continue
+                for o in range(2, 129, 2):
+                    if abs(vco / o - mhz) < 1e-9:
+                        return m, d, o
+        return None
+    assert exact(200.0) == (8, 1, 5) or exact(200.0) is not None
+    assert exact(175.0) is not None
+    for t in (S1, S3, S3_175):
+        assert exact(float(T.load(str(t)).platform['core_mhz'])) is not None
+
+
+def test_clocks_stage_reads_the_core_clock():
+    """create_clocks.tcl takes the core clock from core_clock.tcl (build.py writes it from the
+    target into the clocks stage), keeps Alex's 200 / 400 MHz without it, and stops when the
+    MMCM cannot hit the request exactly."""
+    tcl = (BOARD / 'scripts/create_clocks.tcl').read_text()
+    assert 'set otpu_core_mhz 200.0' in tcl and 'core_clock.tcl' in tcl
+    assert 'CONFIG.CLKOUT1_REQUESTED_OUT_FREQ $core_freq' in tcl
+    assert 'CONFIG.CLKOUT2_REQUESTED_OUT_FREQ $tmem_freq' in tcl
+    assert '{200.000}' not in tcl and '{400.000}' not in tcl
+    assert 'cannot produce' in tcl
+    src = (BOARD / 'build.py').read_text()
+    assert "(dirs['clocks'] / 'core_clock.tcl').write_text(pl['core_clock'])" in src
 
 
 def test_ip_scripts_read_the_geometry():

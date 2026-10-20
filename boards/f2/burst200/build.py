@@ -48,8 +48,11 @@ def plan(target_path: Path) -> dict:
         raise SystemExit(f'{target_path}: two channels a slice on {2 * S} distinct HBM ports')
     geometry = (f'# {target_path.name}: {S} slice(s), window j = 2 s + c on HBM AXI port otpu_ports[j]\n'
                 f'set otpu_S {S}\nset otpu_ports {{{" ".join(map(str, ports))}}}\n')
+    core_mhz = float(t.platform['core_mhz'])
+    core_clock = (f'# {target_path.name}: the core clock (MHz); the TMEM clock is twice it\n'
+                  f'set otpu_core_mhz {core_mhz}\n')
     return dict(target=t, toml=target_path.resolve(), rtl=rtl, floorplan=floorplan,
-                geometry=geometry, S=S, ports=ports)
+                geometry=geometry, S=S, ports=ports, core_mhz=core_mhz, core_clock=core_clock)
 
 
 def main():
@@ -68,6 +71,7 @@ def main():
         print('Target:', pl['toml'], f"({pl['S']} slice(s), HBM ports {pl['ports']})")
         print('CL top:', ', '.join(str(p.relative_to(ROOT)) for p in pl['rtl']))
         print('Floorplan:', pl['floorplan'].relative_to(ROOT))
+        print('Core clock:', f"{pl['core_mhz']} MHz (TMEM {2 * pl['core_mhz']} MHz)")
         print('\n'.join(f'{i + 1}. {stage}' for i, stage in enumerate(STAGES)))
         return
     if output.exists():
@@ -107,6 +111,7 @@ def main():
         shutil.copy2(pl['floorplan'], dirs[stage] / 'floorplan.tcl')
     for stage in ['ip', 'pcis', 'synth_link']:
         (dirs[stage] / 'geometry.tcl').write_text(pl['geometry'])
+    (dirs['clocks'] / 'core_clock.tcl').write_text(pl['core_clock'])
     (dirs['synth_link'] / 'rtl').mkdir()
     for p in pl['rtl']:
         shutil.copy2(p, dirs['synth_link'] / 'rtl' / p.name)
