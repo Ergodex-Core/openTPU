@@ -143,18 +143,23 @@ the 36% went (Lens, the S = 4 token, slice 0; `eng_s4_whole.summary.txt`):
 Per phase (cycles; the roofline at 4 chunks a cycle): MLP 417,499 (its port roofline 314,496:
 +33%), attention 199,870 (44,356: **4.5x**, 149K of it with no MM streaming), the LM head
 179,587 (147,456: +22%). The channels delivered 0.80 beats a cycle each on the 1-layer run and
-0.65 over the whole token (the attention's and the QACT waits idle them): the engine's bursts
-behind a one-beat-a-cycle stream close as single beats and the 64 bursts in flight then cap a
-channel near 64 / ~85 = 0.75 of a beat a cycle where the LPN's channel model assumed 1.0 at RD
-128 -- the -15% model gap; the experiment below quantifies the lever.
+0.65 over the whole token -- exactly port B's busy fraction (80.9% / 64.5%): **the engine path
+delivers what the MXU asks**, and the idle is on the slice's side. Two experiments on the
+1-layer receipt confirm it: 128 bursts outstanding a channel instead of 64 (`OTPU_HBMENG_OT=128`)
+gives the same 203,697 cycles, an idle timer of 6 hclk cycles so bursts form behind the
+one-beat-a-cycle stream (`OTPU_HBMENG_IDLE=6`) 203,471 (-0.1%). The LPN's -15% gap is therefore
+not its channel model (RD 128 over 84: 1.0, as measured) but what it under-charges on the MXU
+side at S = 4 -- the drain's row credits and TMEM arbitration (11% of the 1-layer run) and the
+per-MM prologues / epilogues, four times more frequent per byte than at S = 1 -- and the
+quantizer / VPU waits of the whole token.
 
 What this says, in order: (1) at S = 4 the token is no longer memory-bound in the layers: the
 **quantizer and the VPU** (20% of the token together, every slice doing the norms and the
 queries' QACT in full) and the **attention phase** (25% of the token for 2% of its bytes) are
 the levers -- ULANES 16 / a wider QACT, or overlapping the attention's VPU work with the MLP's
-streaming; (2) the MXU drain's TMEM arbitration (10.5%) is v4's 8% again; (3) the channel
-engine's outstanding bursts (OT 64 of single beats) leave ~20% of the channel; (4) the
-collectives cost 1.4%: the sharding itself is cheap.
+streaming; (2) the MXU drain's TMEM arbitration (10.5%) is v4's 8% again; (3) the memory path
+is not the bound: the channels deliver the port's demand at RD 128 (the OT and IDLE experiments
+above move nothing); (4) the collectives cost 1.4%: the sharding itself is cheap.
 
 ## Utilization (estimated per SLR; tools/v5_utilization.py)
 
