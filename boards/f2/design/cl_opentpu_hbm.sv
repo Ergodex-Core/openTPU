@@ -247,8 +247,8 @@ module cl_opentpu (
   // inputs tied, an ID the wrapper lacks tied to 0)
   `include "otpu_hbm_sc_inst.vh"
   // the host: h_* (otpu_f2_pcis_gate, 250 MHz, beside the shell in its PCIS SLR) -> u_hrs512 (the
-  // same SLR: the SLR crossing runs flop to flop from its registers to cl_axi_sc_1x1's entry
-  // slice in SLR0) -> cl_axi_sc_1x1 (AWS's, as shipped) -> u_hrs256 at 450 -> HBM port NPORT
+  // same SLR) -> u_hrs512x (SLR0's top row, beside the crossing) -> cl_axi_sc_1x1 (AWS's, as
+  // shipped, boxed in its port's whole column) -> u_hrs256 at 450 -> HBM port NPORT
   logic [15:0]  hs_awid, hs_arid, hs_bid, hs_rid;
   logic [63:0]  hs_awaddr, hs_araddr;
   logic [7:0]   hs_awlen, hs_arlen;
@@ -259,6 +259,16 @@ module cl_opentpu (
   logic         hs_rlast, hs_rvalid, hs_rready;
   logic [511:0] hs_wdata, hs_rdata;
   logic [63:0]  hs_wstrb;
+  logic [15:0]  hb_awid, hb_arid, hb_bid, hb_rid;
+  logic [63:0]  hb_awaddr, hb_araddr;
+  logic [7:0]   hb_awlen, hb_arlen;
+  logic [2:0]   hb_awsize, hb_arsize;
+  logic [1:0]   hb_awburst, hb_arburst, hb_bresp, hb_rresp;
+  logic         hb_awvalid, hb_awready, hb_wlast, hb_wvalid, hb_wready;
+  logic         hb_bvalid, hb_bready, hb_arvalid, hb_arready;
+  logic         hb_rlast, hb_rvalid, hb_rready;
+  logic [511:0] hb_wdata, hb_rdata;
+  logic [63:0]  hb_wstrb;
   logic [5:0]  hm_awid, hm_arid, hm_bid, hm_rid;
   logic [33:0]  hm_awaddr, hm_araddr;
   logic [3:0]   hm_awlen, hm_arlen;
@@ -280,7 +290,34 @@ module cl_opentpu (
       .s_axi_arsize(h_arsize), .s_axi_arburst(h_arburst), .s_axi_arlock(1'b0), .s_axi_arcache(4'd3),
       .s_axi_arprot(3'd2), .s_axi_arregion(4'd0), .s_axi_arqos(4'd0), .s_axi_arvalid(h_arvalid),
       .s_axi_arready(h_arready), .s_axi_rid(h_rid), .s_axi_rdata(h_rdata), .s_axi_rresp(h_rresp),
-      .s_axi_rlast(h_rlast), .s_axi_rvalid(h_rvalid), .s_axi_rready(h_rready), .m_axi_awid(hs_awid),
+      .s_axi_rlast(h_rlast), .s_axi_rvalid(h_rvalid), .s_axi_rready(h_rready), .m_axi_awid(hb_awid),
+      .m_axi_awaddr(hb_awaddr), .m_axi_awlen(hb_awlen), .m_axi_awsize(hb_awsize), .m_axi_awburst(hb_awburst),
+      .m_axi_awlock(), .m_axi_awcache(), .m_axi_awprot(), .m_axi_awregion(),
+      .m_axi_awqos(), .m_axi_awvalid(hb_awvalid), .m_axi_awready(hb_awready), .m_axi_wdata(hb_wdata),
+      .m_axi_wstrb(hb_wstrb), .m_axi_wvalid(hb_wvalid), .m_axi_wlast(hb_wlast), .m_axi_wready(hb_wready),
+      .m_axi_bresp(hb_bresp), .m_axi_bvalid(hb_bvalid), .m_axi_bid(hb_bid), .m_axi_bready(hb_bready),
+      .m_axi_arid(hb_arid), .m_axi_araddr(hb_araddr), .m_axi_arlen(hb_arlen), .m_axi_arsize(hb_arsize),
+      .m_axi_arburst(hb_arburst), .m_axi_arlock(), .m_axi_arcache(), .m_axi_arprot(),
+      .m_axi_arregion(), .m_axi_arqos(), .m_axi_arvalid(hb_arvalid), .m_axi_arready(hb_arready),
+      .m_axi_rid(hb_rid), .m_axi_rdata(hb_rdata), .m_axi_rresp(hb_rresp), .m_axi_rlast(hb_rlast),
+      .m_axi_rvalid(hb_rvalid), .m_axi_rready(hb_rready)
+    );
+  // (u_hrs512x: a second register slice in SLR0's top row beside the crossing (pb_otpu_hxs,
+  // X4Y3): the first placed build at 150 MHz put u_hrs512's registers in SLR1 and the
+  // SmartConnect's entry FIFO at the bottom of SLR0 next to the HBM port, 4.1 ns of route on a
+  // 4.0 ns budget; now the crossing is one hop, the descent to the port another)
+    axi_register_slice u_hrs512x (
+      .aclk(clk_main_a0), .aresetn(sc_host_aresetn),
+      .s_axi_awid(hb_awid), .s_axi_awaddr(hb_awaddr), .s_axi_awlen(hb_awlen), .s_axi_awsize(hb_awsize),
+      .s_axi_awburst(hb_awburst), .s_axi_awlock(1'b0), .s_axi_awcache(4'd3), .s_axi_awprot(3'd2),
+      .s_axi_awregion(4'd0), .s_axi_awqos(4'd0), .s_axi_awvalid(hb_awvalid), .s_axi_awready(hb_awready),
+      .s_axi_wdata(hb_wdata), .s_axi_wstrb(hb_wstrb), .s_axi_wlast(hb_wlast), .s_axi_wvalid(hb_wvalid),
+      .s_axi_wready(hb_wready), .s_axi_bid(hb_bid), .s_axi_bresp(hb_bresp), .s_axi_bvalid(hb_bvalid),
+      .s_axi_bready(hb_bready), .s_axi_arid(hb_arid), .s_axi_araddr(hb_araddr), .s_axi_arlen(hb_arlen),
+      .s_axi_arsize(hb_arsize), .s_axi_arburst(hb_arburst), .s_axi_arlock(1'b0), .s_axi_arcache(4'd3),
+      .s_axi_arprot(3'd2), .s_axi_arregion(4'd0), .s_axi_arqos(4'd0), .s_axi_arvalid(hb_arvalid),
+      .s_axi_arready(hb_arready), .s_axi_rid(hb_rid), .s_axi_rdata(hb_rdata), .s_axi_rresp(hb_rresp),
+      .s_axi_rlast(hb_rlast), .s_axi_rvalid(hb_rvalid), .s_axi_rready(hb_rready), .m_axi_awid(hs_awid),
       .m_axi_awaddr(hs_awaddr), .m_axi_awlen(hs_awlen), .m_axi_awsize(hs_awsize), .m_axi_awburst(hs_awburst),
       .m_axi_awlock(), .m_axi_awcache(), .m_axi_awprot(), .m_axi_awregion(),
       .m_axi_awqos(), .m_axi_awvalid(hs_awvalid), .m_axi_awready(hs_awready), .m_axi_wdata(hs_wdata),

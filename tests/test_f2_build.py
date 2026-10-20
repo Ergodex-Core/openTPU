@@ -556,7 +556,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     # the CL: AWS's cl_dram_hbm_dma chain per channel and for the host's own port, both HBM
     # monitor APBs connected as the AWS Shell Interface Specification asks (else AFI creation fails)
     top = (d / 'cl_opentpu_hbm.sv').read_text()
-    for inst in ('axi_register_slice u_rs512', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512',
+    for inst in ('axi_register_slice u_rs512', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512', 'axi_register_slice u_hrs512x',
                  'cl_axi_sc_1x1_wrapper u_hsc', 'cl_axi3_256b_reg_slice u_hrs256',
                  'cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NHBM)'):
         assert inst in top
@@ -605,6 +605,7 @@ set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_
            CLOCKREGION_X0Y4:CLOCKREGION_X3Y7 {s1a} CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
            CLOCKREGION_X4Y3:CLOCKREGION_X4Y3 {s0c}
            CLOCKREGION_X0Y0:CLOCKREGION_X0Y1 {s0a} CLOCKREGION_X1Y0:CLOCKREGION_X1Y1 {s0b}
+           CLOCKREGION_X1Y0:CLOCKREGION_X1Y3 {s0b}
            CLOCKREGION_X5Y1:CLOCKREGION_X5Y3 {s0a} CLOCKREGION_X6Y1:CLOCKREGION_X6Y1 {s0b}
            {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119} {s0c}
            CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
@@ -680,8 +681,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert result.returncode == 0, result.stderr
     out = result.stdout
     # 4 channel ports (the mock) in X0Y0 and the host's port 4 in X1Y0: two boxes by the ports
-    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=7' in out
-    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem pb_otpu_hbmx0 pb_otpu_hbmx1' in out
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=8' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem pb_otpu_hbmx0 pb_otpu_hbmx1 pb_otpu_hxs' in out
     assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
     ranges = {}
     for line in out.splitlines():
@@ -701,7 +702,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
         'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10'],
         'pb_otpu_hbmx0': ['CLOCKREGION_X0Y0:CLOCKREGION_X0Y1'],
-        'pb_otpu_hbmx1': ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y1']}
+        'pb_otpu_hbmx1': ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y3'],     # the host's column: full height
+        'pb_otpu_hxs': ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3']}
     cells = {}
     for line in out.splitlines():
         if line.startswith('CELL '):
@@ -722,6 +724,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         [f'WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c{p}' for p in range(4)] +
         [f'WRAPPER/CL/g_ch[{p}].u_rs256' for p in range(4)])
     assert sorted(cells['pb_otpu_hbmx1']) == ['WRAPPER/CL/u_hrs256', 'WRAPPER/CL/u_hsc']
+    assert cells['pb_otpu_hxs'] == ['WRAPPER/CL/u_hrs512x']       # the second host slice at the crossing
     assert 'WRAPPER/CL/g_ch[*].u_rs512' in hbm
     # the channels' otpu_native_axi and the SmartConnect fabric by the HBM's ports
     assert len([c for c in hbm if '.u_naxi' in c]) == 4 and 'WRAPPER/CL/u_sc' in hbm
@@ -739,11 +742,11 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
     for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem',
-               'pb_otpu_hbmx0', 'pb_otpu_hbmx1'):
+               'pb_otpu_hbmx0', 'pb_otpu_hbmx1', 'pb_otpu_hxs'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
         assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
         assert props[(pb, 'PARENT')] == {'pb_otpu_tmem': 'pb_otpu_board', 'pb_otpu_hbmx0': 'pb_otpu_hbm',
-                                         'pb_otpu_hbmx1': 'pb_otpu_hbm'}.get(pb, 'pblock_CL')
+                                         'pb_otpu_hbmx1': 'pb_otpu_hbm', 'pb_otpu_hxs': 'pb_otpu_hbm'}.get(pb, 'pblock_CL')
     # containment: the one site of SLR2's clock regions that pblock_CL does not hold leaves
     # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board)
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]

@@ -175,6 +175,7 @@ for {set otpu_p 0} {$otpu_p <= $otpu_nport} {incr otpu_p} {
     dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c$otpu_p"]
     dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/g_ch\[$otpu_p\].u_rs256"]   ;# (Vivado takes brackets literally: g_ch[0].u_rs256)
   } else {
+    set otpu_hostx $otpu_x
     foreach otpu_c {u_hsc u_hrs256} { dict lappend otpu_cols $otpu_x [otpu_cells "WRAPPER/CL/$otpu_c"] }
   }
 }
@@ -183,11 +184,23 @@ dict for {otpu_x otpu_cl} $otpu_cols {
   set otpu_pb pb_otpu_hbmx$otpu_x
   create_pblock $otpu_pb
   set_property PARENT pb_otpu_hbm [get_pblocks $otpu_pb]
-  resize_pblock $otpu_pb -add "CLOCKREGION_X${otpu_x}Y0:CLOCKREGION_X${otpu_x}Y1"
+  # (the host's column is the SLR's full height, Y0:Y3: cl_axi_sc_1x1's 250 MHz entry pipeline
+  # then sits at the top beside the crossing from u_hrs512x and its 450 MHz exit at the port)
+  set otpu_ytop [expr {$otpu_x == $otpu_hostx ? 3 : 1}]
+  resize_pblock $otpu_pb -add "CLOCKREGION_X${otpu_x}Y0:CLOCKREGION_X${otpu_x}Y$otpu_ytop"
   add_cells_to_pblock $otpu_pb [concat {*}$otpu_cl]
   lappend otpu_portbox $otpu_pb
   puts "OTPU_FLOORPLAN $otpu_pb X${otpu_x}Y0:X${otpu_x}Y1 cells=[llength $otpu_cl]"
 }
+# the host chain's second register slice (u_hrs512x) in SLR0's top row under the shell's column:
+# the SLR crossing from u_hrs512 (pb_otpu_pcis, X5Y5:X5Y6) is one hop into it, the descent to
+# the host's column one more (the first 150 MHz build placed u_hrs512 -> the SmartConnect's
+# entry FIFO at the bottom of SLR0 at 4.1 ns of route on the 4.0 ns budget: -1.42 ns)
+create_pblock pb_otpu_hxs
+set_property PARENT pb_otpu_hbm [get_pblocks pb_otpu_hxs]
+resize_pblock pb_otpu_hxs -add {CLOCKREGION_X4Y3:CLOCKREGION_X4Y3}
+add_cells_to_pblock pb_otpu_hxs [otpu_cells {WRAPPER/CL/u_hrs512x}]
+puts "OTPU_FLOORPLAN pb_otpu_hxs X4Y3 cells=1"
 # (the host chain's first register slice u_hrs512 sits with the PCIS gate in the shell's PCIS SLR,
 # pb_otpu_pcis, below: the SLR crossing runs from its registers to cl_axi_sc_1x1's entry register
 # slice beside port NPORT, flop to flop, as the AWS Shell Interface Specification asks)
@@ -225,13 +238,13 @@ proc otpu_contain {pb} {
   if {[llength $extra]} { resize_pblock $pb -remove $extra }
   puts "OTPU_FLOORPLAN $pb parent=$parent held=[dict size $held] removed=[llength $extra]"
 }
-foreach pb [concat {pb_otpu_hbm} $otpu_portbox {pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem}] {
+foreach pb [concat {pb_otpu_hbm} $otpu_portbox {pb_otpu_hxs pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem}] {
   set_property CONTAIN_ROUTING 0 [get_pblocks $pb]
   set_property SNAPPING_MODE OFF [get_pblocks $pb]
   set_property IS_SOFT 0 [get_pblocks $pb]
   otpu_contain $pb
 }
-puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {5 + [llength $otpu_portbox]}]"
+puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {6 + [llength $otpu_portbox]}]"
 
 ########################################
 # the core clock and the pump clock on one insertion delay (round 8)
