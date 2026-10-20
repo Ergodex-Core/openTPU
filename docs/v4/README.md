@@ -543,7 +543,11 @@ transient tool crash: killed, the crash log kept in `/home/ubuntu/rachit/crashes
 **restarted as run2 at 09:37** (unit `otpu-f2burst200-s3-162-build2`, output
 `f2burst200-s3-162-run2`, log `logs/f2burst200-s3-162-build2.log`; gate result ~15:30). The
 monitors now flag a stage whose console.log has not changed for 25 minutes and count
-"segfault" / "hs_err" / "tcmalloc" lines, which the plain ERROR count missed.
+"segfault" / "hs_err" / "tcmalloc" lines, which the plain ERROR count missed. The same worker
+crash hit build 11 run2's synthesis twice (two `hs_err_pid*.log` in its synth_link, two
+"segfault in .../task_work" lines) and Vivado recovered by retrying; builds 8 and 10 had none.
+So it is a flaky Vivado 2025.2 parallel-synthesis worker, not our RTL: a run that dies in it
+deadlocks the parent, and the stall check is the safety net.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
