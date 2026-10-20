@@ -549,6 +549,15 @@ crash hit build 11 run2's synthesis twice (two `hs_err_pid*.log` in its synth_li
 So it is a flaky Vivado 2025.2 parallel-synthesis worker, not our RTL: a run that dies in it
 deadlocks the parent, and the stall check is the safety net.
 
+**Build 11 run2 routed clean (10:26 UTC): setup +0.010 ns, hold +0.009, 0 failing endpoints,
+0 nets with routing errors.** Per clock after the implement stage's own phys_opt: core (5.714
+ns) +0.013 over 1.51 M endpoints, HBM AXI 450 MHz +0.028, TMEM 350 MHz +0.128, shell 250 MHz
++0.048; no inter-clock violation; worst path 11 levels at 5.04 ns. The router went -0.038 ->
+-0.021 (global iteration 7) -> -0.015 after delay clean-up, and post-route phys_opt +0.010. The
+three-slice image closes at 175 MHz with the SmartConnect pblocks; the refine stage's two
+rounds (the hard gate) and the audit follow (~13:00 UTC). Build 12 (162.5 MHz) continues on
+the m7a as the margin hedge.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
