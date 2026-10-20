@@ -313,7 +313,40 @@ proc fabric_build {{prefix {}}} {
     set net ${root}core_rst;dict set ::fabric_nets $net [dict create NAME $net]
     dict set ::fabric_anchor $inverter/I0 $net;dict set ::fabric_anchor $net $net
     dict set ::fabric_leaf $net [list $reset/Q $inverter/I0]
+    for {set p 0} {$p<8} {incr p} {
+        # Name intentionally bears no tr/pc_peak/data_q synthesis suffix.
+        set gate ${root}u_mem/fixture_receive_${p}
+        add_cell $gate LUT2;dict set ::cells $gate REF_NAME LUT2;dict set ::cells $gate INIT {4'h2}
+        foreach {pin dir} {I0 IN I1 IN O OUT} {fabric_add_pin $gate/$pin $dir}
+        dict lappend ::fabric_leaf ${root}n${p}_rvalid $gate/I0
+        dict set ::fabric_anchor $gate/I1 $net
+        set endpoints [list ${root}u_board/adapter/error_reg/D]
+        foreach {reg width} {tr 6 outstanding 7 pc_returned 32} {
+            for {set bit 0} {$bit<$width} {incr bit} {lappend endpoints [format {%su_board/adapter/ports[%d].%s_reg[%d][%d]/CE} $root $p $reg $p $bit]}
+        }
+        foreach {reg width} {lr 7 ln 8 lp 7} {
+            for {set bit 0} {$bit<$width} {incr bit} {lappend endpoints [format {%su_native%d/%s_reg[%d]/CE} $root $p $reg $bit]}
+        }
+        foreach engine [list [expr {2*$p}] [expr {2*$p+1}]] {
+            for {set ram 0} {$ram<8} {incr ram} {
+                for {set bit 0} {$bit<($ram==7 ? 4 : 8)} {incr bit} {
+                    lappend endpoints [format {%su_board/adapter/engines[%d].data_q_reg_%d/WEBWE[%d]} $root $engine $ram $bit]
+                }
+            }
+            foreach suffix [list queued_reg\[$engine\]\[0\]/CE wp_reg\[$engine\]\[0\]/CE {tag_q_reg[0][slot][0]/CE}] {
+                lappend endpoints [format {%su_board/adapter/engines[%d].%s} $root $engine $suffix]
+            }
+        }
+        foreach endpoint $endpoints {
+            set ref FDRE
+            if {[regexp {data_q_reg_([0-7])/} $endpoint -> ram]} {set ref [expr {$ram==7 ? "RAMB18E2" : "RAMB36E2"}]}
+            set c [file dirname $endpoint];add_cell $c $ref;dict set ::cells $c REF_NAME $ref
+            fabric_add_pin $endpoint IN
+        }
+        dict set ::fabric_b_endpoints $gate/O $endpoints
+    }
 }
+
 fabric_build
 # This fixture exposes no original u_mem clock pins, just actual register owners.
 foreach pin {u_mem/core_clk u_mem/host_clk u_mem/hbm_clk} {dict unset pins $pin;dict unset pin_clocks $pin}
@@ -336,6 +369,22 @@ switch $fault {
  write_disconnected {dict set fabric_anchor u_mem/f2_mem_i/memory_sc/inst/s01_entry_pipeline/s01_mmu/inst/aw_sreg/s_axi_awvalid {}}
  write_wrong_direction {dict set pins u_mem/f2_mem_i/memory_sc/inst/s01_entry_pipeline/s01_mmu/inst/aw_sreg/s_axi_awvalid DIRECTION OUT}
  write_multiple_drivers {fabric_add_pin extra_active/Q OUT;dict lappend fabric_leaf inactive_s01_aw extra_active/Q}
+ receive_wrong_init {dict set cells u_mem/fixture_receive_0 INIT {4'h8}}
+ receive_wrong_primitive {dict set cells u_mem/fixture_receive_0 REF_NAME LUT3}
+ receive_missing_gate {dict set fabric_leaf n0_rvalid [lrange [dict get $fabric_leaf n0_rvalid] 0 end-1]}
+ receive_cross_pc {dict lappend fabric_b_endpoints u_mem/fixture_receive_0/O {u_board/adapter/ports[1].tr_reg[1][0]/CE}}
+ receive_cross_engine {dict lappend fabric_b_endpoints u_mem/fixture_receive_0/O {u_board/adapter/engines[2].data_q_reg_0/WEBWE[0]}}
+ receive_missing_payload {
+  set old [dict get $fabric_b_endpoints u_mem/fixture_receive_0/O]
+  set at [lsearch -exact $old {u_board/adapter/engines[1].data_q_reg_7/WEBWE[3]}]
+  dict set fabric_b_endpoints u_mem/fixture_receive_0/O [lreplace $old $at $at]
+ }
+ receive_missing_return {
+  set old [dict get $fabric_b_endpoints u_mem/fixture_receive_0/O]
+  set at [lsearch -exact $old {u_board/adapter/ports[0].pc_returned_reg[0][31]/CE}]
+  dict set fabric_b_endpoints u_mem/fixture_receive_0/O [lreplace $old $at $at]
+ }
+ receive_wrong_payload_ref {dict set cells {u_board/adapter/engines[0].data_q_reg_7} REF_NAME RAMB36E2}
  ready_constant {dict set cells u_mem/u_status_cdc_i_2 INIT {2'h3}}
  ready_missing_channel {dict set fabric_leaf n7_rready [lrange [dict get $fabric_leaf n7_rready] 0 end-1]}
  ready_wrong_reset {fabric_add_pin u_board/other_reset/Q OUT;dict set fabric_leaf core_rst {u_board/other_reset/Q u_mem/u_status_cdc_i_2/I0}}
@@ -501,6 +550,7 @@ def test_synthesis_records_limits_and_required_current_vendor_simulation(tmp_pat
     'missing_ref_property', 'missing_blackbox_property', 'empty_ref_property',
     'empty_blackbox_property', 'invalid_blackbox_property', 'duplicate_handshake',
     'duplicate_handshake_bit', 'sc_clock_swap', 'ready_constant', 'ready_missing_channel',
+    'receive_wrong_init','receive_wrong_primitive','receive_missing_gate','receive_cross_pc','receive_cross_engine','receive_missing_payload','receive_missing_return','receive_wrong_payload_ref',
     'ready_wrong_reset','ready_wrong_clock','ready_wrong_channel','b_missing_error','b_wrong_native',
     'existing_checkpoint', 'checkpoint_error', 'write_active','write_vcc','write_missing','write_disconnected','write_wrong_direction','write_multiple_drivers',
 ])
@@ -537,7 +587,7 @@ close $stream
     path=tmp_path/'flows.tcl';path.write_text(text)
     result=subprocess.run([shutil.which('tclsh'),str(path),str(AUDIT),str(tmp_path),fault],capture_output=True,text=True,timeout=20)
     assert (result.returncode==0)==(fault=='none'),result.stderr
-    if fault=='none':assert len((tmp_path/'flows.tcldata').read_text().splitlines())==114
+    if fault=='none':assert len((tmp_path/'flows.tcldata').read_text().splitlines())==122
 
 
 @pytest.mark.parametrize('prefix',['','WRAPPER/CL'])

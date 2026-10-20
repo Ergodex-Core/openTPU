@@ -66,20 +66,89 @@ proc ::c1_alex::relocated_native_loads {root p signal} {
         return [list [format {%su_mem/pending_count[4]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_4${suffix}/I4]
     }
     if {$signal eq "rvalid"} {
-        set receive [lindex {
-            {ports[0].tr[0][5]_i_3/I0} {ports[1].tr[1][5]_i_3/I0}
-            {ports[2].tr[2][5]_i_4/I0} {ports[3].tr[3][5]_i_4/I0}
-            {engines[9].data_q_reg_0_i_9/I0} {ports[5].tr[5][5]_i_4/I0}
-            {ports[6].tr[6][5]_i_3/I0} {ports[7].tr[7][5]_i_3/I0}
-        } $p]
-        return [list ${root}u_mem/$receive \
-            [format {%su_mem/reads[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_1${suffix}/I1]
+        return [list [format {%su_mem/reads[7]_i_1%s/I0} $root $suffix] ${root}u_mem/n_err_i_1${suffix}/I1]
     }
     if {$signal eq "bvalid"} {
         set suffix [expr {$p == 7 ? "" : "__[expr {6-$p}]"}]
         return [list ${root}u_mem/n_err_i_2${suffix}/I1]
     }
     return {}
+}
+# Rebuilt synthesis may name the same receive enable after tr, pc_peak or a
+# data RAM. Prove the source equation RVALID && !core_rst and its actual sinks;
+# do not accept a movable synthesized gate name. Families/bounds below come
+# from otpu_c1_native RD32/TQ64 and the frozen otpu_native_axi bridge, confirmed
+# on DCP e5c725ed4e88f0f4f5be45f065f99d936d9d5c519a16e9c42adf1683efcfa026.
+proc ::c1_alex::receive_endpoint_class {root p endpoint ref} {
+    if {$root ne "" && [string first $root $endpoint] != 0} {error "C1 Alex audit: receive sink outside CL $endpoint"}
+    set name [string range $endpoint [string length $root] end]
+    set expected FDRE; set family {}
+    if {$name eq "u_board/adapter/error_reg/D"} {
+        set family error
+    } elseif {[regexp {^u_native([0-7])/(lr|ln|lp)_reg\[([0-9]+)\]/(CE|D)$} $name -> port reg bit terminal]} {
+        if {$port == $p && $bit < ($reg eq "ln" ? 8 : 7) && ($terminal eq "CE" || $reg eq "ln")} {set family native_$reg}
+    } elseif {[regexp {^u_native([0-7])/lengths_reg_(0_63|64_127)_0_4/RAM[A-H]/WE$} $name -> port range]} {
+        if {$port == $p} {set family native_lengths;set expected RAMD64E}
+    } elseif {[regexp {^u_board/adapter/ports\[([0-7])\]\.(pc_peak|outstanding|tr|pc_returned)_reg\[([0-7])\]\[([0-9]+)\](_rep(__[0-9]+)?)?/(CE|D)$} $name -> port reg index bit replica suffix terminal]} {
+        set limit [dict get {pc_peak 32 outstanding 7 tr 6 pc_returned 32} $reg]
+        if {$port == $p && $index == $p && $bit < $limit && ($replica eq "" || $reg eq "tr") && ($terminal eq "CE" || $reg eq "pc_peak")} {set family port_$reg}
+    } elseif {[regexp {^u_board/adapter/engines\[([0-9]+)\]\.(.+)$} $name -> engine tail] && $engine / 2 == $p} {
+        if {[regexp {^data_q_reg_([0-7])/WEBWE\[([0-7])\]$} $tail -> ram bit] && ($ram != 7 || $bit < 4)} {
+            set family engine_${engine}_data;set expected [expr {$ram == 7 ? "RAMB18E2" : "RAMB36E2"}]
+        } elseif {[regexp {^(queued|wp)_reg\[([0-9]+)\]\[([0-9]+)\]/(CE|D)$} $tail -> reg index bit terminal]} {
+            if {$index == $engine && $bit < ($reg eq "queued" ? 6 : 5) && ($terminal eq "CE" || $reg eq "queued")} {set family engine_${engine}_$reg}
+        } elseif {[regexp {^tag_q_reg\[([0-9]+)\]\[(slot|row|group_id|generation)\]\[([0-9]+)\]/CE$} $tail -> entry field bit]} {
+            set limit [dict get {slot 2 row 32 group_id 10 generation 32} $field]
+            if {$entry < 32 && $bit < $limit} {set family engine_${engine}_tag}
+        }
+    }
+    if {$family eq "" || $ref ne $expected} {error "C1 Alex audit: unreviewed receive sink $endpoint ($ref)"}
+    return $family
+}
+proc ::c1_alex::native_receive_gate {root p input audit} {
+    set name [lindex [names $input] 0]
+    if {![inside $name ${root}u_mem] || [file tail $name] ne "I0" || [get_property DIRECTION $input] ne "IN"} {error "C1 Alex audit: wrong receive gate input $name"}
+    set cell [get_cells -quiet -of_objects $input]
+    if {[llength $cell] != 1 || [get_property REF_NAME $cell] ne "LUT2" || [string tolower [get_property INIT $cell]] ne "4'h2"} {error "C1 Alex audit: receive gate does not implement RVALID and not reset $name"}
+    set base [lindex [names $cell] 0]
+    set reset_input [exact_pin $base/I1]
+    set nets [get_nets -quiet -of_objects $reset_input]
+    if {![llength $nets] || [llength [get_ports -quiet -of_objects $nets]]} {error "C1 Alex audit: unbound receive reset $base"}
+    set reset_driver [get_pins -quiet -leaf -filter {DIRECTION == OUT} -of_objects $nets]
+    if {[names $reset_driver] ne [list ${root}core_rst_reg/Q]} {error "C1 Alex audit: wrong receive reset driver $base"}
+    set output [exact_pin $base/O]
+    if {[get_property DIRECTION $reset_input] ne "IN" || [get_property DIRECTION $output] ne "OUT"} {error "C1 Alex audit: wrong receive gate pin directions $base"}
+    set endpoint_objects [all_fanout -flat -endpoints_only -from $output]
+    set endpoints [names $endpoint_objects]
+    if {![llength $endpoints] || [llength [lsort -unique $endpoints]] != [llength $endpoints]} {error "C1 Alex audit: empty/duplicate receive sinks $base"}
+    # Query the actual typed collection in bulk; per-pin hierarchy lookups are
+    # unnecessary and repeated GND segment expansion can be extremely costly.
+    set cells [get_cells -quiet -of_objects $endpoint_objects]
+    set cell_names [names $cells];set refs [get_property REF_NAME $cells]
+    if {[llength $cell_names] != [llength $refs]} {error "C1 Alex audit: receive sink reference cardinality mismatch"}
+    set references {};foreach c $cell_names ref $refs {dict set references $c $ref}
+    set families {}
+    foreach endpoint $endpoints {
+        set c [file dirname $endpoint]
+        if {![dict exists $references $c]} {error "C1 Alex audit: unresolved receive sink $endpoint"}
+        dict incr families [receive_endpoint_class $root $p $endpoint [dict get $references $c]]
+    }
+    set required [list ${root}u_board/adapter/error_reg/D]
+    foreach {reg width} {tr 6 outstanding 7 pc_returned 32} {
+        for {set bit 0} {$bit < $width} {incr bit} {lappend required [format {%su_board/adapter/ports[%d].%s_reg[%d][%d]/CE} $root $p $reg $p $bit]}
+    }
+    foreach {reg width} {lr 7 ln 8 lp 7} {
+        for {set bit 0} {$bit < $width} {incr bit} {lappend required [format {%su_native%d/%s_reg[%d]/CE} $root $p $reg $bit]}
+    }
+    foreach engine [list [expr {2*$p}] [expr {2*$p+1}]] {
+        for {set ram 0} {$ram < 8} {incr ram} {
+            set width [expr {$ram == 7 ? 4 : 8}]
+            for {set bit 0} {$bit < $width} {incr bit} {lappend required [format {%su_board/adapter/engines[%d].data_q_reg_%d/WEBWE[%d]} $root $engine $ram $bit]}
+        }
+        foreach reg {queued wp tag} {if {![dict exists $families engine_${engine}_$reg]} {error "C1 Alex audit: receive lost engine $engine $reg sinks"}}
+    }
+    foreach endpoint $required {if {$endpoint ni $endpoints} {error "C1 Alex audit: receive lost required state/payload sink $endpoint"}}
+    puts $audit [list native_receive_gate $p input $name reference LUT2 init [get_property INIT $cell] reset_driver [names $reset_driver] output [names $output] sink_families $families endpoints $endpoints cell_references $references]
 }
 proc ::c1_alex::native_b_endpoints {root p driver internal audit} {
     set endpoints [names [all_fanout -flat -endpoints_only -from $driver]]
@@ -159,13 +228,18 @@ proc ::c1_alex::flow {prefix iface signal audit} {
     set leaf_names [names $leaf]; set directions [get_property DIRECTION $leaf]
     if {![llength $leaf] || [llength $leaf_names] != [llength $directions] ||
         [llength [lsort -unique $leaf_names]] != [llength $leaf_names]} {error "C1 Alex audit: malformed leaf evidence $iface/$signal"}
-    set driver {}; set receiver_count 0; set relocated {}
+    set driver {}; set receiver_count 0; set relocated {}; set receive_gates 0
     if {[regexp {^S_N([0-7])$} $iface -> p]} {set relocated [relocated_native_loads $root $p $signal]}
     set source [expr {$forward ? $external : $internal}]
     set destination [expr {$forward ? $internal : $external}]
     foreach pin $leaf name $leaf_names direction $directions {
         if {![inside $name $external] && ![inside $name $internal]} {
-            if {$direction ne "IN" || $name ni $relocated} {error "C1 Alex audit: wrong port/owner on $iface/$signal: $name"}
+            if {$direction ne "IN"} {error "C1 Alex audit: wrong port/owner on $iface/$signal: $name"}
+            if {$name ni $relocated} {
+                if {![regexp {^S_N([0-7])$} $iface -> p] || $signal ne "rvalid"} {error "C1 Alex audit: wrong port/owner on $iface/$signal: $name"}
+                native_receive_gate $root $p [exact_pin $name] $audit
+                incr receive_gates
+            }
             set cell [get_cells -quiet -of_objects [exact_pin $name]]
             if {[llength $cell] != 1 || ![regexp {^LUT[1-6]$} [get_property REF_NAME $cell]]} {error "C1 Alex audit: unreviewed relocated native load $name"}
             if {$signal eq "bvalid"} {incr receiver_count}
@@ -177,6 +251,7 @@ proc ::c1_alex::flow {prefix iface signal audit} {
             if {[inside $name $destination]} {incr receiver_count}
         } else {error "C1 Alex audit: unknown leaf direction on $iface/$signal"}
     }
+    if {[regexp {^S_N([0-7])$} $iface -> p] && $signal eq "rvalid" && $receive_gates != 1} {error "C1 Alex audit: missing/multiple native receive gates on $iface"}
     if {[llength $driver] != 1 || !$receiver_count} {error "C1 Alex audit: missing/multiple drivers or receiver on $iface/$signal"}
     set driver [selected_objects pins $driver]
     set driver_cell [get_cells -quiet -of_objects $driver]
