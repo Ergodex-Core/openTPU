@@ -75,7 +75,10 @@ module otpu_c2_mxu
   logic fill_complete;
   logic [FW:0] live, rn;
   logic [FW-1:0] rh, rt;
-  result_t results[RF], head;
+  // Store packed bits: Vivado 2025.2 can drop metadata from a struct-array FIFO
+  // when its fields feed the output delay. Keep the typed view at the read port.
+  logic [$bits(result_t)-1:0] results[RF];
+  result_t head;
   wire accept=cmd_valid && cmd_ready;
   wire commit=out_valid && out_ready;
   assign fill_command=command_bank[fill_bank];
@@ -180,7 +183,7 @@ module otpu_c2_mxu
   otpu_skew #(.W(C*64),.N(LROW-1)) u_scales(.clk,.en(1'b1),
     .d({sw1,sap1}),.q({tail_sw,tail_sa}));
   wire push=row_valid[LROW-1];
-  assign head=results[rh];
+  assign head=result_t'(results[rh]);
   wire epi_en=!out_valid || out_ready;
   wire pop=epi_en && rn!=0 && (!head.meta.acc || old_valid);
   assign old_req=rn!=0 && head.meta.acc;
@@ -254,7 +257,7 @@ module otpu_c2_mxu
         end
       end
       if(push) begin
-        results[rt]<='{meta:tail_meta,x:integers,sw:tail_sw,sa:tail_sa};rt<=rt+1'b1;
+        results[rt]<={tail_meta,integers,tail_sw,tail_sa};rt<=rt+1'b1;
       end
       if(pop) rh<=rh+1'b1;
       case({push,pop})
