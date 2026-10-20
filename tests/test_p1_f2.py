@@ -146,6 +146,7 @@ PAIR = true
 DSTEP = true
 STREAM = true
 SEQ_WC = true
+CPC = 1
 [uarch]
 MXU_IMPL = 2
 MXU_CL = 16
@@ -207,7 +208,7 @@ def test_floorplan_names_every_cell_of_the_top():
     SmartConnect in its grandchild by its ports, and the host crossbar in SLR1."""
     fp = FLOORPLAN.read_text()
     inst = set(_instances(_p1_top()))
-    named = set(re.findall(r"\$cl/(u_\w+)", fp))
+    named = set(re.findall(r"\$cl/(u_\w+)(?![\w$])", fp))     # (u_mem$g: below)
     assert named <= inst, named - inst
     for name in ("u_board", "u_native0", "u_native1", "u_native2", "u_native3", "u_host_pipe0",
                  "u_host_pipe1", "u_hbm", "u_rst_core_slr0", "u_rstpipe_core_slr0",
