@@ -87,6 +87,55 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   the write-ready cone into the request register (~9), the round robin into the grant
   register (~8), the grant into wiss and its registers (~9), the compare into iss_all_q (~5).
   The receipt: +0.23% on the 1-layer S = 4 point ("RTL (measured)").
+- **The floorplan: a pblock per slice** (cl_pnr_user_hbm5.tcl; the first placed v5 build,
+  340c4ed6 = the 6a52448c RTL with the block-RAM engines floating: WNS -4.430 ns, 161,901 of
+  3.12 M endpoints failing, WHS -0.557). What it placed badly: the core clock at -4.43 ns on
+  `g_slice[2].u_mem/w_blk_reg[7]_rep__2 -> w_blk_reg[6]_rep__2`, 17 levels with 8.0 of 9.1 ns
+  in route (slices 2 and 3 shared one SLR2 pblock: the adapters' replicated registers across
+  the die); the pump at -3.57 ns on 4,120 endpoints, `g_slice[3].u_slice/u_dma/t_re_q_reg ->
+  u_tmem/...g_pc` with 7.1 ns of route (slice 3's DMA far from its TMEM box); hclk at -2.46
+  ns on 40,734 endpoints, `g_port[31].u_eng/r_v_reg -> u_rq/memb_reg_2/WEBWE` (the floating
+  block-RAM read FIFO far from port 31, whose region X7Y0 has no RAM column: the URAM read
+  path's answer); clk_main_a0 at -1.10 ns, `u_hsc/.../s00_si_converter -> u_hrs512/.../
+  m_payload_i_reg/CE` with 4.06 ns of route (the host chain's SLR crossing straight into the
+  SmartConnect: the 150 MHz Alex-shell build's deb7ec12 / ba86b5df fix). The pblocks now
+  (AWS's CL outline: SLR0 X0Y0:X3Y3, X4Y0:X7Y0, X4Y3, X5Y1:X5Y3, X6Y1; SLR1 X0Y4:X3Y7, X4Y4,
+  X4Y6:X4Y7, X5Y4:X5Y7; SLR2 X0Y8:X7Y11; a clock region ~13.6K LUT / 24 RAMB36 / 96 DSP):
+
+  | pblock (parent) | clock regions | cells | estimated fill (LUT / RAMB36 / DSP of the regions') |
+  |---|---|---|---|
+  | pb_otpu_hbm (pblock_CL) | SLR0's 25 CL regions (~290K LUT with the bottom row short) | slice 0 + its adapter (~185K LUT, 266 RAMB36, 727 DSP), the 32 engines' memories (128 URAM) and chains' SLR0 stages, the host pieces below | ~265K / ~290K = 91%; RAMB36 266 / 600 = 44%; URAM 128 / 320 = 40%; DSP 727 / 2,400 = 30% |
+  | pb_otpu_hbmx0..7 (hbm) | X<x>Y0:X<x>Y1 (the right half: Y0 only) | 4 engines' logic (~5.6K LUT) + 4 register slices a column; X7 also u_hrs256 and the mux | ~7K / ~20K = 35% (the bottom row short) |
+  | pb_otpu_hsc (hbm) | X7Y0:X7Y3 + X5Y1:X5Y3 + X6Y0:X6Y1 (cut to the CL: X7Y0, X5Y1:X5Y3, X6Y0:X6Y1) | u_hsc (cl_axi_sc_1x1, ~5K LUT) | 5K / 80K = 6% |
+  | pb_otpu_hxs (hbm) | X4Y3 | u_hrs512x | 2K / 13.6K = 15% |
+  | pb_otpu_tmem0 (hbm) | X2Y1:X3Y3 | slice 0's u_tmem, u_vpu, u_dma (~57K LUT, 68 RAMB36) | 57K / 82K = 70%; RAMB36 68 / 144 = 47% |
+  | pb_otpu_mid (pblock_CL) | X0Y4:X3Y7 + X4Y4 + X4Y6:X4Y7 + X5Y4 + X5Y7 (21 regions, ~285K LUT) | slice 1 + its adapter (~185K), the hub, ctrl, trace (~7K), the chains' middle stages (FFs) | ~192K / 285K = 67%; RAMB36 274 / 504 = 54%; DSP 727 / 2,016 = 36% |
+  | pb_otpu_mid3 (mid) | X4Y4 + X4Y6:X4Y7 + X5Y4 + X5Y7 | slice 3's chains' middle stages (~5K FF) | FFs only |
+  | pb_otpu_tmem1 (mid) | X1Y5:X3Y6 | slice 1's u_tmem, u_vpu, u_dma | 57K / 82K = 70% |
+  | pb_otpu_pcis (pblock_CL) | X5Y5:X5Y6 | u_pcis, u_hrs512, u_ocl | ~4K / 27K = 15% |
+  | pb_otpu_board (pblock_CL) | X0Y8:X7Y11 | the control chain's SLR2 cells only | - |
+  | pb_otpu_s2 (board) | X0Y8:X3Y11 (the whole SLR at S = 3) | slice 2 + its adapter, its hub link ends, its chains' last stages | ~185K / 218K = 85%; RAMB36 266 / 384 = 69%; DSP 727 / 1,536 = 47% |
+  | pb_otpu_s3 (board) | X4Y8:X7Y11 | slice 3 likewise | 85% / 69% / 47% |
+  | pb_otpu_tmem2 / 3 (s2 / s3) | X0Y9:X3Y10 / X4Y9:X7Y10 | the slice's u_tmem, u_vpu, u_dma | 57K / 109K = 52% |
+
+  What moved: slices 2 and 3 into halves of SLR2 with their adapters (both were loose in
+  pb_otpu_board); slice 1's pblock takes the CL's columns beside the shell (16 -> 21 regions;
+  slice 1 with its adapter would be 88% of the left half alone); slice 3's chain middle
+  stages into those right columns, under its half; the DMA into every TMEM box; the host
+  chain two hops (u_hrs512 in the PCIS box, a new u_hrs512x in SLR0's top row beside the
+  crossing, the SmartConnect boxed toward port 31's column, u_hrs256 and the mux at the port).
+  The two SLR2 halves at 85% LUT and SLR0 at ~91% are the floorplan's risk (the slice is
+  132K of it, the adapter ~53K); the levers if the placer refuses are the adapter's queues
+  (RD 96: -4K LUT a slice) and the engines' write FIFOs in URAM (-18K LUT in SLR0).
+- **A 150 MHz core target, `f2-hbm:v5c150`** (targets/f2-hbm.toml; core_mhz 150, the TMEM
+  pumped at 300: build.py's HBM_CORE_MMCM (1, 4.8, 8.0, 4)): the same slices, engines and
+  sharding, the first v5 target to close timing. At 150 MHz the HBM's 280 ns is 42 core
+  cycles, its 172 ns write latency 26, and each engine's AXI side delivers 1.5 native beats a
+  core cycle against the port's one (the receipt model's RATE 1, run.sh MHZ=150): the memory
+  path is further from the bound than at 200, so the token's cycle count can only fall; 3/4
+  of the 200 MHz rate is the ceiling. LPN (lpn-estimate, --lat 42 --adapter-latency 26):
+  1 layer + head 177,650 cycles (177,760 at 200), the whole model 672,448 (674,558): 223.1
+  tok/s at 150 against the LPN's 296.5 at 200. The RTL receipts are in "RTL (measured)".
 - **The engine path's CDC constraints** (boards/f2/build/constraints/cl_timing_user_hbm5.tcl,
   put in cl_timing_user.tcl's place for mem_path "engine"; the SmartConnect path's script
   requires the fabric u_sc, which stopped the first SynthCL of `f2-hbm:v5` right after
@@ -201,6 +250,8 @@ two-part reads, the 7 GATHERs of the layer 1,434 cycles in all (205 each). LPN (
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model, the read path in URAM: LAT_UP 7) | 203,636 (385 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model, LAT_UP 7, the write bus's arbiter two registers deep) | 204,109 (396 s) | - | 177,760 | -12.9% | 161,635, 79.2% | 80.8% |
 | **v5 `f2-hbm:v5`, S 4, whole model (engine model)** | **796,958** (740 s) | **251.0** | 674,558 | -15.4% | 512,938, 64.4% | 64.5% |
+| v5 `f2-hbm:v5c150`, S 4, 1 layer + head (engine model at 150 MHz: lat 42, RATE 1, LAT_UP 7, the registered grant) | 202,110 (392 s) | - | 177,650 | -12.1% | 161,635, 80.0% | 81.5% |
+| **v5 `f2-hbm:v5c150`, S 4, whole model (engine model at 150 MHz)** | **792,174** (745 s) | **189.4** | 672,448 | -15.1% | 512,938, 64.8% | 64.9% |
 | **v5 `f2-hbm:v5s3`, S 3, whole model (engine model)** | **1,045,874** (604 s) | **191.2** | 885,045 | -15.4% | 724,726, 69.3% | 69.5% |
 
 The read path in URAM (otpu_hbm_rpath, "The engines' memories") costs the receipt nothing:
@@ -214,6 +265,17 @@ deep": a write's grant two cycles after its request, in the model as in the RTL)
 cycles, +0.23% (`eng_s4_l1_regw.*`: 204,109, bit-exact): the layer's writes (the K / V rows,
 the QST stores) wait two cycles more each. The whole-model points above stand (their path is
 the same model at LAT_UP 5 with the combinational grant: within 0.3% by these two).
+
+At 150 MHz (`f2-hbm:v5c150`, MHZ=150 run.sh: the HBM's 280 ns = 42 cycles, its 172 ns write
+latency 26, the engine model at RATE 1 since the AXI side's 1.5 native beats a core cycle
+exceed the port's one) the whole token is 792,174 cycles, 0.6% under the 200 MHz count
+(the latencies in cycles shrink, nothing else moves: the port is demand-bound at both), so
+**189.4 tok/s at 150 MHz** against the 3/4 ceiling of 188.3; the 1-layer + head point
+202,110 (-1.0% on 204,109). Lens at 150 reads as at 200 (port B 81.5% / 64.9% streaming,
+the quantizer and VPU waits the whole-model losses). The engine path at 150: each engine
+has 50% more AXI beats a core cycle than the port takes and the read path's 32-entry
+crossing FIFO sees 1.5 pushes a pop at most, the room counted the same way; nothing in the
+engines changes with the core clock (they run at 450 either way).
 
 So the S = 4 token is 3.0x v4's on the RTL (251 against 83.5 tok/s) and the S = 3 fallback 2.3x
 (191); the port-bound token at S = 4 would be 409 tok/s, and the RTL sits at 64% of it. Where
@@ -315,9 +377,12 @@ seat is taken, the build is a later, separately approved step). In order of risk
    bus_skews=256 mux=1`; post-synthesis WNS -0.012 ns on the core clock, hclk +0.328, every
    inter-clock group positive; 798K LUT, 1,290 RAMB36, 2,908 DSP in all) and ImplCL stopped
    three times in placement on the engines' block RAMs (the floorplan commits dfb41dbe,
-   bd5af5b4, 340c4ed6 and "The engines' memories" above): the next ImplCL is the first with
-   the read path in URAM, and what the mocks cannot prove is the URAM inference and placement
-   and that report_bus_skew lists the 256 constraints (validate_route.tcl counts them).
+   bd5af5b4, 340c4ed6 and "The engines' memories" above); the fourth placed (340c4ed6, the
+   block-RAM engines floating) at -4.43 ns with the four path families "The floorplan: a
+   pblock per slice" answers. The next ImplCL is the first with the read path in URAM, the
+   per-slice pblocks and the two-hop host chain; `f2-hbm:v5c150` is the target to close
+   first. What the mocks cannot prove: the URAM inference and placement, the halves' 85%
+   fill, and that report_bus_skew lists the 256 constraints (validate_route.tcl counts them).
 5. **The multi-slice control path**: otpu_board at S = 4 (the hub, the four slices' resets and
    starts through the chains) has run only in Verilator; the v4 card ran S = 1.
 6. **The host at S = 4** reaches the HBM through port 31's mux; the ordering rule (a run's

@@ -1044,6 +1044,13 @@ dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y3 {s0a}
 dict set sites CLOCKREGION_X1Y5:CLOCKREGION_X3Y6 {s1a}
 dict set sites CLOCKREGION_X0Y9:CLOCKREGION_X3Y10 {s2a}
 dict set sites CLOCKREGION_X4Y9:CLOCKREGION_X7Y10 {s2b}
+dict set sites CLOCKREGION_X0Y8:CLOCKREGION_X3Y11 {s2a}
+dict set sites CLOCKREGION_X4Y8:CLOCKREGION_X7Y11 {s2b}
+dict set sites CLOCKREGION_X4Y4:CLOCKREGION_X4Y4 {s1b}
+dict set sites CLOCKREGION_X4Y6:CLOCKREGION_X4Y7 {s1b}
+dict set sites CLOCKREGION_X5Y4:CLOCKREGION_X5Y4 {s1b}
+dict set sites CLOCKREGION_X5Y7:CLOCKREGION_X5Y7 {s1b}
+dict set sites CLOCKREGION_X1Y0:CLOCKREGION_X1Y3 {s0b}
 proc get_cells {args} {
   set pattern [lindex $args end]
   if {$::fault eq "missing" && [string match *u_chub* $pattern]} { return {} }
@@ -1092,46 +1099,86 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     out = result.stdout
     assert 'OTPU_FLOORPLAN ports=8 slices=4 nch=2' in out
     assert 'OTPU_FLOORPLAN host port 7 mux=1' in out
-    assert 'OTPU_FLOORPLAN_APPLIED pblocks=10' in out      # 4 + 2 port columns + 4 TMEM boxes
+    # 4 (hbm, mid, pcis, board) + 2 port columns + hsc + hxs + mid3 + s2 + s3 + 4 TMEM boxes
+    assert 'OTPU_FLOORPLAN_APPLIED pblocks=15' in out
     assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
+    assert 'OTPU_FLOORPLAN pb_otpu_s2 CLOCKREGION_X0Y8:CLOCKREGION_X3Y11 slice 2' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_s3 CLOCKREGION_X4Y8:CLOCKREGION_X7Y11 slice 3' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_hsc X1Y0:X1Y3 cells=1' in out and 'OTPU_FLOORPLAN pb_otpu_hxs X4Y3 cells=1' in out
+    ranges = {}
+    for line in out.splitlines():
+        if line.startswith('RANGE '):
+            _, pb, r = line.split(' ', 2)
+            ranges.setdefault(pb, []).append(r)
+    # a pblock per slice: SLR2's halves; slice 1's SLR1 with the CL's columns beside the shell
+    # (the PCIS box left out), slice 3's chain middle stages in those columns; the host's
+    # SmartConnect its port's column (the mock's host port is in X1: the left half, no more)
+    assert ranges['pb_otpu_s2'] == ['CLOCKREGION_X0Y8:CLOCKREGION_X3Y11']
+    assert ranges['pb_otpu_s3'] == ['CLOCKREGION_X4Y8:CLOCKREGION_X7Y11']
+    right = ['CLOCKREGION_X4Y4:CLOCKREGION_X4Y4', 'CLOCKREGION_X4Y6:CLOCKREGION_X4Y7',
+             'CLOCKREGION_X5Y4:CLOCKREGION_X5Y4', 'CLOCKREGION_X5Y7:CLOCKREGION_X5Y7']
+    assert ranges['pb_otpu_mid'] == ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'] + right
+    assert ranges['pb_otpu_mid3'] == right
+    assert ranges['pb_otpu_hsc'] == ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y3']
+    assert ranges['pb_otpu_hxs'] == ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3']
+    assert ranges['pb_otpu_tmem2'] == ['CLOCKREGION_X0Y9:CLOCKREGION_X3Y10'] and ranges['pb_otpu_tmem3'] == ['CLOCKREGION_X4Y9:CLOCKREGION_X7Y10']
     cells = {}
     for line in out.splitlines():
         if line.startswith('CELL '):
             _, pb, cell = line.split(' ', 2)
             cells.setdefault(pb, []).append(cell)
     hbm, mid, board = cells['pb_otpu_hbm'], cells['pb_otpu_mid'], cells['pb_otpu_board']
+    s2, s3 = cells['pb_otpu_s2'], cells['pb_otpu_s3']
     # (the mock echoes a pattern as the cell: an index built with escaped brackets reads g_x\[2\])
     e = lambda name: name                      # noqa: E731 (Vivado names generate indices literally)
-    # the slices by SLR
+    # the slices by SLR, each with its adapter in its own pblock
     assert 'WRAPPER/CL/u_sys/u_board/u_slice' in hbm and 'WRAPPER/CL/u_sys/u_board/u_mem' in hbm
     assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.u_chub' in mid
+    assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_mem' in mid
     assert 'WRAPPER/CL/u_sys/u_board/u_ctrl' in mid and 'WRAPPER/CL/u_sys/u_board/g_trace.u_trace' in mid
-    assert e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_slice') in board and e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_mem') in board
-    # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's chain and mux)
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_slice') in s2 and e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_mem') in s2
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') in s3 and e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_mem') in s3
+    assert not any('g_slice' in c for c in board) and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
+    # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's 450 MHz
+    # slice and mux); the host SmartConnect in pb_otpu_hsc, the chain's register slices u_hrs512
+    # with the PCIS gate and u_hrs512x at the crossing
     assert all(f'WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng{p}' in hbm for p in range(8))
-    assert 'WRAPPER/CL/u_sys/u_mem/g_mux.u_mux' in cells['pb_otpu_hbmx1'] and 'WRAPPER/CL/u_hsc' in cells['pb_otpu_hbmx1']
+    assert 'WRAPPER/CL/u_sys/u_mem/g_mux.u_mux' in cells['pb_otpu_hbmx1'] and 'WRAPPER/CL/u_hrs256' in cells['pb_otpu_hbmx1']
+    assert cells['pb_otpu_hsc'] == ['WRAPPER/CL/u_hsc'] and cells['pb_otpu_hxs'] == ['WRAPPER/CL/u_hrs512x']
+    assert 'WRAPPER/CL/u_hrs512' in cells['pb_otpu_pcis'] and 'WRAPPER/CL/u_sys/u_mem/u_pcis' in cells['pb_otpu_pcis']
+    assert not any('u_hsc' in c or 'u_hrs512' in c for c in hbm + cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
     # (an engine joins its port box as its non-BRAM leaf cells: the mock answers one fake leaf,
     # '<engine>/*', per engine; the engine's RAMs float in pb_otpu_hbm)
     assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng/*') in cells['pb_otpu_hbmx1']
     assert not any(c.endswith('.u_eng') for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
     # the read path (u_rp: the URAM FIFO and the crossing FIFO) floats with its URAMs in pb_otpu_hbm
     assert not any('u_rp' in c for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
-    # the hub links: slice 2's rx / tx / port in SLR2, the hub's tx / rx in SLR1
-    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in board and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in board
+    # the hub links: slice 2's rx / tx / port in its pblock, the hub's tx / rx in SLR1
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in s2 and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in s2
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[3].u_up_tx') in s3
     assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid
     # the chains' bits: port 0 (slice 0) every stage in SLR0; port 2 (slice 1) stage 1 and 2 in
-    # SLR1; port 6 (slice 3) stage 1 in SLR1, stage 2 in SLR2
+    # SLR1; port 4 (slice 2) stage 1 in SLR1, stage 2 in slice 2's half; port 6 (slice 3) stage 1
+    # in SLR1's right columns, stage 2 in slice 3's half
     def stage(k, p, lo, w):
         return e(f'WRAPPER/CL/u_sys/u_mem/g_xr.g_x[{k}].u_up') + f'/r_reg[{lo + p * w}]'
-    assert stage(0, 0, 0, 517) in hbm and stage(2, 0, 0, 517) in hbm
+    mid3 = cells['pb_otpu_mid3']
+    assert stage(0, 0, 0, 517) in hbm and stage(1, 0, 0, 517) in hbm and stage(2, 0, 0, 517) in hbm
     assert stage(1, 2, 0, 517) in mid and stage(2, 2, 516, 517) in mid
-    assert stage(1, 6, 0, 517) in mid and stage(2, 6, 0, 517) in board and stage(0, 6, 0, 517) in hbm
-    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[1160]' in board     # slice 2's write bus end
+    assert stage(1, 4, 0, 517) in mid and stage(2, 4, 0, 517) in s2
+    assert stage(1, 6, 0, 517) in mid3 and stage(2, 6, 0, 517) in s3 and stage(0, 6, 0, 517) in hbm
+    assert not any('u_mem/g_xr' in c for c in board)     # (the native chains' last stages are the slices')
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[1160]' in s2        # slice 2's write bus end
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[1].u_wb') + '/r_reg[1740]' in mid3      # slice 3's middle stage
     assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[0]' in hbm          # slice 0's
-    # a TMEM box a slice, within the slice's pblock
+    # a TMEM box a slice, within the slice's pblock, with the slice's DMA
     assert 'PROP pb_otpu_tmem0 PARENT pb_otpu_hbm' in out and 'PROP pb_otpu_tmem1 PARENT pb_otpu_mid' in out
-    assert 'PROP pb_otpu_tmem3 PARENT pb_otpu_board' in out
+    assert 'PROP pb_otpu_tmem2 PARENT pb_otpu_s2' in out and 'PROP pb_otpu_tmem3 PARENT pb_otpu_s3' in out
+    assert 'PROP pb_otpu_s3 PARENT pb_otpu_board' in out and 'PROP pb_otpu_mid3 PARENT pb_otpu_mid' in out
+    assert 'PROP pb_otpu_hsc PARENT pb_otpu_hbm' in out and 'PROP pb_otpu_hxs PARENT pb_otpu_hbm' in out
     assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_tmem' in cells['pb_otpu_tmem3']
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_dma' in cells['pb_otpu_tmem3']
+    assert 'WRAPPER/CL/u_sys/u_board/u_slice/u_dma' in cells['pb_otpu_tmem0']
     assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
 
 
@@ -1278,12 +1325,15 @@ puts "FALSEPATHS [llength $false_paths]"
     # the bounds come after every check: nothing is applied on a failed one (above)
 
 
-@pytest.mark.parametrize('name,S,nch,host_mux', [('f2-hbm:v5', 4, 8, 1), ('f2-hbm:v5s3', 3, 8, 0)])
+@pytest.mark.parametrize('name,S,nch,host_mux,khz,mmcm', [
+    ('f2-hbm:v5', 4, 8, 1, 200000, (1, 4.8, 6.0, 3)), ('f2-hbm:v5s3', 3, 8, 0, 200000, (1, 4.8, 6.0, 3)),
+    ('f2-hbm:v5c150', 4, 8, 1, 150000, (1, 4.8, 8.0, 4))])
 def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out(tmp_path, name, S,
-                                                                                nch, host_mux):
+                                                                                nch, host_mux, khz, mmcm):
     """v5 (docs/full_hbm.md): the engine top in cl_opentpu's place, its synthesis script (no
     channel block design), the v5 floorplan, the engine sources, HOST_MUX at 32 ports, the
-    adapter's NRD; the SmartConnect path's files left out and no SmartConnect to generate."""
+    adapter's NRD, the core MMCM of the variant's clock (v5c150: 150 / 300); the SmartConnect
+    path's files left out and no SmartConnect to generate."""
     shell = tmp_path / 'shell'
     scripts = shell / 'build/scripts'
     scripts.mkdir(parents=True)
@@ -1291,10 +1341,13 @@ def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out
     wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
     wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
     t = T.load(name)
-    assert flow.is_hbm(t) and flow.is_engine(t) and t.arch['S'] == S
+    assert flow.is_hbm(t) and flow.is_engine(t) and t.arch['S'] == S and t.core_khz == khz
     out = tmp_path / 'run'
     cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
     d = cl / 'design'
+    geo = (d / 'opentpu_geometry.vh').read_text()
+    assert f'localparam int CORE_KHZ_CL = {khz};' in geo and f'localparam int S = {S};' in geo
+    assert f'localparam real MMCM_DIV0 = {mmcm[2]};' in geo and f'localparam int MMCM_DIV1 = {mmcm[3]};' in geo
     assert not (d / 'cl_opentpu.sv').exists() and not (d / 'cl_opentpu_hbm.sv').exists()
     assert (d / 'cl_opentpu_hbm5.sv').is_file()
     assert (cl / 'build/scripts/synth_cl_opentpu.tcl').read_bytes() == \
@@ -1326,7 +1379,8 @@ def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out
     for f in ('otpu_native_axi.sv', 'otpu_f2_hbm_axi.sv', 'otpu_f2_hbm_sys.sv'):
         assert f not in srcs
     top = (d / 'cl_opentpu_hbm5.sv').read_text()
-    for inst in ('otpu_f2_hbmeng_sys #(', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512',
+    for inst in ('otpu_f2_hbmeng_sys #(', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512 (',
+                 'axi_register_slice u_hrs512x (', '.s_axi_awid(hb_awid)', '.m_axi_awid(hb_awid)',
                  'cl_axi_sc_1x1_wrapper u_hsc', 'cl_axi3_256b_reg_slice u_hrs256',
                  'cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NHBM)', 'localparam bit HOST_MUX = NPORT == 32'):
         assert inst in top

@@ -145,3 +145,15 @@ NRD = 128
 FIFO_DEPTH = 256
 TRACE_DEPTH = 4096
 mem_path = "engine"
+
+[variants.v5c150]               # v5 at a 150 MHz core (the TMEM pumped at 300; build.py's
+S = 4                           # HBM_CORE_MMCM 150000): the first v5 target to close timing
+PORTB = 4                       # (the 200 MHz placement of 340c4ed6: clk_raw -4.4 ns), the
+ROWLANES = true                 # same slices, engines and sharding; 3/4 of the 200 MHz token
+ALINE = 64                      # rate is the ceiling, the HBM's 280 ns is 42 cycles and each
+ACT_ROWS = 8                    # engine's AXI side 1.5 native beats a core cycle (receipt:
+NRD = 128                       # MHZ=150 run.sh, OTPU_HBMENG_RATE=1). build.py --target f2-hbm:v5c150
+FIFO_DEPTH = 256
+TRACE_DEPTH = 4096
+mem_path = "engine"
+core_mhz = 150
