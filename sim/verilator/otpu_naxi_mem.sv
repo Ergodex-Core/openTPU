@@ -63,6 +63,10 @@ module otpu_naxi_mem #(
     .lb_req(1'b0), .lb_addr('0), .lb_rdy(), .lb_rvalid(), .lb_rdata(),
     .la_req(1'b0), .la_addr('0), .la_rdy(), .la_rvalid(), .la_rdata(), .l_idle(), .dump);
   int nburst [NCH], nbeat [NCH], hist [NCH][17];
+  // otpu_native_axi's direction barriers, per channel: cycles a write at the queue's head waits
+  // for the reads in flight to drain (wwait), cycles a read at the head waits for the writes'
+  // responses (rwait), and write episodes (a write taking the head after reads: switches)
+  longint wwait [NCH], rwait [NCH], nswitch [NCH];
   for (genvar c = 0; c < NCH; c++) begin : g_ch
     // ---- the SLR chain: down the takes with their payloads, up the readies and responses
     localparam int DW = 1 + 1 + 25 + 1 + 512 + 64, UW = 1 + 1 + 1 + 512 + 16;
@@ -98,6 +102,17 @@ module otpu_naxi_mem #(
       .m_araddr(araddr), .m_arlen(arlen), .m_arvalid(arvalid), .m_arready(arready),
       .m_rdata(m_rdata[c]), .m_rvalid(rvalid), .m_rlast(rlast), .m_rresp(2'b00), .m_rready(rready));
     always @(posedge clk) if (!rst && b_err) $fatal(1, "otpu_naxi_mem ch%0d: otpu_native_axi n_err", c);
+    logic was_w;
+    always @(posedge clk)
+      if (rst) begin wwait[c] <= 0; rwait[c] <= 0; nswitch[c] <= 0; was_w <= 1'b0; end
+      else begin
+        if (u_naxi.cn != 0 && u_naxi.head_we && u_naxi.reads != 0) wwait[c] <= wwait[c] + 1;
+        if (u_naxi.cn != 0 && !u_naxi.head_we && u_naxi.writes != 0) rwait[c] <= rwait[c] + 1;
+        if (u_naxi.cn != 0) begin
+          if (u_naxi.head_we && !was_w) nswitch[c] <= nswitch[c] + 1;
+          was_w <= u_naxi.head_we;
+        end
+      end
     // ---- the shim: AXI back to native commands (circular buffers, every state change a
     // non-blocking update: the model and otpu_native_axi sample it at the same edges)
     localparam int QN = 64;
@@ -170,6 +185,6 @@ module otpu_naxi_mem #(
       if (COPY == 0) $write("NAXI ch%0d bursts=%0d beats=%0d lengths", c, nburst[c], nbeat[c]);
       else $write("NAXI cp%0d ch%0d bursts=%0d beats=%0d lengths", COPY, c, nburst[c], nbeat[c]);
       for (int i = 1; i <= 16; i++) if (hist[c][i]) $write(" %0d:%0d", i, hist[c][i]);
-      $display("");
+      $display(" wwait=%0d rwait=%0d switches=%0d", wwait[c], rwait[c], nswitch[c]);
     end
 endmodule
