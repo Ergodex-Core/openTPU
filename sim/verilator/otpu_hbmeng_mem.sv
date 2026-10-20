@@ -5,7 +5,8 @@
 //   - the SLR chains: NXR register stages each way (the takes with their payloads down, the
 //     readies, read beats and write-done pulses up: otpu_f2_hbm_eng g_xr), and the per-slice
 //     write bus (one channel's write beat a cycle: a round robin over the channels whose
-//     engine shows room; n_wready[c] is the grant);
+//     engine shows room, the requests and the grant registered as in the RTL; n_wready[c] is
+//     the registered grant, two cycles after the request);
 //   - the engine's command queue (32 entries, XL = 2 NXR kept below its ready) and write queue
 //     (16), the `cont` bit (the beat follows the last command's and is not the first of an
 //     aligned BURST group), the open burst extended while `cont` and under BURST, closed by a
@@ -59,7 +60,7 @@ module otpu_hbmeng_mem #(
   output logic [NCH-1:0][15:0]      n_wdone,
   input  logic                  dump
 );
-  localparam int XL = 2 * NXR;
+  localparam int XL = 2 * NXR + 2;     // (the chain each way, the arbiter's two registers)
   localparam int QN = 32, WN = 16;
   localparam int IDLEC = (IDLE * 4 + 8) / 9;          // ceil(IDLE / 2.25), at least 1
   localparam int IDLC = (IDLEC < 1) ? 1 : IDLEC;
@@ -88,21 +89,25 @@ module otpu_hbmeng_mem #(
   // ---- the write bus: one beat a cycle, round robin over the channels whose engine (as seen
   // through the chain) shows room; the engines' readies seen late, as the chain carries them
   logic [NCH-1:0] e_wready_x;          // the engines' write readies after the up chain
-  logic [NCH-1:0] gnt;
-  logic [CW-1:0]  ptr;
+  logic [NCH-1:0] req_q, gnt, gnt_q;   // (as otpu_f2_hbm_eng: the requests registered, the
+  logic [CW-1:0]  ptr;                 //  round robin, its grant registered: the ready)
   always_comb begin
     logic found;
     found = 1'b0; gnt = '0;
     for (int i = 0; i < NCH; i++) begin
       int c;
       c = (int'(ptr) + i) % NCH;
-      if (!found && n_wvalid[c] && e_wready_x[c]) begin found = 1'b1; gnt[c] = 1'b1; end
+      if (!found && req_q[c]) begin found = 1'b1; gnt[c] = 1'b1; end
     end
   end
-  assign n_wready = gnt;
+  assign n_wready = gnt_q;
   always_ff @(posedge clk)
-    if (rst) ptr <= '0;
-    else for (int c = 0; c < NCH; c++) if (gnt[c]) ptr <= CW'(c + 1);
+    if (rst) begin ptr <= '0; req_q <= '0; gnt_q <= '0; end
+    else begin
+      req_q <= n_wvalid & e_wready_x;
+      gnt_q <= gnt;
+      for (int c = 0; c < NCH; c++) if (gnt[c]) ptr <= CW'(c + 1);
+    end
 
   for (genvar c = 0; c < NCH; c++) begin : g_ch
     // ---- the SLR chain: down the takes with their payloads, up the readies and responses

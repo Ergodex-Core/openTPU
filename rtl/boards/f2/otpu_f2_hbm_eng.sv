@@ -228,33 +228,49 @@ module otpu_f2_hbm_eng #(
     end
   end
 
-  // ---- the write bus per slice: the arbiter on the slices' side, the chain, the demux
+  // ---- the write bus per slice: the arbiter on the slices' side, the chain, the demux. The
+  // arbiter is two registers deep: the requests (the adapter's write valids against the
+  // engines' readies) registered, the round robin over them, its grant registered as the
+  // readies the adapter sees. The adapter holds a write until it is taken, so a grant two
+  // cycles after the request takes it (or, the write just taken and the next not yet shown, a
+  // grant takes nothing: no take goes down the bus and the adapter's wiss stays low), and the
+  // engine's FIFO keeps two more entries below its ready (XL = 2 NXR + 2). Why: the adapter's
+  // write-ready cone (its SW queue's head slot, 32:1, the source select) ran through a
+  // combinational grant back into the adapter's take, its issued counts and wr_idle: 26 logic
+  // levels on the core clock in the first v5 synthesis (6.2 ns of 5.0); each piece is now
+  // under ten.
   logic [S-1:0][BW-1:0] wb_a, wb_e;          // the arbiters' words, the demuxes'
   for (genvar s = 0; s < S; s++) begin : g_wb
-    logic [NCH-1:0] req, gnt;
-    logic [CW-1:0]  ptr, gidx;
+    logic [NCH-1:0] req_q, gnt, gnt_q, take;
+    logic [CW-1:0]  ptr, gidx, gidx_q;
     logic [511:0]   gdata;
     logic [63:0]    gmask;
     always_comb begin
       logic found;
       found = 1'b0; gnt = '0; gidx = '0; gdata = '0; gmask = '0;
-      for (int c = 0; c < NCH; c++) req[c] = n_wvalid[NCH * s + c] && x_wready[NCH * s + c];
       // round robin from ptr: the first requester at or after it
       for (int i = 0; i < NCH; i++) begin
         int c;
         c = (int'(ptr) + i) % NCH;
-        if (!found && req[c]) begin
+        if (!found && req_q[c]) begin
           found = 1'b1; gnt[c] = 1'b1; gidx = CW'(c);
         end
       end
+      // the granted channel's beat (the grant a register: the select is three levels)
       for (int c = 0; c < NCH; c++)
-        if (gnt[c]) begin gdata = n_wdata[NCH * s + c]; gmask = n_wmask[NCH * s + c]; end
+        if (gnt_q[c]) begin gdata = n_wdata[NCH * s + c]; gmask = n_wmask[NCH * s + c]; end
+      take = gnt_q & n_wvalid[NCH * s +: NCH];
     end
-    assign n_wready[NCH * s +: NCH] = gnt;
+    assign n_wready[NCH * s +: NCH] = gnt_q;
     always_ff @(posedge clk)
-      if (rst_q) ptr <= '0;
-      else if (|gnt) ptr <= gidx + 1'b1;
-    assign wb_a[s] = {|gnt, gidx, gdata, gmask};
+      if (rst_q) begin
+        req_q <= '0; gnt_q <= '0; gidx_q <= '0; ptr <= '0;
+      end else begin
+        req_q <= n_wvalid[NCH * s +: NCH] & x_wready[NCH * s +: NCH];
+        gnt_q <= gnt; gidx_q <= gidx;
+        if (|gnt) ptr <= gidx + 1'b1;
+      end
+    assign wb_a[s] = {|take, gidx_q, gdata, gmask};
     // SLR0: the beat into its channel's engine
     logic          b_take;
     logic [CW-1:0] b_ch;
@@ -298,7 +314,7 @@ module otpu_f2_hbm_eng #(
     logic          m_arvalid, m_arready, m_rvalid, m_rready, m_rlast;
     logic [255:0]  m_wdata, m_rdata;
     logic [31:0]   m_wstrb;
-    otpu_hbm_ch #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .XL(2 * NXR), .BURST(BURST),
+    otpu_hbm_ch #(.BASE_ADDR(34'(p) << CH_LOG2), .CH_LOG2(CH_LOG2), .XL(2 * NXR + 2), .BURST(BURST),
                   .IDLE(IDLE), .OT(OT), .RDEPTH(RDEPTH), .ID(6'd0), .ORDER(ORDER)) u_eng (
       .clk, .rst(rst_q),
       .n_cvalid(e_cvalid[p]), .n_cready(e_cready[p]), .n_cwe(e_cwe[p]), .n_caddr(e_caddr[p]),

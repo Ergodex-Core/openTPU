@@ -69,6 +69,24 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   sites the placer may use (the VU47P's URAM columns run through every clock-region row;
   verify with `get_sites -of_objects [get_pblocks pb_otpu_hbm] -filter {SITE_TYPE == URAM288}`
   on the box).
+- **The write bus's arbiter, two registers deep** (otpu_f2_hbm_eng g_wb; the receipt model
+  the same): the second v5 synthesis (01f65cb4: the engines right, hclk +0.140 over 448K
+  endpoints) had the core clock at -1.363 ns over 8,445 endpoints, worst
+  `g_slice[1].u_mem/wpart_reg[6][27] -> iss_all_q_reg`, 26 logic levels: the adapter's
+  write-ready cone (its SW queue's head slot, a 32:1 select, the source select, n_wvalid) ran
+  through the bus's combinational round robin (n_wready) back into the adapter's take (dtk),
+  wiss, the issued-count add and compare into iss_all_q, and every register wiss drives (the
+  bus word, the queues' pointers, c_done / d_done, iss_w: the 8K endpoints over four slices).
+  Now the requests (n_wvalid against the engines' readies) are registered, the round robin
+  runs over them, and its grant is registered as the ready the adapter sees (a grant two
+  cycles after the request; the adapter holds a write until taken, a grant meeting no write
+  takes nothing; the engine's FIFOs keep XL = 2 NXR + 2 entries below their readies), and the
+  adapter's iss_all_q compares registers only (iss_w against n_wdone), the write of the last
+  cycle holding wr_idle down through its wk_v register instead of an add: wr_idle is the same
+  every cycle (tests/test_native_nch.py's equivalence). Each piece is now under ten levels:
+  the write-ready cone into the request register (~9), the round robin into the grant
+  register (~8), the grant into wiss and its registers (~9), the compare into iss_all_q (~5).
+  The receipt: +0.23% on the 1-layer S = 4 point ("RTL (measured)").
 - **The engine path's CDC constraints** (boards/f2/build/constraints/cl_timing_user_hbm5.tcl,
   put in cl_timing_user.tcl's place for mem_path "engine"; the SmartConnect path's script
   requires the fabric u_sc, which stopped the first SynthCL of `f2-hbm:v5` right after
@@ -181,6 +199,7 @@ two-part reads, the 7 GATHERs of the layer 1,434 cycles in all (205 each). LPN (
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (native model RD 64, lat 60) | 195,339 | - | 202,690 | +3.8% | 161,635, 82.7% | - |
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model) | 203,697 (396 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
 | v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model, the read path in URAM: LAT_UP 7) | 203,636 (385 s) | - | 177,760 | -12.7% | 161,635, 79.4% | 80.9% |
+| v5 `f2-hbm:v5`, S 4, 1 layer + head (engine model, LAT_UP 7, the write bus's arbiter two registers deep) | 204,109 (396 s) | - | 177,760 | -12.9% | 161,635, 79.2% | 80.8% |
 | **v5 `f2-hbm:v5`, S 4, whole model (engine model)** | **796,958** (740 s) | **251.0** | 674,558 | -15.4% | 512,938, 64.4% | 64.5% |
 | **v5 `f2-hbm:v5s3`, S 3, whole model (engine model)** | **1,045,874** (604 s) | **191.2** | 885,045 | -15.4% | 724,726, 69.3% | 69.5% |
 
@@ -190,8 +209,11 @@ defaults of otpu_top / tb_top / otpu_hbmeng_mem since) the 1-layer + head point 
 cycles, -61 (-0.03%) against 203,697 at LAT_UP 5 (`eng_s4_l1_uram.*`; the same run at LAT_UP 5
 by mistake first, `eng_s4_l1_uram_lat5_stale.log`, gave 203,697 again): the engines' in-flight
 budget (RDEPTH 256, RD 128) is unchanged and the port is demand-bound, so a longer return path
-moves nothing. The whole-model points above stand (their path is the same model at LAT_UP 5:
-within 0.03% by this).
+moves nothing. The write bus's registered arbiter ("The write bus's arbiter, two registers
+deep": a write's grant two cycles after its request, in the model as in the RTL) costs +473
+cycles, +0.23% (`eng_s4_l1_regw.*`: 204,109, bit-exact): the layer's writes (the K / V rows,
+the QST stores) wait two cycles more each. The whole-model points above stand (their path is
+the same model at LAT_UP 5 with the combinational grant: within 0.3% by these two).
 
 So the S = 4 token is 3.0x v4's on the RTL (251 against 83.5 tok/s) and the S = 3 fallback 2.3x
 (191); the port-bound token at S = 4 would be 409 tok/s, and the RTL sits at 64% of it. Where
