@@ -1662,6 +1662,39 @@ for the bursts' wait) 1,013,343 (-1.4% vs the build's 1,027,452; mean phase erro
 tok/s. The lever stays reads in flight: the adapter's 64 a channel and the SmartConnect's 32
 transactions.
 
+### Incremental implementation (build.py --incremental-from, 2026-10-20)
+
+For a small change on a design that already placed and routed (a register added, one module
+fixed, a constraint tightened), the implementation can start from a previous run's routed
+checkpoint instead of from nothing. Vivado applies the reference's placement and routing to every
+cell of the new netlist that matches it and re-implements only the rest:
+
+```
+build.py --hdk ... --target f2-hbm:p4rl8a64c150 --out RUN --flow ImplCL \
+  --from-synth SYNTH_RUN --synth-sha256 SHA \
+  --incremental-from REF_RUN --incremental-sha256 REF_SHA [--incremental-directive TimingClosure] \
+  [--incremental-force] --package
+```
+
+- The reference is the one routed checkpoint of a finished ImplCL or BuildAll run, met or
+  VIOLATED (a reference is never packaged itself), pinned by its digest, for the same platform and
+  part. build.py copies it into `RUN/incremental_reference/`, records it in inputs.json
+  (`incremental_reference`: run, build, digest, met or not, directive) and passes it to Vivado as
+  OTPU_INCR_*.
+- build_level_1_cl.tcl wraps the HDK's place_design once: it re-checks the copy's digest, runs
+  `read_checkpoint -incremental -directive D` (plus `-force_incr` with --incremental-force),
+  writes `<CL>.<TAG>.incremental_reuse.rpt` and prints `OTPU_INCREMENTAL_REFERENCE`; the HDK's
+  place_design, phys_opt_design and route_design then run incrementally. A run without the
+  marker fails. Without --incremental-from the HDK sequence is untouched.
+- Directives: TimingClosure (the default here) targets WNS 0 and rips up the failing paths;
+  RuntimeOptimized keeps the reference's WNS (useful only from a met reference); Quick is not
+  timing-driven. Vivado may still fall back to its default algorithms when the reuse or the
+  reference's quality is too low; --incremental-force overrides that, and the log says which ran.
+- When not to use it: floorplan changes (the reference's placement is what is being changed),
+  wide RTL changes (reuse falls, and Vivado falls back anyway), a different clock target.
+- Reuse depends on stable cell names: keep the synthesis settings and hierarchy unchanged
+  between the reference and the change.
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |
