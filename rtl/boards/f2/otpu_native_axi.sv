@@ -130,7 +130,7 @@ module otpu_native_axi #(
   wire wr_clear = !PORDER ? (reads == 0) : !rbz[head_k];
   wire adjacent = cq[cr][24:0] == next_addr && cq[cr][24:6] == pending_addr[24:6];
   wire can_take = !pending_valid && cn != 0 && !head_we && (rd_clear || !ORDER) && reads < MAX_OUT;
-  wire join = can_take && (pending_count == 0 || adjacent);
+  wire rjoin = can_take && (pending_count == 0 || adjacent);
   wire ar_free;
   // ZB: the head opens the next burst while the open one goes to the free AR register (never a
   // head that would close at once: one beat bursts, a page's last beat, the last credit, a dry
@@ -138,7 +138,7 @@ module otpu_native_axi #(
   wire sw_new_full = READ_BURST == 1 || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
                      (!READ_WAIT && cn == CW'(1));
   wire sw = ZB && can_take && pending_count != 0 && !adjacent && ar_free && !sw_new_full;
-  wire take_read = join || sw;
+  wire take_read = rjoin || sw;
   wire [4:0] cnt_t = pending_count + 5'd1;
   wire full_t = cnt_t == 5'(READ_BURST) || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
                 (!READ_WAIT && cn == CW'(1));
@@ -150,7 +150,7 @@ module otpu_native_axi #(
   // timer also flushes isolated final reads.
   wire flush = pending_count != 0 && !pending_valid && !take_read &&
                (cn != 0 || idle_count == IW'(READ_IDLE-1) || reads == OW'(MAX_OUT));
-  wire close = (join && full_t) || flush;
+  wire close = (rjoin && full_t) || flush;
   wire ar_fire = m_arvalid && m_arready;
   assign ar_free = !ar_v || ar_fire;
   wire load_ar = (close || pending_valid || sw) && ar_free;
@@ -207,7 +207,7 @@ module otpu_native_axi #(
       if (load_ar) begin
         ar_v <= 1;
         ar_addr <= pending_count == 0 ? cq[cr][24:0] : pending_addr;
-        ar_cnt <= join ? cnt_t : pending_count;
+        ar_cnt <= rjoin ? cnt_t : pending_count;
         // (sw: the open burst left for the AR register; the head opens the next)
         pending_count <= sw ? 5'd1 : 5'd0; pending_valid <= 0; idle_count <= 0;
         if (sw) pending_addr <= cq[cr][24:0];
