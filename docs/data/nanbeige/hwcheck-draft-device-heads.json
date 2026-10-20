@@ -1,0 +1,634 @@
+{
+  "architecture": {
+    "ACT_BLOCKS": 128,
+    "ACT_ROWS": 16,
+    "D": 128,
+    "DRAM_BYTES": 4294967296,
+    "DSTEP": true,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": true,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "board_info": {
+    "D": 128,
+    "LANES": 8,
+    "MCOLS": 4,
+    "act_rows": 16,
+    "build_id": 2118297126,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "caps": {
+      "act_rows": true,
+      "args": true,
+      "chash": true,
+      "ddr": false,
+      "dstep": true,
+      "gen": true,
+      "hostcal": false,
+      "i2c": false,
+      "mx": true,
+      "pair": true,
+      "pq_window": 1024,
+      "stream": true,
+      "temp": true,
+      "trace": true,
+      "trace_depth": 16384,
+      "w4": true,
+      "waitw": true
+    },
+    "caps2": {
+      "gather": true
+    },
+    "cfg": {
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "MXU_IMPL": 2,
+      "S": 1,
+      "SEQ_WC": 1,
+      "TMEM_IMPL": 3,
+      "TMEM_WORDS": 65536,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "channel_bytes": 2147483648,
+      "channels": 2,
+      "hash": 1341988375,
+      "platform": 3
+    },
+    "core_khz": 200000,
+    "ddr_mts": null,
+    "regmap": 5,
+    "running": false,
+    "status": 104,
+    "temp_c": null
+  },
+  "checkpoint_quality_validated": false,
+  "device": "f2:0",
+  "device_lock_held": true,
+  "draft_backbone_backend": "FPGA",
+  "draft_context_projection_backend": "FPGA",
+  "draft_hardware_stats": [
+    {
+      "a_reads": 256,
+      "a_writes": 0,
+      "b_reads": 276,
+      "b_stall": 0,
+      "b_writes": 8,
+      "cycles": 1074,
+      "draft_kind": "fusion",
+      "ecc_ded": false,
+      "instructions": [
+        13
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 256,
+      "a_writes": 324,
+      "b_reads": 276,
+      "b_stall": 0,
+      "b_writes": 0,
+      "cycles": 4099,
+      "draft_kind": "context",
+      "ecc_ded": false,
+      "instructions": [
+        22
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 2688,
+      "a_writes": 1134,
+      "b_reads": 3764,
+      "b_stall": 8260,
+      "b_writes": 124,
+      "cycles": 25546,
+      "draft_kind": "query",
+      "ecc_ded": false,
+      "instructions": [
+        214
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 519,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 513,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 509,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 256,
+      "a_writes": 0,
+      "b_reads": 276,
+      "b_stall": 0,
+      "b_writes": 8,
+      "cycles": 1074,
+      "draft_kind": "fusion",
+      "ecc_ded": false,
+      "instructions": [
+        13
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 256,
+      "a_writes": 324,
+      "b_reads": 276,
+      "b_stall": 0,
+      "b_writes": 0,
+      "cycles": 4245,
+      "draft_kind": "context",
+      "ecc_ded": false,
+      "instructions": [
+        22
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 2688,
+      "a_writes": 1134,
+      "b_reads": 3764,
+      "b_stall": 3458,
+      "b_writes": 124,
+      "cycles": 25590,
+      "draft_kind": "query",
+      "ecc_ded": false,
+      "instructions": [
+        214
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 509,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 509,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 508,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 2688,
+      "a_writes": 1134,
+      "b_reads": 3764,
+      "b_stall": 6199,
+      "b_writes": 124,
+      "cycles": 25937,
+      "draft_kind": "query",
+      "ecc_ded": false,
+      "instructions": [
+        214
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 525,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 516,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    },
+    {
+      "a_reads": 128,
+      "a_writes": 0,
+      "b_reads": 136,
+      "b_stall": 0,
+      "b_writes": 4,
+      "cycles": 525,
+      "draft_kind": "markov",
+      "ecc_ded": false,
+      "instructions": [
+        9
+      ],
+      "status": 233
+    }
+  ],
+  "draft_image_base": 1040384,
+  "draft_image_end": 1380864,
+  "draft_markov_backend": "FPGA projection, CPU row lookup/selection",
+  "draft_precision": {
+    "backbone": "FPGA openTPU INT4 weights, INT8 activations/KV, FP32 residual/norm/RoPE/softmax",
+    "context": "FPGA INT8 fc, FP32 hidden_norm; INT4 per-layer K/V projection and QK norm/RoPE",
+    "embedding": "target host embedding rows",
+    "head": "shared FPGA INT8 LM head and INT8 Markov_w2; CPU w1 lookup, argmax and confidence",
+    "source_equivalent": false
+  },
+  "draft_spec": {
+    "block_size": 7,
+    "confidence_head": false,
+    "confidence_with_markov": false,
+    "draft_vocab": 128,
+    "eps": 1e-05,
+    "ffn": 256,
+    "head_dim": 128,
+    "hidden": 128,
+    "layers": 1,
+    "logit_scale": 1.0,
+    "markov_rank": 8,
+    "mask_token": 127,
+    "n_kv": 1,
+    "n_q": 2,
+    "neox_rope": true,
+    "target_hidden": 128,
+    "target_layers": [
+      0,
+      2
+    ],
+    "theta": 70000000.0,
+    "topk": null,
+    "vocab": 128
+  },
+  "oracle_backbone_backend": "ISA",
+  "passed": true,
+  "phase": "complete",
+  "precision": "target W8A8; draft W4A8; shared INT8 target head",
+  "seed": 92,
+  "stages": [
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          1,
+          2,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "target_prefill"
+    },
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          1,
+          2,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "target_prefill"
+    },
+    {
+      "hardware_wall_seconds": 0.04665013699559495,
+      "hidden": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "seven_query_draft",
+      "target_memory": {
+        "after_sha256": "7105de59e887bb71d04353f5d8033b5babecbdac901fcb389fa6b77f38dc9e8c",
+        "before_sha256": "7105de59e887bb71d04353f5d8033b5babecbdac901fcb389fa6b77f38dc9e8c",
+        "passed": true
+      },
+      "tokens": {
+        "actual": [
+          113,
+          35,
+          35
+        ],
+        "expected": [
+          113,
+          35,
+          35
+        ],
+        "passed": true
+      }
+    },
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          2,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "target_verification_after_draft"
+    },
+    {
+      "hidden": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "incremental_context",
+      "tokens": {
+        "actual": [
+          5,
+          35,
+          35
+        ],
+        "expected": [
+          5,
+          35,
+          35
+        ],
+        "passed": true
+      }
+    },
+    {
+      "hidden": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "context_rollback",
+      "replay_hidden": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          3,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "tokens": {
+        "actual": [
+          113,
+          35,
+          35
+        ],
+        "expected": [
+          113,
+          35,
+          35
+        ],
+        "passed": true
+      }
+    }
+  ],
+  "target_backend": "FPGA",
+  "target_hardware_stats": [
+    {
+      "a_reads": 6784,
+      "a_writes": 648,
+      "b_reads": 7384,
+      "b_stall": 0,
+      "b_writes": 12,
+      "cycles": 25241,
+      "ecc_ded": false,
+      "host_program_cache_hit": false,
+      "instructions": [
+        345
+      ],
+      "runtime_host": true,
+      "status": 233
+    },
+    {
+      "a_reads": 6784,
+      "a_writes": 648,
+      "b_reads": 7384,
+      "b_stall": 25,
+      "b_writes": 12,
+      "cycles": 24755,
+      "ecc_ded": false,
+      "host_program_cache_hit": true,
+      "instructions": [
+        345
+      ],
+      "runtime_host": true,
+      "status": 233
+    },
+    {
+      "a_reads": 8320,
+      "a_writes": 2592,
+      "b_reads": 10652,
+      "b_stall": 26,
+      "b_writes": 48,
+      "cycles": 61199,
+      "ecc_ded": false,
+      "host_program_cache_hit": false,
+      "instructions": [
+        664
+      ],
+      "rows": 4,
+      "runtime_host": true,
+      "status": 233
+    }
+  ],
+  "target_image_bytes": 875264,
+  "target_spec": {
+    "bos": 151643,
+    "capture_layers": [
+      1,
+      3
+    ],
+    "ctx": 0,
+    "embed": "f32",
+    "eos": [],
+    "eps": 1e-05,
+    "ffn": 256,
+    "formats": "",
+    "head_dim": 128,
+    "hidden": 128,
+    "layers": 2,
+    "loops": 2,
+    "mix": "",
+    "n_kv": 1,
+    "n_q": 2,
+    "nope": [],
+    "qk_norm": false,
+    "qk_smooth": false,
+    "rope_div": [],
+    "rope_scale": 1.0,
+    "rotary": 0,
+    "skip_loop_final_norm": false,
+    "theta": 70000000.0,
+    "tied": false,
+    "vocab": 128
+  },
+  "utc": "2026-10-20T17:21:28.428130+00:00"
+}

@@ -1,0 +1,4586 @@
+{
+  "aggregates": {
+    "hybrid": {
+      "acceptance_rate_median": 0.7777777777777778,
+      "decode_seconds_median": 2.23555074702017,
+      "decode_tps_median": 4.025853589768141,
+      "draft_cycles_median": 61733200.0,
+      "draft_seconds_median": 0.7800876820692793,
+      "prefill_seconds_median": 4.685532433970366,
+      "samples": 3,
+      "target_cycles_median": 952937118.0,
+      "target_decode_cycles_median": 190707424.0,
+      "target_prefill_cycles_median": 762220544.0,
+      "target_seconds_median": 6.113937181944493,
+      "tokens_consistent": true,
+      "total_seconds_median": 6.941004070977215
+    },
+    "target": {
+      "acceptance_rate_median": null,
+      "decode_seconds_median": 3.057251922029536,
+      "decode_tps_median": 2.943820211592315,
+      "draft_cycles_median": null,
+      "draft_seconds_median": null,
+      "prefill_seconds_median": 4.3734725280082785,
+      "samples": 3,
+      "target_cycles_median": 1291678469.0,
+      "target_decode_cycles_median": 529454789.0,
+      "target_prefill_cycles_median": 762223680.0,
+      "target_seconds_median": null,
+      "tokens_consistent": true,
+      "total_seconds_median": 7.431456292048097
+    }
+  },
+  "architecture": {
+    "ACT_BLOCKS": 128,
+    "ACT_ROWS": 16,
+    "D": 128,
+    "DRAM_BYTES": 4294967296,
+    "DSTEP": true,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": true,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "backend": "board",
+  "board_info": {
+    "D": 128,
+    "LANES": 8,
+    "MCOLS": 4,
+    "act_rows": 16,
+    "build_id": 2118297126,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "caps": {
+      "act_rows": true,
+      "args": true,
+      "chash": true,
+      "ddr": false,
+      "dstep": true,
+      "gen": true,
+      "hostcal": false,
+      "i2c": false,
+      "mx": true,
+      "pair": true,
+      "pq_window": 1024,
+      "stream": true,
+      "temp": true,
+      "trace": true,
+      "trace_depth": 16384,
+      "w4": true,
+      "waitw": true
+    },
+    "caps2": {
+      "gather": true
+    },
+    "cfg": {
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "MXU_IMPL": 2,
+      "S": 1,
+      "SEQ_WC": 1,
+      "TMEM_IMPL": 3,
+      "TMEM_WORDS": 65536,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "channel_bytes": 2147483648,
+      "channels": 2,
+      "hash": 1341988375,
+      "platform": 3
+    },
+    "core_khz": 200000,
+    "ddr_mts": null,
+    "regmap": 5,
+    "running": false,
+    "status": 104,
+    "temp_c": null
+  },
+  "cap": 128,
+  "capture_layers": [
+    2,
+    11,
+    22,
+    33,
+    41
+  ],
+  "command": "benchmark",
+  "comparison": {
+    "baseline_includes_capture_writes": true,
+    "cache_note": "shared Engine; hybrid may reuse target compilation caches",
+    "exact_target_tokens_match": true,
+    "exact_target_tokens_match_by_repeat": [
+      true,
+      true,
+      true
+    ],
+    "median_decode_tps_ratio": 1.3675609583475727,
+    "observed_decode_tps_ratio": 1.3675609583475727,
+    "order": [
+      "target",
+      "hybrid"
+    ],
+    "same_target_image_and_precision": true
+  },
+  "draft_backend_selected": "board",
+  "draft_fully_on_fpga": false,
+  "draft_fusion_markov_selected": "board",
+  "draft_setup_seconds": 4.698088961013127,
+  "fpga_draft_hardware_executed": true,
+  "fpga_draft_implemented": true,
+  "max_new_tokens": 16,
+  "measured_runs": [
+    {
+      "iteration": 0,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.25536396401003,
+          "decode_tokens": 9,
+          "decode_tps": 3.9904867434336535,
+          "draft_backend": "fpga-int4-backbone-shared-int8-head-int8-fusion-markov-host-lookups",
+          "draft_calls": 3,
+          "draft_cycles": 61733200,
+          "draft_cycles_are_hardware_measured": true,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1927,
+              "b_writes": 384,
+              "cycles": 425649,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425628,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1458,
+              "b_writes": 384,
+              "cycles": 425822,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425903,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425899,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425725,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425836,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425759,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1458,
+              "b_writes": 384,
+              "cycles": 425752,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425722,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1458,
+              "b_writes": 384,
+              "cycles": 425784,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369216,
+              "b_stall": 363,
+              "b_writes": 96,
+              "cycles": 403207,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                12
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 63185,
+              "b_writes": 26328,
+              "cycles": 16867323,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18296,
+              "b_writes": 5192,
+              "cycles": 433107,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18271,
+              "b_writes": 5192,
+              "cycles": 433182,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18732,
+              "b_writes": 5192,
+              "cycles": 433501,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425793,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 245760,
+              "a_writes": 25920,
+              "b_reads": 123300,
+              "b_stall": 191,
+              "b_writes": 0,
+              "cycles": 571095,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 61826,
+              "b_writes": 26328,
+              "cycles": 16864323,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18208,
+              "b_writes": 5192,
+              "cycles": 433424,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18299,
+              "b_writes": 5192,
+              "cycles": 433577,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18456,
+              "b_writes": 5192,
+              "cycles": 433434,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369696,
+              "b_stall": 714,
+              "b_writes": 192,
+              "cycles": 410692,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                13
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 122880,
+              "a_writes": 12960,
+              "b_reads": 123100,
+              "b_stall": 82,
+              "b_writes": 0,
+              "cycles": 313920,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 62569,
+              "b_writes": 26328,
+              "cycles": 16866969,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18991,
+              "b_writes": 5192,
+              "cycles": 433553,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18272,
+              "b_writes": 5192,
+              "cycles": 433438,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18395,
+              "b_writes": 5192,
+              "cycles": 433273,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425910,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            }
+          ],
+          "draft_seconds": 0.8250073181116022,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.685532433970366,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188817,
+              "b_writes": 40904,
+              "cycles": 63794238,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189320,
+              "b_writes": 40904,
+              "cycles": 63790267,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189541,
+              "b_writes": 40904,
+              "cycles": 63792892,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188306,
+              "b_writes": 40904,
+              "cycles": 63796860,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188820,
+              "b_writes": 40904,
+              "cycles": 64192735,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186661,
+              "b_writes": 40904,
+              "cycles": 64190037,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187825,
+              "b_writes": 40904,
+              "cycles": 64192934,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187353,
+              "b_writes": 40904,
+              "cycles": 64198832,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188589,
+              "b_writes": 40904,
+              "cycles": 63811448,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189093,
+              "b_writes": 40904,
+              "cycles": 63827455,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189657,
+              "b_writes": 40904,
+              "cycles": 63792340,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18331,
+              "b_writes": 5672,
+              "cycles": 58817791,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37974,
+              "b_writes": 22688,
+              "cycles": 63361683,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38054,
+              "b_writes": 22688,
+              "cycles": 63677778,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38078,
+              "b_writes": 22688,
+              "cycles": 63666814,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952904104,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190706275,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762197829,
+          "target_prefill_runs": 12,
+          "target_seconds": 6.113937181944493,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.941004070977215
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 3.0555794450338,
+          "decode_tokens": 9,
+          "decode_tps": 2.945431516967298,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.371670176042244,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185816,
+              "b_writes": 40904,
+              "cycles": 63802447,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 190140,
+              "b_writes": 40904,
+              "cycles": 63810777,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188352,
+              "b_writes": 40904,
+              "cycles": 63826058,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188655,
+              "b_writes": 40904,
+              "cycles": 63783171,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186394,
+              "b_writes": 40904,
+              "cycles": 64197184,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188147,
+              "b_writes": 40904,
+              "cycles": 64193032,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 184054,
+              "b_writes": 40904,
+              "cycles": 64192565,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 190102,
+              "b_writes": 40904,
+              "cycles": 64196837,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188182,
+              "b_writes": 40904,
+              "cycles": 63804961,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187565,
+              "b_writes": 40904,
+              "cycles": 63794135,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186007,
+              "b_writes": 40904,
+              "cycles": 63798710,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18653,
+              "b_writes": 5672,
+              "cycles": 58822651,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18349,
+              "b_writes": 5672,
+              "cycles": 58817591,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18341,
+              "b_writes": 5672,
+              "cycles": 58820678,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18390,
+              "b_writes": 5672,
+              "cycles": 58824431,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18758,
+              "b_writes": 5672,
+              "cycles": 58831341,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18385,
+              "b_writes": 5672,
+              "cycles": 58830011,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18510,
+              "b_writes": 5672,
+              "cycles": 58832685,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18526,
+              "b_writes": 5672,
+              "cycles": 58832879,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18417,
+              "b_writes": 5672,
+              "cycles": 58835042,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18499,
+              "b_writes": 5672,
+              "cycles": 58828882,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291676068,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529453540,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762222528,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.427255860995501
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.2124287000042386,
+          "decode_tokens": 9,
+          "decode_tps": 4.067927703153895,
+          "draft_backend": "fpga-int4-backbone-shared-int8-head-int8-fusion-markov-host-lookups",
+          "draft_calls": 3,
+          "draft_cycles": 61737126,
+          "draft_cycles_are_hardware_measured": true,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1458,
+              "b_writes": 384,
+              "cycles": 425901,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1381,
+              "b_writes": 384,
+              "cycles": 425922,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1498,
+              "b_writes": 384,
+              "cycles": 425683,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425847,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425848,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425729,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425938,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425867,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 426045,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425835,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425908,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369216,
+              "b_stall": 363,
+              "b_writes": 96,
+              "cycles": 403083,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                12
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 62835,
+              "b_writes": 26328,
+              "cycles": 16869500,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18490,
+              "b_writes": 5192,
+              "cycles": 433302,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18444,
+              "b_writes": 5192,
+              "cycles": 433410,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18300,
+              "b_writes": 5192,
+              "cycles": 433768,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425710,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 245760,
+              "a_writes": 25920,
+              "b_reads": 123300,
+              "b_stall": 198,
+              "b_writes": 0,
+              "cycles": 571989,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 61055,
+              "b_writes": 26328,
+              "cycles": 16863611,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18389,
+              "b_writes": 5192,
+              "cycles": 433326,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18530,
+              "b_writes": 5192,
+              "cycles": 433521,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18254,
+              "b_writes": 5192,
+              "cycles": 433229,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369696,
+              "b_stall": 714,
+              "b_writes": 192,
+              "cycles": 410387,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                13
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 122880,
+              "a_writes": 12960,
+              "b_reads": 123100,
+              "b_stall": 69,
+              "b_writes": 0,
+              "cycles": 315224,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 62814,
+              "b_writes": 26328,
+              "cycles": 16866211,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18395,
+              "b_writes": 5192,
+              "cycles": 433295,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18532,
+              "b_writes": 5192,
+              "cycles": 433580,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18359,
+              "b_writes": 5192,
+              "cycles": 433594,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425863,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            }
+          ],
+          "draft_seconds": 0.7800876820692793,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.749533470021561,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188365,
+              "b_writes": 40904,
+              "cycles": 63792407,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186222,
+              "b_writes": 40904,
+              "cycles": 63797512,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187165,
+              "b_writes": 40904,
+              "cycles": 63792868,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188148,
+              "b_writes": 40904,
+              "cycles": 63809753,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189120,
+              "b_writes": 40904,
+              "cycles": 64192412,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188444,
+              "b_writes": 40904,
+              "cycles": 64195839,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186445,
+              "b_writes": 40904,
+              "cycles": 64191484,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187956,
+              "b_writes": 40904,
+              "cycles": 64185972,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188966,
+              "b_writes": 40904,
+              "cycles": 63811347,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188160,
+              "b_writes": 40904,
+              "cycles": 63824411,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187495,
+              "b_writes": 40904,
+              "cycles": 63803132,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18359,
+              "b_writes": 5672,
+              "cycles": 58823407,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37820,
+              "b_writes": 22688,
+              "cycles": 63363560,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38565,
+              "b_writes": 22688,
+              "cycles": 63679662,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37852,
+              "b_writes": 22688,
+              "cycles": 63673352,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952937118,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190716574,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762220544,
+          "target_prefill_runs": 12,
+          "target_seconds": 6.179916664958,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.962064952007495
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 3.0579814839875326,
+          "decode_tokens": 9,
+          "decode_tps": 2.943117885810159,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.3734725280082785,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186600,
+              "b_writes": 40904,
+              "cycles": 63820671,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187336,
+              "b_writes": 40904,
+              "cycles": 63796725,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188411,
+              "b_writes": 40904,
+              "cycles": 63791072,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188744,
+              "b_writes": 40904,
+              "cycles": 63794867,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187286,
+              "b_writes": 40904,
+              "cycles": 64194162,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188855,
+              "b_writes": 40904,
+              "cycles": 64198903,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188872,
+              "b_writes": 40904,
+              "cycles": 64192809,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187398,
+              "b_writes": 40904,
+              "cycles": 64192193,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188722,
+              "b_writes": 40904,
+              "cycles": 63820421,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185693,
+              "b_writes": 40904,
+              "cycles": 63803528,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187886,
+              "b_writes": 40904,
+              "cycles": 63837109,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18467,
+              "b_writes": 5672,
+              "cycles": 58824454,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18709,
+              "b_writes": 5672,
+              "cycles": 58822032,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18306,
+              "b_writes": 5672,
+              "cycles": 58819096,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18374,
+              "b_writes": 5672,
+              "cycles": 58824820,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18510,
+              "b_writes": 5672,
+              "cycles": 58831896,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18629,
+              "b_writes": 5672,
+              "cycles": 58834072,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18365,
+              "b_writes": 5672,
+              "cycles": 58832422,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18895,
+              "b_writes": 5672,
+              "cycles": 58831518,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18659,
+              "b_writes": 5672,
+              "cycles": 58830563,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18643,
+              "b_writes": 5672,
+              "cycles": 58829988,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291723321,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529456407,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762266914,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.431456292048097
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.23555074702017,
+          "decode_tokens": 9,
+          "decode_tps": 4.025853589768141,
+          "draft_backend": "fpga-int4-backbone-shared-int8-head-int8-fusion-markov-host-lookups",
+          "draft_calls": 3,
+          "draft_cycles": 61732154,
+          "draft_cycles_are_hardware_measured": true,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425881,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425688,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425688,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425598,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 426060,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425990,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425973,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425650,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425850,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1771,
+              "b_writes": 384,
+              "cycles": 425634,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1371,
+              "b_writes": 384,
+              "cycles": 425527,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369216,
+              "b_stall": 452,
+              "b_writes": 96,
+              "cycles": 403211,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                12
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 64197,
+              "b_writes": 26328,
+              "cycles": 16868231,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18224,
+              "b_writes": 5192,
+              "cycles": 433224,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18538,
+              "b_writes": 5192,
+              "cycles": 433664,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18647,
+              "b_writes": 5192,
+              "cycles": 433518,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1076,
+              "b_writes": 384,
+              "cycles": 425858,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 245760,
+              "a_writes": 25920,
+              "b_reads": 123300,
+              "b_stall": 198,
+              "b_writes": 0,
+              "cycles": 570636,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 62864,
+              "b_writes": 26328,
+              "cycles": 16866073,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18294,
+              "b_writes": 5192,
+              "cycles": 433376,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18427,
+              "b_writes": 5192,
+              "cycles": 433344,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18376,
+              "b_writes": 5192,
+              "cycles": 433682,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 369696,
+              "b_stall": 714,
+              "b_writes": 192,
+              "cycles": 410688,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                13
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 122880,
+              "a_writes": 12960,
+              "b_reads": 123100,
+              "b_stall": 42,
+              "b_writes": 0,
+              "cycles": 313797,
+              "draft_kind": "context",
+              "ecc_ded": false,
+              "instructions": [
+                682
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 9721856,
+              "a_writes": 45360,
+              "b_reads": 7100052,
+              "b_stall": 63122,
+              "b_writes": 26328,
+              "cycles": 16863022,
+              "draft_kind": "query",
+              "ecc_ded": false,
+              "instructions": [
+                16540
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18548,
+              "b_writes": 5192,
+              "cycles": 433518,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18479,
+              "b_writes": 5192,
+              "cycles": 433625,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 332288,
+              "a_writes": 0,
+              "b_reads": 337488,
+              "b_stall": 18383,
+              "b_writes": 5192,
+              "cycles": 433386,
+              "draft_kind": "markov",
+              "ecc_ded": false,
+              "instructions": [
+                129
+              ],
+              "status": 233
+            },
+            {
+              "a_reads": 368640,
+              "a_writes": 0,
+              "b_reads": 370656,
+              "b_stall": 1503,
+              "b_writes": 384,
+              "cycles": 425762,
+              "draft_kind": "fusion",
+              "ecc_ded": false,
+              "instructions": [
+                15
+              ],
+              "status": 233
+            }
+          ],
+          "draft_seconds": 0.7793270239490084,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.6428600829676725,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187905,
+              "b_writes": 40904,
+              "cycles": 63798104,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186601,
+              "b_writes": 40904,
+              "cycles": 63800529,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189386,
+              "b_writes": 40904,
+              "cycles": 63824252,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188154,
+              "b_writes": 40904,
+              "cycles": 63798602,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186417,
+              "b_writes": 40904,
+              "cycles": 64189299,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189594,
+              "b_writes": 40904,
+              "cycles": 64196356,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188979,
+              "b_writes": 40904,
+              "cycles": 64194736,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187806,
+              "b_writes": 40904,
+              "cycles": 64194111,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187920,
+              "b_writes": 40904,
+              "cycles": 63808329,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189532,
+              "b_writes": 40904,
+              "cycles": 63811550,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188578,
+              "b_writes": 40904,
+              "cycles": 63801377,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18394,
+              "b_writes": 5672,
+              "cycles": 58820531,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38037,
+              "b_writes": 22688,
+              "cycles": 63361304,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38178,
+              "b_writes": 22688,
+              "cycles": 63676314,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38187,
+              "b_writes": 22688,
+              "cycles": 63669806,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952945200,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190707424,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762237776,
+          "target_prefill_runs": 12,
+          "target_seconds": 6.097134178970009,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.878503671963699
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 3.057251922029536,
+          "decode_tokens": 9,
+          "decode_tps": 2.943820211592315,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.376432459044736,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187765,
+              "b_writes": 40904,
+              "cycles": 63778182,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187005,
+              "b_writes": 40904,
+              "cycles": 63797256,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188891,
+              "b_writes": 40904,
+              "cycles": 63812088,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188013,
+              "b_writes": 40904,
+              "cycles": 63793564,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189341,
+              "b_writes": 40904,
+              "cycles": 64190434,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187548,
+              "b_writes": 40904,
+              "cycles": 64191221,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187630,
+              "b_writes": 40904,
+              "cycles": 64196412,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185374,
+              "b_writes": 40904,
+              "cycles": 64188464,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188097,
+              "b_writes": 40904,
+              "cycles": 63816901,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188976,
+              "b_writes": 40904,
+              "cycles": 63821265,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188509,
+              "b_writes": 40904,
+              "cycles": 63818707,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18442,
+              "b_writes": 5672,
+              "cycles": 58819186,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18425,
+              "b_writes": 5672,
+              "cycles": 58822047,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18421,
+              "b_writes": 5672,
+              "cycles": 58824648,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18622,
+              "b_writes": 5672,
+              "cycles": 58820402,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18504,
+              "b_writes": 5672,
+              "cycles": 58828587,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18311,
+              "b_writes": 5672,
+              "cycles": 58831108,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18340,
+              "b_writes": 5672,
+              "cycles": 58832056,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18444,
+              "b_writes": 5672,
+              "cycles": 58832879,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18445,
+              "b_writes": 5672,
+              "cycles": 58833759,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18692,
+              "b_writes": 5672,
+              "cycles": 58829303,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291678469,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529454789,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762223680,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.433686732023489
+        }
+      }
+    }
+  ],
+  "mode": "compare",
+  "precision": {
+    "checkpoint": "compressed-tensors channelwise INT8 weights, BF16 activations/head",
+    "draft_execution": "openTPU INT4/W4A8 noncausal backbone and context K/V projections; shared target INT8 head; FPGA INT8 context fusion and Markov projection; host embedding/Markov row lookup, greedy selection and confidence",
+    "draft_implementation_details": {
+      "backbone": "FPGA openTPU INT4 weights, INT8 activations/KV, FP32 residual/norm/RoPE/softmax",
+      "context": "FPGA INT8 fc, FP32 hidden_norm; INT4 per-layer K/V projection and QK norm/RoPE",
+      "embedding": "target host embedding rows",
+      "head": "shared FPGA INT8 LM head and INT8 Markov_w2; CPU w1 lookup, argmax and confidence",
+      "source_equivalent": false
+    },
+    "source_equivalent": false,
+    "target_execution": "openTPU MXU W8A8 repack, INT8 head, original BF16 embedding values expanded to host FP32, FP32 residual/norm/RoPE/softmax"
+  },
+  "prompt": "What is the capital of India? Reply briefly.",
+  "prompt_tokens": [
+    166100,
+    8481,
+    13,
+    18215,
+    19433,
+    154675,
+    152372,
+    21863,
+    152672,
+    57437,
+    162001,
+    46372,
+    152590,
+    5004,
+    15825,
+    152435,
+    3237,
+    3942,
+    152389,
+    166101,
+    13,
+    166100,
+    2714,
+    13,
+    3512,
+    322,
+    269,
+    5463,
+    290,
+    5424,
+    152470,
+    18550,
+    20089,
+    152361,
+    166101,
+    13,
+    166100,
+    66354,
+    13,
+    166103,
+    13,
+    13,
+    166104,
+    13,
+    13
+  ],
+  "repeat": 3,
+  "resident": false,
+  "runs": {
+    "hybrid": {
+      "acceptance_rate": 0.7777777777777778,
+      "accepted_tokens": 7,
+      "compile_fallbacks": 0,
+      "computed_draft_tokens": 9,
+      "computed_query_tokens": 21,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 2.23555074702017,
+      "decode_tokens": 9,
+      "decode_tps": 4.025853589768141,
+      "draft_backend": "fpga-int4-backbone-shared-int8-head-int8-fusion-markov-host-lookups",
+      "draft_calls": 3,
+      "draft_cycles": 61732154,
+      "draft_cycles_are_hardware_measured": true,
+      "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+      "draft_query_tokens": 7,
+      "draft_raw_runs": [
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425881,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425688,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425688,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425598,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 426060,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425990,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425973,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425650,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425850,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1771,
+          "b_writes": 384,
+          "cycles": 425634,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1371,
+          "b_writes": 384,
+          "cycles": 425527,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 369216,
+          "b_stall": 452,
+          "b_writes": 96,
+          "cycles": 403211,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            12
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 9721856,
+          "a_writes": 45360,
+          "b_reads": 7100052,
+          "b_stall": 64197,
+          "b_writes": 26328,
+          "cycles": 16868231,
+          "draft_kind": "query",
+          "ecc_ded": false,
+          "instructions": [
+            16540
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18224,
+          "b_writes": 5192,
+          "cycles": 433224,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18538,
+          "b_writes": 5192,
+          "cycles": 433664,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18647,
+          "b_writes": 5192,
+          "cycles": 433518,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1076,
+          "b_writes": 384,
+          "cycles": 425858,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 245760,
+          "a_writes": 25920,
+          "b_reads": 123300,
+          "b_stall": 198,
+          "b_writes": 0,
+          "cycles": 570636,
+          "draft_kind": "context",
+          "ecc_ded": false,
+          "instructions": [
+            682
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 9721856,
+          "a_writes": 45360,
+          "b_reads": 7100052,
+          "b_stall": 62864,
+          "b_writes": 26328,
+          "cycles": 16866073,
+          "draft_kind": "query",
+          "ecc_ded": false,
+          "instructions": [
+            16540
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18294,
+          "b_writes": 5192,
+          "cycles": 433376,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18427,
+          "b_writes": 5192,
+          "cycles": 433344,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18376,
+          "b_writes": 5192,
+          "cycles": 433682,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 369696,
+          "b_stall": 714,
+          "b_writes": 192,
+          "cycles": 410688,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            13
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 122880,
+          "a_writes": 12960,
+          "b_reads": 123100,
+          "b_stall": 42,
+          "b_writes": 0,
+          "cycles": 313797,
+          "draft_kind": "context",
+          "ecc_ded": false,
+          "instructions": [
+            682
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 9721856,
+          "a_writes": 45360,
+          "b_reads": 7100052,
+          "b_stall": 63122,
+          "b_writes": 26328,
+          "cycles": 16863022,
+          "draft_kind": "query",
+          "ecc_ded": false,
+          "instructions": [
+            16540
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18548,
+          "b_writes": 5192,
+          "cycles": 433518,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18479,
+          "b_writes": 5192,
+          "cycles": 433625,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 332288,
+          "a_writes": 0,
+          "b_reads": 337488,
+          "b_stall": 18383,
+          "b_writes": 5192,
+          "cycles": 433386,
+          "draft_kind": "markov",
+          "ecc_ded": false,
+          "instructions": [
+            129
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 368640,
+          "a_writes": 0,
+          "b_reads": 370656,
+          "b_stall": 1503,
+          "b_writes": 384,
+          "cycles": 425762,
+          "draft_kind": "fusion",
+          "ecc_ded": false,
+          "instructions": [
+            15
+          ],
+          "status": 233
+        }
+      ],
+      "draft_seconds": 0.7793270239490084,
+      "generated_tokens": 10,
+      "iterations": [
+        {
+          "accepted": 3,
+          "committed_position": 49,
+          "draft_queries": 7,
+          "emitted": 4,
+          "position": 45,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 1,
+          "committed_position": 51,
+          "draft_queries": 7,
+          "emitted": 2,
+          "position": 49,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 3,
+          "committed_position": 55,
+          "draft_queries": 7,
+          "emitted": 3,
+          "position": 51,
+          "proposed": 3,
+          "verify_rows": 4
+        }
+      ],
+      "max_verify_draft_tokens": 3,
+      "prefill_seconds": 4.6428600829676725,
+      "prompt_tokens": 45,
+      "proposed_tokens": 9,
+      "raw_runs": [
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187905,
+          "b_writes": 40904,
+          "cycles": 63798104,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186601,
+          "b_writes": 40904,
+          "cycles": 63800529,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189386,
+          "b_writes": 40904,
+          "cycles": 63824252,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188154,
+          "b_writes": 40904,
+          "cycles": 63798602,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186417,
+          "b_writes": 40904,
+          "cycles": 64189299,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189594,
+          "b_writes": 40904,
+          "cycles": 64196356,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188979,
+          "b_writes": 40904,
+          "cycles": 64194736,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187806,
+          "b_writes": 40904,
+          "cycles": 64194111,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187920,
+          "b_writes": 40904,
+          "cycles": 63808329,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189532,
+          "b_writes": 40904,
+          "cycles": 63811550,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188578,
+          "b_writes": 40904,
+          "cycles": 63801377,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18394,
+          "b_writes": 5672,
+          "cycles": 58820531,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 38037,
+          "b_writes": 22688,
+          "cycles": 63361304,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 38178,
+          "b_writes": 22688,
+          "cycles": 63676314,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 38187,
+          "b_writes": 22688,
+          "cycles": 63669806,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_calls": 15,
+      "target_cycles": 952945200,
+      "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+      "target_decode_cycles": 190707424,
+      "target_decode_runs": 3,
+      "target_prefill_cycles": 762237776,
+      "target_prefill_runs": 12,
+      "target_seconds": 6.097134178970009,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 6.878503671963699
+    },
+    "target": {
+      "compile_fallbacks": 0,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 3.057251922029536,
+      "decode_tokens": 9,
+      "decode_tps": 2.943820211592315,
+      "draft_backend": null,
+      "generated_tokens": 10,
+      "prefill_seconds": 4.376432459044736,
+      "raw_runs": [
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187765,
+          "b_writes": 40904,
+          "cycles": 63778182,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187005,
+          "b_writes": 40904,
+          "cycles": 63797256,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188891,
+          "b_writes": 40904,
+          "cycles": 63812088,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188013,
+          "b_writes": 40904,
+          "cycles": 63793564,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189341,
+          "b_writes": 40904,
+          "cycles": 64190434,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187548,
+          "b_writes": 40904,
+          "cycles": 64191221,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187630,
+          "b_writes": 40904,
+          "cycles": 64196412,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 185374,
+          "b_writes": 40904,
+          "cycles": 64188464,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188097,
+          "b_writes": 40904,
+          "cycles": 63816901,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188976,
+          "b_writes": 40904,
+          "cycles": 63821265,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188509,
+          "b_writes": 40904,
+          "cycles": 63818707,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18442,
+          "b_writes": 5672,
+          "cycles": 58819186,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18425,
+          "b_writes": 5672,
+          "cycles": 58822047,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18421,
+          "b_writes": 5672,
+          "cycles": 58824648,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18622,
+          "b_writes": 5672,
+          "cycles": 58820402,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18504,
+          "b_writes": 5672,
+          "cycles": 58828587,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18311,
+          "b_writes": 5672,
+          "cycles": 58831108,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18340,
+          "b_writes": 5672,
+          "cycles": 58832056,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18444,
+          "b_writes": 5672,
+          "cycles": 58832879,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18445,
+          "b_writes": 5672,
+          "cycles": 58833759,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18692,
+          "b_writes": 5672,
+          "cycles": 58829303,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_cycles": 1291678469,
+      "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+      "target_decode_cycles": 529454789,
+      "target_decode_runs": 9,
+      "target_prefill_cycles": 762223680,
+      "target_prefill_runs": 12,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 7.433686732023489
+    }
+  },
+  "runs_compatibility": "runs contains the last measured repetition; measured_runs contains every repetition",
+  "setup_seconds": 57.23186080501182,
+  "thinking": false,
+  "timestamp_utc": "2026-10-20T17:23:55.025074+00:00",
+  "timing_note": "setup and explicit warmups excluded; measured repetitions share compiled programs; wall time includes execution, transfers, host work and any remaining compilation",
+  "warmup_runs": 1,
+  "warmup_seconds": 30.897640021983534,
+  "warmups": [
+    {
+      "iteration": 0,
+      "seconds_by_mode": {
+        "hybrid": 15.642576810030732,
+        "target": 15.255056691996288
+      }
+    }
+  ]
+}

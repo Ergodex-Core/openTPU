@@ -1,0 +1,747 @@
+{
+  "architecture": {
+    "ACT_BLOCKS": 128,
+    "ACT_ROWS": 16,
+    "D": 128,
+    "DRAM_BYTES": 4294967296,
+    "DSTEP": true,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": true,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "backend": "board",
+  "board_info": {
+    "D": 128,
+    "LANES": 8,
+    "MCOLS": 4,
+    "act_rows": 16,
+    "build_id": 2118297126,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "caps": {
+      "act_rows": true,
+      "args": true,
+      "chash": true,
+      "ddr": false,
+      "dstep": true,
+      "gen": true,
+      "hostcal": false,
+      "i2c": false,
+      "mx": true,
+      "pair": true,
+      "pq_window": 1024,
+      "stream": true,
+      "temp": true,
+      "trace": true,
+      "trace_depth": 16384,
+      "w4": true,
+      "waitw": true
+    },
+    "caps2": {
+      "gather": true
+    },
+    "cfg": {
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "MXU_IMPL": 2,
+      "S": 1,
+      "SEQ_WC": 1,
+      "TMEM_IMPL": 3,
+      "TMEM_WORDS": 65536,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "channel_bytes": 2147483648,
+      "channels": 2,
+      "hash": 1341988375,
+      "platform": 3
+    },
+    "core_khz": 200000,
+    "ddr_mts": null,
+    "regmap": 5,
+    "running": false,
+    "status": 104,
+    "temp_c": null
+  },
+  "cap": 128,
+  "capture_layers": [
+    2,
+    11,
+    22,
+    33,
+    41
+  ],
+  "command": "benchmark",
+  "comparison": {
+    "baseline_includes_capture_writes": true,
+    "cache_note": "shared Engine; hybrid may reuse target compilation caches",
+    "exact_target_tokens_match": true,
+    "observed_decode_tps_ratio": 0.7082725034552335,
+    "order": [
+      "target",
+      "hybrid"
+    ],
+    "same_target_image_and_precision": true
+  },
+  "fpga_draft_implemented": false,
+  "max_new_tokens": 16,
+  "mode": "compare",
+  "precision": {
+    "checkpoint": "compressed-tensors channelwise INT8 weights, BF16 activations/head",
+    "draft_execution": "CPU NumPy FP32 DSpark reference with original BF16 shared weights",
+    "source_equivalent": false,
+    "target_execution": "openTPU MXU W8A8 repack, INT8 head, original BF16 embedding values expanded to host FP32, FP32 residual/norm/RoPE/softmax"
+  },
+  "prompt": "What is the capital of India? Reply briefly.",
+  "prompt_tokens": [
+    166100,
+    8481,
+    13,
+    18215,
+    19433,
+    154675,
+    152372,
+    21863,
+    152672,
+    57437,
+    162001,
+    46372,
+    152590,
+    5004,
+    15825,
+    152435,
+    3237,
+    3942,
+    152389,
+    166101,
+    13,
+    166100,
+    2714,
+    13,
+    3512,
+    322,
+    269,
+    5463,
+    290,
+    5424,
+    152470,
+    18550,
+    20089,
+    152361,
+    166101,
+    13,
+    166100,
+    66354,
+    13,
+    166103,
+    13,
+    13,
+    166104,
+    13,
+    13
+  ],
+  "resident": false,
+  "runs": {
+    "hybrid": {
+      "acceptance_rate": 0.7777777777777778,
+      "accepted_tokens": 7,
+      "compile_fallbacks": 0,
+      "computed_draft_tokens": 9,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 18.120946783048566,
+      "decode_tokens": 9,
+      "decode_tps": 0.4966627907333819,
+      "draft_backend": "numpy-fp32-reference",
+      "draft_calls": 3,
+      "draft_seconds": 2.419560112117324,
+      "draft_setup_seconds": 1.9105577890295535,
+      "generated_tokens": 10,
+      "iterations": [
+        {
+          "accepted": 3,
+          "committed_position": 49,
+          "emitted": 4,
+          "position": 45,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 1,
+          "committed_position": 51,
+          "emitted": 2,
+          "position": 49,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 3,
+          "committed_position": 55,
+          "emitted": 3,
+          "position": 51,
+          "proposed": 3,
+          "verify_rows": 4
+        }
+      ],
+      "prefill_seconds": 12.488671645987779,
+      "prompt_tokens": 45,
+      "proposed_tokens": 9,
+      "raw_runs": [
+        {
+          "a_reads": 53195648,
+          "a_writes": 228096,
+          "b_reads": 53601788,
+          "b_stall": 187369,
+          "b_writes": 40904,
+          "cycles": 63409364,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53206912,
+          "a_writes": 228096,
+          "b_reads": 53613052,
+          "b_stall": 184660,
+          "b_writes": 40904,
+          "cycles": 63409815,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53218176,
+          "a_writes": 228096,
+          "b_reads": 53624316,
+          "b_stall": 185131,
+          "b_writes": 40904,
+          "cycles": 63430546,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53229440,
+          "a_writes": 228096,
+          "b_reads": 53635580,
+          "b_stall": 186778,
+          "b_writes": 40904,
+          "cycles": 63430804,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53240704,
+          "a_writes": 228096,
+          "b_reads": 53646844,
+          "b_stall": 189167,
+          "b_writes": 40904,
+          "cycles": 63885831,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53251968,
+          "a_writes": 228096,
+          "b_reads": 53658108,
+          "b_stall": 190826,
+          "b_writes": 40904,
+          "cycles": 63908551,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53263232,
+          "a_writes": 228096,
+          "b_reads": 53669372,
+          "b_stall": 195943,
+          "b_writes": 40904,
+          "cycles": 63903440,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53274496,
+          "a_writes": 228096,
+          "b_reads": 53680636,
+          "b_stall": 198969,
+          "b_writes": 40904,
+          "cycles": 63931506,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53285760,
+          "a_writes": 228096,
+          "b_reads": 53694716,
+          "b_stall": 205167,
+          "b_writes": 40904,
+          "cycles": 63509052,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53297024,
+          "a_writes": 228096,
+          "b_reads": 53705980,
+          "b_stall": 204562,
+          "b_writes": 40904,
+          "cycles": 63555982,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53308288,
+          "a_writes": 228096,
+          "b_reads": 53717244,
+          "b_stall": 205777,
+          "b_writes": 40904,
+          "cycles": 63541688,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53220288,
+          "a_writes": 57024,
+          "b_reads": 53320592,
+          "b_stall": 58261,
+          "b_writes": 5672,
+          "cycles": 58597528,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53322368,
+          "a_writes": 228096,
+          "b_reads": 53697532,
+          "b_stall": 43809,
+          "b_writes": 22688,
+          "cycles": 63052065,
+          "ecc_ded": false,
+          "instructions": [
+            80639
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53333632,
+          "a_writes": 228096,
+          "b_reads": 53708796,
+          "b_stall": 43494,
+          "b_writes": 22688,
+          "cycles": 63395838,
+          "ecc_ded": false,
+          "instructions": [
+            80639
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53339264,
+          "a_writes": 228096,
+          "b_reads": 53714428,
+          "b_stall": 43335,
+          "b_writes": 22688,
+          "cycles": 63384564,
+          "ecc_ded": false,
+          "instructions": [
+            80639
+          ],
+          "rows": 4,
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_calls": 15,
+      "target_cycles": 948346574,
+      "target_seconds": 28.188762011937797,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 30.609692941012327
+    },
+    "target": {
+      "compile_fallbacks": 0,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 12.834568343008868,
+      "decode_tokens": 9,
+      "decode_tps": 0.7012312186488453,
+      "draft_backend": null,
+      "generated_tokens": 10,
+      "prefill_seconds": 48.694354980951175,
+      "raw_runs": [
+        {
+          "a_reads": 53195648,
+          "a_writes": 228096,
+          "b_reads": 53601788,
+          "b_stall": 185213,
+          "b_writes": 40904,
+          "cycles": 63433418,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53206912,
+          "a_writes": 228096,
+          "b_reads": 53613052,
+          "b_stall": 185064,
+          "b_writes": 40904,
+          "cycles": 63418443,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53218176,
+          "a_writes": 228096,
+          "b_reads": 53624316,
+          "b_stall": 184714,
+          "b_writes": 40904,
+          "cycles": 63438035,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53229440,
+          "a_writes": 228096,
+          "b_reads": 53635580,
+          "b_stall": 187076,
+          "b_writes": 40904,
+          "cycles": 63440872,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53240704,
+          "a_writes": 228096,
+          "b_reads": 53646844,
+          "b_stall": 188811,
+          "b_writes": 40904,
+          "cycles": 63890635,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53251968,
+          "a_writes": 228096,
+          "b_reads": 53658108,
+          "b_stall": 191077,
+          "b_writes": 40904,
+          "cycles": 63893356,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53263232,
+          "a_writes": 228096,
+          "b_reads": 53669372,
+          "b_stall": 195345,
+          "b_writes": 40904,
+          "cycles": 63905652,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53274496,
+          "a_writes": 228096,
+          "b_reads": 53680636,
+          "b_stall": 199877,
+          "b_writes": 40904,
+          "cycles": 63926645,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53285760,
+          "a_writes": 228096,
+          "b_reads": 53694716,
+          "b_stall": 206038,
+          "b_writes": 40904,
+          "cycles": 63549097,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53297024,
+          "a_writes": 228096,
+          "b_reads": 53705980,
+          "b_stall": 204522,
+          "b_writes": 40904,
+          "cycles": 63550120,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53308288,
+          "a_writes": 228096,
+          "b_reads": 53717244,
+          "b_stall": 204154,
+          "b_writes": 40904,
+          "cycles": 63531477,
+          "ecc_ded": false,
+          "instructions": [
+            83131
+          ],
+          "rows": 4,
+          "status": 233
+        },
+        {
+          "a_reads": 53220288,
+          "a_writes": 57024,
+          "b_reads": 53320592,
+          "b_stall": 56854,
+          "b_writes": 5672,
+          "cycles": 58599555,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53220992,
+          "a_writes": 57024,
+          "b_reads": 53321296,
+          "b_stall": 16770,
+          "b_writes": 5672,
+          "cycles": 58630458,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53221696,
+          "a_writes": 57024,
+          "b_reads": 53322000,
+          "b_stall": 16865,
+          "b_writes": 5672,
+          "cycles": 58624826,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53222400,
+          "a_writes": 57024,
+          "b_reads": 53322704,
+          "b_stall": 16581,
+          "b_writes": 5672,
+          "cycles": 58615706,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53223104,
+          "a_writes": 57024,
+          "b_reads": 53323408,
+          "b_stall": 84891,
+          "b_writes": 5672,
+          "cycles": 58638910,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53223808,
+          "a_writes": 57024,
+          "b_reads": 53324112,
+          "b_stall": 81053,
+          "b_writes": 5672,
+          "cycles": 58676133,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53224512,
+          "a_writes": 57024,
+          "b_reads": 53324816,
+          "b_stall": 76423,
+          "b_writes": 5672,
+          "cycles": 58658529,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53225216,
+          "a_writes": 57024,
+          "b_reads": 53325520,
+          "b_stall": 16045,
+          "b_writes": 5672,
+          "cycles": 58625531,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53225920,
+          "a_writes": 57024,
+          "b_reads": 53326224,
+          "b_stall": 15903,
+          "b_writes": 5672,
+          "cycles": 58618182,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        },
+        {
+          "a_reads": 53226624,
+          "a_writes": 57024,
+          "b_reads": 53326928,
+          "b_stall": 15907,
+          "b_writes": 5672,
+          "cycles": 58630808,
+          "ecc_ded": false,
+          "instructions": [
+            23995
+          ],
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_cycles": 1286296388,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 61.528925243997946
+    }
+  },
+  "setup_seconds": 44.73793082596967,
+  "thinking": false,
+  "timestamp_utc": "2026-10-20T16:52:05.170265+00:00",
+  "timing_note": "single measured run; setup excluded; no steady-state claim"
+}
