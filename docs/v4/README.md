@@ -504,6 +504,22 @@ was therefore stopped at 06:45 (it had just reached implement) and restarted as 
 ports plus the row above). Unit `otpu-f2burst200-s3-175-mem2-build2`, output
 `/home/ubuntu/rachit/f2burst200-s3-175-mem2-run2`, log `logs/f2burst200-s3-175-mem2-build2.log`.
 
+**Build 10's refine, round 1 (Explore, 08:01 UTC): setup -0.161, hold +0.001.** Core -0.116 ns
+over 744 endpoints (TNS -38; worst slice 1's `ir_reg[8]` into IMEM's address, 10 levels,
+5.05 ns + the BRAM's setup against 5.714), HBM AXI 450 MHz -0.161 over 1730 (worst u_mem1's
+`m00_exit` write register into port 8's WLAST: zero logic levels, 1.85 ns of wire from row
+Y3 to X2Y0). The core gained 0.16 ns in one round, the HBM domain 0.04, and no round can move
+a SmartConnect three rows, so **build 10 was stopped at 08:03** (its `refine/post_Explore.dcp`
+and `timing_Explore.rpt` are kept) and **build 12 started on the m7a at 08:04**:
+`targets/f2-burst200-s3-162.toml` (162.5 / 325 MHz, 6.154 ns = 0.44 ns over 175's period,
+exact as 250 x 26 / 5 / 8; top `rtl/boards/f2/burst200-s3-162`, CORE_KHZ 162500, commit
+64b5bb45) with the three SmartConnect pblocks, the hedge in case build 11 run2's core stays
+0.1 ns short at 175. Why 162.5 and not 166.7: the placer spends most of a longer period
+(200 -> 175 MHz, +0.71 ns of period, moved the routed core slack from -0.436 to -0.277), so
+the step has to be bigger than the deficit. Unit `otpu-f2burst200-s3-162-build1`, output
+`/home/ubuntu/rachit/f2burst200-s3-162-run1`, log `logs/f2burst200-s3-162-build1.log`.
+Predicted 58-60 x 162.5 / 200 = **47-49 tok/s** (2.1-2.2x build 6).
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
