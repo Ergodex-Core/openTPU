@@ -189,10 +189,16 @@ and 85% of the DSPs; the eight adapters' LUT-RAM response FIFOs alone are 45 K L
   register chains (`otpu_f2_hbm_axi` DW 604 + UW 532 = 1,136 signals a channel). The VU47P has
   3,840 LAGUNA sites a side of each boundary (Vivado on the part: SLR0 3,840, SLR1 7,680, SLR2
   3,840; ~23 K SLLs a boundary). Sixteen channels need ~18.2 K a boundary plus the host's and the
-  control chains, ~80% of the boundary before the shell takes its share: unlikely to route.
-  Ways down: the lane memories' adapters in SLR0 (the lane ports cross instead, ~12 K), the
-  write data crossing once and fanned out in SLR0 (every write goes to every copy: the 8 copies'
-  576-bit write ports carry the same data), the chains at clk_f with half the width, or the
+  control chains. **The placer confirmed it** (p3-92fcae38/impl150-1, global placement): "[Place
+  30-356] This design requires 19708 Super Long Lines (SLLs) out of 23040 for the crossing of SLR#
+  0 to SLR# 1" (85.5%).
+  Ways down: **the write data crossing once** (every write reaches every copy in the same order,
+  so the 16 channels' 576-bit write beats carry two distinct halves, ~10.1 K SLLs instead of
+  ~19.7 K; but each copy's adapter sends its beats at its own cycles, as its lane's reads
+  interleave, so SLR0 needs a write-data FIFO a channel, a join of the token and the data at each
+  otpu_native_axi, and backpressure across the copies); the lane memories' adapters in SLR0 (the
+  lane ports cross instead, ~12 K, with credits on the ports); the chains at clk_f with half the
+  width; the
   proposal's floorplan (the lanes, their chunk FIFOs and the ACT RAM in SLR0 beside the HBM, the
   rest in SLR2: only the ACT writes, the commands and the results cross; the vla branch's
   `otpu_mxu_arr` registered cut is the starting point, but the drain's same-cycle TMEM grant
