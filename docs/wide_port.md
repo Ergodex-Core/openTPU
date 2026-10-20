@@ -1679,8 +1679,49 @@ Two floorplan facts learned on the way (also in cl_pnr_user_hbm.tcl): Vivado's g
 takes brackets literally, so `g_ch[0].u_rs256` matches and the escaped form matches nothing
 (the first build boxed one cell of nine); the HBM AXI ports are the sites
 BLI_HBM_AXI_INTF_X<p>Y0, four or five a clock region along the bottom row (ports 0-3 in
-X0Y0, 4-7 in X1Y0, 8-12 in X2Y0, ..., 30-31 in X7Y0). Routing, the route qualification and the
-Developer_CL tar of ba86b5df: pending at the time of writing (see the next entry).
+X0Y0, 4-7 in X1Y0, 8-12 in X2Y0, ..., 30-31 in X7Y0).
+
+ba86b5df routed at **WNS -0.177 ns, TNS -49.4 ns, hold met** (post_route.VIOLATED.dcp,
+route_design 7 h 06 min): the first pass ended at -0.457; the router then moved cells itself
+("Incr Placement Change"), re-routed to +0.004 with hold at -0.220, and its hold fix (leaf clock
+programmable delays) gave the setup margin back; its own physical synthesis recovered -0.214 to
+-0.177. AWS's check flagged an MXU -> TMEM pin pair (u_mxu/lo_ad_reg -> u_tmem/g_one.rpv_reg)
+as tight in both setup and hold. The congestion of the routed da7dc503 is all in SLR2's western
+half: level 5-7 windows over the slice adapter (u_board/u_mem, 56-80% LUT-RAM) right above the
+SLR1 crossing and over the MXU (DSP 65-91%, block RAM 84-100%).
+
+### Incremental implementation (build.py --incremental-from, 2026-10-20)
+
+For a small change on a design that already placed and routed (a register added, one module
+fixed, a constraint tightened), the implementation can start from a previous run's routed
+checkpoint instead of from nothing. Vivado applies the reference's placement and routing to every
+cell of the new netlist that matches it and re-implements only the rest:
+
+```
+build.py --hdk ... --target f2-hbm:p4rl8a64c150 --out RUN --flow ImplCL \
+  --from-synth SYNTH_RUN --synth-sha256 SHA \
+  --incremental-from REF_RUN --incremental-sha256 REF_SHA [--incremental-directive TimingClosure] \
+  [--incremental-force] --package
+```
+
+- The reference is the one routed checkpoint of a finished ImplCL or BuildAll run, met or
+  VIOLATED (a reference is never packaged itself), pinned by its digest, for the same platform and
+  part. build.py copies it into `RUN/incremental_reference/`, records it in inputs.json
+  (`incremental_reference`: run, build, digest, met or not, directive) and passes it to Vivado as
+  OTPU_INCR_*.
+- build_level_1_cl.tcl wraps the HDK's place_design once: it re-checks the copy's digest, runs
+  `read_checkpoint -incremental -directive D` (plus `-force_incr` with --incremental-force),
+  writes `<CL>.<TAG>.incremental_reuse.rpt` and prints `OTPU_INCREMENTAL_REFERENCE`; the HDK's
+  place_design, phys_opt_design and route_design then run incrementally. A run without the
+  marker fails. Without --incremental-from the HDK sequence is untouched.
+- Directives: TimingClosure (the default here) targets WNS 0 and rips up the failing paths;
+  RuntimeOptimized keeps the reference's WNS (useful only from a met reference); Quick is not
+  timing-driven. Vivado may still fall back to its default algorithms when the reuse or the
+  reference's quality is too low; --incremental-force overrides that, and the log says which ran.
+- When not to use it: floorplan changes (the reference's placement is what is being changed),
+  wide RTL changes (reuse falls, and Vivado falls back anyway), a different clock target.
+- Reuse depends on stable cell names: keep the synthesis settings and hierarchy unchanged
+  between the reference and the change.
 
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 

@@ -828,6 +828,131 @@ foreach l $log {{ puts "LOG $l" }}
         assert 'CLK2X_TCL_RAN' not in out
 
 
+
+# build_level_1_cl.tcl with an incremental reference (build.py --incremental-from): the pinned
+# reference read once, immediately before the HDK's place_design (after its post_opt checkpoint),
+# its reuse reported; a wrong digest, an unknown directive or an HDK sequence that never places
+# stops the run
+@pytest.mark.parametrize('fault', ['none', 'force', 'bad_hash', 'bad_directive', 'no_place'])
+def test_incremental_reference_is_read_once_right_before_place_design(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    steps = 'opt_design -directive Explore\nwrite_checkpoint post_opt\n'
+    if fault != 'no_place':
+        steps += 'place_design -directive SSI_SpreadLogic_high -no_bufg_opt\nphys_opt_design\nroute_design\n'
+    (hdk / 'build_level_1_cl.tcl').write_text(steps)
+    cons = tmp_path / 'constraints'
+    cons.mkdir()
+    (cons / 'cl_pnr_user.tcl').write_text('')
+    (cons / 'otpu_clk2x.tcl').write_text('')
+    ref = tmp_path / 'ref.dcp'
+    ref.write_bytes(b'reference routed checkpoint, not a real DCP')
+    good = 'a' * 64
+    env = dict(os.environ, OTPU_INCR_DCP=str(ref), OTPU_INCR_SHA256=good,
+               OTPU_INCR_DIRECTIVE='Bogus' if fault == 'bad_directive' else 'TimingClosure',
+               OTPU_INCR_FORCE='1' if fault == 'force' else '0')
+    digest = 'b' * 64 if fault == 'bad_hash' else good
+    harness = f"""
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set reports_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set log {{}}
+rename exec otpu_test_exec
+proc exec {{args}} {{
+  if {{[lindex $args 0] eq "sha256sum"}} {{ return "{digest}  [lindex $args end]" }}
+  otpu_test_exec {{*}}$args
+}}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
+proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc write_checkpoint {{args}} {{ lappend ::log "write_checkpoint $args" }}
+proc read_checkpoint {{args}} {{ lappend ::log "read_checkpoint $args" }}
+proc report_incremental_reuse {{args}} {{ lappend ::log "report_incremental_reuse" }}
+proc place_design {{args}} {{ lappend ::log "place_design $args" }}
+proc phys_opt_design {{args}} {{ lappend ::log "phys_opt_design" }}
+proc route_design {{args}} {{ lappend ::log "route_design" }}
+proc close_project {{}} {{ error "stop" }}
+if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
+  puts "STOPPED $result"
+}}
+foreach l $log {{ puts "LOG $l" }}
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
+    force = ' -force_incr' if fault == 'force' else ''
+    if fault in ('none', 'force'):
+        assert log == ['read_xdc -unmanaged', 'read_xdc -unmanaged', 'opt_design',
+                       'write_checkpoint post_opt',
+                       f'read_checkpoint -incremental -directive TimingClosure{force} {ref}',
+                       'report_incremental_reuse',
+                       'place_design -directive SSI_SpreadLogic_high -no_bufg_opt',
+                       'phys_opt_design', 'route_design']
+        assert (f'OTPU_INCREMENTAL_REFERENCE ref.dcp directive=TimingClosure '
+                f'force={1 if force else 0}') in out
+        assert 'STOPPED openTPU: implementation produced no routed checkpoint' in out
+    elif fault == 'bad_hash':
+        assert 'STOPPED openTPU: incremental reference checkpoint hash mismatch' in out
+        assert not any(l.startswith(('read_checkpoint', 'place_design')) for l in log)
+    elif fault == 'bad_directive':
+        assert 'STOPPED openTPU: unknown incremental directive Bogus' in out and log == []
+    else:
+        assert 'STOPPED openTPU: the HDK sequence ran no place_design' in out
+        assert not any(l.startswith('read_checkpoint') for l in log)
+
+
+# build.py --incremental-from: the reference is one finished run's routed checkpoint (met or
+# VIOLATED, never both), pinned by digest, for the same platform and device; the run gets a
+# verified copy, its provenance in inputs.json, and the OTPU_INCR_* environment
+@pytest.mark.parametrize('case', ['met', 'violated', 'both', 'none', 'digest', 'unfinished',
+                                  'platform', 'directive'])
+def test_incremental_reference_is_pinned_copied_and_recorded(tmp_path, case):
+    shell, run, synth_dcp = completed_synthesis(tmp_path)
+    met = synth_dcp.with_name('cl_opentpu.01234567.post_route.dcp')
+    violated = synth_dcp.with_name('cl_opentpu.01234567.post_route.VIOLATED.dcp')
+    if case != 'violated' and case != 'none':
+        met.write_bytes(b'routed reference, not a real DCP')
+    if case in ('violated', 'both'):
+        violated.write_bytes(b'violated routed reference, not a real DCP')
+    if case == 'unfinished':
+        (run / 'exit_code').unlink()
+    ref = violated if case == 'violated' else met
+    digest = flow.sha(ref) if ref.is_file() and case != 'digest' else '0' * 64
+    t = T.load('f2-hbm' if case == 'platform' else 'f2')
+    if case in ('both', 'none', 'digest', 'unfinished', 'platform'):
+        with pytest.raises(RuntimeError):
+            flow.load_incremental_reference(run, digest, t)
+        return
+    info, dcp = flow.load_incremental_reference(run, digest, t)
+    assert dcp == ref
+    out = tmp_path / 'impl'
+    flow.prepare(out, shell, t, '89abcdef')
+    if case == 'directive':
+        with pytest.raises(RuntimeError, match='Unknown incremental directive'):
+            flow.attach_incremental(out, run, info, dcp, digest, 'Explore', False)
+        return
+    env = flow.attach_incremental(out, run, info, dcp, digest, 'TimingClosure', case == 'violated')
+    copy = out / 'incremental_reference' / ref.name
+    assert copy.read_bytes() == ref.read_bytes()
+    assert env == {'OTPU_INCR_DCP': str(copy), 'OTPU_INCR_SHA256': digest,
+                   'OTPU_INCR_DIRECTIVE': 'TimingClosure',
+                   'OTPU_INCR_FORCE': '1' if case == 'violated' else '0'}
+    record = json.loads((out / 'inputs.json').read_text())['incremental_reference']
+    assert record['timing_met'] == (case == 'met')
+    assert record['checkpoint_sha256'] == digest and record['build_id'] == '01234567'
+    assert record['inputs_sha256'] == flow.sha(run / 'inputs.json')
+    assert record['directive'] == 'TimingClosure' and record['copy'] == str(copy)
+
 # The SmartConnect fabric's instance (hbm_sc_inst.tcl, sourced by create_hbm_sc.tcl after
 # make_wrapper): a wrapper's ports as Vivado declares them, mapped onto the CL's signals
 def _sc_wrapper(nport, *, mid=False, drop=None, wide=None, extra=None, sid=16):

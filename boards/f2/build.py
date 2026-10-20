@@ -325,6 +325,59 @@ def inherit_synthesis(out: Path, cl: Path, run: Path, info: dict, dcp: Path, exp
     (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
 
 
+INCR_DIRECTIVES = ('TimingClosure', 'RuntimeOptimized', 'Quick')
+
+
+def load_incremental_reference(run: Path, expected_sha: str, t: target.Target) -> tuple[dict, Path]:
+    """A finished implementation run's routed checkpoint as the reference of an incremental
+    implementation (read_checkpoint -incremental before place_design): met or VIOLATED (a
+    reference is never packaged), exactly one of them, pinned by digest, built for the same
+    platform and device as `t`."""
+    if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
+        raise RuntimeError('--incremental-sha256 must be a SHA256 digest')
+    info = json.loads((run / 'inputs.json').read_text())
+    build_id = info['build_id']
+    if not re.fullmatch(r'[0-9a-fA-F]{8}', build_id):
+        raise RuntimeError('Invalid reference build ID')
+    exit_code = run / 'exit_code'
+    if not exit_code.is_file() or not re.fullmatch(r'[0-9]+', exit_code.read_text().strip()):
+        raise RuntimeError('Incremental reference run has no completed exit status')
+    for key in ('platform', 'tech'):
+        if info.get(key) != t.to_dict().get(key):
+            raise RuntimeError(f'Incremental reference {key} differs from target {t.name}')
+    checkpoints = run / 'cl_opentpu/build/checkpoints'
+    routed = [p for p in (checkpoints / f'cl_opentpu.{build_id}.post_route.dcp',
+                          checkpoints / f'cl_opentpu.{build_id}.post_route.VIOLATED.dcp')
+              if p.is_file()]
+    if len(routed) != 1:
+        raise RuntimeError(f'Incremental reference run needs exactly one routed checkpoint, has {len(routed)}')
+    if sha(routed[0]) != expected_sha.lower():
+        raise RuntimeError('Incremental reference checkpoint SHA256 mismatch')
+    return info, routed[0]
+
+
+def attach_incremental(out: Path, run: Path, info: dict, dcp: Path, expected_sha: str,
+                       directive: str, force: bool) -> dict:
+    """Copy the pinned reference into the run (its provenance in inputs.json) and return the
+    environment build_level_1_cl.tcl reads (OTPU_INCR_*)."""
+    if directive not in INCR_DIRECTIVES:
+        raise RuntimeError(f'Unknown incremental directive {directive}')
+    dest = out / 'incremental_reference' / dcp.name
+    dest.parent.mkdir()
+    shutil.copy2(dcp, dest)
+    digest = expected_sha.lower()
+    if sha(dcp) != digest or sha(dest) != digest:
+        raise RuntimeError('Copied incremental reference SHA256 mismatch')
+    current = json.loads((out / 'inputs.json').read_text())
+    current['incremental_reference'] = {'run': str(run), 'build_id': info['build_id'],
+        'inputs_sha256': sha(run / 'inputs.json'), 'checkpoint': str(dcp),
+        'checkpoint_sha256': digest, 'timing_met': not dcp.name.endswith('.VIOLATED.dcp'),
+        'directive': directive, 'force_incr': force, 'copy': str(dest)}
+    (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
+    return {'OTPU_INCR_DCP': str(dest), 'OTPU_INCR_SHA256': digest,
+            'OTPU_INCR_DIRECTIVE': directive, 'OTPU_INCR_FORCE': '1' if force else '0'}
+
+
 def load_routed_run(run: Path, expected_sha: str) -> tuple[dict, Path]:
     """Repackage only a completed, qualified run with an explicitly pinned DCP."""
     if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
@@ -442,6 +495,17 @@ def main() -> None:
     p.add_argument('--place-directive', default='SSI_SpreadLogic_high',
         help="place_design's directive for build_all.tcl's first tclarg (SSI_SpreadLogic_high: the "
              "flow's since its first run; SSI_SpreadLogic_low keeps the slice together: docs/wide_port.md Placement)")
+    p.add_argument('--incremental-from', type=Path,
+        help='a finished ImplCL/BuildAll run whose routed checkpoint (met or VIOLATED) seeds an '
+             'incremental place and route (read_checkpoint -incremental before place_design; '
+             'docs/wide_port.md "Incremental implementation")')
+    p.add_argument('--incremental-sha256', help="the reference routed checkpoint's digest")
+    p.add_argument('--incremental-directive', choices=INCR_DIRECTIVES, default='TimingClosure',
+        help='read_checkpoint -incremental -directive (TimingClosure: target WNS 0, the failing '
+             "paths ripped up; RuntimeOptimized: keep the reference's WNS; Quick: not timing-driven)")
+    p.add_argument('--incremental-force', action='store_true',
+        help="read_checkpoint -force_incr: incremental even where Vivado's reuse / reference "
+             'quality criteria would fall back to the default algorithms')
     a = p.parse_args()
     t = target.load(a.target)
     if t.platform.get('board') != 'f2':
@@ -449,7 +513,8 @@ def main() -> None:
     hdk, out = a.hdk.resolve(), a.out.resolve()
     if a.package_only:
         if (not a.route_sha256 or a.package or a.prepare_only or a.from_synth or
-                a.synth_sha256 or a.build_id or a.flow != 'SynthCL'):
+                a.synth_sha256 or a.build_id or a.flow != 'SynthCL' or a.incremental_from or
+                a.incremental_sha256 or a.incremental_force):
             p.error('--package-only requires --route-sha256 and does not accept build options')
         sh = check_hdk(hdk, t, shell=True)
         check_vivado_version(command('vivado', '-version'), t.platform['vivado'])
@@ -467,8 +532,16 @@ def main() -> None:
         p.error('--from-synth and --synth-sha256 are only valid with ImplCL')
     if a.package and a.flow == 'SynthCL':
         p.error('--package requires ImplCL or BuildAll')
+    if bool(a.incremental_from) != bool(a.incremental_sha256):
+        p.error('--incremental-from and --incremental-sha256 go together')
+    if a.incremental_from and a.flow == 'SynthCL':
+        p.error('--incremental-from requires ImplCL or BuildAll')
+    if a.incremental_force and not a.incremental_from:
+        p.error('--incremental-force requires --incremental-from')
     sh = check_hdk(hdk, t, shell=a.flow != 'SynthCL')
     parent = load_synthesis(a.from_synth.resolve(), a.synth_sha256) if a.from_synth else None
+    reference = (load_incremental_reference(a.incremental_from.resolve(), a.incremental_sha256, t)
+                 if a.incremental_from else None)
     build_id = (parent[0]['build_id'] if parent else a.build_id or
                 command('git', '-C', str(ROOT), 'rev-parse', '--short=8', 'HEAD'))
     if parent and a.build_id and a.build_id != build_id:
@@ -478,6 +551,9 @@ def main() -> None:
     cl = prepare(out, sh, t, build_id, hdk / HBM_WRAPPER if is_hbm(t) else None)
     if parent:
         inherit_synthesis(out, cl, a.from_synth.resolve(), *parent)
+    incremental = (attach_incremental(out, a.incremental_from.resolve(), *reference,
+                                      a.incremental_sha256, a.incremental_directive,
+                                      a.incremental_force) if reference else {})
     env = dict(os.environ, CL_DIR=str(cl), CL='cl_opentpu', SHELL_MODE='small_shell',
         BUILD_FLOW=a.flow, BUILD_TAG=build_id, ENCRYPT='0',
         HDK_SHELL_DIR=str(sh), HDK_SHELL_DESIGN_DIR=str(sh / 'design'),
@@ -486,6 +562,8 @@ def main() -> None:
         HDK_BD_SRC_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd'),
         HDK_BD_GEN_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd'),
         VIVADO_TOOL_VERSION=t.platform['vivado'])
+    env.pop('OTPU_INCR_DCP', None)      # never inherited from the caller's shell
+    env.update(incremental)
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
@@ -493,7 +571,7 @@ def main() -> None:
               if is_hbm(t) and a.flow != 'ImplCL' else None)
     (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),
-        'environment': {k: env[k] for k in env if k.startswith('HDK_') or
+        'environment': {k: env[k] for k in env if k.startswith(('HDK_', 'OTPU_INCR_')) or
             k in ('CL_DIR', 'CL', 'SHELL_MODE', 'BUILD_FLOW', 'BUILD_TAG', 'ENCRYPT', 'VIVADO_TOOL_VERSION')}}, indent=2) + '\n')
     if a.prepare_only:
         print(f'Prepared {cl}; invocation: {out / "invocation.json"}')
@@ -513,6 +591,9 @@ def main() -> None:
     checkpoint = cl / f'build/checkpoints/cl_opentpu.{build_id}.{stage}.dcp'
     if result.returncode or not checkpoint.is_file():
         raise RuntimeError(f'{a.flow} failed; see {out / "console.log"}')
+    if incremental and not re.search(r'^OTPU_INCREMENTAL_REFERENCE ',
+                                     (out / 'console.log').read_text(), re.M):
+        raise RuntimeError('The incremental reference was never loaded')
     if a.flow != 'SynthCL' and not (checkpoint.parent /
             f'cl_opentpu.{build_id}.route_validation.passed').is_file():
         raise RuntimeError(f'Post-route validation failed; see {out / "console.log"}')
