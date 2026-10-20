@@ -522,7 +522,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     assert not (d / 'cl_opentpu.sv').exists() and (d / 'cl_opentpu_hbm.sv').is_file()
     assert (d / 'cl_mem_hbm_wrapper.sv').read_text() == wrapper.read_text()
     # the core MMCM from clk_main_a0 (250 MHz): the core clock and the pumped TMEM's at 2x
-    div, mult, d0, d1 = {200000: (1, 4.8, 6.0, 3), 150000: (1, 4.8, 8.0, 4)}[khz]
+    div, mult, d0, d1 = {200000: (5, 24.0, 6.0, 3), 150000: (5, 24.0, 8.0, 4)}[khz]
     assert 250000 * mult / div / d0 == khz and d0 == 2 * d1 and 800 <= 250 * mult / div <= 1600
     assert (d / 'opentpu_geometry.vh').read_text() == (
         f'localparam int S = {S};\nlocalparam int NCH = {nch};\n'
