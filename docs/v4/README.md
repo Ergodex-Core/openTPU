@@ -562,6 +562,27 @@ held setup +0.010 / hold +0.009 and the stage stops at the first passing round
 `2f3cc0411f7ceaeebfbbfb8b7a2ec667108460b93cb566021eb886cac40569e5`. The audit stage runs on
 it next.
 
+**Build 11 run2 audit reviewed (11:45 UTC): every gate passes and the profile is build 6's
+with three-slice additions.** Audit on `refine/post_route.dcp` (355,120,709 B): WNS +0.010 /
+TNS 0 / 0 failing of 1,749,767 endpoints, WHS +0.009, pulse width met; 0 nets with routing
+errors (821,885 fully routed); DRC 0 errors / 0 critical / 2192 warnings; CDC 11 criticals, all
+False Path, 0 rows outside an exception; bus skew 137 rows / 0 violated; 0 unconstrained
+internal endpoints; the same 35 no_clock pins as build 6 (the shell's PCIe `bufg_gt_sysclk`
+trees). Differences from build 6: (a) 5 more CDC criticals, all the shell's reset launch flop
+reaching the s3 top's two extra per-SLR synchronizers `u_rst_core_slr0` / `u_rst_core_slr2`
+(CDC-10, `arststages_ff_reg[0]/CLR`, 8 endpoints each) and the CDC-11 "fan-out from launch
+flop" rows that three synchronizers on one flop produce; the `u_rst_core` and `u_rst_hbm` rows
+are build 6's. (b) DRC FLBO-1 "Pblock overlap" x3: `pblock_CL_SLR0_MEM0/1` (99.19% inside
+`pblock_CL` / `pblock_CL_SLR0`) and `pblock_CL_SLR1_XBAR` (95.87% inside `pblock_CL_SLR1`)
+extend slightly past their parents; both constraints were honoured (no placement or DRC error).
+(c) 2192 vs 791 warnings in the same rule set (DPIP-2, DPOP-3/4, BUFC-1, AVAL-155/156) at
+three-slice scale. Judged to match the clean profile under the advance sign-off;
+`audit/review.json` written (tree 97af3c29). **Packaging not launched:** the session's
+auto-mode classifier denied the `package_f2.py` launch as a production deploy, so the
+package, the S3 upload, `create-fpga-image`, the slot-0 load and the three-slice run wait
+for the user (commands in the session notes; the laptop's AWS session also needs `aws login`).
+Build 12 run2 (162.5 MHz) was routing on the m7a at 11:47 with a +0.106 pre-route estimate.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
