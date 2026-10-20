@@ -57,7 +57,7 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 # proposal-2-four-lanes.md, otpu_mxu_lanes); MXU_PACK, packed PEs (0: one row a DSP; 1: MCOLS / 2
 # physical columns of DSP48E2s, two stationary rows a DSP sharing its weight, w * (x1 2^19 + x0),
 # exact for the quantizer's activations: timing only, docs/v4/proposal-3-eight-lanes-packed.md,
-# otpu_pe_pk; an FPGA build needs the xilinxus cells); with TMEM_IMPL 3 the one copy's knobs
+# otpu_pe_2r; an FPGA build needs the xilinxus cells); with TMEM_IMPL 3 the one copy's knobs
 # (otpu_slice TMEM_<K>, docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
 MXU_OPT_KEYS = ("MXU_E", "MXU_C", "MXU_PACK")
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",

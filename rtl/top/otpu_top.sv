@@ -26,7 +26,7 @@ module otpu_top
   parameter int MXU_CL     = 16,
   parameter int MXU_E      = 0,       // MXU epilogue lanes (0: MCOLS / 2; otpu_mxu E)
   parameter int MXU_C      = 1,       // MXU chunk lanes (otpu_mxu_lanes; the memory models' lane ports)
-  parameter bit MXU_PACK   = 1'b0,    // packed PEs (otpu_mxu PACK)
+  parameter bit MXU_PACK   = 1'b0,    // packed PEs (otpu_mxu SPACK)
   parameter int QUANT_XD   = 1024,    // quantizer row buffer chunks (0: two passes over TMEM; otpu_quant XD)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer

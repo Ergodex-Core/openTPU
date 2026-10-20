@@ -22,7 +22,7 @@ module tb_top;
   parameter int MXU_CL     = 16;
   parameter int MXU_E      = 0;       // MXU epilogue lanes (0: MCOLS / 2)
   parameter int MXU_C      = 1;       // MXU chunk lanes (otpu_mxu_lanes; docs/v4/proposal-2-four-lanes.md)
-  parameter bit MXU_PACK   = 1'b0;    // packed PEs (otpu_mxu PACK; docs/v4/proposal-3-eight-lanes-packed.md)
+  parameter bit MXU_PACK   = 1'b0;    // packed PEs (otpu_mxu SPACK; docs/v4/proposal-3-eight-lanes-packed.md)
   parameter int QUANT_XD   = 1024;    // quantizer row buffer chunks (0: two passes over TMEM)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1;
   parameter int ULANES     = LANES;

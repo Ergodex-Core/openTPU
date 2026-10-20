@@ -51,9 +51,9 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
   assign p = pf[23:0];
 endmodule
 
-// The packed position (otpu_mxu PACK) needs the DSP48E2's 27-bit pre-adder (x1 * 2^19 + x0): the
+// The packed position (otpu_mxu SPACK) needs the DSP48E2's 27-bit pre-adder (x1 * 2^19 + x0): the
 // DSP48E1's is 25 bits. A 7-series target builds the MXU unpacked (MXU_PACK 0).
-module otpu_pe_pk #(parameter bit FIRST = 1'b0) (
+module otpu_pe_2r #(parameter bit FIRST = 1'b0) (
   input  logic               clk,
   input  logic               en,
   input  logic [7:0]         x0,
@@ -65,7 +65,7 @@ module otpu_pe_pk #(parameter bit FIRST = 1'b0) (
   output logic [47:0]        pcout,
   output logic [47:0]        p
 );
-  initial $fatal(1, "otpu_pe_pk: packed PEs need DSP48E2s (rtl/tech/xilinxus); MXU_PACK 0 here");
+  initial $fatal(1, "otpu_pe_2r: packed PEs need DSP48E2s (rtl/tech/xilinxus); MXU_PACK 0 here");
   assign pcout = '0;
   assign p = '0;
 endmodule

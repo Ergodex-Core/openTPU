@@ -48,7 +48,7 @@ module otpu_board #(
   parameter int MXU_IMPL   = 2,
   parameter int MXU_CL     = 16,
   parameter int MXU_E      = 0,       // MXU epilogue lanes (0: MCOLS / 2; otpu_mxu E)
-  parameter bit MXU_PACK   = 1'b0,    // packed PEs, two rows a DSP48E2 (otpu_mxu PACK; xilinxus only)
+  parameter bit MXU_PACK   = 1'b0,    // packed PEs, two rows a DSP48E2 (otpu_mxu SPACK; xilinxus only)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,  // VPU lanes with exp2/recip/rsqrt
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer
   parameter int CORE_KHZ    = 100000,  // the core clock (CORE_KHZ register)

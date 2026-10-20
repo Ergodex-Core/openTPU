@@ -1,4 +1,4 @@
-// The packed PE (otpu_pe_pk, rtl/tech/<family>/otpu_tech_dsp.sv; otpu_mxu PACK) under random
+// The packed PE (otpu_pe_2r, rtl/tech/<family>/otpu_tech_dsp.sv; otpu_mxu SPACK) under random
 // stimulus: every cycle prints both variants' (FIRST 0 / 1) P and PCOUT. Built once with
 // rtl/tech/generic and once with rtl/tech/xilinxus on Vivado's DSP48E2 model (xsim:
 // sim/tech/run_xsim_pk.sh, tests/test_tech.py); the traces must be equal. The operands cover the
@@ -14,7 +14,7 @@ module tb_tech_pk;
   integer seed, cyc;
   logic [1:0][47:0] po, pco;
   for (genvar v = 0; v < 2; v++) begin : g_pe
-    otpu_pe_pk #(.FIRST(v[0])) u (.clk, .en, .x0, .x1, .wlo, .whi, .sel, .pcin, .pcout(pco[v]),
+    otpu_pe_2r #(.FIRST(v[0])) u (.clk, .en, .x0, .x1, .wlo, .whi, .sel, .pcin, .pcout(pco[v]),
                                   .p(po[v]));
   end
   initial begin

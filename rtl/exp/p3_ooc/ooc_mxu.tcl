@@ -1,11 +1,11 @@
 # v4 P3 (docs/v4/proposal-3-eight-lanes-packed.md section 7, milestone 0): out-of-context synthesis,
-# placement and routing of the production MXU (otpu_mxu_lanes: C lock-step lanes, PACK packed PEs)
+# placement and routing of the production MXU (otpu_mxu_lanes: C lock-step lanes, SPACK packed PEs)
 # on the F2's part, with the DSP48E2 cells (rtl/tech/xilinxus). The ports get input / output
 # delays (IODELAY ns of the period outside), so they are timed but not the point: the reg-to-reg
 # group is the lane's own timing. Vivado 2025.2 on the m8a:
 #   vivado -mode batch -nojournal -source rtl/exp/p3_ooc/ooc_mxu.tcl -tclargs <out> <part> \
 #     <period_ns> [GENERIC=VALUE ...]
-# e.g. xcvu47p-fsvh2892-2-e 5.0 C=1 PACK=1 E=1. Prints OTPU_* summary lines; reports go to <out>.
+# e.g. xcvu47p-fsvh2892-2-e 5.0 C=1 SPACK=1 E=1. Prints OTPU_* summary lines; reports go to <out>.
 set out    [file normalize [lindex $argv 0]]
 set part   [lindex $argv 1]
 set period [lindex $argv 2]

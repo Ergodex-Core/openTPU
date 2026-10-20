@@ -41,7 +41,7 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
 endmodule
 
 
-// A packed position of the systolic MXU (otpu_mxu PACK, docs/v4/proposal-3-eight-lanes-packed.md):
+// A packed position of the systolic MXU (otpu_mxu SPACK, docs/v4/proposal-3-eight-lanes-packed.md):
 // two stationary rows share one DSP. Their activations x0 (the low row) and x1 (the high row) are
 // registered (a DSP48E2's D and A registers) and summed as x1 * 2^19 + x0 in a 27-bit pre-adder;
 // the weight is the select's pick of wlo / whi, registered (the B register: the pick is in
@@ -52,7 +52,7 @@ endmodule
 // docs/isa.md "Quantization") and a chain has at most 16 positions: |sum x0 w| <= 16 * 127 * 128
 // < 2^18, so the low row's sum is P's low 19 bits sign-extended and the high row's
 // P[47:19] + P[18]; the pre-adder (27 bits, wrapping like the DSP's) does not overflow either.
-module otpu_pe_pk #(parameter bit FIRST = 1'b0) (
+module otpu_pe_2r #(parameter bit FIRST = 1'b0) (
   input  logic               clk,
   input  logic               en,
   input  logic [7:0]         x0,

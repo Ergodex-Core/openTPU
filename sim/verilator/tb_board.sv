@@ -27,7 +27,7 @@ module tb_board;
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1;
   parameter int MXU_IMPL   = 2;      // MXU dot product: 2 systolic (docs/mxu_systolic.md), the only one
   parameter int MXU_E      = 0;      // MXU epilogue lanes (0: MCOLS / 2; the board's: its target's)
-  parameter bit MXU_PACK   = 1'b0;   // packed PEs (otpu_mxu PACK)
+  parameter bit MXU_PACK   = 1'b0;   // packed PEs (otpu_mxu SPACK)
   parameter int ULANES     = LANES;
   parameter int WIN        = 16;
   parameter int LAT        = 20;

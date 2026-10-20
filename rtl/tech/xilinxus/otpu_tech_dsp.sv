@@ -56,14 +56,14 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
 endmodule
 
 
-// A packed position of the systolic MXU (otpu_mxu PACK, docs/v4/proposal-3-eight-lanes-packed.md;
+// A packed position of the systolic MXU (otpu_mxu SPACK, docs/v4/proposal-3-eight-lanes-packed.md;
 // rtl/exp/mx_mxu/otpu_mx_us.sv's otpu_pack_pe, docs/mx_mxu.md section 5): one DSP48E2, two
 // stationary rows. A = x1 * 2^19 (A[26:19]) and D = x0 into the 27-bit pre-adder (AREG / DREG 1,
 // AMULTSEL "AD"), B = the weight (BREG 1): the select's pick of wlo / whi in fabric (the
 // pre-adder holds the activations), M registered, P = PCIN + M (FIRST: P = M) registered at
 // every position, the chain's last too (otpu_mxu splits it: the low row's sum P[18:0]
 // sign-extended, the high row's P[47:19] + P[18]). The same cycles as rtl/tech/generic's model.
-module otpu_pe_pk #(parameter bit FIRST = 1'b0) (
+module otpu_pe_2r #(parameter bit FIRST = 1'b0) (
   input  logic               clk,
   input  logic               en,
   input  logic [7:0]         x0,

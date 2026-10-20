@@ -1537,7 +1537,7 @@ def test_chunk_lanes_on_the_board_uarch(have_verilator):
 
 # ------------------------------------------------------------------- packed PEs (MXU_PACK)
 # v4 candidate P3 (docs/v4/proposal-3-eight-lanes-packed.md): packed PEs, two stationary rows a
-# DSP sharing its weight (otpu_pe_pk: w (x1 2^19 + x0), split at the chain end: exact for the
+# DSP sharing its weight (otpu_pe_2r: w (x1 2^19 + x0), split at the chain end: exact for the
 # quantizer's activations), MCOLS / 2 physical columns a lane; PAIR at an odd M moves the high
 # columns up a slot (a DSP's two rows share one weight block). A uarch key like MXU_C: bit for
 # bit the ISA simulator's, alone and on P3's 8 chunk lanes (1 KiB a cycle).
@@ -1662,4 +1662,7 @@ def test_chunk_lanes_stream_c_chunks_a_cycle(have_verilator):
         cyc[C] = st["cycles"]
     assert cyc[1] > N * KB                                # the stream is the run
     assert cyc[4] < cyc[1] * 0.45, cyc                    # 4 chunks a cycle (a fixed start / drain)
-    assert cyc[8] < cyc[1] * 0.25, cyc                    # 8 packed lanes: 8 chunks a cycle
+    # the stream part: N x KB / C chunk-cycles (the LD, QACT, start and drain, ~630 cycles,
+    # do not shrink with C): 8 packed lanes save 7/8 of it
+    for C in (4, 8):
+        assert cyc[1] - cyc[C] >= 0.95 * N * KB * (1 - 1 / C), cyc

@@ -70,8 +70,8 @@ module otpu_mxu
   parameter bit RMAX_WR = 1'b1,
   parameter bit ALPHA_EXT = 1'b0,
   // packed PEs (docs/v4/proposal-3-eight-lanes-packed.md; MXU_PACK): MCOLS / 2 physical columns,
-  // two stationary rows a DSP (otpu_pe_pk: w * (x1 * 2^19 + x0)), the column ends unchanged
-  parameter bit PACK  = 1'b0
+  // two stationary rows a DSP (otpu_pe_2r: w * (x1 * 2^19 + x0)), the column ends unchanged
+  parameter bit SPACK = 1'b0
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -148,12 +148,12 @@ module otpu_mxu
   // chains of CLS products, CPG of them per group of D/8 elements (1, or 2 above D = 128)
   localparam int CLS = (D / 8 < CL) ? D / 8 : CL;
   localparam int CPG = D / 8 / CLS;
-  // physical columns of PEs: MCOLS, or packed (PACK) MCOLS / 2, slots 2p and 2p + 1 (the low and
+  // physical columns of PEs: MCOLS, or packed (SPACK) MCOLS / 2, slots 2p and 2p + 1 (the low and
   // high rows of a DSP) in column p; a packed column is PKL cycles later than an unpacked one of
   // its index (the lane's activation register, with the DSP's weight register; the chain end's
   // P register, before the split)
-  localparam int NPC = PACK ? MCOLS / 2 : MCOLS;
-  localparam int PKL = PACK ? 2 : 0;
+  localparam int NPC = SPACK ? MCOLS / 2 : MCOLS;
+  localparam int PKL = SPACK ? 2 : 0;
   // S0 to the columns' row sums, deskewed (the column end's accumulator is valid CLS + 6 + j
   // edges after S0, column j deskewed by MCOLS - 1 - j; packed: CLS + 6 + PKL + p, by NPC - 1 - p.
   // At MCOLS 4 both are 25)
@@ -173,8 +173,8 @@ module otpu_mxu
   initial if (EL > LANES) $fatal(1, "otpu_mxu: E %0d > LANES", EL);
   // packed: two rows a DSP (an even MCOLS), the low row's sum in P's low 19 bits (chains of at
   // most 16: |sum| <= 16 * 127 * 128 < 2^18)
-  initial if (PACK && (MCOLS % 2 != 0 || CLS > 16))
-    $fatal(1, "otpu_mxu: PACK needs an even MCOLS (%0d) and chains of at most 16 (%0d)", MCOLS, CLS);
+  initial if (SPACK && (MCOLS % 2 != 0 || CLS > 16))
+    $fatal(1, "otpu_mxu: SPACK needs an even MCOLS (%0d) and chains of at most 16 (%0d)", MCOLS, CLS);
   initial if (ROWS < MCOLS || ROWS > 255) $fatal(1, "otpu_mxu: MCOLS <= ROWS < 256");
 
   // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL. With C
@@ -276,7 +276,7 @@ module otpu_mxu
     logic [MW-1:0]    dnl;             // the last group's first drain step: its lanes (min(run,
     logic             dfl;             // Ml)) and whether it drains the group (Ml <= run)
     logic [MCOLS-1:0] cm;              // the columns its advances read (act_ren)
-    // packed (PACK): the array's slot s takes column s - sh[s] (PAIR at an odd M moves the high
+    // packed (SPACK): the array's slot s takes column s - sh[s] (PAIR at an odd M moves the high
     // columns M .. 2M-1 up a slot: a DSP's two slots share a weight, and columns M - 1 (the low
     // block's) and M (the high block's) would share one); hs[s] is that column's high-block
     // select (unpacked: hi, sh 0)
@@ -322,7 +322,7 @@ module otpu_mxu
     for (int j = 0; j < MCOLS; j++)
       cmd_e.cm[j] = (g > 1) || 32'(j) < (cmd_pair ? 32'd2 : 32'd1) * 32'(cmd.w6[23:16]);
     for (int s = 0; s < MCOLS; s++) begin
-      cmd_e.sh[s] = PACK && cmd_pair && cmd.w6[16] && 32'(s) >= 32'(cmd.w6[23:16]) + 32'd1 &&
+      cmd_e.sh[s] = SPACK && cmd_pair && cmd.w6[16] && 32'(s) >= 32'(cmd.w6[23:16]) + 32'd1 &&
                     32'(s) <= 32'd2 * 32'(cmd.w6[23:16]);
       cmd_e.hs[s] = cmd_pair && (32'(s) - 32'(cmd_e.sh[s]) >= 32'(cmd.w6[23:16]));
     end
@@ -746,8 +746,8 @@ module otpu_mxu
     vhi1 <= m0.v && m0.o;
     // per column (packed: per slot, its column's record and select)
     for (int j = 0; j < MCOLS; j++) begin
-      da1[j] <= act_scale[(j - ((PACK && sh0[j]) ? 1 : 0))*64 + 32 +: 32];
-      hi1[j] <= PACK ? hs0[j] : hi0[j];
+      da1[j] <= act_scale[(j - ((SPACK && sh0[j]) ? 1 : 0))*64 + 32 +: 32];
+      hi1[j] <= SPACK ? hs0[j] : hi0[j];
     end
   end
   logic [MCOLS-1:0][7:0][16:0] bm2;
@@ -810,7 +810,7 @@ module otpu_mxu
   for (genvar i = 0; i < D; i++) begin : g_wsk
     otpu_skew #(.W(16), .N(i % CLS)) u_w (.clk, .en(1'b1), .d(wd[i]), .q(wc[0][i]));
   end
-  localparam int NWC = PACK ? NPC : MCOLS;            // the hops (packed: every column's B
+  localparam int NWC = SPACK ? NPC : MCOLS;            // the hops (packed: every column's B
   always_ff @(posedge clk)                            // register takes its wc)
     for (int j = 1; j < NWC; j++) wc[j] <= wc[j-1];
   logic [7:0] as_k [MCOLS][D];
@@ -822,7 +822,7 @@ module otpu_mxu
   initial hi_v = 1'b0;
   always @(posedge clk) hi_v <= 1'b1;
 `endif
-  for (genvar j = 0; j < (PACK ? 0 : MCOLS); j++) begin : g_ask
+  for (genvar j = 0; j < (SPACK ? 0 : MCOLS); j++) begin : g_ask
     for (genvar i = 0; i < D; i++) begin : g_p
       otpu_skew #(.W(8), .N(i % CLS + j)) u_a (.clk, .en(1'b1), .d(a0[(j*D + i)*8 +: 8]),
                                              .q(as_k[j][i]));
@@ -846,8 +846,8 @@ module otpu_mxu
     end
   end
 
-  // ---- the packed array (PACK; docs/v4/proposal-3-eight-lanes-packed.md): MCOLS / 2 physical
-  // columns of otpu_pe_pk, column p's DSPs taking slots 2p (x0, the low row) and 2p + 1 (x1, the
+  // ---- the packed array (SPACK; docs/v4/proposal-3-eight-lanes-packed.md): MCOLS / 2 physical
+  // columns of otpu_pe_2r, column p's DSPs taking slots 2p (x0, the low row) and 2p + 1 (x1, the
   // high row) against one weight. The ACT RAM's block is registered in the lane first (a1: the
   // lanes' broadcast register, S1), where the slots pick their columns (PAIR at an odd M: sh);
   // slot s's byte i is then delayed k + p into the DSP's A / D registers, and the weights, hopping
@@ -855,14 +855,14 @@ module otpu_mxu
   // agrees whenever its result is an output's) into its B register. So a packed column
   // multiplies a cycle after an unpacked column of its index and registers its chain's last sum
   // (P) too, which the column splits in fabric: the low slot's group sum P[18:0] sign-extended,
-  // the high slot's P[47:19] + P[18] (exact: otpu_pe_pk). Its chain ends reach the column ends
+  // the high slot's P[47:19] + P[18] (exact: otpu_pe_2r). Its chain ends reach the column ends
   // PKL = 2 cycles after an unpacked column's.
   logic [MCOLS*D*8-1:0] a1, as1;                      // S1: the block, the slots' picks
   logic [MCOLS-1:0]     sh1;
   logic [47:0]          ppk [NPC][D];                 // the running sums (P) and cascades
   logic [47:0]          ppc [NPC][D];
   logic [23:0]          cesp [MCOLS][D / CLS];        // each slot's chain sums, split
-  if (PACK) begin : g_pka
+  if (SPACK) begin : g_pka
     always_ff @(posedge clk) begin
       a1 <= a0;
       sh1 <= sh0;
@@ -875,7 +875,7 @@ module otpu_mxu
     assign as1 = '0;
     assign sh1 = '0;
   end
-  for (genvar p = 0; p < (PACK ? NPC : 0); p++) begin : g_pkc
+  for (genvar p = 0; p < (SPACK ? NPC : 0); p++) begin : g_pkc
     // the column's select, a copy a chain (each drives 16 positions' weight picks); S0's hs a
     // cycle on, in time for the first weight of the pop that loaded it (column 0, k 0: S1)
     (* keep *) logic [D/CLS-1:0] psr;
@@ -886,7 +886,7 @@ module otpu_mxu
                                               .q(x0));
       otpu_skew #(.W(8), .N(i % CLS + p)) u_x1 (.clk, .en(1'b1), .d(as1[((2*p+1)*D + i)*8 +: 8]),
                                               .q(x1));
-      otpu_pe_pk #(.FIRST(i % CLS == 0)) u_pe (
+      otpu_pe_2r #(.FIRST(i % CLS == 0)) u_pe (
         .clk, .en(1'b1), .x0, .x1, .wlo(wc[p][i][7:0]), .whi(wc[p][i][15:8]), .sel(psr[i / CLS]),
         .pcin((i % CLS == 0) ? 48'd0 : ppc[p][(i % CLS == 0) ? i : i - 1]), .pcout(ppc[p][i]),
         .p(ppk[p][i]));
@@ -905,15 +905,15 @@ module otpu_mxu
   // j's, in physical column j / 2: PKL cycles more, deskewed by NPC - 1 - j / 2
   logic [MCOLS-1:0][47:0] acc_al;
   for (genvar j = 0; j < MCOLS; j++) begin : g_col_end
-    localparam int CJ = PACK ? j / 2 : j;             // its physical column
+    localparam int CJ = SPACK ? j / 2 : j;             // its physical column
     logic [7:0][23:0] ca, cd;
     logic [7:0][16:0] bmd;
     logic             fst;
     logic [47:0]      acc;
     always_comb
       for (int g = 0; g < 8; g++) begin
-        ca[g] = PACK ? cesp[j][g * CPG] : preg[j][g * CPG * CLS + CLS - 1];
-        cd[g] = (CPG != 2) ? 24'd0 : PACK ? cesp[j][g * CPG + 1] : preg[j][(g * CPG + 1) * CLS + CLS - 1];
+        ca[g] = SPACK ? cesp[j][g * CPG] : preg[j][g * CPG * CLS + CLS - 1];
+        cd[g] = (CPG != 2) ? 24'd0 : SPACK ? cesp[j][g * CPG + 1] : preg[j][(g * CPG + 1) * CLS + CLS - 1];
       end
     otpu_skew #(.W(8 * 17), .N(CLS - 1 + CJ + PKL)) u_bm (.clk, .en(1'b1), .d(bm2[j]), .q(bmd));
     otpu_skew #(.W(1), .N(CLS + 4 + CJ + PKL)) u_f (.clk, .en(1'b1), .d(m0.v && m0.first), .q(fst));
@@ -942,7 +942,7 @@ module otpu_mxu
       pb = '0;
       for (int m = 1; m <= MCOLS / 2; m++) begin
         int q;
-        q = j + m + ((PACK && m % 2 == 1) ? 1 : 0);
+        q = j + m + ((SPACK && m % 2 == 1) ? 1 : 0);
         if (j < MCOLS / 2 && q < MCOLS && tl_M == 8'(m)) pb = acc_al[q];
       end
       rowi[j] <= (tl_pr && j < MCOLS / 2) ? acc_al[j] + pb : acc_al[j];
@@ -1794,7 +1794,7 @@ module otpu_mxu_lanes
   parameter int E     = 0,
   parameter int SID   = 0,
   parameter int C     = 1,       // chunk lanes (MXU_C; docs/v4/proposal-2-four-lanes.md)
-  parameter bit PACK  = 1'b0     // packed PEs (MXU_PACK; docs/v4/proposal-3-eight-lanes-packed.md)
+  parameter bit SPACK = 1'b0      // packed PEs (MXU_PACK; docs/v4/proposal-3-eight-lanes-packed.md)
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -1901,7 +1901,7 @@ module otpu_mxu_lanes
   for (genvar l = 0; l < C; l++) begin : g_lane
     otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ROWS), .DEPTH(DEPTH), .LANES(LANES), .IMPL(IMPL),
                .CL(CL), .E(EPL), .SID(SID), .C(C), .RSTEP(C), .RMAX_WR(l == 0),
-               .ALPHA_EXT(l != 0), .PACK(PACK)) u_m (
+               .ALPHA_EXT(l != 0), .SPACK(SPACK)) u_m (
       .clk, .rst, .start, .go, .cmd(lcmd[l]), .rdy(l_rdy[l]), .done(l_done[l]),
       .computing(l_pop[l]), .pf_level(l_lvl[l]), .pf_starve(l_pfs[l]), .pf_block(l_pfb[l]),
       .pf_u(l_pfu[l]), .pf_uv(l_pfuv[l]),
@@ -1993,13 +1993,13 @@ module otpu_mxu_lanes
     for (int l = 0; l < C; l++)
       if (l_pop[l] && !pop_ok[l]) $fatal(1, "otpu_mxu_lanes: lane %0d pops without pop_ok", l);
   end
-  // packed PEs are exact for activations in [-127, 127] (otpu_pe_pk): the quantizer's range
+  // packed PEs are exact for activations in [-127, 127] (otpu_pe_2r): the quantizer's range
   // (QACT saturates), checked on every block an advance consumes (the cycle after its pop: the
   // ACT RAM's read register) in the columns it reads
   logic pk_v;
   logic [MCOLS-1:0] pk_ren;
   always @(posedge clk) begin
-    pk_v <= PACK && !rst && l_pop[0];
+    pk_v <= SPACK && !rst && l_pop[0];
     pk_ren <= l_ren[0];
     if (pk_v)
       for (int j = 0; j < MCOLS; j++)

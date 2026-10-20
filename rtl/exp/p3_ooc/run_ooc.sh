@@ -1,7 +1,7 @@
 #!/bin/bash
 # v4 P3: the OOC runs of the MXU on the F2's part, one at a time (rtl/exp/p3_ooc/ooc_mxu.tcl).
 #   rtl/exp/p3_ooc/run_ooc.sh <outdir> <name>:<period>:<GEN=V,GEN=V...> ...
-# e.g. lane-pk:5.0:C=1,PACK=1,E=1 lane-up:5.0:C=1,PACK=0,E=1. A step whose progress line says
+# e.g. lane-pk:5.0:C=1,SPACK=1,E=1 lane-up:5.0:C=1,SPACK=0,E=1. A step whose progress line says
 # DONE <name> rc=0 is skipped.
 ROOT=$(cd "$(dirname "$0")/../../.." && pwd)
 O=${1:?outdir}; shift

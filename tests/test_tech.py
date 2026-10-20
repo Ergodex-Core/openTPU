@@ -57,7 +57,7 @@ def test_xilinx7_cells_equal_the_generic_models(tmp_path):
 @pytest.mark.skipif(shutil.which("xvlog") is None and not Path("/opt/Xilinx/2025.2/Vivado").exists(),
                     reason="no Vivado simulator")
 def test_xilinxus_packed_pe_equals_the_generic_model():
-    """otpu_pe_pk (otpu_mxu PACK) on the DSP48E2 (Vivado's unisim model, xsim) equals the generic
+    """otpu_pe_2r (otpu_mxu SPACK) on the DSP48E2 (Vivado's unisim model, xsim) equals the generic
     model cycle for cycle under random operands (the whole byte range) and enables
     (sim/tech/run_xsim_pk.sh: sim/tech/tb_tech_pk.sv)."""
     seeds = ["3", "7", "11"]

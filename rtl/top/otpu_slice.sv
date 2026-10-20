@@ -50,7 +50,7 @@ module otpu_slice
   parameter int MXU_CL     = 16,      // cascade chain length
   parameter int MXU_E      = 0,       // MXU epilogue lanes (0: MCOLS / 2; otpu_mxu E)
   parameter int MXU_C      = 1,       // MXU chunk lanes (otpu_mxu_lanes C; docs/v4/proposal-2-four-lanes.md)
-  parameter bit MXU_PACK   = 1'b0,    // packed PEs, two rows a DSP48E2 (otpu_mxu PACK; docs/v4/proposal-3-eight-lanes-packed.md)
+  parameter bit MXU_PACK   = 1'b0,    // packed PEs, two rows a DSP48E2 (otpu_mxu SPACK; docs/v4/proposal-3-eight-lanes-packed.md)
   parameter int QUANT_XD   = 1024,    // quantizer row buffer chunks (0: two passes over TMEM; otpu_quant XD)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,  // VPU lanes with the composite functions
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer (<= LANES)
@@ -519,7 +519,7 @@ module otpu_slice
   // the MXU: MXU_C lock-step chunk lanes (otpu_mxu_lanes; 1: today's otpu_mxu), lane 0 on
   // ports A and B, the others on the lane ports
   otpu_mxu_lanes #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES),
-                   .IMPL(MXU_IMPL), .CL(MXU_CL), .E(MXU_E), .SID(SID), .C(MXU_C), .PACK(MXU_PACK)) u_mxu (
+                   .IMPL(MXU_IMPL), .CL(MXU_CL), .E(MXU_E), .SID(SID), .C(MXU_C), .SPACK(MXU_PACK)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
