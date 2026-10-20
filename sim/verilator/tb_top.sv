@@ -52,6 +52,7 @@ module tb_top;
   parameter bit NAXI_WAIT  = 1'b1;
   parameter int NAXI_OT    = 32;
   parameter bit NAXI_PORDER = 1'b0;
+  parameter bit NAXI_ZB    = 1'b0;
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -70,7 +71,7 @@ module tb_top;
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC),
              .COLL_GATHER(COLL_GATHER || S > 1), .LMEM(LMEM), .SWFILL(SWFILL), .NAXI(NAXI), .NAXI_XR(NAXI_XR),
              .NAXI_BURST(NAXI_BURST), .NAXI_IDLE(NAXI_IDLE), .NAXI_WAIT(NAXI_WAIT), .NAXI_OT(NAXI_OT),
-             .NAXI_PORDER(NAXI_PORDER)) dut (
+             .NAXI_PORDER(NAXI_PORDER), .NAXI_ZB(NAXI_ZB)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 

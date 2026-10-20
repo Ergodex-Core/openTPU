@@ -44,7 +44,13 @@ module otpu_native_axi #(
   // stream from others; the native contract (a read after a write to its beat sees it, one before
   // it does not) holds per beat. 0: every read waits for every write and the reverse (Alex's)
   parameter bit PORDER = 1'b0,
-  parameter int NBK = 32
+  parameter int NBK = 32,
+  // ZB (P2, docs/v4/p2-f2.md "Zero-bubble bursts"): a read that cannot join the open burst (not
+  // adjacent) closes it into the AR register and opens the next in the same cycle, when the AR
+  // register is free; 0 (Alex's): the close takes a cycle without a take. A stream of short runs
+  // (a lane's 9-beat rows on a channel) then takes a command every cycle instead of one in
+  // (run + 1)
+  parameter bit ZB = 1'b0
 )(
   input logic clk, rst,
   input logic n_cvalid, output logic n_cready,
@@ -123,8 +129,16 @@ module otpu_native_axi #(
   wire rd_clear = !PORDER ? (writes == 0) : !wbz[head_k];
   wire wr_clear = !PORDER ? (reads == 0) : !rbz[head_k];
   wire adjacent = cq[cr][24:0] == next_addr && cq[cr][24:6] == pending_addr[24:6];
-  wire take_read = !pending_valid && cn != 0 && !head_we && (rd_clear || !ORDER) &&
-                   reads < MAX_OUT && (pending_count == 0 || adjacent);
+  wire can_take = !pending_valid && cn != 0 && !head_we && (rd_clear || !ORDER) && reads < MAX_OUT;
+  wire join = can_take && (pending_count == 0 || adjacent);
+  wire ar_free;
+  // ZB: the head opens the next burst while the open one goes to the free AR register (never a
+  // head that would close at once: one beat bursts, a page's last beat, the last credit, a dry
+  // queue without READ_WAIT: those keep the close-then-take sequence)
+  wire sw_new_full = READ_BURST == 1 || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
+                     (!READ_WAIT && cn == CW'(1));
+  wire sw = ZB && can_take && pending_count != 0 && !adjacent && ar_free && !sw_new_full;
+  wire take_read = join || sw;
   wire [4:0] cnt_t = pending_count + 5'd1;
   wire full_t = cnt_t == 5'(READ_BURST) || cq[cr][5:0] == 6'd63 || reads == OW'(MAX_OUT-1) ||
                 (!READ_WAIT && cn == CW'(1));
@@ -136,10 +150,10 @@ module otpu_native_axi #(
   // timer also flushes isolated final reads.
   wire flush = pending_count != 0 && !pending_valid && !take_read &&
                (cn != 0 || idle_count == IW'(READ_IDLE-1) || reads == OW'(MAX_OUT));
-  wire close = (take_read && full_t) || flush;
+  wire close = (join && full_t) || flush;
   wire ar_fire = m_arvalid && m_arready;
-  wire ar_free = !ar_v || ar_fire;
-  wire load_ar = (close || pending_valid) && ar_free;
+  assign ar_free = !ar_v || ar_fire;
+  wire load_ar = (close || pending_valid || sw) && ar_free;
   wire write_go = cn != 0 && head_we && wn != 0 && (wr_clear || !ORDER) && writes < MAX_OUT;
   wire aw_fire = m_awvalid && m_awready;
   wire w_fire = m_wvalid && m_wready;
@@ -193,8 +207,10 @@ module otpu_native_axi #(
       if (load_ar) begin
         ar_v <= 1;
         ar_addr <= pending_count == 0 ? cq[cr][24:0] : pending_addr;
-        ar_cnt <= take_read ? cnt_t : pending_count;
-        pending_count <= 0; pending_valid <= 0; idle_count <= 0;
+        ar_cnt <= join ? cnt_t : pending_count;
+        // (sw: the open burst left for the AR register; the head opens the next)
+        pending_count <= sw ? 5'd1 : 5'd0; pending_valid <= 0; idle_count <= 0;
+        if (sw) pending_addr <= cq[cr][24:0];
       end else if (ar_fire) ar_v <= 0;
       if (push_length) begin lengths[lp] <= ar_cnt; lp <= lp+1'b1; end
       if (pop_length) lr <= lr+1'b1;
@@ -276,10 +292,10 @@ module otpu_native_axi #(
     // the buckets' sums are the totals (every read beat and write in exactly one bucket)
     always_ff @(posedge clk)
       if (!rst) begin
-        automatic longint sr = 0, sw = 0;
-        for (int k = 0; k < NBK; k++) begin sr += rb[k]; sw += wb[k]; end
-        if (sr != reads || sw != writes)
-          $fatal(1, "otpu_native_axi: page buckets %0d reads / %0d writes, totals %0d / %0d", sr, sw, reads, writes);
+        automatic longint sr = 0, sww = 0;
+        for (int k = 0; k < NBK; k++) begin sr += rb[k]; sww += wb[k]; end
+        if (sr != reads || sww != writes)
+          $fatal(1, "otpu_native_axi: page buckets %0d reads / %0d writes, totals %0d / %0d", sr, sww, reads, writes);
       end
 `endif
   end else begin : g_nopord
