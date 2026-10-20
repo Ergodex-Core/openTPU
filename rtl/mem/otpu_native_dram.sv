@@ -322,7 +322,13 @@ module otpu_native_dram #(
   assign a_wdata = a_wdata_x; assign a_be = a_be_x;
   assign a_rdy = qa_room && (ao_n < OD);
   assign a_rdy_x = a_rdy;
-  assign sw_rdy = qw_room;
+  // sw_rdy from a flip-flop: qw_room computed a cycle early from the queues' next counts (qw_rq,
+  // in the counts' process), so the slice's arbiters and the quantizer's grant (its pipeline's
+  // enable, ~8K loads) start from a register instead of the four channels' count compares (the P1
+  // F2 build's placement: qw_n -> sw_rdy -> the quantizer's enable at -0.34 ns). Equal to qw_room
+  // every cycle (checked in simulation): cycle-exact
+  logic qw_rq;
+  assign sw_rdy = qw_rq;
   wire sw_take = sw_req && sw_rdy;
   wire [CHW-1:0] sw_ch = chan_of(sw_addr);
   wire [24:0] sw_m = cbeat_of(sw_addr);
@@ -646,6 +652,7 @@ module otpu_native_dram #(
         iss_w[c] <= n_wdone[c];
       end
       bt_n <= '0; bt_h <= '0; ao_n <= '0; ao_h <= '0;
+      qw_rq <= 1'b1;                    // (every count 0)
       al_v <= 1'b0;
       pv <= '0; pfl[0] <= '0; pfl[1] <= '0;
       wq_n <= '0; wacc_q <= '0;
@@ -665,6 +672,9 @@ module otpu_native_dram #(
       wacc_q <= {qw_push, a_take && a_we,
                  b_take && b_we && b_wmask[31:16] != 0,
                  b_take && b_we && b_wmask[15:0]  != 0};
+      begin : g_qwroom
+      logic room_nx;                    // every channel's SW queue below WQD next cycle (qw_rq)
+      room_nx = 1'b1;
       for (int c = 0; c < NCH; c++) begin
         logic [QW:0] na;
         logic [RW:0] rbn, rbr;
@@ -731,10 +741,13 @@ module otpu_native_dram #(
           if (h_ik[c][k] || h_dk[c][k]) wnz[c][k] <= h_iv[c][k] || whb[c][wh_f[c]] != (WW + 1)'(1);
         qb_n[c] <= (QW + 1)'(updn(16'(qb_n[c]), qb_push[c], popb));
         qw_n[c] <= (WW + 1)'(updn(16'(qw_n[c]), qw_push[c], popw));
+        if ((WW + 1)'(updn(16'(qw_n[c]), qw_push[c], popw)) >= (WW + 1)'(WQD)) room_nx = 1'b0;
         qw_rn[c] <= (WW + 1)'(updn(16'(qw_rn[c]), qw_push[c], h_inc[c]));
         qa_n[c] <= na; tg_n[c] <= ntg;
         rb_n[c] <= rbn; rb_res[c] <= rbr; ra_n[c] <= ran; ra_res[c] <= rar;
       end
+      qw_rq <= room_nx;
+      end : g_qwroom
       // ---- order FIFOs
       begin
         logic [OW:0] aon;
@@ -838,6 +851,11 @@ module otpu_native_dram #(
   // with anything, as after a reset in the middle of a run
   logic [WW:0] whb_ref [NCH][NH];
   initial for (int c = 0; c < NCH; c++) for (int k = 0; k < NH; k++) whb[c][k] = (WW + 1)'($urandom);
+  // sw_rdy's register (qw_rq) is the queues' room every cycle
+  always @(posedge clk)
+    if (!rst && qw_rq != qw_room)
+      $fatal(1, "otpu_native_dram: the registered SW room %b differs from the queues' %b", qw_rq,
+             qw_room);
   always_ff @(posedge clk)
     if (rst) begin
       for (int c = 0; c < NCH; c++) for (int k = 0; k < NH; k++) whb_ref[c][k] <= '0;
