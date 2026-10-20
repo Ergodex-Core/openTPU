@@ -277,6 +277,10 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
+    if p.get("MXU_PACK") and cfg.MCOLS % 2:
+        # packed PEs pair the stationary rows (otpu_mxu PACK): an odd MCOLS builds unpacked (a
+        # suite run under OTPU_MXU_PACK=1 keeps its odd-MCOLS configurations)
+        p["MXU_PACK"] = 0
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
