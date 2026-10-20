@@ -200,6 +200,30 @@ def test_three_slices_match_hf_and_one_slice(tiny_h384):
     assert eng.backend.machine.slices[2].dram[base:base + 256 * rb].any() is np.False_
 
 
+@pytest.mark.parametrize("sampled", [False, True])
+def test_three_slices_generate_on_the_card(tiny_h384, sampled):
+    """The generate loop at S = 3 with the uneven head (2 / 3 / 3 blocks, so the slices' head
+    chunks differ in size): a GATHER names one destination in every slice (the RTL writes all
+    of them at slice 0's; the ISA simulator stops when they disagree), so the samplers'
+    gather tiles come before the step's work and their tables take the largest slice's size.
+    Before that, the F2 three-slice image decoded wrong text from the second step. The tokens
+    are the one-slice loop's, greedy and sampled."""
+    from opentpu.llm import generate as GEN
+    m, W, spec = tiny_h384
+    toks = [int(t) for t in np.random.default_rng(5).integers(0, 1000, 20)]
+    samp = GEN.Sampling(0.8, 5, 0.9, 1.1) if sampled else None
+    runs = []
+    for S in (1, 3):
+        eng = Engine(spec, W, cap=1024, cfg=_cfg(S), resident=True)
+        assert eng.can_generate
+        t0 = int(np.argmax(eng.prefill(toks)))
+        kw = dict(sampling=samp, context=toks + [t0], rng=np.random.default_rng(3)) \
+            if sampled else {}
+        runs.append((t0, eng.generate_card(t0, 12, stop_ids=[], **kw)))
+    assert eng.image.v_ranges == [(0, 256), (256, 384), (640, 360)]
+    assert runs[1] == runs[0] and len(set(runs[1][1])) > 3
+
+
 def test_slices_the_model_does_not_split_over():
     """Spec.check: S in (1, 2, 3, 4) and the hidden / MLP widths divisible by S (the heads,
     the K / V rows and the vocabulary split unevenly: split_rows, split_ranges)."""
