@@ -32,12 +32,28 @@ on the RTL (2,394,257 cycles a token) at 0.865 beats a cycle a channel. v5 uses 
   group; the `cont` bit computed at the core clock), 64 bursts outstanding, direction barriers,
   the read data through a 256-beat BRAM asynchronous FIFO to the core clock; the adapter's reads
   in flight raised to 128 a channel (`NRD`). The host keeps AWS's cl_axi_sc_1x1 chain: on its own
-  port at S = 3, through a registered 2 x 1 AXI3 mux in front of port 31 at S = 4. Per slice the
-  channels' write beats share one 580-bit bus across the SLRs (the SLL budget, section
-  "Utilization").
+  port at S = 3, through a registered 2 x 1 AXI3 mux in front of port 31 at S = 4
+  (otpu_hbm_mux2: the channel first, the host after 8 denied cycles; W in AW order through a
+  4-entry order FIFO; B / R routed by ID bit 5 into skid buffers). Per slice the channels'
+  write beats share one 580-bit bus across the SLRs (the SLL budget, section "Utilization");
+  n_wdone crosses as a one-bit pulse and is counted on the slice side. The hclk logic depth as
+  written: the burst's extend / start one LUT level, its close two, the AR load three, the
+  command FIFO's pop into its fetch four (the deepest: a registered pop stage would cut it),
+  every counter flag from its next value into a register, every AXI output a flip-flop. One
+  bug the two-clock testbench caught: an extend coinciding with the registered idle timeout
+  dropped a beat (the burst closed with its old length); the extend now excludes the timeout.
+  `otpu_f2_hbmeng_sys` lints at S = 1 / 3 / 4 (the generic DSP; the DSP48E2 primitive is not on
+  this Mac).
 - **The receipt's memory model** (sim/verilator/otpu_hbmeng_mem.sv, `OTPU_HBMENG=1`): the
   engine's behaviour at the core clock behind the three-stage SLR chains, the HBM at 280 ns
   (`--lat 56` at 200 MHz) with 64 bursts outstanding a channel and the port's rate.
+- **Verilator on this Mac**: `OTPU_VL_THREADS=4` (`--threads 4`, the m7a box's 1.8x) crashes the
+  four-slice model at its first evaluation after the images load (three runs, the same
+  signature: ~50 s of CPU, then an exiting process stuck in the kernel; the worker threads get
+  macOS's 512 KB default stacks, the brief's RLIMIT_STACK pitfall in thread form), while the
+  same model single-threaded runs through. The v5 receipts here are single-threaded (the
+  1-layer + head S = 4 run: 501 s; the whole model ~30 min); on Linux the threads are the
+  known 1.8x.
 
 ## The numbers
 

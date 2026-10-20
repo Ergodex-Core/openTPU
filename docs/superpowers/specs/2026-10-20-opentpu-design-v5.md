@@ -280,7 +280,10 @@ before. Every chain stage k in SLR k. The pumped TMEM boxes (pb_otpu_tmem) becom
    S = 1 on the ISA simulator (tiny model and the real 1B), then RTL = ISA simulator bit for bit.
 8. **Resources at the line.** Section 6: every SLR is at 76-87% LUT on the pessimistic estimate.
 9. **Verilator cost.** Four slices on 32 channels: ~4x the logic of a v4 run for ~1/4 the cycles;
-   the whole-model receipt is ~15-25 minutes with `--threads 4` (measured in docs/full_hbm.md).
+   on this Mac the four-slice model must run single-threaded (`--threads 4` crashes it at the
+   first evaluation: docs/full_hbm.md "What changed"), ~30 minutes a whole-model receipt and
+   ~5 GB of memory a run (one at a time: two at once with the quantization workers swapped the
+   machine out).
 10. **The ISA's 4 GiB a slice** (docs/f2_hbm.md "Past 4 GiB a slice") is untouched: a slice's
     image at S = 4 is ~600 MB.
 
