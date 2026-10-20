@@ -208,7 +208,13 @@ alike under a memory that never stalls):
 
 Labels: RTL, whole model (26 layers and the head), one decode token at pos 14, int8 weights
 and head, the HBM-like memory model (stall 0, 30-cycle reads; not the SmartConnect fabric),
-bit-exact against the ISA simulator. The ISA model's analytic S = 4 token is 2,248,050 (the
+bit-exact against the ISA simulator. The same token with every channel withholding 5% of its
+handshakes at random (`--stall 5`, `p4-gemma3-s4-rtl-stall5.otpuprof`, the probe for the hub
+decision): 2,386,716 cycles (+3.7%), port B 83.3%, **waiting on collectives 0.2%** in every
+slice. Independent per-cycle stalls average out over the ~15K cycles between gathers, so the
+card's 8.8% at S = 3 has to come from something the memory model does not have (a slice's
+sustained bandwidth below the others', long correlated stalls): only the S = 4 card trace
+can price the pipelined hub. The ISA model's analytic S = 4 token is 2,248,050 (the
 RTL +2.4%). **Prediction for the card** (not a measurement): build 11's ratio of card to RTL
 (3.62 M / 2.993 M = 1.21) on 2.302 M gives ~2.78 M cycles a token: **~63 tok/s at 175 MHz**,
 ~58 at 162.5, ~72 at 200 (build 11: 48.3).
