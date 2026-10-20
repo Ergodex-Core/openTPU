@@ -428,13 +428,19 @@ module otpu_coll_port #(
   logic [PW-1:0]          wp, rp;
   logic [PW:0]            n;
   wire                    wtake = n != '0 && gnt_local;
+  // Present the head from flip-flops, not the F:1 FIFO mux. Look ahead on a pop;
+  // bypass the incoming write when it becomes the head on this very edge.
+  // In particular a simultaneous pop/push at n == 1 must not read the old RAM slot.
+  logic [LANES-1:0]       head_m;
+  logic [LANES-1:0][31:0] head_a, head_d;
+  wire [PW-1:0]          rp_next = rp + 1'b1;
 
   assign gnt = gnt_local;
   assign coll_ren = (hv && hq) ? hm : '0;
   assign coll_raddr = ha;
-  assign coll_wen = n != '0 ? fm[rp] : '0;
-  assign coll_waddr = fa[rp];
-  assign coll_wdata = fd[rp];
+  assign coll_wen = head_m;
+  assign coll_waddr = head_a;
+  assign coll_wdata = head_d;
 
   always_ff @(posedge clk) begin
     if (got) dd <= coll_rdata;          // fresh the cycle after the granted read
@@ -456,7 +462,14 @@ module otpu_coll_port #(
       wp <= '0;
       rp <= '0;
       n <= '0;
+      head_m <= '0;
     end else begin
+      if (wv && (n == 0 || (n == 1 && wtake))) begin
+        head_m <= wm; head_a <= wa; head_d <= wd;
+      end else if (wtake) begin
+        head_m <= (n > 1) ? fm[rp_next] : '0;
+        head_a <= fa[rp_next]; head_d <= fd[rp_next];
+      end
       got <= hv && hq && gnt_local;
       dv <= got;
       pop <= wtake;
@@ -469,6 +482,13 @@ module otpu_coll_port #(
     end
   end
 `ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst) begin
+      if (head_m !== ((n != 0) ? fm[rp] : '0))
+        $fatal(1, "otpu_coll_port: registered head enables differ from FIFO");
+      if (n != 0 && (head_a !== fa[rp] || head_d !== fd[rp]))
+        $fatal(1, "otpu_coll_port: registered head payload differs from FIFO");
+    end
   always @(posedge clk)
     if (!rst && ((rv && hv) || (wv && n == (PW+1)'(F) && !wtake)))
       $fatal(1, "otpu_coll_port: a read while one is held (%0d) or a write into a full FIFO", hv);
