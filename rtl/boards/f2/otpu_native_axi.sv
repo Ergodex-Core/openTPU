@@ -255,7 +255,9 @@ module otpu_native_axi #(
         for (int k = 0; k < NBK; k++) begin rb[k] <= '0; wb[k] <= '0; end
       end else begin
         if (ar_fire) begin rbq[rq_p] <= bkt(ar_addr); rq_p <= rq_p + 1'b1; end
-        if (r_fire && m_rlast) rq_r <= rq_r + 1'b1;
+        // (a burst's last beat by its known length, as RLAST is checked: response_count, never
+        // the slave's RLAST, which may be wrong: n_err)
+        if (r_fire && response_known && response_count == 5'd1) rq_r <= rq_r + 1'b1;
         if (popw) begin wbq[wq_p] <= head_k; wq_p <= wq_p + 1'b1; end
         if (b_fire) wq_r <= wq_r + 1'b1;
         for (int k = 0; k < NBK; k++) begin
