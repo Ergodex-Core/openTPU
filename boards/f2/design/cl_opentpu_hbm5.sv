@@ -210,16 +210,16 @@ module cl_opentpu (
   // the host: h_* (otpu_f2_pcis_gate, 250 MHz, beside the shell in its PCIS SLR) -> u_hrs512 (the
   // same SLR: the SLR crossing runs flop to flop from its registers to cl_axi_sc_1x1's entry
   // slice in SLR0) -> cl_axi_sc_1x1 (AWS's, as shipped) -> u_hrs256 at 450 -> HBM port NPORT
-  logic [15:0]  hs_awid, hs_arid, hs_bid, hs_rid;
-  logic [63:0]  hs_awaddr, hs_araddr;
-  logic [7:0]   hs_awlen, hs_arlen;
-  logic [2:0]   hs_awsize, hs_arsize;
-  logic [1:0]   hs_awburst, hs_arburst, hs_bresp, hs_rresp;
-  logic         hs_awvalid, hs_awready, hs_wlast, hs_wvalid, hs_wready;
-  logic         hs_bvalid, hs_bready, hs_arvalid, hs_arready;
-  logic         hs_rlast, hs_rvalid, hs_rready;
-  logic [511:0] hs_wdata, hs_rdata;
-  logic [63:0]  hs_wstrb;
+  logic [15:0]  ha_awid, ha_arid, ha_bid, ha_rid;
+  logic [63:0]  ha_awaddr, ha_araddr;
+  logic [7:0]   ha_awlen, ha_arlen;
+  logic [2:0]   ha_awsize, ha_arsize;
+  logic [1:0]   ha_awburst, ha_arburst, ha_bresp, ha_rresp;
+  logic         ha_awvalid, ha_awready, ha_wlast, ha_wvalid, ha_wready;
+  logic         ha_bvalid, ha_bready, ha_arvalid, ha_arready;
+  logic         ha_rlast, ha_rvalid, ha_rready;
+  logic [511:0] ha_wdata, ha_rdata;
+  logic [63:0]  ha_wstrb;
   logic [5:0]  hm_awid, hm_arid, hm_bid, hm_rid;
   logic [33:0]  hm_awaddr, hm_araddr;
   logic [3:0]   hm_awlen, hm_arlen;
@@ -241,31 +241,31 @@ module cl_opentpu (
       .s_axi_arsize(h_arsize), .s_axi_arburst(h_arburst), .s_axi_arlock(1'b0), .s_axi_arcache(4'd3),
       .s_axi_arprot(3'd2), .s_axi_arregion(4'd0), .s_axi_arqos(4'd0), .s_axi_arvalid(h_arvalid),
       .s_axi_arready(h_arready), .s_axi_rid(h_rid), .s_axi_rdata(h_rdata), .s_axi_rresp(h_rresp),
-      .s_axi_rlast(h_rlast), .s_axi_rvalid(h_rvalid), .s_axi_rready(h_rready), .m_axi_awid(hs_awid),
-      .m_axi_awaddr(hs_awaddr), .m_axi_awlen(hs_awlen), .m_axi_awsize(hs_awsize), .m_axi_awburst(hs_awburst),
+      .s_axi_rlast(h_rlast), .s_axi_rvalid(h_rvalid), .s_axi_rready(h_rready), .m_axi_awid(ha_awid),
+      .m_axi_awaddr(ha_awaddr), .m_axi_awlen(ha_awlen), .m_axi_awsize(ha_awsize), .m_axi_awburst(ha_awburst),
       .m_axi_awlock(), .m_axi_awcache(), .m_axi_awprot(), .m_axi_awregion(),
-      .m_axi_awqos(), .m_axi_awvalid(hs_awvalid), .m_axi_awready(hs_awready), .m_axi_wdata(hs_wdata),
-      .m_axi_wstrb(hs_wstrb), .m_axi_wvalid(hs_wvalid), .m_axi_wlast(hs_wlast), .m_axi_wready(hs_wready),
-      .m_axi_bresp(hs_bresp), .m_axi_bvalid(hs_bvalid), .m_axi_bid(hs_bid), .m_axi_bready(hs_bready),
-      .m_axi_arid(hs_arid), .m_axi_araddr(hs_araddr), .m_axi_arlen(hs_arlen), .m_axi_arsize(hs_arsize),
-      .m_axi_arburst(hs_arburst), .m_axi_arlock(), .m_axi_arcache(), .m_axi_arprot(),
-      .m_axi_arregion(), .m_axi_arqos(), .m_axi_arvalid(hs_arvalid), .m_axi_arready(hs_arready),
-      .m_axi_rid(hs_rid), .m_axi_rdata(hs_rdata), .m_axi_rresp(hs_rresp), .m_axi_rlast(hs_rlast),
-      .m_axi_rvalid(hs_rvalid), .m_axi_rready(hs_rready)
+      .m_axi_awqos(), .m_axi_awvalid(ha_awvalid), .m_axi_awready(ha_awready), .m_axi_wdata(ha_wdata),
+      .m_axi_wstrb(ha_wstrb), .m_axi_wvalid(ha_wvalid), .m_axi_wlast(ha_wlast), .m_axi_wready(ha_wready),
+      .m_axi_bresp(ha_bresp), .m_axi_bvalid(ha_bvalid), .m_axi_bid(ha_bid), .m_axi_bready(ha_bready),
+      .m_axi_arid(ha_arid), .m_axi_araddr(ha_araddr), .m_axi_arlen(ha_arlen), .m_axi_arsize(ha_arsize),
+      .m_axi_arburst(ha_arburst), .m_axi_arlock(), .m_axi_arcache(), .m_axi_arprot(),
+      .m_axi_arregion(), .m_axi_arqos(), .m_axi_arvalid(ha_arvalid), .m_axi_arready(ha_arready),
+      .m_axi_rid(ha_rid), .m_axi_rdata(ha_rdata), .m_axi_rresp(ha_rresp), .m_axi_rlast(ha_rlast),
+      .m_axi_rvalid(ha_rvalid), .m_axi_rready(ha_rready)
     );
   logic [29:0] hm_awaddr_hi, hm_araddr_hi;
   cl_axi_sc_1x1_wrapper u_hsc (
     .aclk_250(clk_main_a0), .aresetn_250(sc_host_aresetn), .aclk_450(hclk),
-    .AXI4_araddr(hs_araddr), .AXI4_arburst(hs_arburst), .AXI4_arcache(4'd3), .AXI4_arid(hs_arid),
-    .AXI4_arlen(hs_arlen), .AXI4_arlock(1'b0), .AXI4_arprot(3'd2), .AXI4_arqos(4'd0),
-    .AXI4_arready(hs_arready), .AXI4_arsize(hs_arsize), .AXI4_arvalid(hs_arvalid),
-    .AXI4_awaddr(hs_awaddr), .AXI4_awburst(hs_awburst), .AXI4_awcache(4'd3), .AXI4_awid(hs_awid),
-    .AXI4_awlen(hs_awlen), .AXI4_awlock(1'b0), .AXI4_awprot(3'd2), .AXI4_awqos(4'd0),
-    .AXI4_awready(hs_awready), .AXI4_awsize(hs_awsize), .AXI4_awvalid(hs_awvalid),
-    .AXI4_bid(hs_bid), .AXI4_bready(hs_bready), .AXI4_bresp(hs_bresp), .AXI4_bvalid(hs_bvalid),
-    .AXI4_rdata(hs_rdata), .AXI4_rid(hs_rid), .AXI4_rlast(hs_rlast), .AXI4_rready(hs_rready),
-    .AXI4_rresp(hs_rresp), .AXI4_rvalid(hs_rvalid), .AXI4_wdata(hs_wdata), .AXI4_wlast(hs_wlast),
-    .AXI4_wready(hs_wready), .AXI4_wstrb(hs_wstrb), .AXI4_wvalid(hs_wvalid),
+    .AXI4_araddr(ha_araddr), .AXI4_arburst(ha_arburst), .AXI4_arcache(4'd3), .AXI4_arid(ha_arid),
+    .AXI4_arlen(ha_arlen), .AXI4_arlock(1'b0), .AXI4_arprot(3'd2), .AXI4_arqos(4'd0),
+    .AXI4_arready(ha_arready), .AXI4_arsize(ha_arsize), .AXI4_arvalid(ha_arvalid),
+    .AXI4_awaddr(ha_awaddr), .AXI4_awburst(ha_awburst), .AXI4_awcache(4'd3), .AXI4_awid(ha_awid),
+    .AXI4_awlen(ha_awlen), .AXI4_awlock(1'b0), .AXI4_awprot(3'd2), .AXI4_awqos(4'd0),
+    .AXI4_awready(ha_awready), .AXI4_awsize(ha_awsize), .AXI4_awvalid(ha_awvalid),
+    .AXI4_bid(ha_bid), .AXI4_bready(ha_bready), .AXI4_bresp(ha_bresp), .AXI4_bvalid(ha_bvalid),
+    .AXI4_rdata(ha_rdata), .AXI4_rid(ha_rid), .AXI4_rlast(ha_rlast), .AXI4_rready(ha_rready),
+    .AXI4_rresp(ha_rresp), .AXI4_rvalid(ha_rvalid), .AXI4_wdata(ha_wdata), .AXI4_wlast(ha_wlast),
+    .AXI4_wready(ha_wready), .AXI4_wstrb(ha_wstrb), .AXI4_wvalid(ha_wvalid),
     .AXI3_araddr({hm_araddr_hi, hm_araddr}), .AXI3_arburst(hm_arburst), .AXI3_arcache(),
     .AXI3_arlen(hm_arlen), .AXI3_arlock(), .AXI3_arprot(), .AXI3_arqos(), .AXI3_arready(hm_arready),
     .AXI3_arsize(hm_arsize), .AXI3_arvalid(hm_arvalid),
