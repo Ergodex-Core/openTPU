@@ -129,6 +129,12 @@ def main(argv=None) -> int:
                "same_dram": same_dram, "argmax_isa": int(np.argmax(want)),
                "argmax_rtl": int(np.argmax(got)), "causes": causes, "wall_s": wall,
                "stall": a.stall, "lat": rtlsim.MEMORY["LAT"], "mxu_c": a.mxu_c}
+    # the memory path's counters (the lane memory's copies, the F2 path's bursts: OTPU_NAXI)
+    mem = {k: st[k] for k in ("native", "native_copies", "mem_copies", "axi_reads", "axi_writes",
+                              "naxi", "lmem_hash") if k in st}
+    summary["memory"] = mem
+    for line in st.get("naxi", []):
+        print(line)
     print(json.dumps(summary, default=float))
     return 0 if same_logits and same_dram else 1
 

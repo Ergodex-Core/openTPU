@@ -500,6 +500,8 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
             bad = {sid: hs for sid, hs in hashes.items() if len(set(hs.values())) > 1}
             if bad:
                 raise RuntimeError(f"lane memory copies differ at the dump: {bad}")
+        # OTPU_NAXI: otpu_native_axi's read bursts per channel (sim/verilator/otpu_naxi_mem.sv)
+        stats["naxi"] = re.findall(r"^NAXI .*$", out, re.M)
         stats["native_copies"] = [{"copy": int(cp), "ch": int(ch),
                                    **{k: int(v) for k, v in (kv.split("=") for kv in rest.split())}}
                                   for cp, ch, rest in re.findall(r"NATIVE cp(\d+) ch(\d) (.*)", out)]
