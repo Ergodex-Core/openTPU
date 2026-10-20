@@ -136,6 +136,7 @@ module otpu_asic_top
     .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
     .coll_req, .coll_cmd(coll_cmd[0]), .coll_ack,
     .coll_ren(coll_ren[0]), .coll_raddr(coll_raddr[0]), .coll_rdata(coll_rdata[0]),
+    .coll_rany(|coll_ren[0]),
     .coll_wen, .coll_waddr, .coll_wdata, .coll_wbanks,
     .coll_gnt_local(coll_gl), .coll_gnt(coll_gl),
     .halted, .error(s_error), .wait_to, .a_inval, .icount, .pf(), .dump(1'b0));

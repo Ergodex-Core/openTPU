@@ -407,6 +407,7 @@ module otpu_coll_port #(
   output logic                    pop,
   // the slice's collective port (otpu_slice coll_*)
   output logic [LANES-1:0]        coll_ren,
+  output logic                    coll_rany,
   output logic [LANES-1:0][31:0]  coll_raddr,
   input  logic [LANES-1:0][31:0]  coll_rdata,
   output logic [LANES-1:0]        coll_wen,
@@ -446,7 +447,6 @@ module otpu_coll_port #(
   wire [PW-1:0]          rp_next = rp + 1'b1;
 
   assign gnt = gnt_local;
-  assign coll_ren = (hv && hq) ? hm : '0;
   assign coll_raddr = ha;
   assign coll_wen = head_m;
   assign coll_waddr = head_a;
@@ -475,7 +475,13 @@ module otpu_coll_port #(
       n <= '0;
       head_m <= '0;
       coll_wbanks <= '0;
+      coll_ren <= '0;
+      coll_rany <= 1'b0;
     end else begin
+      // hq's next value implies hv's next value, even when rv sets hv.
+      // Register the old (hv && hq) ? hm : 0 presentation without moving it.
+      coll_ren <= (hv && !(hq && gnt_local)) ? (rv ? rm : hm) : '0;
+      coll_rany <= hv && !(hq && gnt_local) && |(rv ? rm : hm);
       if (wv && (n == 0 || (n == 1 && wtake))) begin
         head_m <= wm; head_a <= wa; head_d <= wd;
         coll_wbanks <= banks(wm, wa);
@@ -498,6 +504,8 @@ module otpu_coll_port #(
 `ifndef SYNTHESIS
   always @(posedge clk)
     if (!rst) begin
+      if (coll_ren !== ((hv && hq) ? hm : '0) || coll_rany !== (|coll_ren))
+        $fatal(1, "otpu_coll_port: registered read request differs from held read");
       if (coll_wbanks !== banks(coll_wen, coll_waddr))
         $fatal(1, "otpu_coll_port: registered write banks differ from request");
       if (head_m !== ((n != 0) ? fm[rp] : '0))

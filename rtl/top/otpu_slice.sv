@@ -124,6 +124,7 @@ module otpu_slice
   output cmd_t                    coll_cmd,
   input  logic                    coll_ack,
   input  logic [LANES-1:0]        coll_ren,
+  input  logic                    coll_rany,
   input  logic [LANES-1:0][31:0]  coll_raddr,
   output logic [LANES-1:0][31:0]  coll_rdata,
   input  logic [LANES-1:0]        coll_wen,
@@ -385,6 +386,7 @@ module otpu_slice
   logic [NRP-1:0]                  tm_bx, tm_bs, tm_sv, tm_pre;   // TMEM_IMPL 3 (below)
   logic [NRP-1:0]                  tm_lost, tm_frz;               // TMEM_IMPL 3, TMEM_RPL
   logic [NRP-1:0][LANES-1:0]       rq_t;
+  logic [NRP-1:0]                  rq_any;
   logic [NRP-1:0][LANES-1:0][31:0] r_addr, r_data;
   logic [NWP-1:0][LANES-1:0]       wq_en, w_en;
   logic [NWP-1:0][LANES-1:0][31:0] w_addr, w_data;
@@ -674,14 +676,23 @@ module otpu_slice
   // (TMEM_IMPL 1: no guests, the banked arbiter counts every copy's banks)
   localparam bit GUESTS = TMEM_IMPL == 0 || (TMEM_IMPL == 3 && TMEM_GST);
   wire q3_blk = GUESTS && (|rq_en[P_Q3]) && (|rq_en[P_DMA]);
-  wire coll_blk = GUESTS && (|rq_en[P_COLL]) && ((|rq_en[P_DMA]) || (|rq_en[P_Q3]));
+  // RLD is itself a registered one-lane request; the external port supplies its
+  // registered reduction. The group needs only this OR, not an 8-lane reduction
+  // after the collective's enable and RLD lane mux.
+  wire coll_any = coll_rany || rl_pq;
+  wire coll_blk = GUESTS && coll_any && ((|rq_en[P_DMA]) || (|rq_en[P_Q3]));
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!srst && coll_any !== (|rq_en[P_COLL]))
+      $fatal(1, "otpu_slice: collective/RLD read presence differs from requests");
+`endif
   // TMEM_RPL: a group whose port replays a lost read is held (tm_frz, a register); the
   // collective, which is not replayed, reads only where its request does not lose (tm_bx)
   logic [NG-1:0] rpl_hold, rpl_frz;
   always_comb
     for (int g = 0; g < NG; g++) begin
       rpl_frz[g] = TMEM_RPL && g != G_VPU && g != G_COLL && (tm_frz & grp_rports(g)) != '0;
-      rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && |rq_en[P_COLL]);
+      rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && coll_any);
     end
   always_comb begin
     for (int g = 0; g < NG; g++) begin
@@ -742,8 +753,11 @@ module otpu_slice
       for (int g = 0; g < NG; g++)
         if ((g == G_VPU) ? !v_ren : rpl_frz[g]) off = off | grp_rports(g);
     if (TMEM_IMPL == 3 && TMEM_RPL && coll_blk) off[P_COLL] = 1'b1;
-    for (int p = 0; p < NRP; p++)
+    for (int p = 0; p < NRP; p++) begin
       rq_t[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? '0 : rq_en[p];
+      rq_any[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? 1'b0 :
+                   ((p == P_COLL) ? coll_any : (|rq_en[p]));
+    end
   end
   logic [NG-1:0] gs3;
   always_comb begin
@@ -755,7 +769,7 @@ module otpu_slice
     logic [NRP-1:0] rp, ask;
     logic           rd_ok, self;
     tm_pre = '0;
-    for (int p = 0; p < NRP; p++) ask[p] = |rq_t[p];
+    ask = rq_any;
     for (int g = 0; g < NG; g++) begin
       rp = grp_rports(g);
       rd_ok = (tm_bx & rp & ask) == '0;

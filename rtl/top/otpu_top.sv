@@ -155,6 +155,7 @@ module otpu_top
       .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,
       .coll_ren(coll_ren[s]), .coll_raddr(coll_raddr[s]), .coll_rdata(coll_rdata[s]),
+      .coll_rany(|coll_ren[s]),
       .coll_wen, .coll_waddr, .coll_wdata, .coll_wbanks,
       .coll_gnt_local(coll_gl[s]), .coll_gnt,
       .halted(halted[s]), .error(error[s]), .wait_to(), .a_inval, .icount(icount[s]), .pf(), .dump);
