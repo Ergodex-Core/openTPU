@@ -257,7 +257,14 @@ module otpu_f2_hbm_sys #(
     .ch_bresp, .ch_bready, .ch_araddr, .ch_arlen, .ch_arvalid, .ch_arready, .ch_rdata, .ch_rvalid,
     .ch_rlast, .ch_rresp, .ch_rready);
 
-  // ---- the accelerator (HAS_I2C 0: no I2C on the slot; temp 0: the shell owns the SYSMON)
+  // ---- the accelerator (HAS_I2C 0: no I2C on the slot; temp 0: the shell owns the SYSMON).
+  // COLL_GATHER S > 1: a one-slice build's collective unit runs BAR alone (otpu_coll_bar, CAPS2
+  // bit0 0), as the card's since release r2 and as the simulations build every one-slice FPGA
+  // target (rtlsim BOARD_UARCH): no program compiled for one slice has a GATHER and the host
+  // refuses one there (opentpu/host/board.py check_no_gather). The GATHER unit (otpu_coll) at
+  // S = 1 was dead area in SLR2 inside the TMEM's grant cone: ba86b5df routed its asel -> qd
+  // enables through its grant at -0.080 ns (67 failing endpoints; docs/wide_port.md "SLR2
+  // without the hot spot"). S > 1 keeps GATHER.
   logic [3:0] i2c_lo;
   otpu_board #(.S(S), .NCH(NCH), .CH_LOG2(CH_LOG2), .DRAM_LOG2(DRAM_LOG2), .D(D), .MCOLS(MCOLS), .ACT_ROWS(ACT_ROWS), .ACT_BLOCKS(ACT_BLOCKS),
                .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS), .FIFO_DEPTH(FIFO_DEPTH),
@@ -265,7 +272,7 @@ module otpu_f2_hbm_sys #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
-               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .PLATFORM(PLATFORM),
+               .DSTEP(DSTEP), .HOSTCAL(1'b0), .COLL_GATHER(S > 1), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),

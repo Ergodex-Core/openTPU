@@ -767,7 +767,7 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         assert f'WRAPPER/CL/u_sys/g_rs[{k}].u_x' in pb
     assert 'WRAPPER/CL/u_sys/u_cx/g_xr.u_m' in hbm and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
     # the TMEM with every unit of its grant / replay cone: the VPU, the quantizer, the collective
-    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/g_coll.u_coll',
+    assert sorted(tmem) == ['WRAPPER/CL/u_sys/u_board/g_coll*.u_coll',      # (g_coll or g_coll_bar)
                             'WRAPPER/CL/u_sys/u_board/u_slice/u_quant',
                             'WRAPPER/CL/u_sys/u_board/u_slice/u_tmem',
                             'WRAPPER/CL/u_sys/u_board/u_slice/u_vpu']

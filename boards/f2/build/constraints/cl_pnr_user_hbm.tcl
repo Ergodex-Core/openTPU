@@ -187,16 +187,18 @@ if {[llength $otpu_areq]} { add_cells_to_pblock pb_otpu_mem2 $otpu_areq }
 # Every unit whose TMEM request enters the grant / replay cone (requests -> the TMEM's conflict
 # compares and the slice's arbiter -> the grants, lost / rpv, the units' enables) with the
 # TMEM: the VPU (ba86b5df: u_mxu -> u_vpu's WBUF enable through tm_lost, 98 failing endpoints),
-# the quantizer (its t_ren -> the pumped pieces' ADDR, clk -> clk_f at +0.021 ns over 5.1 ns of
-# route from outside the box) and the collective (g_coll.u_coll asel -> qd through its grant, 67
-# endpoints, outside the box).
+# the quantizer (not boxed, it held both of the pumped TMEM's zero-margin paths: a piece's RAM
+# -> its g_pre x2_reg, clk_f -> clk +0.003 ns, and its t_ren -> a piece's ADDR, clk -> clk_f
+# +0.021, over 4.8 / 5.1 ns of route) and the collective (g_coll.u_coll asel -> qd through its
+# grant, 67 endpoints, not boxed; since the SLR2 rework's RTL a one-slice build has the BAR-only
+# unit, g_coll_bar.u_coll: the pattern takes either).
 create_pblock pb_otpu_tmem
 set_property PARENT pb_otpu_board [get_pblocks pb_otpu_tmem]
 resize_pblock pb_otpu_tmem -add {CLOCKREGION_X2Y9:CLOCKREGION_X5Y10}
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_tmem}]
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_vpu}]
 add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/u_slice/u_quant}]
-add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/g_coll.u_coll}]
+add_cells_to_pblock pb_otpu_tmem [otpu_cells {WRAPPER/CL/u_sys/u_board/g_coll*.u_coll}]
 
 ########################################
 # the memory path's 450 MHz ends beside their HBM ports, SLR0 (since the first placed build)

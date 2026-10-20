@@ -321,9 +321,9 @@ module otpu_vpu
 
   // the pipeline enable: the grant, or (WBUF) the write buffer's room, registered. The enable
   // reaches every pipeline register of the lanes and the tree (~21k loads on the board), so it
-  // must not come from the arbiter in the same cycle.
+  // must not come from the arbiter in the same cycle. ren, the enable as the slice's arbiter sees
+  // it: en itself, or (WBUF) its one-register copy (g_wbuf ren_r)
   logic en;
-  assign ren = en;
 
   // ------------------------------------------------------------------ issue
   // The read addresses follow the mode alone (OUTER fill or not, B's mode): a lane's address
@@ -1153,6 +1153,7 @@ module otpu_vpu
   logic                     wb_e;          // no write pending
   if (!WBUF) begin : g_wdir
     assign en = (SE && ss_act) ? sen : gnt;
+    assign ren = en;
     assign wb_e = (tw_en == '0);
     always_ff @(posedge clk) begin
       if (rst) begin
@@ -1175,6 +1176,12 @@ module otpu_vpu
     // have a flip-flop in front of them, no logic; it is then a cycle staler, and the buffer
     // has four slots (at most three are used). In stream mode it is the stream's pe (two
     // cycles behind the DMA's, see the header).
+    // A lost TMEM read (rhold, the TMEM's lost of port VA or VB) holds the lanes the next cycle:
+    // its register is en_h, a few copies, and the enable is en_r && !en_h, not en_r <= ... &&
+    // !rhold in every one of en_r's ~400 replicas (ba86b5df routed the MXU's t_ren -> the TMEM's
+    // conflict compares -> lost -> rhold into 394 en_r copies at -0.173 ns, 98 failing endpoints;
+    // docs/wide_port.md "SLR2 without the hot spot"). The same value every cycle; ren, the
+    // arbiter's view of it, is one register of its own (ren_r) so no LUT precedes the grants'.
     localparam int NWQ = SE ? 4 : 2;
     localparam int WQW = $clog2(NWQ);
     typedef struct packed {
@@ -1188,7 +1195,15 @@ module otpu_vpu
     logic [WQW:0]   wn;                          // entries
     (* max_fanout = 64 *) logic en_r;
     (* max_fanout = 32 *) logic en_q;
-    assign en = en_r;
+    (* max_fanout = 64 *) logic en_h;            // rhold, registered
+    logic ren_r;                                 // en in one register (the arbiter's ren)
+    (* max_fanout = 64 *) wire en_w = en_r && !en_h;
+    assign en = en_w;
+    assign ren = ren_r;
+`ifndef SYNTHESIS
+    always @(posedge clk)
+      if (ren_r != en_w) $fatal(1, "otpu_vpu: WBUF's ren %0d is not its enable %0d", ren_r, en_w);
+`endif
     assign wb_e = (wn == 0);
     wire  pdn  = done_i || dpend;
     wire  push = en && ((|cw_en) || pdn);
@@ -1224,7 +1239,7 @@ module otpu_vpu
     always_ff @(posedge clk) if (push) wq[wt] <= '{en: cw_en, a: cw_addr, d: cw_data, dn: pdn};
     always_ff @(posedge clk) begin
       if (rst) begin
-        wh <= '0; wt <= '0; wn <= '0; en_r <= 1'b0; en_q <= 1'b0;
+        wh <= '0; wt <= '0; wn <= '0; en_r <= 1'b0; en_q <= 1'b0; en_h <= 1'b0; ren_r <= 1'b0;
         done <= 1'b0; dpend <= 1'b0; hen <= '0;
       end else begin
         if (push) wt <= wt + 1'b1;
@@ -1239,10 +1254,13 @@ module otpu_vpu
         wn <= wn_nx;
         if (SE) begin
           en_q <= ss_act_d ? ss_pe : (pop ? (wn_p1 < 2) : (wn_p0 < 2)) && red_thr;  // a stream: its pe (as sen)
-          en_r <= en_q && !rhold;
+          en_r <= en_q;
+          ren_r <= en_q && !rhold;
         end else begin
-          en_r <= (pop ? (wn_p1 < 2) : (wn_p0 < 2)) && red_thr && !rhold;
+          en_r <= (pop ? (wn_p1 < 2) : (wn_p0 < 2)) && red_thr;
+          ren_r <= (pop ? (wn_p1 < 2) : (wn_p0 < 2)) && red_thr && !rhold;
         end
+        en_h <= rhold;
         done <= pop && hd.dn;
         dpend <= pdn && !en;
       end
