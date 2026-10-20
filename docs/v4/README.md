@@ -490,7 +490,19 @@ TNS is 8x smaller than build 8's, the regime in which the refine stage closed bu
 -0.217). The HBM domain got worse rather than better (build 8: -0.087 over 1095 endpoints), so
 build 11's pblock is needed whatever the core does; a side Vivado session on the checkpoint
 (`scratch/b10_hbm_paths.tcl` on the m7a) lists the failing HBM-domain paths by SmartConnect and
-the clock regions each SmartConnect landed in.
+the clock regions each SmartConnect landed in. **Its answer (06:41 UTC): all three
+SmartConnects fail, not slice 2's alone.** Destinations u_mem2 658, u_mem1 633, u_mem0 524 (+9
+in the HBM core); sources ports 20 (256 paths), 12 (253), 8 (238), 16 (211), 4 (99), 0 (18)
+and the SmartConnects' own 450 MHz logic (u_mem0 407); slacks 0 to -0.10 for 1606 of the 1824,
+the worst -0.200 = port 16's ACLK into u_mem2's `m00_exit` register enable, 2.02 ns with one
+logic level. Placement: u_mem0's mass in X0Y0-X0Y2 (ports at X0Y0 / X1Y0), u_mem1's in row Y3
+(X2Y3 / X0Y3 / X1Y3; ports at X2Y0), u_mem2's in X3-X5 rows Y2-Y3 (ports at X4Y0 / X5Y0): the
+placer follows the slices' register-slice ends at the Laguna rows, not the ports. **Build 11
+was therefore stopped at 06:45 (it had just reached implement) and restarted as run2 on commit
+97af3c29**, which pins every SmartConnect: `pblock_CL_SLR0_MEM0` X0Y0:X1Y1, `MEM1` X2Y0:X3Y1,
+`MEM2` X4Y0:X6Y0 + X5Y1:X6Y1 (hard grandchildren of SLR0, the clock regions of each one's two
+ports plus the row above). Unit `otpu-f2burst200-s3-175-mem2-build2`, output
+`/home/ubuntu/rachit/f2burst200-s3-175-mem2-run2`, log `logs/f2burst200-s3-175-mem2-build2.log`.
 
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
