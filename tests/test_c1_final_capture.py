@@ -16,6 +16,7 @@ def replay(tmp_path, structural_error=True, report_error=False, timing_blockers=
     # The ready helper is sourced during collection; mock the structural call,
     # never its successful/failed state in the collector itself.
     script = "source {" + str(SOURCE) + "}\n"
+    script += "rename ::c1_unused_capture::collect ::c1_unused_capture::original_collect\nproc ::c1_unused_capture::collect {args} {return {nets 1 route_qualified 0}}\n"
     mocks = {
         "structure": 'error "C1 observed host topology requires review"' if structural_error else "return {clocks current}",
         "gray_inventory": "return {fifo {source 0 destination 0}}",

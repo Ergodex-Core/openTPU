@@ -713,10 +713,17 @@ def review_unused_outputs(inventories,shell_objects,topology,checkpoint):
     expected={'WRAPPER/CL/SH_DDR/genblk1.IS_DDR_IO.DDR_CLK/O'}
     expected.update(f'WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top/sl_oport{s}[{bit}]' for s in range(2) for bit in range(17))
     require(new==expected,'New net lacks reviewed source contract')
-    nets={};leaves={};headers=[];selected=[];complete=[]
+    nets={};leaves={};headers=[];selected=[];complete=[];finding_inventory={}
     for ordinal,row in enumerate(g.records(topology),1):
         require(ordinal<=1000,'Unused-output record cap')
         if row[0]=='schema': headers.append(g.pairs(row))
+        elif row[0]=='finding_inventory':
+            data=g.pairs(row[1:])
+            require(set(data)=={'name','check','related_count','related_nets'} and data['check']=='RTSTAT-10','Unknown unused-net finding schema')
+            name=data['name'];require(name not in finding_inventory,'Duplicate unused-net finding')
+            related=unique(data['related_nets'])
+            require(data['related_count'].isdigit() and int(data['related_count'])==len(related),'Incomplete unused-net finding relation')
+            finding_inventory[name]=sorted(related)
         elif row[0]=='selected_nets':selected.append(unique(g.pairs(row[1:])['names']))
         elif row[0]=='net':
             require(row[1] not in nets,'Duplicate net');nets[row[1]]=g.pairs(row[2:])
@@ -724,7 +731,8 @@ def review_unused_outputs(inventories,shell_objects,topology,checkpoint):
             data=g.pairs(row[2:]);key=(row[1],data['name']);require(key not in leaves,'Duplicate leaf');leaves[key]=data
         elif row[0]=='complete':complete.append(g.pairs(row[1:]))
         else:raise ValueError('Unexpected/error/capped/port record: '+row[0])
-    require(headers==[{'schema':'1','kind':'unused_output_nets','checkpoint_sha256':checkpoint,'route_qualified':'0'}],'Wrong checkpoint/header')
+    require(headers==[{'schema':'1','kind':'c1_unused_output_nets','checkpoint_sha256':checkpoint,'route_qualified':'0'}],'Wrong checkpoint/header')
+    require(finding_inventory=={name:sorted(row['nets']) for name,row in inventories.items()},'Unused-net probe differs from current full finding membership')
     require(len(selected)==1 and set(selected[0])==new and set(nets)==new,'Probe does not cover exact new nets')
     require(complete==[{'nets':str(len(new)),'route_qualified':'0'}],'Probe incomplete')
     facts=[];used=set()

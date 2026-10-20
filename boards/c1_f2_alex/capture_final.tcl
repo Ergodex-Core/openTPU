@@ -1,6 +1,7 @@
 # C1 raw final-checkpoint collection. This cannot qualify or modify a design.
 # Existing structural errors are retained while independent reports are saved.
 source [file join [file dirname [info script]] qualify_c1_alex.tcl]
+source [file join [file dirname [info script]] capture_unused.tcl]
 namespace eval ::c1_final_capture {
     variable library_path [file normalize [info script]]
     variable max_file_bytes 536870912
@@ -35,6 +36,7 @@ proc ::c1_final_capture::collect {directory checkpoint digest} {
         foreach row $cdc {puts $audit [list cdc $row]}
         set findings [::c1_alex_route::findings $audit]
         set supplemental [::c1_alex_route::supplemental $directory $groups]
+        set unused [::c1_unused_capture::collect $directory/unused_outputs.tcldata $digest]
         set blockers [concat $blockers [dict get $timing blockers] [dict get $findings blockers]]
         if {![dict get $route pass]} {lappend blockers routing_incomplete}
         if {[dict get $supplemental incomplete_or_error]} {lappend blockers supplemental_incomplete}
@@ -43,7 +45,7 @@ proc ::c1_final_capture::collect {directory checkpoint digest} {
         }
         if {![regexp {(^|\n)No waivers found\.\s*$} [::c1_alex_route::read_text $directory/waivers.rpt]]} {lappend blockers waiver_review_required}
         foreach row $cdc {if {[dict get $row waived] ne "N"} {lappend blockers waived_cdc}}
-        lappend inventory objects.tcldata supplemental.tcldata
+        lappend inventory objects.tcldata supplemental.tcldata unused_outputs.tcldata
         set pending {
             current_structural_and_ready_equivalence
             current_vendor_CDC_and_gray_max_delay_scope
@@ -56,7 +58,7 @@ proc ::c1_final_capture::collect {directory checkpoint digest} {
         set result [dict create schema 1 kind c1_final_raw_capture stage final_raw \
             route_qualified 0 hardware_measured 0 checkpoint $checkpoint checkpoint_sha256 $digest \
             structural_capture $structural blockers [lsort -unique $blockers] pending_reviews $pending \
-            timing $timing routing $route findings $findings supplemental_evidence $supplemental \
+            timing $timing routing $route findings $findings unused_output_capture $unused supplemental_evidence $supplemental \
             gray_bus_groups [dict size $groups] bus_skew_constraints [dict size $rows] \
             cdc_records [llength $cdc] exception_counts [dict get $exceptions counts] report_inventory $inventory]
     } message options]
@@ -74,7 +76,7 @@ proc ::c1_final_capture::capture {checkpoint expected directory} {
     if {[version -short] ne "2025.2" || [llength [get_designs -quiet]]} {error "Fresh Vivado 2025.2 session required"}
     if {[file exists $directory] || ![file isdirectory [file dirname $directory]]} {error "Fresh output with existing parent required"}
     set helpers {}
-    foreach name {capture_final.tcl qualify_c1_alex.tcl audit_c1_alex.tcl routed_host_ready.tcl} {
+    foreach name {capture_final.tcl qualify_c1_alex.tcl audit_c1_alex.tcl routed_host_ready.tcl capture_unused.tcl} {
         dict set helpers $name [::c1_alex_route::sha256 [file join [file dirname $library_path] $name]]
     }
     file mkdir $directory

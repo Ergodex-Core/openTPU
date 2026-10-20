@@ -271,3 +271,46 @@ def test_pure_literal_selector_cannot_use_larger_coverage_count():
  text,fifo=export();ignored,coverage=reports()
  result=m.review_exceptions(text.replace(m.MEMORY_TO,literal_memory_selector(23)),ignored,coverage,fifo_write_periods={fifo:'5.000'})
  assert any(x['reason']=='literal_destination_selected_coverage' for x in result['issues'])
+
+
+def unused_fixture(tmp_path):
+    """Synthetic C1 contract inventory; does not represent physical evidence."""
+    def words(values): return ' '.join('{'+str(value)+'}' for value in values)
+    def record(*values): return words(values)+'\n'
+    def fields(values): return words(item for pair in values.items() for item in pair)
+    checkpoint='a'*64
+    selected=['WRAPPER/CL/SH_DDR/genblk1.IS_DDR_IO.DDR_CLK/O']
+    selected += [f'WRAPPER/CL/u_hbm/HBM_CORE_I/inst/TWO_STACK.u_hbm_top/sl_oport{s}[{b}]' for s in range(2) for b in range(17)]
+    inherited='WRAPPER/STATIC/unused'
+    inventories={'RTSTAT-10#1':{'nets':selected+[inherited],'ports':[]}}
+    shell=tmp_path/'shell'
+    shell.write_text(''.join(record('relation_inventory','drc RTSTAT-10#1',kind,'count',1 if kind=='nets' else 0,'names',words([inherited]) if kind=='nets' else '') for kind in ('pins','cells','nets','ports','pblocks')))
+    raw=record('schema',1,'kind','c1_unused_output_nets','checkpoint_sha256',checkpoint,'route_qualified',0)
+    raw+=record('finding_inventory','name','RTSTAT-10#1','check','RTSTAT-10','related_count',36,'related_nets',words(selected+[inherited]))
+    raw+=record('selected_nets','names',words(selected))
+    for i,name in enumerate(selected):
+        owner=f'WRAPPER/CL/driver{i}';pin=owner+'/O';ref='IBUFCTRL' if i==0 else 'LUT1'
+        raw+=record('net',name,'properties',fields({'NAME':name,'CLASS':'net','ROUTE_STATUS':'NOLOADS'}),'segments',words([name]),'pins',words([pin]),'leaf_pins',words([pin]),'ports','')
+        raw+=record('leaf',name,'name',pin,'properties',fields({'NAME':pin,'CLASS':'pin','DIRECTION':'OUT','REF_PIN_NAME':'O','REF_NAME':ref}),'owner',words([owner]),'owner_properties',fields({'NAME':owner,'CLASS':'cell','REF_NAME':ref,'IS_PRIMITIVE':1,'IS_BLACKBOX':0}))
+    raw+=record('complete','nets',35,'route_qualified',0)
+    path=tmp_path/'unused';path.write_text(raw)
+    return inventories,shell,path,checkpoint
+
+
+def test_c1_unused_probe_requires_full_current_finding_membership(tmp_path):
+    args=unused_fixture(tmp_path)
+    result=m.review_unused_outputs(*args)
+    assert result['issues']==[] and result['route_qualified'] is False
+    assert len(result['canonical_facts']['new_unused_outputs'])==35
+
+
+@pytest.mark.parametrize('old,new',[
+    ('{c1_unused_output_nets}','{unused_output_nets}'),
+    ('{related_count} {36}','{related_count} {35}'),
+    ('{finding_inventory}','{unrecognized_inventory}'),
+    ('{WRAPPER/STATIC/unused}','{WRAPPER/STATIC/different}'),
+    ('{DIRECTION} {OUT}','{DIRECTION} {IN}'),
+])
+def test_unused_probe_foreign_schema_truncated_or_changed_scope_blocks(tmp_path,old,new):
+    args=unused_fixture(tmp_path);path=args[2];text=path.read_text();assert old in text;path.write_text(text.replace(old,new,1))
+    with pytest.raises(ValueError):m.review_unused_outputs(*args)
