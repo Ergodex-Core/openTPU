@@ -29,6 +29,9 @@ HERE = Path(__file__).resolve().parent
 ROOT = HERE.parents[1]
 MANIFEST = 'bundle-manifest.json'
 INSTANCE = 'i-06cf8792fb8f15534'
+# Build provenance only. Portable replay may run elsewhere; hardware sessions
+# retain their separate, sole opentpu-f2 target in physical_artifact.py.
+BUILDER_INSTANCES = frozenset({INSTANCE, 'i-0ec8d33362b3100be'})
 MAX_FILES, MAX_TOTAL, MAX_FILE, MAX_MANIFEST = 100000, 64 << 30, 16 << 30, 64 << 20
 MAX_SUPPLEMENTAL_TEXT = 256 << 20
 ROLES = ('ip', 'synth', 'link', 'implement', 'refine', 'qualify', 'simulation', 'simulation_private', 'installed')
@@ -126,7 +129,8 @@ def manifest_data(raw, expected_sha256):
     m = decode(raw)
     require(set(m) == {'schema', 'kind', 'instance_id', 'hardware', 'roots', 'source_snapshots', 'receipts', 'files'},
             'Unknown/missing manifest fields')
-    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c1-alex-portable-candidate-evidence' and m['instance_id'] == INSTANCE,
+    require(type(m['schema']) is int and m['schema'] in (1, 2) and m['kind'] == 'c1-alex-portable-candidate-evidence' and
+            isinstance(m['instance_id'], str) and m['instance_id'] in BUILDER_INSTANCES,
             'Wrong evidence schema or dedicated instance')
     hardware = m['hardware']
     require(set(hardware) == {'source_revision', 'build_id'} and
@@ -589,7 +593,7 @@ def _verify_authenticated(x, manifest_sha256):
     for name, row in x.files.items():
         require(sha(x.root / name) == row['sha256'], 'Bundle changed while verifying')
     require(sha(x.root / MANIFEST) == manifest_sha256, 'Manifest changed while verifying')
-    return {'schema': m['schema'], 'kind': 'verified-c1-alex-portable-candidate-evidence', 'instance_id': INSTANCE,
+    return {'schema': m['schema'], 'kind': 'verified-c1-alex-portable-candidate-evidence', 'instance_id': m['instance_id'],
             'manifest_sha256': digest(manifest_sha256), **hardware, 'route_qualified': False, 'review_required': True,
             'hardware_measured': False, 'final_dcp_sha256': final_sha,
             'pending_reviews': tcl_list(summary['pending_reviews']), 'blockers': tcl_list(summary.get('blockers', '')),

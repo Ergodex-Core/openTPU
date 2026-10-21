@@ -132,7 +132,7 @@ class Plan:
         self.roots = {role: Path(path) for role, path in spec['roots'].items()}
         self.files, self.source_bytes, self.tree_checks = {}, {}, []
         self.git = {}
-        self.manifest = {'schema': spec['schema'], 'kind': 'c1-alex-portable-candidate-evidence', 'instance_id': e.INSTANCE,
+        self.manifest = {'schema': spec['schema'], 'kind': 'c1-alex-portable-candidate-evidence', 'instance_id': spec['instance_id'],
                          'hardware': {}, 'roots': {}, 'source_snapshots': {}, 'receipts': {}, 'files': {}}
         for role, path in self.roots.items():
             prefix = 'runs/simulation/private-ip' if role == 'simulation_private' else 'runs/' + role
@@ -211,7 +211,8 @@ def checked_spec(spec):
     e.require(isinstance(spec, dict) and set(spec) == {'schema', 'kind', 'instance_id', 'roots', 'receipt_sha256', 'source_checkouts'},
               'Invalid collection specification fields')
     e.require(type(spec['schema']) is int and spec['schema'] in (1, 2) and spec['kind'] == 'c1-alex-candidate-collection-inputs'
-              and spec['instance_id'] == e.INSTANCE, 'Wrong collection schema/dedicated instance')
+              and isinstance(spec['instance_id'], str) and spec['instance_id'] in e.BUILDER_INSTANCES,
+              'Wrong collection schema/dedicated instance')
     e.require(set(spec['roots']) == set(e.schema_roles(spec['schema'])) and set(spec['receipt_sha256']) == set(e.schema_receipts(spec['schema']))
               and set(spec['source_checkouts']) == set(e.schema_sources(spec['schema'])), 'Incomplete collection roles/trusted receipt hashes')
     for role, path in spec['roots'].items():
@@ -355,7 +356,7 @@ def collect(spec, out, *, spec_raw=None):
         plan.recheck()
         e.require(e.verify_bundle(bundle, manifest_sha) == verified, 'Bundle changed during archive creation')
         receipt = {'schema': spec['schema'], 'kind': 'c1-alex-candidate-evidence-collection', 'state': 'complete',
-                   'instance_id': e.INSTANCE, 'started_utc': started, 'finished_utc': now(),
+                   'instance_id': plan.manifest['instance_id'], 'started_utc': started, 'finished_utc': now(),
                    'inputs_sha256': hashlib.sha256(raw).hexdigest(), 'manifest_sha256': manifest_sha,
                    'collector_sha256': e.sha(Path(__file__)), 'verifier_sha256': e.sha(HERE / 'candidate_evidence.py'),
                    'archive': {'relative_path': 'evidence.tar', 'sha256': archived['archive_sha256'], 'bytes': archive.stat().st_size},

@@ -92,11 +92,13 @@ def repin(root, m, role):
     return refresh(root, m)
 
 
-def test_schema2_retains_pending_and_structural_error_after_relocation(raw, tmp_path):
-    root, _, digest = raw
+@pytest.mark.parametrize('builder',(e.INSTANCE,'i-0ec8d33362b3100be'))
+def test_schema2_retains_pending_and_structural_error_after_relocation(raw, tmp_path, builder):
+    root, m, _ = raw;m['instance_id']=builder;digest=refresh(root,m)
     destination = tmp_path / "relocated"
     shutil.move(root, destination)
     result = e.verify_bundle(destination, digest)
+    assert result['instance_id']==builder
     assert result["schema"] == 2 and result["route_qualified"] is False
     assert result["qualification_receipt_sha256"] is None
     assert result["review_required"] is True and result["hardware_measured"] is False
@@ -141,7 +143,8 @@ def test_schema2_rejects_linked_capture_from_another_checkpoint(raw, role):
         e.verify_bundle(root, refresh(root, m))
 
 
-def test_schema2_collects_frozen_capture_inventory_without_copying_live_logs(tmp_path, monkeypatch):
+@pytest.mark.parametrize('builder',(e.INSTANCE,'i-0ec8d33362b3100be'))
+def test_schema2_collects_frozen_capture_inventory_without_copying_live_logs(tmp_path, monkeypatch, builder):
     root, m, _ = fixture_raw(tmp_path, monkeypatch, original_base=str(tmp_path / "portable/runs"))
     module_spec = importlib.util.spec_from_file_location("c1_raw_collect", e.HERE / "collect_candidate.py")
     collector = importlib.util.module_from_spec(module_spec)
@@ -153,7 +156,7 @@ def test_schema2_collects_frozen_capture_inventory_without_copying_live_logs(tmp
     monkeypatch.setattr(collector, "GitSource", FixtureGit)
     f.put(root / "runs/capture/console.log", "Live outer log excluded by receipt\n")
     plan = {
-        "schema": 2, "kind": "c1-alex-candidate-collection-inputs", "instance_id": e.INSTANCE,
+        "schema": 2, "kind": "c1-alex-candidate-collection-inputs", "instance_id": builder,
         "roots": {role: row["original_absolute_path"] for role, row in m["roots"].items()},
         "receipt_sha256": {role: row["sha256"] for role, row in m["receipts"].items()},
         "source_checkouts": {role: {"path": str(root / row["bundle_relative_path"]), "revision": row["revision"]}
@@ -162,7 +165,14 @@ def test_schema2_collects_frozen_capture_inventory_without_copying_live_logs(tmp
     before = f.inventory(root)
     output = tmp_path / "collection"
     result = collector.collect(plan, output)
+    assert result['instance_id']==result['verified']['instance_id']==builder
+    assert f.read(output/'bundle'/e.MANIFEST)['instance_id']==builder
     assert result["schema"] == 2 and result["verified"]["route_qualified"] is False
     assert before == f.inventory(root)
     assert not (output / "bundle/runs/capture/console.log").exists()
     assert e.inspect_archive(output / "evidence.tar", result["manifest_sha256"])["route_qualified"] is False
+
+
+def test_schema2_allowed_builder_swap_still_requires_manifest_hash(raw):
+    root,m,digest=raw;m['instance_id']='i-0ec8d33362b3100be';refresh(root,m)
+    with pytest.raises(ValueError):e.verify_bundle(root,digest)

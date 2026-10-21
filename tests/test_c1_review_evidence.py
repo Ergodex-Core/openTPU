@@ -50,6 +50,19 @@ class ProjectionTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             P._project_manifest(R.canonical(self.m), "0" * 64)
 
+    def test_each_reviewed_builder_survives_schema3_projection(self):
+        for builder in R.E.BUILDER_INSTANCES:
+            self.m['instance_id']=builder
+            manifest,projected,result=self.project()
+            self.assertEqual(manifest['instance_id'],builder)
+            self.assertEqual(projected['instance_id'],builder)
+            self.assertFalse(result['route_qualified'])
+
+    def test_unknown_or_nonbuilder_identity_cannot_enter_schema3(self):
+        for builder in ('unapproved-instance','i-0c78de2253f66519d',None,True,[]):
+            self.m['instance_id']=builder
+            with self.subTest(builder=builder),self.assertRaises(ValueError):self.project()
+
     def test_every_base_role_preserved(self):
         for role in R.E.schema_roles(2):
             m = copy.deepcopy(self.m); del m["roots"][role]; raw = R.canonical(m)

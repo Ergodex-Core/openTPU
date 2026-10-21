@@ -19,10 +19,11 @@ spec = importlib.util.spec_from_file_location('c1_collection_raw_fixture', ROOT 
 raw = importlib.util.module_from_spec(spec); spec.loader.exec_module(raw)
 
 
-@pytest.fixture
-def context(tmp_path, monkeypatch):
+@pytest.fixture(params=('i-06cf8792fb8f15534','i-0ec8d33362b3100be'))
+def context(tmp_path, monkeypatch, request):
     tmp_path = tmp_path.resolve()
     root, manifest, digest = raw.fixture_raw(tmp_path, monkeypatch)
+    manifest['instance_id']=request.param;digest=raw.refresh(root,manifest)
     e = raw.e
     original_modules = e.local_module
     monkeypatch.setattr(e, 'local_module', lambda name: p.F if name == 'final_review' else original_modules(name))
@@ -58,6 +59,8 @@ def test_additive_collection_preserves_original_and_relocates(context):
     c = context; before = raw.f.inventory(c['root'])
     result = p.collect(c['spec'], c['out'])
     assert result['schema'] == 3 and result['state'] == 'complete' and not result['hardware_actions']
+    assert result['instance_id']==result['verified']['instance_id']==c['manifest']['instance_id']
+    assert json.loads((c['out']/'bundle'/p.E.MANIFEST).read_text())['instance_id']==c['manifest']['instance_id']
     assert result['original_candidate_manifest_sha256'] == c['sha']
     assert raw.f.inventory(c['root']) == before
     assert p.E.verify_bundle(c['root'], c['sha'])['route_qualified'] is False
@@ -131,3 +134,10 @@ def test_schema3_archive_payload_mutation_rejected(context):
     data = bytearray(archive.read_bytes()); needle = b'Synthetic test reference:'
     index = data.index(needle); data[index] ^= 1; archive.write_bytes(data)
     with pytest.raises(ValueError): p.Q.inspect_archive(archive, result['manifest_sha256'])
+
+
+def test_builder_change_cannot_reuse_schema3_manifest_hash(context):
+    c=context;result=p.collect(c['spec'],c['out']);path=c['out']/'bundle'/p.E.MANIFEST
+    manifest=json.loads(path.read_text());manifest['instance_id']=next(value for value in p.E.BUILDER_INSTANCES if value!=manifest['instance_id'])
+    path.write_text(json.dumps(manifest))
+    with pytest.raises(ValueError):p.Q.verify_bundle(path.parent,result['manifest_sha256'])

@@ -166,7 +166,7 @@ def collect(spec, out, *, spec_raw=None):
         archived = archive_bundle(bundle, out / 'evidence.tar', manifest_sha)
         recheck()
         E.require(Q.verify_bundle(bundle, manifest_sha) == verified, 'Qualified bundle changed during archive creation')
-        result = dict(schema=3, kind='c1-alex-qualified-evidence-collection', state='complete', instance_id=E.INSTANCE,
+        result = dict(schema=3, kind='c1-alex-qualified-evidence-collection', state='complete', instance_id=manifest['instance_id'],
             started_utc=started, finished_utc=C.now(), inputs_sha256=hashlib.sha256(raw).hexdigest(),
             original_candidate_manifest_sha256=spec['candidate_manifest_sha256'], manifest_sha256=manifest_sha,
             review_receipt_sha256=manifest['receipts']['review']['sha256'],

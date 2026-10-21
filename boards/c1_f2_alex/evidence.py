@@ -38,7 +38,8 @@ def _project_manifest(raw, trusted_sha256):
         "source_snapshots", "receipts", "files"}, "Unknown schema3 manifest fields")
     R.need(type(manifest["schema"]) is int and manifest["schema"] == 3 and
            manifest["kind"] == "c1-alex-portable-candidate-evidence" and
-           manifest["instance_id"] == E.INSTANCE, "Wrong schema3 identity")
+           isinstance(manifest["instance_id"], str) and manifest["instance_id"] in E.BUILDER_INSTANCES,
+           "Wrong schema3 identity")
     for field, expected in (
         ("roots", set(E.schema_roles(2)) | {"review"}),
         ("source_snapshots", set(E.schema_sources(2)) | {"review"}),

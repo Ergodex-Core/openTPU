@@ -242,11 +242,14 @@ def repin_final(root,m):
     put(p,r);return refresh_manifest(root,m)
 
 
-def test_relocation_replays_c1_receipts_and_keeps_pending(bundle,tmp_path,monkeypatch):
-    root,m,trusted=bundle;out=tmp_path/'relocated';shutil.move(root,out)
+@pytest.mark.parametrize('builder',(e.INSTANCE,'i-0ec8d33362b3100be'))
+def test_relocation_replays_c1_receipts_and_keeps_pending(bundle,tmp_path,monkeypatch,builder):
+    root,m,_=bundle;m['instance_id']=builder;trusted=refresh_manifest(root,m)
+    out=tmp_path/'relocated';shutil.move(root,out)
     def forbidden(*a,**k):raise AssertionError('Offline replay must not execute tools or bundled code')
     monkeypatch.setattr(subprocess,'run',forbidden);monkeypatch.setattr(subprocess,'check_output',forbidden)
     result=e.verify_bundle(out,trusted)
+    assert result['instance_id']==builder
     assert result['route_qualified'] is False and result['review_required'] is True
     assert result['hardware_measured'] is False
     assert result['pending_reviews']==['SYNTHETIC_pending_review']
@@ -281,9 +284,21 @@ def test_physical_blocker_is_preserved_as_unqualified_data(bundle):
 
 
 @pytest.mark.parametrize('name',['runs/ip/ip/ip_project/child.dcp','runs/refine/post_route.dcp','runs/qualify/qualification/cdc.rpt','sources/hardware/rtl/c1/otpu_c1_native.sv','runs/simulation/seed-17-phase-0/console.log'])
-def test_receipt_bound_data_tamper_rejected_after_outer_rehash(bundle,name):
-    root,m,_=bundle;put(root/name,'CORRUPTED')
+@pytest.mark.parametrize('builder',(e.INSTANCE,'i-0ec8d33362b3100be'))
+def test_receipt_bound_data_tamper_rejected_after_outer_rehash(bundle,name,builder):
+    root,m,_=bundle;m['instance_id']=builder;put(root/name,'CORRUPTED')
     with pytest.raises((ValueError,RuntimeError)):e.verify_bundle(root,refresh_manifest(root,m))
+
+
+@pytest.mark.parametrize('builder',('unapproved-instance','i-0c78de2253f66519d',None,True,[]))
+def test_unknown_or_nonbuilder_identity_rejected(bundle,builder):
+    root,m,_=bundle;m['instance_id']=builder
+    with pytest.raises(ValueError):e.verify_bundle(root,refresh_manifest(root,m))
+
+
+def test_changing_to_another_allowed_builder_requires_new_manifest_hash(bundle):
+    root,m,trusted=bundle;m['instance_id']='i-0ec8d33362b3100be';refresh_manifest(root,m)
+    with pytest.raises(ValueError):e.verify_bundle(root,trusted)
 
 
 @pytest.mark.parametrize('change',['missing','extra','symlink','wrong_manifest','wrong_instance','schema2'])

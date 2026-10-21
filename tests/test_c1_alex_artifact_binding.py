@@ -49,8 +49,10 @@ def records():
     return SimpleNamespace(image=image, live=live, evidence=evidence, package=package)
 
 
-def test_qualified_cpu_built_image_requires_matching_available_aws_record(records):
+@pytest.mark.parametrize('builder',('i-06cf8792fb8f15534','i-0ec8d33362b3100be'))
+def test_qualified_cpu_built_image_requires_matching_available_aws_record(records,builder):
     r = records
+    r.evidence['instance_id']=builder
     assert d.verify_deployment(r.image, r.evidence)['agfi_id'] == r.image['global_image_id']
     assert d.verify_aws_image(r.live, r.image)['owner'] == d.ACCOUNT
 
@@ -130,8 +132,10 @@ def runtime(tmp_path, monkeypatch, records):
         image_path=image_path, modules=modules, calls=calls)
 
 
-def test_runtime_verifies_all_offline_layers_then_checks_live_image(runtime):
+@pytest.mark.parametrize('builder',('i-06cf8792fb8f15534','i-0ec8d33362b3100be'))
+def test_runtime_verifies_all_offline_layers_then_checks_live_image(runtime,builder):
     r = runtime
+    r.evidence['instance_id']=builder
     result = a.verify_session_artifact(r.request_path, r.request_sha)
     assert r.calls == ['evidence', 'package']
     assert result['identity'] == dict(id=0x43314D42, abi=1, build_id=int(r.evidence['build_id'], 16),
@@ -140,6 +144,13 @@ def test_runtime_verifies_all_offline_layers_then_checks_live_image(runtime):
     result['qualification_sha256'] = '0' * 64
     with pytest.raises(ValueError, match='Runtime publication binding changed'):
         a.verify_aws_image(r.live, result)
+
+
+def test_m8a_builder_never_becomes_fpga_session_target(runtime):
+    r=runtime;r.evidence['instance_id']='i-0ec8d33362b3100be'
+    r.request['instance_id']='i-0ec8d33362b3100be';r.request_sha=write(r.request_path,r.request)
+    with pytest.raises(ValueError):a.verify_session_artifact(r.request_path,r.request_sha)
+    assert r.calls==[] and a.INSTANCE=='i-0c78de2253f66519d'
 
 
 @pytest.mark.parametrize('field', list(d.HASH_FIELDS) + ['source_revision', 'build_id', 'package_bytes'])

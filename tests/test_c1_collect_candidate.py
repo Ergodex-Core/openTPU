@@ -28,9 +28,12 @@ def inputs(tmp_path,monkeypatch):
     return spec,origin,tmp_path/'collection'
 
 
-def test_pending_collection_preserves_raw_and_relocates(inputs,tmp_path):
-    spec,origin,out=inputs;before=f.inventory(origin);receipt=c.collect(spec,out)
+@pytest.mark.parametrize('builder',(c.e.INSTANCE,'i-0ec8d33362b3100be'))
+def test_pending_collection_preserves_raw_and_relocates(inputs,tmp_path,builder):
+    spec,origin,out=inputs;spec['instance_id']=builder;before=f.inventory(origin);receipt=c.collect(spec,out)
     assert receipt['state']=='complete' and receipt['hardware_actions'] is False
+    assert receipt['instance_id']==receipt['verified']['instance_id']==builder
+    assert f.read(out/'bundle'/c.e.MANIFEST)['instance_id']==builder
     assert receipt['verified']['route_qualified'] is False and receipt['verified']['review_required'] is True
     assert f.inventory(origin)==before
     for role,name in c.e.RECEIPTS.items():
@@ -72,6 +75,21 @@ def test_changed_input_during_copy_fails_closed(inputs,monkeypatch):
 def test_external_spec_hash_required_before_output(inputs,tmp_path):
     spec,_,out=inputs;p=tmp_path/'spec.json';f.put(p,spec)
     with pytest.raises(ValueError,match='independently trusted'):c.main(['--spec',str(p),'--spec-sha256','0'*64,'--out',str(out)])
+    assert not out.exists()
+
+
+@pytest.mark.parametrize('builder',('unapproved-instance','i-0c78de2253f66519d',None,True,[]))
+def test_unapproved_builder_rejected_before_output(inputs,builder):
+    spec,_,out=inputs;spec['instance_id']=builder
+    with pytest.raises(ValueError):c.collect(spec,out)
+    assert not out.exists()
+
+
+def test_builder_change_cannot_reuse_pinned_spec_hash(inputs,tmp_path):
+    spec,_,out=inputs;p=tmp_path/'spec.json';f.put(p,spec);trusted=c.e.sha(p)
+    spec['instance_id']='i-0ec8d33362b3100be';f.put(p,spec)
+    with pytest.raises(ValueError,match='independently trusted'):
+        c.main(['--spec',str(p),'--spec-sha256',trusted,'--out',str(out)])
     assert not out.exists()
 
 
