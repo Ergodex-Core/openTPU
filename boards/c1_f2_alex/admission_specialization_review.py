@@ -13,6 +13,13 @@ from . import native_review as N
 
 HARDWARE_REVISION = '0d654453e2c77ea9bc9d0e854c33d9166bb27375'
 SYNTH_INPUT_SHA256 = '3dc8cdb3f1106c25ce5dcd72d17e9ea5c967b327cd98fc7150c3d45df2d85b87'
+# These exact complete manifests differ only in the HDK locator. Their source,
+# installed input and prepared file inventories are identical. This admits no
+# other relocation and makes no equivalence claim about regenerated checkpoints.
+REVIEWED_SYNTH_INPUT_SHA256 = frozenset({
+    SYNTH_INPUT_SHA256,
+    '67c96a774565f7cb38f245b3f585a419ba63cf992061c4eb8f914b1b99cfbd72',
+})
 TOP_SHA256 = 'adce0a570cea1a249f9b00653d274a58ed287b148420d022492e04176a8ac22a'
 SOURCE_SHA256 = {
     'rtl/c1/otpu_c1_hbm_kernel.sv': '249f61da5bf6178ae3329e179483eeab8671aac1bacec4724d5f11eb9b41bd24',
@@ -130,9 +137,9 @@ def review_sources(*, source_paths, synth_inputs_path, synth_inputs_sha256, gene
             'issues':[],'canonical_facts':{},'pending_reviews':['native_state_transition_correspondence','linked_final_accounting_preservation','admission_ram_state_address_control_preservation']}
     try:
         N.require(set(source_paths)==set(SOURCE_SHA256), 'source specialization inventory differs')
-        N.require(synth_inputs_sha256==SYNTH_INPUT_SHA256, 'unreviewed frozen synthesis input identity')
+        N.require(synth_inputs_sha256 in REVIEWED_SYNTH_INPUT_SHA256, 'unreviewed frozen synthesis input identity')
         before={name:N.identity(path,SOURCE_SHA256[name]) for name,path in source_paths.items()}
-        input_record=N.identity(synth_inputs_path,SYNTH_INPUT_SHA256)
+        input_record=N.identity(synth_inputs_path,synth_inputs_sha256)
         top_record=N.identity(generated_top_path,TOP_SHA256)
         inputs=json.loads(Path(synth_inputs_path).read_bytes(),object_pairs_hook=unique)
         N.require(inputs['schema']==1 and inputs['kind']=='c1-alex-burst200-build-inputs' and inputs['source_revision']==HARDWARE_REVISION and inputs['build_id']==HARDWARE_REVISION[:8] and inputs['source_status']=='', 'frozen hardware input source binding differs')
@@ -147,7 +154,7 @@ def review_sources(*, source_paths, synth_inputs_path, synth_inputs_sha256, gene
             N.require(inputs['prepared_files'][prefix+'cl_opentpu.sv']==top_record, 'generated top differs from frozen synthesis input')
         texts={name:Path(path).read_text() for name,path in source_paths.items()}
         facts=source_facts(texts,Path(generated_top_path).read_text())
-        N.require(before=={name:N.identity(path,SOURCE_SHA256[name]) for name,path in source_paths.items()} and N.identity(synth_inputs_path,SYNTH_INPUT_SHA256)==input_record and N.identity(generated_top_path,TOP_SHA256)==top_record, 'source specialization files changed')
+        N.require(before=={name:N.identity(path,SOURCE_SHA256[name]) for name,path in source_paths.items()} and N.identity(synth_inputs_path,synth_inputs_sha256)==input_record and N.identity(generated_top_path,TOP_SHA256)==top_record, 'source specialization files changed')
         facts.update(hardware_revision=HARDWARE_REVISION,source_files=before,synthesis_inputs=input_record,generated_top=top_record)
         result.update(source_elided_bits_proven=True,canonical_facts=facts)
         result['facts_sha256']=hashlib.sha256(json.dumps(facts,sort_keys=True,separators=(',',':')).encode()).hexdigest()

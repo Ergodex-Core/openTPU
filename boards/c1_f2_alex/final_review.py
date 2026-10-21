@@ -79,7 +79,7 @@ def hardware_source_binding(bundle, *, relocated_root=None):
              for name, digest in specialization.SOURCE_SHA256.items()}
     synth_prefix = E.relative(bundle.manifest['roots']['synth']['bundle_relative_path'])
     inputs_sha = E.digest(bundle.receipt('synth')['inputs_sha256'])
-    require(inputs_sha == specialization.SYNTH_INPUT_SHA256, 'Unreviewed synthesis input identity')
+    require(inputs_sha in specialization.REVIEWED_SYNTH_INPUT_SHA256, 'Unreviewed synthesis input identity')
     inputs = selected(synth_prefix + '/inputs.json', inputs_sha)
     top = selected(synth_prefix + '/source/rtl/boards/f2/cl_opentpu.sv', specialization.TOP_SHA256)
     return dict(source_paths=paths, synth_inputs_path=inputs,

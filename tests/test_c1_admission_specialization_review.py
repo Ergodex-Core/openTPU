@@ -90,10 +90,11 @@ def bound(tmp_path,monkeypatch):
             source[name]=record(path)
             if name.endswith('.sv'):prepared['source/'+name]=record(path)
     for prefix in ('source/rtl/boards/f2/','synth/rtl/','link/rtl/'):prepared[prefix+'cl_opentpu.sv']=record(top)
-    inputs=dict(schema=1,kind='c1-alex-burst200-build-inputs',source_revision=R.HARDWARE_REVISION,build_id=R.HARDWARE_REVISION[:8],source_status='',prepared_files=prepared,source_inputs=source)
+    inputs=dict(schema=1,kind='c1-alex-burst200-build-inputs',source_revision=R.HARDWARE_REVISION,build_id=R.HARDWARE_REVISION[:8],source_status='',hdk='/historical/hdk',prepared_files=prepared,source_inputs=source)
     p=tmp_path/'inputs.json';p.write_text(json.dumps(inputs))
-    monkeypatch.setattr(R,'TOP_SHA256',record(top)['sha256']);monkeypatch.setattr(R,'SYNTH_INPUT_SHA256',record(p)['sha256'])
-    return dict(source_paths=paths,synth_inputs_path=p,synth_inputs_sha256=R.SYNTH_INPUT_SHA256,generated_top_path=top)
+    checksum=record(p)['sha256']
+    monkeypatch.setattr(R,'TOP_SHA256',record(top)['sha256']);monkeypatch.setattr(R,'REVIEWED_SYNTH_INPUT_SHA256',frozenset({checksum}))
+    return dict(source_paths=paths,synth_inputs_path=p,synth_inputs_sha256=checksum,generated_top_path=top)
 
 
 def test_public_source_binding_proves_only_specialized_source_invariants(bound):
@@ -119,7 +120,7 @@ def test_public_byte_and_receipt_binding_mutations_reject(bound,monkeypatch,muta
         elif mutation=='prepared_kernel':data['prepared_files']['source/rtl/c1/otpu_c1_hbm_kernel.sv']['sha256']='f'*64
         elif mutation=='generator':data['source_inputs']['rtl/c1_alex/generate.py']['sha256']='f'*64
         elif mutation=='revision':data['source_revision']='a'*40
-        p.write_text(json.dumps(data));b['synth_inputs_sha256']=record(p)['sha256'];monkeypatch.setattr(R,'SYNTH_INPUT_SHA256',b['synth_inputs_sha256'])
+        p.write_text(json.dumps(data));b['synth_inputs_sha256']=record(p)['sha256'];monkeypatch.setattr(R,'REVIEWED_SYNTH_INPUT_SHA256',frozenset({b['synth_inputs_sha256']}))
     r=R.review_sources(**b)
     assert r['issues'] and not r['source_elided_bits_proven'] and not r['route_qualified']
 
@@ -135,3 +136,40 @@ def test_relocated_source_proof_is_byte_identical_and_has_no_host_paths(bound,tm
         target=copied/bound[key].name;shutil.copyfile(bound[key],target);after_binding[key]=target
     assert R.review_sources(**after_binding)==before
     assert str(tmp_path) not in json.dumps(before)
+
+
+def relocated_input_bytes(bound,monkeypatch):
+    inputs=json.loads(bound['synth_inputs_path'].read_bytes());inputs['hdk']='/reviewed/m8a/hdk'
+    raw=json.dumps(inputs).encode();checksum=hashlib.sha256(raw).hexdigest()
+    monkeypatch.setattr(R,'REVIEWED_SYNTH_INPUT_SHA256',frozenset({bound['synth_inputs_sha256'],checksum}))
+    return raw,checksum
+
+
+@pytest.mark.parametrize('relocated',(False,True))
+def test_each_exact_reviewed_input_uses_its_own_receipt_digest(bound,monkeypatch,relocated):
+    raw,checksum=relocated_input_bytes(bound,monkeypatch)
+    if relocated:
+        bound['synth_inputs_path'].write_bytes(raw);bound['synth_inputs_sha256']=checksum
+    result=R.review_sources(**bound)
+    assert not result['issues'] and result['source_elided_bits_proven']
+    assert result['canonical_facts']['synthesis_inputs']==record(bound['synth_inputs_path'])
+    assert result['canonical_facts']['synthesis_inputs']['sha256']==bound['synth_inputs_sha256']
+    assert not result['source_hardware_equivalence_proven'] and not result['route_qualified']
+    assert len(result['pending_reviews'])==3
+
+
+@pytest.mark.parametrize('attack',('other_reviewed_hash','unreviewed_relocation','during_replay'))
+def test_allowlist_does_not_admit_mismatched_or_replaced_input(bound,monkeypatch,attack):
+    raw,checksum=relocated_input_bytes(bound,monkeypatch)
+    if attack=='other_reviewed_hash':bound['synth_inputs_sha256']=checksum
+    elif attack=='unreviewed_relocation':
+        inputs=json.loads(raw);inputs['hdk']='/unreviewed/hdk'
+        bound['synth_inputs_path'].write_text(json.dumps(inputs))
+        bound['synth_inputs_sha256']=record(bound['synth_inputs_path'])['sha256']
+    else:
+        original=R.source_facts
+        def mutate(*args):
+            facts=original(*args);bound['synth_inputs_path'].write_bytes(raw);return facts
+        monkeypatch.setattr(R,'source_facts',mutate)
+    result=R.review_sources(**bound)
+    assert result['issues'] and not result['source_elided_bits_proven'] and not result['route_qualified']

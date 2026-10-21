@@ -18,6 +18,20 @@ HERE = Path(__file__).resolve().parent
 HARDWARE_REVISION = '0d654453e2c77ea9bc9d0e854c33d9166bb27375'
 # Exact read-only capture executors; separate from the frozen hardware revision.
 ANCESTRY_EXECUTORS = {'link': {'revision': '0278cb668faa078524f8d7dc97c6401adef0fe48', 'hashes': {'implement.py': 'c02a0164e57a154065fe3e39caf8df1ff5c79376cbd18641120404df65324941', 'build.py': 'de5d55aa379f6b127249af308a761d418f3e3466cdc3af2787e2389dc8b859eb'}}, 'refine': {'revision': '85addb6f352bf4b3a9fed1ecacfe4a6d3acbf1a6', 'hashes': {'implement.py': '370c994857c41109c48f9623b3f9b54fc320c67663d041f9e7c5499d9d9f718e', 'build.py': 'de5d55aa379f6b127249af308a761d418f3e3466cdc3af2787e2389dc8b859eb'}}}
+M8A_ANCESTRY_EXECUTOR = {
+    'revision': '06715ae62becda862f0fee9de35a2bf332b91e30',
+    'hashes': {
+        'implement.py': '7607ae83aed8ad8a96109b51b170685cfebd122aa43408e4b998df578b239c9e',
+        'build.py': 'de5d55aa379f6b127249af308a761d418f3e3466cdc3af2787e2389dc8b859eb',
+    },
+}
+# Preserve each historical stage pin and admit the exact reviewed m8a executor
+# as a complete revision/hash tuple. Actual parent receipt and checkpoint hashes
+# remain mandatory; an accepted executor never equates old and new checkpoints.
+REVIEWED_ANCESTRY_EXECUTORS = {
+    stage: (historical, M8A_ANCESTRY_EXECUTOR)
+    for stage, historical in ANCESTRY_EXECUTORS.items()
+}
 SPECS = {
     'accounting': ('c1-accounting-raw-capture', 'raw/accounting.tcldata',
                    ('capture_accounting.tcl', 'capture_native.tcl'),
@@ -92,8 +106,9 @@ def authenticate_capture(*, role, raw_path, receipt_path, checkpoint_sha256,
     N.require(isinstance(executor, dict) and set(executor) == {'implement.py', 'build.py'},
               'additive executor inventory differs')
     for value in executor.values(): digest(value)
-    N.require(receipt['ancestry_executor_revision'] == ANCESTRY_EXECUTORS[stage]['revision'] and
-              executor == ANCESTRY_EXECUTORS[stage]['hashes'], 'unreviewed additive ancestry executor')
+    N.require(any(receipt['ancestry_executor_revision'] == reviewed['revision'] and
+                  executor == reviewed['hashes'] for reviewed in REVIEWED_ANCESTRY_EXECUTORS[stage]),
+              'unreviewed additive ancestry executor')
     times = [datetime.fromisoformat(receipt[key]) for key in ('started_at', 'completed_at')]
     N.require(all(value.tzinfo is not None for value in times) and times[0] <= times[1],
               'additive capture time interval differs')

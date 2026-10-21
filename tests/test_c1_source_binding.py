@@ -1,5 +1,6 @@
 """Source-role selection after Bundle authentication; no synthetic FPGA approval."""
 from copy import deepcopy
+import hashlib
 import shutil
 from types import SimpleNamespace
 import pytest
@@ -20,7 +21,8 @@ def selected(tmp_path, monkeypatch):
     source={name:add('sources/hardware/'+name) for name in names}
     inputs=add('runs/synth/inputs.json');top=add('runs/synth/source/rtl/boards/f2/cl_opentpu.sv')
     revision='1'*40
-    module=SimpleNamespace(HARDWARE_REVISION=revision,SOURCE_SHA256=source,SYNTH_INPUT_SHA256=inputs,TOP_SHA256=top)
+    module=SimpleNamespace(HARDWARE_REVISION=revision,SOURCE_SHA256=source,SYNTH_INPUT_SHA256=inputs,
+                           REVIEWED_SYNTH_INPUT_SHA256=frozenset({inputs}),TOP_SHA256=top)
     original=F.module
     monkeypatch.setattr(F,'module',lambda name:module if name=='admission_specialization_review' else original(name))
     manifest={'hardware':{'source_revision':revision,'build_id':revision[:8]},
@@ -80,3 +82,29 @@ def test_actual_fresh_local_validator_loader_supports_relative_imports(name):
     assert loaded.__package__=='boards.c1_f2_alex'
     assert loaded.__file__==str(F.HERE/(name+'.py'))
     assert loaded is not F.module(name)
+
+
+@pytest.mark.parametrize('relocated',(False,True))
+def test_selects_exact_authenticated_receipt_from_two_reviewed_inputs(selected,relocated):
+    bundle,receipt,module=selected
+    raw=b'second exact reviewed synthesis input fixture';checksum=hashlib.sha256(raw).hexdigest()
+    module.REVIEWED_SYNTH_INPUT_SHA256=frozenset({module.SYNTH_INPUT_SHA256,checksum})
+    if relocated:
+        path=bundle.root/'runs/synth/inputs.json';path.write_bytes(raw)
+        bundle.files['runs/synth/inputs.json']=F.record(path);receipt['inputs_sha256']=checksum
+    binding=F.hardware_source_binding(bundle)
+    assert binding['synth_inputs_sha256']==receipt['inputs_sha256']
+    assert F.record(binding['synth_inputs_path'])['sha256']==receipt['inputs_sha256']
+
+
+@pytest.mark.parametrize('attack',('allowlisted_receipt_only','unreviewed_coherent_input'))
+def test_receipt_allowlist_does_not_replace_inventory_authentication(selected,attack):
+    bundle,receipt,module=selected
+    raw=b'another synthesis input';checksum=hashlib.sha256(raw).hexdigest()
+    receipt['inputs_sha256']=checksum
+    if attack=='allowlisted_receipt_only':
+        module.REVIEWED_SYNTH_INPUT_SHA256=frozenset({module.SYNTH_INPUT_SHA256,checksum})
+    else:
+        path=bundle.root/'runs/synth/inputs.json';path.write_bytes(raw)
+        bundle.files['runs/synth/inputs.json']=F.record(path)
+    with pytest.raises(ValueError):F.hardware_source_binding(bundle)
