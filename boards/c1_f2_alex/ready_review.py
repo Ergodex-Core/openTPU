@@ -71,6 +71,27 @@ def network(e,pin):
     return row
 
 
+def primitive_pins(e, cell, reference):
+    """Require the complete public FDRE/LUT interface, not a partial pin query."""
+    if reference == 'FDRE':
+        inputs = {'C', 'CE', 'D', 'R'}
+    else:
+        N.require(re.fullmatch('LUT[1-6]', reference), 'unsupported ready pin interface')
+        inputs = {f'I{i}' for i in range(int(reference[-1]))}
+    output = 'Q' if reference == 'FDRE' else 'O'
+    roles = inputs | {output}
+    wanted = {cell + '/' + role for role in roles}
+    N.require(cell in e.cells and set(e.cells[cell]) == wanted and
+              e.cells[cell] == e.query('cell_pins', cell),
+              'ready primitive pin inventory differs')
+    for role in roles:
+        pin = cell + '/' + role
+        e.pin(pin, 'IN' if role in inputs else 'OUT')
+        N.require(e.prop('pin', pin, 'REF_PIN_NAME') == role and
+                  e.query('pin_owner', pin) == [cell], 'ready primitive pin role/owner differs')
+    return {cell + '/' + role for role in inputs}, {cell + '/' + output}
+
+
 def facts(e):
     expected={f'native {pc} {channel}' for pc in range(8) for channel in ('b','r')}|{'host_wready'}
     N.require(set(e.ready['root'])==expected, 'missing/extra ready roots')
@@ -97,10 +118,12 @@ def facts(e):
             props=e.objects[('cell',owner)]
             node={'output':output,'cell':owner,'properties':props}
             if re.fullmatch('LUT[1-6]',ref):
+                full_inputs, full_outputs = primitive_pins(e, owner, ref)
+                N.require(output in full_outputs, 'ready LUT output role differs')
                 init=e.prop('cell',owner,'INIT')
                 N.require(re.fullmatch(r"[0-9]+'[hHbB][0-9a-fA-F]+",init), 'invalid LUT INIT')
                 inputs=e.query('ready_inputs',label,owner)
-                N.require(len(inputs)==int(ref[-1]), 'LUT input inventory')
+                N.require(set(inputs)==full_inputs, 'LUT input inventory')
                 node['inputs']={}
                 for pin in inputs:
                     edge=e.ready['edge'].get((label,owner,pin))
@@ -123,7 +146,9 @@ def facts(e):
     for (label,reg),r in e.ready['register'].items():
         N.require(r['clock_scope']=='names_and_properties_only', 'register clock scope')
         e.primitive(reg,'FDRE')
-        N.require(r['outputs']==e.query('ready_register_outputs',label,reg) and r['outputs'], 'register output inventory')
+        _, full_outputs = primitive_pins(e, reg, 'FDRE')
+        N.require(r['outputs']==e.query('ready_register_outputs',label,reg) and
+                  set(r['outputs'])==full_outputs, 'register output inventory')
         outputs={output:network(e,output) for output in r['outputs']}
         controls={}
         for role in ('D','CE','R','C'):
