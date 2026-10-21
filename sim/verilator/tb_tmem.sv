@@ -21,8 +21,9 @@
 // the write meets the reads of the next.
 module tb_tmem #(parameter int IMPL = 0, parameter int NSB = 4, parameter int SBP = 2,
                  parameter int SBH = 0, parameter bit RPL = 1'b0, parameter bit TDP = 1'b0,
-                 parameter bit GST = 1'b0, parameter int PMP = 0, parameter bit IQ = 1'b0);
-  localparam int WORDS = 256, LANES = 4, NRP = 3, NWP = 2, WPB = 1, CYCLES = 20000;
+                 parameter bit GST = 1'b0, parameter int PMP = 0, parameter bit IQ = 1'b0,
+                 parameter int LANES = 4);
+  localparam int WORDS = 256, NRP = 3, NWP = 2, WPB = 1, CYCLES = 20000;
   localparam int BW = $clog2(LANES);
   localparam int NCP = 2;
   localparam logic [NRP-1:0][2:0] CPY = {3'd1, 3'd0, 3'd0};

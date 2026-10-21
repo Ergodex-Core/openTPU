@@ -312,6 +312,36 @@ R2_TMEM = {"TMEM_IMPL": 3, "TMEM_NSB": 2, "TMEM_SBP": 3, "TMEM_RPL": 1, "TMEM_TD
 R2_ARB = {"RPB": _target.NRP * _target.SIM_LANES_MAX, "WPB": 1}
 
 
+def test_wide_rowlanes_unpumped_tmem_under_stalls(have_verilator, monkeypatch):
+    """The P4 / MCOLS8 / ALINE64 row-lane slice with the board's TMEM, except PMP=0.
+
+    A long independent VPU fill overlaps the row-lane MMs and is stored through the native
+    memory path. The ISA comparison covers the TMEM and DRAM after random native stalls.
+    """
+    from test_quant_rtl import _xrows
+    from test_wide_port_rtl import _rl_matrix, _rl_prog
+
+    rng = np.random.default_rng(9041)
+    cfg = Config(S=1, D=128, MCOLS=8, ACT_BLOCKS=16, ACT_ROWS=16, PAIR=True,
+                 PORTB=4, ROWLANES=True, ALINE=64, DRAM_BYTES=1 << 20)
+    kb = 9
+    rows, srows = _rl_matrix(rng, "int8", 13, kb * cfg.D)
+    x = _xrows(rng, 1, kb * cfg.D, cfg.D // 4)
+    prog, dram = _rl_prog(cfg, "int8", 4, 13, kb, 0, x, rows, srows)
+    prog.insert(3, I.vop(I.V_FILL, 50000, 0, 0, 32, 256, 256, 0, 0, I.B_SCALAR, 2.5))
+    prog.insert(-1, I.st(0xD0000, 50000, 32 * 256))
+    assert any(i.op == I.MM and I.mm_layout(i) == 4 for i in prog)
+
+    monkeypatch.setenv("OTPU_NCH", "8")
+    m = Machine(cfg, [prog], [dram.copy()]).run()
+    drams, tmems, st = rtlsim.run(cfg, [prog], [dram.copy()], axi=True, boot=True,
+                                  stall=50, seed=7, lat=120, max_cycles=1_000_000,
+                                  uarch={**_target.sim_uarch("f2-hbm:p4rl8a64"), "TMEM_PMP": 0})
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    assert st["native_b"][0]["wide"] > 0, st["native_b"]
+
+
 @pytest.mark.parametrize("mcols,rows,seed", [(2, 8, 1), (2, 6, 3)])
 def test_one_copy_replays_make_progress(have_verilator, mcols, rows, seed):
     """The single pumped TMEM copy (TMEM_IMPL 3 with replays and guests, on the board's uarch)
@@ -1279,6 +1309,18 @@ def test_tmem_random_traffic(have_verilator, impl, nsb, sbp, sbh, rpl, tdp, gst,
                        {"IMPL": impl, **({"NSB": nsb, "SBP": sbp, "SBH": sbh, "RPL": rpl, "TDP": tdp,
                                           "GST": gst, "PMP": pmp}
                                          if impl == 3 else {})})
+    r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=120)
+    assert r.returncode == 0 and "PASS" in r.stdout, r.stdout[-2000:] + r.stderr[-2000:]
+
+
+def test_tmem_random_traffic_lanes8_unpumped(have_verilator):
+    """The F2 wide-port TMEM's exact eight-lane, unpumped sub-bank/replay/guest setting."""
+    exe = rtlsim.build("tb_tmem", [rtlsim.RTL / "mem/otpu_tmem.sv",
+                                   rtlsim.RTL / "tech/generic/otpu_tech_ram.sv",
+                                   rtlsim.RTL / "exp/tmem_pump/otpu_tmem_pump.sv",
+                                   rtlsim.TB / "tb_tmem.sv"],
+                       {"IMPL": 3, "LANES": 8, "NSB": 2, "SBP": 3, "SBH": 0,
+                        "RPL": 1, "TDP": 1, "GST": 1, "PMP": 0})
     r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=120)
     assert r.returncode == 0 and "PASS" in r.stdout, r.stdout[-2000:] + r.stderr[-2000:]
 
