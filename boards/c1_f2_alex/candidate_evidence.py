@@ -184,13 +184,15 @@ def parent_names(names):
 
 
 class Bundle:
+    parse_manifest = staticmethod(manifest_data)
+
     def __init__(self, root, manifest_sha256):
         self.root = Path(os.path.abspath(root))
         no_symlink(self.root)
         require(self.root.is_dir(), 'Bundle root is not a directory')
         no_symlink(self.root / MANIFEST)
         require((self.root / MANIFEST).stat().st_size <= MAX_MANIFEST, 'Oversized manifest')
-        self.manifest = manifest_data((self.root / MANIFEST).read_bytes(), manifest_sha256)
+        self.manifest = self.parse_manifest((self.root / MANIFEST).read_bytes(), manifest_sha256)
         self.files = self.manifest['files']
         allowed_dirs = parent_names(self.files)
         actual = set()
@@ -422,7 +424,11 @@ def verify_raw_captures(x, final_sha):
 
 def verify_bundle(root, manifest_sha256):
     """Replay frozen evidence under a new root; no commands or bundled imports."""
-    x = Bundle(root, manifest_sha256)
+    return _verify_authenticated(Bundle(root, manifest_sha256), manifest_sha256)
+
+
+def _verify_authenticated(x, manifest_sha256):
+    """Internal semantic replay of a byte-authenticated Bundle or exact role view."""
     b, sim = local_module('build'), local_module('simulate')
     m = x.manifest; hardware = m['hardware']; stages = {}
     ip, synth = x.receipt('ip'), x.receipt('synth')
@@ -595,6 +601,11 @@ def verify_bundle(root, manifest_sha256):
 
 def inspect_archive(archive_path, manifest_sha256):
     """Bounded streaming inventory preflight only; does not extract or qualify."""
+    return _inspect_archive(archive_path, manifest_sha256, manifest_data)
+
+
+def _inspect_archive(archive_path, manifest_sha256, parser):
+    """Shared bounded inventory mechanics; parser supplied only by trusted code."""
     path = Path(os.path.abspath(archive_path)); no_symlink(path)
     require(path.is_file(), 'Archive is not a regular file')
     archive_sha = sha(path)
@@ -650,7 +661,7 @@ def inspect_archive(archive_path, manifest_sha256):
                 require(size == member.size, 'Truncated archive member')
                 regular[name] = {'sha256': h.hexdigest(), 'bytes': size}
     require(manifest_raw is not None, 'Archive lacks manifest')
-    m = manifest_data(manifest_raw, manifest_sha256)
+    m = parser(manifest_raw, manifest_sha256)
     require(regular == m['files'], 'Archive inventory/hash differs from trusted manifest')
     require(directories <= parent_names(regular), 'Extra archive directory')
     for name in seen:
