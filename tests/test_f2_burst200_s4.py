@@ -342,3 +342,27 @@ def test_gemma3_1b_token_on_four_slice_rtl_is_bit_exact(have_verilator):
     assert int(np.argmax(want)) == int(np.argmax(got))
     for s in range(4):
         assert np.array_equal(isa.machine.slices[s].dram[:n], rtl.drams[s][:n])
+
+
+def test_tmem_floorplan_is_s4s_with_a_box_per_slice():
+    """floorplan_s4_tmem.tcl (the 175 MHz variant, build.py --floorplan): floorplan_s4.tcl as it
+    is, then one hard box per slice for its pumped TMEM, DMA and collective port, each six clock
+    regions inside the slice's own pblock (SLR0 above the SmartConnect rows, SLR1, SLR2's halves)."""
+    base = (BOARD / 'constraints/floorplan_s4.tcl').read_text()
+    tm = (BOARD / 'constraints/floorplan_s4_tmem.tcl').read_text()
+    first, rest = tm.split('\n', 1)
+    assert first.startswith('# floorplan_s4_tmem.tcl') and rest.startswith(base)
+    boxes = re.findall(r'^  (\d) (pblock_CL_\w+) +\{CLOCKREGION_X(\d)Y(\d+):CLOCKREGION_X(\d)Y(\d+)\}',
+                       rest[len(base):], re.M)
+    assert [b[:2] for b in boxes] == [('0', 'pblock_CL_SLR0'), ('1', 'pblock_CL_SLR1'),
+                                      ('2', 'pblock_CL_SLR2_S2'), ('3', 'pblock_CL_SLR2_S3')]
+    inside = {'pblock_CL_SLR0': (0, 3, 2, 3),         # X0Y0:X3Y3 less the SmartConnect rows
+              'pblock_CL_SLR1': (0, 3, 4, 7), 'pblock_CL_SLR2_S2': (0, 3, 8, 11),
+              'pblock_CL_SLR2_S3': (4, 7, 8, 11)}
+    for s, parent, x0, y0, x1, y1 in boxes:
+        X0, X1, Y0, Y1 = inside[parent]
+        x0, y0, x1, y1 = map(int, (x0, y0, x1, y1))
+        assert X0 <= x0 <= x1 <= X1 and Y0 <= y0 <= y1 <= Y1, (s, parent)
+        assert (x1 - x0 + 1) * (y1 - y0 + 1) == 6
+    assert 'otpu_s4_cells [list $tm/u_tmem $tm/u_dma $cp]' in tm
+    assert "IS_SOFT false [get_pblocks pblock_CL_TMEM$s]" in tm
