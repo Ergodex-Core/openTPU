@@ -46,6 +46,8 @@ REFERENCE_AUXILIARY = frozenset({
     "shell_objects", "shell_cdc", "shell_complete", "shell_timing",
     "shell_waivers", "gray_vendor", "handshake_vendor", "memory_vendor",
     "accounting", "accounting_linked", "accounting_receipt", "accounting_linked_receipt",
+    "accounting_boundary", "accounting_boundary_linked",
+    "accounting_boundary_receipt", "accounting_boundary_linked_receipt",
     "structural", "structural_receipt",
 })
 REVIEW_SOURCES = frozenset({
@@ -58,6 +60,7 @@ REVIEW_SOURCES = frozenset({
     "boards/c1_f2_alex/structural_review.py",
     "boards/c1_f2_alex/structural_capture_review.py",
     "boards/c1_f2_alex/capture_accounting.tcl",
+    "boards/c1_f2_alex/capture_accounting_boundary.tcl",
     "boards/c1_f2_alex/capture_native.tcl",
     "boards/c1_f2_alex/capture_structure.tcl",
     "boards/c1_f2_alex/routed_host_ready.tcl",
