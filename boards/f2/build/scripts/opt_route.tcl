@@ -29,6 +29,22 @@ if {$otpu_expect_hbm} {
     error "openTPU: inherited DDR firmware sentinel mismatch"
   }
 }
+# A legal core MMCM in place of an illegal one (route_opt.py --mmcm DIVCLK MULT): the same VCO,
+# so every clock keeps the period the design was placed and routed for; it clears DRC AVAL-168
+# (CLKFBOUT_MULT_F 4.8 is not a 0.125 step), which route qualification counts as a blocker
+if {[info exists ::env(OTPU_MMCM_MULT)] && $::env(OTPU_MMCM_MULT) ne ""} {
+  set otpu_mmcm [get_cells -quiet WRAPPER/CL/u_mmcm]
+  if {[llength $otpu_mmcm] != 1} { error "openTPU: no single core MMCM WRAPPER/CL/u_mmcm" }
+  set otpu_d0 [get_property DIVCLK_DIVIDE $otpu_mmcm]
+  set otpu_m0 [get_property CLKFBOUT_MULT_F $otpu_mmcm]
+  set otpu_d1 $::env(OTPU_MMCM_DIVCLK)
+  set otpu_m1 $::env(OTPU_MMCM_MULT)
+  if {abs(double($otpu_m0) / $otpu_d0 - double($otpu_m1) / $otpu_d1) > 1e-9} {
+    error "openTPU: MMCM M/D $otpu_m1/$otpu_d1 changes the VCO (it was $otpu_m0/$otpu_d0)"
+  }
+  set_property -dict [list DIVCLK_DIVIDE $otpu_d1 CLKFBOUT_MULT_F $otpu_m1] $otpu_mmcm
+  puts "OTPU_MMCM_SET DIVCLK_DIVIDE $otpu_d0 -> $otpu_d1 CLKFBOUT_MULT_F $otpu_m0 -> $otpu_m1"
+}
 report_timing_summary -delay_type min_max -file ${reports_dir}/${CL}.${TAG}.before_route_opt.rpt
 # Post-route physical optimization: the directives in order (route_opt.py --phys-opt-directive,
 # default Explore alone), each pass from the previous one's result, stopping once setup is met

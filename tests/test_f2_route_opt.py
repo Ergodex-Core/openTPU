@@ -241,6 +241,89 @@ puts "PASSES $passes"
     assert f'PASSES {" ".join(ran)}' in result.stdout
     assert 'QUALIFICATION_RUN' in result.stdout
 
+
+# A recovery run whose candidate met timing but was refused by qualification (DRC AVAL-168: the
+# core MMCM's M 4.8) seeds another recovery: its route_opt.unvalidated.dcp is a parent (with its
+# route_validation.txt as the evidence), never a package; any other run's candidate is refused
+@pytest.mark.parametrize('case', ['recovery', 'not_recovery', 'no_validation'])
+def test_recovery_accepts_a_previous_recovery_candidate_as_parent(tmp_path, case):
+    run, dcp = routed_parent(tmp_path, 'hbm')
+    first = tmp_path / 'recovery1'
+    recovery.prepare(first, run, dcp, recovery.flow.sha(dcp))
+    seed = first if case != 'not_recovery' else run
+    (seed / 'exit_code').write_text('1\n')
+    (seed / 'console.log').write_text('openTPU: routed design failed qualification\n')
+    cand = seed / 'cl_opentpu/build/checkpoints/cl_opentpu.01234567.route_opt.unvalidated.dcp'
+    cand.write_bytes(b'timing-met candidate refused by DRC AVAL-168')
+    if case != 'no_validation':
+        (seed / 'cl_opentpu/build/reports/cl_opentpu.01234567.route_validation.txt').write_text(
+            'setup_failed=0\nhold_failed=0\ndrc_blockers=1\n')
+    second = tmp_path / 'recovery2'
+    if case != 'recovery':
+        with pytest.raises(RuntimeError):
+            recovery.prepare(second, seed, cand, recovery.flow.sha(cand), mmcm=(5, 24.0))
+        return
+    cl, info = recovery.prepare(second, seed, cand, recovery.flow.sha(cand), mmcm=(5, 24.0))
+    assert info['parent_implementation']['run'] == str(first)
+    assert info['route_recovery']['mmcm'] == {'divclk': 5, 'clkfbout_mult_f': 24.0}
+    assert Path(info['route_recovery']['parent_checkpoint_copy']).read_bytes() == cand.read_bytes()
+
+
+# opt_route.tcl with --mmcm: the core MMCM's DIVCLK_DIVIDE / CLKFBOUT_MULT_F set before the
+# post-route passes, only when the VCO (M / D) stays the same
+@pytest.mark.parametrize('mult,ok', [('24.000', True), ('25.000', False)])
+def test_recovery_tcl_sets_a_legal_mmcm_with_the_same_vco(tmp_path, mult, ok):
+    tclsh = shutil.which('tclsh')
+    if not tclsh or not shutil.which('sha256sum'):
+        pytest.skip('Tcl or SHA256 utility unavailable')
+    scripts = tmp_path / 'build/scripts'
+    scripts.mkdir(parents=True)
+    (tmp_path / 'build/reports').mkdir()
+    (tmp_path / 'build/checkpoints').mkdir()
+    shutil.copy2(ROOT / 'boards/f2/build/scripts/opt_route.tcl', scripts / 'opt_route.tcl')
+    (scripts / 'validate_route.tcl').write_text('puts "QUALIFICATION_RUN"\n')
+    parent = tmp_path / 'parent.dcp'
+    parent.write_bytes(b'immutable parent fixture')
+    harness = f"""
+set env(BUILD_TAG) 01234567
+set env(OTPU_PARENT_DCP) {{{parent}}}
+set env(OTPU_PARENT_SHA256) {recovery.flow.sha(parent)}
+set env(OTPU_EXPECTED_DDR_INIT) none_hbm
+set env(OTPU_MMCM_DIVCLK) 5
+set env(OTPU_MMCM_MULT) {mult}
+set log {{}}
+proc set_param {{args}} {{}}
+proc open_checkpoint {{path}} {{}}
+proc close_design {{}} {{}}
+proc get_cells {{args}} {{ return [lindex $args end] }}
+proc get_property {{property object}} {{
+  if {{$property eq "DIVCLK_DIVIDE"}} {{ return 1 }}
+  if {{$property eq "CLKFBOUT_MULT_F"}} {{ return 4.800 }}
+  error "unexpected property $property"
+}}
+proc set_property {{args}} {{ lappend ::log "set_property $args" }}
+proc report_timing_summary {{args}} {{}}
+proc report_timing {{args}} {{}}
+proc phys_opt_design {{args}} {{ lappend ::log "phys_opt_design $args" }}
+proc get_nets {{args}} {{ return {{}} }}
+proc route_design {{args}} {{ error "unexpected reroute" }}
+proc write_checkpoint {{path}} {{ set f [open $path w]; puts $f candidate; close $f }}
+proc write_debug_probes {{args}} {{ set f [open [lindex $args end] w]; close $f }}
+if {{[catch {{source {{{scripts / 'opt_route.tcl'}}}}} err]}} {{ puts "STOPPED $err" }}
+foreach l $log {{ puts "LOG $l" }}
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    log = [l[4:] for l in result.stdout.splitlines() if l.startswith('LOG ')]
+    if ok:
+        assert log == ['set_property -dict {DIVCLK_DIVIDE 5 CLKFBOUT_MULT_F 24.000} WRAPPER/CL/u_mmcm',
+                       'phys_opt_design -directive Explore']
+        assert 'OTPU_MMCM_SET DIVCLK_DIVIDE 1 -> 5 CLKFBOUT_MULT_F 4.800 -> 24.000' in result.stdout
+        assert 'QUALIFICATION_RUN' in result.stdout
+    else:
+        assert 'STOPPED openTPU: MMCM M/D 25.000/5 changes the VCO' in result.stdout
+        assert log == []
+
 def test_validation_only_preparation_preserves_parent_design_and_selects_read_only_driver(tmp_path):
     run, dcp = routed_parent(tmp_path)
     cl, info = recovery.prepare(tmp_path / 'validation', run, dcp, recovery.flow.sha(dcp),
