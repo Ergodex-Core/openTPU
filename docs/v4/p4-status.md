@@ -382,6 +382,32 @@ over 2 endpoints, which phys_opt replicates. The 162.5 MHz SLR0-crossbar build p
 +0.030 (185), TMEM +0.155, HBM +0.096, shell +0.077; after phys_opt +0.030 / TNS 0, router
 initialization +0.133 / TNS 0.
 
+**Closed: the four-slice image at 175 MHz** (`/home/ubuntu/opt/hwloop-nightly/p4-866c920e/f2-burst200-s4-175-tmem2`:
+the 866c920e netlist, `floorplan_s4_tmem.tcl` of 470cf908, the flow's directives). Its route ended
+at -0.059 ns / +0.002 hold (`implement/implementation_result.txt`; TNS -2.56 over 114 endpoints:
+the pumped-TMEM paths were gone, TMEM +0.217 ns, and slice 0's adapter `u_mem/iss_w_reg` into
+the slice's `ic_base_reg[*]/CE` was the core clock's worst at -0.059, 6 levels, 4.6 of 5.25 ns
+in route, the write-done compare that `otpu_board`'s WDQ option would register), and the refine
+stage's first round (phys_opt Explore, route Explore) met timing: `refine/progress.txt` "Explore
+setup=0.000 hold=0.000", `refine/console.log` line 558 ROUTED_TIMING_PASS_PENDING_REPORT_REVIEW.
+Final per clock, `refine/route_timing.rpt`:
+
+| clock | setup WNS (ns) | failing / endpoints | hold WHS (ns) | line |
+|:--|--:|--:|--:|--:|
+| design | **0.000** | 0 / 2,324,622 | **0.000** | 183 ("All user specified timing constraints are met.", 186) |
+| core `clk_out1_f2_core_clk` 175 MHz | 0.000 | 0 / 2,015,914 | 0.000 | 224 |
+| TMEM `clk_out2_f2_core_clk` 350 MHz | +0.217 | 0 / 3,904 | +0.054 | 225 |
+| HBM AXI `clk_out1_f2_hbm_clk` 450 MHz | +0.002 | 0 / 92,278 | +0.010 | 222 |
+| shell `clk_main_a0` 250 MHz | +0.011 | 0 / 203,377 | +0.010 | 223 |
+| inter-clock | none violated | | | |
+
+`refine/post_route.dcp` 459,816,914 B, SHA-256
+`b958d4063deb95463787a1a04dc547af41dfa90bae0cd954c0f17bd8d99cf0eb`. The margin is zero on the
+core clock (build 11 shipped at +0.010). A chained post-route phys_opt recovery (the
+coordinator's opt_route.tcl recipe: AggressiveExplore, AggressiveFanoutOpt, AlternateReplication,
+Explore, ...) runs on the same run's pre-refine checkpoint for a candidate with margin
+(`.../f2-burst200-s4-175-tmem2/popt/`); the 162.5 MHz hedge (refining from -0.259) was stopped.
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
