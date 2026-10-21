@@ -195,6 +195,7 @@ otpu_board #(
   .TMEM_PMP(1),
   .COLL_PIPE(16),
   .COLL_F(8),
+  .WDQ(1),
   .S(4),
   .D(128),
   .MCOLS(4),

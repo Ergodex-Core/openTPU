@@ -58,6 +58,8 @@ TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_
 # and at S > 1 the collective's: COLL_PIPE, its reads in flight across the crossings (0: one),
 # COLL_F, the writes a slice's port holds (otpu_board; docs/v4/p4-status.md)
 COLL_KEYS = ("COLL_PIPE", "COLL_F")
+# and the memory adapter's: WDQ, its write-done compare a register (otpu_native_dram; timing only)
+MEM_KEYS = ("WDQ",)
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
@@ -189,7 +191,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + COLL_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + COLL_KEYS + MEM_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -290,6 +292,7 @@ def sim_uarch(t: Target | str | None = None) -> dict:
     if t.kind == "fpga" and t.arch["S"] > 1:    # the board's collective: the hub (otpu_top COLL_HUB)
         d["COLL_HUB"] = 1
         d.update({k: int(u[k]) for k in COLL_KEYS if k in u})
+    d.update({k: int(u[k]) for k in MEM_KEYS if k in u})
     return d
 
 
@@ -302,6 +305,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
     cfg = config(t)
     tm3 = {k: int(u[k]) for k in TMEM3_KEYS if k in u} if u["TMEM_IMPL"] == 3 else {}
     tm3 |= {k: int(u[k]) for k in COLL_KEYS if k in u and a["S"] > 1}
+    tm3 |= {k: int(u[k]) for k in MEM_KEYS if k in u}
     return tm3 | {
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],

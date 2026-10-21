@@ -46,6 +46,7 @@ module tb_top;
   parameter bit COLL_HUB   = 1'b0;    // S > 1: the collective through the board's hub (otpu_top)
   parameter int COLL_PIPE  = 0;       // COLL_HUB: the hub's reads in flight (otpu_board COLL_PIPE)
   parameter int COLL_F     = 8;       // COLL_HUB: the writes a port holds (otpu_board COLL_F)
+  parameter bit WDQ        = 1'b0;    // AXI: the adapter's write-done compare a register
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -63,7 +64,7 @@ module tb_top;
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
              .COLL_GATHER(COLL_GATHER || S > 1), .COLL_HUB(COLL_HUB), .COLL_PIPE(COLL_PIPE),
-             .COLL_F(COLL_F)) dut (
+             .COLL_F(COLL_F), .WDQ(WDQ)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 

@@ -7,6 +7,7 @@ cycles it is compared with are `measured` (the S = 4 gate or the Lens RTL run, V
 
     python tools/p4_lpn.py --vla-tree DIR --lpn DIR/lpn/language/src [--slices 4]
         [--prompt "Why is the sky blue?"] [--lat 30] [--rtl-cycles N] [--mhz 175] [--json out]
+        [--coll-beat A --coll-fixed B]
 
 What the net is (pi05_lpn's header has the whole description): the sequencer's one instruction
 a cycle into a 16-slot window with the scoreboard's RAW / WAR / WAW dependencies (opentpu.waits),
@@ -18,7 +19,11 @@ LANES 8, VPU_CL 2 and the sums at 8 a cycle, unpacked MMs, L_MM = CL 16 + MCOLS 
 the LD round trip at --lat (30: the HBM-like reference, the gate's OTPU_LAT) + 28. The
 collective: a GATHER is the unit's nominal S x rows x ceil(cols / 8) cycles (profile._describe)
 on one slice; the net has one slice, so the rendezvous skew and the hub's crossing latency are
-not in it (the RTL's "waiting on collectives" line is what they cost)."""
+not in it (the RTL's "waiting on collectives" line is what they cost). --coll-beat A /
+--coll-fixed B put the board's hub in: a GATHER of n beats costs A n + B, a BAR B (the
+collective through otpu_coll_hub: A ~9 with one read in flight, ~1 pipelined; B its crossings,
+rendezvous and ack; both fitted to the RTL's GATHERs, the hub in the simulation top, otpu_top
+COLL_HUB: a model of the hub, not of the slices' skew, which the net still cannot have)."""
 from __future__ import annotations
 
 import argparse
@@ -33,7 +38,8 @@ import numpy as np
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-from opentpu.isasim import ARG0  # noqa: E402  (this tree's opentpu first: the net reads its ISA)
+from opentpu import isa as I  # noqa: E402  (this tree's opentpu first: the net reads its ISA)
+from opentpu.isasim import ARG0  # noqa: E402
 
 LABEL = "lpn-estimate"
 
@@ -103,6 +109,10 @@ def main() -> None:
     ap.add_argument("--lat", type=int, default=30, help="the memory's read latency (OTPU_LAT)")
     ap.add_argument("--rtl-cycles", type=int, default=None, help="the measured RTL token")
     ap.add_argument("--mhz", type=float, default=175.0)
+    ap.add_argument("--coll-beat", type=float, default=1.0,
+                    help="cycles a GATHER beat costs (1: the unit's nominal rate)")
+    ap.add_argument("--coll-fixed", type=float, default=0.0,
+                    help="cycles a collective's crossings, rendezvous and ack add")
     ap.add_argument("--json")
     a = ap.parse_args()
     m = load_net(a.vla_tree.resolve(), a.lpn.resolve())
@@ -116,8 +126,13 @@ def main() -> None:
     out = {"label": LABEL, "slices": [], "knobs": {k: getattr(kn, k) for k in vars(kn)},
            "cfg": {"S": cfg.S, "MCOLS": cfg.MCOLS, "LANES": cfg.LANES, "E": E}, "pos": pos,
            "next_token": nxt}
+    out["coll"] = {"beat": a.coll_beat, "fixed": a.coll_fixed}
     for s, prog in enumerate(programs):
         dyn = m.expand(prog, cfg, kn, E, regs)      # the step's run arguments in R8..R15
+        for d in dyn:                               # the board's hub (--coll-beat / --coll-fixed)
+            if d.unit == m.U_COLL and (a.coll_beat != 1 or a.coll_fixed):
+                beat = a.coll_beat if d.ins.op == I.GATHER else 1.0
+                d.cyc = int(round(beat * d.cyc + a.coll_fixed))
         net = m.Net(dyn, kn)
         t1 = time.time()
         cyc, n, wall = net.run(), len(dyn), time.time() - t1
@@ -126,7 +141,8 @@ def main() -> None:
         out["slices"].append({"cycles": int(cyc), "instructions": n, "busy": busy})
     tok = max(sl["cycles"] for sl in out["slices"])
     out["token_cycles"] = tok
-    line = f"token ({LABEL}, the slowest slice): {tok:,} cycles = {tok / a.mhz / 1e3:.2f} ms, " \
+    line = f"token ({LABEL}, the slowest slice; a GATHER beat {a.coll_beat:g} cycles, a collective " \
+           f"+{a.coll_fixed:g}): {tok:,} cycles = {tok / a.mhz / 1e3:.2f} ms, " \
            f"{a.mhz * 1e6 / tok:.1f} tok/s at {a.mhz:g} MHz"
     if a.rtl_cycles:
         err = tok / a.rtl_cycles - 1

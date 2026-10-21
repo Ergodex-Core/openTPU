@@ -51,6 +51,7 @@ module otpu_top
   parameter bit COLL_HUB   = 1'b0,    // S > 1: the collective through the board's hub (see the top)
   parameter int COLL_PIPE  = 0,       // COLL_HUB: the hub's reads in flight (otpu_board COLL_PIPE)
   parameter int COLL_F     = 8,       // COLL_HUB: the writes a port holds (otpu_board COLL_F)
+  parameter bit WDQ        = 1'b0,    // AXI: the adapter's write-done compare a register (otpu_board WDQ)
   parameter int NCH        = 2        // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
 ) (
   input  logic          clk,
@@ -113,7 +114,7 @@ module otpu_top
       logic [NCH-1:0][511:0] wdata, rdata;
       logic [NCH-1:0][63:0] wmask;
       logic [NCH-1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128)) u_adapt (
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .WDQ(WDQ)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,

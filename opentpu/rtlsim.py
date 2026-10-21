@@ -229,6 +229,10 @@ if os.environ.get("OTPU_ULANES"):
 for _k in ("HUB", "PIPE", "F"):
     if os.environ.get("OTPU_COLL_" + _k):
         UARCH["COLL_" + _k] = BOARD_UARCH["COLL_" + _k] = int(os.environ["OTPU_COLL_" + _k])
+# The memory adapter's write-done compare a register (timing only; otpu_native_dram WDQ, the AXI
+# memory path): OTPU_WDQ=1
+if os.environ.get("OTPU_WDQ"):
+    UARCH["WDQ"] = BOARD_UARCH["WDQ"] = int(os.environ["OTPU_WDQ"])
 
 # The memory path. AXI: the board's memory path -- its adapter (otpu_native_dram) in front of a
 # two-channel native memory model (sim/verilator/otpu_native_mem.sv) with random stalls (percent)

@@ -3,7 +3,8 @@
 # reads in flight across the SLR crossings. 470cf908's hub has one read in flight, so a GATHER beat
 # of 8 words costs the read's round trip through the crossings and the slice's port (~9 cycles),
 # 11.3% of the card's Gemma token (hwlens); otpu_coll_pu and the hub and ports at COLL_PIPE 16
-# keep up to 16 reads in flight, one a cycle. COLL_F: the writes a slice's port holds. Everything
+# keep up to 16 reads in flight, one a cycle. COLL_F: the writes a slice's port holds. WDQ: the
+# adapters' write-done compare a register (core margin; the F2 HBM board's option). Everything
 # else is f2-burst200-s4-175's (S = 4, slices 0 | 1 | 2 and 3 in SLR0 | SLR1 | SLR2, the host
 # crossbar in SLR0, the core at 175 MHz), with its closing floorplan, floorplan_s4_tmem.tcl (a box
 # per slice for its pumped TMEM, DMA and collective port); the top is the s4 generator's with the
@@ -50,6 +51,8 @@ PQ_WIN = 1024
 CHASH = true
 COLL_PIPE = 16                  # the collective's reads in flight across the crossings (otpu_board)
 COLL_F = 8                      # the writes a slice's collective port holds
+WDQ = true                      # the adapters' write-done compare a register (otpu_native_dram: the
+                                #   866c920e route's -0.059 ns core path, iss_w -> the slice's ic_base CE)
 [tech]
 family = "xilinxus"
 part = "xcvu47p-fsvh2892-2-e"

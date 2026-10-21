@@ -118,21 +118,23 @@ def test_build_variants_differ_in_the_core_clock_alone():
 
 def test_pipelined_collective_target():
     """f2-burst200-s4-175p: the 175 MHz target with the collective's two parameters (COLL_PIPE 16
-    reads in flight, COLL_F 8 writes a port) and floorplan_s4_tmem.tcl, nothing else; the same
-    CFG_HASH (a host takes either image); its top is the 175 MHz top with .COLL_PIPE / .COLL_F
-    alone; its simulations take the board's hub (sim_uarch COLL_HUB) with both."""
+    reads in flight, COLL_F 8 writes a port), the adapters' WDQ and floorplan_s4_tmem.tcl,
+    nothing else; the same CFG_HASH (a host takes either image); its top is the 175 MHz top with
+    .COLL_PIPE / .COLL_F / .WDQ alone; its simulations take the board's hub (sim_uarch COLL_HUB)
+    with the three."""
     t, t175 = T.load(str(S4P)), T.load(str(S4_SLOWER[0][0]))
     assert t.arch == t175.arch and t.tech == t175.tech and t.platform_id == t175.platform_id
-    assert t.uarch == dict(t175.uarch, COLL_PIPE=16, COLL_F=8)
+    assert t.uarch == dict(t175.uarch, COLL_PIPE=16, COLL_F=8, WDQ=True)
     assert t.platform == dict(t175.platform, rtl_board=S4P.stem, floorplan='floorplan_s4_tmem.tcl')
     assert T.arch_hash(T.config(t)) == T.arch_hash(T.config(t175))
     p, p175 = T.rtl_params(t), T.rtl_params(t175)
-    assert p == dict(p175, COLL_PIPE=16, COLL_F=8)
-    assert T.sim_uarch(t) == dict(T.sim_uarch(t175), COLL_PIPE=16, COLL_F=8)
+    assert p == dict(p175, COLL_PIPE=16, COLL_F=8, WDQ=1)
+    assert T.sim_uarch(t) == dict(T.sim_uarch(t175), COLL_PIPE=16, COLL_F=8, WDQ=1)
     assert T.sim_uarch(t175)['COLL_HUB'] == 1 and 'COLL_PIPE' not in T.sim_uarch(t175)
     a, b = S4_SLOWER[0][1].read_text().splitlines(), TOP4P.read_text().splitlines()
     extra = [x for x in b if x not in a]
-    assert extra == ['  .COLL_PIPE(16),', '  .COLL_F(8),'] and [x for x in a if x not in b] == []
+    assert extra == ['  .COLL_PIPE(16),', '  .COLL_F(8),', '  .WDQ(1),']
+    assert [x for x in a if x not in b] == []
     pl = flow.plan(S4P)
     assert pl['floorplan'].name == 'floorplan_s4_tmem.tcl' and pl['core_mhz'] == 175.0
     assert any(q == TOP4P for q in pl['rtl'])

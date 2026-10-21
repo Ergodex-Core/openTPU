@@ -604,11 +604,11 @@ class SimTransport:
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
             p["COLL_GATHER"] = int(rtlsim.UARCH["COLL_GATHER"])
-        from opentpu.target import COLL_KEYS, sim_uarch
-        # the collective at S > 1 as the target builds it (COLL_PIPE, COLL_F); OTPU_COLL_*
-        # (rtlsim.UARCH) override
-        p.update({k: v for k, v in sim_uarch(self.target).items() if k in COLL_KEYS})
-        p.update({k: v for k, v in rtlsim.UARCH.items() if k in COLL_KEYS})
+        from opentpu.target import COLL_KEYS, MEM_KEYS, sim_uarch
+        # the collective at S > 1 and the adapter as the target builds them (COLL_PIPE, COLL_F,
+        # WDQ); OTPU_COLL_* / OTPU_WDQ (rtlsim.UARCH) override
+        p.update({k: v for k, v in sim_uarch(self.target).items() if k in COLL_KEYS + MEM_KEYS})
+        p.update({k: v for k, v in rtlsim.UARCH.items() if k in COLL_KEYS + MEM_KEYS})
         # the TMEM as the target builds it (TMEM_IMPL 3: the one copy and its knobs, pumped on
         # tb_board's clk_f with PMP 1); OTPU_TMEM_* (rtlsim.UARCH) override
         tm = {k: v for k, v in sim_uarch(self.target).items() if k.startswith("TMEM_")}

@@ -39,6 +39,7 @@ module tb_board;
   parameter int TRACE_QD   = 32;
   parameter int COLL_PIPE  = 0;            // S > 1: the collective's reads in flight (otpu_board)
   parameter int COLL_F     = 8;            // S > 1: the writes a slice's collective port holds
+  parameter bit WDQ        = 1'b0;         // the adapters' write-done compare a register
   parameter int PQ_WIN     = 1024;
   parameter bit DSTEP      = 1'b1;
   parameter int MEM_NATIVE = 2;            // the channels: 2 otpu_chmem (otpu_mem_ch and a LiteDRAM
@@ -107,7 +108,7 @@ module tb_board;
                .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS), .TRACE_DEPTH(TRACE_DEPTH), .TRACE_QD(TRACE_QD),
                .PQ_WIN(PQ_WIN), .DSTEP(DSTEP), .HOSTCAL(HOSTCAL), .SEQ_WC(SEQ_WC), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .COLL_GATHER(COLL_GATHER || S > 1), .COLL_PIPE(COLL_PIPE),
-               .COLL_F(COLL_F), .TMEM_IMPL(TMEM_IMPL),
+               .COLL_F(COLL_F), .WDQ(WDQ), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL),
                .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK),
                .TMEM_SDM(TMEM_SDM)) dut (
