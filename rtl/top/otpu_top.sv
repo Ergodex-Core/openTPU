@@ -111,7 +111,8 @@ module otpu_top
       logic [NCH-1:0][511:0] wdata, rdata;
       logic [NCH-1:0][63:0] wmask;
       logic [NCH-1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .PORTB(PORTB), .ALINE(ALINE),
+      // Keep the RTL performance model's credit depth equal to otpu_board NRD.
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH == 8 ? 128 : (NCH > 2 ? 64 : 128)), .PORTB(PORTB), .ALINE(ALINE),
                          .APR(RL != 0 ? 16 : 1)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
