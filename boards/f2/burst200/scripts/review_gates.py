@@ -98,7 +98,8 @@ def drc_gate(rpt: Path) -> dict:
                 rows.append(ev(rpt, i, l))
     out = {"errors": sev.get("Error", 0), "critical_warnings": sev.get("Critical Warning", 0),
            "warnings": sev.get("Warning", 0), "evidence": rows[:20]}
-    found = [ev(rpt, i, l) for i, l in enumerate(L) if re.search(r"Violations found:\s*\d+", l)]
+    found = [ev(rpt, i, l) for i, l in enumerate(L)
+             if re.search(r"(Violations|Checks) found:\s*\d+", l)]        # (2025.2: "Checks found")
     out["evidence"] = found[:1] + out["evidence"]
     out["pass"] = bool(found and out["errors"] == 0 and out["critical_warnings"] == 0)
     if not out["pass"]:

@@ -330,3 +330,94 @@ instead of the native path's 14) 4,415,543 (-4.5%) (`/home/ubuntu/opt/logs/p1-wp
 the whole chunk 1.477 s / 0.68 Hz (lpnlang) and 1.414 s / 0.71 Hz (dialect) at 200 MHz, the
 cut phases within -17.9..+5.5% of their Verilator cycles (`/home/ubuntu/opt/logs/p1-pi05lpn.log`,
 `/home/ubuntu/lens-runs/p1/pi05-lpn-{phases,full}.json`).
+
+### 6.5 Vivado (burst200 flow, m8a, Vivado 2025.2; per-clock tables from report_timing_summary)
+
+Clocks: the core 200 MHz (clk_out1_f2_core_clk, 5.000 ns) and the pumped TMEM's 400 MHz
+(clk_out2, 2.500 ns) from one clk_wiz on clk_main_a0 (M 24.000, D 5, O 6.000 / 3, VCO 1200 MHz:
+exactly 200 / 400, the link stage's VERIFIED_CORE_CLOCK 5.000 / 2.500 ns; no AVAL-168), the HBM
+side's 450 MHz (clk_out1_f2_hbm_clk), the shell's clk_main_a0 250 MHz.
+
+**Synthesis (b1, 93064ad1)**: CL 184,062 LUTs (29,940 LUTRAM), 195,575 FFs, 322 RAMB36, 1,275 DSP,
+no URAM; the board 137,834 LUTs / 318 RAMB36 / 1,275 DSP (the MXU 1,122 DSP, the two ACT RAM
+copies 68 RAMB36 each), the CPC 2 adapter 23,649 LUTs (11,320 LUTRAM), each SmartConnect 16,615
+LUTs / 28,094 FFs (`.../p1-93064ad1/b1/synth_link/synth_utilization.rpt`). pblock_CL_SLR0 after
+opt_design: LUT 33.5%, LUTRAM 23.4%, FF 21.9%, RAMB36 54.5% (327 / 600), DSP 50.1% (1,275 /
+2,544) (`slr0_utilization.rpt`).
+
+**b1** placed in 23 min, then its post_place.dcp write failed: the box's root disk filled at 17:02
+UTC (the coordinator grew it to 678 GB). **b2** (the same netlist, `--from-netlist b1`):
+
+| stage | WNS / TNS (failing) | core 200 | TMEM 400 | 400 -> 200 / 200 -> 400 | HBM 450 | host 250 | report |
+|:--|:--|--:|--:|--:|--:|--:|:--|
+| placed | -0.741 / -423.0 (3,160) | -0.741 (2,874) | -0.132 | -0.356 / -0.330 | +0.033 | +0.613 | b2/implement/place_timing.rpt |
+| phys_opt (estimate) | +0.005 / 0 | | | | | | b2/implement/console.log |
+| routed | -0.037 / -2.922 (190) | -0.031 (150) | -0.026 (7) | -0.029 / -0.037 | +0.014 | +0.164 | b2/implement/route_timing.rpt |
+| refine Explore, AggressiveExplore | -0.027, -0.006 / -0.062 (20) | -0.006 (17) | +0.018 | -0.005 / met | +0.014 | +0.164 | b2/refine/route_timing.rpt |
+| recover (4 post-route phys_opt passes) | -0.006 | | | | | | b2/recover/progress.txt |
+
+b2's placed worst paths (`p1-b7ae926d/b2-place-analysis/worst200.rpt`): the board's SLR0 reset
+through otpu_axil_iso's combinational readies into the OCL converter in SLR1 (-0.741, 5.07 ns of
+route); the pumped TMEM's read data into the DMA / VPU (-0.356); the adapter's SW queue count
+through `sw_rdy` into the quantizer's grant (its pipeline enable, 7,941 loads; -0.344); the
+adapter's hazard buckets and port-A run address (up to 11 levels); its write count into the
+status synchronizer in SLR1 (-0.361). phys_opt replicated the reset and the enables away; the
+refined state's last 20 endpoints were the SW write's channel hash into the queue count, the
+TMEM's reads into the DMA / VPU, the sequencer's issue registers and the hazard buckets.
+
+The fixes, each gated in Verilator (6.3): the control path through `f2_ocl_pipe` in SLR0 and the
+status synchronizer in SLR0 (3d982d6e), `sw_rdy` from a register (d3373cdf), the SW channel
+from the slice's registered parity `sw_par` (2f7ddc9d). b3 = 57584b2b (the first two), b4 =
+2f7ddc9d (all three).
+
+**b3 (57584b2b: the OCL register slice, the status synchronizer in SLR0, `sw_rdy` registered):
+timing met, all six gates pass.** Run `/home/ubuntu/opt/hwloop-nightly/p1-57584b2b/b3`:
+
+| clock | placed (implement/place_timing.rpt) | routed (implement/route_timing.rpt) | final: refine Explore, audit (audit/timing.rpt) |
+|:--|--:|--:|--:|
+| design WNS / TNS, WHS | -0.482 / -3.604 (78), -0.502 (line 144) | +0.001 / 0, +0.004 (line 183) | **+0.001 / 0 (0 of 956,783), WHS +0.004** (line 183) |
+| core 200 MHz (clk_out1_f2_core_clk) | -0.006 (18; line 185) | +0.001 (line 224) | **+0.001**, WHS +0.004 (line 224) |
+| TMEM 400 MHz (clk_out2_f2_core_clk) | -0.118 (32; line 186) | +0.009 (line 225) | **+0.009**, WHS +0.101 (line 225) |
+| 400 -> 200 / 200 -> 400 | -0.005 / -0.064 (lines 201-202) | +0.010 / +0.007 (lines 240-241) | **+0.010 / +0.007** (lines 240-241) |
+| HBM 450 MHz (clk_out1_f2_hbm_clk) | +0.067 (line 183) | +0.006 (line 222) | **+0.006**, WHS +0.010 (line 222) |
+| host 250 MHz (clk_main_a0) | +0.377 (line 184) | +0.158 (line 223) | **+0.158**, WHS +0.010 (line 223) |
+
+The audit (`audit/`, `scripts/gate_summary.sh`, `scripts/review_gates.py` -> `audit/review.json`):
+setup, hold and pulse width met ("All user specified timing constraints are met"); 0 nets
+with routing errors (400,472 fully routed); DRC 0 errors, 0 critical warnings (835 warnings:
+DPIP-2 / DPOP-3 / DPOP-4 DSP pipelining, BUFC-1, FLBO-1 x3 the SmartConnect and crossbar
+grandchild pblocks as in build 11, RTSTAT-10 x1; advisories AVAL-155 / 156, HDPRA-57; no
+AVAL-168); CDC 9 criticals, all False Path from the shell's hidden reset flops into the CL's
+reset synchronizers, 0 outside an exception (builds 6 and 11's profile); bus skew 93 rows, 0
+violated; check_timing 0 unconstrained internal endpoints, the shell's 35 no_clock pins and one
+hidden shell pulse-width pin. The margins are thin (+0.001 ns setup on the core clock; build 6
+shipped at +0.035, build 11 at +0.010).
+
+**b4 (2f7ddc9d: b3 plus `sw_par`)** placed at -0.471 and routed at -0.614 ns, refine -0.546: its
+placement landed worse (not packaged; `p1-2f7ddc9d/b4`).
+
+### 6.6 The package and the card (for the coordinator)
+
+`package_f2.py` on b3's audited checkpoint (local only: not uploaded, no AFI):
+`/home/ubuntu/opt/hwloop-nightly/p1-57584b2b/b3/package/cl/build/checkpoints/otpu_p1_cpc2_57584b2b.Developer_CL.tar`
+(181,831,680 B, SHA-256 eb5f7b1dee62898f19fbcc66eaba05491cfc953326a32fc923cdda5e93801cd6);
+its manifest: dcp_hash 52d12bfd8c040e06dfc6c4f5e696a46798c0496b0b8e417231d3cf704ed7fd17 (the
+reviewed `refine/post_route.dcp`), shell 0x10212415, HDK 2.3.0, Vivado v2025.2, PCI
+1D0F:F001 / FEDD:1D51, clock recipes A1 / B2 / C0 / H2. The review JSON is the agent's reading
+of the six gates; the sign-off is the coordinator's. The image's RTL is 57584b2b's; the branch's
+later 2f7ddc9d (`sw_par`, gated in Verilator, its build b4 not closed) is not in it, and changes
+nothing the host sees (the same CFG_HASH).
+
+Bring-up: the host must be this branch's (its CPC 2 channel map and windows: four channels of
+1 GiB at BAR4 0 / 2 / 4 / 6 GiB). An older host refuses the image: tpubench's f2.py rejects the
+CFG_DRAM geometry (four 1 GiB channels) and its device_config's CPC 1 hash is not CFG_HASH
+0x54839966. Checks in order: CFG_PLATFORM 3, CAPS2 [3:1] = 2, CFG_DRAM 4 channels of 1 GiB and
+4 GiB a slice, CFG_HASH 54839966, BUILD_ID 0x50310002, CORE_KHZ 200000. Then
+`OTPU_DEVICE=f2:<slot> python -m opentpu.host.chat --backend board --dev f2:<slot> --model gemma3
+--greedy --prompt "Why is the sky blue? Answer in two sentences."` and `python -m
+opentpu.host.hwlens record --dev f2:<slot> --model models/gemma-3-1b-it -o p1-hw.otpuprof`. The
+image load writes 4 GiB of zeros once (scrub) and the 1.05 GB image.
+
+What the card should show, as predictions from the RTL (not measured): about 41 device tok/s
+at 200 MHz (4.84-4.89 M cycles a token on the F2 path, resident, position 14), if the four
+ports deliver what build 6's two did (89% of the native port rate).
