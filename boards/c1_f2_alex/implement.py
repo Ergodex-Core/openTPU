@@ -24,8 +24,149 @@ STAGES = ('link', 'implement', 'refine', 'qualify')
 PREVIOUS = {'implement': 'link', 'refine': 'implement', 'qualify': 'refine'}
 CHECKPOINTS = {'link': 'post_link.dcp', 'implement': 'post_route.dcp', 'refine': 'post_route.dcp'}
 FORBIDDEN_CONTROLS = ('tuning.tcl', 'incremental_reference.txt', 'incremental_reference.sha256')
-PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt')
+PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt', 'align-promoted-carry-pblocks')
 
+
+# Two synthesis-promoted carry predecessors escaped their original u_board
+# hierarchy and inherited the parent Pblock instead of the hard SLR0 child.
+# Tighten only those two memberships; do not rewrite logic or region bounds.
+CARRY_PBLOCK_SCRIPT = r'''
+namespace eval ::c1_carry_pblock {
+  variable output [open $::run/carry_pblock_repair.tcldata {WRONLY CREAT EXCL}]
+  set run $::run
+proc emit {kind value} {
+  set line [list $kind $value]
+  if {[string bytelength $line] > 1048576} {error "Observation record bound"}
+  puts $::c1_carry_pblock::output $line
+}
+proc selector {name} {return [format {NAME == "%s"} $name]}
+proc one {count label} {
+  if {$count != 1} {error "Expected one object for $label, got $count"}
+}
+set pairs [list \
+  [list {WRAPPER/CL/engines[15].engine/sums_reg[0][17][3]_i_2} {WRAPPER/CL/u_board/core/cluster/engines[15].engine/sums_reg[0][17][16]_i_11}] \
+  [list {WRAPPER/CL/engines[15].engine/sums_reg[0][15][2]_i_1} {WRAPPER/CL/u_board/core/cluster/engines[15].engine/sums_reg[0][15][11]_i_18}]]
+set targets {}
+foreach pair $pairs {foreach name $pair {dict set targets $name 1}}
+emit header [dict create schema 1 kind c1_promoted_carry_pblock_repair route_qualified 0 hardware_actions 0]
+
+# Prove the exact current primitive identities and closed carry chain boundaries.
+# CI/CI_TOP are inspected through complete leaf-driver inventories. Every
+# connected CO output is checked for other carry successors before mutation.
+foreach pair $pairs {
+  lassign $pair first last
+  foreach name $pair {
+    one [llength [get_cells -hierarchical -filter [selector $name]]] $name
+    foreach cell [get_cells -hierarchical -filter [selector $name]] {
+      if {[get_property REF_NAME $cell] ne "CARRY8" || [get_property CARRY_TYPE $cell] ne "SINGLE_CY8"} {error "Wrong carry primitive"}
+      if {[get_property DONT_TOUCH $cell] ni {"" 0 false FALSE}} {error "Protected target"}
+      emit target [dict create name $name ref CARRY8 carry_type SINGLE_CY8]
+      foreach port {CI CI_TOP} {
+        one [llength [get_pins -of_objects $cell -filter [format {REF_PIN_NAME == "%s"} $port]]] "$name/$port"
+        foreach pin [get_pins -of_objects $cell -filter [format {REF_PIN_NAME == "%s"} $port]] {
+          one [llength [get_nets -of_objects $pin]] "$name/$port net"
+          foreach net [get_nets -of_objects $pin] {
+            one [llength [get_pins -leaf -of_objects $net -filter {DIRECTION == OUT}]] "$name/$port driver"
+            foreach source [get_pins -leaf -of_objects $net -filter {DIRECTION == OUT}] {
+              set source_name [get_property NAME $source]
+              one [llength [get_cells -of_objects $source]] $source_name
+              foreach owner [get_cells -of_objects $source] {
+                if {$name eq $last && $port eq "CI"} {
+                  if {[get_property NAME $owner] ne $first || [get_property REF_PIN_NAME $source] ne {CO[7]}} {error "Chain input differs"}
+                } elseif {[get_property REF_NAME $owner] ne "GND"} {error "Carry chain has another predecessor"}
+                emit input [dict create cell $name pin $port source $source_name source_ref [get_property REF_NAME $owner]]
+              }
+            }
+          }
+        }
+      }
+      set successor_count 0
+      foreach pin [get_pins -of_objects $cell -filter {DIRECTION == OUT}] {
+        if {![regexp {^CO\[[0-7]\]$} [get_property REF_PIN_NAME $pin]]} {continue}
+        foreach net [get_nets -of_objects $pin] {
+          set count [llength [get_pins -leaf -of_objects $net -filter {DIRECTION == IN}]]
+          if {$count > 128} {error "Carry-output endpoint bound"}
+          foreach sink [get_pins -leaf -of_objects $net -filter {DIRECTION == IN}] {
+            foreach owner [get_cells -of_objects $sink] {
+              if {[get_property REF_NAME $owner] eq "CARRY8" && [get_property REF_PIN_NAME $sink] in {CI CI_TOP}} {
+                if {$name ne $first || [get_property NAME $owner] ne $last ||
+                    [get_property REF_PIN_NAME $pin] ne {CO[7]} || [get_property REF_PIN_NAME $sink] ne "CI"} {error "Unexpected carry successor"}
+                incr successor_count
+                emit successor [dict create source [get_property NAME $pin] sink [get_property NAME $sink]]
+              }
+            }
+          }
+        }
+      }
+      if {$successor_count != [expr {$name eq $first ? 1 : 0}]} {error "Carry chain closure differs"}
+    }
+  }
+}
+
+proc net_names {pin} {
+  set nets [get_nets -of_objects $pin]
+  if {![llength $nets]} {return {}}
+  return [lsort [get_property NAME $nets]]
+}
+set block_properties {PARENT GRID_RANGES IS_SOFT CONTAIN_ROUTING SNAPPING_MODE EXCLUDE_PLACEMENT}
+set region_before {}
+foreach name {pblock_CL pblock_CL_SLR0} {
+  set block [get_pblocks -filter [selector $name]]
+  one [llength $block] $name
+  foreach property $block_properties {
+    dict set region_before $name $property [get_property $property $block]
+  }
+}
+if {[dict get $region_before pblock_CL_SLR0 PARENT] ne "pblock_CL" ||
+    [dict get $region_before pblock_CL_SLR0 IS_SOFT] ne "0" ||
+    [dict get $region_before pblock_CL PARENT] ne "ROOT" ||
+    [dict get $region_before pblock_CL IS_SOFT] ne "0"} {error "Unexpected carry region hierarchy"}
+emit region_before $region_before
+set pin_nets {}
+foreach pair $pairs {
+  lassign $pair first last
+  foreach name $pair {
+    set cell [get_cells -hierarchical -filter [selector $name]]
+    set wanted [expr {$name eq $first ? "pblock_CL" : "pblock_CL_SLR0"}]
+    if {[get_property PBLOCK $cell] ne $wanted ||
+        [get_pblocks -of_objects $cell] ne $wanted} {error "Carry Pblock membership differs"}
+    emit membership_before [dict create cell $name pblock $wanted]
+    foreach pin [get_pins -of_objects $cell] {
+      dict set pin_nets [get_property NAME $pin] [net_names $pin]
+    }
+  }
+}
+foreach pair $pairs {
+  set name [lindex $pair 0]
+  add_cells_to_pblock [get_pblocks pblock_CL_SLR0] [get_cells -hierarchical -filter [selector $name]]
+}
+set pins_after {}
+foreach name [dict keys $targets] {
+  set cell [get_cells -hierarchical -filter [selector $name]]
+  one [llength $cell] $name
+  if {[get_property REF_NAME $cell] ne "CARRY8" ||
+      [get_property CARRY_TYPE $cell] ne "SINGLE_CY8" ||
+      [get_property PBLOCK $cell] ne "pblock_CL_SLR0" ||
+      [get_pblocks -of_objects $cell] ne "pblock_CL_SLR0"} {error "Carry membership repair incomplete"}
+  foreach pin [get_pins -of_objects $cell] {
+    set pin_name [get_property NAME $pin]
+    lappend pins_after $pin_name
+    if {[net_names $pin] ne [dict get $pin_nets $pin_name]} {error "Carry pin connectivity changed"}
+  }
+  emit membership_after [dict create cell $name pblock pblock_CL_SLR0]
+}
+if {[lsort $pins_after] ne [lsort [dict keys $pin_nets]]} {error "Carry pin inventory changed"}
+foreach name {pblock_CL pblock_CL_SLR0} {
+  foreach property $block_properties {
+    if {[get_property $property [get_pblocks $name]] ne [dict get $region_before $name $property]} {error "Carry Pblock region changed"}
+  }
+}
+emit complete [dict create added_cells 2 carry_primitives_and_pin_nets_preserved 1 region_properties_unchanged 1 route_qualified 0 hardware_actions 0]
+close $output
+}
+namespace delete ::c1_carry_pblock
+puts C1_CARRY_PBLOCK_REPAIR_COMPLETE_NOT_ROUTE_QUALIFIED
+'''
 
 def require(ok, message):
     if not ok:
@@ -324,13 +465,17 @@ def physical_script(script, strategy):
     require(strategy in PHYSICAL_STRATEGIES, 'Unknown physical implementation strategy')
     require('synth_design' not in script, 'Physical continuation unexpectedly requests synthesis')
     require(not re.search(r'general\.maxThreads (?!4\b)\d+', script), 'Thread limit changed')
-    if strategy == 'skip-pre-route-phys-opt':
+    if strategy in ('skip-pre-route-phys-opt', 'align-promoted-carry-pblocks'):
         # The first packed C1 route failed on two CARRY8 cascade pins after
         # AggressiveExplore. Keep placement/routing and every timing constraint;
         # this explicit alternative omits only that pre-route optimization pass.
         old = '  phys_opt_design -directive AggressiveExplore\n'
         require(script.count(old) == 1, 'Physical optimization anchor changed')
         script = script.replace(old, '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
+    if strategy == 'align-promoted-carry-pblocks':
+        old = 'write_checkpoint -force $run/post_opt.dcp\n'
+        require(script.count(old) == 1, 'Post-opt checkpoint anchor changed')
+        script = script.replace(old, CARRY_PBLOCK_SCRIPT + old)
     return script
 
 

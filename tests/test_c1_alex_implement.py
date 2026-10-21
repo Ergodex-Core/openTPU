@@ -179,6 +179,41 @@ def test_explicit_skip_strategy_changes_only_pre_route_physical_pass(context, mo
     m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
 
 
+def test_carry_pblock_repair_keeps_link_ancestry_and_constraints(context, monkeypatch):
+    stage_run(context, monkeypatch, 'link')
+    out = context.tmp / 'carry-pblock-repair'
+    inputs = m.prepare(out, 'implement', context.origin, context.previous, context.hdk,
+                       physical_strategy='align-promoted-carry-pblocks')
+    original = (context.run / 'implement/build.tcl').read_text()
+    expected = original.replace('  phys_opt_design -directive AggressiveExplore\n',
+                                '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
+    expected = expected.replace('write_checkpoint -force $run/post_opt.dcp\n',
+                                m.CARRY_PBLOCK_SCRIPT + 'write_checkpoint -force $run/post_opt.dcp\n')
+    assert (out / 'run.tcl').read_text() == expected
+    assert inputs['source_checkpoint']['sha256'] == b.sha(context.previous['checkpoint'])
+    assert inputs['source_revision'] != inputs['executor_revision']
+    for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
+        assert (out / name).read_bytes() == (context.run / 'implement' / name).read_bytes()
+    fake_tool(context, monkeypatch, 'implement')
+    m.execute(out, 'implement', context.origin, context.previous, inputs, context.hdk, 'vivado')
+    m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
+
+
+def test_carry_pblock_repair_rejects_changed_post_opt_anchor(context):
+    script = (context.run / 'implement/build.tcl').read_text()
+    anchor = 'write_checkpoint -force $run/post_opt.dcp\n'
+    for changed in (script.replace(anchor, ''), script + anchor):
+        with pytest.raises(RuntimeError, match='anchor'):
+            m.physical_script(changed, 'align-promoted-carry-pblocks')
+
+
+@pytest.mark.parametrize('stage', ['link', 'refine', 'qualify'])
+def test_carry_pblock_repair_cannot_run_in_other_stages(context, stage):
+    with pytest.raises(RuntimeError, match='only to implementation'):
+        m.prepare(context.tmp / stage, stage, context.origin, context.previous, context.hdk,
+                  physical_strategy='align-promoted-carry-pblocks')
+
+
 @pytest.mark.parametrize('strategy', ['unknown', 'Explore', '', None])
 def test_unknown_physical_strategy_rejected(context, strategy):
     with pytest.raises(RuntimeError, match='strategy'):
