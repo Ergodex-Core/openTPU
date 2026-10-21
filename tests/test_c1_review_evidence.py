@@ -1,4 +1,5 @@
 import copy
+import importlib.util
 import io
 import tarfile
 import unittest
@@ -149,6 +150,20 @@ def test_schema3_review_claim_cannot_bypass_current_raw_review(tmp_path, monkeyp
     monkeypatch.setattr(P.E, 'local_module', lambda name: SimpleNamespace(verify_review=fail))
     with pytest.raises(ValueError, match='current raw predicate unresolved'):
         P.verify_bundle(root, digest)
+
+
+@pytest.mark.parametrize('schema', [1, 2])
+def test_legacy_schema_remains_unqualified_under_new_wrapper(tmp_path, monkeypatch, schema):
+    source = P._ROOT / 'tests/test_c1_raw_candidate_evidence.py'
+    spec = importlib.util.spec_from_file_location('legacy_review_test_fixture', source)
+    fixture_module = importlib.util.module_from_spec(spec); spec.loader.exec_module(fixture_module)
+    fixture_call = fixture_module.f.fixture_bundle if schema == 1 else fixture_module.fixture_raw
+    root, _, digest = fixture_call(tmp_path, monkeypatch)
+    monkeypatch.setattr(P, 'E', fixture_module.e)
+    result = P.verify_bundle(root, digest)
+    assert result['schema'] == schema and result['route_qualified'] is False
+    assert result['review_required'] is True and result['hardware_measured'] is False
+    assert result['generated_dependency_capture'] == 'collection_time_not_pre_synthesis_attestation'
 
 
 @pytest.mark.parametrize('mode', ['valid', 'extra', 'missing', 'changed', 'linked'])
