@@ -595,6 +595,73 @@ agfi-07bbf03753aaa85c4` on opentpu-f2, then `OTPU_TARGET=f2-burst200-s3-175 OTPU
 python -m opentpu.host.chat --backend board --dev f2:0 --model gemma3 --slices 3 --greedy
 --prompt ...` (int8, then `--wformat fp4`), predicted 51-53 device tok/s against build 6's 22.2.
 
+**First three-slice hardware run (13:17-13:43 UTC): 48.3 device tok/s, build 6's text word for
+word.** The AFI was available at 13:17 (48 min) and loaded on slot 0 (`loaded`, ok). The
+first run decoded at 48.3 device tok/s but wrong text from the second decode step ("The sky
+blue color is is comes due because of sunlight of shorter- rays of of of ..."), the same in
+every run. The cause was the host compiler, not the image: Gemma 3's 2^18-row LM head splits
+682 / 683 / 683 blocks (`split_ranges`), so slice 0's last head chunk is 128 rows shorter, and
+the next-fit TMEM allocator then put every later tile 128 words lower on slice 0, the on-card
+greedy pick's `all_gather` destinations included. A GATHER writes every slice at slice 0's
+destination, so slices 1 and 2 read a stale pick and fed a wrong token into their share of the
+next step. The ISA simulator stops on it ("GATHER: slices disagree on dst"); the per-position
+host loop failed separately (its logits sink sized S * v_loc = 261,888 against 262,144).
+Fixed in baa9e5a5: the samplers' gather tiles are allocated before the step's work and their
+tables sized by the largest slice (`m.v_max`), and the host loop takes the ranges' total;
+`tests/test_gemma3.py::test_three_slices_generate_on_the_card` (greedy and sampled, S = 3
+against S = 1) fails on the old compiler with the same error. Same image, no rebuild:
+
+| Gemma 3 1B, greedy, "Why is the sky blue?" | build 11 (3 slices, 175 MHz) | build 6 (1 slice, 200 MHz) |
+|---|---|---|
+| int8 weights, int8 head: decode device / wall tok/s | 48.3 / 28.1-28.3 (46 tokens) | 22.2 / 16.3-16.7 (46 tokens) |
+| int8 Mcycles a token | 3.62 | 9.00 |
+| fp4 weights, **fp4 head**: decode device / wall tok/s | 71.2 / 37.6 (56 tokens) | not run |
+| fp4 weights, **int8 head**: decode device / wall tok/s | not run | 31.1 / 21.3 (41 tokens) |
+| prefill device tok/s (20 prompt tokens) | 96.5 | 98.4 |
+
+2.18x build 6's device rate with int8 weights and head; 7-9% under the 51-53 predicted. The two
+4-bit runs are not comparable (build 11's used an fp4 head, build 6's an int8 one); a build 11
+run with `--head-format int8` is the like-for-like one. The
+int8 text is build 6's ("The sky appears blue because of a phenomenon called Rayleigh
+scattering, where sunlight is scattered by the tiny air molecules in the atmosphere. Blue light
+is scattered more effectively than other colors, making it spread across the sky and reach our
+eyes."); fp4's is coherent. Hardware Lens trace `/home/ubuntu/rachit/lens/g3-s3-175-hw.otpuprof`
+(positions 19 and 20): 3,395,767 cycles a token, 3,832 instructions on every slice, slice 0's
+port B streaming 2,645,464 chunks of 128 B (338.6 MB in 19.4 ms: 17.5 GB/s, 78% of the token;
+build 6: 89%). Only slice 0's counters were read; 52.4 GB/s across three slices is an
+extrapolation (about 49 GB/s over the 46-token reply at its 3.62 Mcycles a token). The losses Lens names are
+the tensor-parallel ones, waiting on collectives 8.8% and on the quantizer 6.6%. Logs:
+`/home/ubuntu/rachit/logs/g3-s3-175-run{1,2}.log`, `g3-s3-175-diag1.log`. Hardware runs go
+through `sudo` (`/home/ubuntu/rachit/g3-s3-175-run1.sh`): as ubuntu, the slot lookup
+`fpga-describe-local-image-slots` exits 243.
+
+**Build 12 failed the gate (2026-10-20 13:58 UTC):** 162.5 MHz with the SmartConnect pblocks,
+routed -0.101 / +0.009, refine Explore -0.076, AggressiveExplore -0.043 with 25 failing endpoints
+(`f2burst200-s3-162-run2/refine/progress.txt`, BUILD_EXIT 1): placement variance, as build 11 at
+175 MHz closed.
+
+**200 MHz pipelining (2026-10-20/21).** All 9,435 violating paths of build 8 were extracted
+(`/tmp/otpu/paths200/b8.csv`, grouping script `/tmp/otpu/dbg/groups.py`): about 5,600 in the
+slice's TMEM arbiter cone (the collective port's FIFO head, the VPU write buffer's bank adder, RLD
+/ DMA / quantizer requests into the bank masks, the priority chain and the MXU / VPU / TMEM
+enables), 1,040 in the sequencer (fetch address, dispatch), 496 DMA -> port B payload enable,
+about 400 pumped-TMEM returns, 256 reset fanout; 70-97% of every family's delay is wire. Five
+cycle-exact fixes, written by Codex (codex-plugin-cc) and verified on opentpu-f2, are on branch
+`tpubench-200mhz` (8466aa9b collective FIFO head, 19181139 registered write-bank masks, 5996cc29
+collective read presence, 0d67d96e trace reset, 8f3639fb port-B payload): test_rtl 176 passed,
+test_board 156, test_f2_burst200_s3 16 (the Gemma 3 1B three-slice token), test_gemma3 +
+test_timing200 17, and 280 RTL / board runs identical to the base in cycles, instructions and
+DRAM/TMEM hashes. **Build 13** (200 MHz with them, m7a; run1 deadlocked in synth_design after
+task_worker segfaults, run2 from 17:08 UTC): routed -0.499 / +0.001 with 9,129 failing endpoints,
+refine -0.462 twice, BUILD_EXIT 1 (22:53). HBM 450 MHz is clean (-0.005, 2 endpoints; build 8
+779); the arbiter cone is gone from the worst paths; the failures moved to the sequencer (2,787
+endpoints, -0.499: the IMEM / WAITC RAM addresses and dispatch), the MXU's internals (1,154),
+the TMEM's internals (1,103, two levels, 89% wire), the VPU (645) and the TMEM returns (624 into
+the VPU). Round 2 (Codex): fetch predecode and the pumped-TMEM return register pass and are
+cycle-identical on every suite; the dispatch preselection fails its in-order ROB test and is
+being reworked. The wire share says a floorplan inside each slice's SLR (TMEM banks, MXU, VPU
+boxed together) will be needed on top of the RTL cuts.
+
 **Build 4 failed in route_design** (20:30 UTC): "Routing results verification failed due to
 partially-conflicted nets" starting at the MXU's lane-0 multiplier registers, i.e. the round 4
 fabric's placement left the router with unresolvable conflicts; post-place WNS was -2.18. Round
