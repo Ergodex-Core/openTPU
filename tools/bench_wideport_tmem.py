@@ -114,8 +114,14 @@ runpy.run_path('tools/perf_qwen.py',run_name='__main__')
             record['runs'].append(run)
             save(receipt, record)
             with log.open('w') as stream:
-                rc = subprocess.run(cmd, cwd=root, env=run_env, stdout=stream,
-                                    stderr=subprocess.STDOUT).returncode
+                # Drain the pipe to EOF as well as waiting for the model process:
+                # multiprocessing's resource tracker can write after its parent exits.
+                with subprocess.Popen(cmd, cwd=root, env=run_env, stdout=subprocess.PIPE,
+                                      stderr=subprocess.STDOUT) as process:
+                    for chunk in iter(lambda: process.stdout.read1(65536), b''):
+                        stream.write(chunk.decode(errors='replace'))
+                        stream.flush()
+                    rc = process.wait()
             data = log.read_bytes()
             run.update(returncode=rc, finished_at=now(),
                        log_sha256=hashlib.sha256(data).hexdigest(),
