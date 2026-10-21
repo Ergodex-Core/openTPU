@@ -369,3 +369,22 @@ def test_tmem_floorplan_is_s4s_with_a_box_per_slice():
         assert 78 / sites < 0.6, (s, sites)              # the TMEM's 64 and the DMA's 14
     assert 'otpu_s4_cells [list $tm/u_tmem $tm/u_dma $cp]' in tm
     assert "IS_SOFT false [get_pblocks pblock_CL_TMEM$s]" in tm
+
+
+def test_place_net_delay_weight_reaches_place_design(tmp_path):
+    """build.py --place-net-delay-weight writes place_net_delay_weight into implement/strategy.tcl
+    and implement.tcl hands it to place_design (Vivado 2025.2's -net_delay_weight, compatible with
+    -directive); without it the strategy and the command are as before."""
+    assert flow.strategy_tcl(flow.STRATEGY, 'RuntimeOptimized') == flow.strategy_tcl(
+        flow.STRATEGY, 'RuntimeOptimized', '')
+    assert 'place_net_delay_weight' not in flow.strategy_tcl(flow.STRATEGY, 'RuntimeOptimized')
+    assert flow.strategy_tcl(flow.STRATEGY, 'RuntimeOptimized', 'high').endswith(
+        'set place_net_delay_weight high\n')
+    impl = (BOARD / 'scripts/implement.tcl').read_text()
+    assert 'set place_net_delay_weight {}' in impl
+    assert 'place_design -directive $place_directive -no_bufg_opt -net_delay_weight $place_net_delay_weight' in impl
+    out = subprocess.run([sys.executable, str(BOARD / 'build.py'), '--hdk', '/nonexistent',
+                          '--target', str(S4_SLOWER[0][0]), '--plan', '--place-net-delay-weight',
+                          'high'], text=True, capture_output=True, cwd=tmp_path)
+    assert out.returncode == 0, out.stderr
+    assert 'place_design Explore -net_delay_weight high, phys_opt_design AggressiveExplore' in out.stdout

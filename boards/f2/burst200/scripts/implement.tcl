@@ -12,6 +12,7 @@ set place_directive Explore
 set phys_directive AggressiveExplore
 set route_directive Explore
 set incremental_directive RuntimeOptimized
+set place_net_delay_weight {}
 if {[file exists $run/strategy.tcl]} {source $run/strategy.tcl}
 # Optional later-stage file proves that the source checkpoint has finished writing.
 if {[llength $argv] > 3} {
@@ -61,8 +62,12 @@ if {$incremental} {
   report_incremental_reuse -file $run/incremental_read_reuse.rpt
   place_design -no_bufg_opt
 } else {
-  puts "IMPLEMENTATION_STRATEGY place=$place_directive phys_opt=$phys_directive route=$route_directive"
-  place_design -directive $place_directive -no_bufg_opt
+  puts "IMPLEMENTATION_STRATEGY place=$place_directive phys_opt=$phys_directive route=$route_directive net_delay_weight=$place_net_delay_weight"
+  if {$place_net_delay_weight ne ""} {
+    place_design -directive $place_directive -no_bufg_opt -net_delay_weight $place_net_delay_weight
+  } else {
+    place_design -directive $place_directive -no_bufg_opt
+  }
 }
 write_checkpoint -force $run/post_place.dcp
 report_timing_summary -report_unconstrained -file $run/place_timing.rpt
