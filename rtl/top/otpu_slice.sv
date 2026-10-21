@@ -990,11 +990,16 @@ module otpu_slice
   // (tests/test_target.py). One cycle more each way costs nothing measurable (co-simulated:
   // within +-0.07% at m4 on decode, a tiled prompt run and a MoE step, signs mixed)
   assign b_rdy_i   = !b_req || b_rdy;
+  // A free request register may load payload before valid. The memory consumes
+  // it only with b_req. This removes go_iss from the 1,089-bit payload enable;
+  // 417243f1's routed qb_n -> b_wdata/CE path used 5.698 ns of wire at 150 MHz.
+  // Keep payload and valid held together while a valid request is stalled.
+  (* max_fanout = 128 *) wire b_ld = !b_req || b_rdy;
   assign rd_idle_i = rd_idle && !a_req && !(b_req && !b_we) && !b_rvalid_i;
   always_ff @(posedge clk) begin : pb_reg
     if (sys_rst) b_req <= 1'b0;
     else if (b_rdy_i) b_req <= b_req_c;
-    if (b_rdy_i && b_req_c) begin
+    if (b_ld) begin
       b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
       b_addr <= b_addr_c; b_par <= b_par_c; b_n <= b_n_c;
     end
@@ -1021,7 +1026,8 @@ module otpu_slice
   always_ff @(posedge clk) begin : pa_reg
     if (sys_rst) a_req <= 1'b0;
     else if (a_rdy_i) a_req <= mxu_areq;
-    if (a_rdy_i && mxu_areq) a_addr <= mxu_aaddr;
+    // As on port B, valid qualifies consumption, not loading a free payload.
+    if (a_rdy_i) a_addr <= mxu_aaddr;
   end : pa_reg
 
   // a unit's DRAM request waiting for its port, a cycle late (pf: the board's B_STALL and

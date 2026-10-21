@@ -618,8 +618,9 @@ module otpu_mxu
   assign b_addr = chunk_addr >> 2;
   assign b_n    = WP ? (i_klast ? i_nl : i_nb) : 2'd0;
   assign a_req  = go_iss && need_a;
-  assign a_addr = !a_req ? '0 : (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2)
-                                                                           : (scale_addr >> 2);
+  // The slice samples the address only with a valid request. Keep the issue
+  // decision off its payload cone; a_req still carries the original handshake.
+  assign a_addr = (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2) : (scale_addr >> 2);
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst && i_act && i_gw && w_sod != i_soff + w_ds)
     $fatal(1, "otpu_mxu: group walk w_sod %0h, i_soff %0h + w_ds %0h", w_sod, i_soff, w_ds);
