@@ -25,11 +25,19 @@ M8A_ANCESTRY_EXECUTOR = {
         'build.py': 'de5d55aa379f6b127249af308a761d418f3e3466cdc3af2787e2389dc8b859eb',
     },
 }
+M8A_REIMPLEMENTATION_ANCESTRY_EXECUTOR = {
+    'revision': '43c093df0778d9063ce06307d0d52d7f6d4d7a78',
+    'hashes': {
+        'implement.py': '7862c60f35321f1fa64ffe327bfd3f90398800909dcd2e4ed29640cb905b494c',
+        'build.py': 'de5d55aa379f6b127249af308a761d418f3e3466cdc3af2787e2389dc8b859eb',
+    },
+}
 # Preserve each historical stage pin and admit the exact reviewed m8a executor
 # as a complete revision/hash tuple. Actual parent receipt and checkpoint hashes
 # remain mandatory; an accepted executor never equates old and new checkpoints.
 REVIEWED_ANCESTRY_EXECUTORS = {
-    stage: (historical, M8A_ANCESTRY_EXECUTOR)
+    stage: (historical, M8A_ANCESTRY_EXECUTOR) +
+           ((M8A_REIMPLEMENTATION_ANCESTRY_EXECUTOR,) if stage == 'refine' else ())
     for stage, historical in ANCESTRY_EXECUTORS.items()
 }
 SPECS = {

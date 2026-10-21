@@ -301,6 +301,56 @@ def test_changing_to_another_allowed_builder_requires_new_manifest_hash(bundle):
     with pytest.raises(ValueError):e.verify_bundle(root,trusted)
 
 
+def retained_link_source_binding(role='link'):
+    """Source policy input after Bundle byte/receipt authentication, not a bundle."""
+    from types import SimpleNamespace
+    retained = e.RETAINED_M8A_LINK
+    name = 'boards/c1_f2_alex/implement.py'
+    record = copy.deepcopy(retained['implement'])
+    manifest = {
+        'hardware': {'source_revision': retained['hardware_revision'],
+                     'build_id': retained['hardware_revision'][:8]},
+        'source_snapshots': {role: {'revision': retained['revision'],
+                                   'bundle_relative_path': 'sources/' + role}},
+        'receipts': {'link': {'sha256': retained['receipt_sha256']}},
+    }
+    bound = SimpleNamespace(manifest=manifest, files={'sources/' + role + '/' + name: record})
+    return bound, retained['revision'], {name: record}
+
+
+def test_retained_link_source_requires_its_exact_reviewed_provenance():
+    bound, revision, sources = retained_link_source_binding()
+    assert e.RETAINED_M8A_LINK['implement']['sha256'] not in e.REVIEWED_HISTORICAL[
+        ('link', 'boards/c1_f2_alex/implement.py')]
+    assert e.Bundle.source(bound, 'link', revision, sources, current=sources) is None
+    # This source-only check returns no route or semantic qualification.
+
+
+@pytest.mark.parametrize('attack', ['revision', 'snapshot_revision', 'hardware', 'build_id',
+    'receipt', 'source_hash', 'source_size', 'snapshot_record', 'source_path'])
+def test_retained_link_source_cannot_relabel_or_broaden_its_allowance(attack):
+    bound, revision, sources = retained_link_source_binding()
+    name = next(iter(sources))
+    if attack == 'revision':
+        revision = 'd' * 40
+        bound.manifest['source_snapshots']['link']['revision'] = revision
+    elif attack == 'snapshot_revision':bound.manifest['source_snapshots']['link']['revision'] = 'd' * 40
+    elif attack == 'hardware':bound.manifest['hardware']['source_revision'] = 'd' * 40
+    elif attack == 'build_id':bound.manifest['hardware']['build_id'] = 'd' * 8
+    elif attack == 'receipt':bound.manifest['receipts']['link']['sha256'] = 'd' * 64
+    elif attack == 'source_hash':sources[name]['sha256'] = 'd' * 64
+    elif attack == 'source_size':sources[name]['bytes'] += 1
+    elif attack == 'snapshot_record':bound.files['sources/link/' + name] = {'sha256': 'd' * 64, 'bytes': 1}
+    elif attack == 'source_path':bound.manifest['source_snapshots']['link']['bundle_relative_path'] = 'sources/refine'
+    with pytest.raises(ValueError):e.Bundle.source(bound, 'link', revision, sources, current=sources)
+
+
+@pytest.mark.parametrize('role', ['ip', 'implement', 'refine', 'qualify'])
+def test_retained_link_source_is_not_a_general_executor_allowance(role):
+    bound, revision, sources = retained_link_source_binding(role)
+    with pytest.raises(ValueError):e.Bundle.source(bound, role, revision, sources, current=sources)
+
+
 @pytest.mark.parametrize('change',['missing','extra','symlink','wrong_manifest','wrong_instance','schema2'])
 def test_closed_transport_inventory(bundle,change):
     root,m,trusted=bundle;p=root/'runs/qualify/qualification/cdc.rpt'

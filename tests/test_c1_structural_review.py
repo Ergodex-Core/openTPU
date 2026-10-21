@@ -86,6 +86,37 @@ def test_reviewed_executor_tuples_cannot_be_crossed_or_replace_ancestry(sample,s
  kwargs['receipt_path'].write_text(json.dumps(receipt))
  with pytest.raises(ValueError):S.authenticate_capture(**kwargs)
 
+
+@pytest.mark.parametrize('role', ('accounting','accounting_boundary','structural'))
+def test_exact_reimplementation_refine_executor_preserves_pending_scope(sample,role):
+ receipt,kwargs=sample(role,'refine');executor=S.M8A_REIMPLEMENTATION_ANCESTRY_EXECUTOR
+ receipt['collector_revision']=S.M8A_ANCESTRY_EXECUTOR['revision']
+ receipt['ancestry_executor_revision']=executor['revision']
+ receipt['ancestry_executor_hashes']=dict(executor['hashes'])
+ kwargs['receipt_path'].write_text(json.dumps(receipt));result=S.authenticate_capture(**kwargs)
+ assert result['collector_revision']==S.M8A_ANCESTRY_EXECUTOR['revision']
+ assert result['ancestry_executor_revision']==executor['revision']
+ assert result['checkpoint_sha256']==CHECKPOINT and result['parent_receipt_sha256']==PARENT
+ assert result['route_qualified'] is False and 'structural_proven' not in result
+
+
+@pytest.mark.parametrize('attack', ('new_revision_old_hashes','old_revision_new_hashes',
+    'wrong_revision','changed_build','wrong_stage','checkpoint','parent','changed_helper'))
+def test_reimplementation_executor_never_relabels_link_or_loosens_capture_binding(sample,attack):
+ receipt,kwargs=sample('accounting','refine');executor=S.M8A_REIMPLEMENTATION_ANCESTRY_EXECUTOR
+ receipt['ancestry_executor_revision']=executor['revision']
+ receipt['ancestry_executor_hashes']=dict(executor['hashes'])
+ if attack=='new_revision_old_hashes':receipt['ancestry_executor_hashes']=dict(S.M8A_ANCESTRY_EXECUTOR['hashes'])
+ elif attack=='old_revision_new_hashes':receipt['ancestry_executor_revision']=S.M8A_ANCESTRY_EXECUTOR['revision']
+ elif attack=='wrong_revision':receipt['ancestry_executor_revision']='4'*40
+ elif attack=='changed_build':receipt['ancestry_executor_hashes']['build.py']='4'*64
+ elif attack=='wrong_stage':receipt['stage']=kwargs['stage']='link'
+ elif attack=='checkpoint':receipt['checkpoint_sha256']='4'*64
+ elif attack=='parent':receipt['parent_receipt_sha256']='4'*64
+ elif attack=='changed_helper':receipt['helpers']['capture_accounting.tcl']='4'*64
+ kwargs['receipt_path'].write_text(json.dumps(receipt))
+ with pytest.raises(ValueError):S.authenticate_capture(**kwargs)
+
 def test_structural_wrapper_never_accepts_authenticated_but_unreviewed_facts(sample,monkeypatch):
  monkeypatch.setattr(S,'authenticate_capture',lambda **kw:{'role':kw['role'],'route_qualified':False})
  auxiliary={name:Path('/unused') for name in ('accounting','accounting_receipt','accounting_linked','accounting_linked_receipt','accounting_boundary','accounting_boundary_receipt','accounting_boundary_linked','accounting_boundary_linked_receipt','structural','structural_receipt')}

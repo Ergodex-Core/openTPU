@@ -66,6 +66,17 @@ REVIEWED_HISTORICAL = {('ip', 'boards/c1_f2_alex/audit_c1_alex.tcl'): {'fae454cd
                       # the explicit post-LINK physical-strategy tooling option.
                       ('link', 'boards/c1_f2_alex/implement.py'): {'649a50b9338e8ca911661b7fa417f2257e9a98db698f270329f89efd79b50fb7'}}
 
+# The new physical executor reuses this exact completed LINK. Its older source
+# is admissible only with the original revision, hardware and authenticated
+# receipt. The existing receipt graph still verifies its inputs, DCP and paths.
+RETAINED_M8A_LINK = {
+    'revision': '06715ae62becda862f0fee9de35a2bf332b91e30',
+    'hardware_revision': '0d654453e2c77ea9bc9d0e854c33d9166bb27375',
+    'receipt_sha256': 'b4a80dc18b45a3ded1ef78b64c38205384599e0ac14182099854a7ad76103dfa',
+    'implement': {'bytes': 64937,
+                  'sha256': '7607ae83aed8ad8a96109b51b170685cfebd122aa43408e4b998df578b239c9e'},
+}
+
 DEPENDENCY_TREES = tuple(f'{stage}/ip_project/{project}.{suffix}'
                         for stage, project in (('ip', 'f2_ip'), ('pcis', 'pcis'), ('clocks', 'clocks'))
                         for suffix in ('srcs', 'gen'))
@@ -278,6 +289,14 @@ class Bundle:
             require(self.files.get(key) == wanted, 'Source snapshot mismatch: ' + role + '/' + name)
             if name in current:
                 accepted = {sha(ROOT / name)} | REVIEWED_HISTORICAL.get((role, name), set())
+                retained = RETAINED_M8A_LINK
+                if (role == 'link' and name == 'boards/c1_f2_alex/implement.py' and
+                        revision == retained['revision'] and wanted == retained['implement'] and
+                        self.manifest['hardware'] == {
+                            'source_revision': retained['hardware_revision'],
+                            'build_id': retained['hardware_revision'][:8]} and
+                        self.manifest['receipts']['link']['sha256'] == retained['receipt_sha256']):
+                    accepted.add(retained['implement']['sha256'])
                 require(wanted['sha256'] in accepted, 'Source differs from reviewed local validator: ' + role + '/' + name)
 
     def receipt(self, role):
