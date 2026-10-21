@@ -83,9 +83,12 @@ REUSED_IP_RECEIPT_SHA256 = 'c21aae37ad72606811b17c9b212aa26d0ef6f8b31196494057c8
 # when a later final-route classifier is reviewed. The original IP receipt retains its old audit
 # input, which did not synthesize the retry hardware. Final QUALIFY, hardware
 # audit, and all other inputs still require current reviewed bytes.
+# The 0d2a5082 LINK helper predates only the routed receive-flow predicate;
+# audit_linked uses the unchanged structural fabric path (routed=0).
 REVIEWED_HISTORICAL = {('link', 'boards/c2_f2_alex/qualify_c2_alex.tcl'):
                       {'6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c',
-                       'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'},
+                       'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d',
+                       'ab5b795d03a0a6663996536b69d65187df887be550bcf9988d51e27b263dc38a'},
                       ('ip', 'boards/c2_f2_alex/audit_c2_alex.tcl'):
                       {'5e1999a5f1ad2f515c9fac78bfd616c5e4932bce4ee07c77cc38f63916df1c2e',
                        'a9d91bef071f935089dc8cbc157d053253f00fe7dd667d5e6dca7ccb8cd4d349'}}

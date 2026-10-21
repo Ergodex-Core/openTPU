@@ -444,7 +444,9 @@ def synthetic_historical_link(root,monkeypatch):
     name='boards/c2_f2_alex/qualify_c2_alex.tcl'
     assert e.REVIEWED_HISTORICAL['link',name]=={
         '6306dc7dc5f8c9112ce62b4140ccc0aa2846cd05fb624ef48b1af87140ab623c',
-        'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d'}
+        'c072db502318cadcd4a38b47438fcaef69a5b91fe7090374a629558e502eef9d',
+        'ab5b795d03a0a6663996536b69d65187df887be550bcf9988d51e27b263dc38a'}
+    assert ('qualify',name) not in e.REVIEWED_HISTORICAL
     # The entire bundle is parser-only synthetic evidence. Give its LINK
     # bytes a test-local historical role; never widen the production pins or
     # add a QUALIFY exception. This works after the current helper changes.
