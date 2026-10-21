@@ -321,6 +321,32 @@ the vendor HBM reset recovery at -0.372 over 6 endpoints (213), which phys_opt a
 replicated: after phys_opt +0.063 ns / TNS 0 (`implement/console.log` line 1613), router
 initialization +0.058 / TNS 0 (line 1735).
 
+**The SLR1 crossbar does not route; the SLR0 one does.** The af7dddf5 162.5 MHz run failed in
+`route_design` at 23:12 UTC: "3826 signals failed to route due to routing congestion" and
+"Design is not legally routed. There are 2055 node overlaps" (`implement/console.log` lines
+1933 and 2052), so the af7dddf5 floorplan is unroutable at either clock (its 175 MHz run died
+in the same stage, silently). The 866c920e run at 175 MHz routed legally: its first global
+iteration ended at 0 overlaps and -0.338 ns (af7dddf5 at 162.5: -0.631 with 5,455 overlaps),
+`route_design` at -0.144 ns, its own post-route phys_opt at **-0.077 ns setup / +0.004 hold**
+(`implement/implementation_result.txt`), and the refine stage's Explore and AggressiveExplore
+rounds held -0.076 / 0.000 (`refine/progress.txt`), so the flow's gate failed (01:15 UTC).
+Per clock in `refine/route_timing.rpt` (final of that run): core **+0.002** (line 224), HBM AXI
+450 MHz **+0.001** (222), shell **+0.000** (223); TMEM 350 MHz **-0.066** over 2 endpoints (225)
+and core -> TMEM **-0.076** over 39 of 9,088 (241): 41 failing endpoints of 2.32 M, TNS -1.5 ns.
+Every failing path is inside a pumped TMEM bank (`refine/worst_paths.rpt`): the bank's
+write-staging registers (`g_pmp.pk_v_reg`, `pk_a_reg`, `evr_reg`) into its BRAMs' ENARDEN /
+ADDRARDADDR / WEA, one logic level with ~2.0 ns of route against the 2.857 ns fast period
+(91% route), in all four slices (slice 3 most), plus DMA `t_re_q` -> the banks' port-B address
+(11 levels, ~4 ns of route on the 5.714 ns multicycle). The core, HBM and shell domains close.
+
+Next (08:51 UTC, the box idle after the night's jobs): (1) a post-route recovery pass on that
+checkpoint (`/home/ubuntu/opt/p4_recover.tcl`: forced replication of the failing launch
+registers' nets so a copy sits by each BRAM, then AggressiveFanoutOpt, AlternateReplication and
+AggressiveExplore, each with a reroute; the first pass with setup and hold >= 0 is kept; unit
+`opt-p4-recover-s4x-175`, output `.../p4-866c920e/f2-burst200-s4-175/recover/`), and (2) the
+same tree at 162.5 MHz (the 2x clock's period +0.22 ns; unit `opt-p4-viv-s4x-162`, output
+`.../p4-866c920e/f2-burst200-s4-162`).
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
