@@ -421,3 +421,38 @@ image load writes 4 GiB of zeros once (scrub) and the 1.05 GB image.
 What the card should show, as predictions from the RTL (not measured): about 41 device tok/s
 at 200 MHz (4.84-4.89 M cycles a token on the F2 path, resident, position 14), if the four
 ports deliver what build 6's two did (89% of the native port rate).
+
+### 6.7 On the card (2026-10-21): the image hangs
+
+The setup:
+
+- **AFI:** afi-067e5810d0bb33969 / agfi-0097f20d1a4bfbe85 on opentpu-f2's slot 0.
+- **Host:** this branch at 9950fd5d.
+- **Coordinator:** card-run.sh under the canonical lock, with the baseline restored afterwards.
+
+The identity is as built:
+
+- CORE_KHZ 200000, BUILD_ID 0x50310002
+- CAPS2 0x5 (CPC 2)
+- CFG_DRAM 0x001e0420 (4 channels of 1 GiB, 4 GiB a slice)
+- CFG_PLATFORM 3, CFG_HASH 54839966
+- STATUS 0x68 (calibrated, idle)
+
+The image never finishes a program:
+
+- **otpu-chat** ("Why is the sky blue? Answer in two sentences.", int8 / int8 head):
+  - It loaded in 14.5 s (image built in 7.9 s).
+  - The first prefill program never halted. `board.wait` timed out after about 10 minutes: `TimeoutError: register 0xc = 0xe8, waiting for 0x1/0x1`, so STATUS had RUN set, HALTED clear, and no ERROR.
+- **hwlens record**, started after it on the same image:
+  - The program load (762 words from DRAM 0x3ed94000) never completed.
+  - Two read-only snapshots 3 s apart gave identical values: STATUS 0x6c (LOADING), ICOUNT 0, and frozen counters (CYCLES 0x1bf08f32af, B_RD 0x1147, A_RD 0xe50, no writes).
+  - AXI_ERR stayed clear, and SCRATCH = DRAM_INIT, so the scrub had finished.
+  - It was stopped after 4 minutes.
+- **What it means:** a DRAM read issued on the four-channel CPC 2 map gets no response on the card, both during a run and in the program loader. The Verilator gates (6.3) cannot show this: their memory always answers.
+- **Not yet localized.** Candidates:
+  - a port or window of hbm_ports 0 / 4 / 8 / 12 that does not answer through the HBM switch
+  - the per-channel SmartConnect / ID path
+  - the channel select of an address
+- **Next on the card:** a register-level probe, i.e. single reads of each channel's window through BAR4 and a one-instruction program per channel.
+
+Log: opentpu-f2 /home/ubuntu/opt/coord-bench/card-p1-57584b2b.log and bench-p1-f2/build/chat-p1-57584b2b.txt. The ISA text reference is on opentpu-m8a-build at /home/ubuntu/opt/coord-isa/isa-ref-p1-twosentences.txt.
