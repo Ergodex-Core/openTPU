@@ -7,6 +7,7 @@ attempts and negative-timing candidates are retained, never overwritten.
 """
 from __future__ import annotations
 import argparse
+import hashlib
 import importlib.util
 import json
 import math
@@ -468,6 +469,205 @@ def complete_carry_pblock_script():
         '@PRIOR@', '{' + ' '.join('{' + name + '}' for name in prior) + '}')
 
 
+# Exact empty DI/S observations from the current failed implementation receipt's
+# complete pre-placement carry inventory. Its static raw header names an older
+# checkpoint; provenance here is the current receipt/output hash and run ancestry.
+# These are topology observations, never inferred logical zeroes or dead inputs.
+CARRY_EMPTY_INPUT_WITNESS = {
+    'raw_sha256': '1cc1be81e36bc1a7cf89f175bf59152f2da5cb5bae9663d0dceebac1fe6aeb9f',
+    'stage_receipt_sha256': '81883fb71bf01b50862a6e9481561b07fabeb656d9d7ac4674dc7d639a9b9ef4',
+    'stage_inputs_sha256': '84fb12da83c8371df7a6f73d2cc0eb5ed2b9e4cc32d9b3812a33cd0da692f4bc',
+    'run_tcl_sha256': 'ca1dd52265aeacadffd25dd56b2c41af193a1c151a74843fcc19ca4001e1948b',
+    'source_checkpoint_sha256': '1ef88c9552d7b63a719c644feee957e0eb2bb8aa450fbdc3ee8c2947393377be',
+    'hardware_revision': '0d654453e2c77ea9bc9d0e854c33d9166bb27375',
+    'executor_revision': '06715ae62becda862f0fee9de35a2bf332b91e30',
+}
+# Named terminal suffixes and the exact observed bits, independently identical
+# for DI and S. No other pin, terminal, family or bit is eligible.
+CARRY_EMPTY_INPUT_BITS = (
+    ('sums_reg[0][0][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][0][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][0][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][0][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][10][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][10][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][10][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][10][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][11][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][11][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][11][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][11][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][12][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][12][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][12][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][12][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][13][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][13][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][13][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][13][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][14][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][14][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][14][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][14][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][15][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][15][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][15][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][15][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][16][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][16][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][16][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][16][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][17][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][17][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][17][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][17][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][18][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][18][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][18][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][18][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][19][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][19][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][19][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][19][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][1][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][1][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][1][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][1][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][20][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][20][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][20][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][20][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][21][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][21][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][21][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][21][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][22][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][22][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][22][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][22][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][23][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][23][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][23][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][23][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][24][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][24][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][24][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][24][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][25][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][25][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][25][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][25][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][26][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][26][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][26][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][26][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][27][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][27][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][27][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][27][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][28][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][28][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][28][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][28][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][29][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][29][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][29][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][29][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][2][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][2][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][2][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][2][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][30][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][30][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][30][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][30][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][31][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][31][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][31][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][31][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][3][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][3][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][3][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][3][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][4][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][4][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][4][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][4][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][5][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][5][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][5][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][5][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][6][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][6][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][6][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][6][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][7][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][7][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][7][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][7][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][8][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][8][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][8][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][8][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][9][11]_i_18', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][9][16]_i_1', (4, 5, 6, 7)),
+    ('sums_reg[0][9][16]_i_11', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[0][9][16]_i_2', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][0][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][10][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][11][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][12][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][13][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][14][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][15][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][1][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][2][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][3][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][4][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][5][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][6][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][7][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][8][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[1][9][20]_i_1', (2, 3, 4, 5, 6, 7)),
+    ('sums_reg[2][0][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][1][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][2][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][3][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][4][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][5][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][6][20]_i_1', (5, 6, 7)),
+    ('sums_reg[2][7][20]_i_1', (5, 6, 7)),
+    ('sums_reg[3][0][20]_i_1', (5, 6, 7)),
+    ('sums_reg[3][1][20]_i_1', (5, 6, 7)),
+    ('sums_reg[3][2][20]_i_1', (5, 6, 7)),
+    ('sums_reg[3][3][20]_i_1', (5, 6, 7)),
+    ('sums_reg[4][0][20]_i_1', (5, 6, 7)),
+    ('sums_reg[4][1][20]_i_1', (5, 6, 7)),
+    ('sums_reg[5][0][20]_i_1', (5, 6, 7)),
+)
+CARRY_EMPTY_INPUTS_SHA256 = '9ed7a5bc7c6293c3fc12a9a8e8c29565fbaeebdde79195923afc5205770c4e3f'
+
+
+def carry_observed_empty_inputs():
+    prefix = 'WRAPPER/CL/u_board/core/cluster/engines[15].engine/'
+    terminals = {component[-1] for component in CARRY_COMPLETE_COMPONENTS}
+    require(len(CARRY_EMPTY_INPUT_BITS) == 159 and
+            {suffix for suffix, _ in CARRY_EMPTY_INPUT_BITS} == terminals,
+            'Observed empty-input terminal inventory differs')
+    pins = []
+    for suffix, bits in CARRY_EMPTY_INPUT_BITS:
+        require(re.fullmatch(r'sums_reg\[[0-5]\]\[[0-9]+\]\[[0-9]+\]_i_[0-9]+', suffix) and
+                bits and all(type(bit) is int and 0 <= bit < 8 for bit in bits) and
+                tuple(sorted(set(bits))) == bits, 'Invalid observed empty-input bits')
+        for family in ('DI', 'S'):
+            pins.extend(f'{prefix}{suffix}/{family}[{bit}]' for bit in bits)
+    pins = sorted(pins)
+    require(len(pins) == len(set(pins)) == 1690 and
+            hashlib.sha256(('\n'.join(pins) + '\n').encode()).hexdigest() == CARRY_EMPTY_INPUTS_SHA256,
+            'Observed empty-input witness inventory changed')
+    return pins
+
+
 def carry_physopt_preservation_scripts():
     """Observe the repaired carry graph around the restored physical pass.
 
@@ -477,6 +677,8 @@ def carry_physopt_preservation_scripts():
     """
     complete = complete_carry_pblock_script()
     chains = complete.split('set chains ', 1)[1].split('\n', 1)[0]
+    empty_inputs = carry_observed_empty_inputs()
+    witness = ' '.join(f'{key} {value}' for key, value in CARRY_EMPTY_INPUT_WITNESS.items())
     before = r'''
 namespace eval ::c1_physopt_carry {
 variable output [open $::run/physopt_carry_preservation.tcldata {WRONLY CREAT EXCL}]
@@ -511,6 +713,7 @@ proc region {} {
   return $result
 }
 proc snapshot {name} {
+  variable expected_empty;variable observed_empty
   set object [cell $name];set props {};set available [list_property $object]
   foreach property {NAME PARENT REF_NAME CARRY_TYPE DONT_TOUCH KEEP KEEP_HIERARCHY MARK_DEBUG RLOC RLOC_ORIGIN RLOC_RANGE IS_LOC_FIXED IS_BEL_FIXED LOCK_PINS PBLOCK} {
     if {$property in $available} {dict set props $property [list observed [get_property $property $object]]} else {dict set props $property unavailable}
@@ -535,6 +738,13 @@ proc snapshot {name} {
     set nets [get_nets -quiet -segments -of_objects $pin]
     if {[llength $nets]>16 || ([llength $nets] && [llength [get_ports -quiet -of_objects $nets]])} {error "Physical carry net boundary differs"}
     set drivers {};set successors {}
+    if {$direction eq "IN"} {
+      set expected [dict exists $expected_empty $pin_name]
+      if {![llength $nets]} {
+        if {!$expected} {error "Physical carry input unexpectedly disconnected: $pin_name"}
+        dict set observed_empty $pin_name 1
+      } elseif {$expected} {error "Physical carry witnessed empty input became connected: $pin_name"}
+    }
     if {[llength $nets]} {
       set drivers [names [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]]
       if {[llength $drivers]!=1} {error "Physical carry driver cardinality differs"}
@@ -547,7 +757,7 @@ proc snapshot {name} {
           }
         }
       }
-    } elseif {$direction eq "IN"} {error "Physical carry input disconnected"}
+    }
     dict set pins $pin_name [list role $role direction $direction properties $pin_props nets [names $nets] drivers $drivers carry_successors [lsort -unique $successors]]
   }
   return [list properties $props pins $pins]
@@ -561,23 +771,32 @@ foreach chain $chains {
 if {[llength $chains]!=159 || [llength $all]!=349 || [llength [lsort -unique $all]]!=349 || [llength $promoted]!=190} {error "Physical carry inventory differs"}
 set all [lsort $all];set promoted [lsort $promoted]
 if {[names [get_cells -quiet -hierarchical -filter {REF_NAME == CARRY8 && NAME =~ WRAPPER/CL/engines*}]] ne $promoted} {error "Physical promoted carry inventory differs"}
+set expected_empty {};set observed_empty {}
+foreach pin @EMPTY_INPUTS@ {dict set expected_empty $pin 1}
+if {[dict size $expected_empty]!=1690} {error "Physical carry empty-input witness cardinality differs"}
 set region_before [region];set before {}
-emit header [list schema 1 kind c1_pre_route_physopt_carry_preservation cells 349 promoted 190 terminal 159 placement_fields_excluded {LOC BEL} route_qualified 0 hardware_actions 0]
+emit header [list schema 1 kind c1_pre_route_physopt_carry_preservation cells 349 promoted 190 terminal 159 placement_fields_excluded {LOC BEL} empty_input_witness {@WITNESS@} empty_input_inventory_sha256 @EMPTY_SHA@ expected_empty_inputs 1690 semantic_acceptance 0 route_qualified 0 hardware_actions 0]
 emit region_before $region_before
 foreach name $all {dict set before $name [snapshot $name];emit before [list cell $name snapshot [dict get $before $name]]}
+if {[lsort [dict keys $observed_empty]] ne [lsort [dict keys $expected_empty]]} {error "Physical carry baseline empty-input set differs"}
+emit baseline_complete [list cells 349 observed_empty_inputs 1690 exact_empty_input_witness_match 1 semantic_acceptance 0 route_qualified 0]
 flush $output
 }
-'''.replace('@CHAINS@', chains)
+'''.replace('@CHAINS@', chains).replace('@EMPTY_INPUTS@',
+        '{' + ' '.join('{' + pin + '}' for pin in empty_inputs) + '}').replace(
+        '@WITNESS@', witness).replace('@EMPTY_SHA@', CARRY_EMPTY_INPUTS_SHA256)
     after = r'''
 namespace eval ::c1_physopt_carry {
+set observed_empty {}
 if {[names [get_cells -quiet -hierarchical -filter {REF_NAME == CARRY8 && NAME =~ WRAPPER/CL/engines*}]] ne $promoted} {error "Physical promoted carry inventory changed"}
 foreach name $all {
   set observed [snapshot $name]
   if {$observed ne [dict get $before $name]} {error "Physical optimization changed carry topology or configuration: $name"}
   emit after [list cell $name snapshot $observed]
 }
+if {[lsort [dict keys $observed_empty]] ne [lsort [dict keys $expected_empty]]} {error "Physical carry final empty-input set differs"}
 if {[region] ne $region_before} {error "Physical optimization changed carry region"}
-emit complete [list cells 349 carry_topology_and_configuration_preserved 1 region_properties_unchanged 1 placement_movement_permitted 1 route_qualified 0 hardware_actions 0]
+emit complete [list cells 349 carry_topology_and_configuration_preserved 1 region_properties_unchanged 1 observed_empty_inputs 1690 exact_empty_input_witness_match 1 semantic_acceptance 0 placement_movement_permitted 1 route_qualified 0 hardware_actions 0]
 close $output
 }
 namespace delete ::c1_physopt_carry

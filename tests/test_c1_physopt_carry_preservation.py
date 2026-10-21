@@ -13,6 +13,23 @@ spec.loader.exec_module(model)
 m = model.m
 
 EXTEND = r'''
+# Remove both forward and reverse topology so mutation tests cannot rely on a
+# stale mock edge to disguise an actually disconnected carry-chain endpoint.
+proc disconnect_pin {pin} {
+  if {[dict exists $::pins $pin NET]} {
+    set net [dict get $::pins $pin NET]
+    set members [dict get $::nets $net]
+    set at [lsearch -exact $members $pin]
+    if {$at<0} {error "Incoherent mock reverse edge"}
+    dict set ::nets $net [lreplace $members $at $at]
+    dict unset ::pins $pin NET
+  }
+}
+proc attach_pin {pin net} {
+  disconnect_pin $pin
+  dict set ::pins $pin NET $net
+  dict lappend ::nets $net $pin
+}
 # Complete the independent finite CARRY8 interface model to all34 primitive pins.
 foreach name $all {
   # Give each cell a shared16-load input net. This retains shared-net queries
@@ -27,12 +44,13 @@ foreach name $all {
       set direction [expr {$family in {DI S} ? "IN" : "OUT"}]
       if {![dict exists $pins $p]} {addpin $name $suffix $direction}
       if {$direction eq "IN"} {
-        dict set pins $p NET $input_owner
-        dict lappend nets $input_owner $p
+        attach_pin $p $input_owner
       } elseif {![dict exists $pins $p NET]} {connect own/$p [list $p]}
     }
   }
 }
+foreach pin @EMPTY_INPUTS@ {disconnect_pin $pin}
+set witness_terminal {WRAPPER/CL/u_board/core/cluster/engines[15].engine/sums_reg[0][0][11]_i_18}
 dict for {p properties} $pins {
   dict set pins $p IS_INVERTED 0
   dict set pins $p IS_CLOCK 0
@@ -45,7 +63,11 @@ def execute(tmp_path, mutation='', before_mutation=''):
     chains = complete.split('set chains ', 1)[1].split('\n', 1)[0]
     prior = complete.split('set prior ', 1)[1].split('\n', 1)[0]
     stub = model.STUB.replace('@CHAINS@', chains).replace('@PRIOR@', prior).replace('@ATTACK@', 'none')
-    stub = stub.replace('proc get_property {property objects}', EXTEND + '\nproc get_property {property objects}')
+    empty_inputs = '{' + ' '.join('{' + pin + '}' for pin in m.carry_observed_empty_inputs()) + '}'
+    stub = stub.replace('proc get_property {property objects}',
+        EXTEND.replace('@EMPTY_INPUTS@', empty_inputs) + '\nproc get_property {property objects}')
+    stub = stub.replace('lappend result [dict get $::pins $p NET]',
+        'if {[dict exists $::pins $p NET]} {lappend result [dict get $::pins $p NET]}')
     stub = stub.replace('proc list_property {object} {return [dict keys [dict get $::cells [lindex $object 0]]]}',
         'proc list_property {object} {foreach table {cells pins blocks} {if {[dict exists [set ::$table] [lindex $object 0]]} {return [dict keys [dict get [set ::$table] [lindex $object 0]]]}};error "unknown object"}')
     before, after = m.carry_physopt_preservation_scripts()
@@ -63,6 +85,11 @@ def test_all349_preserved_with_placement_movement(tmp_path):
     raw = (tmp_path / 'physopt_carry_preservation.tcldata').read_text()
     assert raw.count('\nbefore ') == raw.count('\nafter ') == 349
     assert 'carry_topology_and_configuration_preserved 1' in raw
+    assert raw.count('nets {} drivers {} carry_successors {}') == 2 * 1690
+    assert 'baseline_complete {cells 349 observed_empty_inputs 1690 exact_empty_input_witness_match 1' in raw
+    assert 'semantic_acceptance 0' in raw
+    assert m.CARRY_EMPTY_INPUT_WITNESS['raw_sha256'] in raw
+    assert m.CARRY_EMPTY_INPUT_WITNESS['stage_receipt_sha256'] in raw
     assert 'placement_movement_permitted 1 route_qualified 0 hardware_actions 0' in raw
 
 
@@ -75,7 +102,7 @@ def test_all349_preserved_with_placement_movement(tmp_path):
     'dict set cells $target DONT_TOUCH 1',
     'dict set cells $target IS_LOC_FIXED 1',
     'dict set cells $target LOCK_PINS changed',
-    'dict set pins $target/CI NET ground_top',
+    'attach_pin $target/CI ground_top',
     'dict unset pins $target/S\\[0\\]',
     'dict set pins $target/S\\[0\\] REF_PIN_NAME {DI[0]}',
     'dict set pins $target/S\\[0\\] DIRECTION OUT',
@@ -106,6 +133,52 @@ def test_complete_baseline_interface_is_required_before_physical_pass(tmp_path, 
     result = execute(tmp_path, before_mutation=mutation)
     assert result.returncode != 0
     assert 'Physical carry' in result.stderr
+
+
+@pytest.mark.parametrize('when', ['before', 'after'])
+@pytest.mark.parametrize(('mutation', 'error'), [
+    # Empty is permitted only at the exact witnessed terminal DI/S bits.
+    (r'disconnect_pin $witness_terminal/DI\[0\]', 'unexpectedly disconnected'),
+    (r'disconnect_pin $target/DI\[7\]', 'unexpectedly disconnected'),
+    (r'disconnect_pin $target/CI', 'unexpectedly disconnected'),
+    (r'disconnect_pin $witness_terminal/CI_TOP', 'unexpectedly disconnected'),
+    (r'attach_pin $witness_terminal/DI\[2\] inputs/$witness_terminal', 'became connected'),
+    (r'attach_pin $witness_terminal/S\[7\] inputs/$witness_terminal', 'became connected'),
+    # Both ends are disconnected; no stale mock successor can hide the break.
+    (r'disconnect_pin $target/CO\[7\];disconnect_pin [lindex [lindex $model_chains 0] 1]/CI', 'Physical '),
+    (r'dict unset pins $witness_terminal/S\[7\]', 'full pin inventory differs'),
+    (r'dict unset pins $witness_terminal/S\[7\] IS_CLOCK', 'pin property unavailable'),
+    (r'rename get_nets original_get_nets;proc get_nets {args} {error "injected net API failure"}', 'injected net API failure'),
+])
+def test_witnessed_empty_topology_is_exact_before_and_after(tmp_path, when, mutation, error):
+    result = execute(tmp_path, before_mutation=mutation if when == 'before' else '',
+                     mutation=mutation if when == 'after' else '')
+    assert result.returncode != 0
+    assert error in result.stderr, result.stderr
+    raw = tmp_path / 'physopt_carry_preservation.tcldata'
+    assert raw.exists() and '\ncomplete ' not in raw.read_text()
+    assert ('\nbaseline_complete ' in raw.read_text()) == (when == 'after')
+
+
+def test_exact_empty_inventory_is_bound_and_first_failed_terminal_matches_observation(monkeypatch):
+    pins = m.carry_observed_empty_inputs()
+    terminal = 'WRAPPER/CL/u_board/core/cluster/engines[15].engine/sums_reg[0][0][11]_i_18'
+    assert [pin for pin in pins if pin.startswith(terminal + '/')] == sorted(
+        f'{terminal}/{family}[{bit}]' for family in ('DI', 'S') for bit in range(2, 8))
+    assert len(pins) == 1690
+    assert sum('/DI[' in pin for pin in pins) == sum('/S[' in pin for pin in pins) == 845
+    assert len({pin.rsplit('/', 1)[0] for pin in pins}) == 159
+    # A syntactically valid broadened, narrowed, or relocated exception must fail.
+    original = m.CARRY_EMPTY_INPUT_BITS
+    for replacement in (
+        ((original[0][0], (1, 2, 3, 4, 5, 6, 7)),) + original[1:],
+        ((original[0][0], (3, 4, 5, 6, 7)),) + original[1:],
+        ((original[0][0], original[1][1]), (original[1][0], original[0][1])) + original[2:],
+        original[:-1],
+    ):
+        monkeypatch.setattr(m, 'CARRY_EMPTY_INPUT_BITS', replacement)
+        with pytest.raises(RuntimeError, match='inventory'):
+            m.carry_physopt_preservation_scripts()
 
 
 def test_strategy_preserves_existing_optimizer_and_all_non_strategy_text():
