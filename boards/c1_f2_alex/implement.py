@@ -25,7 +25,8 @@ PREVIOUS = {'implement': 'link', 'refine': 'implement', 'qualify': 'refine'}
 CHECKPOINTS = {'link': 'post_link.dcp', 'implement': 'post_route.dcp', 'refine': 'post_route.dcp'}
 FORBIDDEN_CONTROLS = ('tuning.tcl', 'incremental_reference.txt', 'incremental_reference.sha256')
 PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt', 'align-promoted-carry-pblocks',
-                       'align-complete-promoted-carry-pblocks')
+                       'align-complete-promoted-carry-pblocks',
+                       'align-complete-carry-and-phys-opt')
 
 
 # Two synthesis-promoted carry predecessors escaped their original u_board
@@ -467,6 +468,124 @@ def complete_carry_pblock_script():
         '@PRIOR@', '{' + ' '.join('{' + name + '}' for name in prior) + '}')
 
 
+def carry_physopt_preservation_scripts():
+    """Observe the repaired carry graph around the restored physical pass.
+
+    This is a strict topology check, not a whole-design equivalence proof.
+    Placement may move; changed carry primitives, connectivity or region bounds
+    stop the run before routing so a new topology can be reviewed separately.
+    """
+    complete = complete_carry_pblock_script()
+    chains = complete.split('set chains ', 1)[1].split('\n', 1)[0]
+    before = r'''
+namespace eval ::c1_physopt_carry {
+variable output [open $::run/physopt_carry_preservation.tcldata {WRONLY CREAT EXCL}]
+variable output_bytes 0
+proc emit {kind value} {
+  set line [list $kind $value]
+  set bytes [expr {[string bytelength $line]+1}]
+  if {$bytes>1048576} {error "Physical carry record bound"}
+  incr ::c1_physopt_carry::output_bytes $bytes
+  if {$::c1_physopt_carry::output_bytes>33554432} {error "Physical carry output bound"}
+  puts $::c1_physopt_carry::output $line
+}
+proc names {objects} {
+  set result {};foreach object $objects {lappend result [get_property NAME $object]}
+  if {[llength $result]>65536 || [llength $result]!=[llength [lsort -unique $result]]} {error "Physical carry object bound or duplicate"}
+  return [lsort $result]
+}
+proc cell {name} {
+  set objects [get_cells -quiet -hierarchical -filter [format {NAME == "%s"} $name]]
+  if {[names $objects] ne [list $name]} {error "Physical carry cell missing"}
+  return $objects
+}
+proc region {} {
+  set result {}
+  foreach name {pblock_CL pblock_CL_SLR0} {
+    set object [get_pblocks -quiet [list $name]]
+    if {[names $object] ne [list $name]} {error "Physical carry region missing"}
+    foreach property {PARENT GRID_RANGES IS_SOFT CONTAIN_ROUTING SNAPPING_MODE EXCLUDE_PLACEMENT} {
+      dict set result $name $property [get_property $property $object]
+    }
+  }
+  return $result
+}
+proc snapshot {name} {
+  set object [cell $name];set props {};set available [list_property $object]
+  foreach property {NAME PARENT REF_NAME CARRY_TYPE DONT_TOUCH KEEP KEEP_HIERARCHY MARK_DEBUG RLOC RLOC_ORIGIN RLOC_RANGE IS_LOC_FIXED IS_BEL_FIXED LOCK_PINS PBLOCK} {
+    if {$property in $available} {dict set props $property [list observed [get_property $property $object]]} else {dict set props $property unavailable}
+  }
+  if {[get_property REF_NAME $object] ne "CARRY8" || [get_property CARRY_TYPE $object] ne "SINGLE_CY8" || [get_property PBLOCK $object] ne "pblock_CL_SLR0" || [names [get_pblocks -of_objects $object]] ne [list pblock_CL_SLR0]} {error "Physical carry primitive or membership differs"}
+  set wanted [list $name/CI $name/CI_TOP]
+  foreach family {DI S CO O} {for {set bit 0} {$bit<8} {incr bit} {lappend wanted [format {%s/%s[%d]} $name $family $bit]}}
+  set actual [names [get_pins -of_objects $object]]
+  if {$actual ne [lsort $wanted]} {error "Physical carry full pin inventory differs"}
+  set pins {}
+  foreach pin_name $actual {
+    set pin [get_pins -quiet [list $pin_name]]
+    if {[names $pin] ne [list $pin_name]} {error "Physical carry pin missing"}
+    set role [string range $pin_name [expr {[string length $name]+1}] end]
+    set direction [expr {[regexp {^(CO|O)\[} $role] ? "OUT" : "IN"}]
+    if {[get_property REF_PIN_NAME $pin] ne $role || [get_property DIRECTION $pin] ne $direction} {error "Physical carry pin role differs"}
+    set pin_props {};set pin_available [list_property $pin]
+    foreach property {IS_INVERTED IS_CLOCK} {
+      if {$property ni $pin_available} {error "Physical carry pin property unavailable"}
+      dict set pin_props $property [get_property $property $pin]
+    }
+    set nets [get_nets -quiet -segments -of_objects $pin]
+    if {[llength $nets]>16 || ([llength $nets] && [llength [get_ports -quiet -of_objects $nets]])} {error "Physical carry net boundary differs"}
+    set drivers {};set successors {}
+    if {[llength $nets]} {
+      set drivers [names [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]]
+      if {[llength $drivers]!=1} {error "Physical carry driver cardinality differs"}
+      if {$direction eq "OUT"} {
+        foreach endpoint [get_pins -quiet -leaf -of_objects $nets] {
+          set owner [get_cells -quiet -of_objects $endpoint]
+          if {[llength $owner]!=1} {error "Physical carry endpoint owner differs"}
+          if {[get_property REF_NAME $owner] eq "CARRY8" && [get_property REF_PIN_NAME $endpoint] in {CI CI_TOP}} {
+            lappend successors [get_property NAME $endpoint]
+          }
+        }
+      }
+    } elseif {$direction eq "IN"} {error "Physical carry input disconnected"}
+    dict set pins $pin_name [list role $role direction $direction properties $pin_props nets [names $nets] drivers $drivers carry_successors [lsort -unique $successors]]
+  }
+  return [list properties $props pins $pins]
+}
+set chains @CHAINS@
+set all {};set promoted {}
+foreach chain $chains {
+  foreach name $chain {lappend all $name}
+  foreach name [lrange $chain 0 end-1] {lappend promoted $name}
+}
+if {[llength $chains]!=159 || [llength $all]!=349 || [llength [lsort -unique $all]]!=349 || [llength $promoted]!=190} {error "Physical carry inventory differs"}
+set all [lsort $all];set promoted [lsort $promoted]
+if {[names [get_cells -quiet -hierarchical -filter {REF_NAME == CARRY8 && NAME =~ WRAPPER/CL/engines*}]] ne $promoted} {error "Physical promoted carry inventory differs"}
+set region_before [region];set before {}
+emit header [list schema 1 kind c1_pre_route_physopt_carry_preservation cells 349 promoted 190 terminal 159 placement_fields_excluded {LOC BEL} route_qualified 0 hardware_actions 0]
+emit region_before $region_before
+foreach name $all {dict set before $name [snapshot $name];emit before [list cell $name snapshot [dict get $before $name]]}
+flush $output
+}
+'''.replace('@CHAINS@', chains)
+    after = r'''
+namespace eval ::c1_physopt_carry {
+if {[names [get_cells -quiet -hierarchical -filter {REF_NAME == CARRY8 && NAME =~ WRAPPER/CL/engines*}]] ne $promoted} {error "Physical promoted carry inventory changed"}
+foreach name $all {
+  set observed [snapshot $name]
+  if {$observed ne [dict get $before $name]} {error "Physical optimization changed carry topology or configuration: $name"}
+  emit after [list cell $name snapshot $observed]
+}
+if {[region] ne $region_before} {error "Physical optimization changed carry region"}
+emit complete [list cells 349 carry_topology_and_configuration_preserved 1 region_properties_unchanged 1 placement_movement_permitted 1 route_qualified 0 hardware_actions 0]
+close $output
+}
+namespace delete ::c1_physopt_carry
+puts C1_PRE_ROUTE_PHYSOPT_CARRY_PRESERVATION_COMPLETE_NOT_ROUTE_QUALIFIED
+'''
+    return before, after
+
+
 def require(ok, message):
     if not ok:
         raise RuntimeError(message)
@@ -778,15 +897,23 @@ def physical_script(script, strategy, max_threads=4):
         old = '  phys_opt_design -directive AggressiveExplore\n'
         require(script.count(old) == 1, 'Physical optimization anchor changed')
         script = script.replace(old, '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
-    if strategy in ('align-promoted-carry-pblocks', 'align-complete-promoted-carry-pblocks'):
+    if strategy in ('align-promoted-carry-pblocks', 'align-complete-promoted-carry-pblocks',
+                    'align-complete-carry-and-phys-opt'):
         old = 'write_checkpoint -force $run/post_opt.dcp\n'
         require(script.count(old) == 1, 'Post-opt checkpoint anchor changed')
         repair = CARRY_PBLOCK_SCRIPT
-        if strategy == 'align-complete-promoted-carry-pblocks':
+        if strategy in ('align-complete-promoted-carry-pblocks', 'align-complete-carry-and-phys-opt'):
             # Replay the historical repair first: the complete raw inventory was
             # captured after these two exact membership additions.
             repair += complete_carry_pblock_script()
         script = script.replace(old, repair + old)
+    if strategy == 'align-complete-carry-and-phys-opt':
+        old = '  phys_opt_design -directive AggressiveExplore\n'
+        require(script.count(old) == 1, 'Physical optimization anchor changed')
+        require(script.index('write_checkpoint -force $run/post_opt.dcp\n') < script.index(old),
+                'Physical optimization must follow complete carry repair')
+        before, after = carry_physopt_preservation_scripts()
+        script = script.replace(old, before + old + after)
     return script
 
 
