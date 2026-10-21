@@ -57,3 +57,56 @@ def test_loop_predecode_forwarding(have_verilator, D, boot):
     at = 0x1000 + 32 * (2 + 5 * (0 + 1 + 2) + 2 * 2)
     assert np.array_equal(drams[0][at:at + 32], dram[:32])
     print(f"LOOP_FORWARD D={D} boot={boot}: {stats}")
+
+
+_DISPATCH_MODES = [
+    pytest.param((), id="normal"),
+    pytest.param(("+hz_ino=1",), id="inorder"),
+    pytest.param(("+hz_rob=1",), id="rob"),
+    pytest.param(("+hz_ino=1", "+hz_rob=1"), id="inorder-rob"),
+]
+
+
+@pytest.mark.parametrize("waitc", [0, 1])
+@pytest.mark.parametrize("overrides", _DISPATCH_MODES)
+def test_dispatch_completed_slot_lifetime(have_verilator, waitc, overrides):
+    """Completion ends command consumption even if the ROB delays retirement."""
+    exe = rtlsim.build("tb_seq_dispatch", [rtlsim.RTL / "top/otpu_pkg.sv",
+                                         rtlsim.RTL / "tech/generic/otpu_tech_ram.sv",
+                                         rtlsim.RTL / "seq/otpu_seq.sv",
+                                         rtlsim.TB / "tb_seq_dispatch.sv"],
+                      {"WAITC": waitc})
+    out = rtlsim.run_sim([exe, *overrides], timeout=60)
+    assert out.returncode == 0, out.stdout + out.stderr
+    assert "DISPATCH_LIFETIME PASS" in out.stdout, out.stdout
+    print(out.stdout)
+
+
+@pytest.mark.parametrize("waitc", [0, 1])
+@pytest.mark.parametrize("overrides", _DISPATCH_MODES)
+def test_dispatch_preselection(have_verilator, monkeypatch, waitc, overrides):
+    """Window reuse, concurrent starts/completions and both dependency schemes.
+
+    Exercise in-order and ROB overrides separately and together; the RTL checks
+    every preselected field and command read against the original selector,
+    including idle reloads after completion but before ROB retirement.
+    """
+    import numpy as np
+
+    from opentpu import Config
+    from opentpu.isasim import Machine
+    from test_rtl import _hazard_program, _images
+
+    monkeypatch.setenv("OTPU_WAITS", "1")
+    rng = np.random.default_rng(3017)
+    cfg = Config(S=1)
+    prog, images = _hazard_program(rng, cfg), _images(rng, 1)
+    ref = Machine(cfg, [prog], [i.copy() for i in images]).run()
+    drams, tmems, stats = rtlsim.run(
+        cfg, [prog], [i.copy() for i in images], max_cycles=1_000_000,
+        uarch={"WIN": 16, "SEQ_WC": waitc},
+        plusargs=list(overrides))
+    assert np.array_equal(drams[0], ref.slices[0].dram)
+    assert np.array_equal(tmems[0], ref.slices[0].tmem)
+    assert stats["instructions"] == [ref.slices[0].icount]
+    print(f"DISPATCH_PRESELECT waitc={waitc} overrides={overrides}: {stats}")

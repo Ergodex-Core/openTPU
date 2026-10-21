@@ -784,40 +784,135 @@ module otpu_seq
         same_started[u][i] = sv[i] && sstarted[i] && soh[i][u] && u != U_VPU;
   end
 
-  // ---- per-unit start: the oldest ready (all dependencies completed) instruction
-  logic [NUNITS-1:0] can_start;
-  logic [SW-1:0]     start_slot [NUNITS];
-  logic [WIN-1:0]    sel [NUNITS];           // the oldest candidate, one-hot (or none)
-  logic [NUNITS-1:0] cand_any;               // the unit has a candidate
-  logic [WIN-1:0]    mrdy, crdy;             // per slot: ready as the MXU / COLL oldest
-  // (the oldest of a set: the member none of whose older slots is in the set -- an age matrix
-  // instead of comparing dispatch numbers, so the choice is parallel logic). older is a strict
-  // total order over the valid slots, so sel has at most one bit; readiness is tested per slot
-  // in parallel with the selection and AND-ORed with sel -- no slot id on the can_start path
+  // ---- per-unit start: preselect from the window's exact next state. These
+  // mirrors follow the writes below in their original priority: completion, the
+  // optional simulated ROB, starts, then dispatch (including the cleared age column).
+  // Selection registers thus describe the CURRENT window, not last cycle's. Only
+  // urdy and !ustart still qualify the selected command in the cycle it starts.
+  logic [WIN-1:0] sv_n, sstarted_n, w_all_n, w_dram_n;
+  logic [WIN-1:0] older_n [WIN], sdep_n [WIN], sdepd_n [WIN];
+  logic [NUNITS-1:0] soh_n [WIN];
+  logic [NUNITS-1:0] can_start, cand_any, start_ready;
+  logic [NUNITS-1:0] cand_any_n, start_ready_n;
+  logic [SW-1:0] start_slot [NUNITS], start_slot_n [NUNITS];
+  logic [WIN-1:0] sel [NUNITS], sel_n [NUNITS];
+  always_comb begin
+    sv_n = sv & ~fin;
+    sstarted_n = sstarted;
+    w_all_n = w_all & ~(c_go ? WIN'(1) << free_slot : '0);
+    w_dram_n = w_dram & ~(c_go ? WIN'(1) << free_slot : '0);
+    for (int i = 0; i < WIN; i++) begin
+      older_n[i] = older[i];
+      soh_n[i] = soh[i];
+      sdep_n[i] = sdep[i] & ~fin;
+      sdepd_n[i] = sdepd[i] & ~fin;
+`ifndef SYNTHESIS
+      if (hz_rob)
+        sv_n[i] = sv[i] && !((sdone[i] || fin[i]) &&
+                            (older[i] & sv & ~(sdone | fin)) == '0);
+`endif
+      for (int u = 0; u < NUNITS; u++)
+        if (can_start[u] && sel[u][i]) sstarted_n[i] = 1'b1;
+    end
+    if (c_go) begin
+      sv_n[free_slot] = 1'b1;
+      older_n[free_slot] = sv;
+      for (int i = 0; i < WIN; i++) older_n[i][free_slot] = 1'b0;
+      soh_n[free_slot] = NUNITS'(1) << c_unit;
+      sstarted_n[free_slot] = 1'b0;
+      sdep_n[free_slot] = ndep;
+      sdepd_n[free_slot] = ndepd;
+    end
+  end
+  always_comb begin
+    for (int u = 0; u < NUNITS; u++) begin
+      logic [WIN-1:0] same_n, dep_ready, cand, ready_l;
+      for (int i = 0; i < WIN; i++)
+        same_n[i] = sv_n[i] && sstarted_n[i] && soh_n[i][u] && u != U_VPU;
+      for (int i = 0; i < WIN; i++) begin
+        dep_ready[i] = (sdep_n[i] & ~same_n) == '0;
+        cand[i] = sv_n[i] && !sstarted_n[i] && soh_n[i][u];
+        if (u == U_MXU)
+          ready_l[i] = WAITC ? w_dram_n[i] : (sdepd_n[i] & ~same_n) == '0;
+        else if (u == U_COLL)
+          ready_l[i] = WAITC ? w_all_n[i] : dep_ready[i];
+        else if (WAITC) begin
+          // In-order units pick their oldest; the VPU picks its oldest ready.
+          cand[i] = cand[i] && (u != U_VPU || w_all_n[i]);
+          ready_l[i] = w_all_n[i];
+        end else begin
+          cand[i] = cand[i] && dep_ready[i];
+          ready_l[i] = 1'b1;
+        end
+`ifndef SYNTHESIS
+        // Preserve the original +hz_ino override, including its precedence over WAITC.
+        if (hz_ino && u != U_MXU && u != U_COLL && hz_inom[u]) begin
+          cand[i] = sv_n[i] && !sstarted_n[i] && soh_n[i][u];
+          ready_l[i] = dep_ready[i];
+        end
+`endif
+      end
+      start_slot_n[u] = '0;
+      for (int i = 0; i < WIN; i++) begin
+        sel_n[u][i] = cand[i] && (older_n[i] & cand) == '0;
+        if (sel_n[u][i]) start_slot_n[u] |= SW'(i);
+      end
+      cand_any_n[u] = |cand;
+      start_ready_n[u] = |(sel_n[u] & ready_l);
+      if (!WAITC && u != U_MXU && u != U_COLL) start_ready_n[u] = cand_any_n[u];
+`ifndef SYNTHESIS
+      if (hz_ino && u != U_MXU && u != U_COLL && hz_inom[u])
+        start_ready_n[u] = |(sel_n[u] & dep_ready);
+`endif
+    end
+  end
+  always_ff @(posedge clk)
+    if (rst) begin
+      cand_any <= '0;
+      start_ready <= '0;
+      for (int u = 0; u < NUNITS; u++) begin sel[u] <= '0; start_slot[u] <= '0; end
+    end else begin
+      cand_any <= cand_any_n;
+      start_ready <= start_ready_n;
+      for (int u = 0; u < NUNITS; u++) begin
+        sel[u] <= sel_n[u];
+        start_slot[u] <= start_slot_n[u];
+      end
+    end
+  always_comb can_start = start_ready & urdy & ~ustart;
+
+`ifndef SYNTHESIS
+  // The original selector on the actual registered window, independently of the
+  // next-state mirrors above. Compare even when a unit is not ready, so a bad
+  // preselection cannot hide behind urdy or the one-cycle ustart pulse.
+  logic [SW-1:0] start_slot_ref [NUNITS];
+  logic [WIN-1:0] sel_ref [NUNITS];
+  logic [NUNITS-1:0] cand_any_ref, start_ready_ref;
+  logic [WIN-1:0] mrdy_ref, crdy_ref;
   always_comb begin
     for (int i = 0; i < WIN; i++) begin
-      mrdy[i] = WAITC ? w_dram_q[i] : (sdepd[i] & ~same_started[U_MXU]) == '0;
-      crdy[i] = WAITC ? w_all_q[i] : (sdep[i] & ~same_started[U_COLL]) == '0;
+      mrdy_ref[i] = WAITC ? w_dram_q[i] : (sdepd[i] & ~same_started[U_MXU]) == '0;
+      crdy_ref[i] = WAITC ? w_all_q[i] : (sdep[i] & ~same_started[U_COLL]) == '0;
     end
     for (int u = 0; u < NUNITS; u++) begin
       logic [WIN-1:0] cand;
-      start_slot[u] = '0;
+      start_slot_ref[u] = '0;
       // collectives pair up across slices, so the collective unit stays strictly in order:
       // it only considers its oldest instruction
       for (int i = 0; i < WIN; i++)
         cand[i] = sv[i] && !sstarted[i] && soh[i][u] &&
                   ((sdep[i] & ~same_started[u]) == '0 || u == U_COLL || u == U_MXU);
       for (int i = 0; i < WIN; i++) begin
-        sel[u][i] = cand[i] && (older[i] & cand) == '0;
-        if (sel[u][i]) start_slot[u] |= SW'(i);
+        sel_ref[u][i] = cand[i] && (older[i] & cand) == '0;
+        if (sel_ref[u][i]) start_slot_ref[u] |= SW'(i);
       end
-      cand_any[u] = |cand;
+      cand_any_ref[u] = |cand;
       if (u == U_MXU)
-        can_start[u] = |(sel[u] & mrdy) && urdy[u] && !ustart[u];
+        start_ready_ref[u] = |(sel_ref[u] & mrdy_ref);
       else if (u == U_COLL)
-        can_start[u] = |(sel[u] & crdy) && urdy[u] && !ustart[u];
+        start_ready_ref[u] = |(sel_ref[u] & crdy_ref);
       else    // cand already requires readiness
-        can_start[u] = cand_any[u] && urdy[u] && !ustart[u];
+        start_ready_ref[u] = cand_any_ref[u];
     end
     // WAITC: the VPU starts its oldest ready instruction (its waits met), the others their
     // oldest only
@@ -825,15 +920,15 @@ module otpu_seq
       for (int u = 0; u < NUNITS; u++)
         if (u != U_MXU && u != U_COLL) begin
           logic [WIN-1:0] c2;
-          start_slot[u] = '0;
+          start_slot_ref[u] = '0;
           for (int i = 0; i < WIN; i++)
             c2[i] = sv[i] && !sstarted[i] && soh[i][u] && (u != U_VPU || w_all_q[i]);
           for (int i = 0; i < WIN; i++) begin
-            sel[u][i] = c2[i] && (older[i] & c2) == '0;
-            if (sel[u][i]) start_slot[u] |= SW'(i);
+            sel_ref[u][i] = c2[i] && (older[i] & c2) == '0;
+            if (sel_ref[u][i]) start_slot_ref[u] |= SW'(i);
           end
-          cand_any[u] = |c2;
-          can_start[u] = |(sel[u] & w_all_q) && urdy[u] && !ustart[u];
+          cand_any_ref[u] = |c2;
+          start_ready_ref[u] = |(sel_ref[u] & w_all_q);
         end
 `ifndef SYNTHESIS
     // +hz_ino: the DMA, the quantizer and the VPU start their oldest instruction only, as the
@@ -842,21 +937,28 @@ module otpu_seq
       for (int u = 0; u < NUNITS; u++)
         if (u != U_MXU && u != U_COLL && hz_inom[u]) begin
           logic [WIN-1:0] c2, r2;
-          start_slot[u] = '0;
+          start_slot_ref[u] = '0;
           for (int i = 0; i < WIN; i++) begin
             c2[i] = sv[i] && !sstarted[i] && soh[i][u];
             r2[i] = (sdep[i] & ~same_started[u]) == '0;
           end
           for (int i = 0; i < WIN; i++) begin
-            sel[u][i] = c2[i] && (older[i] & c2) == '0;
-            if (sel[u][i]) start_slot[u] |= SW'(i);
+            sel_ref[u][i] = c2[i] && (older[i] & c2) == '0;
+            if (sel_ref[u][i]) start_slot_ref[u] |= SW'(i);
           end
-          cand_any[u] = |c2;
-          can_start[u] = |(sel[u] & r2) && urdy[u] && !ustart[u];
+          cand_any_ref[u] = |c2;
+          start_ready_ref[u] = |(sel_ref[u] & r2);
         end
 `endif
   end
-
+  always @(posedge clk)
+    if (!rst)
+      for (int u = 0; u < NUNITS; u++)
+        if (sel[u] !== sel_ref[u] || start_slot[u] !== start_slot_ref[u] ||
+            cand_any[u] !== cand_any_ref[u] || start_ready[u] !== start_ready_ref[u] ||
+            can_start[u] !== (start_ready_ref[u] && urdy[u] && !ustart[u]))
+          $fatal(1, "otpu_seq: unit %0d preselection differs from current window", u);
+`endif
 
   // MXU release: the oldest started, unreleased MM once all its dependencies are clear
   wire [SW-1:0] rel_slot = uq[U_MXU][uq_r[SW-1:0]];
@@ -886,9 +988,34 @@ module otpu_seq
     always_ff @(posedge clk) if (!rst && q_en) q <= m[start_slot[u]];
     assign ucmd[u] = cmd_t'(q);
 `ifndef SYNTHESIS
-    // the copy is the started slot's command while the slot is in the window
+    // Independently clock the original selector's command read, including the
+    // collective's speculative idle loads. Checking q even when no command is
+    // live distinguishes a bad preselection/read from a slot-lifetime mistake.
+    logic [$bits(cmd_t)-1:0] q_ref;
+    logic q_ref_valid;
+    wire q_en_ref = (u == U_COLL) ? urdy[u] && !ustart[u] :
+                                   start_ready_ref[u] && urdy[u] && !ustart[u];
+    always_ff @(posedge clk)
+      if (rst) q_ref_valid <= 1'b0;
+      else if (q_en_ref) begin
+        q_ref <= m[start_slot_ref[u]];
+        q_ref_valid <= 1'b1;
+      end
+
+    // Keep the started command until COMPLETION, including the fin edge.
+    // +hz_rob can retain a completed slot (sv && sdone) behind an older live
+    // slot. The idle collective may then reload q without changing ucs; it no
+    // longer consumes that completed slot's command. sdone, not fin, excludes
+    // only cycles AFTER completion. Slot allocation clears sdone on reuse.
     always @(posedge clk) begin
-      if (!rst && sv[ucs[u]] && sstarted[ucs[u]] && soh[ucs[u]][u] && q != m[ucs[u]])
+      if (!rst && q_en !== q_en_ref)
+        $fatal(1, "otpu_seq: unit %0d command enable differs from original selector", u);
+      if (!rst && q_ref_valid && q !== q_ref)
+        $fatal(1, "otpu_seq: unit %0d command differs from original selector", u);
+      if (!rst && ustart[u] && !q_ref_valid)
+        $fatal(1, "otpu_seq: unit %0d starts without an original-selector command", u);
+      if (!rst && sv[ucs[u]] && sstarted[ucs[u]] && soh[ucs[u]][u] &&
+          !(hz_rob && sdone[ucs[u]]) && q !== m[ucs[u]])
         $fatal(1, "otpu_seq: unit %0d's command is not slot %0d's", u, ucs[u]);
       if (!rst && can_start[u] && !q_en)
         $fatal(1, "otpu_seq: unit %0d starts without loading its command", u);
