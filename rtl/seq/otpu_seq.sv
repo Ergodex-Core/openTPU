@@ -82,6 +82,7 @@ module otpu_seq
   initial if (D % 32 != 0) $fatal(1, "otpu_seq: D must be a multiple of 32");
   logic [D*8-1:0] irow;           // the RAM output: the row holding fa
   logic [255:0]   ir;             // the instruction at pc
+  wire [255:0]   ir_in = irow[256 * (fa % IPR) +: 256];
   logic           ir_v;           // ir is valid (0 only in the first cycle after reset)
   logic [31:0]    fa, fa_d;       // the pc R moves to next; its next value
   logic [31:0]    fa_n;           // fa's next value when it moves (the RAM address)
@@ -392,7 +393,7 @@ module otpu_seq
     fa <= fa_d;
     if (rst) ir_v <= 1'b0;
     else if (ld) begin
-      ir <= irow[256 * (fa % IPR) +: 256];
+      ir <= ir_in;
       ir_v <= 1'b1;
     end
   end
@@ -472,6 +473,57 @@ module otpu_seq
   function automatic logic [31:0] rv(input logic [3:0] r);
     return (r == 0) ? 32'd0 : R[r];
   endfunction
+
+  // The value R[r] will have after this edge. Match the register file's write
+  // priority below: RLD first, then an executing LI/ADDI (and R0 always reads 0).
+  // LOOP predecode uses this while the retiring instruction and the incoming
+  // instruction still occupy different stages.
+  function automatic logic [31:0] rv_next(input logic [3:0] r);
+    logic [31:0] v;
+    v = rv(r);
+    if (r != 0) begin
+      if (rl_v && rl_rd == r) v = rl_val;
+      if (!stopping && !halted && ir_v && !rl_wait && rd == r) begin
+        if (op == OP_LI) v = iw[1];
+        if (op == OP_ADDI) v = rv(ra) + iw[1];
+      end
+    end
+    return v;
+  endfunction
+
+  // Predecode beside ir, not between ir and the next IMEM address. pc takes fa
+  // on the same edge, so these are pc + 1 and pc + 1 + iw[1] for the new ir.
+  // An RLD can update its source while ir is held: refresh the predicate on that
+  // edge, before rl_wait releases the held instruction. Targets do not change.
+  logic        ir_loop, lp_zero_q;
+  logic [31:0] lp_enter_q, lp_skip_q;
+  function automatic logic sum_zero(input logic [31:0] a, b);
+    return (a ^ b) == ((a | b) << 1);
+  endfunction
+  always_ff @(posedge clk)
+    if (rst) begin
+      ir_loop <= 1'b0;
+      // The targets and predicate are only used with a valid ir; its first load
+      // initializes them from the register file after reset (including rinit).
+    end else if (ld) begin
+      ir_loop <= ir_in[7:0] == OP_LOOP;
+      lp_enter_q <= fa + 32'd1;
+      lp_skip_q <= fa + 32'd1 + ir_in[63:32];
+      lp_zero_q <= sum_zero(rv_next(ir_in[11:8]), ir_in[95:64]);
+    end else if (rl_v) begin
+      lp_zero_q <= sum_zero(rv_next(ra), iw[2]);
+    end
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && ir_v) begin
+      logic [31:0] a;
+      a = rv(ra);
+      if (ir_loop !== (op == OP_LOOP) ||
+          lp_enter_q !== (pc + 32'd1) || lp_skip_q !== (pc + 32'd1 + iw[1]) ||
+          lp_zero_q !== ((a ^ iw[2]) == ((a | iw[2]) << 1)))
+        $fatal(1, "otpu_seq: LOOP predecode differs from ir/pc/register file at pc %0d", pc);
+    end
+`endif
 
   // STREAM: src (w2) and dst (w3) += R[ra], vec (w4) += R[rb], x (w5) += R[rc], k (w6) += R[rd].
   // The others: w1 += R[ra], w2 += R[rb] and w3 += R[rc] where docs/isa.md writes the field as
@@ -680,8 +732,6 @@ module otpu_seq
   logic        hit1, hit2;       // fa ends the loop on top of the stack / the one below it
   logic        hit;              // fa's successor is a loop start ...
   logic [31:0] hit_pc;           // ... this one
-  logic        lp_z;             // the LOOP's trip count (R[ra] + iw[2]) is 0
-  logic [31:0] lp_a;
   logic [31:0] succ;
   always_comb begin
     case (op)
@@ -695,22 +745,31 @@ module otpu_seq
     hit2 = (sp >= 2) && (stk_end[sp-2] == fa);
     hit = hit1 && stk_rem[sp-1] > 1;                                          // D
     hit_pc = stk_start[sp-1];
-    if (ir_v && op == OP_LOOP) begin
+    if (ir_v && ir_loop) begin
       if (lp_cnt != 0) begin hit = lp_len == 1 && lp_cnt > 1; hit_pc = fa; end  // A
     end else if (ir_v && at_end) begin
       if (stk_rem[sp-1] > 1) hit = hit1 && stk_rem[sp-1] > 2;                // B
       else begin hit = hit2 && stk_rem[sp-2] > 1; hit_pc = stk_start[sp-2]; end // C
     end
     succ = hit ? hit_pc : fa + 1;
-    // a + b == 0 without the carry chain: every sum bit is 0 iff a ^ b is the carry, (a | b) << 1
-    lp_a = rv(ra);
-    lp_z = (lp_a ^ iw[2]) == ((lp_a | iw[2]) << 1);
     if (rst) fa_n = '0;
-    else if (ir_v && op == OP_LOOP && !lp) fa_n = lp_z ? pc + 1 + iw[1] : pc + 1;
+    else if (ir_v && ir_loop && !lp) fa_n = lp_zero_q ? lp_skip_q : lp_enter_q;
     else fa_n = succ;
-    fe = rst || (ir_v && op == OP_LOOP && !lp && !stopping && !halted && !rl_wait) || ld;
+    fe = rst || (ir_v && ir_loop && !lp && !stopping && !halted && !rl_wait) || ld;
     fa_d = fe ? fa_n : fa;
   end
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst) begin
+      logic [31:0] a, addr;
+      a = rv(ra);
+      addr = (ir_v && op == OP_LOOP && !lp) ?
+               (((a ^ iw[2]) == ((a | iw[2]) << 1)) ? pc + 32'd1 + iw[1] : pc + 32'd1) :
+               succ;
+      if (fa_n !== addr)
+        $fatal(1, "otpu_seq: predecoded IMEM address differs from original LOOP address");
+    end
+`endif
 
   // A dependency on an instruction that has already started on the SAME unit is satisfied:
   // every unit processes its instructions in start order (the MXU consumes and drains its two
