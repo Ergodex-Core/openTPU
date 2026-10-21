@@ -3,7 +3,7 @@
 2026-10-21 UTC. This is a plan and evidence checkpoint; no new physical build or
 hardware programming was performed. The successful 150 MHz image is preserved.
 
-The isolated candidate is `codex/wide-port-200mhz-opt`. Production RTL last changed
+The isolated candidate is `codex/wide-port-200mhz-opt`. Synthesized RTL behavior last changed
 at `b22dda7e45143e6cdfbcf6374103a2b44ee9a8f6`; build support was added at
 `6fa3c671ec5d373092c62a3fe6f3cdf271834f18`. Replay reporting is at `beb39f0b`,
 with the missing-arbitration gate extended to replay-disabled mode at `b4639a9a`.
@@ -42,66 +42,82 @@ Replay port-cycle totals are 1,700/15,648 and 12,307/80,035 respectively (PMP1/P
 The full 26-layer Gemma baseline/combined comparison is separate and passed;
 the matched PMP0/PMP1 Gemma fixture above covers four layers plus the whole head.
 
-Independent PMP0 prediction requires bank request/grant/replay state and unit
-holds/backpressure represented inside the LPN, validated against cycle-level
-events. Saved aggregate counters and 64-cycle buckets do not determine that
-overlap. Do not fit a coefficient from these same elapsed times or inject all
-instruction freezes into service time. A narrow cycle-level arbiter trace/test
-is the next useful model experiment; it does not require repeating full models.
+Independent PMP0 prediction requires bank arbitration, replay and unit pipeline
+feedback inside the LPN. Aggregate counters and 64-cycle buckets do not identify
+exposed delay. Do not fit a coefficient or add instruction freeze counts to
+command service times.
 
-That first experiment is now implemented in `tools/wideport_tmem_resource.py`
-and `sim/verilator/tb_tmem_replay_trace.sv`. The cycle-stepped reference resource
-models the eight-port, eight-bank/two-subbank read-side arbitration, same-word
-sharing, guest collapse, pending addresses, replay age and PMP0 landing-write
-contention. The write pipeline helper checks IQ-to-pw's two core-edge delay.
-PMP0's default side mask is 0xf0; PMP1's is 0x0c, so mode comparisons must account
-for both the side split and write occupancy.
+`tools/wideport_tmem_resource.py` implements the cycle-stepped eight-port,
+eight-bank/two-subbank read resource, including same-word sharing, guests,
+pending addresses, replay age and PMP0 landing-write contention. Its write
+pipeline helper models IQ-to-pw's two core-edge delay. PMP0's default read-side
+mask is 0xf0; pumped modes use 0x0c, so both the side split and write occupancy
+matter. Its standalone test matched 768 RTL cycles, including eight-lane reads
+and a fixed-side pumped control; the controlled write-conflict window had 34
+PMP0 replay port-cycles versus zero in the pumped controls.
 
-On EC2, 49 tests passed, including 768 RTL cycles in three cases: PMP0/default
-side map, PMP1/default side map, PMP1/fixed0xf0 side map. Each cycle's loss,
-freeze, cross/self-block masks and delayed writes matched exactly. The bench
-uses the slice's MXU-only crossbar and other-port rotators, single- and eight-lane
-requests, guest traffic, aged replays, same-word bypass and different-word
-landing-write conflicts. In the controlled write-conflict window, PMP0 has 34
-replay port-cycles and both PMP1 cases have zero. This is a resource-boundary
-test, not an elapsed program-cycle or throughput result. It checks masks and
-write delay, not returned operand data. The component is not yet wired into
-`WpCompactOpenTPU`; the whole-model estimates/errors above are unchanged and
-the uncalibrated/TPS suppression remains active.
+The mixed slice experiment is implemented in
+`tests/test_wideport_slice_feedback.py`. It uses 13-row KB9 int8 row-lane MM,
+an independent 32x256 two-operand V_ADD, native NCH8 memory, stall50/seed7/lat120,
+and a 32768-cycle trace cap. TMEM/DRAM match the bit-exact ISA in both modes.
+Program, initial DRAM and source digests are identical; the actual compiled
+parameter dictionaries differ only in TMEM_PMP. PMP2 is the core-clock model
+of pumped TMEM; it is not a physical target or an on-card clock qualification.
 
-The next integration requires per-beat unit state, not a delay on whole
-commands. In the LPN, gather all units' current-cycle asks, arbitrate at one
-deterministic cycle barrier, then advance only the relevant pipeline stages.
-Keep MXU prefetch/compute independent from drain until its result FIFO fills;
-keep VPU operand reads independent from write-buffer pops. A resource token
-held for an entire instruction cannot express those overlaps.
+| Mixed test observation | PMP0 | PMP2 |
+|---|---:|---:|
+| RTL run cycles | 4,855 | 4,603 |
+| Complete trace cycles, including reset/loader | 5,014 | 4,762 |
+| Replay port-cycles | 298 | 5 |
+| VPU read-hold cycles | 257 | 0 |
+| VPU queued-write grant-denial cycles | 144 | 145 |
+| MXU compute advances while drain grant denied | 20 | 25 |
+| MXU result pushes while drain grant denied | 3 | 6 |
+| Maximum VPU write-buffer entries | 3 | 3 |
+| Maximum MXU result-FIFO rows | 1 | 7 |
+| Consumer/next-command handoffs | 4 | 4 |
 
-The missing slice trace must use a documented pre-core-edge sampling point and
-include the following, with initial pipeline/replay state if a bounded window
-starts after reset:
+`tools/wideport_unit_feedback.py` derives slice write-priority grants, guest
+and replay holds, filtered reads and read takes. It couples the bank resource
+to a VPU write FIFO containing addresses/completion bits and the registered
+read enable/hold/lookahead, plus MXU operand/scale/result queue counts, row
+capacity, independent compute/drain and next-command handoff. Every captured
+cycle matches, including the full read-blocker cause matrix: 9,776 cycles,
+zero mismatches. This demonstrates why an MXU-wide freeze is incorrect: compute
+and completed rows can progress while its TMEM drain is denied.
 
-- Raw `rq_en`, filtered `rq_t`, actual `r_en`, lane masks and enabled word
-  addresses for every port; input granted `w_en/w_addr`, IQ registers, landing
-  `u_tmem.pw_v/pw_a`, and configuration/side/rank/guest masks.
-- `tm_lost/tm_frz`, `u_tmem.g_one.rpv/rpe/rpa`, replay age, write-conflict `wm`
-  versus read blockers `hm`, group `gnt`, `rpl_hold/rpl_frz`, and guest blocking.
-- VPU `rhold`, `g_wbuf.en_h/en_r/en_q/ren_r/wn/push/pop`, pipeline enable, and
-  instruction start/done identity. The unit bench's immediate group freeze is
-  a stimulus policy; it does not model the VPU's registered hold/room feedback.
-- MXU `pop/mxu_pop`, `drain_go/t_gnt/d_pop`, `rf_n/rows_live/f_count/s_count`,
-  result/operand pipeline valids, and DRAM A/B/write ready/grant events. Quant
-  read stages, group hold and `q_awant/sw_rdy_i` are also needed to separate TMEM
-  replay from external write-room stalls.
+The final focused EC2 regression passed 54 tests. Both original and final
+traces are preserved (`slice-feedback-v1` and `slice-feedback-v2`). The final
+regression reuses the same RTL binaries; only Python compile-contract recording
+and rejection checks changed. The trace-only final audit additionally checks
+each exact read-blocker cause. No full Gemma/Qwen RTL run was repeated.
 
-The smallest next integration experiment starts from
-`test_wide_rowlanes_unpumped_tmem_under_stalls` (13 rows, KB9, seed7, native
-stalls) paired under PMP0 and the core-clock PMP2 model, with a bounded trace.
-Its current V_FILL has no operand reads: add a two-operand VOP on independent
-TMEM buffers to exercise VPU B replay while row-lane MM/drain is active. Keep
-ISA-exact TMEM/DRAM checks and assert the required conflict and queue events
-actually occurred. Check the resource oracle against slice loss/freeze masks,
-then use queue transitions to validate the next LPN unit model. No full Gemma or
-Qwen rerun is necessary for this experiment. It has not been run yet.
+The opt-in `+tmfeedback=FILE +tmfeedback_limit=32768` block in
+`rtl/top/otpu_slice.sv` is under `ifndef SYNTHESIS`; no synthesized behavior was
+changed. Records sample before the core edge from the first edge through halt,
+with an explicit end/truncation marker. They contain raw/filtered read requests,
+read takes, raw/granted/landing writes, replay/blocker masks, group grants,
+VPU queue/enable/hold state and producer outputs, MXU queue/compute/drain state,
+DRAM readiness and instruction events. The runner pins actual compile parameters,
+input/program/source SHA256 digests and native stall settings. Unsupported
+GST/rank/bank/SBH/slice contracts fail closed. A window starting after reset
+would additionally need initial replay/age and IQ state; current traces start
+at reset, so those states are reconstructed and checked cycle by cycle.
+
+This is still a trace-conditioned component model, not a whole-program LPN
+predictor. Arithmetic outputs (`cw_words`, `done_i`, `rf_push`), instruction and
+operand availability, DRAM ready and the global collective decision remain
+external producer inputs. To predict a changed TMEM schedule, generate their
+address/valid/latency pipelines from issued commands and DRAM responses; replaying
+recorded producer events under a different stall schedule would be invalid.
+Gather same-cycle asks at one deterministic LPN cycle barrier, arbitrate, then
+advance the relevant stages rather than delaying an entire instruction.
+
+The result FIFO did not reach capacity in this experiment (zero full-capacity
+cycles); its full-threshold backpressure branch needs a bounded stress case
+before claiming coverage. The whole-model LPN estimates/errors in the first
+table remain unchanged. Calibration and tok/s suppression stay active until
+producer pipelines and their counterfactual feedback are modeled and validated.
 
 ## Physical target and prerequisites
 
