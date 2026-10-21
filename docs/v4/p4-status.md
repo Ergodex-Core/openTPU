@@ -347,6 +347,19 @@ AggressiveExplore, each with a reroute; the first pass with setup and hold >= 0 
 same tree at 162.5 MHz (the 2x clock's period +0.22 ns; unit `opt-p4-viv-s4x-162`, output
 `.../p4-866c920e/f2-burst200-s4-162`).
 
+The recovery's forced replication is refused after routing ("-force_replication_on_nets ... not
+supported yet for post-route physical synthesis"), and its AggressiveFanoutOpt pass left
+-0.076 / 0.000 (`recover/recover_progress.txt`). Forcing the replication on the placed
+checkpoint instead made the placed estimate +0.063 -> -0.620 ns, so that reroute was stopped.
+Where the cells sit explains the paths (`f2-burst200-s4-175/where/tmem_where.txt`, from the
+routed checkpoint): each slice's 64 TMEM BRAMs are spread over 6-8 clock regions (slice 0
+X2-X4 Y1-Y3; slice 1 X1-X3 Y6-Y7 with half its TMEM logic in X4-X5; slice 2 X1-X2 Y9-Y11; slice
+3 X4-X7 Y10-Y11), and the 75K-cell VPU of each slice spreads over 10-16. `floorplan_s4_tmem.tcl`
+(dc28a9b7: floorplan_s4.tcl plus one hard six-region box per slice for `u_tmem`, `u_dma` and the
+slice's collective port: X1Y2:X3Y3, X1Y6:X3Y7, X1Y9:X2Y11, X5Y9:X6Y11) is implemented on the same
+175 MHz netlist from 09:35 UTC (`build.py --from-netlist .../f2-burst200-s4-175 --floorplan ...`,
+output `.../p4-866c920e/f2-burst200-s4-175-tmem`, unit `opt-p4-viv-s4x-175tm`).
+
 ## Commands to reproduce
 
 From the worktree root with its interpreter (`PYTHONPATH=.` so that the checkout's package is
