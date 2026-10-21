@@ -39,10 +39,13 @@ each a credit held for its beats at RD / round-trip beats a cycle; graded +1 .. 
     max of the ends in dispatch order).
 
 Nothing here is fitted: every constant is the RTL's (otpu_mxu's row pipeline CL + MCOLS + 5
-and lanes 9, otpu_vpu's slots, otpu_quant's 60, otpu_board's NRD 64, the adapter's 14 cycles of
+and lanes 9, otpu_vpu's slots, otpu_quant's 60, otpu_board's NRD 128 at NCH=8, the adapter's 14 cycles of
 path derived from its structure as the tier's README says) or upstream's validated model's.
 `--adapter-latency` is the one sensitivity worth a sweep (each cycle ~1.3% of a channel-bound
 point). Labels: every number here is `lpn-estimate`; the receipt's column is `measured`.
+TMEM_IMPL=3 replay arbitration/holds are not modeled. Their overlapping RTL counters
+can be audited with --rtl-reference, but are never added to modeled cycles. Such
+points cannot qualify a throughput prediction, even when phase error is small.
 """
 from __future__ import annotations
 
@@ -65,6 +68,7 @@ os.environ.setdefault("OTPU_TARGET", "f2-hbm")
 os.environ.setdefault("OTPU_NCH", "8")
 SCRATCH = Path(os.environ.get("HWLOOP_LPN_SCRATCH", str(Path.home() / "ergodex-03" / "lpn-scratch")))
 HWLOOP = Path(os.environ.get("HWLOOP_TREE", str(Path.home() / "ergodex-03" / "openTPU-hwloop")))
+from wideport_tmem_accounting import load_reference, replay_scope, throughput_result, verify_program
 LABEL = "lpn-estimate"
 GATE = 0.10          # the brief's rule: no tok/s from a calibration whose mean |error| is above ~10%
 SMALL = 0.02         # a phase under 2% of the token's cycles is shown but kept out of the mean
@@ -546,16 +550,14 @@ def phase_runs(commands, progs, W, phase_of):
 
 
 def target_uarch(target: str) -> dict:
-    """The target's [uarch] values the model takes from the RTL (targets/<name>.toml)."""
-    name = target.split(":")[0]
-    p = ROOT / "targets" / f"{name}.toml"
-    out = {}
-    for k in ("FIFO_DEPTH", "WIN", "MXU_E", "CHASH"):
-        m = re.search(rf"^{k}\s*=\s*(\w+)", p.read_text(), re.M) if p.is_file() else None
-        if m:
-            v = m.group(1)
-            out[k] = (v == "true") if v in ("true", "false") else int(v)
-    return out
+    """Resolve the selected variant, including its TMEM mode, through the RTL target loader."""
+    from opentpu.target import load
+    return dict(load(target).uarch)
+
+
+def channel_depth(nch):
+    """rtl/shell/otpu_board.sv NRD (including the NCH=8 credit optimization)."""
+    return 128 if nch == 8 or nch <= 2 else 64
 
 
 def native(binary: Path, work: Path, trace: bool = True) -> tuple[dict, str]:
@@ -593,13 +595,14 @@ def main() -> None:
     ap.add_argument("--nch", type=int, default=int(os.environ.get("OTPU_NCH", "8")))
     ap.add_argument("--lat", type=int, default=60, help="the receipt's --lat: the port's read latency")
     ap.add_argument("--adapter-latency", type=int, default=None, help="cycles of path over --lat (default 14 on the native path, 4 behavioral)")
-    ap.add_argument("--channel-depth", type=int, default=None, help="B read beats in flight a channel (default otpu_board NRD: 64 at NCH > 2)")
+    ap.add_argument("--channel-depth", type=int, default=None, help="B read beats in flight a channel (otpu_board NRD: 128 at NCH=8 or <=2, otherwise 64)")
     ap.add_argument("--window", type=int, default=None, help="the dispatch window (default the target's WIN)")
     ap.add_argument("--epilogue-lanes", type=int, default=None, help="default the target's MXU_E")
     ap.add_argument("--batch-rows", type=int, default=8, help="upstream's validated rows a prefetch event")
     ap.add_argument("--mhz", type=float, default=200.0)
     ap.add_argument("--measured", help="a tools/perf_qwen.py / perf_bonsai2.py --json receipt (its last line): the phases to calibrate against")
     ap.add_argument("--rtl-cycles", type=int, default=None, help="the measured whole-token cycles when there is no receipt with phases")
+    ap.add_argument("--rtl-reference", help="preserved PMP comparison directory with status, log, Lens and TMEMSTAT; diagnostics only")
     ap.add_argument("--wide", default=str(HWLOOP / "tools" / "hwloop" / "lpn" / "wide.py"), help="the hwloop branch's wide model")
     ap.add_argument("--dialect", default=os.environ.get("HWLOOP_LPN", str(SCRATCH / "LPNDialect")))
     ap.add_argument("--lpn-compile", default=str(SCRATCH / "lpn-build" / "tools" / "lpn-compile" / "lpn-compile"))
@@ -608,6 +611,30 @@ def main() -> None:
     ap.add_argument("--json")
     ap.add_argument("--diag", action="store_true", help="per phase the plan's rooflines")
     a = ap.parse_args()
+    ua = target_uarch(os.environ["OTPU_TARGET"])
+    scope = replay_scope(ua)
+    accounting = lens = reference_run = None
+    if a.rtl_reference:
+        from opentpu.llm import model_dir
+        model_path = model_dir(a.model)
+        expected = {k: ua[k] for k in ("WIN", "FIFO_DEPTH", "MXU_E", "TMEM_IMPL", "TMEM_NSB",
+                    "TMEM_RPL", "TMEM_TDP", "TMEM_GST") if k in ua}
+        expected["NCH"] = a.nch
+        accounting, lens, reference_run = load_reference(a.rtl_reference, ua.get("TMEM_PMP"), expected)
+        for flag, value in (("--model", a.model), ("--layers", a.layers), ("--pos", a.pos),
+                            ("--wformat", a.wformat), ("--head-format", a.head_format or a.wformat),
+                            ("--lat", a.lat), ("--mhz", a.mhz)):
+            command = reference_run["command"]
+            saved = command[command.index(flag) + 1]
+            equal = Path(saved).name == model_path.name if flag == "--model" else str(saved) == str(value)
+            if flag == "--mhz":
+                equal = float(saved) == value
+            if not equal:
+                raise ValueError(f"reference workload mismatch: {flag} {saved} != {value}")
+        reference_status = json.loads((Path(a.rtl_reference) / "status.json").read_text())
+        expected_config_hash = reference_status["checkpoint_manifest"]["config.json"]["sha256"]
+        if hashlib.sha256((model_path / "config.json").read_bytes()).hexdigest() != expected_config_hash:
+            raise ValueError("reference checkpoint config hash mismatch")
     sys.path.insert(1, a.dialect)
     import lpnlang_mlir  # noqa: F401
     import numpy as np
@@ -623,18 +650,35 @@ def main() -> None:
     for c in commands:
         ops[I.OPNAMES.get(c.instruction.op, hex(c.instruction.op))] = ops.get(I.OPNAMES.get(c.instruction.op, hex(c.instruction.op)), 0) + 1
     runs = phase_runs(commands, progs, W, _phase)
-    ua = target_uarch(os.environ["OTPU_TARGET"])
     nch = a.nch
+    if accounting:
+        for key in ("S", "D", "PORTB", "MCOLS", "ALINE", "LANES", "TMEM_WORDS"):
+            if accounting["parameters"][key] != getattr(cfg, key):
+                raise ValueError(f"reference config mismatch: {key}")
+        verify_program(lens, progs, commands, W.UNIT)
+        from opentpu.rtlsim import top_params, BOARD_UARCH
+        effective = top_params(cfg, uarch=BOARD_UARCH, axi=1)
+        if ua.get("CHASH", True) is not True:
+            raise ValueError("reference does not record non-default CHASH")
+        for key in effective.keys() | accounting["parameters"].keys():
+            value = accounting["parameters"].get(key)
+            # DRAM/IMEM capacities may be minimally sized by the timing frontend;
+            # the exact static program and dynamic dispatch were checked above.
+            if key not in ("DRAM_WORDS", "IMEM_WORDS") and effective.get(key) != value:
+                raise ValueError(f"reference effective parameter mismatch: {key}: {effective.get(key)} != {value}")
     WpTiming, WpCompact, plan_mm = model_classes(wide, I)
     timing = WpTiming(dram_latency=a.lat, dram_bytes_per_cycle=cfg.D,
                       window=a.window or ua.get("WIN", 32), fifo_chunks=ua.get("FIFO_DEPTH", 128),
                       chain_length=16, epilogue_lanes=a.epilogue_lanes or ua.get("MXU_E", 2),
                       quant_buffer_chunks=1024, batch_rows=a.batch_rows,
                       port_chunks=cfg.PORTB, nch=nch, chash=ua.get("CHASH", True),
-                      channel_depth=a.channel_depth or (64 if nch > 2 else 128),
+                      channel_depth=a.channel_depth or channel_depth(nch),
                       adapter_latency=a.adapter_latency if a.adapter_latency is not None else (14 if nch > 1 else 4),
                       aline=getattr(cfg, "ALINE", 32), dstep_lanes=I.DSTEP_LANES)
     tag = f"{name}_l{a.layers}_{a.wformat}_{a.head_format or a.wformat}_p{cfg.PORTB}_m{cfg.MCOLS}{'_rl' if a.rowlanes else ''}_a{timing.aline}"
+    fingerprint = hashlib.sha256(json.dumps({"uarch": ua, "timing": dataclasses.asdict(timing),
+                                            "pos": a.pos}, sort_keys=True).encode()).hexdigest()[:12]
+    tag += f"_pmp{ua.get('TMEM_PMP', 'na')}_{fingerprint}"
     wd = Path(a.work) / tag
     wd.mkdir(parents=True, exist_ok=True)
     print(f"{name}: {len(progs[0])} instructions, {len(commands)} commands, {len(runs)} phase runs; "
@@ -700,6 +744,13 @@ def main() -> None:
         lines_ = [l for l in Path(a.measured).read_text().splitlines() if l.strip()]
         meas = json.loads(lines_[-1])
     rtl_cycles = (meas or {}).get("cycles") or a.rtl_cycles
+    if accounting:
+        if rtl_cycles is not None and rtl_cycles != accounting["rtl_cycles"]:
+            raise ValueError("measured receipt and RTL reference cycles disagree")
+        if meas is not None and meas.get("phases") != accounting["phases"]:
+            raise ValueError("measured receipt and RTL reference phases disagree")
+        rtl_cycles = accounting["rtl_cycles"]
+        meas = {"cycles": rtl_cycles, "phases": accounting["phases"]}
     # ---- the table
     print(f"\n{name} {a.wformat}/{a.head_format or a.wformat}, {'all' if not a.layers else a.layers} layers + head, PORTB {cfg.PORTB}, "
           f"MCOLS {cfg.MCOLS}{', row lanes' if a.rowlanes else ''}, ALINE {timing.aline}, NCH {nch} at --lat {a.lat}")
@@ -726,15 +777,20 @@ def main() -> None:
             print(f"{ph:10s} {mphases[ph]['cycles']:>15} {'-':>15s} {'-':>8s}   (no run of this phase in the model's trace)")
     mean_abs = sum(abs(e) for _, e, _ in errs) / len(errs) if errs else None
     wmean = sum(abs(e) * mc for _, e, mc in errs + small) / sum(mc for _, _, mc in errs + small) if errs or small else None
-    calibrated = mean_abs is not None and mean_abs <= GATE
-    tok_s = a.mhz * 1e6 / cycles
+    qualification = throughput_result(cycles, a.mhz, mean_abs, scope)
+    calibrated, tok_s = qualification["calibrated"], qualification["tok_s"]
     if mean_abs is not None:
         print(f"mean |error| over the {len(errs)} phases carrying >= {100 * SMALL:.0f}% of the token: {100 * mean_abs:.1f}% "
               f"(cycle-weighted over all {len(errs) + len(small)}: {100 * wmean:.1f}%; gate {100 * GATE:.0f}%): "
               + ("calibrated" if calibrated else "NOT calibrated: no tok/s from this point")
               + (f"; left out of the mean: " + ", ".join(f"{ph} {100 * e:+.0f}% of {mc:,}" for ph, e, mc in small) if small else ""))
-    line = f"tok/s at {a.mhz:g} MHz ({LABEL}): {tok_s:.1f}" + (f" (RTL measured {a.mhz * 1e6 / rtl_cycles:.1f})" if rtl_cycles else "")
-    print(line if (calibrated or mean_abs is None) else f"({line}: withheld, see the gate)")
+    if scope["limitation"]:
+        print(scope["limitation"])
+    if accounting:
+        print(f"RTL replay losses: {accounting['replay_loss_port_cycles']:,} port-cycles; "
+              "overlapping diagnostics only, cycle correction 0")
+    print(f"tok/s at {a.mhz:g} MHz ({LABEL}): {tok_s:.1f}" if tok_s is not None
+          else "tok/s withheld: requires both the phase-error gate and complete timing accounting")
     res = {"label": LABEL, "model": name, "args": vars(a), "config": str(cfg), "timing": dataclasses.asdict(timing),
            "target_uarch": ua, "wide_model": wide_info, "tree": subprocess.run(["git", "-C", str(ROOT), "rev-parse", "HEAD"],
                                                                                  capture_output=True, text=True).stdout.strip(),
@@ -742,7 +798,8 @@ def main() -> None:
            "tok_s": tok_s, "rtl_cycles": rtl_cycles, "error": (cycles / rtl_cycles - 1) if rtl_cycles else None,
            "phases": {ph: dict(phases[ph], roofline=rl[ph], rtl=((meas or {}).get("phases") or {}).get(ph, {}).get("cycles"))
                       for ph in phases},
-           "mean_abs_error": mean_abs, "weighted_mean_abs_error": wmean, "small_phases": small, "calibrated": calibrated, "roofline": rl_all, "tally": tally,
+           "mean_abs_error": mean_abs, "weighted_mean_abs_error": wmean, "small_phases": small,
+           **qualification, "timing_scope": scope, "rtl_replay_accounting": accounting, "roofline": rl_all, "tally": tally,
            "native": nat, "wall": {"frontend_s": fe, "model_s": build_s, "compile_s": comp_s},
            "work": str(wd), "measured": a.measured}
     if a.json:
