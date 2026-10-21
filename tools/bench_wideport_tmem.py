@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run a pinned, matched PMP1/PMP0 Gemma RTL comparison on the existing EC2 builder.
+"""Run a pinned, matched PMP1/PMP0 RTL comparison on the existing EC2 builder.
 
 This measures simulated cycles, not FPGA timing closure or hardware throughput.
 Run the unpumped TMEM correctness regressions first. This script never builds an AFI,
@@ -41,29 +41,46 @@ def checkpoint_manifest(path):
     return manifest
 
 
+def checkpoint_identity(path, layers):
+    config = json.loads((path / 'config.json').read_text())
+    arch = config.get('text_config', config)
+    model_type = config.get('model_type') or arch.get('model_type')
+    config_layers = int(arch['num_hidden_layers'])
+    if not model_type or config_layers < 4:
+        raise RuntimeError(f'{path}: missing model type or fewer than four layers')
+    return dict(name=path.name, model_type=model_type, config_layers=config_layers,
+                run_layers=config_layers if layers == '0' else int(layers))
+
+
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--expected', required=True, help='Exact clean source commit')
     ap.add_argument('--out', type=Path, required=True, help='New result directory')
     ap.add_argument('--lat', type=int, required=True, help='Same modeled core-cycle latency for both modes')
-    ap.add_argument('--layers', choices=['4', '0'], default='4', help='0: whole 26-layer model plus head')
+    ap.add_argument('--model-dir', type=Path, help='Absolute path to an existing local checkpoint; default: Gemma 3 1B')
+    ap.add_argument('--layers', choices=['4', '0'], default='4', help='0: whole checkpoint model plus head')
     a = ap.parse_args()
     if sys.platform != 'linux' or not Path('/home/ubuntu').is_dir():
         ap.error('Run on the existing EC2 builder, never on the Mac')
     if a.lat < 0:
         ap.error('--lat must be nonnegative')
+    if a.model_dir is not None and not a.model_dir.is_absolute():
+        ap.error('--model-dir must be an absolute path')
     root = Path(__file__).resolve().parents[1]
-    checkpoint = (root / 'models/gemma-3-1b-it').resolve(strict=True)
+    checkpoint = (a.model_dir if a.model_dir is not None else
+                  root / 'models/gemma-3-1b-it').resolve(strict=True)
     rev = subprocess.check_output(['git', 'rev-parse', 'HEAD'], cwd=root, text=True).strip()
     if rev != a.expected or subprocess.check_output(
             ['git', 'status', '--porcelain', '--untracked-files=no'], cwd=root, text=True).strip():
         raise SystemExit('Expected an exact, clean source revision')
+    model = checkpoint_identity(checkpoint, a.layers)
     out = a.out.resolve()
     out.mkdir(parents=True, exist_ok=False)
     receipt = out / 'status.json'
     record = dict(revision=rev, started_at=now(), state='running', runs=[],
-                  checkpoint=str(checkpoint),
-                  scope='Gemma3 int8 weights/head, pos9, RTL cycles; no host time or physical closure')
+                  checkpoint=str(checkpoint), model=model,
+                  scope=(f"{model['name']} ({model['model_type']}), {model['run_layers']} layers, "
+                         'int8 weights/head, pos9, RTL cycles; no host time or physical closure'))
     save(receipt, record)
     # Remove inherited experimental OTPU overrides so PMP is the only A/B change.
     env = {k: v for k, v in os.environ.items() if not k.startswith('OTPU_')}
