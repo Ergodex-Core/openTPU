@@ -110,3 +110,30 @@ def test_dispatch_preselection(have_verilator, monkeypatch, waitc, overrides):
     assert np.array_equal(tmems[0], ref.slices[0].tmem)
     assert stats["instructions"] == [ref.slices[0].icount]
     print(f"DISPATCH_PRESELECT waitc={waitc} overrides={overrides}: {stats}")
+
+
+def test_pumped_return_matches_core_model(have_verilator):
+    """A replay/guest-contention program: fast-clock and core-clock TMEM agree."""
+    import numpy as np
+
+    from opentpu import Config
+    from opentpu.isasim import Machine
+    from test_rtl import R2_ARB, R2_TMEM, _images, _random_program
+
+    rng = np.random.default_rng(3001)
+    cfg = Config(S=1, MCOLS=2, ACT_ROWS=8)
+    prog = _random_program(rng, cfg, n_ops=60, gather=True)
+    images = _images(rng, 1)
+    ref = Machine(cfg, [prog], [i.copy() for i in images]).run()
+    timing = []
+    for pmp in (1, 2):
+        drams, tmems, stats = rtlsim.run(
+            cfg, [prog], [i.copy() for i in images], max_cycles=1_000_000,
+            uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB,
+                   "COLL_GATHER": 1, "TMEM_PMP": pmp})
+        assert np.array_equal(drams[0], ref.slices[0].dram)
+        assert np.array_equal(tmems[0], ref.slices[0].tmem)
+        assert stats["instructions"] == [ref.slices[0].icount]
+        timing.append((stats["cycles"], stats["instructions"]))
+        print(f"TMEM_RETURN pmp={pmp}: {stats}")
+    assert timing[0] == timing[1]

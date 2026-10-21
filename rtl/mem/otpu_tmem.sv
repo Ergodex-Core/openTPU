@@ -761,6 +761,7 @@ module otpu_tmem #(
       localparam int SD = sd_of(p);
       logic [LANES-1:0][LW-1:0]  ss;
       logic [LANES-1:0]          bh;
+      logic [LANES-1:0][31:0]    pq_raw;
       always_ff @(posedge clk)
         for (int b = 0; b < LANES; b++)
 `ifdef OTPU_TMEM_ABL_RPL
@@ -777,10 +778,41 @@ module otpu_tmem #(
       always_comb
 `ifdef OTPU_TMEM_ABL_DSEL
         for (int b = 0; b < LANES; b++)
-          pq[p][b] = bh[b] ? pd[b][0] : s_q[b][p % NSB][SD] ^ s_q[b][(p + NSB / 2) % NSB][SD];
+          pq_raw[b] = bh[b] ? pd[b][0] : s_q[b][p % NSB][SD] ^ s_q[b][(p + NSB / 2) % NSB][SD];
 `else
-        for (int b = 0; b < LANES; b++) pq[p][b] = bh[b] ? pd[b][0] : s_q[b][ss[b]][SD];
+        for (int b = 0; b < LANES; b++) pq_raw[b] = bh[b] ? pd[b][0] : s_q[b][ss[b]][SD];
 `endif
+      if (PMP == 1) begin : g_ret
+        // Core edge N updates s_q and ss/bh/pd. The intervening fast edge
+        // captures their selected word; core edge N+1 consumes it, just as it
+        // consumed pq_raw before. The odd RAM write holds qa/qb (NO_CHANGE),
+        // so pq_raw cannot change between that capture and the consuming edge.
+        //
+        // Capture on every fast edge: the coincident core/fast edge merely
+        // recaptures the SAME old word (before the RAM/metadata update). This
+        // avoids a phase-enable fanout on the wide return registers. No reset
+        // or valid stage is needed; the existing fresh/held logic is unchanged.
+        // Guests share this host's register through pq[SH_HOST], above.
+        //
+        // Both sides of this cut have a half-core-period timing budget. The
+        // existing RAM-output -> core multicycle exception does not pass
+        // through pq_ret; do not extend it to the new register's outputs.
+        (* keep = "true" *) logic [LANES-1:0][31:0] pq_ret;
+        always_ff @(posedge clk_f) pq_ret <= pq_raw;
+        assign pq[p] = pq_ret;
+`ifndef SYNTHESIS
+        // Start after one core period, which includes an intervening fast edge.
+        // At every subsequent consumer edge compare all banks, even unused
+        // ones, against the complete original sub-bank/bypass expression.
+        bit ret_check = 1'b0;
+        always_ff @(posedge clk) ret_check <= 1'b1;
+        always @(posedge clk)
+          if (ret_check && pq_ret !== pq_raw)
+            $fatal(1, "TMEM%0d: port %0d pumped return differs at core sampling edge", SID, p);
+`endif
+      end else begin : g_direct
+        assign pq[p] = pq_raw;
+      end
 `ifndef SYNTHESIS
       initial bh = '0;
 `endif
