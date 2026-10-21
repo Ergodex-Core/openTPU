@@ -176,9 +176,9 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     if hbm:
         nport = t.arch['S'] * p['channels_per_slice']
         if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] != 2**29 or nport > 31 or
-                p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
-            raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core (the pumped TMEM at '
-                               '2x), 512 MiB channels, a power-of-two NCH and S x NCH <= 31 ports (the host '
+                p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] not in (0, 1)):
+            raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core, TMEM_PMP 0 or 1, '
+                               '512 MiB channels, a power-of-two NCH and S x NCH <= 31 ports (the host '
                                'has its own HBM port)')
     elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')

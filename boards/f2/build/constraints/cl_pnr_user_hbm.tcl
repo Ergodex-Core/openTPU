@@ -263,9 +263,20 @@ puts "OTPU_FLOORPLAN_APPLIED pblocks=[expr {7 + [llength $otpu_portbox]}]"
 # group makes the placer put their roots together and match the trees' insertion delays
 # (UltraScale clocking: CLOCK_DELAY_GROUP on the nets of buffers in one clock region). Fail
 # closed: both nets must be found.
-set otpu_ck_nets [get_nets -quiet -of_objects [get_pins -quiet {WRAPPER/CL/u_clk/O WRAPPER/CL/u_clk_f/O}]]
-if {[llength $otpu_ck_nets] != 2} {
-  error "openTPU floorplan: the core and pump clock nets (u_clk/O, u_clk_f/O): [llength $otpu_ck_nets] found, expected 2"
+if {![info exists ::otpu_tmem_pmp] || $::otpu_tmem_pmp ni {0 1}} {
+  error "openTPU floorplan: no validated frozen TMEM_PMP parameter"
 }
-set_property CLOCK_DELAY_GROUP otpu_core_pump $otpu_ck_nets
-puts "OTPU_FLOORPLAN clock delay group otpu_core_pump on $otpu_ck_nets"
+if {$::otpu_tmem_pmp == 1} {
+  set otpu_ck_nets [get_nets -quiet -of_objects [get_pins -quiet {WRAPPER/CL/u_clk/O WRAPPER/CL/u_clk_f/O}]]
+  if {[llength $otpu_ck_nets] != 2} {
+    error "openTPU floorplan: the core and pump clock nets (u_clk/O, u_clk_f/O): [llength $otpu_ck_nets] found, expected 2"
+  }
+  set_property CLOCK_DELAY_GROUP otpu_core_pump $otpu_ck_nets
+  puts "OTPU_FLOORPLAN clock delay group otpu_core_pump on $otpu_ck_nets"
+} else {
+  set otpu_core_net [get_nets -quiet -of_objects [get_pins -quiet WRAPPER/CL/u_clk/O]]
+  if {[llength $otpu_core_net] != 1} {
+    error "openTPU floorplan: core clock net u_clk/O missing for TMEM_PMP 0"
+  }
+  puts "OTPU_FLOORPLAN core-clock TMEM: no pump clock delay group"
+}

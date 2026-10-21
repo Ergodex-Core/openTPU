@@ -3,7 +3,8 @@
 # (cl_mem_hbm_wrapper, the cl_hbm IP, 450 MHz AXI): a slice holds 8 x 512 MiB = 4 GiB without
 # crossing the HBM's switch, at 8 x 14.4 GB/s of ports for the 25.6 GB/s a slice streams at 200
 # MHz. The host reaches every pseudo-channel through PCIS (AppPF BAR4 offset = HBM address).
-# Core 200 MHz, TMEM pumped at 400 (TMEM_PMP 1), as Alex's f2-hbm200 image. The arch is the f2
+# Core 200 MHz, TMEM pumped at 400 (TMEM_PMP 1), as Alex's f2-hbm200 image; the
+# p4rl8a64tdp variant keeps the TMEM at the core clock (TMEM_PMP 0). The arch is the f2
 # target's (the YPCB card's m4: the same programs and CFG_HASH). Variants: s2 (S = 2: 16 ports,
 # 8 GiB), s4 (S = 4: all 32 ports, 16 GiB; the 27B at a quarter per slice). f2-hbm16 is S = 1 on
 # 16 channels (8 GiB in one slice).
@@ -109,6 +110,13 @@ ROWLANES = true                 # placed at WNS -1.609 ns at 200 MHz (docs/wide_
 MCOLS = 8                       # shell"). build.py --target f2-hbm:p4rl8a64c150
 ALINE = 64
 core_mhz = 150.0
+
+[variants.p4rl8a64tdp]          # the 200 MHz wide port with core-clock true dual-port TMEM:
+PORTB = 4                       # the write takes port A and conflicting reads replay.
+ROWLANES = true
+MCOLS = 8
+ALINE = 64
+TMEM_PMP = 0
 
 [variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
 PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl
