@@ -358,7 +358,18 @@ X2-X4 Y1-Y3; slice 1 X1-X3 Y6-Y7 with half its TMEM logic in X4-X5; slice 2 X1-X
 (dc28a9b7: floorplan_s4.tcl plus one hard six-region box per slice for `u_tmem`, `u_dma` and the
 slice's collective port: X1Y2:X3Y3, X1Y6:X3Y7, X1Y9:X2Y11, X5Y9:X6Y11) is implemented on the same
 175 MHz netlist from 09:35 UTC (`build.py --from-netlist .../f2-burst200-s4-175 --floorplan ...`,
-output `.../p4-866c920e/f2-burst200-s4-175-tmem`, unit `opt-p4-viv-s4x-175tm`).
+output `.../p4-866c920e/f2-burst200-s4-175-tmem`, unit `opt-p4-viv-s4x-175tm`). That first try
+stopped at placement DRC UTLZ-1 (`implement/console.log` line 595: slice 3's X5Y9:X6Y11 has 72
+RAMB36 sites for the 78 its TMEM and DMA need; a clock region has 24 / 24 / 36 / 12 / 24 / 12 /
+12 / 24 RAMB36 in columns X0-X7, from the device); slice 3's box is X4Y9:X6Y11 (144) in 470cf908,
+rerun as `f2-burst200-s4-175-tmem2` (unit `opt-p4-viv-s4x-175tm2`). The post-route recovery's
+last passes (AlternateReplication, AggressiveExplore) also held -0.076. A third 175 MHz attempt
+on the same netlist adds placement with pessimistic long-net delays: Vivado 2025.2 replaced the
+`ExtraNetDelay_high` strategy Alex's closing build used with `place_design -net_delay_weight
+high` (and `-subdirective`, which excludes the flow's `-no_bufg_opt`), so 62f82f9d gives
+build.py `--place-net-delay-weight` (written to strategy.tcl, passed by implement.tcl; nothing
+changes without it; 120 tests pass); run `.../p4-62f82f9d/f2-burst200-s4-175-tmem-ndw` with the
+TMEM boxes, unit `opt-p4-viv-s4x-175ndw`.
 
 ## Commands to reproduce
 
