@@ -32,8 +32,8 @@ def expected_steps():
 STEPS = expected_steps()
 ALLOWED_TAGS = {
     'general': {'memory_interface_pins', 'smartconnect', 'unresolved_shell_objects',
-                'hierarchy_cell', 'cell_inventory'},
-    'clocks': {'clock', 'clock_registers', 'fabric_clock', 'fabric_port_clock_consumers',
+                'hierarchy_cell', 'cell_inventory', 'smartconnect_properties'},
+    'clocks': {'clock', 'clock_anchor', 'clock_registers', 'fabric_clock', 'fabric_port_clock_consumers',
                'register_clock_inventory', 'register_inventory', 'register_chunk'},
     'flow': {'fabric_flow', 'native_receive_gate', 'native_b_response', 'routed_host_wready',
              'flow_detail', 'tag_ram_control', 'tag_ram_inventory'},
@@ -43,6 +43,7 @@ ALLOWED_TAGS = {
 # Fixed field schemas of the unchanged collectors. Values are retained verbatim
 # for semantic replay; accepting their syntax is not accepting their assertions.
 FIELDS = {
+    'clock_anchor': ('pin', 'selected', 'clocks'),
     'hierarchy_cell': ('expected_reference', 'selected', 'properties'),
     'cell_inventory': ('count', 'names'),
     'register_inventory': ('properties', 'count', 'chunk_size', 'chunks'),
@@ -113,6 +114,9 @@ def payload(words, label):
         N.require(len(words) == 3 and words[1] in ('host', 'core', 'hbm', 'reference'),
                   'malformed clock payload')
         N.td(words[2])
+    elif tag == 'smartconnect_properties':
+        fields = N.pairs(words[1:], ('selected', 'properties'))
+        N.names(fields['selected']); N.td(fields['properties'])
     elif tag == 'register_clock_inventory':
         fields = N.pairs(words[1:], ('count', 'names'))
         N.require(N.number(fields['count']) == len(N.names(fields['names'])) <= 256,

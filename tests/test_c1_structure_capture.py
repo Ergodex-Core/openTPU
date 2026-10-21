@@ -229,6 +229,72 @@ close $::c1_structure_capture::out
         with pytest.raises(ValueError): S.register_inventory({'records': rows[:index] + rows[index+1:]})
 
 
+@pytest.mark.parametrize('opaque', [0, 1])
+def test_smartconnect_properties_are_retained_before_rejection(tmp_path, opaque):
+    from boards.c1_f2_alex import native_review as N, structural_capture_review as S
+    body = setup(tmp_path) + r'''
+proc ::c1_structure_capture::hierarchy_cell {args} {}
+proc ::c1_structure_capture::cell_inventory {audit label objects} {
+ if {$label ne "native"} {return {}}
+ set names {};for {set i 0} {$i<8} {incr i} {lappend names WRAPPER/CL/u_native$i};return $names
+}
+proc get_cells {args} {return [lindex $args end]}
+proc get_pins {args} {return WRAPPER/CL/u_mem/clk}
+proc get_property {key obj} {
+ if {$key eq "NAME"} {return $obj}
+ if {$key eq "REF_NAME"} {return concrete_sc}
+ if {$key eq "IS_BLACKBOX"} {return OPAQUE}
+ error unknown
+}
+::c1_structure_capture::step general [list ::c1_structure_capture::general $::c1_structure_capture::audit]
+puts $::c1_structure_capture::failures
+close $::c1_structure_capture::audit
+close $::c1_structure_capture::out
+'''.replace('OPAQUE', str(opaque))
+    result=run(tmp_path,body)
+    assert result.returncode==0, result.stderr
+    assert result.stdout.strip()==str(opaque)
+    records=list(N.records(tmp_path/'raw'))
+    record=next(r for r in records if r[0]=='smartconnect_properties')
+    S.payload(record,('general',))
+    props=N.td(N.pairs(record[1:])['properties'])
+    assert props=={'NAME':'WRAPPER/CL/u_mem/f2_mem_i/memory_sc','REF_NAME':'concrete_sc','IS_BLACKBOX':str(opaque)}
+
+
+def test_all_four_clock_anchor_queries_are_retained(tmp_path):
+    from boards.c1_f2_alex import native_review as N, structural_capture_review as S
+    body=setup(tmp_path)+r'''
+proc ::c1_structure_capture::register_inventories {args} {}
+proc ::c1_alex::fabric_clocks {args} {}
+proc get_pins {args} {return [lindex $args end]}
+proc get_clocks {args} {
+ set pin [lindex $args end]
+ if {$pin eq "WRAPPER/CL/clk_main_a0"} {return host}
+ if {$pin eq "WRAPPER/CL/u_core_clk/clk_out1"} {return core}
+ if {$pin eq "WRAPPER/CL/u_hbm_clk/clk_out1"} {return hbm}
+ if {$pin eq "WRAPPER/CL/clk_hbm_ref"} {return reference}
+ error unknown_pin
+}
+proc list_property {obj} {return {NAME PERIOD}}
+proc get_property {key obj} {
+ if {$key eq "NAME"} {return $obj}
+ if {$key eq "PERIOD"} {return [dict get {host 4.000 core 5.000 hbm 2.222222222222 reference 10.000} $obj]}
+ error unknown_property
+}
+proc all_registers {args} {return WRAPPER/CL/u_hbm/reg}
+::c1_structure_capture::clocks $::c1_structure_capture::audit
+close $::c1_structure_capture::audit
+close $::c1_structure_capture::out
+'''
+    result=run(tmp_path,body)
+    assert result.returncode==0, result.stderr
+    records=[r for r in N.records(tmp_path/'raw') if r[0]=='clock_anchor']
+    assert [r[1] for r in records]==['host','core','hbm','reference']
+    for r in records:
+        S.payload(r,('clocks',));p=N.pairs(r[2:])
+        assert N.names(p['selected'])==[p['pin']] and N.names(p['clocks'])==[r[1]]
+
+
 @pytest.mark.parametrize('iface,signal,expected', [('S_HOST','awvalid','WRAPPER/CL/u_pcis_pipe/m_axi_awvalid[0]'), ('M_H7','rready','WRAPPER/CL/u_hbm/i_axi_rready[7]'), ('S_N3','arready','WRAPPER/CL/n3_arready')])
 def test_flow_detail_retains_exact_anchor_ports_and_driver_properties(tmp_path, iface, signal, expected):
     from boards.c1_f2_alex import native_review as N, structural_capture_review as S

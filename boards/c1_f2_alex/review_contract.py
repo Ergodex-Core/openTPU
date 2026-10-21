@@ -59,6 +59,7 @@ REVIEW_SOURCES = frozenset({
     "boards/c1_f2_alex/accounting_review.py",
     "boards/c1_f2_alex/structural_review.py",
     "boards/c1_f2_alex/structural_capture_review.py",
+    "boards/c1_f2_alex/structural_static_review.py",
     "boards/c1_f2_alex/capture_accounting.tcl",
     "boards/c1_f2_alex/capture_accounting_boundary.tcl",
     "boards/c1_f2_alex/capture_native.tcl",

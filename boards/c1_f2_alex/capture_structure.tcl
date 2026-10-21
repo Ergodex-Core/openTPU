@@ -141,6 +141,11 @@ proc ::c1_structure_capture::general {audit} {
     foreach pin $pins {if {[string first "$cl/" $pin]!=0} {error "Memory pin outside CL"}}
     puts $audit [list memory_interface_pins $pins]
     set sc [get_cells -quiet $cl/u_mem/f2_mem_i/memory_sc]
+    set sc_selected [::c1_alex::names $sc];set sc_properties {}
+    if {$sc_selected eq [list $cl/u_mem/f2_mem_i/memory_sc]} {
+        foreach key {NAME REF_NAME IS_BLACKBOX} {dict set sc_properties $key [get_property $key $sc]}
+    }
+    puts $audit [list smartconnect_properties selected $sc_selected properties $sc_properties]
     if {[::c1_alex::names $sc] ne [list $cl/u_mem/f2_mem_i/memory_sc] || [::c1_alex::property $sc IS_BLACKBOX]} {error "Missing concrete SmartConnect"}
     puts $audit [list smartconnect [::c1_alex::names $sc] reference [::c1_alex::property $sc REF_NAME] slave_interfaces 9 master_interfaces 8 address_map_validation executor_generated_BD_required]
     puts $audit [list unresolved_shell_objects $opaque]
@@ -150,6 +155,8 @@ proc ::c1_structure_capture::clocks {audit} {
     set cl WRAPPER/CL;set clocks {}
     foreach {label pin period} {host clk_main_a0 4.000 core u_core_clk/clk_out1 5.000 hbm u_hbm_clk/clk_out1 2.222222222222 reference clk_hbm_ref 10.000} {
         set clock [::c1_alex_route::clock $cl/$pin $period]
+        set anchor [get_pins -quiet $cl/$pin]
+        puts $audit [list clock_anchor $label pin $cl/$pin selected [::c1_alex::names $anchor] clocks [::c1_alex::names [get_clocks -quiet -of_objects $anchor]]]
         dict set clocks $label $clock
         set data {};foreach key {NAME PERIOD MASTER_CLOCK SOURCE_PINS IS_GENERATED IS_PROPAGATED IS_VIRTUAL} {if {$key in [list_property $clock]} {dict set data $key [get_property $key $clock]}}
         puts $audit [list clock $label $data]
