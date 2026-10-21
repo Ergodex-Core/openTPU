@@ -49,6 +49,60 @@ overlap. Do not fit a coefficient from these same elapsed times or inject all
 instruction freezes into service time. A narrow cycle-level arbiter trace/test
 is the next useful model experiment; it does not require repeating full models.
 
+That first experiment is now implemented in `tools/wideport_tmem_resource.py`
+and `sim/verilator/tb_tmem_replay_trace.sv`. The cycle-stepped reference resource
+models the eight-port, eight-bank/two-subbank read-side arbitration, same-word
+sharing, guest collapse, pending addresses, replay age and PMP0 landing-write
+contention. The write pipeline helper checks IQ-to-pw's two core-edge delay.
+PMP0's default side mask is 0xf0; PMP1's is 0x0c, so mode comparisons must account
+for both the side split and write occupancy.
+
+On EC2, 49 tests passed, including 768 RTL cycles in three cases: PMP0/default
+side map, PMP1/default side map, PMP1/fixed0xf0 side map. Each cycle's loss,
+freeze, cross/self-block masks and delayed writes matched exactly. The bench
+uses the slice's MXU-only crossbar and other-port rotators, single- and eight-lane
+requests, guest traffic, aged replays, same-word bypass and different-word
+landing-write conflicts. In the controlled write-conflict window, PMP0 has 34
+replay port-cycles and both PMP1 cases have zero. This is a resource-boundary
+test, not an elapsed program-cycle or throughput result. It checks masks and
+write delay, not returned operand data. The component is not yet wired into
+`WpCompactOpenTPU`; the whole-model estimates/errors above are unchanged and
+the uncalibrated/TPS suppression remains active.
+
+The next integration requires per-beat unit state, not a delay on whole
+commands. In the LPN, gather all units' current-cycle asks, arbitrate at one
+deterministic cycle barrier, then advance only the relevant pipeline stages.
+Keep MXU prefetch/compute independent from drain until its result FIFO fills;
+keep VPU operand reads independent from write-buffer pops. A resource token
+held for an entire instruction cannot express those overlaps.
+
+The missing slice trace must use a documented pre-core-edge sampling point and
+include the following, with initial pipeline/replay state if a bounded window
+starts after reset:
+
+- Raw `rq_en`, filtered `rq_t`, actual `r_en`, lane masks and enabled word
+  addresses for every port; input granted `w_en/w_addr`, IQ registers, landing
+  `u_tmem.pw_v/pw_a`, and configuration/side/rank/guest masks.
+- `tm_lost/tm_frz`, `u_tmem.g_one.rpv/rpe/rpa`, replay age, write-conflict `wm`
+  versus read blockers `hm`, group `gnt`, `rpl_hold/rpl_frz`, and guest blocking.
+- VPU `rhold`, `g_wbuf.en_h/en_r/en_q/ren_r/wn/push/pop`, pipeline enable, and
+  instruction start/done identity. The unit bench's immediate group freeze is
+  a stimulus policy; it does not model the VPU's registered hold/room feedback.
+- MXU `pop/mxu_pop`, `drain_go/t_gnt/d_pop`, `rf_n/rows_live/f_count/s_count`,
+  result/operand pipeline valids, and DRAM A/B/write ready/grant events. Quant
+  read stages, group hold and `q_awant/sw_rdy_i` are also needed to separate TMEM
+  replay from external write-room stalls.
+
+The smallest next integration experiment starts from
+`test_wide_rowlanes_unpumped_tmem_under_stalls` (13 rows, KB9, seed7, native
+stalls) paired under PMP0 and the core-clock PMP2 model, with a bounded trace.
+Its current V_FILL has no operand reads: add a two-operand VOP on independent
+TMEM buffers to exercise VPU B replay while row-lane MM/drain is active. Keep
+ISA-exact TMEM/DRAM checks and assert the required conflict and queue events
+actually occurred. Check the resource oracle against slice loss/freeze masks,
+then use queue transitions to validate the next LPN unit model. No full Gemma or
+Qwen rerun is necessary for this experiment. It has not been run yet.
+
 ## Physical target and prerequisites
 
 Target `f2-hbm:p4rl8a64tdp`: S1, D128, PORTB4, MCOLS8, row lanes, ALINE64,
@@ -66,7 +120,12 @@ must be rechecked before any separately authorized build.
 
 Vivado2025.2, HDK `/home/ubuntu/aws-fpga`, the target-pinned HDK/IP commits, shell
 version0x10212415, shell DCP and HBM XCI exist. License-seat availability is
-unverified. The candidate is staged in our isolated
+unverified: at 22:35-22:36 UTC the read-only lmstat queries returned no license
+file or seat data; the legacy loader was absent, a query via the standard loader
+reported no license file, and sourcing settings exited without a seat result.
+No license checkout was attempted. That preflight found no active Vivado/RTL
+jobs and 242 GiB available RAM/499 GiB free disk; it is not a reservation.
+The candidate is staged in our isolated
 `/home/ubuntu/work/codex-wideport-20261021/lpn-accounting-v1` worktree. No CL build
 snapshot has been created there. The PMP0 clock/RAM gates passed mocked flow
 tests but have not yet been exercised on an actual PMP0 Vivado netlist.
