@@ -277,6 +277,12 @@ module otpu_f2_hbm_sys #(
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
                .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .MXU_C(MXU_C), .MXU_PACK(MXU_PACK),
                .SWFILL(1'b0), .PLATFORM(PLATFORM),
+               // the collective unit as every simulation of a one-slice FPGA target builds it
+               // (opentpu.rtlsim BOARD_UARCH COLL_GATHER 0: BAR alone, the card's build since r2;
+               // no program has a GATHER at S = 1 and the host refuses one): at S = 1 the GATHER
+               // unit was hardware the gates never ran, and its RLD / TMEM paths were P3's placed
+               // core-clock class into the VPU's write-buffer enables (docs/v4/p3-status.md)
+               .COLL_GATHER(S > 1),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
