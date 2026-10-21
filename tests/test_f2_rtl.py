@@ -71,7 +71,7 @@ def test_f2_hbm_axi(have_verilator, nport, core_half, axi_half, hbm_half, nxr, b
     (8, 6, 2, 30, 0)])   # two
 def test_f2_hbm_axi_pumped_chain(have_verilator, nport, core_half, nxf, ch_log2, porder):
     """The native ports' SLR chain pumped on clk_f (otpu_f2_hbm_axi NXF, otpu_xr2: each core
-    cycle's word as two halves, NXF clk_f stages, the latency NXF / 2 + 2 core cycles each way,
+    cycle's word as two halves, NXF clk_f stages, the latency NXF / 2 + 3 core cycles each way,
     otpu_native_axi's XL from it): every channel's native contract as with NXR's chain."""
     exe = _hbm_axi_exe(NPORT=nport, CORE_HALF=core_half, AXI_HALF=4, HBM_HALF=2, NXR=3, NXF=nxf,
                        READ_BURST=8, READ_WAIT=1, READ_IDLE=1, CH_LOG2=ch_log2, PORDER=porder)

@@ -145,7 +145,8 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 
 ########################################
-# the pumped chains (NXF > 0): each chain's serializer end in its source's SLR, its NXF clk_f stages
+# the pumped chains (NXF > 0): each chain's serializer end (its core input register dr and ser) in
+# its source's SLR, its NXF clk_f stages
 # a third of them an SLR from the serializer's end (two each at NXF 6), its deserializer end in the
 # destination's SLR. u_dn: the adapter (pb_otpu_board) -> u_naxi (pb_otpu_hbm); u_up the reverse.
 # (Brackets: Vivado takes them literally, so a pattern's are escaped from Tcl, not from get_cells)
@@ -154,7 +155,7 @@ if {[llength $otpu_xf]} {
   set otpu_nxf [llength [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[0\].u_dn/g_x\[*\].u_s"]]
   foreach {otpu_dir otpu_spb otpu_dpb} {u_dn pb_otpu_board pb_otpu_hbm u_up pb_otpu_hbm pb_otpu_board} {
     set otpu_b "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[*\].$otpu_dir"
-    foreach otpu_c {ser_reg* tg_s_reg tgf_s_reg sel_s_reg*} {
+    foreach otpu_c {dr_reg* ser_reg* tg_s_reg tgf_s_reg sel_s_reg*} {
       add_cells_to_pblock $otpu_spb [otpu_cells "$otpu_b/$otpu_c"]
     }
     foreach otpu_c {lo_c_reg* hi_f_reg* o_reg* tg_d_reg tgf_d_reg sel_d_reg*} {

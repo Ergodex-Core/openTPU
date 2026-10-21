@@ -728,10 +728,18 @@ module otpu_slice
       rpl_frz[g] = TMEM_RPL && g != G_VPU && g != G_COLL && (tm_frz & grp_rports(g)) != '0;
       rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && |rq_en[P_COLL]);
     end
+  // MXU_C > 1 (the lock-step lanes spread over the SLR: P3's placed build, docs/v4/p3-status.md):
+  // the MXU's grant does not wait for its own requests (the lanes' drain stages -> the masks ->
+  // the grant -> every lane's drain enables was one cycle across all the lanes): it is admitted
+  // unless a group before it writes TMEM this cycle at all (or its port replays), a superset of
+  // the bank conflicts, so never a conflict. The groups after it see its grant as before.
   always_comb begin
     for (int g = 0; g < NG; g++) begin
       aok[g] = !rpl_hold[g];
-      for (int h = 0; h < g; h++) if (aok[h] && acf[g][h]) aok[g] = 1'b0;
+      if (MXU_C > 1 && g == G_MXU) begin
+        for (int h = 0; h < g; h++) if (amk[h] != '0) aok[g] = 1'b0;
+      end else
+        for (int h = 0; h < g; h++) if (aok[h] && acf[g][h]) aok[g] = 1'b0;
       if (g == G_Q && q_awant && !sw_rdy_i) aok[g] = 1'b0;   // QST write the DRAM cannot take
       if ((g == G_Q && q3_blk) || (g == G_COLL && coll_blk)) aok[g] = 1'b0;
     end

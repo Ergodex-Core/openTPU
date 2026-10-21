@@ -29,9 +29,12 @@ endmodule
 // cross as two halves of HW = ceil(W / 2) bits on clk_f (2 x clk, phase aligned with it: the CL's
 // MMCM, the pumped TMEM's clock), through NXF stages of otpu_xr on clk_f, so a boundary carries
 // half the signals of a core-clock chain (super long lines: 23,040 a boundary on the VU47P) at the
-// same bandwidth. NXF even; the latency NXF / 2 + 2 core cycles from d to q, every core cycle's
+// same bandwidth. NXF even; the latency NXF / 2 + 3 core cycles from d to q, every core cycle's
 // word in order and whole:
-//   ser   (clk_f, the d end): the low half at the edge in mid-cycle, the high half at the core edge
+//   dr    (clk, the d end): d in a core register first, so the half-period crossing into ser is
+//         register to register (d itself may come from the source's logic: the lane memory's
+//         adapters' native port; the first placement's -1.6 ns at ser)
+//   ser   (clk_f): the low half at the edge in mid-cycle, the high half at the core edge
 //   g_x   NXF otpu_xr stages on clk_f (the floorplan places them by SLR: two per SLR at NXF 6)
 //   des   the low half in a core register at the core edge where it is at the chain's end, the
 //         high half in a clk_f register at the next mid edge, the word in a core register at the
@@ -61,7 +64,9 @@ module otpu_xr2 #(
     tgf_s <= tg_s;
     sel_s <= (tg_s == tgf_s);
   end
-  wire [2*HW-1:0] dx = (2*HW)'(d);
+  (* shreg_extract = "no" *) logic [W-1:0] dr;
+  always_ff @(posedge clk) dr <= d;
+  wire [2*HW-1:0] dx = (2*HW)'(dr);
   (* shreg_extract = "no" *) logic [HW-1:0] ser;
   always_ff @(posedge clk_f) ser <= sel_s ? dx[HW-1:0] : dx[2*HW-1:HW];
   // the stages

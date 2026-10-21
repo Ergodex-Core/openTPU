@@ -30,7 +30,7 @@ module otpu_f2_hbm_axi #(
   parameter bit PORDER     = 1'b0,      // ... per page bucket (otpu_native_axi PORDER)
   // the pumped chain (otpu_xr2: each core cycle's word as two halves on clk_f, NXF clk_f stages,
   // half the SLR crossings of NXR's at the same bandwidth; P3's 16 channels, docs/v4/p3-status.md
-  // "SLR crossings"): 0, NXR's core-clock chain; NXF even, the latency NXF / 2 + 2 core cycles
+  // "SLR crossings"): 0, NXR's core-clock chain; NXF even, the latency NXF / 2 + 3 core cycles
   parameter int NXF        = 0
 ) (
   input  logic                    clk,
@@ -153,7 +153,7 @@ module otpu_f2_hbm_axi #(
   // pumped chain's longer round trip gets deeper queues, the next power of two that keeps the
   // slots NXR's chain leaves usable (16 - 6 = 10: the bursts' coalescing needs them; at 16 - 10 =
   // 6 the F2 path's token ran 23% longer, docs/v4/p3-status.md)
-  localparam int LX = (NXF > 0) ? NXF / 2 + 2 : NXR;
+  localparam int LX = (NXF > 0) ? NXF / 2 + 3 : NXR;
   function automatic int pow2ceil(input int x);
     int v;
     v = 1;

@@ -28,6 +28,14 @@
 // registers (b_we, a_we: requests already registered, otpu_slice "port B's registers"): a write's
 // readiness is the AND of every copy's, a read's its copy's; a lane's read waits while its
 // copy's port is taking a broadcast write.
+//
+// C > 1 (eight copies spread over the SLR: P3's placed build, docs/v4/p3-status.md): every ready
+// is a register of the copies' "room for two" (otpu_native_dram sw_rdy2 / b_rdy2 / a_rdy2: a
+// port's queues grow by one request a cycle at most, so room for two now is room for one next
+// cycle), and a request reaches a copy only when that ready says it is taken; wr_idle and rd_idle
+// are registers too (every copy idle and no request of the kind this cycle: exact, or a cycle
+// late). No copy's counts then run into the slice's port registers, the DMA, the lanes' issuers
+// or the copies' queue enables in the cycle they change. C 1: the adapter's own, cycle for cycle.
 module otpu_lane_mem #(
   parameter int D = 128,
   parameter int C = 4,                 // lanes = copies
@@ -106,7 +114,8 @@ module otpu_lane_mem #(
   logic [C-1:0][31:0]    ca_addr, ca_wdata;
   logic [C-1:0][3:0]     ca_be;
   logic [C-1:0][255:0]   ca_rdata;
-  logic [C-1:0]          cs_rdy, cs_req;
+  logic [C-1:0]          cs_rdy, cs_rdy2, cs_req;
+  logic [C-1:0]          ca_rdy2, cb_rdy2;
   logic [C-1:0]          cb_rdy, cb_req, cb_tag, cb_we, cb_par, cb_rvalid, cb_rtag;
   logic [C-1:0][31:0]    cb_addr;
   logic [C-1:0][D*8-1:0] cb_rdata;
@@ -115,21 +124,52 @@ module otpu_lane_mem #(
   // a broadcast write goes when every copy takes it; a read is its copy's alone
   wire a_wr = a_req_x && a_we_x;
   wire b_wr = b_req && b_we;
-  wire a_all = &ca_rdy;
-  wire b_all = &cb_rdy;
-  assign a_rdy_x = a_we_x ? a_all : ca_rdy[0];
-  assign b_rdy   = b_we ? b_all : cb_rdy[0];
-  assign sw_rdy  = &cs_rdy;
-  assign wr_idle = &c_wr_idle;
-  assign rd_idle = &c_rd_idle;
+  // each copy's port readies as the slice and the lanes see them: C 1, the adapter's; C > 1, the
+  // registers of room for two (above)
+  logic [C-1:0] ca_ok, cb_ok;
+  logic         a_all, b_all;
+  if (C > 1) begin : g_rq
+    logic [C-1:0] ca_q, cb_q;
+    logic         a_all_q, b_all_q, sw_q, wi_q, ri_q;
+    always_ff @(posedge clk) begin
+      ca_q    <= rst ? '0 : ca_rdy2;
+      cb_q    <= rst ? '0 : cb_rdy2;
+      a_all_q <= !rst && (&ca_rdy2);
+      b_all_q <= !rst && (&cb_rdy2);
+      sw_q    <= !rst && (&cs_rdy2);
+      // idle: every copy idle now and no request of the kind this cycle (a request taken now
+      // makes its copies busy next cycle; one not taken is still the slice's): idle next cycle
+      wi_q    <= !rst && (&c_wr_idle) && !sw_req && !b_wr && !a_wr;
+      ri_q    <= !rst && (&c_rd_idle) && !(a_req_x && !a_we_x) && !(b_req && !b_we) &&
+                 !(|lb_req) && !(|la_req);
+    end
+    assign ca_ok = ca_q;
+    assign cb_ok = cb_q;
+    assign a_all = a_all_q;
+    assign b_all = b_all_q;
+    assign sw_rdy  = sw_q;
+    assign wr_idle = wi_q;
+    assign rd_idle = ri_q;
+  end else begin : g_r1
+    assign ca_ok = ca_rdy;
+    assign cb_ok = cb_rdy;
+    assign a_all = &ca_rdy;
+    assign b_all = &cb_rdy;
+    assign sw_rdy  = &cs_rdy;
+    assign wr_idle = &c_wr_idle;
+    assign rd_idle = &c_rd_idle;
+  end
+  assign a_rdy_x = a_we_x ? a_all : ca_ok[0];
+  assign b_rdy   = b_we ? b_all : cb_ok[0];
 
   for (genvar l = 0; l < C; l++) begin : g_cp
     if (l == 0) begin : g_s
-      // copy 0: the slice's ports as they are (a write waits for the other copies)
-      assign ca_req[0]   = a_req_x && (!a_we_x || a_all);
+      // copy 0: the slice's ports as they are (a write waits for the other copies; C > 1, a read
+      // for the registered ready, so the copy takes exactly what the slice sees taken)
+      assign ca_req[0]   = a_req_x && (a_we_x ? a_all : (C == 1 || ca_ok[0]));
       assign ca_we[0]    = a_we_x;
       assign ca_addr[0]  = a_addr_x;
-      assign cb_req[0]   = b_req && (!b_we || b_all);
+      assign cb_req[0]   = b_req && (b_we ? b_all : (C == 1 || cb_ok[0]));
       assign cb_tag[0]   = b_tag;
       assign cb_we[0]    = b_we;
       assign cb_addr[0]  = b_addr;
@@ -137,18 +177,19 @@ module otpu_lane_mem #(
       assign lb_rdy[0] = 1'b0; assign lb_rvalid[0] = 1'b0; assign lb_rdata[0] = '0;
       assign la_rdy[0] = 1'b0; assign la_rvalid[0] = 1'b0; assign la_rdata[0] = '0;
     end else begin : g_l
-      // copy l: lane l's reads, unless a broadcast write takes the port this cycle
-      assign ca_req[l]   = a_wr ? a_all : la_req[l];
+      // copy l: lane l's reads, unless a broadcast write takes the port this cycle (a read only
+      // with the copy's ready as the lane sees it)
+      assign ca_req[l]   = a_wr ? a_all : (la_req[l] && ca_ok[l]);
       assign ca_we[l]    = a_wr;
       assign ca_addr[l]  = a_wr ? a_addr_x : la_addr[l];
-      assign cb_req[l]   = b_wr ? b_all : lb_req[l];
+      assign cb_req[l]   = b_wr ? b_all : (lb_req[l] && cb_ok[l]);
       assign cb_tag[l]   = b_wr && b_tag;
       assign cb_we[l]    = b_wr;
       assign cb_addr[l]  = b_wr ? b_addr : lb_addr[l];
       // (lb_addr is the slice's lane register: its 27-bit parity starts at a flip-flop)
       assign cb_par[l]   = b_wr ? b_par : ^lb_addr[l][31:5];
-      assign la_rdy[l]    = ca_rdy[l] && !a_wr;
-      assign lb_rdy[l]    = cb_rdy[l] && !b_wr;
+      assign la_rdy[l]    = ca_ok[l] && !a_wr;
+      assign lb_rdy[l]    = cb_ok[l] && !b_wr;
       assign la_rvalid[l] = ca_rvalid[l];
       assign la_rdata[l]  = ca_rdata[l];
       assign lb_rvalid[l] = cb_rvalid[l];
@@ -162,7 +203,8 @@ module otpu_lane_mem #(
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),
-      .sw_rdy(cs_rdy[l]), .sw_req(cs_req[l]), .sw_addr, .sw_wdata, .sw_be,
+      .sw_rdy(cs_rdy[l]), .sw_rdy2(cs_rdy2[l]), .b_rdy2(cb_rdy2[l]), .a_rdy2(ca_rdy2[l]),
+      .sw_req(cs_req[l]), .sw_addr, .sw_wdata, .sw_be,
       .b_rdy(cb_rdy[l]), .b_req(cb_req[l]), .b_tag(cb_tag[l]), .b_we(cb_we[l]), .b_wmask,
       .b_wdata, .b_addr(cb_addr[l]), .b_par(cb_par[l]), .b_rvalid(cb_rvalid[l]),
       .b_rtag(cb_rtag[l]), .b_rdata(cb_rdata[l]), .wr_idle(c_wr_idle[l]), .rd_idle(c_rd_idle[l]),
@@ -178,6 +220,18 @@ module otpu_lane_mem #(
   assign b_rdata  = cb_rdata[0];
 
 `ifndef SYNTHESIS
+  // C > 1: what the slice and the lanes see taken, every copy takes (a registered ready implies
+  // the copy's own); the idles are never early
+  always_ff @(posedge clk)
+    if (!rst && C > 1) begin
+      for (int l = 0; l < C; l++) begin
+        if (ca_req[l] && !ca_rdy[l]) $fatal(1, "otpu_lane_mem: copy %0d's A request without room", l);
+        if (cb_req[l] && !cb_rdy[l]) $fatal(1, "otpu_lane_mem: copy %0d's B request without room", l);
+        if (cs_req[l] && !cs_rdy[l]) $fatal(1, "otpu_lane_mem: copy %0d's SW request without room", l);
+      end
+      if (wr_idle && !(&c_wr_idle)) $fatal(1, "otpu_lane_mem: wr_idle with a copy's write pending");
+      if (rd_idle && !(&c_rd_idle)) $fatal(1, "otpu_lane_mem: rd_idle with a copy's read in flight");
+    end
   // a lane copy answers only its lane's reads: a write never returns data, and lane reads are
   // never tagged (the DMA's loader reads are copy 0's)
   always_ff @(posedge clk)

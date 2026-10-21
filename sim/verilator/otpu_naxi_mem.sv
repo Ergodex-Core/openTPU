@@ -34,7 +34,7 @@ module otpu_naxi_mem #(
   parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket
   parameter int NXF        = 0,          // the chain pumped on clk_f (otpu_f2_hbm_axi NXF: the
                                          //   build's otpu_xr2 itself, NXF clk_f stages, latency
-                                         //   NXF / 2 + 2 core cycles each way); 0: NXR stages
+                                         //   NXF / 2 + 3 core cycles each way); 0: NXR stages
   parameter int QD         = 0           // otpu_native_axi's queues (0: the build's, otpu_f2_hbm_axi
                                          //   QDX: 16, deeper with NXF)
 ) (
@@ -76,7 +76,7 @@ module otpu_naxi_mem #(
   longint wwait [NCH], rwait [NCH], nswitch [NCH];
   // the chain's latency each way and otpu_native_axi's queues as otpu_f2_hbm_axi sizes them (LX,
   // QDX: the slots NXR's 3-stage chain leaves usable, kept at the pumped chain's round trip)
-  localparam int LX = (NXF > 0) ? NXF / 2 + 2 : NXR;
+  localparam int LX = (NXF > 0) ? NXF / 2 + 3 : NXR;
   function automatic int pow2ceil(input int x);
     int v;
     v = 1;

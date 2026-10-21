@@ -132,6 +132,12 @@ module otpu_native_dram #(
   output logic              a_rvalid,
   output logic [255:0]      a_rdata,    // the aligned 32 bytes holding word a_addr (half a beat)
   output logic              sw_rdy,
+  // room for two (each of the port's counts below its bound by two): the port's queues grow by one
+  // request a cycle at most, so a register of it is a ready for the next cycle (otpu_lane_mem's
+  // registered readies at C > 1: no copy's counts in the slice's or the lanes' grant logic)
+  output logic              sw_rdy2,
+  output logic              b_rdy2,
+  output logic              a_rdy2,
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,    // word address
   input  logic [31:0]       sw_wdata,
@@ -282,6 +288,7 @@ module otpu_native_dram #(
   logic [25:0]  al_beat;
 
   assign b_rdy = (qb_n[0] < QD) && (qb_n[1] < QD) && (bt_n < OD);
+  assign b_rdy2 = (qb_n[0] < QD - 1) && (qb_n[1] < QD - 1) && (bt_n < OD - 1);
   // Port A's requests come from the slice's port A register (otpu_slice; this adapter's own, on
   // the way in, until it moved there): the slice's grant chain (DMA busy -> port arbitration ->
   // the MXU's issue -> the scale address) does not run on into the channel hash, the run compare
@@ -293,7 +300,9 @@ module otpu_native_dram #(
   assign a_wdata = a_wdata_x; assign a_be = a_be_x;
   assign a_rdy = (qa_n[0] < QD) && (qa_n[1] < QD) && (ao_n < OD);
   assign a_rdy_x = a_rdy;
+  assign a_rdy2 = (qa_n[0] < QD - 1) && (qa_n[1] < QD - 1) && (ao_n < OD - 1);
   assign sw_rdy = (qw_n[0] < WQD) && (qw_n[1] < WQD);
+  assign sw_rdy2 = (qw_n[0] < WQD - 1) && (qw_n[1] < WQD - 1);
   wire sw_take = sw_req && sw_rdy;
   wire sw_ch = chan_of(sw_addr);
   wire [24:0] sw_m = sw_addr[29:5];
