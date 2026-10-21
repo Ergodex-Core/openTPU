@@ -1,11 +1,12 @@
-# P3 "eight lock-step chunk lanes, packed DSP48E2": status (2026-10-20)
+# P3 "eight lock-step chunk lanes, packed DSP48E2": status (2026-10-21)
 
 Branch `p3-eight-lanes` (P2's `v4-p2-four-lanes` 72eb4b4c, then P2's `p2-f2` b4b3eb03 merged at
 74cf3dc0). Proposal: [proposal-3-eight-lanes-packed.md](proposal-3-eight-lanes-packed.md). This
 note says what landed, how it was checked and measured, and what is next. Every run below ran on
 the m8a (54.174.195.152); receipts are files under `/home/ubuntu/lens-runs/p3/` and
 `/home/ubuntu/opt/hwloop-nightly/p3-<sha>/` with the exact command at the top. Nothing here ran on
-an F2 card: the token numbers are Verilator RTL, the timing numbers out-of-context Vivado.
+an F2 card: the token numbers are Verilator RTL, the timing numbers Vivado's (out of context, or
+the whole CL synthesized and placed; nothing has been routed).
 
 ## What landed
 
@@ -231,6 +232,60 @@ chain 8 passed; test_rtl -k "packed or chunk_lanes" 30 passed; test_f2_p2_build 
 variant prepares NCH 16, NXF 6, the exact MMCM, the floorplan's pumped branch), test_target,
 test_tech, test_f2_copies 35 passed.
 
+**The pumped design, placed** (7f191bb6, `f2-p2:p3c150`: clk 150 / clk_f 300 MHz from the exact
+MMCM, DIVCLK 5, M 24; SynthCL then ImplCL, SSI_SpreadLogic_high, P2's floorplan with its pumped
+branch, "OTPU_FLOORPLAN pumped chains: NXF 6, 16 channels";
+`/home/ubuntu/opt/hwloop-nightly/p3-7f191bb6/impl150-1`: synthesis passed 20:32 UTC, post_synth
+sha256 bc32575d; placed by 22:00 UTC and stopped before phys_opt and routing; reports
+`impl150-1/placed-report/`: `util_slr.txt:28-47`, `congestion.txt`, `timing_summary.txt:144` and
+its clock tables at :174-210):
+
+| placed, 150 MHz | NXR 3 (92fcae38) | NXF 6, pumped (7f191bb6) |
+|:--|--:|--:|
+| SLLs, SLR2 <-> SLR1 | 18,295 (79.4%) | **9,206 (40.0%)**: 4,892 down, 4,314 up |
+| SLLs, SLR1 <-> SLR0 | 19,707 (85.5%) | **10,620 (46.1%)**: 5,673 down, 4,947 up |
+| SLLs in all | 38,002 | 19,826 (18,196 through both LAGUNA registers) |
+| SLR2: CLB / LUT / LUT-RAM / BRAM / DSP | 88.4 / 67.7 / 50.0 / 73.2 / 82.9% | 93.0 / 68.8 / 50.0 / 73.2 / 82.9% |
+| SLR0 / SLR1 LUTs | 12.8 / 1.5% | 13.3 / 1.5% |
+| placer congestion windows at level 7 (at level 6) | 10 (12) | 6 (10) |
+| WNS / TNS / failing endpoints, all clocks | -2.752 / -12,604 / 18,278 | -1.722 / -4,978 / 9,616 |
+| core clock clk_raw (150 MHz) | -2.752 / -12,577 / 17,544 | -1.722 / -3,674 / 4,967 |
+| clk_raw -> clk_f_raw (half a core period) | -0.119 / -0.5 / 9 | -1.648 / -870 / 1,411 |
+| clk_f_raw (300 MHz); clk_f_raw -> clk_raw | +0.978; +1.269 | -0.004 (1 endpoint); -0.098 (1) |
+| HBM AXI hclk_raw (450 MHz) | -0.132 / -26 / 723 | -0.534 / -434 / 3,236 |
+| WHS before routing | -0.558 | -0.753 |
+
+The SLLs halved as designed: each boundary lost 9,089 / 9,087, the 16 channels' 568 signals (half
+of 604 + 532) = 9,088. A boundary now carries the chains' 4,832 down and 4,256 up plus ~60 each way
+of control; the ~1.4 K more that SLR1 <-> SLR0 carries is the same in both designs, so it is not
+the chains. Level-7 congestion remains in two places: north over MXU lanes 1-3 in SLR2, and around
+the SLR2 / SLR1 boundary's LAGUNA rows (otpu_f2_hbm_axi's stages 24-27% of the window, lane 2,
+adapter g_cp[2]). SLR2's CLBs went to 93%: each chain end holds ~2.5 K flops a channel (serializer
+and two clk_f stages down; two stages and the deserializer's 2 x 266 + 532 up) instead of 1,136.
+
+The worst core-clock paths (the top 20 all -1.68 to -1.72 ns) are the first design's RTL classes:
+the RMAX fold of the lanes' keys into the TMEM write (`g_lane[0]` / `g_lane[1].u_m/mk_reg` ->
+`u_tmem/g_iq.wi_data_reg`, 29-33 levels, 10-12 CARRY8); the lock-step pop and the cross-lane enables (`g_lane[2].u_m/pop_q_reg[wf]` ->
+`g_lane[5].u_m/occ_reg`, 12-13 levels; `g_lane[7].u_m/c_left_reg` -> `g_lane[2].u_m/s_rd_reg` CE,
+9; lane 7's `u_rw` -> lane 6's FP multiplier DSP reset, 9); the lane memory's write readiness
+(`g_cp[2].u_adapt/qb_n_reg` -> `u_slice/b_wdata_reg` CE, 8). New with the pumped chain:
+
+- **The down word into the serializer at half a core period** (clk_raw -> clk_f_raw, -1.648 ns,
+  1,411 endpoints): `g_cp[5].u_adapt/ra_res_reg` -> `g_xf.g_ch[11].u_dn/ser_reg`, 5 LUT levels,
+  4.34 ns (93% route) against 3.33 ns. The native port's down word comes out of the adapter's
+  logic, not a register; at NXR 3 it had a whole period to the first stage. The fix is local: a
+  core register in front of each serializer (otpu_xr2; +1 core cycle each way, LX 6, QDX stays 32
+  with 20 usable slots), then the F2-path token again.
+- **The 450 MHz SmartConnects** (hclk_raw -0.534 ns, 3,236 endpoints, from -0.132 / 723):
+  `u_sc/otpu_hbm_sc_i/sc_c7`'s AXI3 write splitter into its W node FIFO, 4 levels, 84% route. The
+  IP is the same (187,818 endpoints in both); its placement in SLR0 is what changed.
+- The up chain's last stage into the deserializer's core capture (clk_f_raw -> clk_raw): one
+  endpoint, -0.098 ns (2.8 ns of route).
+
+Hold before routing is WHS -0.753 ns (clk_f_raw -> clk_raw, 13,659 endpoints; clk_raw -> clk_f_raw
+-0.574, 7,149): the router fixes hold, with detours through the congested windows. Nothing here
+is routed, and there is no DCP or tar for an AFI.
+
 ## Risks found on the real part
 
 - **SLR crossings at 16 channels.** P2's floorplan (wide-port-alexshell's) keeps the board in SLR2
@@ -240,27 +295,38 @@ test_tech, test_f2_copies 35 passed.
   3,840; ~23 K SLLs a boundary). Sixteen channels need ~18.2 K a boundary plus the host's and the
   control chains. **The placer confirmed it** (p3-92fcae38/impl150-1, global placement): "[Place
   30-356] This design requires 19708 Super Long Lines (SLLs) out of 23040 for the crossing of SLR#
-  0 to SLR# 1" (85.5%).
-  Ways down: **the write data crossing once** (every write reaches every copy in the same order,
+  0 to SLR# 1" (85.5%). **The pumped chains took the placed design to 9,206 (40.0%) and 10,620
+  (46.1%)** (p3-7f191bb6/impl150-1, above).
+  Further ways down, if needed: **the write data crossing once** (every write reaches every copy in the same order,
   so the 16 channels' 576-bit write beats carry two distinct halves, ~10.1 K SLLs instead of
   ~19.7 K; but each copy's adapter sends its beats at its own cycles, as its lane's reads
   interleave, so SLR0 needs a write-data FIFO a channel, a join of the token and the data at each
   otpu_native_axi, and backpressure across the copies); the lane memories' adapters in SLR0 (the
   lane ports cross instead, ~12 K, with credits on the ports); the chains at clk_f with half the
-  width; the
-  proposal's floorplan (the lanes, their chunk FIFOs and the ACT RAM in SLR0 beside the HBM, the
+  width (done, 7f191bb6); the proposal's floorplan (the lanes, their chunk FIFOs and the ACT RAM in SLR0 beside the HBM, the
   rest in SLR2: only the ACT writes, the commands and the results cross; the vla branch's
   `otpu_mxu_arr` registered cut is the starting point, but the drain's same-cycle TMEM grant
   needs a credit scheme across the SLRs).
 - **DSPs in SLR2**: ~2,400 packed MXU DSPs + ~170 VPU / quantizer of SLR2's 3,008 (85%): the
   packing is what lets eight lanes stay in one SLR (unpacked: ~4,450).
+- **The core clock at 150 MHz**: placed WNS -1.722 ns, 4,967 failing endpoints, all in the lanes'
+  cross-lane logic (the fold, the lock-step pop and enables, the write readiness): RTL work before
+  any route.
+- **Crossings at half a core period**: the pumped chains and the TMEM's pumped RAMs give 12 K
+  core -> clk_f and 22.6 K clk_f -> core endpoints with a 3.33 ns budget, plus their hold to fix;
+  after routing, the skew between the two clocks' trees could make these the limit.
+- **SLR2 at 93% of its CLBs** with level-7 windows: a routing risk even with timing fixed.
 
 ## What is next
 
-1. **Place and route the F2 CL** (`boards/f2/build.py --target f2-p2:p3c150`, ImplCL from the
-   synthesis above) on P2's floorplan, and read the SLR crossings first; then the floorplan or
-   RTL change the crossings need (the list under "Risks"). A packaged Developer_CL tar for the
-   coordinator only after a routed, qualified build.
+1. **Timing on the placed design, before any route** (the pumped design's 9,616 failing
+   endpoints are these classes): a core register in front of each serializer (otpu_xr2, +1 core
+   cycle each way); lane 0's RMAX fold as a registered tree (mx_go delayed at C > 1); the
+   lock-step pop and the cross-lane enables computed a cycle early and replicated per lane; the
+   lane memory's write readiness registered, with a slot of headroom in each copy's queue; the
+   450 MHz SmartConnects' placement in SLR0. Each with the usual gates (bit-exact suites, the F2
+   path token with --check, LPN, Lens), then synthesis and placement again, then route. A packaged
+   Developer_CL tar for the coordinator only after a routed, qualified build.
 2. **The cycles Lens names** (C 8 packed, 1.30 M against the 0.98 M bound): the MXU's start and
    drain per command (6.4%: each lane's command is an eighth of the MM; a third command held, or
    the MLP's 768-row chunks merged), the vector units (9.1%: the proposal's M4, VPU 32 lanes / CL 8
@@ -268,6 +334,5 @@ test_tech, test_f2_copies 35 passed.
 3. **Memory capacity**: eight 2 GiB copies are the whole 16 GiB, so the copies hold Gemma 3 1B
    (~1.05 GB) and nothing larger; the proposal's laned layout (one image, lane l's rows on its own
    channels, group scale rows) is the way past that, an ISA change (Config.CLANES, MM LANE / bs).
-4. Receipts still to take: the tokens at stall 5 and on the F2 channel path (OTPU_NAXI, the SLR
-   chain and otpu_native_axi at 150 MHz: P2's latency 49), `tools/perf_qwen.py --layers 0 --pos 14
-   --check` at c8p.
+4. Receipt still to take: `tools/perf_qwen.py --layers 0 --pos 14 --check` at c8p (the stall-5
+   and F2-channel-path tokens are in the measurements above).
