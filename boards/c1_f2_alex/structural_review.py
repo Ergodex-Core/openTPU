@@ -188,9 +188,51 @@ def replay_current_native(path, checkpoint_sha256, prerequisite):
     return evidence, result['canonical_facts']['receive_gates']
 
 
+def replay_source_specialization(prerequisites):
+    """Reread the exact hardware sources; caller success flags are not evidence."""
+    from . import admission_specialization_review as S
+    value = S.review_sources(**prerequisites['source_binding'])
+    N.require(value == prerequisites['source_specialization'],
+              'current source specialization differs from prerequisite')
+    N.require(value.get('source_elided_bits_proven') is True and value.get('issues') == [],
+              'source specialization replay incomplete')
+    return value
+
+
+def admission_source_composition(source, transitions):
+    """Internal composition of fresh public replays; final scope stays pending."""
+    from . import admission_transition_review as T, admission_equation_review as E
+    N.require(source.get('source_elided_bits_proven') is True and source.get('issues') == [],
+              'source specialization unavailable for admission composition')
+    configuration = source['canonical_facts']['configuration']
+    N.require(configuration == T.CONFIGURATION, 'admission source configuration differs')
+    N.require(set(transitions) == {'link', 'refine'}, 'paired transition replay missing')
+    checked = {}
+    for stage, value in transitions.items():
+        N.require(value.get('one_step_equivalent_under_source_specialization') is True and
+                  value.get('issues') == [], 'admission transition replay incomplete')
+        channels = value['canonical_facts']['channels']
+        N.require(set(channels) == {str(i) for i in range(8)}, 'admission composition channel inventory')
+        for channel in channels.values():
+            N.require(channel['configuration_required'] == configuration and
+                      channel['rtl_sha256'] == E.RTL_SHA256 and
+                      channel['one_step_equivalent_under_source_specialization'] is True,
+                      'admission transition source/configuration binding differs')
+        checked[stage] = {'transition_facts_sha256': digest(value['facts_sha256']),
+                          'roots': {pc: row['root'] for pc, row in channels.items()}}
+    return {'source_facts_sha256': digest(source['facts_sha256']),
+            'configuration': configuration, 'checked': checked, 'configuration_bound': True,
+            'scope': 'conditional one-step admission-slice equations with separately replayed source specialization',
+            'whole_native_equivalence_proven': False, 'paired_preservation_proven': False,
+            'route_qualified': False, 'hardware_measured': False,
+            'pending_reviews': ['external_admission_input_producer_equivalence',
+                                'linked_final_accounting_preservation', 'ready_replica_scope_closure']}
+
+
 def review_artifact(*, reports, auxiliary, checkpoint_sha256, linked_checkpoint_sha256, prerequisites):
     from . import structural_capture_review as C, structural_static_review as T
     from . import structural_flow_review as F, accounting_review as A
+    from . import admission_transition_review as D, admission_pair_review as P
     result = {'schema': 1, 'kind': 'c1-structural-closure-review', 'issues': [],
               'canonical_facts': {}, 'resolved_pending_reviews': [],
               'route_qualified': False, 'hardware_measured': False}
@@ -244,4 +286,23 @@ def review_artifact(*, reports, auxiliary, checkpoint_sha256, linked_checkpoint_
             topology_sha256=bound['raw']['sha256'], checkpoint_sha256=bound['checkpoint_sha256'],
             helper_sha256=bound['helpers']['capture_accounting.tcl'],
             native_helper_sha256=bound['helpers']['capture_native.tcl']))
+    source = attempt('source_specialization', lambda: replay_source_specialization(prerequisites))
+    admission_bindings = {}; transitions = {}
+    for stage, raw_role in (('link', 'accounting_boundary_linked'), ('refine', 'accounting_boundary')):
+        if raw_role not in captures: continue
+        bound = captures[raw_role]
+        def replay_admission():
+            binding = dict(topology_path=auxiliary[raw_role], topology_sha256=bound['raw']['sha256'],
+                checkpoint_sha256=bound['checkpoint_sha256'],
+                helper_sha256=bound['helpers']['capture_accounting_boundary.tcl'],
+                native_helper_sha256=bound['helpers']['capture_native.tcl'])
+            admission_bindings[stage] = binding
+            return D.review_artifact(**binding)
+        value = attempt(raw_role + '_transition', replay_admission)
+        if value is not None: transitions[stage] = value
+    if set(admission_bindings) == {'link', 'refine'}:
+        attempt('admission_pair', lambda: P.review_pair(linked=admission_bindings['link'],
+                                                       routed=admission_bindings['refine']))
+    if source is not None and set(transitions) == {'link', 'refine'}:
+        attempt('admission_source_composition', lambda: admission_source_composition(source, transitions))
     return result

@@ -125,3 +125,92 @@ def test_partial_replay_does_not_drop_failed_capture_or_final_obligations(monkey
  assert result['canonical_facts']['static']['issues']==[]
  assert result['resolved_pending_reviews']==[] and result['route_qualified'] is False
  assert result['issues'][0]['reason']=='structural_semantics_pending'
+
+
+def semantic_values():
+ from boards.c1_f2_alex import admission_transition_review as T, admission_equation_review as E
+ source={'source_elided_bits_proven':True,'issues':[],'facts_sha256':'a'*64,
+         'canonical_facts':{'configuration':dict(T.CONFIGURATION)}}
+ transition={'one_step_equivalent_under_source_specialization':True,'issues':[],'facts_sha256':'b'*64,
+             'canonical_facts':{'channels':{str(pc):{'configuration_required':dict(T.CONFIGURATION),
+                'rtl_sha256':E.RTL_SHA256,'one_step_equivalent_under_source_specialization':True,
+                'root':f'actual/pc{pc}/root/O'} for pc in range(8)}}}
+ return source,transition
+
+
+def test_source_prerequisite_is_reread_not_trusted(monkeypatch):
+ from boards.c1_f2_alex import admission_specialization_review as A
+ source,_=semantic_values();seen=[];binding={'source_paths':{'frozen':'/actual'},'synth_inputs_path':'/input',
+                                          'synth_inputs_sha256':'c'*64,'generated_top_path':'/top'}
+ def replay(**kw):seen.append(kw);return source
+ monkeypatch.setattr(A,'review_sources',replay)
+ assert S.replay_source_specialization({'source_binding':binding,'source_specialization':source})==source
+ assert seen==[binding]
+ with pytest.raises(ValueError,match='differs from prerequisite'):
+  S.replay_source_specialization({'source_binding':binding,'source_specialization':{**source,'facts_sha256':'d'*64}})
+ source['source_elided_bits_proven']=False
+ with pytest.raises(ValueError,match='replay incomplete'):
+  S.replay_source_specialization({'source_binding':binding,'source_specialization':source})
+
+
+@pytest.mark.parametrize('attack',('source_config','transition_config','source_flag','transition_flag',
+                                  'transition_issue','channel_missing','channel_flag','rtl','stage_missing'))
+def test_source_transition_composition_rejects_unbound_obligations(attack):
+ import copy
+ source,transition=semantic_values();transitions={'link':transition,'refine':copy.deepcopy(transition)}
+ channel=transitions['refine']['canonical_facts']['channels']['7']
+ if attack=='source_config':source['canonical_facts']['configuration']['QD']=32
+ elif attack=='transition_config':channel['configuration_required']['QD']=32
+ elif attack=='source_flag':source['source_elided_bits_proven']=False
+ elif attack=='transition_flag':transitions['refine']['one_step_equivalent_under_source_specialization']=False
+ elif attack=='transition_issue':transitions['refine']['issues']=[{'reason':'unproved reset'}]
+ elif attack=='channel_missing':del transitions['refine']['canonical_facts']['channels']['7']
+ elif attack=='channel_flag':channel['one_step_equivalent_under_source_specialization']=False
+ elif attack=='rtl':channel['rtl_sha256']='f'*64
+ elif attack=='stage_missing':del transitions['refine']
+ with pytest.raises(ValueError):S.admission_source_composition(source,transitions)
+
+
+@pytest.mark.parametrize('failed_stage',(None,'link','refine'))
+def test_authenticated_admission_public_replays_preserve_scope(monkeypatch,failed_stage):
+ from boards.c1_f2_alex import admission_specialization_review as Z, admission_transition_review as T, admission_pair_review as P
+ source,transition=semantic_values();seen=[];pairs=[]
+ def auth(**kw):
+  if kw['role']!='accounting_boundary':raise ValueError('unavailable unrelated capture')
+  if kw['stage']==failed_stage:raise ValueError('actual raw receipt mismatch')
+  return {'raw':{'sha256':('a' if kw['stage']=='link' else 'b')*64},
+          'checkpoint_sha256':kw['checkpoint_sha256'],
+          'helpers':{'capture_accounting_boundary.tcl':'c'*64,'capture_native.tcl':'d'*64}}
+ def replay(**binding):seen.append(binding);return transition
+ def pair(**binding):pairs.append(binding);return {'issues':[],'paired_preservation_proven':True,
+       'interface_assumption':'external input producer equivalence remains unproved'}
+ monkeypatch.setattr(S,'authenticate_capture',auth)
+ monkeypatch.setattr(S,'original_structural_observation',lambda *args:{'failed_scope_resolved':False})
+ monkeypatch.setattr(Z,'review_sources',lambda **kw:source)
+ monkeypatch.setattr(T,'review_artifact',replay);monkeypatch.setattr(P,'review_pair',pair)
+ auxiliary={key:'/raw/'+key for role in S.SPECS for key in (role,role+'_receipt',role+'_linked',role+'_linked_receipt')}
+ result=S.review_artifact(reports={},auxiliary=auxiliary,checkpoint_sha256=CHECKPOINT,linked_checkpoint_sha256='9'*64,
+    prerequisites={'receipt_sha256':{'link':PARENT,'refine':PARENT},'source_binding':{},'source_specialization':source})
+ expected=[{'topology_path':'/raw/accounting_boundary'+suffix,'topology_sha256':sha*64,
+            'checkpoint_sha256':checkpoint,'helper_sha256':'c'*64,'native_helper_sha256':'d'*64}
+           for stage,suffix,sha,checkpoint in (('link','_linked','a','9'*64),('refine','','b',CHECKPOINT)) if stage!=failed_stage]
+ assert seen==expected
+ if failed_stage is None:
+  assert pairs==[{'linked':expected[0],'routed':expected[1]}]
+  composed=result['canonical_facts']['admission_source_composition']
+  assert composed['configuration_bound'] is True and composed['whole_native_equivalence_proven'] is False
+  assert composed['paired_preservation_proven'] is False and composed['route_qualified'] is False
+  assert 'external_admission_input_producer_equivalence' in composed['pending_reviews']
+ else:
+  assert not pairs and 'admission_source_composition' not in result['canonical_facts']
+ assert result['issues'][0]['obligations']==['original_structural_failure_scope',
+     'paired_accounting_and_admission_preservation','ready_replica_scope_closure']
+ assert result['resolved_pending_reviews']==[] and result['route_qualified'] is result['hardware_measured'] is False
+
+
+def test_failed_source_replay_is_retained_without_composition(monkeypatch):
+ from boards.c1_f2_alex import admission_specialization_review as A
+ source,_=semantic_values()
+ monkeypatch.setattr(A,'review_sources',lambda **kw:{**source,'issues':[{'reason':'changed frozen source'}]})
+ with pytest.raises(ValueError,match='differs from prerequisite'):
+  S.replay_source_specialization({'source_binding':{},'source_specialization':source})
