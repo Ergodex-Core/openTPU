@@ -66,7 +66,8 @@ PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_byte
                  "host")
 # platform keys a [variants.<name>] table may set (a board build at another core clock: the
 # F2 HBM builds' 150 / 175 / 200 MHz, wide-port-alexshell docs/wide_port.md "Alex's shell")
-VARIANT_PLATFORM_KEYS = ("core_mhz", "channels_per_slice", "hbm_chain_nxf")   # (f2-p2: P3's variants)
+VARIANT_PLATFORM_KEYS = ("core_mhz", "channels_per_slice", "hbm_chain_nxf",
+                         "lane_memory_slr")   # (f2-p2: P3's variants)
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
 # (OTPU_LANES=16): RPB = 0 ("every read lane": TMEM replicated per read port) simulates as
 # NRP x 16, the board build as NRP x LANES; both select the slice's write-mask arbiter.

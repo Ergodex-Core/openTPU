@@ -56,7 +56,7 @@ def test_prepare_writes_the_geometry_and_the_floorplans_ports(tmp_path):
     for want in ("S = 1;", "NCH = 8;", "PSTRIDE = 2;", "HPORT = 15;", "CORE_KHZ_CL = 150000;"):
         assert want in geo, want
     pnr = (cl / "build/constraints/cl_pnr_user.tcl").read_text()
-    assert "set otpu_pstride 2\nset otpu_hport 15\n" in pnr
+    assert "set otpu_pstride 2\nset otpu_hport 15\nset otpu_lmem_slr 2\n" in pnr   # (P2's: copies in SLR2)
     assert "otpu_hbm_port_x [expr {$otpu_p < $otpu_nport ? $otpu_pstride * $otpu_p : $otpu_hport}]" in pnr
     params = (cl / "design/opentpu_params.vh").read_text()
     for k, v in (("MXU_C", 4), ("NCH", 8), ("CH_LOG2", 30), ("DRAM_LOG2", 31)):
@@ -96,3 +96,7 @@ def test_p3_variants_prepare_16_channels_and_the_pumped_chain(tmp_path):
         assert re.search(rf"\.{k}\({w}'h{v:x}\)", params), k
     pnr = (cl / "build/constraints/cl_pnr_user.tcl").read_text()
     assert "g_xf.g_ch\\[*\\].$otpu_dir" in pnr and "if {![llength $otpu_xf]}" in pnr
+    # the copies' adapters and the chains' board ends in SLR1 (9a863228's congestion)
+    assert t.platform["lane_memory_slr"] == 1 and "set otpu_lmem_slr 1\n" in pnr
+    assert "add_cells_to_pblock pb_otpu_mid $otpu_lmem" in pnr and \
+        "set otpu_bpb [expr {[llength $otpu_lmem] > 1 ? \"pb_otpu_mid\" : \"pb_otpu_board\"}]" in pnr

@@ -101,16 +101,19 @@ MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
 hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
+lane_memory_slr = 1              # the copies' adapters in SLR1 (the floorplan; 9a863228's congestion)
 core_mhz = 150.0
 [variants.p3c175]
 MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
 hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
+lane_memory_slr = 1              # the copies' adapters in SLR1 (the floorplan; 9a863228's congestion)
 core_mhz = 175.0
 [variants.p3c200]
 MXU_C = 8
 MXU_PACK = 1
 channels_per_slice = 16
 hbm_chain_nxf = 6                # the native ports' chains on clk_f at half width (otpu_xr2)
+lane_memory_slr = 1              # the copies' adapters in SLR1 (the floorplan; 9a863228's congestion)
 core_mhz = 200.0

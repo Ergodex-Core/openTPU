@@ -93,9 +93,27 @@ add_cells_to_pblock pb_otpu_hbm [otpu_cells {WRAPPER/CL/u_sys/g_rs[0].u_x}]
 ########################################
 # pb_otpu_mid: the chains' middle stage, SLR1
 ########################################
+# With the lane memory's copies (otpu_lane_mem C > 1, below) the box is all of the CL's SLR1 but
+# the PCIS box (X5Y5:X5Y6): P3's 9a863228 was not routable ("global congestion level 7", five
+# level-7 windows at the SLR2 / SLR1 boundary owned by the pumped chains' SLR2 ends, the eight
+# adapters and the MXU lanes, docs/v4/p3-status.md), its 9.2 K crossings all through the LAGUNA
+# columns of X0-X3; the copies' 76 K LUTs (45 K LUT RAM) and the chains' SLR2 ends move into SLR1
+# (5.6% of its CLBs used) and the crossings spread over SLR1's whole width.
+# (build.py's otpu_lmem_slr, the target's lane_memory_slr: 1 for f2-p2's p3c* variants, else 2)
+set otpu_lmem {}
+if {[info exists otpu_lmem_slr] && $otpu_lmem_slr == 1} {
+  set otpu_lmem [get_cells -quiet {WRAPPER/CL/u_sys/u_board/u_mem/g_cp[*].u_adapt}]
+  if {[llength $otpu_lmem] < 2} { error "openTPU floorplan: lane_memory_slr 1 without the lane memory's copies" }
+}
 create_pblock pb_otpu_mid
 set_property PARENT pblock_CL [get_pblocks pb_otpu_mid]
-resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
+if {[llength $otpu_lmem] > 1} {
+  resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X7Y4 CLOCKREGION_X0Y7:CLOCKREGION_X7Y7}
+  resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y5:CLOCKREGION_X4Y6 CLOCKREGION_X6Y5:CLOCKREGION_X7Y6}
+  # (the adapters themselves are added below, after u_board's own assignment)
+} else {
+  resize_pblock pb_otpu_mid -add {CLOCKREGION_X0Y4:CLOCKREGION_X3Y7}
+}
 if {![llength $otpu_xf]} {
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_dn}]
   add_cells_to_pblock pb_otpu_mid [otpu_cells {WRAPPER/CL/u_sys/u_mem/g_xr.g_x[1].u_up}]
@@ -143,6 +161,14 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.u_s}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_dn}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/u_cx/g_xr.g_x[2].u_up}]
 add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
+# the lane memory's copies (C > 1) in SLR1 (pb_otpu_mid above), after u_board's assignment so
+# theirs is the nearer one: the adapters alone; the lane memory's slice-facing registers and gates
+# (its readies, idles, the broadcast's request gates) stay with the slice in SLR2, so every
+# SLR2 / SLR1 crossing starts or ends at a register of the slice's or the copies' logic
+if {[llength $otpu_lmem] > 1} {
+  add_cells_to_pblock pb_otpu_mid $otpu_lmem
+  puts "OTPU_FLOORPLAN lane memory copies in SLR1: [llength $otpu_lmem] adapters"
+}
 
 ########################################
 # the pumped chains (NXF > 0): each chain's serializer end (its core input register dr and ser) in
@@ -153,7 +179,9 @@ add_cells_to_pblock pb_otpu_board [otpu_cells {WRAPPER/CL/u_sys/g_rs[2].u_x}]
 ########################################
 if {[llength $otpu_xf]} {
   set otpu_nxf [llength [otpu_cells "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[0\].u_dn/g_x\[*\].u_s"]]
-  foreach {otpu_dir otpu_spb otpu_dpb} {u_dn pb_otpu_board pb_otpu_hbm u_up pb_otpu_hbm pb_otpu_board} {
+  # (the copies in SLR1: the chains' board ends there too, so a chain crosses SLR1 / SLR0 alone)
+  set otpu_bpb [expr {[llength $otpu_lmem] > 1 ? "pb_otpu_mid" : "pb_otpu_board"}]
+  foreach {otpu_dir otpu_spb otpu_dpb} [list u_dn $otpu_bpb pb_otpu_hbm u_up pb_otpu_hbm $otpu_bpb] {
     set otpu_b "WRAPPER/CL/u_sys/u_mem/g_xf.g_ch\[*\].$otpu_dir"
     foreach otpu_c {dr_reg* ser_reg* tg_s_reg tgf_s_reg sel_s_reg*} {
       add_cells_to_pblock $otpu_spb [otpu_cells "$otpu_b/$otpu_c"]

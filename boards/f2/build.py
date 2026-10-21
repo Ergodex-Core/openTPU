@@ -202,6 +202,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         floorplan = cons / 'cl_pnr_user_hbm.tcl'
         pnr.write_text(pnr.read_text().replace(old, old[:-1] + ' hbm_reset_n}') + '\n' +
                        f'set otpu_pstride {pstride}\nset otpu_hport {hport}\n' +
+                       f"set otpu_lmem_slr {int(t.platform.get('lane_memory_slr', 2))}\n" +
                        floorplan.read_text())
         floorplan.unlink()
         w = wrapper or sh.parents[2] / HBM_WRAPPER
