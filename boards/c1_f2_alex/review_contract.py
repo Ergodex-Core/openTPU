@@ -54,6 +54,8 @@ REVIEW_SOURCES = frozenset({
     "boards/c1_f2_alex/ready_pair_review.py",
     "boards/c1_f2_alex/structural_review.py",
     "boards/c1_f2_alex/candidate_evidence.py",
+    "boards/c1_f2_alex/collect_candidate.py",
+    "boards/c1_f2_alex/collect_qualified.py",
     "boards/c1_f2_alex/build.py",
     "boards/c1_f2_alex/implement.py",
     "boards/c1_f2_alex/simulate.py",
