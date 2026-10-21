@@ -1270,10 +1270,16 @@ def qwen35_layer_tile(m, li: int, pos, row, T: int, block: int = ATTN_BLOCK,
 def tile_run(m, kernel, pos, T: int, kind: str, block: int = ATTN_BLOCK, kw=None):
     """A tiled prompt run (docs/prefill.md): `kernel`'s T rows at the run-time position in the
     generate state's tpos word (pos: a RunRows, toks_at 0), their tokens from out[]; kind "P",
-    or "L" (the prompt's last run: its last row's logits). kw: the kernel's own (hidden, spill,
+    "L" (the prompt's last run: its last row's logits) or "A" (every row's logits: a
+    speculative verify run, docs/spec_draft.md). kw: the kernel's own (hidden, spill,
     drows)."""
     with RunWords(m, pos):
-        kernel.fn(m, pos, T, [T - 1] if kind == "L" else [], block, **(kw or {}))
+        kernel.fn(m, pos, T, run_logit_rows(kind, T), block, **(kw or {}))
+
+
+def run_logit_rows(kind: str, T: int) -> list:
+    """The logits rows of a prompt run of kind P (none), L (the last) or A (every row)."""
+    return {"P": [], "L": [T - 1], "A": list(range(T))}[kind]
 
 
 KERNELS = {"qwen3": qwen3_tile, "qwen35": qwen35_tile, "lfm2": lfm2_tile,
@@ -1321,7 +1327,7 @@ def compile_tile_run(img, blocks: int, T: int, kind: str, block: int = ATTN_BLOC
         raise ValueError(f"no tiled prompt run for {type(img).__module__}")
     if not img.lookup:
         raise ValueError("a prompt run needs lookup tables (lookup=True)")
-    if kind not in ("P", "L"):
+    if kind not in ("P", "L", "A"):
         raise ValueError(f"tiled prompt run kind {kind!r}")
     spec = img.spec
     if getattr(spec, "moe", None) is not None or getattr(spec, "experts", 0):
