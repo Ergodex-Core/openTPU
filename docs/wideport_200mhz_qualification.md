@@ -104,20 +104,66 @@ GST/rank/bank/SBH/slice contracts fail closed. A window starting after reset
 would additionally need initial replay/age and IQ state; current traces start
 at reset, so those states are reconstructed and checked cycle by cycle.
 
-This is still a trace-conditioned component model, not a whole-program LPN
-predictor. Arithmetic outputs (`cw_words`, `done_i`, `rf_push`), instruction and
-operand availability, DRAM ready and the global collective decision remain
-external producer inputs. To predict a changed TMEM schedule, generate their
-address/valid/latency pipelines from issued commands and DRAM responses; replaying
-recorded producer events under a different stall schedule would be invalid.
-Gather same-cycle asks at one deterministic LPN cycle barrier, arbitrate, then
-advance the relevant stages rather than delaying an entire instruction.
+### Command-driven producer and FIFO-capacity follow-up
 
-The result FIFO did not reach capacity in this experiment (zero full-capacity
-cycles); its full-threshold backpressure branch needs a bounded stress case
-before claiming coverage. The whole-model LPN estimates/errors in the first
-table remain unchanged. Calibration and tok/s suppression stay active until
-producer pipelines and their counterfactual feedback are modeled and validated.
+`validate_feedback_trace(..., predict_producers=True)` now reads the saved
+eight-word instruction image and checks its assembled SHA256 (restoring the
+trailing zero words omitted by `rtlsim._write_hex`). Two narrow producer models
+replace captured events with command-generated state:
+
+- `wideport_vadd_producer.py`: register-free V_ADD/B_FULL, SE/LANES8, no stream
+  or experimental throttle. Its command queue, row/chunk addresses, enabled
+  read/metadata pipeline and slot latency generate both read requests,
+  `cw_words`, `done_i` and the write-buffer contents. Actual fp32 arithmetic is
+  verified by the separate bit-exact ISA comparison, not computed here.
+- `wideport_mxu_producer.py`: static RL4 int8, M1, KB1/KB9, CL8/CL16. Command
+  KB and modeled pop advances generate row-ending tags and the free-running
+  LROW+3 result-valid pipeline, including bubbles. Command/FIFO state generates
+  active-head `first_row`, `c_unit`, `f_av`, `s_av`, `row_in`, `fpop` and capacity;
+  command queue count and the delayed pop-command-cache load are checked too.
+  Slice validation explicitly rejects a warm reset with live producer work.
+
+Both saved mixed traces still match: 9,776 cycles, zero mismatches. No original
+mixed or full-model RTL run was repeated for that comparison. The new bounded
+`test_wideport_fifo_capacity.py` uses one 513-row/KB1 RL4 MM (129 row groups)
+and a concurrent 2048-issue-cycle V_ADD that repeats a valid row. PMP2, native
+NCH8, stall0/seed7/lat8 are fixed. It checks whole TMEM/DRAM against the ISA,
+the entire bounded feedback trace, exact FIFO saturation, a ready row denied
+solely by capacity during VPU write arbitration, and subsequent drain recovery.
+
+| Capacity fixture | CL8 control | CL16 board configuration |
+|---|---:|---:|
+| FIFO capacity / observed maximum rows | 32 / 32 | 64 / 64 |
+| RTL run cycles | 5,268 | 5,268 |
+| Complete trace cycles | 5,304 | 5,304 |
+| First ready-row capacity-block cycle | 2,336 | 2,376 |
+| Result pushes while drain grant denied | 31 | 63 |
+| ISA / command-driven cycle checks | pass | pass |
+
+The EC2 focused regression passed 62 tests in 3.28s; three previously validated
+standalone bank RTL cases were deselected. The two capacity fixtures reused
+compiled RTL binaries. Earlier attempts are retained in `results/fifo-v1` and
+`fifo-v2`: both passed ISA/cycle checks and RF32 saturation, but reached only
+56/64 rows in the board case and correctly failed its capacity assertion. The
+final program adds row groups so early drain activity cannot exhaust the offered
+rows before saturation. These stimulus changes are not cycle correction factors.
+
+This remains a trace-conditioned unit model. Its externally supplied signals are:
+reset and accepted unit starts; MXU `c_done`, `pn` and `more` (sequencer release/
+head state); inactive/load-edge prerequisite flags (unused while `more=0`);
+MXU operand/scale arrivals `b_push`/`r_cpl`; drain epilogue `d_fin`/`c_asc`/`al_st`;
+DMA/MXU/COLL/QUANT raw TMEM requests and writes; DRAM `q_want`/`write_ready`;
+and the global collective grant. The small whole fixture therefore **cannot yet
+be predicted independently**. In particular, its DMA and operand producers must
+respond to the model's schedule, not replay captured arrival events under a new
+PMP schedule. The smallest next step is a bounded native-memory issue/response
+producer and explicit MXU release/head state, retaining these trace comparisons.
+
+All four final trace comparisons total 20,384 cycles with zero mismatches.
+`results/fifo-v3/final-producer-audit.json` records manifests, model/trace/log
+digests, full-capacity cycles and recovery. Full-model LPN estimates/errors in
+the first table remain unchanged; `calibrated=false` and `tok_s=null` remain
+mandatory. No 200 MHz routed or on-card result is implied by these simulations.
 
 ## Physical target and prerequisites
 

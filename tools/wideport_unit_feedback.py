@@ -1,14 +1,20 @@
 """Structural feedback states checked at the slice's pre-core-edge boundary.
 
-Producer events (VPU arithmetic outputs, MXU completed rows/operand availability,
-DRAM ready and instruction state) are inputs, not fitted cycle corrections.
-This is a coupled trace validator, not an independent whole-program predictor.
+The optional narrow producer mode generates V_ADD address/mask/completion and
+RL4 int8 result-valid pipelines from commands and coupled unit enables/pop.
+Other-unit requests, operand/DRAM arrivals and command dispatch remain trace
+inputs. This is not an independent whole-program predictor or cycle fit.
 """
 from collections import deque
+import hashlib
 import json
 from pathlib import Path
+import struct
 
 from tools.wideport_tmem_resource import TmemReplayConfig, TmemReplayResource, WriteLandingPipeline
+from tools.wideport_vadd_producer import VAddCommand, VAddProducer
+from tools.wideport_mxu_producer import MxuRowProducer
+from opentpu import isa as I
 
 
 def require(got, expected, field, cycle):
@@ -59,6 +65,11 @@ class MxuQueueFeedback:
         self.rf_n = self.rf_nz = self.rows_live = self.rows_p = self.rl_nz = 0
         self.f_count = self.s_count = 0
 
+    def compute_pop(self, e):
+        return int(bool(e["more"] and e["f_av"] and (e["c_unit"] or e["s_av"])
+                        and (not e["first_row"] or e["row_in"]
+                             and self.rows_live + self.rows_p < e["rf_capacity"])))
+
     def check_and_step(self, e, cycle, t_gnt):
         if e["rst"]:
             self.__init__()
@@ -67,9 +78,7 @@ class MxuQueueFeedback:
             require(e[key], getattr(self, key), "mxu." + key, cycle)
         drain = int(bool(self.rf_nz and self.rl_nz and (not e["c_asc"] or e["al_st"] == 2)))
         d_pop = int(bool(t_gnt and drain and e["d_fin"]))
-        pop = int(bool(e["more"] and e["f_av"] and (e["c_unit"] or e["s_av"])
-                       and (not e["first_row"] or e["row_in"]
-                            and self.rows_live + self.rows_p < e["rf_capacity"])))
+        pop = self.compute_pop(e)
         for key, value in (("drain_go", drain), ("d_pop", d_pop), ("pop", pop), ("t_gnt", t_gnt)):
             require(e[key], value, "mxu." + key, cycle)
         first = int(bool(pop and e["first_row"]))
@@ -118,7 +127,7 @@ def slice_grants(raw_reads, raw_writes, frozen, ren, dram, coll_gnt):
     return grant, frz, filtered, taken, issued
 
 
-def validate_feedback_trace(path):
+def validate_feedback_trace(path, *, predict_producers=False):
     with Path(path).open() as stream:
         records = [json.loads(line) for line in stream if line.strip()]
     header, end = records[0], records[-1]
@@ -126,7 +135,8 @@ def validate_feedback_trace(path):
         raise ValueError("missing config/end or truncated feedback trace")
     # The slice trace's compact header is supplemented by the runner's actual
     # top parameters. In particular the zero COLL replay hold assumes GST.
-    params = json.loads(Path(path).with_name("feedback-inputs.json").read_text())["parameters"]
+    manifest = json.loads(Path(path).with_name("feedback-inputs.json").read_text())
+    params = manifest["parameters"]
     expected = {"S": 1, "LANES": 8, "TMEM_IMPL": 3, "TMEM_NSB": 2, "TMEM_SBP": 3,
                 "TMEM_RPL": 1, "TMEM_TDP": 1, "TMEM_GST": 1, "WPB": 1,
                 "TMEM_PMP": header["pmp"], "TMEM_WORDS": header["words"]}
@@ -144,6 +154,23 @@ def validate_feedback_trace(path):
         raise ValueError("feedback trace length mismatch")
     bank = TmemReplayResource(TmemReplayConfig(pmp=header["pmp"], words=header["words"], side_mask=header["side_mask"]))
     writes, vpu, mxu = WriteLandingPipeline(), VpuWriteFeedback(), MxuQueueFeedback()
+    producer, commands, command_index, row_producer = VAddProducer(), [], 0, None
+    if predict_producers:
+        # Read the exact saved instruction image, not reconstructed workload
+        # constants. Its little-endian words must match the runner's receipt.
+        words = [int(line, 16) for line in Path(path).with_name("prog_0.hex").read_text().splitlines()]
+        # rtlsim._write_hex omits trailing zero words; restore the final
+        # instruction's zeros before checking the original assembled image.
+        words += [0] * (-len(words) % 8)
+        digest = hashlib.sha256(b"".join(struct.pack("<I", w) for w in words)).hexdigest()
+        require(digest, manifest["program_sha256"], "program.sha256", -1)
+        commands = [VAddCommand.from_words(words[i:i+8], tmem_words=header["words"])
+                    for i in range(0, len(words), 8) if words[i] & 255 == 0x30]
+        if not commands:
+            raise ValueError("producer validation requires a V_ADD command")
+        row_producer = MxuRowProducer(
+            [I.Instr.decode(words[i:i+8]) for i in range(0, len(words), 8) if words[i] & 255 == I.MM],
+            d=params["D"], mcols=params["MCOLS"], cl=params.get("MXU_CL", 16))
     counts = {"cycles_checked": 0, "replay_port_cycles": 0, "vpu_hold_cycles": 0,
               "mxu_compute_while_drain_denied": 0, "mxu_result_push_while_drain_denied": 0,
               "vpu_queued_writes": 0, "mxu_max_result_rows": 0}
@@ -151,8 +178,33 @@ def validate_feedback_trace(path):
         require(e.get("kind"), "cycle", "record kind", cycle)
         require(e["cycle"], cycle, "cycle", cycle)
         frozen = bank._mask([p is not None for p in bank.pending])
+        raw_reads, raw_writes = e["raw_reads"], e["raw_writes"]
+        vpu_event = e["vpu"]
+        if predict_producers:
+            predicted = producer.snapshot()
+            if not vpu_event["rst"]:
+                for key in ("cw_words", "done_i", "red_thr"):
+                    require(vpu_event[key], predicted[key], "producer.vpu." + key, cycle)
+                require(vpu_event["ss_act_d"], 0, "producer.vpu.no_stream", cycle)
+                require(raw_reads[3], predicted["ta_words"], "producer.vpu.read_a", cycle)
+                require(raw_reads[4], predicted["tb_words"], "producer.vpu.read_b", cycle)
+                head = list(vpu.queue[0][0]) if vpu.queue else []
+                require(raw_writes[3], head, "producer.vpu.queued_writes", cycle)
+                raw_reads = [list(w) for w in raw_reads]
+                raw_reads[3], raw_reads[4] = predicted["ta_words"], predicted["tb_words"]
+                raw_writes = [list(w) for w in raw_writes]
+                raw_writes[3] = head
+                vpu_event = {**vpu_event, **{key: predicted[key] for key in ("cw_words", "done_i", "red_thr")},
+                             "ss_act_d": 0, "ss_pe": 0}
+            start = None
+            if e["start"] & (1 << 3):
+                if command_index >= len(commands):
+                    raise ValueError(f"cycle {cycle}: unexpected VPU start")
+                start = commands[command_index]
+                command_index += 1
+            producer.step(start=start, en=bool(vpu.en_r and not vpu.en_h), reset=bool(vpu_event["rst"]))
         grant, frz, filtered, taken, issued = slice_grants(
-            e["raw_reads"], e["raw_writes"], frozen, vpu.ren_r, e["dram"], e["coll_gnt"])
+            raw_reads, raw_writes, frozen, vpu.ren_r, e["dram"], e["coll_gnt"])
         require(e["gnt"], bank._mask(grant), "slice.gnt", cycle)
         require(e["rpl_frz"], bank._mask(frz), "slice.rpl_frz", cycle)
         require(e["rpl_hold"], bank._mask(frz), "slice.rpl_hold", cycle)
@@ -166,8 +218,31 @@ def validate_feedback_trace(path):
         blockers = sum(1 << (p * 8 + other) for p, row in enumerate(result["read_blockers"]) for other in row)
         require(e["read_blockers"], blockers, "tmem.read_blockers", cycle)
         rhold = int(bool(result["lost"] & ((1 << 3) | (1 << 4))))
-        vpu.check_and_step(e["vpu"], cycle, rhold, grant[2])
-        mxu.check_and_step(e["mxu"], cycle, grant[3])
+        vpu.check_and_step(vpu_event, cycle, rhold, grant[2])
+        mxu_event = e["mxu"]
+        if row_producer is not None:
+            if not mxu_event["rst"]:
+                require(mxu_event["q_n"], len(row_producer.accepted), "producer.mxu.q_n", cycle)
+                require(mxu_event["cl_ld"], int(row_producer.loading), "producer.mxu.cl_ld", cycle)
+                if row_producer.loading:
+                    require(mxu_event["more"], 0, "producer.mxu.loading_more", cycle)
+                prerequisites = row_producer.eligibility(f_count=mxu.f_count, s_count=mxu.s_count, pn=mxu_event["pn"])
+                for key, value in prerequisites.items():
+                    require(mxu_event[key], value, "producer.mxu." + key, cycle)
+                mxu_event = {**mxu_event, **prerequisites}
+                if prerequisites:
+                    pop = mxu.compute_pop(mxu_event)
+                    require(mxu_event["fpop"], pop, "producer.mxu.fpop", cycle)
+                    mxu_event = {**mxu_event, "fpop": pop}
+            # This slice contract starts cold and never resets live work.
+            if mxu_event["rst"] and (mxu_event["pop"] or row_producer.accepted or any(row_producer.stages)):
+                raise ValueError(f"cycle {cycle}: warm MXU reset is outside the slice producer contract")
+            rf_push = row_producer.step(pop=bool(mxu.compute_pop(mxu_event)),
+                                       start=bool(e["start"] & (1 << 1)), done=mxu_event["c_done"],
+                                       pn=mxu_event["pn"], rst=mxu_event["rst"])
+            require(mxu_event["rf_push"], rf_push, "producer.mxu.rf_push", cycle)
+            mxu_event = {**mxu_event, "rf_push": rf_push}
+        mxu.check_and_step(mxu_event, cycle, grant[3])
         counts["cycles_checked"] += 1
         counts["replay_port_cycles"] += result["lost"].bit_count()
         counts["vpu_hold_cycles"] += rhold
@@ -175,5 +250,16 @@ def validate_feedback_trace(path):
         counts["mxu_result_push_while_drain_denied"] += bool(e["mxu"]["rf_push"] and not grant[3])
         counts["vpu_queued_writes"] = max(counts["vpu_queued_writes"], e["vpu"]["wn"])
         counts["mxu_max_result_rows"] = max(counts["mxu_max_result_rows"], e["mxu"]["rf_n"])
+    if predict_producers:
+        require(command_index, len(commands), "producer.vpu.started_commands", len(events))
+        row_producer.finish()
     return {**counts, "mismatches": 0, "whole_program_predictor": False, "calibrated": False, "tok_s": None,
-            "external_producers": "arithmetic outputs, completed rows, operand/instruction state, DRAM ready, collective grant"}
+            "command_driven_vadd": predict_producers,
+            "command_driven_mxu_row_valid": predict_producers,
+            "externally_supplied_signals": (
+                ["reset and accepted unit starts", "MXU c_done/pn and more (sequencer release/head state)",
+                 "inactive/load-edge MXU prerequisite flags (unused while more=0)",
+                 "MXU b_push/r_cpl (operand/scale arrivals)", "MXU d_fin/c_asc/al_st (drain epilogue)",
+                 "DMA/MXU/COLL/QUANT raw TMEM reads/writes", "DRAM q_want/write_ready", "collective grant"] if predict_producers else
+                ["all raw unit requests", "VPU cw_words/done_i/stream state", "MXU rf_push",
+                 "operand/instruction state", "DRAM readiness", "collective grant"])}

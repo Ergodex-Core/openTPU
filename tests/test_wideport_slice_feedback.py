@@ -124,8 +124,10 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
     assert header["words"] == cfg.TMEM_WORDS and header["lanes"] == 8
     assert header["vpu_se"] == 1 and header["limit"] == 32768
     assert len(events) < 32768 and end["cycles"] == len(events)
-    summary = validate_feedback_trace(trace)
+    summary = validate_feedback_trace(trace, predict_producers=True)
     assert summary is not None
+    assert summary["command_driven_vadd"] and summary["command_driven_mxu_row_valid"]
+    assert not summary["whole_program_predictor"] and not summary["calibrated"] and summary["tok_s"] is None
 
     active = [e for e in events if not e["srst"] and not e["sys_rst"] and not e["halted"]]
     assert any(e["reads"][3] and e["reads"][4] and e["taken"][3] and e["taken"][4]
