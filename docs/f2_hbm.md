@@ -23,7 +23,9 @@ core (its HBM_CORE_MMCM: VCO 1200 /6 /3, PFD 50 VCO 1050 /6 /3, VCO 1200 /8 /4) 
 u_mmcm through opentpu_geometry.vh, the block design's core_clk and CORE_KHZ.
 
 Every one has the f2 target's arch (the YPCB card's m4: CFG_HASH 4ffd1e17 at S = 1, the same
-programs), platform id 3 (opentpu/host/f2.py), core 200 MHz, TMEM_PMP 1.
+programs), core 200 MHz, TMEM_PMP 1. Their platform ids are f2-hbm's 5 and f2-hbm16's 6, not f2's 3:
+opentpu/host/f2.py takes every F2 target's (PLATFORMS). Before that change, it took only 3 and
+refused 417243f1 on the card (2026-10-21).
 
 ## Architecture
 

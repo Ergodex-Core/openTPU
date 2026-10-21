@@ -35,6 +35,10 @@ SYSFS = Path("/sys/bus/pci/devices")
 BAR0_BYTES = 4096
 PCI_VENDOR, PCI_DEVICE = 0x1D0F, 0xF001
 PLATFORM = 3
+# CFG_PLATFORM of every F2 target (targets/*.toml platform_id): f2's 3 (the DDR build, and Alex's
+# burst200 images, which report it), f2-hbm200 4, f2-hbm 5 and f2-hbm16 6 (the HBM shell's
+# builds). The memory geometry (CFG_DRAM, CFG_SLICES) is checked on its own below.
+PLATFORMS = (3, 4, 5, 6)
 _BDF = re.compile(r"(?:[0-9a-fA-F]{4}:)?[0-9a-fA-F]{2}:[0-1][0-9a-fA-F]\.[0-7]")
 
 
@@ -151,7 +155,7 @@ class F2Transport:
             self.words = memoryview(self.regs).cast("I")
             if self.reg_read(R.R_ID) != R.ID_OTPU:
                 raise RuntimeError(f"{self.dev}: no openTPU image in BAR0")
-            if R.regmap(self.reg_read(R.R_REGMAP)) < R.CFG_SINCE or self.reg_read(R.R_CFG_PLATFORM) != PLATFORM:
+            if R.regmap(self.reg_read(R.R_REGMAP)) < R.CFG_SINCE or self.reg_read(R.R_CFG_PLATFORM) not in PLATFORMS:
                 raise RuntimeError(f"{self.dev}: image is not the F2 openTPU platform")
             dram = self.reg_read(R.R_CFG_DRAM)
             channel_shift, channels, total_shift = (dram >> 16) & 255, (dram >> 8) & 255, dram & 255
