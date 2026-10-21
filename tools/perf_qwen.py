@@ -366,9 +366,8 @@ def main():
         if a.pos % blk + R > blk:
             ap.error(f"--rows {R} from --pos {a.pos} leave the bucket")
         kind = {"last": "L", "all": "A", "none": "P"}[a.logits]
-        progs, ra = TL.compile_tile_run(img, b, R, kind, blk)
-        if ra:
-            ap.error(f"a tiled run with host arguments {ra}")
+        # (its run-time values are RLDs of the state block's tpos word: no host arguments)
+        progs, _ = TL.compile_tile_run(img, b, R, kind, blk)
         g = img.lookup["gen"]
         st = np.zeros(G.STATE_WORDS, np.float32)
         st[G.S_TPOS] = a.pos % blk
