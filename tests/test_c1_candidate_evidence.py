@@ -72,7 +72,7 @@ def refresh_manifest(root, m):
     return e.sha(root / e.MANIFEST)
 
 
-def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/original"):
+def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/original", physical_threads=4, script_threads=None):
     root = tmp_path / 'portable'; root.mkdir()
     roots = {role: {'original_absolute_path': original_base + '/' + role,
                     'bundle_relative_path': 'runs/' + role} for role in e.ROLES}
@@ -103,6 +103,8 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
         inp['source_inputs'] = source_copy(root, source_role, b.source_inputs())
         for name in e.prepared_names(b):
             put(run(role) / name, '# SYNTHETIC prepared test input ' + name + '\n')
+            if name in ('implement/build.tcl', 'refine/build.tcl'):
+                put(run(role) / name, '# SYNTHETIC physical recipe\nset_param general.maxThreads 4\n')
         inp['prepared_files'] = inventory(run(role))
         put(run(role) / 'inputs.json', inp)
     products = [sim.BD, sim.WRAPPER, sim.PCIS, 'ip/ip_project/child.dcp']
@@ -183,6 +185,12 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
             for name in prepared:
                 original = 'build.tcl' if name == 'run.tcl' else name
                 put(dest / name, (run('synth') / 'implement' / original).read_bytes())
+        if stage == 'refine':
+            put(dest / 'run.tcl', (run('synth') / 'refine/build.tcl').read_bytes())
+        if stage in ('implement', 'refine'):
+            threads = physical_threads if script_threads is None else script_threads
+            put(dest / 'run.tcl', (dest / 'run.tcl').read_text().replace(
+                'set_param general.maxThreads 4\n', f'set_param general.maxThreads {threads}\n'))
         inp = {'schema': 1, 'kind': 'c1-alex-checkpoint-stage-inputs', 'stage': stage,
                'executor_revision': 'd'*40, 'executor_sources': sources, **m['hardware'],
                'synth_run': old('synth'), 'synth_receipt_sha256': e.sha(run('synth')/'synth-complete.json'),
@@ -191,7 +199,8 @@ def fixture_bundle(tmp_path, monkeypatch, *, original_base="/unavailable/origina
                'source_checkpoint': {'path': old(prev, checkpoint), **rec(run(prev)/checkpoint)},
                'previous_run': None if stage=='link' else old(prev),
                'previous_receipt_sha256': None if stage=='link' else e.sha(run(prev)/'stage-result.json'),
-               'max_threads':4, 'resynthesis':False, 'hardware_actions':False, 'prepared_files':inventory(dest)}
+               'max_threads':physical_threads if stage in ('implement', 'refine') else 4,
+               'resynthesis':False, 'hardware_actions':False, 'prepared_files':inventory(dest)}
         if stage == 'qualify': inp['simulation'] = {'run':old('simulation'),
             'receipt_sha256':e.sha(run('simulation')/'simulation-complete.json'), 'inputs_sha256':e.sha(run('simulation')/'inputs.json')}
         put(dest / 'stage-inputs.json', inp)
@@ -297,3 +306,16 @@ def test_candidate_archive_never_grants_qualification(bundle,tmp_path):
         for item in sorted(root.rglob('*')):
             if item.is_file():archive.add(item,arcname=item.relative_to(root).as_posix(),recursive=False)
     assert e.inspect_archive(path,trusted)['route_qualified'] is False
+
+
+def test_eight_thread_physical_stages_remain_unqualified(tmp_path, monkeypatch):
+    root, _, trusted = fixture_bundle(tmp_path, monkeypatch, physical_threads=8)
+    result = e.verify_bundle(root, trusted)
+    assert result['route_qualified'] is False
+
+
+@pytest.mark.parametrize('declared,actual', [(8,4),(4,8),(16,4),(True,4),(8.0,4)])
+def test_rebound_thread_budget_or_script_mismatch_is_rejected(tmp_path, monkeypatch, declared, actual):
+    root, _, trusted = fixture_bundle(tmp_path, monkeypatch, physical_threads=declared, script_threads=actual)
+    with pytest.raises((ValueError, RuntimeError)):
+        e.verify_bundle(root, trusted)

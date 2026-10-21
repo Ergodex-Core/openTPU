@@ -484,7 +484,8 @@ def _verify_authenticated(x, manifest_sha256):
         reviewed_collection = stage == 'qualify'
         expected_status = 'pending-review' if reviewed_collection else ('candidate' if stage == 'implement' else 'complete')
         require(receipt.get('status') == expected_status and receipt.get('route_qualified') is False, 'Pending/unqualified checkpoint stage')
-        require(stage_inputs.get('schema') == 1 and stage_inputs.get('kind') == 'c1-alex-checkpoint-stage-inputs' and stage_inputs.get('stage') == stage and stage_inputs.get('max_threads') == 4 and stage_inputs.get('resynthesis') is False and stage_inputs.get('hardware_actions') is False, 'Invalid stage execution contract')
+        max_threads = stage_inputs.get('max_threads')
+        require(stage_inputs.get('schema') == 1 and stage_inputs.get('kind') == 'c1-alex-checkpoint-stage-inputs' and stage_inputs.get('stage') == stage and type(max_threads) is int and max_threads in ((4, 8) if stage in ('implement', 'refine') else (4,)) and stage_inputs.get('resynthesis') is False and stage_inputs.get('hardware_actions') is False, 'Invalid stage execution contract')
         for key, expected in {'source_revision': hardware['source_revision'], 'build_id': hardware['build_id'], 'synth_run': x.original('synth'), 'synth_receipt_sha256': m['receipts']['synth']['sha256'], 'synth_inputs_sha256': synth['inputs_sha256'], 'ip_run': x.original('ip'), 'ip_receipt_sha256': m['receipts']['ip']['sha256'], 'hdk': x.original('installed'), 'shell_sha256': b.SHELL_SHA256}.items():
             require(stage_inputs.get(key) == expected, 'Stage identity/relocation mismatch: ' + key)
         wanted_previous = None if stage == 'link' else x.original(previous_role)
@@ -505,11 +506,14 @@ def _verify_authenticated(x, manifest_sha256):
         require(set(stage_inputs['executor_sources']) == executors, 'Incomplete executor source inventory')
         x.source(stage, stage_inputs['executor_revision'], stage_inputs['executor_sources'], current=executors)
         x.inventory(stage, stage_inputs['prepared_files'], exact=prepared)
-        if stage == 'implement':
+        if stage in ('implement', 'refine'):
             implementation = local_module('implement')
+            strategy = stage_inputs.get('physical_strategy', 'default')
+            require(stage == 'implement' or strategy == 'default', 'Refine strategy differs')
             expected_script = implementation.physical_script(
-                x.text('synth', 'implement/build.tcl'), stage_inputs.get('physical_strategy', 'default'))
+                x.text('synth', stage + '/build.tcl'), strategy, max_threads)
             require(x.text(stage, 'run.tcl') == expected_script, 'Physical strategy/script binding differs')
+        if stage == 'implement':
             for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
                 require(x.record(stage, name) == x.record('synth', 'implement/' + name),
                         'Physical strategy changed frozen constraints')

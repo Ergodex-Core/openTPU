@@ -255,7 +255,8 @@ def verify_previous(run, expected_sha256, expected_stage, origin):
     inputs = read_bound(run / 'stage-inputs.json', result['inputs_sha256'])
     require(inputs.get('schema') == 1 and inputs.get('kind') == 'c1-alex-checkpoint-stage-inputs' and
             inputs['stage'] == expected_stage and inputs.get('resynthesis') is False and
-            inputs.get('hardware_actions') is False and inputs.get('max_threads') == 4 and
+            inputs.get('hardware_actions') is False and type(inputs.get('max_threads')) is int and
+            inputs.get('max_threads') in ((4, 8) if expected_stage in ('implement', 'refine') else (4,)) and
             inputs.get('shell_sha256') == b.SHELL_SHA256 and
             inputs['synth_receipt_sha256'] == origin['receipt_sha256'] and
             inputs['synth_inputs_sha256'] == origin['receipt']['inputs_sha256'] and
@@ -265,11 +266,13 @@ def verify_previous(run, expected_sha256, expected_stage, origin):
             'Upstream stage belongs to different synthesized inputs')
     verify_files(run, inputs['prepared_files'])
     verify_files(run, result['outputs'])
-    if expected_stage == 'implement':
+    if expected_stage in ('implement', 'refine'):
         strategy = inputs.get('physical_strategy', 'default')
+        require(expected_stage == 'implement' or strategy == 'default', 'Refine strategy differs')
         require((run / 'run.tcl').read_text() ==
-                physical_script((origin['run'] / 'implement/build.tcl').read_text(), strategy),
+                physical_script((origin['run'] / expected_stage / 'build.tcl').read_text(), strategy, inputs['max_threads']),
                 'Physical strategy/script binding differs')
+    if expected_stage == 'implement':
         for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
             require((run / name).read_bytes() == (origin['run'] / 'implement' / name).read_bytes(),
                     'Physical strategy changed frozen constraints')
@@ -460,11 +463,14 @@ def executor_inputs(stage):
     return b.inventory(paths, ROOT)
 
 
-def physical_script(script, strategy):
+def physical_script(script, strategy, max_threads=4):
     """Select one explicit implementation flow without changing its constraints."""
     require(strategy in PHYSICAL_STRATEGIES, 'Unknown physical implementation strategy')
     require('synth_design' not in script, 'Physical continuation unexpectedly requests synthesis')
-    require(not re.search(r'general\.maxThreads (?!4\b)\d+', script), 'Thread limit changed')
+    require(type(max_threads) is int and max_threads in (4, 8), 'Thread limit must be 4 or 8')
+    anchors = re.findall(r'(?m)^set_param general\.maxThreads 4$', script)
+    require(anchors and len(anchors) == script.count('general.maxThreads'), 'Thread limit anchor changed')
+    script = re.sub(r'(?m)^set_param general\.maxThreads 4$', f'set_param general.maxThreads {max_threads}', script)
     if strategy in ('skip-pre-route-phys-opt', 'align-promoted-carry-pblocks'):
         # The first packed C1 route failed on two CARRY8 cascade pins after
         # AggressiveExplore. Keep placement/routing and every timing constraint;
@@ -479,8 +485,11 @@ def physical_script(script, strategy):
     return script
 
 
-def prepare(out, stage, origin, previous, hdk, simulation=None, physical_strategy='default'):
+def prepare(out, stage, origin, previous, hdk, simulation=None, physical_strategy='default', max_threads=4):
     require(not out.exists(), f'Refusing existing stage output: {out}')
+    require(type(max_threads) is int and max_threads in (4, 8) and
+            (stage in ('implement', 'refine') or max_threads == 4),
+            'Thread limit must be 4, or 8 for implement/refine')
     require(physical_strategy in PHYSICAL_STRATEGIES and
             (stage == 'implement' or physical_strategy == 'default'),
             'Physical strategy applies only to implementation')
@@ -494,7 +503,7 @@ def prepare(out, stage, origin, previous, hdk, simulation=None, physical_strateg
         script = render_link(origin)
     elif stage in ('implement', 'refine'):
         script = (origin['run'] / stage / 'build.tcl').read_text()
-        script = physical_script(script, physical_strategy)
+        script = physical_script(script, physical_strategy, max_threads)
         if stage == 'implement':
             for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
                 shutil.copy2(origin['run'] / 'implement' / name, out / name)
@@ -523,7 +532,7 @@ source $run/qualify_c1_alex.tcl
               'hdk': str(hdk), 'shell_sha256': b.SHELL_SHA256,
               'source_checkpoint': source, 'previous_run': str(previous['run']) if previous else None,
               'previous_receipt_sha256': previous['receipt_sha256'] if previous else None,
-              'max_threads': 4, 'resynthesis': False, 'hardware_actions': False}
+              'max_threads': max_threads, 'resynthesis': False, 'hardware_actions': False}
     if stage == 'implement':
         inputs['physical_strategy'] = physical_strategy
     if simulation:
@@ -628,10 +637,14 @@ def main(argv=None):
     parser.add_argument('--simulation-run', type=Path)
     parser.add_argument('--simulation-receipt-sha256')
     parser.add_argument('--vivado', default='vivado')
+    parser.add_argument('--max-threads', type=int, choices=(4, 8), default=4,
+                        help='Bounded implement/refine concurrency; historical default is 4')
     parser.add_argument('--physical-strategy', choices=PHYSICAL_STRATEGIES, default='default',
                         help='Explicit implementation-only strategy; timing/constraints remain frozen')
     parser.add_argument('--plan', action='store_true')
     args = parser.parse_args(argv)
+    if args.max_threads != 4 and args.stage not in ('implement', 'refine'):
+        parser.error('--max-threads 8 applies only to implement/refine')
     if args.stage != 'implement' and args.physical_strategy != 'default':
         parser.error('--physical-strategy applies only to implement')
     if args.stage == 'link':
@@ -653,7 +666,7 @@ def main(argv=None):
         print(json.dumps({'stage': args.stage, 'out': str(out), 'synth_run': str(synth),
               'source': str(args.from_run) if args.from_run else str(synth),
               'physical_strategy': args.physical_strategy,
-              'max_threads': 4, 'resynthesis': False, 'hardware_actions': False,
+              'max_threads': args.max_threads, 'resynthesis': False, 'hardware_actions': False,
               'route_qualified': False}, indent=2))
         return 0
     b.require_clean_source()
@@ -664,7 +677,7 @@ def main(argv=None):
                                    origin) if args.stage == 'qualify' else None
     version = b.command(args.vivado, '-version')
     b.check_vivado(version)
-    inputs = prepare(out, args.stage, origin, previous, hdk, simulation, args.physical_strategy)
+    inputs = prepare(out, args.stage, origin, previous, hdk, simulation, args.physical_strategy, args.max_threads)
     (out / 'vivado_version.txt').write_text(version + '\n')
     result = execute(out, args.stage, origin, previous, inputs, hdk, args.vivado)
     print(json.dumps({'stage': args.stage, 'status': result['status'],

@@ -111,10 +111,10 @@ def simulation_run(ctx, monkeypatch):
     return out, proof
 
 
-def stage_run(ctx, monkeypatch, stage, **kwargs):
+def stage_run(ctx, monkeypatch, stage, *, max_threads=4, **kwargs):
     out = ctx.tmp / ('stage-' + stage)
     simulation = simulation_run(ctx, monkeypatch)[1] if stage == 'qualify' else None
-    inputs = m.prepare(out, stage, ctx.origin, ctx.previous, ctx.hdk, simulation)
+    inputs = m.prepare(out, stage, ctx.origin, ctx.previous, ctx.hdk, simulation, max_threads=max_threads)
     fake_tool(ctx, monkeypatch, stage, **kwargs)
     result = m.execute(out, stage, ctx.origin, ctx.previous, inputs, ctx.hdk, 'vivado')
     if stage != 'qualify':
@@ -159,6 +159,59 @@ def test_link_is_existing_dcp_only(context):
     assert script.count('general.maxThreads 4') == 1
     assert '::c1_alex_route::audit_linked $run' in script
     assert 'clk_out1 1.0 clk_out2 2.0' not in script
+
+
+@pytest.mark.parametrize('strategy', m.PHYSICAL_STRATEGIES)
+def test_eight_threads_change_only_exact_frozen_thread_parameters(context, strategy):
+    original = (context.run / 'implement/build.tcl').read_text()
+    four = m.physical_script(original, strategy)
+    eight = m.physical_script(original, strategy, 8)
+    assert eight == four.replace('set_param general.maxThreads 4\n', 'set_param general.maxThreads 8\n')
+    assert 'general.maxThreads 4' not in eight
+    assert m.physical_script(original, strategy, 4) == four
+
+
+@pytest.mark.parametrize('threads', [True, False, 4.0, 8.0, '8', 0, 6, 16, None])
+def test_thread_budget_rejects_unreviewed_values_before_output(context, threads):
+    out = context.tmp / 'invalid-threads'
+    with pytest.raises(RuntimeError, match='Thread limit'):
+        m.prepare(out, 'implement', context.origin, None, context.hdk, max_threads=threads)
+    assert not out.exists()
+
+
+def test_thread_anchor_cannot_be_missing_altered_or_unbound(context):
+    original = (context.run / 'implement/build.tcl').read_text()
+    for changed in (original.replace('set_param general.maxThreads 4\n', ''),
+                    original.replace('general.maxThreads 4', 'general.maxThreads 6'),
+                    original + 'set_param general.maxThreads $unbound\n'):
+        with pytest.raises(RuntimeError, match='Thread limit anchor'):
+            m.physical_script(changed, 'default', 8)
+
+
+@pytest.mark.parametrize('stage', ['link', 'qualify'])
+def test_eight_threads_are_restricted_to_physical_stages(context, stage):
+    with pytest.raises(RuntimeError, match='Thread limit'):
+        m.prepare(context.tmp / 'invalid', stage, context.origin, None, context.hdk, max_threads=8)
+
+
+def test_eight_thread_implementation_and_refine_bind_exact_scripts(context, monkeypatch):
+    stage_run(context, monkeypatch, 'link')
+    for stage in ('implement', 'refine'):
+        out, _ = stage_run(context, monkeypatch, stage, max_threads=8)
+        inputs = json.loads((out / 'stage-inputs.json').read_text())
+        assert inputs['max_threads'] == 8
+        actual = (out / 'run.tcl').read_text()
+        frozen = (context.run / stage / 'build.tcl').read_text()
+        assert actual == frozen.replace('set_param general.maxThreads 4\n', 'set_param general.maxThreads 8\n')
+    # Even a self-consistently re-hashed input/receipt cannot relabel an8-thread
+    # script as a4-thread run; ancestry and actual script are checked again.
+    inputs['max_threads'] = 4
+    b.write_json(out / 'stage-inputs.json', inputs)
+    result = json.loads((out / 'stage-result.json').read_text())
+    result['inputs_sha256'] = b.sha(out / 'stage-inputs.json')
+    b.write_json(out / 'stage-result.json', result)
+    with pytest.raises(RuntimeError, match='strategy/script'):
+        m.verify_previous(out, b.sha(out / 'stage-result.json'), 'refine', context.origin)
 
 
 def test_explicit_skip_strategy_changes_only_pre_route_physical_pass(context, monkeypatch):
