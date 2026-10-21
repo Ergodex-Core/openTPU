@@ -40,7 +40,8 @@ def parse_tmemstat(line):
 
 
 def replay_scope(uarch):
-    missing = uarch.get("TMEM_IMPL") == 3 and bool(uarch.get("TMEM_RPL", False))
+    # Grant arbitration is still absent when replay itself is disabled.
+    missing = uarch.get("TMEM_IMPL") == 3
     return {"tmem_pmp": uarch.get("TMEM_PMP"), "replay_timing_modeled": not missing,
             "cycle_correction": 0, "calibration_eligible": not missing,
             "limitation": ("Bank arbitration, replay holds and downstream backpressure are not "

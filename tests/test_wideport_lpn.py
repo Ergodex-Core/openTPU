@@ -54,6 +54,11 @@ def test_complete_timing_still_requires_error_validation():
     assert A.throughput_result(100, 1, .02, scope)["tok_s"] == 10000
 
 
+def test_disabling_replay_does_not_supply_missing_bank_arbitration():
+    scope = A.replay_scope({"TMEM_IMPL": 3, "TMEM_RPL": False, "TMEM_PMP": 0})
+    assert not scope["calibration_eligible"]
+
+
 def test_variant_resolution_retains_tmem_mode_and_board_credit_default():
     assert model.target_uarch("f2-hbm:p4rl8a64")["TMEM_PMP"] == 1
     assert model.target_uarch("f2-hbm:p4rl8a64tdp")["TMEM_PMP"] == 0
