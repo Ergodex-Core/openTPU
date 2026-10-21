@@ -64,3 +64,18 @@ def test_native_nch_detects_a_wrong_map(have_verilator):
     r = subprocess.run([str(exe), "+seed=1", "+cycles=3000"], capture_output=True, text=True,
                        timeout=300)
     assert "FAIL" in r.stdout and "wrong data" in r.stdout, r.stdout[-3000:]
+
+
+@pytest.mark.parametrize("rd", [64, 128])
+def test_native_nch8_wide_read_credit_saturation(have_verilator, rd):
+    """All eight channels hit RD B reservations while A runs and SW fills share read tags.
+
+    The directed native model holds responses until B credits saturate, then forces B port
+    backpressure before releasing them. This tests the adapter, not the F2 AXI fabric.
+    """
+    exe = rtlsim.build("tb_native_rd_stress", [rtlsim.RTL / "mem/otpu_native_dram.sv",
+                                                 rtlsim.TB / "tb_native_rd_stress.sv"],
+                       {"RD": rd})
+    r = subprocess.run([str(exe)], capture_output=True, text=True, timeout=300)
+    assert r.returncode == 0 and f"PASS native RD{rd} NCH8 PORTB4 ALINE64" in r.stdout, \
+        r.stdout[-3000:] + r.stderr[-3000:]
