@@ -1,0 +1,188 @@
+{
+  "root": "/Users/rachittibrewal/Documents/Codex/2026-10-21/task-7/opentpu-wp200-codex",
+  "revision": "0a868822a71422beb11771c9fa046af762579e81",
+  "config": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 8,
+    "ACT_BLOCKS": 64,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 1048576,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": false,
+    "STREAM": false,
+    "ACT_ROWS": 16,
+    "PORTB": 4,
+    "T2": true,
+    "ROWLANES": true,
+    "ALINE": 64,
+    "SEQ_WC": false
+  },
+  "uarch": {
+    "WIN": 16,
+    "RPB": 128,
+    "WPB": 1,
+    "FIFO_DEPTH": 1024,
+    "TMEM_IMPL": 3,
+    "TMEM_NSB": 2,
+    "TMEM_RPL": 1,
+    "TMEM_TDP": 1,
+    "TMEM_GST": 1,
+    "TMEM_PMP": 1,
+    "MXU_E": 4,
+    "SEQ_WC": 1,
+    "T2": 1,
+    "COLL_GATHER": 1
+  },
+  "harness_sha256": "80a8d42c7ab9a856477a7c5ca68bbc90427b6413d4863e240fdae200528b3117",
+  "top_harness_sha256": "9406cb0503ce38ceed8f388f6ca0d30b3d36186ecaa0a406ce0513447fa7598c",
+  "a_throttle": true,
+  "cases": [
+    {
+      "case": "rl-stall0-seed1-abort0",
+      "cycles": 2783,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "ff39e27917c23bb7b801956ef7fbcb3598bf133423352cc695eae1b87c126a9d",
+      "trace_lines": 8445,
+      "coverage": {
+        "astall": 1568,
+        "bstall": 0,
+        "wstall": 781,
+        "replay": 3,
+        "abort": 0
+      }
+    },
+    {
+      "case": "rl-stall40-seed7-abort0",
+      "cycles": 2880,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "e43813795d46c4213b00ce9bd6aed346049a1675581abe74abf6dffdd1f1e70d",
+      "trace_lines": 8893,
+      "coverage": {
+        "astall": 1597,
+        "bstall": 18,
+        "wstall": 857,
+        "replay": 0,
+        "abort": 0
+      }
+    },
+    {
+      "case": "rl-stall70-seed2026-abort0",
+      "cycles": 3011,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "1c34cd8796dd0b1b5b4470ee52886aabdb2b470d1d29873b9504dc7c4d526018",
+      "trace_lines": 9453,
+      "coverage": {
+        "astall": 1588,
+        "bstall": 60,
+        "wstall": 956,
+        "replay": 0,
+        "abort": 0
+      }
+    },
+    {
+      "case": "walk-stall0-seed1-abort0",
+      "cycles": 8663,
+      "isa_exact": true,
+      "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+      "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+      "transactions_sha256": "310c22b826cd0c72371ce6acdf977e599cfb067d43c0e07297ed355da718eceb",
+      "trace_lines": 16954,
+      "coverage": {
+        "astall": 3766,
+        "bstall": 0,
+        "wstall": 1022,
+        "replay": 0,
+        "abort": 0
+      }
+    },
+    {
+      "case": "walk-stall40-seed7-abort0",
+      "cycles": 8668,
+      "isa_exact": true,
+      "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+      "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+      "transactions_sha256": "888b45b7116189c284ccb7ec76e5cb47c49e5461f7e442f098bf9fb809ee7f60",
+      "trace_lines": 16957,
+      "coverage": {
+        "astall": 3762,
+        "bstall": 0,
+        "wstall": 1023,
+        "replay": 0,
+        "abort": 0
+      }
+    },
+    {
+      "case": "walk-stall70-seed2026-abort0",
+      "cycles": 8687,
+      "isa_exact": true,
+      "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+      "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+      "transactions_sha256": "d717f34b5d1e00964562f1c6e01518fba7a361a4a5a1c8908854be737aba361c",
+      "trace_lines": 16986,
+      "coverage": {
+        "astall": 3780,
+        "bstall": 0,
+        "wstall": 1019,
+        "replay": 0,
+        "abort": 0
+      }
+    },
+    {
+      "case": "rl-stall70-seed42-abort1",
+      "cycles": 3538,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "ffb2a8da1dae69bdc59b2c846cec6dda11dad5b5936a3b8cf6ae75711a82514e",
+      "trace_lines": 10718,
+      "coverage": {
+        "astall": 1945,
+        "bstall": 46,
+        "wstall": 961,
+        "replay": 0,
+        "abort": 1
+      }
+    },
+    {
+      "case": "rl-stall70-seed42-abort2",
+      "cycles": 3578,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "4a46e168ebbc315eeb3a5db11f0252576031e5357f62d2cf4d8cd7ba1413145e",
+      "trace_lines": 10825,
+      "coverage": {
+        "astall": 1982,
+        "bstall": 32,
+        "wstall": 926,
+        "replay": 0,
+        "abort": 1
+      }
+    },
+    {
+      "case": "rl-stall70-seed42-abort3",
+      "cycles": 4869,
+      "isa_exact": true,
+      "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+      "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+      "transactions_sha256": "475c209b810c9cccfcf55c97a3ee716de6baf06710e7855cf95d4043ecafa7be",
+      "trace_lines": 16406,
+      "coverage": {
+        "astall": 2347,
+        "bstall": 65,
+        "wstall": 1900,
+        "replay": 0,
+        "abort": 1
+      }
+    }
+  ]
+}

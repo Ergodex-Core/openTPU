@@ -1,0 +1,144 @@
+diff --git a/rtl/mxu/otpu_mxu.sv b/rtl/mxu/otpu_mxu.sv
+index 0a0371b5..45b625c1 100644
+--- a/rtl/mxu/otpu_mxu.sv
++++ b/rtl/mxu/otpu_mxu.sv
+@@ -151,6 +151,7 @@ module otpu_mxu
+   output logic [LANES-1:0]        t_wen,
+   output logic [LANES-1:0][31:0]  t_waddr,
+   output logic [LANES-1:0][31:0]  t_wdata,
++  output logic [LANES-1:0]        t_wbm,       // the banks t_wen / t_waddr write, from registers
+   input  logic                    t_gnt
+ );
+   localparam int BW = $clog2(LANES);
+@@ -618,8 +619,9 @@ module otpu_mxu
+   assign b_addr = chunk_addr >> 2;
+   assign b_n    = WP ? (i_klast ? i_nl : i_nb) : 2'd0;
+   assign a_req  = go_iss && need_a;
+-  assign a_addr = !a_req ? '0 : (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2)
+-                                                                           : (scale_addr >> 2);
++  // (not gated with a_req, as b_addr: the slice's port A register takes it with a_req; the issue
++  // decision, go_iss from a_gnt and b_gnt, reaches a_req alone)
++  assign a_addr = (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2) : (scale_addr >> 2);
+ `ifndef SYNTHESIS
+   always @(posedge clk) if (!rst && i_act && i_gw && w_sod != i_soff + w_ds)
+     $fatal(1, "otpu_mxu: group walk w_sod %0h, i_soff %0h + w_ds %0h", w_sod, i_soff, w_ds);
+@@ -1757,6 +1759,43 @@ module otpu_mxu
+     end
+   end
+ 
++  // The write request's banks (t_wbm, the slice's write-bank mask of the MXU for its arbiter), kept
++  // in registers beside the request's sources instead of decoded from t_waddr: the lanes' (lo, a
++  // non-ACC drain write) as lo_bm, loaded with lo_ad and lvm from the stage before them; the RMW's
++  // (rw) through a delay line beside u_rw (r1's banks, the same length and enable); the RMAX lanes'
++  // (mxm at mxl) from their registers. The three are never active together (lo writes only for
++  // !c_acc commands and rw only for c_acc ones, the head changing once drained; RMAX writes start
++  // after the drain), so the OR is the request's bank set; the simulation checks it every cycle.
++  // ba86b5df routed lo_ad -> t_waddr's mux -> the bank decode -> the slice's acf -> its grants ->
++  // alpha's enables (-0.157 ns, 144 MXU endpoints) and -> the TMEM's rpv (-0.177, the worst path):
++  // the cone now starts at a few flip-flops, the decode before them (docs/wide_port.md "SLR2
++  // without the hot spot"). No cycle changes.
++  logic [LANES-1:0] lo_bm, lo_bm_nx, r1_bm, rw_bm, mx_bm;
++  always_comb begin
++    lo_bm_nx = '0; r1_bm = '0; mx_bm = '0;
++    if (lvm[LLAT-3][NL])
++      for (int k = 0; k < NL; k++) if (lvm[LLAT-3][k]) lo_bm_nx[lo_p.ad[k][BW-1:0]] = 1'b1;
++    if (r1.v)
++      for (int k = 0; k < NL; k++) if (r1.m[k]) r1_bm[r1.ad[k][BW-1:0]] = 1'b1;
++    if (mx_go)
++      for (int k = 0; k < LANES; k++) if (mxm[k]) mx_bm[mxl[k][BW-1:0]] = 1'b1;
++  end
++  always_ff @(posedge clk)
++    if (rst) lo_bm <= '0;
++    else if (t_gnt) lo_bm <= lo_bm_nx;
++  otpu_delay #(.W(LANES), .N(LM + LA)) u_rwbm (.clk, .en(t_gnt), .d(r1_bm), .q(rw_bm));
++  assign t_wbm = (c_acc ? '0 : lo_bm) | rw_bm | mx_bm;
++`ifndef SYNTHESIS
++  always @(posedge clk) begin
++    logic [LANES-1:0] b;
++    b = '0;
++    for (int k = 0; k < LANES; k++) if (t_wen[k]) b[t_waddr[k][BW-1:0]] = 1'b1;
++    if (b != t_wbm)
++      $fatal(1, "otpu_mxu: write banks %b, the registered mask %b (lo %b, rw %b, RMAX %b)", b, t_wbm,
++             lo_bm, rw_bm, mx_bm);
++  end
++`endif
++
+   // ---- statistics for the profiler (per completed command): cycles the stream was starved
+   // (work, no chunk), backpressured (chunks, no consumption), the drain frozen by the TMEM grant,
+   // the issuer denied a DRAM port. The conditions are registered (st_c) and summed a cycle
+diff --git a/rtl/top/otpu_slice.sv b/rtl/top/otpu_slice.sv
+index 5aa4c978..c6792a1d 100644
+--- a/rtl/top/otpu_slice.sv
++++ b/rtl/top/otpu_slice.sv
+@@ -426,6 +426,7 @@ module otpu_slice
+   logic [LANES-1:0][31:0]  dma_raddr, dma_waddr, dma_wdata, va_raddr, vb_raddr, v_waddr, v_wdata;
+   logic [ULANES-1:0]       mxu_ren, mxu_wen, q_ren, q_ren2;
+   logic [ULANES-1:0][31:0] mxu_raddr, mxu_waddr, mxu_wdata, q_raddr, q_raddr2;
++  logic [ULANES-1:0]       mxu_wbm;      // the banks the MXU's write request takes (registers)
+ 
+   // ---- ACT RAM
+   logic [ULANES-1:0]      act_we;
+@@ -528,7 +529,7 @@ module otpu_slice
+     .b_rvalid(b_rvalid_i && !b_rtag_i), .b_rcm(b_rcm_i), .b_rlast(b_rlast_i),
+     .b_rdata(b_rdata_i),
+     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
+-    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
++    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_wbm(mxu_wbm), .t_gnt(gnt[G_MXU]));
+ 
+   // the quantizer's group maxes of a row (MX offsets; not ROW mode): a QACT's 4 KB (KB <=
+   // ACT_BLOCKS: the ACT RAM's bound) and a QST's KB (its row in TMEM: KB <= TMEM_WORDS / D), so
+@@ -666,6 +667,11 @@ module otpu_slice
+           for (int l = 0; l < LANES; l++)
+             if (wq_en[p][l]) amk[g][w_addr[p][l][BW-1:0]] = 1'b1;
+     end
++    // the MXU's from its registers (otpu_mxu t_wbm: the same banks, checked there every cycle),
++    // not decoded from its write addresses: its drain's address registers -> the decode -> acf ->
++    // the grants was the routed ba86b5df's worst cone (docs/wide_port.md "SLR2 without the hot
++    // spot"); the bank bits are the MXU's own (ULANES banks), the slice's at ULANES = LANES
++    if (ULANES == LANES) amk[G_MXU] = LANES'(mxu_wbm);
+     acf = '0;
+     for (int g = 0; g < NG; g++)
+       for (int h = 0; h < g; h++) acf[g][h] = (amk[g] & amk[h]) != '0;
+@@ -988,13 +994,22 @@ module otpu_slice
+   // its data comes back, as one in the DRAM's queues. The units, the loader and the arbiters read
+   // the DRAM's b_rdy, rd_idle, b_rvalid, b_rtag and b_rdata only through them
+   // (tests/test_target.py). One cycle more each way costs nothing measurable (co-simulated:
+-  // within +-0.07% at m4 on decode, a tiled prompt run and a MoE step, signs mixed)
++  // within +-0.07% at m4 on decode, a tiled prompt run and a MoE step, signs mixed).
++  // The request's fields (b_tag ... b_n, 1,089 flip-flops with the DMA's write data) load
++  // whenever the register is free (b_ld), not only with a request: what they hold while b_req is
++  // low is read by nobody (the adapter and the memory models take them with b_req, otpu_native_
++  // dram's BREG stage loads them every cycle and uses them with its take; the idle checks AND them
++  // with b_req), so the request's own cone (the DMA's request, and the MXU's issue: a_rdy and b_rdy
++  // through go_iss, docs/wide_port.md "SLR2 without the hot spot") reaches b_req alone. ba86b5df
++  // routed u_mem/qa_n -> a_rdy -> the MXU's issue -> this enable -> 1,089 CE pins at -0.173 ns
++  // (106 failing endpoints). No cycle changes: b_req, and every field of a request taken, as before
+   assign b_rdy_i   = !b_req || b_rdy;
++  (* max_fanout = 128 *) wire b_ld = !b_req || b_rdy;   // (b_rdy_i, for the fields: replicated by them)
+   assign rd_idle_i = rd_idle && !a_req && !(b_req && !b_we) && !b_rvalid_i;
+   always_ff @(posedge clk) begin : pb_reg
+     if (sys_rst) b_req <= 1'b0;
+     else if (b_rdy_i) b_req <= b_req_c;
+-    if (b_rdy_i && b_req_c) begin
++    if (b_ld) begin
+       b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
+       b_addr <= b_addr_c; b_par <= b_par_c; b_n <= b_n_c;
+     end
+@@ -1016,12 +1031,15 @@ module otpu_slice
+   // reset clears it, as the adapter's did: it holds a request, not data, and the adapter's
+   // a_flush (a run's reset, a load, a WAITW's word holding) drops the beats it holds (its
+   // reused beat and runs), so a read that leaves after a flush reads the memory as the host left
+-  // it. The read data needs none: the MXU registers a_rdata at the port (ln1)
++  // it. The read data needs none: the MXU registers a_rdata at the port (ln1). a_addr loads
++  // whenever the register is free, as port B's fields (read only with a_req: the adapter's queue,
++  // run and reuse updates and its order entry take it with a_take), and the MXU's a_addr is no
++  // longer gated by its a_req: the issue's go_iss (a_rdy, b_rdy) reaches a_req alone
+   assign a_rdy_i = !a_req || a_rdy;
+   always_ff @(posedge clk) begin : pa_reg
+     if (sys_rst) a_req <= 1'b0;
+     else if (a_rdy_i) a_req <= mxu_areq;
+-    if (a_rdy_i && mxu_areq) a_addr <= mxu_aaddr;
++    if (a_rdy_i) a_addr <= mxu_aaddr;
+   end : pa_reg
+ 
+   // a unit's DRAM request waiting for its port, a cycle late (pf: the board's B_STALL and

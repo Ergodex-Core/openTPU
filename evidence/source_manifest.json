@@ -1,0 +1,99 @@
+{
+  "prepared_utc": "2026-10-21T16:27:33.615804+00:00",
+  "baseline_revision": "0a868822a71422beb11771c9fa046af762579e81",
+  "qualified_build_id": "417243f1",
+  "qualified_compute_revision": "ba86b5df",
+  "selected_patch_origin": "e5fd4eedcf0e42218b59417fd25d54a9b8b1da1a",
+  "branch": "codex/wp200-request-mask",
+  "target": "f2-hbm:p4rl8a64",
+  "mmcm": {
+    "input_mhz": 250,
+    "divclk": 5,
+    "multiplier": 24,
+    "core_divide": 6,
+    "tmem_divide": 3,
+    "core_mhz": 200,
+    "tmem_mhz": 400,
+    "hbm_axi_mhz": 450,
+    "shell_mhz": 250
+  },
+  "files": {
+    "rtl/top/otpu_slice.sv": {
+      "baseline_sha256": "dfaa6d1b93f56301a53c54da6f9fa8edf9016e94e2652758b19cdf7abc85440c",
+      "candidate_sha256": "0e625de720441af53dc321dd48fa907454b95479106d1c27985fed903d12183c",
+      "unchanged": false
+    },
+    "rtl/mxu/otpu_mxu.sv": {
+      "baseline_sha256": "bdd9bd3e107032dc9ee75d5b41f9c91e6b320a02a214d1373ce90229869bb3c5",
+      "candidate_sha256": "927fb57497440b224be12d241483403e726b2f7927887c323a8f390d5fe9e498",
+      "unchanged": false
+    },
+    "rtl/vpu/otpu_vpu.sv": {
+      "baseline_sha256": "74062de4f5570b8a77d9dd056c6e3e9b26b1129f6b0c49b96da7600f252098a8",
+      "candidate_sha256": "74062de4f5570b8a77d9dd056c6e3e9b26b1129f6b0c49b96da7600f252098a8",
+      "unchanged": true
+    },
+    "rtl/boards/f2/otpu_f2_hbm_sys.sv": {
+      "baseline_sha256": "77780b81d0753ac78397b489250736a58f8c33410b029a05d72c566ea1f91245",
+      "candidate_sha256": "77780b81d0753ac78397b489250736a58f8c33410b029a05d72c566ea1f91245",
+      "unchanged": true
+    },
+    "boards/f2/build.py": {
+      "baseline_sha256": "4be5934a336c8603f6ea9105a2ec5a1c7ffd10ffe3cc66dba76973f9f6a186a9",
+      "candidate_sha256": "4be5934a336c8603f6ea9105a2ec5a1c7ffd10ffe3cc66dba76973f9f6a186a9",
+      "unchanged": true
+    },
+    "boards/f2/build/constraints/cl_pnr_user_hbm.tcl": {
+      "baseline_sha256": "6a14a3c4d279bf147dee6e5c7ac87cd1369039e07ee7aae36c277335cae85367",
+      "candidate_sha256": "6a14a3c4d279bf147dee6e5c7ac87cd1369039e07ee7aae36c277335cae85367",
+      "unchanged": true
+    },
+    "boards/f2/build/constraints/cl_timing_user_hbm.tcl": {
+      "baseline_sha256": "f458eaa04d51b08db5265f6382820a8b8bea50a834862a36460e7817b256efa8",
+      "candidate_sha256": "f458eaa04d51b08db5265f6382820a8b8bea50a834862a36460e7817b256efa8",
+      "unchanged": true
+    },
+    "boards/f2/build/scripts/build_level_1_cl.tcl": {
+      "baseline_sha256": "b5f939e07e94b09b14dca3a3bca98504dca54871e33ce083732a1c71f3e084d3",
+      "candidate_sha256": "b5f939e07e94b09b14dca3a3bca98504dca54871e33ce083732a1c71f3e084d3",
+      "unchanged": true
+    },
+    "boards/f2/build/scripts/validate_route.tcl": {
+      "baseline_sha256": "7a0aa3d3d8bdbcc46f5a2a12ce39ece99b7409c04c055c228cca1775a0ab387b",
+      "candidate_sha256": "7a0aa3d3d8bdbcc46f5a2a12ce39ece99b7409c04c055c228cca1775a0ab387b",
+      "unchanged": true
+    },
+    "targets/f2-hbm.toml": {
+      "baseline_sha256": "8e28c82c378a60c62288c334f2cb3752d568639ebb1f6c45552f35af87860f3b",
+      "candidate_sha256": "8e28c82c378a60c62288c334f2cb3752d568639ebb1f6c45552f35af87860f3b",
+      "unchanged": true
+    }
+  },
+  "older_150mhz_report_sources": {
+    "/Users/rachittibrewal/ergodex-03/slr2-scratch/ba86b5df/to_clk_raw.rpt": {
+      "sha256": "bbb92c41fbeb3e755aa6afa96876edea8d3572a310adc8976104e203284dfc8e",
+      "bytes": 208310,
+      "retained_copy": "evidence/older-ba86b5df-150mhz/to_clk_raw.rpt"
+    },
+    "/Users/rachittibrewal/ergodex-03/slr2-scratch/ba86b5df/to_clk_f_raw.rpt": {
+      "sha256": "8a0120f5db5365c6d777163d9d48961758bfa9f34069c318077ef62b8bade8ad",
+      "bytes": 209910,
+      "retained_copy": "evidence/older-ba86b5df-150mhz/to_clk_f_raw.rpt"
+    },
+    "/Users/rachittibrewal/ergodex-03/slr2-scratch/ba86b5df/congestion.rpt": {
+      "sha256": "f3df306c28ca4fba8d2f5aa76a66b6d55a9cde07b1db7a0d893388cbaac50468",
+      "bytes": 12191,
+      "retained_copy": "evidence/older-ba86b5df-150mhz/congestion.rpt"
+    },
+    "/Users/rachittibrewal/ergodex-03/slr2-scratch/ba86b5df/util_pb_otpu_tmem.rpt": {
+      "sha256": "ed02fd18b751937bf0dbd806dc5ad144721974f4e8f1137f35980e8d41e0e4a2",
+      "bytes": 21163,
+      "retained_copy": "evidence/older-ba86b5df-150mhz/util_pb_otpu_tmem.rpt"
+    }
+  },
+  "physical_result": null,
+  "selected_patch_sha256": "6f625746a6de9163c01460eb02f02f45ed868f99402f5870964fab36eb5892bc",
+  "candidate_files_match_selected_origin": true,
+  "source_scope_verified": "Only rtl/top/otpu_slice.sv and rtl/mxu/otpu_mxu.sv differ from baseline among RTL, board flow, target, and constraints.",
+  "candidate_rtl_commit": "df01e692f0131ce45939a0c61dd1379570ea82a2"
+}

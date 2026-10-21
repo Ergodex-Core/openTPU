@@ -1,0 +1,14 @@
+{
+  "recorded_utc": "2026-10-21T17:04:46.768375+00:00",
+  "kind": "local_functional_verification_only",
+  "python": "3.14.5 (v3.14.5:5607950ef23, May 10 2026, 07:38:09) [Clang 21.0.0 (clang-2100.0.123.102)]",
+  "python_executable": "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+  "machine": "arm64",
+  "platform": "macOS-15.7.3-arm64-arm-64bit-Mach-O",
+  "numpy": "2.5.4",
+  "pytest": "9.1.1",
+  "verilator": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+  "clang": "Apple clang version 17.0.0 (clang-1700.6.4.2)\nTarget: arm64-apple-darwin24.6.0\nThread model: posix\nInstalledDir: /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin",
+  "parallel_compile_jobs": 4,
+  "physical_tools_invoked": false
+}

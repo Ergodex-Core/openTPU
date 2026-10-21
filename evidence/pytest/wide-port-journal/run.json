@@ -1,0 +1,31 @@
+{
+  "started_utc": "2026-10-21T16:58:14.066467+00:00",
+  "pid": 68904,
+  "root": "/Users/rachittibrewal/Documents/Codex/2026-10-21/task-7/opentpu-wp200-codex",
+  "revision": "df01e692f0131ce45939a0c61dd1379570ea82a2",
+  "source_fingerprint_sha256": "edf5a5e94d82de78c4fe8838a37a239e8cc6dd288e3b201c1fce15bfe99b4d7c",
+  "python": "3.14.5 (v3.14.5:5607950ef23, May 10 2026, 07:38:09) [Clang 21.0.0 (clang-2100.0.123.102)]",
+  "verilator": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+  "vflags": [
+    "--binary",
+    "-j",
+    "4",
+    "-Wno-fatal",
+    "-Wno-WIDTHEXPAND",
+    "-Wno-WIDTHTRUNC",
+    "-Wno-UNUSEDSIGNAL",
+    "-Wno-UNUSEDPARAM",
+    "-O3",
+    "--x-assign",
+    "0",
+    "--x-initial",
+    "0"
+  ],
+  "environment": {
+    "PYTHONDONTWRITEBYTECODE": "1",
+    "PYTEST_DISABLE_PLUGIN_AUTOLOAD": "1",
+    "OTPU_TARGET": "f2-hbm",
+    "OTPU_NCH": "8"
+  },
+  "script_sha256": "febf3cd3f08aef9355581e01c4137da64a6a4e1beec4bbb7e4d94ee6efcc6aad"
+}

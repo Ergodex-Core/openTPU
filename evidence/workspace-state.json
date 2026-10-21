@@ -1,0 +1,27 @@
+{
+  "checked_utc": "2026-10-21T17:33:50.424079+00:00",
+  "read_only": true,
+  "workspaces": [
+    {
+      "path": "/Users/rachittibrewal/ergodex-03/openTPU-wp-alexshell",
+      "head": "0a868822a71422beb11771c9fa046af762579e81",
+      "branch": "wide-port-alexshell",
+      "status_porcelain": "",
+      "common_git_directory": "/Users/rachittibrewal/ergodex-03/openTPU/.git"
+    },
+    {
+      "path": "/Users/rachittibrewal/ergodex-03/openTPU-wp-slr2",
+      "head": "bd3df78769c1c21aed70218cbd8814103f9de5f6",
+      "branch": "wide-port-slr2",
+      "status_porcelain": "",
+      "common_git_directory": "/Users/rachittibrewal/ergodex-03/openTPU/.git"
+    },
+    {
+      "path": "/Users/rachittibrewal/Documents/Codex/2026-10-21/task-7/opentpu-wp200-baseline",
+      "head": "0a868822a71422beb11771c9fa046af762579e81",
+      "branch": "",
+      "status_porcelain": "",
+      "common_git_directory": "/Users/rachittibrewal/Documents/Codex/2026-10-21/task-7/opentpu-wp200-codex/.git"
+    }
+  ]
+}

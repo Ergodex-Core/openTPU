@@ -1,0 +1,79 @@
+{
+  "as_of_utc": "2026-10-21T17:38:02.041563+00:00",
+  "groups": [
+    {
+      "name": "build-contracts",
+      "status": "passed",
+      "tests": 309,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 1,
+      "passed": 308,
+      "junit": "evidence/pytest/build-contracts.xml",
+      "junit_sha256": "cb94b8c4620be28cfb5add7fb216462382e4f9a924650f79014a48b3663bfd1a"
+    },
+    {
+      "name": "replay-reset",
+      "status": "passed",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 15,
+      "junit": "evidence/pytest/replay-reset.xml",
+      "junit_sha256": "cab5ce7a79c03d5a67b085cf00a02cd947f5fea678615bf803075227edb3f725"
+    },
+    {
+      "name": "wide-port",
+      "status": "passed",
+      "tests": 168,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "passed": 168,
+      "junit": "evidence/pytest/wide-port-journal/junit.xml",
+      "junit_sha256": "00e6e09ce7df9aa092ad8f465709233f597af9e53fe97c9a14f5cc1d283025d3"
+    }
+  ],
+  "wide_port_suite": {
+    "status": "passed",
+    "tests": 168,
+    "exit_code": 0,
+    "run_directory": "evidence/pytest/wide-port-journal",
+    "log": "evidence/pytest/wide-port-journal.log",
+    "per_test_receipts": 504,
+    "source_fingerprint_sha256": "edf5a5e94d82de78c4fe8838a37a239e8cc6dd288e3b201c1fce15bfe99b4d7c",
+    "run_metadata_sha256": "337fd1ecab36a4c0e05b466874e2ad51bb0cb8c9e61741ac3bf1898fd8919153",
+    "receipt_journal_sha256": "43be7fa88bd125819cd1f091a3b8bad8e16826eaaa8fcb8598a144718fa3fa2a",
+    "completed_receipt_sha256": "59cd0ec72ae21da01eeb8b3e69becc632bb794e7352255942aaaeae0b5b1e0fb",
+    "interrupted_logs": [
+      "evidence/pytest/wide-port.log",
+      "evidence/pytest/wide-port-resume.log"
+    ],
+    "interrupted_runs_counted": false
+  },
+  "cycle_equivalence": {
+    "status": "passed",
+    "cases": 18,
+    "summary": "evidence/equivalence_summary.json",
+    "summary_sha256": "f69d67a5b441a9e5c745fa793cac41b38b46b9fa0dc32b8f1f9345005b1f4d70"
+  },
+  "source_manifest": "evidence/source_manifest.json",
+  "physical_build_status": "not_launched_access_denied",
+  "physical_timing_closed": false,
+  "afi_created": false,
+  "fpga_loaded": false,
+  "hardware_inference_run": false,
+  "pytest_totals": {
+    "tests": 492,
+    "passed": 491,
+    "skipped": 1,
+    "failures": 0,
+    "errors": 0
+  },
+  "candidate_rtl_commit": "df01e692f0131ce45939a0c61dd1379570ea82a2",
+  "production_scope_verified": true,
+  "environment": "evidence/environment.json",
+  "workspace_state": "evidence/workspace-state.json",
+  "source_manifest_sha256": "d19e5534ccf29f9de6956fd1c89aa7ba4043e53704928b0f652bf5b14911d44c"
+}

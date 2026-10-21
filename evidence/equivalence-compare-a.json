@@ -1,0 +1,1 @@
+{"pass": true, "cases": 9, "exact": ["transaction cycles and payloads", "grant/replay/reset cycles", "DRAM", "TMEM", "ISA reference"]}

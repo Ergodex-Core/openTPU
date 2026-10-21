@@ -1,0 +1,85 @@
+{
+  "status": "success",
+  "stdout": "",
+  "return_value": {
+    "identity": {
+      "UserId": "AIDAWMEJHM4KOHLCTS3QN",
+      "Account": "438374459156",
+      "Arn": "arn:aws:iam::438374459156:user/rachit-ergodex"
+    },
+    "instances": [
+      {
+        "InstanceId": "i-0c78de2253f66519d",
+        "InstanceType": "f2.6xlarge",
+        "State": {
+          "Code": 16,
+          "Name": "running"
+        },
+        "Tags": [
+          {
+            "Key": "Project",
+            "Value": "openTPU"
+          },
+          {
+            "Key": "Name",
+            "Value": "opentpu-f2"
+          },
+          {
+            "Key": "Owner",
+            "Value": "rachit"
+          }
+        ],
+        "PrivateIpAddress": "172.31.35.32",
+        "PublicIpAddress": "54.196.118.232",
+        "Placement": {
+          "AvailabilityZoneId": "use1-az6",
+          "GroupName": "",
+          "Tenancy": "default",
+          "AvailabilityZone": "us-east-1d"
+        }
+      },
+      {
+        "InstanceId": "i-0ec8d33362b3100be",
+        "InstanceType": "m8a.16xlarge",
+        "State": {
+          "Code": 16,
+          "Name": "running"
+        },
+        "Tags": [
+          {
+            "Key": "Name",
+            "Value": "opentpu-m8a-build"
+          },
+          {
+            "Key": "project",
+            "Value": "opentpu"
+          }
+        ],
+        "PrivateIpAddress": "172.31.89.205",
+        "PublicIpAddress": "54.174.195.152",
+        "Placement": {
+          "AvailabilityZoneId": "use1-az2",
+          "GroupName": "",
+          "Tenancy": "default",
+          "AvailabilityZone": "us-east-1b"
+        }
+      }
+    ]
+  },
+  "warning": "Operation name warning: 'get_caller_identity' looks like a snake_case boto3 method name; auto-corrected to 'GetCallerIdentity' for sts. Use PascalCase AWS API operation names (e.g. GetTable, not get_table).; Operation name warning: 'describe_instances' looks like a snake_case boto3 method name; auto-corrected to 'DescribeInstances' for ec2. Use PascalCase AWS API operation names (e.g. GetTable, not get_table).",
+  "api_calls": [
+    {
+      "service": "sts",
+      "operation": "GetCallerIdentity",
+      "status": "success"
+    },
+    {
+      "service": "ec2",
+      "operation": "DescribeInstances",
+      "status": "success",
+      "n_items": {
+        "Reservations": 2
+      }
+    }
+  ]
+}
