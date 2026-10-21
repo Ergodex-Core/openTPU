@@ -30,6 +30,81 @@ proc ::c1_structure_capture::sink {operation channel args} {
     }
 }
 proc ::c1_structure_capture::emit {record} {variable audit;puts $audit $record}
+# Named query inventories and properties are raw data for independent replay.
+proc ::c1_structure_capture::hierarchy_cell {audit name expected_ref} {
+    set objects [get_cells -quiet [list $name]]
+    set selected [::c1_alex::names $objects];set data {}
+    if {$selected eq [list $name]} {
+        foreach key {NAME REF_NAME ORIG_REF_NAME IS_BLACKBOX} {dict set data $key [get_property $key $objects]}
+    }
+    puts $audit [list hierarchy_cell $name expected_reference $expected_ref selected $selected properties $data]
+    return [::c1_alex::cell $name $expected_ref 1]
+}
+proc ::c1_structure_capture::cell_inventory {audit label objects} {
+    set names [::c1_alex::names $objects]
+    if {[llength $names]>65536 || [llength $names]!=[llength [lsort -unique $names]]} {error "Structural cell inventory bound/duplicates"}
+    puts $audit [list cell_inventory $label count [llength $names] names $names]
+    return $names
+}
+proc ::c1_structure_capture::register_inventories {audit} {
+    set clocks [get_clocks -quiet *];set names [::c1_alex::names $clocks]
+    if {![llength $names] || [llength $names]>256 || [llength $names]!=[llength [lsort -unique $names]]} {error "Structural clock inventory bound/duplicates"}
+    puts $audit [list register_clock_inventory count [llength $names] names $names]
+    foreach clock $clocks {
+        set name [get_property NAME $clock];set properties {};set available [list_property $clock]
+        foreach key {NAME PERIOD MASTER_CLOCK SOURCE_PINS IS_GENERATED IS_PROPAGATED IS_VIRTUAL} {
+            if {$key in $available} {dict set properties $key [list observed [get_property $key $clock]]} else {dict set properties $key unavailable}
+        }
+        set members [lsort [::c1_alex::names [all_registers -clock $clock -cells]]]
+        set count [llength $members]
+        if {$count>2000000 || $count!=[llength [lsort -unique $members]]} {error "Structural register inventory bound/duplicates"}
+        puts $audit [list register_inventory $name properties $properties count $count chunk_size 256 chunks [expr {($count+255)/256}]]
+        for {set offset 0} {$offset<$count} {incr offset 256} {
+            puts $audit [list register_chunk $name offset $offset names [lrange $members $offset [expr {$offset+255}]]]
+        }
+    }
+}
+proc ::c1_structure_capture::flow_detail {audit iface signal} {
+    set root WRAPPER/CL
+    if {$iface eq "S_HOST"} {
+        set kind pin;set name $root/u_pcis_pipe/m_axi_$signal
+    } elseif {[regexp {^S_N([0-7])$} $iface -> pc]} {
+        set kind net;set name $root/n${pc}_$signal
+    } elseif {[regexp {^M_H([0-7])$} $iface -> pc]} {
+        set io [expr {$signal in {awvalid wvalid arvalid bready rready} ? "i" : "o"}]
+        set kind pin;set name [format {%s/u_hbm/%s_axi_%s[%d]} $root $io $signal $pc]
+    } else {error "Unknown raw flow interface"}
+    set properties {}
+    if {$kind eq "pin"} {
+        set anchor [::c1_alex::exact_pin $name [expr {$iface eq "S_HOST"}]]
+        foreach key {NAME DIRECTION IS_INVERTED} {dict set properties $key [get_property $key $anchor]}
+        set local [get_nets -quiet -of_objects $anchor]
+        set nets [get_nets -quiet -segments -of_objects $anchor]
+    } else {
+        set anchor [get_nets -quiet [list $name]];set local $anchor;set nets $anchor
+        if {[::c1_alex::names $anchor] ne [list $name]} {error "Raw flow anchor differs"}
+    }
+    if {![llength $nets] || [llength $nets]>20000 || [llength $local]>256} {error "Raw flow network inventory bound"}
+    set ports [get_ports -quiet -of_objects $nets]
+    set drivers [get_pins -quiet -leaf -filter {DIRECTION == OUT} -of_objects $nets]
+    if {[llength $ports]>256 || [llength $drivers]>256} {error "Raw flow endpoint inventory bound"}
+    set driver_cells {}
+    foreach driver $drivers {
+        set owners [get_cells -quiet -of_objects [::c1_alex::exact_pin [get_property NAME $driver]]];set data {}
+        foreach owner $owners {
+            lappend data [dict create NAME [get_property NAME $owner] REF_NAME [get_property REF_NAME $owner] IS_BLACKBOX [get_property IS_BLACKBOX $owner]]
+        }
+        dict set driver_cells [get_property NAME $driver] $data
+    }
+    puts $audit [list flow_detail $iface signal $signal anchor_kind $kind anchor [::c1_alex::names $anchor] anchor_properties $properties local_nets [::c1_alex::names $local] nets [::c1_alex::names $nets] ports [::c1_alex::names $ports] drivers [::c1_alex::names $drivers] driver_cells $driver_cells]
+}
+proc ::c1_structure_capture::flow {audit iface signal} {
+    if {$iface eq "S_HOST" && $signal eq "wready"} {
+        set result [::c1_alex_routed_ready::host_wready $audit]
+    } else {set result [::c1_alex::flow WRAPPER/CL $iface $signal $audit]}
+    flow_detail $audit $iface $signal
+    return $result
+}
 proc ::c1_structure_capture::step {label command} {
     variable attempted;variable failures;variable labels;variable exhausted
     if {$label in $labels} {error "Duplicate structural step"}
@@ -47,20 +122,20 @@ proc ::c1_structure_capture::step {label command} {
 }
 proc ::c1_structure_capture::general {audit} {
     set cl WRAPPER/CL
-    ::c1_alex::cell $cl cl_opentpu 1
-    ::c1_alex::cell $cl/u_board otpu_c1_hbm_kernel 1
-    ::c1_alex::cell $cl/u_board/core otpu_c1_top 1
+    hierarchy_cell $audit $cl cl_opentpu
+    hierarchy_cell $audit $cl/u_board otpu_c1_hbm_kernel
+    hierarchy_cell $audit $cl/u_board/core otpu_c1_top
     set expected {}
-    for {set p 0} {$p<8} {incr p} {lappend expected $cl/u_native$p;::c1_alex::cell $cl/u_native$p otpu_native_axi 1}
-    if {[lsort [::c1_alex::names [get_cells -quiet -hierarchical -regexp {^WRAPPER/CL/u_native[0-9]+$}]]] ne $expected} {error "Native topology changed"}
-    foreach {name ref} {u_mem f2_mem_wrapper u_hbm cl_mem_hbm_wrapper u_ocl_cdc f2_ocl_cdc u_pcis_pipe f2_pcis_pipe u_core_clk f2_core_clk u_hbm_clk f2_hbm_clk} {::c1_alex::cell $cl/$name $ref 1}
+    for {set p 0} {$p<8} {incr p} {lappend expected $cl/u_native$p;hierarchy_cell $audit $cl/u_native$p otpu_native_axi}
+    set native [cell_inventory $audit native [get_cells -quiet -hierarchical -regexp {^WRAPPER/CL/u_native[0-9]+$}]]
+    if {[lsort $native] ne $expected} {error "Native topology changed"}
+    foreach {name ref} {u_mem f2_mem_wrapper u_hbm cl_mem_hbm_wrapper u_ocl_cdc f2_ocl_cdc u_pcis_pipe f2_pcis_pipe u_core_clk f2_core_clk u_hbm_clk f2_hbm_clk} {hierarchy_cell $audit $cl/$name $ref}
     set opaque {}
-    foreach object [get_cells -quiet -hierarchical -filter {IS_BLACKBOX}] {
-        set name [::c1_alex::property $object NAME]
+    foreach name [cell_inventory $audit blackboxes [get_cells -quiet -hierarchical -filter {IS_BLACKBOX}]] {
         if {$name eq $cl || [string first "$cl/" $name]==0} {error "Unresolved CL/IP $name"}
         lappend opaque $name
     }
-    if {[llength [get_cells -quiet -hierarchical -filter {REF_NAME =~ otpu_tmem* || ORIG_REF_NAME =~ otpu_tmem*}]]} {error "Unexpected TMEM implementation"}
+    if {[llength [cell_inventory $audit tmem [get_cells -quiet -hierarchical -filter {REF_NAME =~ otpu_tmem* || ORIG_REF_NAME =~ otpu_tmem*}]]]} {error "Unexpected TMEM implementation"}
     set pins [::c1_alex::names [get_pins -quiet -of_objects [get_cells $cl/u_mem]]]
     if {![llength $pins] || [llength $pins]!=[llength [lsort -unique $pins]]} {error "Empty/duplicate memory interface pins"}
     foreach pin $pins {if {[string first "$cl/" $pin]!=0} {error "Memory pin outside CL"}}
@@ -87,6 +162,7 @@ proc ::c1_structure_capture::clocks {audit} {
             foreach name [::c1_alex::names $registers] {if {[::c1_alex_route::owner $name] ni {u_mem u_hbm u_rst_hbm}} {error "Unexpected HBM-clock register $name"}}
         }
     }
+    register_inventories $audit
     ::c1_alex::fabric_clocks $cl $clocks {} $audit
     set names {};dict for {label objects} $clocks {dict set names $label [::c1_alex::names $objects]}
     return [dict create clocks $names]
@@ -148,13 +224,11 @@ proc ::c1_structure_capture::body {} {
     step general [list general $audit]
     step clocks [list clocks $audit]
     foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {
-        if {$signal eq "wready"} {
-            step [list flow S_HOST $signal] [list ::c1_alex_routed_ready::host_wready $audit]
-        } else {step [list flow S_HOST $signal] [list ::c1_alex::flow WRAPPER/CL S_HOST $signal $audit]}
+        step [list flow S_HOST $signal] [list flow $audit S_HOST $signal]
     }
     for {set p 0} {$p<8} {incr p} {
-        foreach signal {bvalid arvalid arready rvalid} {step [list flow S_N$p $signal] [list ::c1_alex::flow WRAPPER/CL S_N$p $signal $audit]}
-        foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {step [list flow M_H$p $signal] [list ::c1_alex::flow WRAPPER/CL M_H$p $signal $audit]}
+        foreach signal {bvalid arvalid arready rvalid} {step [list flow S_N$p $signal] [list flow $audit S_N$p $signal]}
+        foreach signal {awvalid awready wvalid wready bvalid bready arvalid arready rvalid rready} {step [list flow M_H$p $signal] [list flow $audit M_H$p $signal]}
         foreach channel {aw w} {step [list disabled_write $p $channel] [list disabled $audit $p $channel]}
     }
     step unused_clocks [list unused_clocks $audit]

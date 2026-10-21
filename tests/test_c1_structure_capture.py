@@ -31,6 +31,7 @@ proc ::c1_structure_capture::general {audit} {puts $audit {general_witness curre
 proc ::c1_structure_capture::clocks {audit} {puts $audit {clock_witness current};return current}
 proc ::c1_structure_capture::unused_clocks {audit} {puts $audit {unused_clock_witness current};return current}
 proc ::c1_structure_capture::disabled {audit pc channel} {puts $audit [list disabled_witness $pc $channel];return current}
+proc ::c1_structure_capture::flow_detail {args} {}
 proc ::c1_alex_routed_ready::host_wready {audit} {error {exact host replica missing}}
 proc ::c1_alex::flow {prefix interface signal audit} {
  if {$interface eq "S_N0" && $signal eq "rvalid"} {error {exact relocated native load}}
@@ -172,6 +173,96 @@ def test_collector_has_no_constraint_or_design_mutation_commands():
     text = SOURCE.read_text()
     for token in ('set_property', 'set_false_path', 'set_max_delay', 'create_waiver', 'write_checkpoint', 'route_design', 'place_design'):
         assert token not in text
+
+
+@pytest.mark.parametrize('bad', ['', 'reference', 'blackbox'])
+def test_hierarchy_properties_are_emitted_before_cell_rejection(tmp_path, bad):
+    body = setup(tmp_path) + r'''
+proc get_cells {args} {return WRAPPER/CL/u_native0}
+proc get_property {key obj} {
+ if {$key eq "NAME"} {return $obj}
+ if {$key eq "REF_NAME"} {return REFERENCE}
+ if {$key eq "ORIG_REF_NAME"} {return {}}
+ if {$key eq "IS_BLACKBOX"} {return BLACKBOX_VALUE}
+ error unknown
+}
+::c1_structure_capture::step general [list ::c1_structure_capture::hierarchy_cell $::c1_structure_capture::audit WRAPPER/CL/u_native0 otpu_native_axi]
+puts $::c1_structure_capture::failures
+close $::c1_structure_capture::audit
+close $::c1_structure_capture::out
+'''.replace('REFERENCE', 'wrong' if bad == 'reference' else 'otpu_native_axi').replace('BLACKBOX_VALUE', '1' if bad == 'blackbox' else '0')
+    result = run(tmp_path, body)
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.strip() == ('1' if bad else '0')
+    raw = (tmp_path/'raw').read_text()
+    assert 'hierarchy_cell WRAPPER/CL/u_native0 expected_reference otpu_native_axi' in raw
+    assert 'ORIG_REF_NAME {} IS_BLACKBOX ' in raw
+
+
+def test_clock_register_inventory_is_complete_bounded_and_chunked(tmp_path):
+    from boards.c1_f2_alex import native_review as N, structural_capture_review as S
+    result = run(tmp_path, setup(tmp_path) + r'''
+proc get_clocks {args} {return {core unused}}
+proc list_property {obj} {return {NAME PERIOD}}
+proc get_property {key obj} {
+ if {$key eq "NAME"} {return $obj}
+ if {$key eq "PERIOD"} {return 5.000}
+ error unknown
+}
+proc all_registers {args} {
+ if {[lindex $args 1] eq "unused"} {return {}}
+ set names {};for {set i 0} {$i<513} {incr i} {lappend names WRAPPER/CL/u_native0/reg_$i};return $names
+}
+::c1_structure_capture::register_inventories $::c1_structure_capture::audit
+close $::c1_structure_capture::audit
+close $::c1_structure_capture::out
+''')
+    assert result.returncode == 0, result.stderr
+    rows = list(N.records(tmp_path/'raw'))
+    for row in rows: S.payload(row, ('clocks',))
+    S.register_inventory({'records': rows})
+    chunks = [N.pairs(row[2:]) for row in rows if row[0] == 'register_chunk']
+    assert [len(N.names(row['names'])) for row in chunks] == [256, 256, 1]
+    assert [row['offset'] for row in chunks] == ['0', '256', '512']
+    assert 'register_inventory unused' in (tmp_path/'raw').read_text()
+    for index in (2, 3, 4):
+        with pytest.raises(ValueError): S.register_inventory({'records': rows[:index] + rows[index+1:]})
+
+
+@pytest.mark.parametrize('iface,signal,expected', [('S_HOST','awvalid','WRAPPER/CL/u_pcis_pipe/m_axi_awvalid[0]'), ('M_H7','rready','WRAPPER/CL/u_hbm/i_axi_rready[7]'), ('S_N3','arready','WRAPPER/CL/n3_arready')])
+def test_flow_detail_retains_exact_anchor_ports_and_driver_properties(tmp_path, iface, signal, expected):
+    from boards.c1_f2_alex import native_review as N, structural_capture_review as S
+    body = setup(tmp_path) + r'''
+proc ::c1_alex::exact_pin {name {scalar 0}} {if {$scalar} {return "${name}\[0\]"};return $name}
+proc get_nets {args} {
+ if {[lsearch -exact $args -of_objects]<0} {return [lindex $args end]}
+ if {[lsearch -exact $args -segments]>=0} {return {seg_a seg_b}}
+ return local
+}
+proc get_ports {args} {return unexpected_top}
+proc get_pins {args} {return driver/O}
+proc get_cells {args} {return driver}
+proc get_property {key obj} {
+ if {$key eq "NAME"} {return $obj}
+ if {$key eq "DIRECTION"} {return IN}
+ if {$key eq "IS_INVERTED"} {return 0}
+ if {$key eq "REF_NAME"} {return FDRE}
+ if {$key eq "IS_BLACKBOX"} {return 0}
+ error unknown
+}
+::c1_structure_capture::flow_detail $::c1_structure_capture::audit IFACE SIGNAL
+close $::c1_structure_capture::audit
+close $::c1_structure_capture::out
+'''.replace('IFACE', iface).replace('SIGNAL', signal)
+    result = run(tmp_path, body)
+    assert result.returncode == 0, result.stderr
+    rows = list(N.records(tmp_path/'raw')); assert len(rows) == 1
+    S.payload(rows[0], ('flow', iface, signal))
+    facts = N.pairs(rows[0][2:])
+    assert N.names(facts['anchor']) == [expected]
+    assert facts['ports'] == 'unexpected_top'  # Raw anomaly retained, never silently blessed.
+    owner = N.tcl_list(N.td(facts['driver_cells'])['driver/O'])
+    assert N.td(owner[0]) == {'NAME':'driver','REF_NAME':'FDRE','IS_BLACKBOX':'0'}
 
 
 def test_complete_capture_retains_failed_checks_without_qualification(tmp_path):

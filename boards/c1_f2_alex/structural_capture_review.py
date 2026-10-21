@@ -31,15 +31,23 @@ def expected_steps():
 
 STEPS = expected_steps()
 ALLOWED_TAGS = {
-    'general': {'memory_interface_pins', 'smartconnect', 'unresolved_shell_objects'},
-    'clocks': {'clock', 'clock_registers', 'fabric_clock', 'fabric_port_clock_consumers'},
-    'flow': {'fabric_flow', 'native_receive_gate', 'native_b_response', 'routed_host_wready'},
+    'general': {'memory_interface_pins', 'smartconnect', 'unresolved_shell_objects',
+                'hierarchy_cell', 'cell_inventory'},
+    'clocks': {'clock', 'clock_registers', 'fabric_clock', 'fabric_port_clock_consumers',
+               'register_clock_inventory', 'register_inventory', 'register_chunk'},
+    'flow': {'fabric_flow', 'native_receive_gate', 'native_b_response', 'routed_host_wready', 'flow_detail'},
     'disabled_write': {'disabled_network', 'disabled_polarity', 'native_disabled_write'},
     'unused_clocks': {'clock_source_inventory', 'unused_clock'},
 }
 # Fixed field schemas of the unchanged collectors. Values are retained verbatim
 # for semantic replay; accepting their syntax is not accepting their assertions.
 FIELDS = {
+    'hierarchy_cell': ('expected_reference', 'selected', 'properties'),
+    'cell_inventory': ('count', 'names'),
+    'register_inventory': ('properties', 'count', 'chunk_size', 'chunks'),
+    'register_chunk': ('offset', 'names'),
+    'flow_detail': ('signal', 'anchor_kind', 'anchor', 'anchor_properties', 'local_nets',
+                    'nets', 'ports', 'drivers', 'driver_cells'),
     'smartconnect': ('reference', 'slave_interfaces', 'master_interfaces', 'address_map_validation'),
     'clock_registers': ('count',),
     'fabric_clock': ('label', 'registers', 'owner_counts'),
@@ -64,7 +72,7 @@ def payload(words, label):
     if tag in FIELDS:
         N.require(len(words) >= 2 and words[1], 'missing structural payload identity')
         fields = N.pairs(words[2:], FIELDS[tag])
-        if tag == 'fabric_flow':
+        if tag in ('fabric_flow', 'flow_detail'):
             N.require((words[1], fields['signal']) == label[1:], 'flow witness belongs to another step')
         elif tag in ('native_receive_gate', 'native_b_response'):
             N.require(label[1:] == ('S_N' + words[1], 'rvalid' if tag == 'native_receive_gate' else 'bvalid'),
@@ -83,9 +91,49 @@ def payload(words, label):
         N.require(len(words) == 3 and words[1] in ('host', 'core', 'hbm', 'reference'),
                   'malformed clock payload')
         N.td(words[2])
+    elif tag == 'register_clock_inventory':
+        fields = N.pairs(words[1:], ('count', 'names'))
+        N.require(N.number(fields['count']) == len(N.names(fields['names'])) <= 256,
+                  'clock inventory count differs')
     else:
         raise ValueError('unhandled structural payload tag')
     return words
+
+
+def register_inventory(step):
+    """Reject dropped/duplicated chunks in a claimed complete clock observation.
+
+    This proves enumeration consistency only. Every register's clock/owner and
+    every clock's semantic role still require the final structural reviewer.
+    """
+    records = step['records']
+    headers = [N.pairs(row[1:], ('count', 'names')) for row in records if row[0] == 'register_clock_inventory']
+    inventories = [row for row in records if row[0] == 'register_inventory']
+    chunks = [row for row in records if row[0] == 'register_chunk']
+    if not headers and not inventories and not chunks:
+        return
+    N.require(len(headers) == 1, 'missing/duplicate register clock inventory')
+    clocks = N.names(headers[0]['names'])
+    N.require(clocks and N.number(headers[0]['count']) == len(clocks), 'empty/inconsistent clock inventory')
+    N.require([row[1] for row in inventories] == clocks, 'missing/reordered/duplicate register inventory')
+    remaining = list(chunks)
+    for row in inventories:
+        meta = N.pairs(row[2:], FIELDS['register_inventory'])
+        count = N.number(meta['count'])
+        N.require(count <= 2000000 and meta['chunk_size'] == '256' and
+                  N.number(meta['chunks']) == (count + 255) // 256, 'register chunk declaration differs')
+        properties = N.td(meta['properties'])
+        N.require(N.tcl_list(properties.get('NAME', '')) == ['observed', row[1]], 'register clock identity differs')
+        observed = []
+        for offset in range(0, count, 256):
+            N.require(remaining and remaining[0][1] == row[1], 'missing/reordered register chunk')
+            chunk = N.pairs(remaining.pop(0)[2:], FIELDS['register_chunk'])
+            names = N.names(chunk['names'])
+            N.require(N.number(chunk['offset']) == offset and len(names) == min(256, count-offset),
+                      'register chunk offset/length differs')
+            observed.extend(names)
+        N.require(len(set(observed)) == count, 'duplicate register across chunks')
+    N.require(not remaining, 'extra register chunks')
 
 
 def parse(records, checkpoint_sha256, helpers):
@@ -129,6 +177,8 @@ def parse(records, checkpoint_sha256, helpers):
                 options = N.td(result['options'])
                 N.require({'-code', '-level'} <= set(options), 'incomplete Tcl error options')
             active['result'] = result
+            if active['label'] == ['clocks'] and result['state'] == 'observed':
+                register_inventory(active)
             steps.append(active)
             active = None
         elif tag == 'summary':

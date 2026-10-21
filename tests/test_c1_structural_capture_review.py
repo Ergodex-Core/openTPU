@@ -155,6 +155,7 @@ proc ::c1_structure_capture::unused_clocks {audit} {
  return {clocks core unused {}}
 }
 proc ::c1_structure_capture::disabled {audit pc channel} {return {}}
+proc ::c1_structure_capture::flow_detail {args} {}
 proc ::c1_alex_routed_ready::host_wready {audit} {error {missing replica}}
 proc ::c1_alex::flow {args} {return {}}
 ::c1_structure_capture::capture {DEST} {DCP} DIGEST
