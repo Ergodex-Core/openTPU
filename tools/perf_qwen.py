@@ -251,6 +251,9 @@ def main():
     ap.add_argument("--gaps", action="store_true",
                     help="per phase: the cycles above its roofline, split by what the MXU and "
                          "port B did (64-cycle windows)")
+    ap.add_argument("--vocab", type=int, default=None,
+                    help="the LM head (and its tied embedding table) cut to its first N rows: "
+                         "a draft model's truncated head (docs/spec_draft.md), timing")
     a = ap.parse_args()
     plus = list(a.plus)
     ldc = 0
@@ -275,6 +278,10 @@ def main():
     elif layers[0]:
         spec = dataclasses.replace(spec, **({"kinds": spec.kinds[:layers[0]]}
                                             if hasattr(spec, "kinds") else {"layers": layers[0]}))
+    if a.vocab:
+        if not 0 < a.vocab <= spec.vocab:
+            ap.error(f"--vocab {a.vocab}: 1 .. {spec.vocab}")
+        spec = dataclasses.replace(spec, vocab=a.vocab)
     if a.mtp:
         spec = dataclasses.replace(spec, mtp=True)
         a.rows, a.logits = 2, "all"
