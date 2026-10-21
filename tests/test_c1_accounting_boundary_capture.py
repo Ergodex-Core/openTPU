@@ -126,15 +126,17 @@ proc ::c1_accounting_boundary::input_drivers {pin} {return {BAD}}
 
 def test_interface_role_inventory_and_aliases_are_explicit(tmp_path):
     text = run(tmp_path, r'''
-proc ::c1_accounting_boundary::input_drivers {pin} {return {drivers observed/Q ports {}}}
+proc ::c1_accounting_boundary::net_drivers {net} {return {drivers observed/Q ports {}}}
 proc ::c1_accounting_boundary::properties {args} {return {}}
-proc ::c1_accounting_boundary::owners {args} {return {}}
-set cuts [::c1_accounting_boundary::interfaces 0]
-if {[llength [dict get $cuts observed/Q]]!=35} {error "interface role inventory"}
+proc ::c1_accounting_boundary::qnames {args} {return {}}
+proc ::c1_accounting_boundary::owners {args} {return observed}
+proc ::c1_accounting_boundary::cell {args} {return {REF_NAME FDRE}}
+set interface [::c1_accounting_boundary::interfaces 0]
+if {![dict get $interface complete] || [llength [dict get $interface cuts observed/Q]]!=35} {error "interface role inventory"}
 ''', '')
     assert text.count('admission_interface 0 role ') == 35
     assert 'n_caddr[24]' in text and 'm_arready' in text
-    assert 'admission_cut_inventory 0 outputs {observed/Q' in text
+    assert 'admission_cut_inventory 0 complete 1 outputs {observed/Q' in text
 
 
 def test_constants_stay_constants_even_when_interface_roles_alias_them(tmp_path):
@@ -145,7 +147,7 @@ def test_constants_stay_constants_even_when_interface_roles_alias_them(tmp_path)
 @pytest.mark.parametrize('reference, gap', [('FDRE', True), ('LUT1', True), ('GND', False)])
 def test_interface_cannot_hide_internal_nonconstant_state_or_logic(tmp_path, reference, gap):
     body = r'''
-proc ::c1_accounting_boundary::input_drivers {pin} {return {drivers WRAPPER/CL/u_native0/internal/Q ports {}}}
+proc ::c1_accounting_boundary::net_drivers {net} {return {drivers WRAPPER/CL/u_native0/internal/Q ports {}}}
 proc ::c1_accounting_boundary::properties {args} {return {}}
 proc ::c1_accounting_boundary::qnames {args} {return {}}
 proc ::c1_accounting_boundary::owners {args} {return WRAPPER/CL/u_native0/internal}
@@ -183,3 +185,62 @@ def test_collector_has_no_constraint_or_checkpoint_mutation_commands():
     for command in ('set_property', 'create_clock', 'create_pblock', 'resize_pblock',
                     'write_checkpoint', 'place_design', 'route_design', 'phys_opt_design'):
         assert command not in text
+
+
+def test_missing_interface_inventory_does_not_begin_any_cone(tmp_path):
+    text = run(tmp_path, r'''
+proc ::c1_accounting_boundary::net_drivers {net} {gap $net missing_interface_net;return {}}
+proc ::c1_accounting_boundary::qnames {args} {return {}}
+proc ::c1_accounting_boundary::walk {args} {error "MUST NOT WALK INCOMPLETE BOUNDARY"}
+::c1_accounting_boundary::body
+''', '')
+    assert text.count('reason incomplete_interface_inventory') == 8
+    assert 'admission_root' not in text
+
+
+def test_unsupported_clock_and_external_state_do_not_enumerate_output_fanout(tmp_path):
+    text = run(tmp_path, r'''
+rename ::c1_accounting_boundary::network original_network
+proc ::c1_accounting_boundary::network {kind name args} {
+ if {$name eq "cl/reset/Q"} {error "MUST NOT ENUMERATE EXTERNAL FANOUT"}
+ return [original_network $kind $name {*}$args]
+}
+::c1_accounting_boundary::walk 0 cl/gate/O {}
+rename get_property original_get_property
+proc get_property {key object} {
+ if {$object eq "@cell|cl/reset" && $key in {REF_NAME ORIG_REF_NAME}} {return BUFGCE}
+ if {$object eq "@cell|cl/reset" && $key eq "IS_SEQUENTIAL"} {return 0}
+ return [original_get_property $key $object]
+}
+array unset ::c1_native_capture::seen_cells
+array unset ::c1_native_capture::seen_properties
+::c1_accounting_boundary::walk 0 cl/reset/Q {}
+''')
+    assert 'reason state_outside_native_scope' in text
+    assert 'reason unsupported_combinational cell cl/reset reference BUFGCE' in text
+    assert 'admission_output 0 output cl/reset/Q' not in text
+
+
+def test_exact_interface_net_names_follow_source_roles(tmp_path):
+    text = run(tmp_path, r'''
+foreach {role expected} {clk WRAPPER/CL/core_clk rst WRAPPER/CL/core_rst n_cvalid {WRAPPER/CL/n_cvalid[7]} n_cwe {WRAPPER/CL/n_cwe[7]} n_wvalid {WRAPPER/CL/n_wvalid[7]} {n_caddr[24]} {WRAPPER/CL/n_caddr[7][24]} m_arready WRAPPER/CL/n7_arready m_awready WRAPPER/CL/n7_awready m_wready WRAPPER/CL/n7_wready m_bvalid WRAPPER/CL/n7_bvalid m_rvalid WRAPPER/CL/n7_rvalid} {
+ if {[::c1_accounting_boundary::interface_net 7 $role] ne $expected} {error "interface mapping changed"}
+}
+if {![catch {::c1_accounting_boundary::interface_net 7 other}]} {error "unrecognized role accepted"}
+''', '')
+    assert text == ''
+
+
+def test_net_driver_query_is_typed_and_does_not_enumerate_consumers(tmp_path):
+    text = run(tmp_path, r'''
+rename get_pins original_get_pins
+proc get_pins {args} {
+ if {"-leaf" in $args && "-filter" ni $args} {error "MUST NOT ENUMERATE GLOBAL CONSUMERS"}
+ return [original_get_pins {*}$args]
+}
+set n [::c1_accounting_boundary::net_drivers cl/rst]
+if {[dict get $n drivers] ne {cl/reset/Q} || [dict get $n net] ne "cl/rst"} {error "missing exact net binding"}
+::c1_accounting_boundary::net_drivers absent
+''')
+    assert 'reason missing_interface_net' in text
+    assert 'query {admission_net_drivers cl/rst}' in text
