@@ -286,6 +286,102 @@ Hold before routing is WHS -0.753 ns (clk_f_raw -> clk_raw, 13,659 endpoints; cl
 -0.574, 7,149): the router fixes hold, with detours through the congested windows. Nothing here
 is routed, and there is no DCP or tar for an AFI.
 
+**Its failing paths by class** (a Vivado pass over its post_place checkpoint, every failing
+endpoint folded by start and end hierarchy, lanes / copies / channels as `[*]`:
+`impl150-1/placed-report/classes.txt`): core clock 4,967 endpoints, the RMAX fold (256, -1.722),
+the lock-step pop's FIFO compares and `c_left` into the lanes' `occ`, `s_rd`, `s_head`, `f_head`,
+`f_rdl`, `f_count`, `c_left` (~600, to -1.714), the copies' B readiness into the slice's port B
+registers and the DMA (`qb_n` -> `b_wdata` 1,024, `u_dma/gh` 223, ... to -1.709), the sequencer's
+MXU command into the eight lanes' issuers and their `q_n` back into it (~1,000, to -1.641), the
+MXU drain's TMEM grant into every lane's epilogue (`u_rw` -> `p1_x` 208, the FP DSPs, ..., to
+-1.696), the copies' write-done counts (the up chain's `o`) through `wr_idle` into the slice and
+the control block (~200, to -1.458), the collective's RLD read into the VPU's write-buffer enables
+(361, -0.638); clk -> clk_f 1,411: the adapters' native word into the serializers (1,003 + 119 +
+76 + the up direction's 9, to -1.648) and the same RLD read into a pumped TMEM bank (50, -0.536);
+the 450 MHz SmartConnects 3,236 (2-level W-FIFO enables of 450-580 fanout in sc_c0 .. sc_c15).
+
+**Timing round 2** (9a863228; every change at C > 1 only, C 1 cycle for cycle: the probe's 10
+programs identical in cycles, DRAM and TMEM to 8a9d75d3's):
+
+- `otpu_xr2`: a core register (`dr`) in front of each serializer, so the half-period crossing
+  into it is register to register; 6 core cycles each way (NXF / 2 + 3), QDX still 32 (20 usable).
+- RMAX: the C lanes' keys folded in a registered tree (`g_fold`, log2 C = 3 levels), the writes
+  waiting three drained cycles instead of one (the same maximum: a total order).
+- Lock step: each lane's want is a register (`wq`), the next cycle's `pop_w` computed a cycle early
+  (no pop: this cycle's arrivals; a pop: within a row 1, at a row's end the next row's first
+  advance with the counts after the pop), `c_left != 0` a register (`cl_nz`), the ordinals
+  compared by their low bit (a lane is lane 0's command or one ahead: checked), a gather copy per
+  lane (kept), `occ`'s decrement a cycle late (P2's ed7b59f0). `wq` implies `pop_w` (checked).
+- The MXU's commands through registers: start, go and each lane's command a cycle later
+  (`lcmd_q`), `rdy` a register (low a cycle after a start).
+- The lane memory: every ready a register of the copies' room for two (`otpu_native_dram`
+  `sw_rdy2` / `b_rdy2` / `a_rdy2`: P2's SW fix extended to ports A and B and the lane reads), a
+  request reaching a copy only with the ready the slice or the lane sees; `wr_idle` / `rd_idle`
+  registers (idle now and no request of the kind: exact or a cycle late). Checked: every request
+  a copy takes has room; the idles are never early.
+- The MXU's TMEM grant does not wait for its own requests: it is admitted unless a group before it
+  (DMA, collective, VPU) writes TMEM at all that cycle (a superset of the bank conflicts).
+
+Gates (all on the m8a): tests/test_rtl.py -k "packed or chunk_lanes" 30 passed; the 8-lane board
+tests on the pumped NAXI path 8 passed; tests/test_f2_rtl.py 26 passed; test_gemma3, test_target,
+test_tech, test_f2_copies 39 passed (6 skipped); test_f2_p2_build 4 passed; the C 1 probe 10 / 10.
+
+| Gemma-3-1B int8, one decode token at pos 14, Verilator RTL, C 8 packed | cycles | tok/s | vs before |
+|:--|--:|--:|--:|
+| F2 channel path (NXF 6, latency 49, 150 MHz): 2d90f987 | 1,523,024 | 98.5 at 150 MHz | |
+| **9a863228** | **1,524,729** | **98.4 at 150 MHz** | **+0.11%** |
+| 9a863228 without the grant change | 1,523,062 | 98.5 | +0.00% |
+| 9a863228 without the serializer register | 1,519,934 | 98.7 | -0.20% |
+| 9a863228 without both | 1,518,522 | 98.8 | -0.30% |
+| lane memory, stall 0 (200 MHz label): 8a9d75d3 / 9a863228 | 1,299,884 / 1,300,176 | 153.9 / 153.8 | +0.02% |
+
+The F2 build writes the quantizer's partial SW beats with byte masks (otpu_f2_hbm_sys SWFILL 0,
+P2's 9cb57f61), which every F2-path receipt above modeled as fill reads (rtlsim's default,
+OTPU_SWFILL=1): **9a863228 with OTPU_SWFILL=0 is 1,451,711 cycles, 103.3 tok/s at 150 MHz**
+(Verilator RTL, the same F2 channel path, bit-exact;
+`p3-gemma3-c8p-naxi-xf6-swfill0-lat49-150mhz-9a863228.txt:7-9`), 4.8% under the SWFILL 1 run: the
+F2 build's own setting, the number to quote for it.
+
+All bit-exact (logits and the KV-cache DRAM image; receipts
+`/home/ubuntu/lens-runs/p3/p3-gemma3-c8p-naxi-xf6-lat49-150mhz-9a863228{,-nogrant,-nodr,-nogrant-nodr}.txt:7-9`,
+`p3-gemma3-c8p-stall0-9a863228.txt:7-9`; the variants are the snapshot with the one change
+undone). The delta: the serializer register's two more cycles of round trip +4,540 to +4,795
+(+0.3%), the conservative grant +1,412 to +1,667 (+0.1%), the other registers -4,502 (-0.3%) on
+the F2 path and +292 at stall 0. Lens (9a863228 against 2d90f987): port B streaming 80.3% (80.5%),
+waiting on the quantizer 10.0% (10.6%: attention.py:117's QACT wait 150,730 cycles, from
+158,597), MXU computing not streaming 3.4% (2.8%: the command and first-pop registers), the MXU
+drain's TMEM arbitration losses 6.8% (13.3%). LPN at the new round trip (lat 55): 1,316,289,
+-13.7% against the SWFILL 1 run and -9.3% against the build's SWFILL 0 run (inside the 10% rule
+there; `p3-gemma3-c8-lat55-150mhz-lpn-9a863228.txt`); the VLA net unchanged, f2-vla 0.68 Hz and with
+P3's MXU 0.34 Hz at 200 MHz (`p3-vla-pi05-lpn-9a863228.txt`: its knobs are the vla tree's).
+
+**9a863228 synthesized and placed** (`f2-p2:p3c150`, the exact MMCM, SynthCL then ImplCL
+`--package` as unit opt-p3-impl-9a863228; `/home/ubuntu/opt/hwloop-nightly/p3-9a863228/`, job
+script /home/ubuntu/opt/p3/synth-place-po.sh, log /home/ubuntu/opt/logs/p3-sp3.log). Synthesis
+passed 10:34 UTC (post_synth sha256 7e3116cd; its estimate: core +3.143 ns where 7f191bb6's was
+-2.258 over the RMAX fold's 256 endpoints; registers 493 K, from 471 K). Placed (SSI_SpreadLogic_high,
+the same floorplan) 11:52, post-place phys_opt (AggressiveExplore) 12:03:
+
+| post-place phys_opt, 150 MHz (`impl150-1/po-report/`) | 7f191bb6 (placed) | **9a863228** |
+|:--|--:|--:|
+| WNS / TNS, all clocks | -1.722 / -4,978 | **+0.075 / 0** |
+| core clk_raw (150 MHz) | -1.722 | **+0.087** |
+| clk_raw -> clk_f_raw; clk_f_raw -> clk_raw | -1.648; -0.098 | +0.108; +0.281 |
+| clk_f_raw (300 MHz) | -0.004 | +0.109 |
+| HBM AXI hclk_raw (450 MHz) | -0.534 | **+0.075** |
+| shell clk_main_a0 (250 MHz) | | +0.470 |
+| WHS before routing | -0.753 | -0.533 |
+| SLLs SLR2 <-> SLR1 / SLR1 <-> SLR0 | 9,206 / 10,620 | 9,206 / 10,620 |
+| SLR2 CLB / LUT / LUT-RAM / registers | 93.0 / 68.8 / 50.0 / 32.0% | 94.2 / 71.2 / 51.0 / 33.6% |
+| congestion windows at level 7 (6) | 6 (10) | 5 (10) |
+
+(`timing_summary.txt:144` and its clock tables, `util_slr.txt:28-47`, `congestion.txt`.) The
+worst placed paths: hclk, SmartConnect sc_c2's reset into its W-node FIFO (+0.075, 4 levels);
+core, the slice's port B register b_we into dw_r (+0.087, 9 levels, 89% route). By the
+coordinator's rule (route only at WNS >= 0 after the post-place phys_opt) the route went on at
+12:03 UTC; the router's first estimates WNS +0.080, WHS -0.585 (console.log `Route 35-416`). The
+learned rule says a placed margin under ~0.2 ns tends to lose 0.1-0.3 ns in routing on this part.
+
 ## Risks found on the real part
 
 - **SLR crossings at 16 channels.** P2's floorplan (wide-port-alexshell's) keeps the board in SLR2
@@ -309,24 +405,23 @@ is routed, and there is no DCP or tar for an AFI.
   needs a credit scheme across the SLRs).
 - **DSPs in SLR2**: ~2,400 packed MXU DSPs + ~170 VPU / quantizer of SLR2's 3,008 (85%): the
   packing is what lets eight lanes stay in one SLR (unpacked: ~4,450).
-- **The core clock at 150 MHz**: placed WNS -1.722 ns, 4,967 failing endpoints, all in the lanes'
-  cross-lane logic (the fold, the lock-step pop and enables, the write readiness): RTL work before
-  any route.
+- **The core clock at 150 MHz**: the pumped design placed at -1.722 ns (4,967 failing endpoints,
+  the lanes' cross-lane logic); after round 2 (9a863228) every clock meets after the post-place
+  phys_opt, but by +0.075 ns (hclk) and +0.087 ns (core): the route may take that margin.
 - **Crossings at half a core period**: the pumped chains and the TMEM's pumped RAMs give 12 K
   core -> clk_f and 22.6 K clk_f -> core endpoints with a 3.33 ns budget, plus their hold to fix;
   after routing, the skew between the two clocks' trees could make these the limit.
-- **SLR2 at 93% of its CLBs** with level-7 windows: a routing risk even with timing fixed.
+- **SLR2 at 94% of its CLBs** (9a863228) with five level-7 windows: a routing risk even with
+  timing met.
 
 ## What is next
 
-1. **Timing on the placed design, before any route** (the pumped design's 9,616 failing
-   endpoints are these classes): a core register in front of each serializer (otpu_xr2, +1 core
-   cycle each way); lane 0's RMAX fold as a registered tree (mx_go delayed at C > 1); the
-   lock-step pop and the cross-lane enables computed a cycle early and replicated per lane; the
-   lane memory's write readiness registered, with a slot of headroom in each copy's queue; the
-   450 MHz SmartConnects' placement in SLR0. Each with the usual gates (bit-exact suites, the F2
-   path token with --check, LPN, Lens), then synthesis and placement again, then route. A packaged
-   Developer_CL tar for the coordinator only after a routed, qualified build.
+1. **The route of 9a863228** (running from 12:03 UTC as unit opt-p3-impl-9a863228, ImplCL with
+   `--package`: route, the HDK's checks, validate_route's qualification and the Developer_CL tar
+   if it qualifies). If the route loses the +0.075 ns: the next build adds the F2 system's
+   collective unit as the simulations build it (COLL_GATHER 0 at S = 1: BAR alone; every gate ran
+   that unit, the F2 build had the GATHER unit, which no one-slice program uses and which carried
+   the RLD -> VPU write-buffer class), then the remaining paths of the routed design by class.
 2. **The cycles Lens names** (C 8 packed, 1.30 M against the 0.98 M bound): the MXU's start and
    drain per command (6.4%: each lane's command is an eighth of the MM; a third command held, or
    the MLP's 768-row chunks merged), the vector units (9.1%: the proposal's M4, VPU 32 lanes / CL 8
