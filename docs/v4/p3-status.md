@@ -416,6 +416,33 @@ went through the LAGUNA columns under pb_otpu_mid (X0-X3).
   instead of the chains' 9.2 K; SLR1 / SLR0 the chains as before. The simulated RTL is
   9a863228's (b7b7d2cc and 8ec4c72b change only the F2 system's collective parameter, the
   floorplan, build.py and the target), so round 2's gates stand.
+  Placed 14:36 UTC (`p3-8ec4c72b/impl150-1/console.log`): **global congestion down to level 6**
+  (East 64 x 64; North and South 32 x 32, West 4 x 4; :1668-1681; SLR1's own at most 32 x 32),
+  though still "[Place 46-14] highly congested" (:1657); post-placement WNS **-1.878 ns** (:1648):
+  1,766 failing core endpoints, nearly all the SLR2 -> SLR1 request paths into the copies (the
+  slice's lane and port registers `la_addr`, `a_addr`, `sw_addr`, `b_we` -> the adapters' channel
+  hash, run compares, queue counts and LUT-RAM queue writes, 5-13 levels across the boundary;
+  `impl150-1/placed-report/classes.txt`), the 450 MHz SmartConnects -0.546 (3,095), and six bits of
+  an up chain's `dr` -> `ser` in SLR0 (-1.645). Its phys_opt reached -1.785 and was stopped
+  (systemctl, 14:48): it cannot close without the copies' input registers.
+- The copies' input registers (bac693eb): each adapter takes the slice's requests (ports A, SW, B,
+  a_flush) through a register of its own (`otpu_native_dram` IREG), inside the adapter and so in
+  SLR1, so each request crossing is register to register; a request the slice saw taken enters a
+  cycle later, so the rooms the readies are made of are for 2 + IREG (three), and the idles count
+  the register's request (checked: a registered request always has room). A build option
+  (`LMEM_IREG`, set by build.py with lane_memory_slr 1; rtlsim `OTPU_LMEM_IREG=1`), 0 elsewhere.
+  Gates (m8a): test_rtl -k "packed or chunk_lanes" with IREG 1: 30 passed, and with IREG 0: 30
+  passed; the 8-lane board tests on the pumped NAXI path with IREG 1 and SWFILL 0 (the build's
+  settings): 8 passed; test_f2_rtl 26 passed; test_f2_p2_build and test_target 27 passed (the
+  p3c150 build carries LMEM_IREG 1); the C 1 probe 10 / 10. Token (Gemma-3-1B int8, decode at
+  pos 14, Verilator RTL, F2 channel path, NXF 6, latency 49, SWFILL 0, the build's IREG 1):
+  **1,454,252 cycles, 103.1 tok/s at 150 MHz**, bit-exact
+  (`p3-gemma3-c8p-naxi-xf6-swfill0-ireg-lat49-150mhz-bac693eb.txt:7-9`), +2,541 cycles (+0.18%)
+  over 9a863228's 1,451,711: the requests' cycle in the register and the third slot of room. At
+  IREG 0 the lane memory is cycle for cycle 9a863228's (stall 0: 1,300,176 both,
+  `p3-gemma3-c8p-stall0-bac693eb.txt:7`). Lens: port B streaming 84.1% (84.4%), MXU computing not
+  streaming 3.8% (3.6%). LPN (lat 56): 1,316,293, -9.5% (`p3-gemma3-c8-lat56-150mhz-lpn-bac693eb.txt`);
+  VLA unchanged, 0.68 / 0.34 Hz at 200 MHz (`p3-vla-pi05-lpn-bac693eb.txt`).
 
 ## Risks found on the real part
 
