@@ -189,7 +189,7 @@ def run_steps(eng, tokens: list[int], pos0: int, n: int, keep: str, prompt_len: 
 def record_card(a) -> list:
     from opentpu.llm import load_spec
     from opentpu.llm.qwen3 import Engine, load_weights
-    from .board import Board, BoardBackend, XdmaTransport, device_config
+    from .board import Board, BoardBackend, device_config, open_transport
     model = Path(a.model)
     spec = load_spec(model)
     if a.prompt_ids:
@@ -203,7 +203,7 @@ def record_card(a) -> list:
         ids = list(ids["input_ids"] if hasattr(ids, "keys") else ids)
     pos0 = len(ids) - 1 if a.pos is None else a.pos
     cap = max(256, -(-(pos0 + a.tokens + 1) // 128) * 128)
-    tr = XdmaTransport(a.dev)
+    tr = open_transport(a.dev)                  # an XDMA prefix, or f2:<slot> / f2:<BDF>
     cfg = device_config(Board(tr, lock=False).info())
     eng = Engine(spec, load_weights(model), cap=cap, cfg=cfg, pipeline="thread",  # programs
                  backend=lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model.name),

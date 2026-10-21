@@ -935,9 +935,8 @@ def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
     if name == "isa":
         return "isa", None
     if name == "board":
-        from opentpu.host.board import (Board, BoardBackend, XdmaTransport,   # the PCIe driver
-                                        device_config)
-        tr = XdmaTransport(dev)
+        from opentpu.host.board import Board, BoardBackend, device_config, open_transport
+        tr = open_transport(dev)            # an XDMA prefix, or f2:<slot> / f2:<BDF> (AWS F2)
         cfg = device_config(Board(tr, lock=False).info())     # MCOLS / LANES of the bitstream
         return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
     if name == "board-sim":
