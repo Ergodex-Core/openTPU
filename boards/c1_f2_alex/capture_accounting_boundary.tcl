@@ -38,9 +38,18 @@ proc ::c1_accounting_boundary::net_drivers {name} {
 }
 proc ::c1_accounting_boundary::interfaces {pc} {
     set scope WRAPPER/CL/u_native$pc
-    set roles {clk rst n_cvalid n_cwe n_wvalid m_awready m_wready m_bvalid m_arready m_rvalid}
-    for {set bit 0} {$bit<25} {incr bit} {lappend roles [format {n_caddr[%d]} $bit]}
+    set roles {clk rst n_cvalid m_bvalid m_arready m_rvalid}
+    for {set bit 0} {$bit<24} {incr bit} {lappend roles [format {n_caddr[%d]} $bit]}
     set cuts {};set before $::c1_native_capture::gaps
+    # These five source-interface nets are absent in the observed LINK design.
+    # They create neither free inputs nor assumed constant values. The actual
+    # cone must close through typed constants, native state and the live cuts.
+    foreach role {n_cwe n_wvalid m_awready m_wready {n_caddr[24]}} {
+        set net [interface_net $pc $role]
+        set names [qnames [list admission_uncut_selection $pc $role] {get_nets -quiet [list $net]}]
+        emit admission_uncut_role $pc role $role kind net name $net observed $names disposition no_assumed_input_or_constant
+        if {[llength $names]} {gap [list admission_interface $pc $role] unexpected_retained_uncut_role}
+    }
     foreach role $roles {
         set net [interface_net $pc $role]
         set n [net_drivers $net]
@@ -126,7 +135,7 @@ proc ::c1_accounting_boundary::walk {pc root cuts} {
 proc ::c1_accounting_boundary::body {} {
     # A bounded name-only diagnostic preserves actual top-level signal spelling
     # when synthesis has removed or renamed one of the exact interface anchors.
-    qnames admission_interface_net_inventory {get_nets -quiet -hier -filter {NAME =~ WRAPPER/CL/n_c* || NAME =~ WRAPPER/CL/n_wvalid* || NAME =~ WRAPPER/CL/core*}}
+    qnames admission_interface_net_inventory {get_nets -quiet -hier -filter {NAME =~ WRAPPER/CL/n_c* || NAME =~ WRAPPER/CL/n_wvalid* || NAME == WRAPPER/CL/core_clk || NAME == WRAPPER/CL/core_rst}}
     for {set pc 0} {$pc<8} {incr pc} {
         set interface [interfaces $pc]
         if {![dict get $interface complete]} {

@@ -132,9 +132,9 @@ proc ::c1_accounting_boundary::qnames {args} {return {}}
 proc ::c1_accounting_boundary::owners {args} {return observed}
 proc ::c1_accounting_boundary::cell {args} {return {REF_NAME FDRE}}
 set interface [::c1_accounting_boundary::interfaces 0]
-if {![dict get $interface complete] || [llength [dict get $interface cuts observed/Q]]!=35} {error "interface role inventory"}
+if {![dict get $interface complete] || [llength [dict get $interface cuts observed/Q]]!=30} {error "interface role inventory"}
 ''', '')
-    assert text.count('admission_interface 0 role ') == 35
+    assert text.count('admission_interface 0 role ') == 30
     assert 'n_caddr[24]' in text and 'm_arready' in text
     assert 'admission_cut_inventory 0 complete 1 outputs {observed/Q' in text
 
@@ -244,3 +244,37 @@ if {[dict get $n drivers] ne {cl/reset/Q} || [dict get $n net] ne "cl/rst"} {err
 ''')
     assert 'reason missing_interface_net' in text
     assert 'query {admission_net_drivers cl/rst}' in text
+
+
+def test_absent_roles_are_observed_but_never_added_as_input_or_constant_cuts(tmp_path):
+    text = run(tmp_path, r'''
+proc ::c1_accounting_boundary::net_drivers {net} {return {drivers observed/Q ports {}}}
+proc ::c1_accounting_boundary::qnames {args} {return {}}
+proc ::c1_accounting_boundary::properties {args} {return {}}
+proc ::c1_accounting_boundary::owners {args} {return observed}
+proc ::c1_accounting_boundary::cell {args} {return {REF_NAME FDRE}}
+set boundary [::c1_accounting_boundary::interfaces 0]
+if {![dict get $boundary complete] || [llength [dict get $boundary cuts observed/Q]]!=30} {error "live boundary"}
+foreach absent {n_cwe n_wvalid m_awready m_wready {n_caddr[24]}} {
+ if {$absent in [dict get $boundary cuts observed/Q]} {error "fabricated missing input"}
+}
+''', '')
+    assert text.count('admission_uncut_role 0 role ') == 5
+    assert text.count('observed {} disposition no_assumed_input_or_constant') == 5
+    assert 'admission_constant' not in text
+
+
+def test_unexpected_retained_uncut_role_stays_a_gap(tmp_path):
+    text = run(tmp_path, r'''
+proc ::c1_accounting_boundary::net_drivers {net} {return {drivers observed/Q ports {}}}
+proc ::c1_accounting_boundary::qnames {label script} {
+ if {[lindex $label 0] eq "admission_uncut_selection"} {return retained_net}
+ return {}
+}
+proc ::c1_accounting_boundary::properties {args} {return {}}
+proc ::c1_accounting_boundary::owners {args} {return observed}
+proc ::c1_accounting_boundary::cell {args} {return {REF_NAME FDRE}}
+set boundary [::c1_accounting_boundary::interfaces 0]
+if {[dict get $boundary complete]} {error "retained uncut role accepted"}
+''', '')
+    assert text.count('reason unexpected_retained_uncut_role') == 5
