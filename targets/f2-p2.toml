@@ -83,6 +83,8 @@ vivado = "2025.2"
 
 [variants.c150]                 # the first build: 150 MHz core (TMEM 300), docs/v4/p2-f2.md "Clock"
 core_mhz = 150.0
+[variants.c162]                 # 162.5 MHz: VCO 1300 (PFD 50 x 26) / 8 (TMEM / 4), docs/v4/p2-f2.md "A faster core"
+core_mhz = 162.5
 [variants.c175]                 # VCO 1050 (PFD 50) / 6 (TMEM / 3)
 core_mhz = 175.0
 [variants.c200]                 # VCO 1200 / 6 (TMEM / 3)

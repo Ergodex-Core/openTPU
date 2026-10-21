@@ -30,6 +30,21 @@ def test_the_targets_lanes_and_lane_memory():
     for f in src:
         assert (ROOT / "rtl" / f).exists(), f
     assert T.load("f2-p2:c200").core_khz == 200000 and T.config("f2-p2:c200") == T.config(t)
+    assert T.load("f2-p2:c162").core_khz == 162500 and T.config("f2-p2:c162") == T.config(t)
+
+
+def test_core_mmcm_recipes_are_legal():
+    """Every core clock of the HBM CL (build.py HBM_CORE_MMCM) from clk_main_a0's 250 MHz: the
+    feedback multiplier in the MMCME4's 0.125 steps (4.8 was rounded to 4.75: DRC AVAL-168), the
+    PFD and VCO in range (-2: 10-500 MHz, 800-1600 MHz), the core exactly its kHz, the pump 2x."""
+    b = _build()
+    for khz, (div, mult, d0, d1) in b.HBM_CORE_MMCM.items():
+        assert (mult * 8) == int(mult * 8) and (d0 * 8) == int(d0 * 8), khz
+        pfd, vco = 250000.0 / div, 250000.0 * mult / div
+        assert 10000 <= pfd <= 500000 and 800000 <= vco <= 1600000, khz
+        assert vco / d0 == khz and d0 == 2 * d1, khz
+    for v in ("c150", "c162", "c175", "c200"):
+        assert T.load(f"f2-p2:{v}").core_khz in b.HBM_CORE_MMCM, v
 
 
 def test_hbm_ports_of_1_gib_windows():

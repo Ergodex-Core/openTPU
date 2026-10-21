@@ -27,7 +27,7 @@ set hdk_bd [file normalize [lindex $argv 4]]
 set ch_log2 [expr {[llength $argv] > 5 ? [lindex $argv 5] : 29}]
 if {$ch_log2 ni {29 30}} { error "openTPU SmartConnect: channel window 2^$ch_log2 bytes" }
 if {![string is integer -strict $nport] || $nport < 1 || $nport > 31} { error "openTPU SmartConnect: NPORT $nport" }
-if {$core_hz ni {200000000 175000000 150000000}} { error "openTPU SmartConnect: core clock $core_hz Hz" }
+if {$core_hz ni {200000000 175000000 162500000 150000000}} { error "openTPU SmartConnect: core clock $core_hz Hz" }
 set ref_bd $hdk_bd/cl_axi_sc_1x1/cl_axi_sc_1x1.bd
 if {![file exists $ref_bd]} { error "openTPU SmartConnect: the HDK's cl_axi_sc_1x1 block design is missing ($ref_bd)" }
 source [file join [file dirname [file normalize [info script]]] hbm_sc_inst.tcl]

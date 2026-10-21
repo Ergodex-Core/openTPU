@@ -57,6 +57,7 @@ HBM_CHAIN_IP = ('hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice/
 # at 150; P2's build b31bf94b has that clock, docs/v4/p2-f2.md)
 HBM_CORE_MMCM = {200000: (5, 24.0, 6.0, 3),     # PFD 50, VCO 1200: 200 / 400
                  175000: (5, 21.0, 6.0, 3),     # PFD 50, VCO 1050: 175 / 350
+                 162500: (5, 26.0, 8.0, 4),     # PFD 50, VCO 1300: 162.5 / 325
                  150000: (1, 6.0, 10.0, 5)}     # VCO 1500: 150 / 300
 
 
@@ -179,7 +180,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         pstride, hport = hbm_ports(t)
         if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] not in (2**29, 2**30) or
                 p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
-            raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core (the pumped TMEM at '
+            raise RuntimeError('F2 HBM CL requires a 200, 175, 162.5 or 150 MHz core (the pumped TMEM at '
                                '2x), 512 MiB or 1 GiB channels and a power-of-two NCH')
     elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')

@@ -53,8 +53,8 @@ proc ::otpu_scoped::cl_kind {} {
     error "scoped clocks: unreviewed CL (DDR4 MMCM pins $ddr, SmartConnect fabric cells $sc, DDR UI clocks $ui)"
 }
 proc ::otpu_scoped::hbm_periods {} {
-    # the HBM CL's core periods, ns: boards/f2/build.py HBM_CORE_MMCM (200 / 175 / 150 MHz)
-    return {5.000 5.714 6.667}
+    # the HBM CL's core periods, ns: boards/f2/build.py HBM_CORE_MMCM (200 / 175 / 162.5 / 150 MHz)
+    return {5.000 5.714 6.154 6.667}
 }
 proc ::otpu_scoped::core_period {kind} {
     # clk_raw's period as the design has it, three decimals (clocks' PERIOD and exceptions'
