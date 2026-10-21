@@ -86,7 +86,9 @@ def main():
     env = {k: v for k, v in os.environ.items() if not k.startswith('OTPU_')}
     env.update(PYTHONUNBUFFERED='1', OTPU_TARGET='f2-hbm:p4rl8a64', OTPU_NCH='8',
                OTPU_NAXI='1', OTPU_NAXI_XR='3', OTPU_NAXI_BURST='8',
-               OTPU_NAXI_IDLE='1', OTPU_NAXI_WAIT='1', OTPU_NAXI_OT='32')
+               OTPU_NAXI_IDLE='1', OTPU_NAXI_WAIT='1', OTPU_NAXI_OT='32',
+               # Identical quantization in-process avoids fragile spawn/semaphore pools.
+               OTPU_BUILD_JOBS='1')
     common = ['--model', str(checkpoint), '--layers', a.layers, '--pos', '9',
               '--wformat', 'int8', '--head-format', 'int8', '--mhz', '200',
               '--portb', '4', '--rowlanes', '--mcols', '8', '--aline', '64',
