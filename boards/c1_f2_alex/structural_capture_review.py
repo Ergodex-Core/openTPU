@@ -35,7 +35,8 @@ ALLOWED_TAGS = {
                 'hierarchy_cell', 'cell_inventory'},
     'clocks': {'clock', 'clock_registers', 'fabric_clock', 'fabric_port_clock_consumers',
                'register_clock_inventory', 'register_inventory', 'register_chunk'},
-    'flow': {'fabric_flow', 'native_receive_gate', 'native_b_response', 'routed_host_wready', 'flow_detail'},
+    'flow': {'fabric_flow', 'native_receive_gate', 'native_b_response', 'routed_host_wready',
+             'flow_detail', 'tag_ram_control', 'tag_ram_inventory'},
     'disabled_write': {'disabled_network', 'disabled_polarity', 'native_disabled_write'},
     'unused_clocks': {'clock_source_inventory', 'unused_clock'},
 }
@@ -64,12 +65,33 @@ FIELDS = {
 }
 LIST_RECORDS = {'memory_interface_pins', 'unresolved_shell_objects'}
 DICT_RECORDS = {'fabric_port_clock_consumers', 'routed_host_wready'}
+TAG_FIELDS = {
+    'tag_ram_control': ('engine', 'cell', 'reference', 'pin', 'drivers', 'clocks'),
+    'tag_ram_inventory': ('engine', 'cells', 'write_enable_pins', 'clock_reference', 'clocks'),
+}
 
 
 def payload(words, label):
     tag = words[0]
     N.require(tag in ALLOWED_TAGS[label[0]], 'unexpected structural payload in step')
-    if tag in FIELDS:
+    if tag in TAG_FIELDS:
+        fields = N.pairs(words[1:], TAG_FIELDS[tag])
+        N.require(len(label) == 3 and re.fullmatch(r'S_N[0-7]', label[1]) and label[2] == 'rvalid',
+                  'tag RAM witness outside native RVALID step')
+        engine = N.number(fields['engine'])
+        N.require(engine // 2 == int(label[1][-1]), 'tag RAM witness belongs to another PC')
+        prefix = N.ROOT + f'u_board/adapter/engines[{engine}].tag_q'
+        N.names(fields['clocks'])
+        if tag == 'tag_ram_control':
+            N.require(fields['cell'].startswith(prefix) and fields['pin'] in
+                      (fields['cell'] + '/WE', fields['cell'] + '/CLK'), 'tag RAM control scope differs')
+            N.names(fields['drivers'])
+        else:
+            cells = N.names(fields['cells']); pins = N.names(fields['write_enable_pins'])
+            N.require(0 < len(cells) <= 256 and all(name.startswith(prefix) for name in cells) and
+                      all(name.startswith(prefix) and name.endswith('/WE') for name in pins) and
+                      fields['clock_reference'] == N.ROOT + 'core_rst_reg/C', 'tag RAM inventory scope differs')
+    elif tag in FIELDS:
         N.require(len(words) >= 2 and words[1], 'missing structural payload identity')
         fields = N.pairs(words[2:], FIELDS[tag])
         if tag in ('fabric_flow', 'flow_detail'):

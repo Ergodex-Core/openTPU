@@ -112,6 +112,27 @@ def test_native_and_disabled_observations_bind_their_step():
     with pytest.raises(ValueError): S.payload(disabled, ('disabled_write', '7', 'aw'))
 
 
+@pytest.mark.parametrize('engine', range(16))
+def test_tag_ram_partial_records_retain_exact_pc_engine_scope(engine):
+    cell = f'WRAPPER/CL/u_board/adapter/engines[{engine}].tag_q_reg_0_31_0_3/RAMA'
+    label = ('flow', f'S_N{engine//2}', 'rvalid')
+    control = ['tag_ram_control', 'engine', str(engine), 'cell', cell, 'reference', 'RAMD32',
+               'pin', cell+'/WE', 'drivers', 'gate/O', 'clocks', '']
+    inventory = ['tag_ram_inventory', 'engine', str(engine), 'cells', cell,
+                 'write_enable_pins', cell+'/WE', 'clock_reference', 'WRAPPER/CL/core_rst_reg/C', 'clocks', 'core']
+    for row in (control, inventory):
+        assert S.payload(row, label) == row
+        with pytest.raises(ValueError): S.payload(row, ('flow', f'S_N{(engine//2+1)%8}', 'rvalid'))
+        with pytest.raises(ValueError): S.payload(row, ('flow', label[1], 'arready'))
+        with pytest.raises(ValueError): S.payload(row + ['extra', 'x'], label)
+    index = S.STEPS.index(label)
+    rows = records((index,))
+    rows[2 + index*2:2 + index*2] = [control, inventory]
+    parsed = parse(rows)
+    assert parsed['steps'][index]['records'] == [control, inventory]
+    assert parsed['steps'][index]['result']['state'] == 'error'
+
+
 def tcl_word(text):
     # Fixtures contain balanced braces and no escaped newline; braces preserve
     # literal substitutions in this Tcl-list-data encoder.
