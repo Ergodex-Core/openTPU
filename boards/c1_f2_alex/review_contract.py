@@ -57,6 +57,7 @@ REVIEW_SOURCES = frozenset({
     "boards/c1_f2_alex/reviewed_artifacts.json",
     "boards/c1_f2_alex/ready_pair_review.py",
     "boards/c1_f2_alex/accounting_review.py",
+    "boards/c1_f2_alex/admission_review.py",
     "boards/c1_f2_alex/structural_review.py",
     "boards/c1_f2_alex/structural_capture_review.py",
     "boards/c1_f2_alex/structural_static_review.py",
