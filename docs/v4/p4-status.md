@@ -95,9 +95,10 @@ was a re-timing of the one-slice instruction stream, this is the split's own.
 
 ## What remains (proposal section 7, milestones 2-5)
 
-Status 2026-10-20 (below, "On the F2"): item 2 is done (S = 4 bit-exact on the board model
+Status 2026-10-21 (below, "On the F2"): item 2 is done (S = 4 bit-exact on the board model
 and on the RTL with the real model); item 4 is the burst200 fabric instead of a new bridge,
-built at S = 4; item 1 is deferred to the S = 4 card trace (0.6% of the RTL token); item 3 is
+built at S = 4, qualified at 175 MHz and packaged (the AFI and the card run are the
+coordinator's); item 1 is deferred to the S = 4 card trace (0.6% of the RTL token); item 3 is
 not taken (4.5% "row's scales not all in" is its share now).
 
 1. **The collective hub.** The ISA simulator resolves a GATHER instantly once every slice
@@ -405,8 +406,36 @@ Final per clock, `refine/route_timing.rpt`:
 `b958d4063deb95463787a1a04dc547af41dfa90bae0cd954c0f17bd8d99cf0eb`. The margin is zero on the
 core clock (build 11 shipped at +0.010). A chained post-route phys_opt recovery (the
 coordinator's opt_route.tcl recipe: AggressiveExplore, AggressiveFanoutOpt, AlternateReplication,
-Explore, ...) runs on the same run's pre-refine checkpoint for a candidate with margin
-(`.../f2-burst200-s4-175-tmem2/popt/`); the 162.5 MHz hedge (refining from -0.259) was stopped.
+Explore, ...) on the same run's pre-refine checkpoint also stopped at exactly 0.000 / 0.000 after
+its first pass (phys_opt stops once setup is met), so it gave no candidate with margin and was
+dropped; the 162.5 MHz hedge (refining from -0.259) was stopped.
+
+**Qualified** (the flow's audit stage on `refine/post_route.dcp`, the gates of
+[hbm-integration.md](hbm-integration.md) rule 10, `audit/review.json` bound to the checkpoint's
+SHA-256): setup / hold / pulse width WNS 0.000 / WHS 0.000 / WPWS 0.000 with 0 failing endpoints
+(`audit/timing.rpt` line 183, "All user specified timing constraints are met."); 0 nets with
+routing errors, 1,089,983 fully routed (`audit/route_status.rpt` lines 10-11); DRC 0 errors / 0
+critical warnings / 2,891 warnings in 6 rules / 161 advisories, no AVAL-168; CDC 11 criticals,
+every one under a False Path exception (CDC-10 / CDC-11 on the xpm reset synchronizers
+`u_rst_core`, `u_rst_core_slr0`, `u_rst_core_slr2` and `u_rst_hbm`, as build 11 plus nothing new;
+CDC-1 / CDC-7 / CDC-13 on hidden shell cells; `audit/cdc.rpt` lines 34-52, 4929-4936, 9128); bus
+skew 181 rows, 0 violated; check_timing no_clock 35 (the shell's PCIe trees, as builds 6 and 11),
+unconstrained internal endpoints 0, pulse_width_clock 1 (LOW, one hidden shell pin).
+
+**Packaged** (`boards/f2/burst200/scripts/package_f2.py` with the official HDK packager, local
+only; command at the top of `/home/ubuntu/opt/logs/p4-package.log`):
+`/home/ubuntu/opt/hwloop-nightly/p4-866c920e/f2-burst200-s4-175-tmem2/package/cl/build/checkpoints/otpu_burst200_s4_175_470cf908.Developer_CL.tar`,
+459,827,200 B, SHA-256 `e8ffb6c21a66da76f3ca801099fcaaf739372282331193f7218733070b21f6d2`;
+manifest `dcp_hash` = the reviewed checkpoint's `b958d406...`, shell 0x10212415, HDK 2.3.0,
+v2025.2, clock recipes A1 / B2 / C0 / H2, PCI 0x1D0F:0xF001 / 0xFEDD:0x1D51; `package.json`
+uploaded false. The image's CFG_HASH is the target's ARCH_HASH 0x2f01ab9b, CORE_KHZ 175000.
+
+On the card (the coordinator's: AFI, load, run): `OTPU_TARGET=f2-burst200-s4-175
+OTPU_DEVICE=f2:0 python -m opentpu.host.chat --backend board --dev f2:0 --model gemma3 --slices
+4 --greedy --prompt "Why is the sky blue?"` from this branch's host tree (int8, then `--wformat
+fp4`), and `python -m opentpu.host.hwlens record --dev f2:0 --model models/gemma-3-1b-it -o
+g3-s4-175-hw.otpuprof` for the hardware trace (S comes from CFG_SLICES). Predicted, not measured:
+~63 int8 device tok/s (build 11's card / RTL ratio on 2,301,972 RTL cycles), the one-slice text.
 
 ## Commands to reproduce
 
