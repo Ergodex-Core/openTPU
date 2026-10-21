@@ -63,3 +63,65 @@ def test_structural_wrapper_never_accepts_authenticated_but_unreviewed_facts(sam
  result=S.review_artifact(reports={},auxiliary=auxiliary,checkpoint_sha256=CHECKPOINT,linked_checkpoint_sha256='4'*64,prerequisites={'receipt_sha256':{'link':PARENT,'refine':'5'*64}})
  assert result['issues'][0]['reason']=='structural_semantics_pending'
  assert result['resolved_pending_reviews']==[] and result['route_qualified'] is False
+
+
+def tcl(values):
+ return ' '.join('{'+str(x)+'}' for x in values)
+
+
+def original(tmp_path,state='unresolved'):
+ observation={'state':state,'route_qualified':'0'}
+ if state=='unresolved':observation.update(error='exact observed failure',error_info='exact observed failure\n    while executing\noriginal collector')
+ else:observation['topology']='retained original topology'
+ raw=tcl(sum(([k,v] for k,v in observation.items()),[]))
+ summary=tmp_path/'summary.tcldata';objects=tmp_path/'objects.tcldata'
+ summary.write_text(tcl(['kind','c1_final_raw_capture','checkpoint_sha256',CHECKPOINT,'route_qualified','0','structural_capture',raw])+'\n')
+ objects.write_text(tcl(['checkpoint','/immutable/design.dcp','sha256',CHECKPOINT])+'\n'+tcl(['structural_capture',raw])+'\n')
+ return {'summary.tcldata':summary,'objects.tcldata':objects}
+
+
+@pytest.mark.parametrize('state',('observed','unresolved'))
+def test_original_structural_state_is_preserved_not_waived(tmp_path,state):
+ reports=original(tmp_path,state);result=S.original_structural_observation(reports,CHECKPOINT)
+ assert result['observation']['state']==state and result['failed_scope_resolved'] is False
+ assert result['route_qualified'] is False
+ if state=='unresolved':assert 'while executing' in result['observation']['error_info']
+
+
+@pytest.mark.parametrize('attack',('summary_dcp','object_dcp','object_error','object_missing','object_duplicate','state','stack','missing_stack'))
+def test_original_structural_binding_mutations_reject(tmp_path,attack):
+ reports=original(tmp_path);summary=reports['summary.tcldata'];objects=reports['objects.tcldata']
+ if attack=='summary_dcp':summary.write_text(summary.read_text().replace(CHECKPOINT,'9'*64))
+ elif attack=='object_dcp':objects.write_text(objects.read_text().replace(CHECKPOINT,'9'*64))
+ elif attack=='object_error':objects.write_text(objects.read_text().replace('exact observed failure','different failure'))
+ elif attack=='object_missing':objects.write_text(tcl(['checkpoint','/immutable/design.dcp','sha256',CHECKPOINT])+'\n')
+ elif attack=='object_duplicate':objects.write_text(objects.read_text()+objects.read_text())
+ else:
+  for path in (summary,objects):
+   raw=path.read_text()
+   if attack=='state':raw=raw.replace('unresolved','accepted')
+   elif attack=='stack':raw=raw.replace('exact observed failure\n','unrelated stack\n')
+   elif attack=='missing_stack':raw=raw.replace('{error_info}','{unrecognized}')
+   path.write_text(raw)
+ with pytest.raises(ValueError):S.original_structural_observation(reports,CHECKPOINT)
+
+
+def test_partial_replay_does_not_drop_failed_capture_or_final_obligations(monkeypatch):
+ from boards.c1_f2_alex import structural_capture_review as C, structural_static_review as T, structural_flow_review as F, accounting_review as A
+ def auth(**kw):
+  if kw['role']=='accounting_boundary':raise ValueError('actual admission incomplete')
+  return {'raw':{'sha256':'1'*64},'checkpoint_sha256':CHECKPOINT,'helpers':{'capture_accounting.tcl':'2'*64,'capture_native.tcl':'3'*64}}
+ monkeypatch.setattr(S,'authenticate_capture',auth)
+ monkeypatch.setattr(S,'original_structural_observation',lambda *args:{'failed_scope_resolved':False})
+ monkeypatch.setattr(S,'replay_current_native',lambda *args:(None,[]))
+ monkeypatch.setattr(C,'review_artifact',lambda **kw:{'issues':[],'capture_complete':True,'canonical_facts':{'steps':[]}})
+ monkeypatch.setattr(T,'review',lambda *args:{'issues':[],'proven_static_steps':['general','clocks','unused_clocks']})
+ monkeypatch.setattr(F,'review',lambda *args,**kw:{'issues':[],'proven_steps':[]})
+ monkeypatch.setattr(A,'review_artifact',lambda **kw:{'issues':[],'arithmetic_proven':True,'pending_reviews':['admission pending']})
+ auxiliary={key:'/unused' for role in S.SPECS for key in (role,role+'_receipt',role+'_linked',role+'_linked_receipt')};auxiliary['native']='/unused'
+ result=S.review_artifact(reports={},auxiliary=auxiliary,checkpoint_sha256=CHECKPOINT,linked_checkpoint_sha256='9'*64,prerequisites={'receipt_sha256':{'link':PARENT,'refine':PARENT},'native':{}})
+ assert len([issue for issue in result['issues'] if issue['reason'].endswith('_authentication')])==2
+ assert result['canonical_facts']['accounting_arithmetic']['arithmetic_proven'] is True
+ assert result['canonical_facts']['static']['issues']==[]
+ assert result['resolved_pending_reviews']==[] and result['route_qualified'] is False
+ assert result['issues'][0]['reason']=='structural_semantics_pending'

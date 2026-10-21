@@ -141,29 +141,107 @@ def authenticate_capture(*, role, raw_path, receipt_path, checkpoint_sha256,
             'ancestry_executor_hashes': executor, 'route_qualified': False}
 
 
+def original_structural_observation(reports, checkpoint_sha256):
+    """Preserve and cross-bind the exact original fail-fast result, never waive it."""
+    summary_path = reports['summary.tcldata']; objects_path = reports['objects.tcldata']
+    before = {str(path): file_record(path) for path in (summary_path, objects_path)}
+    summary = N.td(Path(summary_path).read_text())
+    N.require(summary.get('checkpoint_sha256') == checkpoint_sha256 and
+              summary.get('kind') == 'c1_final_raw_capture' and summary.get('route_qualified') == '0',
+              'original structural summary identity differs')
+    structural = N.td(summary['structural_capture'])
+    N.require(structural.get('state') in ('observed', 'unresolved') and structural.get('route_qualified') == '0',
+              'unknown original structural capture state')
+    expected = {'state', 'route_qualified'} | ({'topology'} if structural['state'] == 'observed' else {'error', 'error_info'})
+    N.require(set(structural) == expected and all(structural[k] for k in expected),
+              'incomplete original structural result')
+    if structural['state'] == 'unresolved':
+        N.require(structural['error'] in structural['error_info'], 'original structural error/stack disagree')
+    checkpoints = []; observations = []
+    for row in N.records(objects_path):
+        if row[0] == 'checkpoint':
+            N.require(len(row) == 4 and row[2] == 'sha256', 'original object checkpoint schema differs')
+            checkpoints.append(row[3])
+        elif row[0] == 'structural_capture':
+            N.require(len(row) == 2, 'original structural object schema differs')
+            observations.append(N.td(row[1]))
+    N.require(checkpoints == [checkpoint_sha256] and observations == [structural],
+              'original structural summary/object identity differs')
+    N.require(all(file_record(path) == before[str(path)] for path in (summary_path, objects_path)),
+              'original structural observation changed')
+    return {'inputs': before, 'observation': structural,
+            'failed_scope_resolved': False, 'route_qualified': False}
+
+
+def replay_current_native(path, checkpoint_sha256, prerequisite):
+    """Reread typed facts only when they match the already verified native replay."""
+    bound = file_record(path)
+    N.require(prerequisite.get('capture') == bound and prerequisite.get('checkpoint_sha256') == checkpoint_sha256 and
+              prerequisite.get('issues') == [], 'native prerequisite binding differs')
+    result = N.review_artifact(topology_path=path, topology_sha256=bound['sha256'],
+                               checkpoint_sha256=checkpoint_sha256)
+    N.require(result == prerequisite, 'current native replay differs from prerequisite')
+    evidence = N.Evidence()
+    for row in N.records(path): evidence.add(row)
+    N.require(not evidence.issues and not evidence.incomplete and file_record(path) == bound,
+              'native typed evidence changed or incomplete')
+    return evidence, result['canonical_facts']['receive_gates']
+
+
 def review_artifact(*, reports, auxiliary, checkpoint_sha256, linked_checkpoint_sha256, prerequisites):
+    from . import structural_capture_review as C, structural_static_review as T
+    from . import structural_flow_review as F, accounting_review as A
     result = {'schema': 1, 'kind': 'c1-structural-closure-review', 'issues': [],
               'canonical_facts': {}, 'resolved_pending_reviews': [],
               'route_qualified': False, 'hardware_measured': False}
-    try:
-        parents = prerequisites['receipt_sha256']
-        N.require(set(parents) == {'link', 'refine'}, 'missing verified structural stage ancestry')
-        captures = {}
-        for role in SPECS:
-            for stage in (('refine',) if role == 'structural' else ('link', 'refine')):
-                suffix = '_linked' if stage == 'link' else ''
-                raw_role = role + suffix
-                receipt_role = role + suffix + '_receipt'
+    # No combination of partial proofs closes admission/RAM preservation or a
+    # routed ready-replica rewrite. Their actual paired witnesses are mandatory.
+    result['issues'].append({'reason': 'structural_semantics_pending',
+        'obligations': ['original_structural_failure_scope', 'paired_accounting_and_admission_preservation',
+                        'ready_replica_scope_closure']})
+    facts = result['canonical_facts']; captures = {}; facts['additive_capture_bindings'] = captures
+    def attempt(label, operation):
+        try:
+            value = operation(); facts[label] = value
+            if value.get('issues'):
+                result['issues'].append({'reason': label + '_unresolved', 'issues': value['issues']})
+            return value
+        except (ValueError, OSError, KeyError, TypeError, StopIteration, UnicodeError, IndexError) as exc:
+            result['issues'].append({'reason': label + '_unresolved', 'detail': str(exc)})
+            return None
+    parents = prerequisites.get('receipt_sha256', {})
+    if set(parents) != {'link', 'refine'}:
+        result['issues'].append({'reason': 'missing verified structural stage ancestry'})
+        return result
+    for role in SPECS:
+        for stage in (('refine',) if role == 'structural' else ('link', 'refine')):
+            suffix = '_linked' if stage == 'link' else ''; raw_role = role + suffix
+            try:
                 captures[raw_role] = authenticate_capture(role=role,
-                    raw_path=auxiliary[raw_role], receipt_path=auxiliary[receipt_role],
+                    raw_path=auxiliary[raw_role], receipt_path=auxiliary[role + suffix + '_receipt'],
                     checkpoint_sha256=linked_checkpoint_sha256 if stage == 'link' else checkpoint_sha256,
                     parent_receipt_sha256=parents[stage], stage=stage)
-        result['canonical_facts']['additive_capture_bindings'] = captures
-        # Receipt success is deliberately insufficient. Actual final raw facts
-        # must close every structural, admission and replica predicate below.
-        result['issues'].append({'reason': 'structural_semantics_pending',
-            'obligations': ['complete_structural_fact_replay', 'original_structural_failure_scope',
-                            'paired_accounting_and_admission_preservation', 'ready_replica_scope_closure']})
-    except (ValueError, OSError, KeyError, TypeError, StopIteration, UnicodeError) as exc:
-        result['issues'].append({'reason': str(exc)})
+            except (ValueError, OSError, KeyError, TypeError, StopIteration, UnicodeError) as exc:
+                result['issues'].append({'reason': raw_role + '_authentication', 'detail': str(exc)})
+    attempt('original_structural', lambda: original_structural_observation(reports, checkpoint_sha256))
+    if 'structural' in captures:
+        bound = captures['structural']
+        parsed = attempt('structural_envelope', lambda: C.review_artifact(path=auxiliary['structural'],
+            sha256=bound['raw']['sha256'], checkpoint_sha256=checkpoint_sha256, helpers=bound['helpers']))
+        if parsed and parsed.get('capture_complete') is True and not parsed.get('issues'):
+            canonical = parsed['canonical_facts']
+            attempt('static', lambda: T.review(canonical))
+            native = None; receive = None
+            try:
+                native, receive = replay_current_native(auxiliary['native'], checkpoint_sha256, prerequisites['native'])
+            except (ValueError, OSError, KeyError, TypeError, UnicodeError) as exc:
+                result['issues'].append({'reason': 'native_flow_prerequisite', 'detail': str(exc)})
+            attempt('flows', lambda: F.review(canonical, native=native, receive_facts=receive))
+    for raw_role in ('accounting_linked', 'accounting'):
+        if raw_role not in captures: continue
+        bound = captures[raw_role]
+        attempt(raw_role + '_arithmetic', lambda: A.review_artifact(topology_path=auxiliary[raw_role],
+            topology_sha256=bound['raw']['sha256'], checkpoint_sha256=bound['checkpoint_sha256'],
+            helper_sha256=bound['helpers']['capture_accounting.tcl'],
+            native_helper_sha256=bound['helpers']['capture_native.tcl']))
     return result
