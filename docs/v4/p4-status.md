@@ -369,7 +369,18 @@ on the same netlist adds placement with pessimistic long-net delays: Vivado 2025
 high` (and `-subdirective`, which excludes the flow's `-no_bufg_opt`), so 62f82f9d gives
 build.py `--place-net-delay-weight` (written to strategy.tcl, passed by implement.tcl; nothing
 changes without it; 120 tests pass); run `.../p4-62f82f9d/f2-burst200-s4-175-tmem-ndw` with the
-TMEM boxes, unit `opt-p4-viv-s4x-175ndw`.
+TMEM boxes, unit `opt-p4-viv-s4x-175ndw`. It placed byte-identically to the run without the
+option (`Command: place_design -directive Explore -no_bufg_opt -net_delay_weight high`, console
+line 587, then the same Phase 2 / Phase 4 checksums 2cb957214 / 2a60f722a and an identical
+place_timing.rpt): with `-directive Explore` the weight changes nothing here, so it was stopped
+(its console and report kept in `/home/ubuntu/opt/logs/p4-viv-s4x-175ndw-*`).
+
+**The TMEM boxes at placement** (`f2-burst200-s4-175-tmem2/implement/place_timing.rpt`, before
+phys_opt): TMEM 350 MHz **+0.630 ns** (line 186; +0.143 without the boxes), core +0.083 (185;
++0.067), HBM AXI +0.089 (183), shell +0.209 (184), and the vendor HBM reset recovery at -0.214
+over 2 endpoints, which phys_opt replicates. The 162.5 MHz SLR0-crossbar build placed core
++0.030 (185), TMEM +0.155, HBM +0.096, shell +0.077; after phys_opt +0.030 / TNS 0, router
+initialization +0.133 / TNS 0.
 
 ## Commands to reproduce
 
