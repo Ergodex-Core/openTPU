@@ -186,13 +186,15 @@ foreach s {0 2 3} {
 # route at the 2.857 ns fast period, and the DMA's t_re_q into the banks' port B. The routed
 # checkpoint had each slice's 64 TMEM BRAMs over 6-8 clock regions (slice 0 X2-X4 Y1-Y3, slice 1
 # X1-X3 Y6-Y7 with its TMEM logic in X4-X5, slice 2 X1-X2 Y9-Y11, slice 3 X4-X7 Y10-Y11). Each box is
-# 6 clock regions (~126 RAMB36 for the TMEM's 64 and the DMA's 15), a hard child of the slice's own
-# pblock, clear of the SmartConnect boxes on SLR0's rows Y0-Y1.
+# a hard child of the slice's own pblock, clear of the SmartConnect boxes on SLR0's rows Y0-Y1, with
+# room for the TMEM's 64 RAMB36 and the DMA's 14 (78): a clock region has 24 / 24 / 36 / 12 / 24 /
+# 12 / 12 / 24 RAMB36 sites in columns X0-X7, so slices 0-2's six regions hold 144-180 and slice 3's
+# box takes nine (X4Y9:X6Y11, 144; X5Y9:X6Y11's 72 failed DRC UTLZ-1 with 78 needed).
 foreach {s parent ranges tm cp} [list \
   0 pblock_CL_SLR0    {CLOCKREGION_X1Y2:CLOCKREGION_X3Y3}  $cl/u_board/u_slice           "$xs.g_x\[0\].u_cport" \
   1 pblock_CL_SLR1    {CLOCKREGION_X1Y6:CLOCKREGION_X3Y7}  "$cl/u_board/g_slice\[1\].u_slice" "$xs.g_x\[1\].u_cport" \
   2 pblock_CL_SLR2_S2 {CLOCKREGION_X1Y9:CLOCKREGION_X2Y11} "$cl/u_board/g_slice\[2\].u_slice" "$xs.g_x\[2\].u_cport" \
-  3 pblock_CL_SLR2_S3 {CLOCKREGION_X5Y9:CLOCKREGION_X6Y11} "$cl/u_board/g_slice\[3\].u_slice" "$xs.g_x\[3\].u_cport"] {
+  3 pblock_CL_SLR2_S3 {CLOCKREGION_X4Y9:CLOCKREGION_X6Y11} "$cl/u_board/g_slice\[3\].u_slice" "$xs.g_x\[3\].u_cport"] {
   create_pblock pblock_CL_TMEM$s
   resize_pblock pblock_CL_TMEM$s -add $ranges
   set_property parent $parent [get_pblocks pblock_CL_TMEM$s]
