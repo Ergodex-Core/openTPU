@@ -189,6 +189,30 @@ input without enumerating unrelated constant-net sinks. Full reset fanout and
 semantic equivalence require separate review. The capture does not alter design
 constraints and always leaves `route_qualified=0`.
 
+## Final review and qualified evidence
+
+`collect_qualified.py` consumes a fully verified schema 2 bundle, externally
+hash-bound reference files and an exact C1 artifact disposition. It writes a
+fresh schema 3 bundle with separate review and reviewer-source roles. Original
+captures, pending markers and source/IP/build/simulation receipts are preserved.
+The collector records the current reviewer bytes from an explicit Git revision,
+then replays the resulting bundle and checks its complete archive inventory.
+
+`evidence.py` authenticates the whole schema 3 inventory before replaying the
+unchanged candidate provenance checks and `final_review.py`. Recorded success
+does not substitute for current raw review. Physical failures cannot be waived;
+native and ready equivalence, accounting, replica scope, reset/status, CDC,
+exceptions and exact finding dispositions must all close for the same routed
+checkpoint. `reviewed_artifacts.json` starts empty; adding tooling alone qualifies
+no C1 design. Schemas 1 and 2 remain unqualified candidates, and generated IP
+dependencies retain their collection-time provenance limitation.
+
+Only a successfully replayed qualified bundle can pass `package.py` and the
+separate `tools/c1_f2_alex_publish.py` image publisher. Publication does not load
+an FPGA or establish measured performance; the dedicated session controller
+requires the exact available image, verified runtime bindings and exclusive
+ownership of the approved `opentpu-f2` device.
+
 ## Recorded build milestones
 
 At 2026-10-19 22:51:43 UTC, the isolated E16/S4 synthesis from `de1f5ac5` completed:
