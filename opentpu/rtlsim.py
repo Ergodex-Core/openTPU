@@ -286,6 +286,10 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the lanes on the model's behavioural lane ports (P2's M2 stand-in) instead of the lane
         # memory (otpu_lane_mem: an image copy and adapter a lane, docs/v4/p2-f2.md)
         p["LMEM"] = 0
+    if axi == 1 and int(p.get("MXU_C", 1)) > 1 and os.environ.get("OTPU_LMEM_IREG", "0") == "1":
+        # the lane memory's copies with an input register each (otpu_lane_mem IREG): P3's F2
+        # build, whose copies sit an SLR from the slice (lane_memory_slr 1)
+        p["LMEM_IREG"] = 1
     if axi == 1 and os.environ.get("OTPU_SWFILL", "1") == "0":
         # SW partial beats written with their byte masks, no fill read (the F2 build's adapters:
         # its HBM takes masks; otpu_native_dram SWFILL, docs/v4/p2-f2.md)

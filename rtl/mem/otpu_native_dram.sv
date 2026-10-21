@@ -117,7 +117,13 @@ module otpu_native_dram #(
   // beat written whole (LiteDRAM's controller would read-modify-write a masked beat, holding the
   // channel for a read's latency); 0, written with their byte mask, no fill read (a controller
   // that takes byte masks at full rate: the F2's HBM, its ECC off, docs/v4/p2-f2.md "SWFILL")
-  parameter bit SWFILL = 1'b1
+  parameter bit SWFILL = 1'b1,
+  // the slice-side requests (ports A, SW, B and a_flush) through a register first: 1 for a copy
+  // an SLR from the slice (otpu_lane_mem's copies in SLR1, P3's F2 build: the slice's request
+  // registers -> the channel hash, the run compares and the queue writes ran across the SLR in one
+  // cycle, docs/v4/p3-status.md). A request the slice saw taken enters a cycle later, so the
+  // rooms (sw_rdy2 / b_rdy2 / a_rdy2) are for 2 + IREG and the idles count the register's
+  parameter bit IREG = 1'b0
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -288,7 +294,7 @@ module otpu_native_dram #(
   logic [25:0]  al_beat;
 
   assign b_rdy = (qb_n[0] < QD) && (qb_n[1] < QD) && (bt_n < OD);
-  assign b_rdy2 = (qb_n[0] < QD - 1) && (qb_n[1] < QD - 1) && (bt_n < OD - 1);
+  assign b_rdy2 = (qb_n[0] < QD - 1 - IREG) && (qb_n[1] < QD - 1 - IREG) && (bt_n < OD - 1 - IREG);
   // Port A's requests come from the slice's port A register (otpu_slice; this adapter's own, on
   // the way in, until it moved there): the slice's grant chain (DMA busy -> port arbitration ->
   // the MXU's issue -> the scale address) does not run on into the channel hash, the run compare
@@ -296,24 +302,45 @@ module otpu_native_dram #(
   logic        a_req, a_we, a_rdy;
   logic [31:0] a_addr, a_wdata;
   logic [3:0]  a_be;
-  assign a_req = a_req_x; assign a_we = a_we_x; assign a_addr = a_addr_x;
-  assign a_wdata = a_wdata_x; assign a_be = a_be_x;
+  // the slice-side inputs as the logic below sees them (IREG: a cycle later, through a register)
+  logic           sw_req_i, b_req_i, b_tag_i, b_we_i, b_par_i, a_flush_i;
+  logic [31:0]    sw_addr_i, sw_wdata_i, b_addr_i;
+  logic [3:0]     sw_be_i;
+  logic [D/4-1:0] b_wmask_i;
+  logic [D*8-1:0] b_wdata_i;
+  if (IREG) begin : g_ireg
+    always_ff @(posedge clk) begin
+      a_req <= !rst && a_req_x; sw_req_i <= !rst && sw_req; b_req_i <= !rst && b_req;
+      a_flush_i <= a_flush;
+      a_we <= a_we_x; a_addr <= a_addr_x; a_wdata <= a_wdata_x; a_be <= a_be_x;
+      sw_addr_i <= sw_addr; sw_wdata_i <= sw_wdata; sw_be_i <= sw_be;
+      b_tag_i <= b_tag; b_we_i <= b_we; b_par_i <= b_par; b_addr_i <= b_addr;
+      b_wmask_i <= b_wmask; b_wdata_i <= b_wdata;
+    end
+  end else begin : g_idir
+    assign a_req = a_req_x; assign a_we = a_we_x; assign a_addr = a_addr_x;
+    assign a_wdata = a_wdata_x; assign a_be = a_be_x;
+    assign sw_req_i = sw_req; assign sw_addr_i = sw_addr; assign sw_wdata_i = sw_wdata;
+    assign sw_be_i = sw_be; assign b_req_i = b_req; assign b_tag_i = b_tag; assign b_we_i = b_we;
+    assign b_par_i = b_par; assign b_addr_i = b_addr; assign b_wmask_i = b_wmask;
+    assign b_wdata_i = b_wdata; assign a_flush_i = a_flush;
+  end
   assign a_rdy = (qa_n[0] < QD) && (qa_n[1] < QD) && (ao_n < OD);
   assign a_rdy_x = a_rdy;
-  assign a_rdy2 = (qa_n[0] < QD - 1) && (qa_n[1] < QD - 1) && (ao_n < OD - 1);
+  assign a_rdy2 = (qa_n[0] < QD - 1 - IREG) && (qa_n[1] < QD - 1 - IREG) && (ao_n < OD - 1 - IREG);
   assign sw_rdy = (qw_n[0] < WQD) && (qw_n[1] < WQD);
-  assign sw_rdy2 = (qw_n[0] < WQD - 1) && (qw_n[1] < WQD - 1);
-  wire sw_take = sw_req && sw_rdy;
-  wire sw_ch = chan_of(sw_addr);
-  wire [24:0] sw_m = sw_addr[29:5];
-  wire b_take = b_req && b_rdy;
+  assign sw_rdy2 = (qw_n[0] < WQD - 1 - IREG) && (qw_n[1] < WQD - 1 - IREG);
+  wire sw_take = sw_req_i && sw_rdy;
+  wire sw_ch = chan_of(sw_addr_i);
+  wire [24:0] sw_m = sw_addr_i[29:5];
+  wire b_take = b_req_i && b_rdy;
   wire a_take = a_req && a_rdy;
   wire a_ch = chan_of(a_addr);
   // the chunk's high half is on channel 0. b_addr comes at the end of the slice's grant chain
   // (DMA request -> the MXU's grant and request -> the port's address mux), and its 27-bit parity
   // then ran into every queue write (b_par: the slice muxes its sources' parities instead)
-  wire b_sw = CHASH && b_par;
-  wire [1:0] b_hnz = {b_wmask[31:16] != 0, b_wmask[15:0] != 0};   // the halves a B write writes
+  wire b_sw = CHASH && b_par_i;
+  wire [1:0] b_hnz = {b_wmask_i[31:16] != 0, b_wmask_i[15:0] != 0};   // the halves a B write writes
   wire [25:0] a_beat = a_addr[29:4];
   wire a_reuse = !a_we && al_v && al_beat == a_beat;
   // A runs per channel: the next channel beat of the run, valid (no write since), beats not
@@ -362,11 +389,11 @@ module otpu_native_dram #(
   always_comb begin
     for (int c = 0; c < 2; c++) begin
       // channel c holds the chunk's half c ^ b_sw
-      qb_push[c] = b_take && (!b_we || b_hnz[c ^ b_sw]);
-      qb_e[c].we = b_we;
-      qb_e[c].m = b_addr[29:5];
-      qb_e[c].data = b_wdata[512 * (c ^ b_sw) +: 512];
-      qb_e[c].wmask = b_we ? b_wmask[16 * (c ^ b_sw) +: 16] : '0;
+      qb_push[c] = b_take && (!b_we_i || b_hnz[c ^ b_sw]);
+      qb_e[c].we = b_we_i;
+      qb_e[c].m = b_addr_i[29:5];
+      qb_e[c].data = b_wdata_i[512 * (c ^ b_sw) +: 512];
+      qb_e[c].wmask = b_we_i ? b_wmask_i[16 * (c ^ b_sw) +: 16] : '0;
       qa_push[c] = a_take && a_ch == c[0] && !a_reuse && !a_hit;
       qa_e[c].we = a_we;
       qa_e[c].m = a_cb;
@@ -392,9 +419,9 @@ module otpu_native_dram #(
           gd[c][8 * k +: 8] <= gw_word == 4'(k / 4) && gw_be[k % 4]
                                ? gw_wdata[c][8 * (k % 4) +: 8]
                                : gw_same[c] ? gd[c][8 * k +: 8] : 8'h00;
-      gw_wdata[c] <= sw_wdata;
+      gw_wdata[c] <= sw_wdata_i;
     end
-    gw_word <= sw_addr[3:0]; gw_be <= sw_be;
+    gw_word <= sw_addr_i[3:0]; gw_be <= sw_be_i;
   end
 
   for (genvar c = 0; c < 2; c++) begin : g_mem
@@ -562,7 +589,7 @@ module otpu_native_dram #(
   // the tag FIFO writes its tail every cycle too (the slot is not live unless the FIFO is full),
   // so its write enable is a register, not b_take
   always_ff @(posedge clk) begin
-    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= {b_sw, b_tag};
+    if (!bt_n[OW]) bt_q[OW'(bt_h + bt_n)] <= {b_sw, b_tag_i};
     if (a_take && !a_we)
       ao_q[OW'(ao_h + ao_n)] <= ao_in;
   end
@@ -578,8 +605,9 @@ module otpu_native_dram #(
   logic [4:0]    wacc_q;
   logic [15:0]   iss_w [2];
   assign wr_idle = (wq_n == 0) && (wacc_q == '0) && (gv == '0) &&
-                   (iss_w[0] == n_wdone[0]) && (iss_w[1] == n_wdone[1]);
-  assign rd_idle = (bt_n == 0) && (ao_n == 0);
+                   (iss_w[0] == n_wdone[0]) && (iss_w[1] == n_wdone[1]) &&
+                   !(IREG && ((a_req && a_we) || sw_req_i || (b_req_i && b_we_i)));
+  assign rd_idle = (bt_n == 0) && (ao_n == 0) && !(IREG && ((a_req && !a_we) || (b_req_i && !b_we_i)));
 
   always_ff @(posedge clk) begin
     if (rst) begin
@@ -605,8 +633,8 @@ module otpu_native_dram #(
       wq_n <= wq_n + PW'(wacc_q[0]) + PW'(wacc_q[1]) + PW'(wacc_q[2]) + PW'(wacc_q[3]) +
               PW'(wacc_q[4]) - PW'(wiss[0]) - PW'(wiss[1]);
       wacc_q <= {qw_push[1], qw_push[0], a_take && a_we,
-                 b_take && b_we && b_wmask[31:16] != 0,
-                 b_take && b_we && b_wmask[15:0]  != 0};
+                 b_take && b_we_i && b_wmask_i[31:16] != 0,
+                 b_take && b_we_i && b_wmask_i[15:0]  != 0};
       for (int c = 0; c < 2; c++) begin
         logic [QW:0] na;
         logic [RW:0] rbn, rbr;
@@ -687,7 +715,7 @@ module otpu_native_dram #(
           ao_h <= ao_h + 1; aon = aon - 1;
           if (!aoh.reuse) a_last <= ra_head[aoh.c];
         end
-        bt_n <= (OW + 1)'(updn(16'(bt_n), b_take && !b_we, b_out));
+        bt_n <= (OW + 1)'(updn(16'(bt_n), b_take && !b_we_i, b_out));
         ao_n <= aon;
       end
       // ---- SW gather: merge into the beat, or start a new one (the old one was pushed)
@@ -700,7 +728,7 @@ module otpu_native_dram #(
           gage[c] <= '0;
           gb[c].m <= sw_m;
           for (int k = 0; k < 64; k++)
-            gb[c].strb[k] <= (sw_addr[3:0] == 4'(k / 4) && sw_be[k % 4]) || (same && gb[c].strb[k]);
+            gb[c].strb[k] <= (sw_addr_i[3:0] == 4'(k / 4) && sw_be_i[k % 4]) || (same && gb[c].strb[k]);
         end else if (qw_push[c]) begin
           gv[c] <= 1'b0;
         end else if (gv[c] && gage[c] != '1) begin
@@ -729,7 +757,7 @@ module otpu_native_dram #(
       end
       // ---- the host may have written since (last: an A read taken now decided with the old
       // state, and its run is dropped too)
-      if (a_flush) begin
+      if (a_flush_i) begin
         pv <= '0;
         al_v <= 1'b0;
       end
@@ -775,6 +803,13 @@ module otpu_native_dram #(
                        wnz[c][wh_r[c]] ? whb[c][wh_r[c]] + 1'b1 : (WW + 1)'(1);
 
 `ifndef SYNTHESIS
+  // IREG: a request the caller saw taken a cycle ago has room now
+  always_ff @(posedge clk)
+    if (!rst && IREG && ((a_req && !a_rdy) || (sw_req_i && !sw_rdy) || (b_req_i && !b_rdy)))
+      $fatal(1, "otpu_native_dram: a registered request without room (a %0d/%0d sw %0d/%0d b %0d/%0d)",
+             a_req, a_rdy, sw_req_i, sw_rdy, b_req_i, b_rdy);
+`endif
+`ifndef SYNTHESIS
   // The hazard counts are read only while live: a write goes out only from a live bucket, and
   // every live count is what a count reset with the rest would hold (whb_ref). The counts start
   // with anything, as after a reset in the middle of a run
@@ -801,13 +836,13 @@ module otpu_native_dram #(
   // cycle: the head of each (the entry a command or a read's data takes) is what a queue written
   // on a push only holds (qbr, btr: the old write enables)
   always_ff @(posedge clk)
-    if (!rst && b_req && b_par != ^b_addr[31:5])
-      $fatal(1, "otpu_native_dram: b_par %0d, address %h", b_par, b_addr);
+    if (!rst && b_req_i && b_par_i != ^b_addr_i[31:5])
+      $fatal(1, "otpu_native_dram: b_par_i %0d, address %h", b_par_i, b_addr_i);
   logic [$bits(qb_t)-1:0] qbr [2][QD];
   logic [1:0] btr [OD];
   always_ff @(posedge clk) begin
     for (int c = 0; c < 2; c++) if (qb_push[c]) qbr[c][QW'(qb_h[c] + qb_n[c])] <= qb_e[c];
-    if (b_take && !b_we) btr[OW'(bt_h + bt_n)] <= {b_sw, b_tag};
+    if (b_take && !b_we_i) btr[OW'(bt_h + bt_n)] <= {b_sw, b_tag_i};
   end
   always_ff @(posedge clk)
     if (!rst) begin
@@ -852,8 +887,8 @@ module otpu_native_dram #(
         gb_ref[c].m <= sw_m;
         for (int k = 0; k < 64; k++) begin
           logic hit;
-          hit = sw_addr[3:0] == 4'(k / 4) && sw_be[k % 4];
-          gb_ref[c].data[8 * k +: 8] <= hit ? sw_wdata[8 * (k % 4) +: 8]
+          hit = sw_addr_i[3:0] == 4'(k / 4) && sw_be_i[k % 4];
+          gb_ref[c].data[8 * k +: 8] <= hit ? sw_wdata_i[8 * (k % 4) +: 8]
                                         : same ? gb_ref[c].data[8 * k +: 8] : 8'h00;
           gb_ref[c].strb[k] <= hit || (same && gb_ref[c].strb[k]);
         end

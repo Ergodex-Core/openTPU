@@ -77,6 +77,8 @@ module otpu_f2_hbm_sys #(
   parameter int READ_IDLE  = 1,          //   gather timeout,
   parameter bit READ_WAIT  = 1'b1,       //   and wait (docs/f2_hbm.md "The memory path")
   parameter bit PORDER     = 1'b0,       // otpu_native_axi's barriers per page bucket (P2: see the top)
+  parameter bit LMEM_IREG  = 1'b0,       // the lane memory copies' input registers (otpu_lane_mem IREG;
+                                         //   P3: build.py sets 1 with lane_memory_slr 1)
   parameter int NXF        = 0           // the native ports' chain pumped on clk_f (otpu_f2_hbm_axi
                                          //   NXF: half the SLR crossings; P3's 16 channels): 0, NXR's
 ) (
@@ -283,6 +285,7 @@ module otpu_f2_hbm_sys #(
                // unit was hardware the gates never ran, and its RLD / TMEM paths were P3's placed
                // core-clock class into the VPU's write-buffer enables (docs/v4/p3-status.md)
                .COLL_GATHER(S > 1),
+               .LMEM_IREG(LMEM_IREG),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),

@@ -92,7 +92,8 @@ def test_p3_variants_prepare_16_channels_and_the_pumped_chain(tmp_path):
     for want in ("NCH = 16;", "PSTRIDE = 2;", "HPORT = 15;", "MMCM_DIVCLK = 5;", "MMCM_MULT = 24.0;"):
         assert want in geo, want
     params = (cl / "design/opentpu_params.vh").read_text()
-    for k, v, w in (("MXU_C", 8, 32), ("MXU_PACK", 1, 1), ("NCH", 16, 32), ("NXF", 6, 32)):
+    for k, v, w in (("MXU_C", 8, 32), ("MXU_PACK", 1, 1), ("NCH", 16, 32), ("NXF", 6, 32),
+                    ("LMEM_IREG", 1, 1)):
         assert re.search(rf"\.{k}\({w}'h{v:x}\)", params), k
     pnr = (cl / "build/constraints/cl_pnr_user.tcl").read_text()
     assert "g_xf.g_ch\\[*\\].$otpu_dir" in pnr and "if {![llength $otpu_xf]}" in pnr

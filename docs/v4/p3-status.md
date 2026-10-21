@@ -382,6 +382,41 @@ coordinator's rule (route only at WNS >= 0 after the post-place phys_opt) the ro
 12:03 UTC; the router's first estimates WNS +0.080, WHS -0.585 (console.log `Route 35-416`). The
 learned rule says a placed margin under ~0.2 ns tends to lose 0.1-0.3 ns in routing on this part.
 
+**The route stopped at its start**: "ERROR: [Route 35-3] Design is not routable as its global
+congestion level is 7" (`impl150-1/console.log:2033`, after "[Route 35-447] Congestion is
+preventing the router from routing all nets"; ImplCL exit 1 at 12:29 UTC). The router's global
+congestion (console.log:2052-2090): West 128 x 128 at 90.0% (INT_X0Y500 -> INT_X127Y627, level
+7), East 64 x 64 at 92.0% (INT_X64Y485 -> X127Y548), North 64 x 64 at 88.5% (INT_X0Y562 ->
+X63Y625), all in SLR2's lower half and at the SLR2 / SLR1 boundary. The placed congestion report
+(`po-report/congestion.txt`) names the owners of the five level-7 windows (Y425-555, X0-72):
+otpu_f2_hbm_axi's pumped chains (`u_sys/u_mem`, 28-29% of the window's cells), MXU lane 4
+(23-24%) and adapter `g_cp[4]` (12-13%); the north long window, lanes 1 and 0. The chains' SLR2
+ends and the eight adapters sit at the boundary, and every one of the 9.2 K SLR2 / SLR1 crossings
+went through the LAGUNA columns under pb_otpu_mid (X0-X3).
+
+**The congestion round** (the coordinator's levers, 2026-10-21):
+
+- A placement directive that spreads more, on the same netlist: `impl150-alt`
+  (`--place-directive AltSpreadLogic_high`, 9a863228's synthesis; script impl-po.sh). Placed at
+  13:55 UTC, WNS +0.046 (`impl150-alt/console.log:1646`), "[Place 46-14] highly congested"
+  (:1661), and its global congestion worse: North and West 128 x 128 (level 7; :1677, :1683; the
+  first placement's North was 64 x 64). It cannot route (the router refuses level 7), so it was
+  stopped (systemctl) before phys_opt.
+- The lane memory out of SLR2 (8ec4c72b, on b7b7d2cc's BAR-only collective): the eight adapters
+  (`u_board/u_mem/g_cp[*].u_adapt`: 75.9 K LUTs, 45.2 K of them LUT RAM, 23 K flip-flops) and the
+  pumped chains' board ends into SLR1, whose CL area was 5.6% used; pb_otpu_mid widened to the
+  CL's whole SLR1 (but the PCIS box) so the crossings spread over its width. The lane memory's
+  slice-facing registers (its room-for-two readies, the idles) and gates stay with the slice: every
+  SLR2 / SLR1 crossing starts or ends at a register (the slice's port and lane registers, the
+  adapters' counters into the ready registers, the adapters' read data into the slice's input
+  registers). A floorplan option of the target (f2-p2 p3c* `lane_memory_slr = 1`; P2's variants
+  keep 2); checked on 9a863228's linked design: the adapters and the chains' ends in pb_otpu_mid,
+  the ready registers in pb_otpu_board. SLR2 / SLR1 then carries the copies' ports (~12 K signals:
+  the lanes' 1 KiB chunk data and scale lines back, the requests and the broadcast writes out)
+  instead of the chains' 9.2 K; SLR1 / SLR0 the chains as before. The simulated RTL is
+  9a863228's (b7b7d2cc and 8ec4c72b change only the F2 system's collective parameter, the
+  floorplan, build.py and the target), so round 2's gates stand.
+
 ## Risks found on the real part
 
 - **SLR crossings at 16 channels.** P2's floorplan (wide-port-alexshell's) keeps the board in SLR2

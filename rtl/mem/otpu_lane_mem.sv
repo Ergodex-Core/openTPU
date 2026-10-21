@@ -49,7 +49,10 @@ module otpu_lane_mem #(
   // the adapters' A runs take forward skips (otpu_native_dram APS): each lane's scale rows are C
   // rows apart (P3, docs/v4/p3-status.md "lane 0's scale beats")
   parameter bit APS = (C > 1),
-  parameter bit SWFILL = 1'b1          // SW partial beats with a fill read (otpu_native_dram)
+  parameter bit SWFILL = 1'b1,         // SW partial beats with a fill read (otpu_native_dram)
+  // the copies' requests through a register in each adapter (otpu_native_dram IREG; C > 1 only):
+  // the copies an SLR from the slice (P3's F2 floorplan, lane_memory_slr 1)
+  parameter bit IREG = 1'b0
 ) (
   input  logic              clk,
   input  logic              rst,
@@ -199,7 +202,7 @@ module otpu_lane_mem #(
     assign ca_be[l]    = a_be_x;
     assign cs_req[l]   = sw_req && sw_rdy;
     otpu_native_dram #(.D(D), .QD(QD), .WQD(WQD), .CHASH(CHASH), .WGATHER(WGATHER), .RD(RD),
-                       .AD(AD), .APF(APF), .APS(APS), .SWFILL(SWFILL)) u_adapt (
+                       .AD(AD), .APF(APF), .APS(APS), .SWFILL(SWFILL), .IREG(IREG && C > 1)) u_adapt (
       .clk, .rst, .a_flush,
       .a_rdy_x(ca_rdy[l]), .a_req_x(ca_req[l]), .a_we_x(ca_we[l]), .a_addr_x(ca_addr[l]),
       .a_wdata_x(ca_wdata[l]), .a_be_x(ca_be[l]), .a_rvalid(ca_rvalid[l]), .a_rdata(ca_rdata[l]),
