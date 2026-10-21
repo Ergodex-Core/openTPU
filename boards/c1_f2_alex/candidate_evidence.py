@@ -283,7 +283,8 @@ class Bundle:
 
 def local_module(name):
     # These are reviewed local pure validators, never paths from the bundle.
-    spec = importlib.util.spec_from_file_location('c1_alex_evidence_' + name, HERE / (name + '.py'))
+    # The trusted package name also permits their local relative imports.
+    spec = importlib.util.spec_from_file_location('boards.c1_f2_alex._evidence_' + name, HERE / (name + '.py'))
     module = importlib.util.module_from_spec(spec)
     old = sys.dont_write_bytecode
     try:

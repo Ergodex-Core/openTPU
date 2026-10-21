@@ -39,6 +39,9 @@ def context(tmp_path, monkeypatch):
     decisions = dict(kind='synthetic-test-decisions-never-deploy', route_qualified=True, hardware_measured=False,
                      resolved_pending_reviews=['SYNTHETIC_pending_review'], original_nested_pending_reviews={})
     monkeypatch.setattr(p.F, 'replay', lambda **kwargs: copy.deepcopy(decisions))
+    # This fixture replaces source semantics; dedicated binding tests exercise
+    # actual manifest role selection, receipt hashes, relocation and tampering.
+    monkeypatch.setattr(p.F, 'hardware_source_binding', lambda *args, **kwargs: {'synthetic_only': True})
     refs = tmp_path / 'references'; refs.mkdir()
     def external(name):
         path = refs / name; path.write_text('Synthetic test reference: ' + name)

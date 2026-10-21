@@ -50,6 +50,53 @@ def source_inventory():
     return {name: record(E.ROOT / name) for name in sorted(R.REVIEW_SOURCES)}
 
 
+def hardware_source_binding(bundle, *, relocated_root=None):
+    """Select source proof inputs solely from an authenticated candidate Bundle.
+
+    The collector may supply its exact copied root before writing schema3. Each
+    selected copy must still equal the original manifest inventory and receipt.
+    No source code in that snapshot is imported or executed.
+    """
+    specialization = module('admission_specialization_review')
+    hardware = bundle.manifest['hardware']
+    snapshot = bundle.manifest['source_snapshots']['hardware']
+    require(hardware['source_revision'] == snapshot['revision'] == specialization.HARDWARE_REVISION and
+            hardware['build_id'] == specialization.HARDWARE_REVISION[:8],
+            'Source specialization hardware snapshot differs')
+    root = Path(relocated_root) if relocated_root is not None else bundle.root
+    require(root.is_absolute(), 'Source binding root must be absolute')
+    E.no_symlink(root)
+    def selected(name, expected_sha256):
+        name = E.relative(name)
+        row = bundle.files.get(name)
+        require(isinstance(row, dict), 'Missing source proof inventory: ' + name)
+        E.metadata(row)
+        require(row['sha256'] == expected_sha256 and record(root / name) == row,
+                'Source proof input differs from authenticated inventory: ' + name)
+        return root / name
+    source_prefix = E.relative(snapshot['bundle_relative_path'])
+    paths = {name: selected(source_prefix + '/' + name, digest)
+             for name, digest in specialization.SOURCE_SHA256.items()}
+    synth_prefix = E.relative(bundle.manifest['roots']['synth']['bundle_relative_path'])
+    inputs_sha = E.digest(bundle.receipt('synth')['inputs_sha256'])
+    require(inputs_sha == specialization.SYNTH_INPUT_SHA256, 'Unreviewed synthesis input identity')
+    inputs = selected(synth_prefix + '/inputs.json', inputs_sha)
+    top = selected(synth_prefix + '/source/rtl/boards/f2/cl_opentpu.sv', specialization.TOP_SHA256)
+    return dict(source_paths=paths, synth_inputs_path=inputs,
+                synth_inputs_sha256=inputs_sha, generated_top_path=top)
+
+
+def source_binding_files(binding):
+    require(isinstance(binding, dict) and set(binding) == {
+        'source_paths', 'synth_inputs_path', 'synth_inputs_sha256', 'generated_top_path'},
+        'Missing/extra source specialization binding fields')
+    require(isinstance(binding['source_paths'], dict) and
+            set(binding['source_paths']) == set(module('admission_specialization_review').SOURCE_SHA256),
+            'Missing/extra source specialization files')
+    E.digest(binding['synth_inputs_sha256'])
+    return [*binding['source_paths'].values(), binding['synth_inputs_path'], binding['generated_top_path']]
+
+
 def artifact_records(g, objects, summary):
     records = []
     for row in g.records(objects):
@@ -206,7 +253,7 @@ def successful(value, label):
 
 
 def replay(*, reports, auxiliary, disposition_path, checkpoint, linked_checkpoint,
-           capture_receipt_sha256, capture_receipts):
+           capture_receipt_sha256, capture_receipts, source_binding=None):
     policy = read_json(POLICY)
     require(isinstance(policy, dict) and set(policy) == {'schema', 'artifacts'} and
             type(policy['schema']) is int and policy['schema'] == 1 and
@@ -217,13 +264,20 @@ def replay(*, reports, auxiliary, disposition_path, checkpoint, linked_checkpoin
     require(set(reports) == set(E.FINAL_REPORTS) and
             set(auxiliary) == set(R.RAW_AUXILIARY) | R.REFERENCE_AUXILIARY,
             'Missing/extra current raw review inputs')
-    before = {str(path): record(path) for path in [*reports.values(), *auxiliary.values(), disposition_path, POLICY]}
+    before = {str(path): record(path) for path in [*reports.values(), *auxiliary.values(), disposition_path, POLICY,
+                                                 *source_binding_files(source_binding)]}
     sources = source_inventory()
     g = module('gray_review'); summary = g.td(Path(reports['summary.tcldata']).read_text())
     require(summary.get('checkpoint_sha256') == checkpoint, 'Summary checkpoint mismatch')
     pending = g.tcl_list(summary['pending_reviews'])
     R.pending_categories(pending, {})
     result = {'physical': physical(g, summary)}
+    result['source_specialization'] = module('admission_specialization_review').review_sources(**source_binding)
+    successful(result['source_specialization'], 'Source specialization')
+    require(result['source_specialization'].get('source_elided_bits_proven') is True and
+            result['source_specialization'].get('source_hardware_equivalence_proven') is False and
+            result['source_specialization'].get('route_qualified') is False,
+            'Source specialization scope differs')
     result['gray'] = g.review_final(reports['objects.tcldata'], reports['supplemental.tcldata'],
                                     reports['timing_all_ids.xdc'], auxiliary['gray_vendor'], checkpoint)
     require(result['gray'].get('gray_evidence_consistent') is True, 'Gray predicate unresolved')
@@ -255,7 +309,8 @@ def replay(*, reports, auxiliary, disposition_path, checkpoint, linked_checkpoin
             result['ready_pair'].get('issues') == [], 'Observed LINK/routed ready equivalence unresolved')
     structural = module('structural_review').review_artifact(reports=reports, auxiliary=auxiliary,
         checkpoint_sha256=checkpoint, linked_checkpoint_sha256=linked_checkpoint,
-        prerequisites={**{name: result[name] for name in ('linked_native', 'native', 'ready_pair')},
+        prerequisites={**{name: result[name] for name in ('linked_native', 'native', 'ready_pair', 'source_specialization')},
+            'source_binding': source_binding,
             'receipt_sha256': {'link': E.digest(capture_receipts['linked_native']['linked_receipt_sha256']),
                                'refine': E.digest(capture_receipts['capture']['refine_receipt_sha256'])}})
     successful(structural, 'Structural/replica closure')
@@ -297,7 +352,8 @@ def verify_review(bundle, candidate):
     result = replay(reports=reports, auxiliary=auxiliary, disposition_path=bundle.path('review', 'disposition.json'),
         checkpoint=inputs['checkpoints']['final'], linked_checkpoint=inputs['checkpoints']['linked'],
         capture_receipt_sha256=inputs['receipt_sha256']['capture'],
-        capture_receipts={role: bundle.receipt(role) for role in E.RAW_ROLES})
+        capture_receipts={role: bundle.receipt(role) for role in E.RAW_ROLES},
+        source_binding=hardware_source_binding(bundle))
     require(bundle.read('review', R.DECISIONS_NAME, receipt['decisions_sha256']) == result,
             'Recorded C1 decisions differ from current raw replay')
     require(set(candidate['pending_reviews']) == set(result['resolved_pending_reviews']),

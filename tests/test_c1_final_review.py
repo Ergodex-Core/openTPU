@@ -138,11 +138,15 @@ def isolated_replay(tmp_path, monkeypatch):
  def good(**kw): return {'issues':[],'canonical_facts':{'synthetic':True}}
  native_pending=['current_routed_native_ready_equivalence','current_host_wready_equivalence','current_reset_status','physical_timing_and_exceptions']
  values['native']={**good(),'pending_reviews':native_pending}
+ values['source_specialization']={**good(),'source_elided_bits_proven':True,'source_hardware_equivalence_proven':False,'route_qualified':False}
  values['ready_pair']={'issues':[],'observed_ready_equivalent':True,'pending_reviews':['renamed_replica_scope_closure','C1_final_artifact_qualification']}
  values['structural']={**good(),'resolved_pending_reviews':['current_routed_native_ready_equivalence','current_host_wready_equivalence','renamed_replica_scope_closure']}
  actual_gray=r.module('gray_review')
  monkeypatch.setattr(actual_gray,'review_final',lambda *args:{'gray_evidence_consistent':True})
+ source_path=tmp_path/'source';source_path.write_text('SYNTHETIC source input')
+ source_binding=dict(source_paths={'source':source_path},synth_inputs_path=source_path,synth_inputs_sha256=r.record(source_path)['sha256'],generated_top_path=source_path)
  modules={'gray_review':actual_gray,
+  'admission_specialization_review':SimpleNamespace(SOURCE_SHA256={'source':'0'*64},review_sources=lambda **kw:copy.deepcopy(values['source_specialization'])),
   'no_clock_review':SimpleNamespace(review_raw=lambda *args:{'predicate_satisfied':True,'pins':35}),
   'reset_status_review':SimpleNamespace(review_artifact=good),
   'exception_review':SimpleNamespace(review_artifact=good),
@@ -157,7 +161,7 @@ def isolated_replay(tmp_path, monkeypatch):
  receipts['linked_native']['linked_receipt_sha256']='2'*64
  receipts['capture']['refine_receipt_sha256']='3'*64
  arguments=dict(reports=reports,auxiliary=auxiliary,disposition_path=disposition,checkpoint='b'*64,
-  linked_checkpoint='a'*64,capture_receipt_sha256='c'*64,capture_receipts=receipts)
+  linked_checkpoint='a'*64,capture_receipt_sha256='c'*64,capture_receipts=receipts,source_binding=source_binding)
  return arguments,values
 
 
@@ -179,3 +183,39 @@ def test_any_unresolved_raw_obligation_prevents_acceptance(tmp_path,monkeypatch,
  elif mode=='extra_closure':values['structural']['resolved_pending_reviews'].append('inapplicable')
  else:values['structural']['resolved_pending_reviews']*=2
  with pytest.raises(ValueError):r.replay(**args)
+
+
+@pytest.mark.parametrize('case', ['missing_binding', 'missing_source', 'extra_flag', 'source_issue', 'source_false', 'broad_claim'])
+def test_source_binding_cannot_be_replaced_by_success_claim(tmp_path, monkeypatch, case):
+ args,values=isolated_replay(tmp_path,monkeypatch)
+ if case=='missing_binding':args.pop('source_binding')
+ elif case=='missing_source':args['source_binding']['source_paths']={}
+ elif case=='extra_flag':args['source_binding']['source_elided_bits_proven']=True
+ elif case=='source_issue':values['source_specialization']['issues']=[{'reason':'source changed'}]
+ elif case=='source_false':values['source_specialization']['source_elided_bits_proven']=False
+ else:values['source_specialization']['source_hardware_equivalence_proven']=True
+ with pytest.raises(ValueError):r.replay(**args)
+
+
+def test_source_change_during_later_raw_predicate_is_detected(tmp_path,monkeypatch):
+ args,_=isolated_replay(tmp_path,monkeypatch)
+ def changed(*args_):
+  args['source_binding']['synth_inputs_path'].write_text('changed during structural replay')
+  return {'synthetic':'cdc'}
+ monkeypatch.setattr(r,'protected_cdc_context',changed)
+ with pytest.raises(ValueError,match='changed during replay'):r.replay(**args)
+
+
+def test_structural_adapter_receives_same_raw_source_binding_and_replayed_fact(tmp_path,monkeypatch):
+ args,values=isolated_replay(tmp_path,monkeypatch)
+ original=r.module
+ calls=[]
+ def structural(**kwargs):
+  calls.append(kwargs['prerequisites'])
+  return copy.deepcopy(values['structural'])
+ monkeypatch.setattr(r,'module',lambda name:SimpleNamespace(review_artifact=structural) if name=='structural_review' else original(name))
+ result=r.replay(**args)
+ assert len(calls)==1
+ assert calls[0]['source_binding']==args['source_binding']
+ assert calls[0]['source_specialization']==result['source_specialization']
+ assert str(tmp_path) not in json.dumps(result)

@@ -137,7 +137,8 @@ def collect(spec, out, *, spec_raw=None):
             auxiliary={key: resolve(row) for key, row in inputs['auxiliary'].items()}, disposition_path=review / 'disposition.json',
             checkpoint=inputs['checkpoints']['final'], linked_checkpoint=inputs['checkpoints']['linked'],
             capture_receipt_sha256=inputs['receipt_sha256']['capture'],
-            capture_receipts={role: base.receipt(role) for role in E.RAW_ROLES})
+            capture_receipts={role: base.receipt(role) for role in E.RAW_ROLES},
+            source_binding=F.hardware_source_binding(base, relocated_root=bundle))
         E.require(decisions.get('route_qualified') is True and decisions.get('hardware_measured') is False and
                   set(decisions['resolved_pending_reviews']) == set(candidate['pending_reviews']), 'Final reviewer did not close candidate obligations')
         add(review_prefix + '/' + R.DECISIONS_NAME, F.encode(decisions))
