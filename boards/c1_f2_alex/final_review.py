@@ -255,7 +255,9 @@ def replay(*, reports, auxiliary, disposition_path, checkpoint, linked_checkpoin
             result['ready_pair'].get('issues') == [], 'Observed LINK/routed ready equivalence unresolved')
     structural = module('structural_review').review_artifact(reports=reports, auxiliary=auxiliary,
         checkpoint_sha256=checkpoint, linked_checkpoint_sha256=linked_checkpoint,
-        prerequisites={name: result[name] for name in ('linked_native', 'native', 'ready_pair')})
+        prerequisites={**{name: result[name] for name in ('linked_native', 'native', 'ready_pair')},
+            'receipt_sha256': {'link': E.digest(capture_receipts['linked_native']['linked_receipt_sha256']),
+                               'refine': E.digest(capture_receipts['capture']['refine_receipt_sha256'])}})
     successful(structural, 'Structural/replica closure')
     nested = {name: result[name]['pending_reviews'] for name in ('linked_native', 'native', 'ready_pair')}
     R.pending_categories(pending, nested)

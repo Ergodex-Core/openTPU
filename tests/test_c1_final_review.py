@@ -154,6 +154,8 @@ def isolated_replay(tmp_path, monkeypatch):
  monkeypatch.setattr(r,'protected_cdc_context',lambda *args:{'synthetic':'cdc'})
  monkeypatch.setattr(r,'artifact_records',lambda *args:records)
  receipts={role:{'files':{name:{'sha256':'1'*64} for name in ('capture_ready.tcl','capture_native.tcl')}} for role in r.E.RAW_ROLES}
+ receipts['linked_native']['linked_receipt_sha256']='2'*64
+ receipts['capture']['refine_receipt_sha256']='3'*64
  arguments=dict(reports=reports,auxiliary=auxiliary,disposition_path=disposition,checkpoint='b'*64,
   linked_checkpoint='a'*64,capture_receipt_sha256='c'*64,capture_receipts=receipts)
  return arguments,values
