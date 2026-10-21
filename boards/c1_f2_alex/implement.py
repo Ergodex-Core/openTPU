@@ -24,7 +24,8 @@ STAGES = ('link', 'implement', 'refine', 'qualify')
 PREVIOUS = {'implement': 'link', 'refine': 'implement', 'qualify': 'refine'}
 CHECKPOINTS = {'link': 'post_link.dcp', 'implement': 'post_route.dcp', 'refine': 'post_route.dcp'}
 FORBIDDEN_CONTROLS = ('tuning.tcl', 'incremental_reference.txt', 'incremental_reference.sha256')
-PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt', 'align-promoted-carry-pblocks')
+PHYSICAL_STRATEGIES = ('default', 'skip-pre-route-phys-opt', 'align-promoted-carry-pblocks',
+                       'align-complete-promoted-carry-pblocks')
 
 
 # Two synthesis-promoted carry predecessors escaped their original u_board
@@ -167,6 +168,304 @@ close $output
 namespace delete ::c1_carry_pblock
 puts C1_CARRY_PBLOCK_REPAIR_COMPLETE_NOT_ROUTE_QUALIFIED
 '''
+
+# Complete observed promoted-to-core components. Last suffix in each tuple is
+# the existing child-Pblock terminal; preceding suffixes are promoted cells.
+# Source: exact post-opt raw 98717de7...11bf4, 159 disjoint components.
+CARRY_COMPLETE_COMPONENTS = (
+    ('sums_reg[0][0][11]_i_1', 'sums_reg[0][0][16]_i_1'),
+    ('sums_reg[0][0][16]_i_8', 'sums_reg[0][0][16]_i_2'),
+    ('sums_reg[0][0][2]_i_1', 'sums_reg[0][0][11]_i_18'),
+    ('sums_reg[0][0][3]_i_2', 'sums_reg[0][0][16]_i_11'),
+    ('sums_reg[0][10][11]_i_1', 'sums_reg[0][10][16]_i_1'),
+    ('sums_reg[0][10][16]_i_8', 'sums_reg[0][10][16]_i_2'),
+    ('sums_reg[0][10][2]_i_1', 'sums_reg[0][10][11]_i_18'),
+    ('sums_reg[0][10][3]_i_2', 'sums_reg[0][10][16]_i_11'),
+    ('sums_reg[0][11][11]_i_1', 'sums_reg[0][11][16]_i_1'),
+    ('sums_reg[0][11][16]_i_8', 'sums_reg[0][11][16]_i_2'),
+    ('sums_reg[0][11][2]_i_1', 'sums_reg[0][11][11]_i_18'),
+    ('sums_reg[0][11][3]_i_2', 'sums_reg[0][11][16]_i_11'),
+    ('sums_reg[0][12][11]_i_1', 'sums_reg[0][12][16]_i_1'),
+    ('sums_reg[0][12][16]_i_8', 'sums_reg[0][12][16]_i_2'),
+    ('sums_reg[0][12][2]_i_1', 'sums_reg[0][12][11]_i_18'),
+    ('sums_reg[0][12][3]_i_2', 'sums_reg[0][12][16]_i_11'),
+    ('sums_reg[0][13][11]_i_1', 'sums_reg[0][13][16]_i_1'),
+    ('sums_reg[0][13][16]_i_8', 'sums_reg[0][13][16]_i_2'),
+    ('sums_reg[0][13][2]_i_1', 'sums_reg[0][13][11]_i_18'),
+    ('sums_reg[0][13][3]_i_2', 'sums_reg[0][13][16]_i_11'),
+    ('sums_reg[0][14][11]_i_1', 'sums_reg[0][14][16]_i_1'),
+    ('sums_reg[0][14][16]_i_8', 'sums_reg[0][14][16]_i_2'),
+    ('sums_reg[0][14][2]_i_1', 'sums_reg[0][14][11]_i_18'),
+    ('sums_reg[0][14][3]_i_2', 'sums_reg[0][14][16]_i_11'),
+    ('sums_reg[0][15][11]_i_1', 'sums_reg[0][15][16]_i_1'),
+    ('sums_reg[0][15][16]_i_8', 'sums_reg[0][15][16]_i_2'),
+    ('sums_reg[0][15][2]_i_1', 'sums_reg[0][15][11]_i_18'),
+    ('sums_reg[0][15][3]_i_2', 'sums_reg[0][15][16]_i_11'),
+    ('sums_reg[0][16][11]_i_1', 'sums_reg[0][16][16]_i_1'),
+    ('sums_reg[0][16][16]_i_8', 'sums_reg[0][16][16]_i_2'),
+    ('sums_reg[0][16][2]_i_1', 'sums_reg[0][16][11]_i_18'),
+    ('sums_reg[0][16][3]_i_2', 'sums_reg[0][16][16]_i_11'),
+    ('sums_reg[0][17][11]_i_1', 'sums_reg[0][17][16]_i_1'),
+    ('sums_reg[0][17][16]_i_8', 'sums_reg[0][17][16]_i_2'),
+    ('sums_reg[0][17][2]_i_1', 'sums_reg[0][17][11]_i_18'),
+    ('sums_reg[0][17][3]_i_2', 'sums_reg[0][17][16]_i_11'),
+    ('sums_reg[0][18][11]_i_1', 'sums_reg[0][18][16]_i_1'),
+    ('sums_reg[0][18][16]_i_8', 'sums_reg[0][18][16]_i_2'),
+    ('sums_reg[0][18][2]_i_1', 'sums_reg[0][18][11]_i_18'),
+    ('sums_reg[0][18][3]_i_2', 'sums_reg[0][18][16]_i_11'),
+    ('sums_reg[0][19][11]_i_1', 'sums_reg[0][19][16]_i_1'),
+    ('sums_reg[0][19][16]_i_8', 'sums_reg[0][19][16]_i_2'),
+    ('sums_reg[0][19][2]_i_1', 'sums_reg[0][19][11]_i_18'),
+    ('sums_reg[0][19][3]_i_2', 'sums_reg[0][19][16]_i_11'),
+    ('sums_reg[0][1][11]_i_1', 'sums_reg[0][1][16]_i_1'),
+    ('sums_reg[0][1][16]_i_8', 'sums_reg[0][1][16]_i_2'),
+    ('sums_reg[0][1][2]_i_1', 'sums_reg[0][1][11]_i_18'),
+    ('sums_reg[0][1][3]_i_2', 'sums_reg[0][1][16]_i_11'),
+    ('sums_reg[0][20][11]_i_1', 'sums_reg[0][20][16]_i_1'),
+    ('sums_reg[0][20][16]_i_8', 'sums_reg[0][20][16]_i_2'),
+    ('sums_reg[0][20][2]_i_1', 'sums_reg[0][20][11]_i_18'),
+    ('sums_reg[0][20][3]_i_2', 'sums_reg[0][20][16]_i_11'),
+    ('sums_reg[0][21][11]_i_1', 'sums_reg[0][21][16]_i_1'),
+    ('sums_reg[0][21][16]_i_8', 'sums_reg[0][21][16]_i_2'),
+    ('sums_reg[0][21][2]_i_1', 'sums_reg[0][21][11]_i_18'),
+    ('sums_reg[0][21][3]_i_2', 'sums_reg[0][21][16]_i_11'),
+    ('sums_reg[0][22][11]_i_1', 'sums_reg[0][22][16]_i_1'),
+    ('sums_reg[0][22][16]_i_8', 'sums_reg[0][22][16]_i_2'),
+    ('sums_reg[0][22][2]_i_1', 'sums_reg[0][22][11]_i_18'),
+    ('sums_reg[0][22][3]_i_2', 'sums_reg[0][22][16]_i_11'),
+    ('sums_reg[0][23][11]_i_1', 'sums_reg[0][23][16]_i_1'),
+    ('sums_reg[0][23][16]_i_8', 'sums_reg[0][23][16]_i_2'),
+    ('sums_reg[0][23][2]_i_1', 'sums_reg[0][23][11]_i_18'),
+    ('sums_reg[0][23][3]_i_2', 'sums_reg[0][23][16]_i_11'),
+    ('sums_reg[0][24][11]_i_1', 'sums_reg[0][24][16]_i_1'),
+    ('sums_reg[0][24][16]_i_8', 'sums_reg[0][24][16]_i_2'),
+    ('sums_reg[0][24][2]_i_1', 'sums_reg[0][24][11]_i_18'),
+    ('sums_reg[0][24][3]_i_2', 'sums_reg[0][24][16]_i_11'),
+    ('sums_reg[0][25][11]_i_1', 'sums_reg[0][25][16]_i_1'),
+    ('sums_reg[0][25][16]_i_8', 'sums_reg[0][25][16]_i_2'),
+    ('sums_reg[0][25][2]_i_1', 'sums_reg[0][25][11]_i_18'),
+    ('sums_reg[0][25][3]_i_2', 'sums_reg[0][25][16]_i_11'),
+    ('sums_reg[0][26][11]_i_1', 'sums_reg[0][26][16]_i_1'),
+    ('sums_reg[0][26][16]_i_8', 'sums_reg[0][26][16]_i_2'),
+    ('sums_reg[0][26][2]_i_1', 'sums_reg[0][26][11]_i_18'),
+    ('sums_reg[0][26][3]_i_2', 'sums_reg[0][26][16]_i_11'),
+    ('sums_reg[0][27][11]_i_1', 'sums_reg[0][27][16]_i_1'),
+    ('sums_reg[0][27][16]_i_8', 'sums_reg[0][27][16]_i_2'),
+    ('sums_reg[0][27][2]_i_1', 'sums_reg[0][27][11]_i_18'),
+    ('sums_reg[0][27][3]_i_2', 'sums_reg[0][27][16]_i_11'),
+    ('sums_reg[0][28][11]_i_1', 'sums_reg[0][28][16]_i_1'),
+    ('sums_reg[0][28][16]_i_8', 'sums_reg[0][28][16]_i_2'),
+    ('sums_reg[0][28][2]_i_1', 'sums_reg[0][28][11]_i_18'),
+    ('sums_reg[0][28][3]_i_2', 'sums_reg[0][28][16]_i_11'),
+    ('sums_reg[0][29][11]_i_1', 'sums_reg[0][29][16]_i_1'),
+    ('sums_reg[0][29][16]_i_8', 'sums_reg[0][29][16]_i_2'),
+    ('sums_reg[0][29][2]_i_1', 'sums_reg[0][29][11]_i_18'),
+    ('sums_reg[0][29][3]_i_2', 'sums_reg[0][29][16]_i_11'),
+    ('sums_reg[0][2][11]_i_1', 'sums_reg[0][2][16]_i_1'),
+    ('sums_reg[0][2][16]_i_8', 'sums_reg[0][2][16]_i_2'),
+    ('sums_reg[0][2][2]_i_1', 'sums_reg[0][2][11]_i_18'),
+    ('sums_reg[0][2][3]_i_2', 'sums_reg[0][2][16]_i_11'),
+    ('sums_reg[0][30][11]_i_1', 'sums_reg[0][30][16]_i_1'),
+    ('sums_reg[0][30][16]_i_8', 'sums_reg[0][30][16]_i_2'),
+    ('sums_reg[0][30][2]_i_1', 'sums_reg[0][30][11]_i_18'),
+    ('sums_reg[0][30][3]_i_2', 'sums_reg[0][30][16]_i_11'),
+    ('sums_reg[0][31][11]_i_1', 'sums_reg[0][31][16]_i_1'),
+    ('sums_reg[0][31][16]_i_8', 'sums_reg[0][31][16]_i_2'),
+    ('sums_reg[0][31][2]_i_1', 'sums_reg[0][31][11]_i_18'),
+    ('sums_reg[0][31][3]_i_2', 'sums_reg[0][31][16]_i_11'),
+    ('sums_reg[0][3][11]_i_1', 'sums_reg[0][3][16]_i_1'),
+    ('sums_reg[0][3][16]_i_8', 'sums_reg[0][3][16]_i_2'),
+    ('sums_reg[0][3][2]_i_1', 'sums_reg[0][3][11]_i_18'),
+    ('sums_reg[0][3][3]_i_2', 'sums_reg[0][3][16]_i_11'),
+    ('sums_reg[0][4][11]_i_1', 'sums_reg[0][4][16]_i_1'),
+    ('sums_reg[0][4][16]_i_8', 'sums_reg[0][4][16]_i_2'),
+    ('sums_reg[0][4][2]_i_1', 'sums_reg[0][4][11]_i_18'),
+    ('sums_reg[0][4][3]_i_2', 'sums_reg[0][4][16]_i_11'),
+    ('sums_reg[0][5][11]_i_1', 'sums_reg[0][5][16]_i_1'),
+    ('sums_reg[0][5][16]_i_8', 'sums_reg[0][5][16]_i_2'),
+    ('sums_reg[0][5][2]_i_1', 'sums_reg[0][5][11]_i_18'),
+    ('sums_reg[0][5][3]_i_2', 'sums_reg[0][5][16]_i_11'),
+    ('sums_reg[0][6][11]_i_1', 'sums_reg[0][6][16]_i_1'),
+    ('sums_reg[0][6][16]_i_8', 'sums_reg[0][6][16]_i_2'),
+    ('sums_reg[0][6][2]_i_1', 'sums_reg[0][6][11]_i_18'),
+    ('sums_reg[0][6][3]_i_2', 'sums_reg[0][6][16]_i_11'),
+    ('sums_reg[0][7][11]_i_1', 'sums_reg[0][7][16]_i_1'),
+    ('sums_reg[0][7][16]_i_8', 'sums_reg[0][7][16]_i_2'),
+    ('sums_reg[0][7][2]_i_1', 'sums_reg[0][7][11]_i_18'),
+    ('sums_reg[0][7][3]_i_2', 'sums_reg[0][7][16]_i_11'),
+    ('sums_reg[0][8][11]_i_1', 'sums_reg[0][8][16]_i_1'),
+    ('sums_reg[0][8][16]_i_8', 'sums_reg[0][8][16]_i_2'),
+    ('sums_reg[0][8][2]_i_1', 'sums_reg[0][8][11]_i_18'),
+    ('sums_reg[0][8][3]_i_2', 'sums_reg[0][8][16]_i_11'),
+    ('sums_reg[0][9][11]_i_1', 'sums_reg[0][9][16]_i_1'),
+    ('sums_reg[0][9][16]_i_8', 'sums_reg[0][9][16]_i_2'),
+    ('sums_reg[0][9][2]_i_1', 'sums_reg[0][9][11]_i_18'),
+    ('sums_reg[0][9][3]_i_2', 'sums_reg[0][9][16]_i_11'),
+    ('sums_reg[1][0][7]_i_1', 'sums_reg[1][0][15]_i_1', 'sums_reg[1][0][20]_i_1'),
+    ('sums_reg[1][10][7]_i_1', 'sums_reg[1][10][15]_i_1', 'sums_reg[1][10][20]_i_1'),
+    ('sums_reg[1][11][7]_i_1', 'sums_reg[1][11][15]_i_1', 'sums_reg[1][11][20]_i_1'),
+    ('sums_reg[1][12][7]_i_1', 'sums_reg[1][12][15]_i_1', 'sums_reg[1][12][20]_i_1'),
+    ('sums_reg[1][13][7]_i_1', 'sums_reg[1][13][15]_i_1', 'sums_reg[1][13][20]_i_1'),
+    ('sums_reg[1][14][7]_i_1', 'sums_reg[1][14][15]_i_1', 'sums_reg[1][14][20]_i_1'),
+    ('sums_reg[1][15][7]_i_1', 'sums_reg[1][15][15]_i_1', 'sums_reg[1][15][20]_i_1'),
+    ('sums_reg[1][1][7]_i_1', 'sums_reg[1][1][15]_i_1', 'sums_reg[1][1][20]_i_1'),
+    ('sums_reg[1][2][7]_i_1', 'sums_reg[1][2][15]_i_1', 'sums_reg[1][2][20]_i_1'),
+    ('sums_reg[1][3][7]_i_1', 'sums_reg[1][3][15]_i_1', 'sums_reg[1][3][20]_i_1'),
+    ('sums_reg[1][4][7]_i_1', 'sums_reg[1][4][15]_i_1', 'sums_reg[1][4][20]_i_1'),
+    ('sums_reg[1][5][7]_i_1', 'sums_reg[1][5][15]_i_1', 'sums_reg[1][5][20]_i_1'),
+    ('sums_reg[1][6][7]_i_1', 'sums_reg[1][6][15]_i_1', 'sums_reg[1][6][20]_i_1'),
+    ('sums_reg[1][7][7]_i_1', 'sums_reg[1][7][15]_i_1', 'sums_reg[1][7][20]_i_1'),
+    ('sums_reg[1][8][7]_i_1', 'sums_reg[1][8][15]_i_1', 'sums_reg[1][8][20]_i_1'),
+    ('sums_reg[1][9][7]_i_1', 'sums_reg[1][9][15]_i_1', 'sums_reg[1][9][20]_i_1'),
+    ('sums_reg[2][0][7]_i_1', 'sums_reg[2][0][15]_i_1', 'sums_reg[2][0][20]_i_1'),
+    ('sums_reg[2][1][7]_i_1', 'sums_reg[2][1][15]_i_1', 'sums_reg[2][1][20]_i_1'),
+    ('sums_reg[2][2][7]_i_1', 'sums_reg[2][2][15]_i_1', 'sums_reg[2][2][20]_i_1'),
+    ('sums_reg[2][3][7]_i_1', 'sums_reg[2][3][15]_i_1', 'sums_reg[2][3][20]_i_1'),
+    ('sums_reg[2][4][7]_i_1', 'sums_reg[2][4][15]_i_1', 'sums_reg[2][4][20]_i_1'),
+    ('sums_reg[2][5][7]_i_1', 'sums_reg[2][5][15]_i_1', 'sums_reg[2][5][20]_i_1'),
+    ('sums_reg[2][6][7]_i_1', 'sums_reg[2][6][15]_i_1', 'sums_reg[2][6][20]_i_1'),
+    ('sums_reg[2][7][7]_i_1', 'sums_reg[2][7][15]_i_1', 'sums_reg[2][7][20]_i_1'),
+    ('sums_reg[3][0][7]_i_1', 'sums_reg[3][0][15]_i_1', 'sums_reg[3][0][20]_i_1'),
+    ('sums_reg[3][1][7]_i_1', 'sums_reg[3][1][15]_i_1', 'sums_reg[3][1][20]_i_1'),
+    ('sums_reg[3][2][7]_i_1', 'sums_reg[3][2][15]_i_1', 'sums_reg[3][2][20]_i_1'),
+    ('sums_reg[3][3][7]_i_1', 'sums_reg[3][3][15]_i_1', 'sums_reg[3][3][20]_i_1'),
+    ('sums_reg[4][0][7]_i_1', 'sums_reg[4][0][15]_i_1', 'sums_reg[4][0][20]_i_1'),
+    ('sums_reg[4][1][7]_i_1', 'sums_reg[4][1][15]_i_1', 'sums_reg[4][1][20]_i_1'),
+    ('sums_reg[5][0][7]_i_1', 'sums_reg[5][0][15]_i_1', 'sums_reg[5][0][20]_i_1'),
+)
+
+CARRY_COMPLETE_TEMPLATE = r'''
+namespace eval ::c1_complete_carry_pblock {
+  variable output [open $::run/complete_carry_pblock_repair.tcldata {WRONLY CREAT EXCL}]
+  variable emitted 0
+proc emit {kind value} {
+  set line [list $kind $value]
+  incr ::c1_complete_carry_pblock::emitted [expr {[string bytelength $line]+1}]
+  if {[string bytelength $line]>1048576 || $::c1_complete_carry_pblock::emitted>16777216} {error "Carry observation bound"}
+  puts $::c1_complete_carry_pblock::output $line
+}
+proc names {objects} {
+  set result {}
+  foreach object $objects {lappend result [get_property NAME $object]}
+  if {[llength $result]>65536 || [llength $result]!=[llength [lsort -unique $result]]} {error "Carry object inventory bound or duplicate"}
+  return [lsort $result]
+}
+proc cell {name} {
+  set objects [get_cells -quiet -hierarchical -filter [format {NAME == "%s"} $name]]
+  if {[names $objects] ne [list $name]} {error "Missing exact carry cell"}
+  return $objects
+}
+proc pin {name} {
+  set objects [get_pins -quiet [list $name]]
+  if {[names $objects] ne [list $name]} {error "Missing exact carry pin"}
+  return $objects
+}
+proc driver {name expected} {
+  set nets [get_nets -quiet -of_objects [pin $name]]
+  if {[llength $nets]!=1 || [llength [get_ports -quiet -of_objects $nets]]} {error "Carry input net boundary differs"}
+  set drivers [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]
+  if {[names $drivers] ne [list $expected]} {error "Carry input driver differs"}
+  if {[get_property REF_NAME [get_cells -quiet -of_objects $drivers]] ne [expr {[string match */G $expected] ? "GND" : "CARRY8"}]} {error "Carry input driver primitive differs"}
+  emit input [list pin $name driver $expected]
+}
+proc snapshot {name} {
+  set object [cell $name];set props {};set available [list_property $object]
+  foreach property {NAME PARENT REF_NAME CARRY_TYPE DONT_TOUCH KEEP KEEP_HIERARCHY MARK_DEBUG LOC BEL RLOC RLOC_ORIGIN RLOC_RANGE IS_LOC_FIXED IS_BEL_FIXED LOCK_PINS} {
+    if {$property in $available} {dict set props $property [list observed [get_property $property $object]]} else {dict set props $property unavailable}
+  }
+  set nets {}
+  foreach p [get_pins -of_objects $object] {dict set nets [get_property NAME $p] [names [get_nets -quiet -of_objects $p]]}
+  return [list properties $props pin_nets $nets]
+}
+set chains @CHAINS@
+set prior @PRIOR@
+set promoted {};set terminals {};set all {}
+foreach chain $chains {
+  if {[llength $chain] ni {2 3}} {error "Carry component length differs"}
+  foreach name $chain {
+    if {$name in $all} {error "Duplicate carry component cell"}
+    lappend all $name
+  }
+  lappend terminals [lindex $chain end]
+  foreach name [lrange $chain 0 end-1] {lappend promoted $name}
+}
+set promoted [lsort $promoted]
+if {[llength $chains]!=159 || [llength $promoted]!=190 || [llength $all]!=349 || [llength $prior]!=2} {error "Carry component inventory differs"}
+if {[names [get_cells -quiet -hierarchical -filter {REF_NAME == CARRY8 && NAME =~ WRAPPER/CL/engines*}]] ne $promoted} {error "Complete promoted carry inventory differs"}
+foreach name $prior {if {$name ni $promoted} {error "Prior repair outside inventory"}}
+emit header [list schema 1 kind c1_complete_promoted_carry_pblock_repair raw_sha256 98717de7476163a94513566d0997ae1680292cc3be616cc9d4cf7f5227511bf4 source_checkpoint_sha256 5865dbfd47ca1636d66cb8a2d03754739541bd7b67a632575f8d9ad6d1ffad95 prior_repair_cells $prior route_qualified 0 hardware_actions 0]
+set region_before {};set region_properties {PARENT GRID_RANGES IS_SOFT CONTAIN_ROUTING SNAPPING_MODE EXCLUDE_PLACEMENT}
+foreach name {pblock_CL pblock_CL_SLR0} {
+  set block [get_pblocks -quiet [list $name]]
+  if {[names $block] ne [list $name]} {error "Missing exact carry region"}
+  foreach property $region_properties {dict set region_before $name $property [get_property $property $block]}
+}
+if {[dict get $region_before pblock_CL PARENT] ne "ROOT" || [dict get $region_before pblock_CL IS_SOFT] ne "0" || [dict get $region_before pblock_CL_SLR0 PARENT] ne "pblock_CL" || [dict get $region_before pblock_CL_SLR0 IS_SOFT] ne "0"} {error "Carry hard region hierarchy differs"}
+emit region_before $region_before
+set before {}
+foreach name $all {
+  set c [cell $name]
+  set parent [expr {$name in $promoted ? "WRAPPER/CL" : {WRAPPER/CL/u_board/core/cluster/engines[15].engine}}]
+  set membership [expr {$name in $promoted && $name ni $prior ? "pblock_CL" : "pblock_CL_SLR0"}]
+  if {[get_property REF_NAME $c] ne "CARRY8" || [get_property CARRY_TYPE $c] ne "SINGLE_CY8" || [get_property PARENT $c] ne $parent || [get_property DONT_TOUCH $c] ni {"" 0 false FALSE}} {error "Carry primitive or hierarchy differs"}
+  if {[get_property PBLOCK $c] ne $membership || [names [get_pblocks -of_objects $c]] ne [list $membership]} {error "Carry pre-repair membership differs"}
+  dict set before $name [snapshot $name]
+  emit before [list cell $name pblock $membership snapshot [dict get $before $name]]
+}
+foreach chain $chains {
+  set previous WRAPPER/CL/GND/G
+  for {set i 0} {$i<[llength $chain]-1} {incr i} {
+    set name [lindex $chain $i];set next [lindex $chain [expr {$i+1}]]
+    driver $name/CI $previous
+    driver $name/CI_TOP WRAPPER/CL/GND_1/G
+    set output_pin $name/CO\[7\]
+    set nets [get_nets -quiet -segments -of_objects [pin $output_pin]]
+    if {![llength $nets] || [llength $nets]>16 || [llength [get_ports -quiet -of_objects $nets]]} {error "Carry output net boundary differs"}
+    set leaves [names [get_pins -quiet -leaf -of_objects $nets]]
+    if {$leaves ne [lsort [list $output_pin $next/CI]] || [names [get_pins -quiet -leaf -of_objects $nets -filter {DIRECTION == OUT}]] ne [list $output_pin]} {error "Carry output endpoint inventory differs"}
+    emit successor [list source $output_pin sink $next/CI]
+    set previous $output_pin
+  }
+}
+set added {}
+foreach name $promoted {
+  if {$name in $prior} {continue}
+  add_cells_to_pblock [get_pblocks pblock_CL_SLR0] [cell $name]
+  lappend added $name
+}
+if {[llength $added]!=188} {error "Carry repair cardinality differs"}
+foreach name $all {
+  set c [cell $name]
+  if {[get_property PBLOCK $c] ne "pblock_CL_SLR0" || [names [get_pblocks -of_objects $c]] ne [list pblock_CL_SLR0]} {error "Carry membership repair incomplete"}
+  if {[snapshot $name] ne [dict get $before $name]} {error "Carry primitive, pin inventory or connectivity changed"}
+  emit after [list cell $name pblock pblock_CL_SLR0]
+}
+foreach name {pblock_CL pblock_CL_SLR0} {
+  foreach property $region_properties {
+    if {[get_property $property [get_pblocks $name]] ne [dict get $region_before $name $property]} {error "Carry region changed"}
+  }
+}
+emit complete [list added_cells 188 prior_repaired_cells 2 promoted_cells 190 terminal_carries 159 carry_primitives_and_pin_nets_preserved 1 region_properties_unchanged 1 route_qualified 0 hardware_actions 0]
+close $::c1_complete_carry_pblock::output
+}
+namespace delete ::c1_complete_carry_pblock
+puts C1_COMPLETE_CARRY_PBLOCK_REPAIR_COMPLETE_NOT_ROUTE_QUALIFIED
+'''
+
+def complete_carry_pblock_script():
+    promoted_prefix = 'WRAPPER/CL/engines[15].engine/'
+    terminal_prefix = 'WRAPPER/CL/u_board/core/cluster/engines[15].engine/'
+    chains = []
+    for component in CARRY_COMPLETE_COMPONENTS:
+        require(len(component) in (2, 3), 'Invalid observed carry component')
+        require(all(re.fullmatch(r'sums_reg\[[0-5]\]\[[0-9]+\]\[[0-9]+\]_i_[0-9]+', suffix)
+                    for suffix in component), 'Invalid observed carry suffix')
+        names = [promoted_prefix + suffix for suffix in component[:-1]] + [terminal_prefix + component[-1]]
+        chains.append('{' + ' '.join('{' + name + '}' for name in names) + '}')
+    prior = [promoted_prefix + suffix for suffix in ('sums_reg[0][17][3]_i_2', 'sums_reg[0][15][2]_i_1')]
+    return CARRY_COMPLETE_TEMPLATE.replace('@CHAINS@', '{' + ' '.join(chains) + '}').replace(
+        '@PRIOR@', '{' + ' '.join('{' + name + '}' for name in prior) + '}')
+
 
 def require(ok, message):
     if not ok:
@@ -471,17 +770,23 @@ def physical_script(script, strategy, max_threads=4):
     anchors = re.findall(r'(?m)^set_param general\.maxThreads 4$', script)
     require(anchors and len(anchors) == script.count('general.maxThreads'), 'Thread limit anchor changed')
     script = re.sub(r'(?m)^set_param general\.maxThreads 4$', f'set_param general.maxThreads {max_threads}', script)
-    if strategy in ('skip-pre-route-phys-opt', 'align-promoted-carry-pblocks'):
+    if strategy in ('skip-pre-route-phys-opt', 'align-promoted-carry-pblocks',
+                    'align-complete-promoted-carry-pblocks'):
         # The first packed C1 route failed on two CARRY8 cascade pins after
         # AggressiveExplore. Keep placement/routing and every timing constraint;
         # this explicit alternative omits only that pre-route optimization pass.
         old = '  phys_opt_design -directive AggressiveExplore\n'
         require(script.count(old) == 1, 'Physical optimization anchor changed')
         script = script.replace(old, '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
-    if strategy == 'align-promoted-carry-pblocks':
+    if strategy in ('align-promoted-carry-pblocks', 'align-complete-promoted-carry-pblocks'):
         old = 'write_checkpoint -force $run/post_opt.dcp\n'
         require(script.count(old) == 1, 'Post-opt checkpoint anchor changed')
-        script = script.replace(old, CARRY_PBLOCK_SCRIPT + old)
+        repair = CARRY_PBLOCK_SCRIPT
+        if strategy == 'align-complete-promoted-carry-pblocks':
+            # Replay the historical repair first: the complete raw inventory was
+            # captured after these two exact membership additions.
+            repair += complete_carry_pblock_script()
+        script = script.replace(old, repair + old)
     return script
 
 

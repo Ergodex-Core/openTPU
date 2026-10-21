@@ -232,24 +232,30 @@ def test_explicit_skip_strategy_changes_only_pre_route_physical_pass(context, mo
     m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
 
 
-def test_carry_pblock_repair_keeps_link_ancestry_and_constraints(context, monkeypatch):
+@pytest.mark.parametrize('strategy', ['align-promoted-carry-pblocks', 'align-complete-promoted-carry-pblocks'])
+def test_carry_pblock_repair_keeps_link_ancestry_and_constraints(context, monkeypatch, strategy):
     stage_run(context, monkeypatch, 'link')
     out = context.tmp / 'carry-pblock-repair'
     inputs = m.prepare(out, 'implement', context.origin, context.previous, context.hdk,
-                       physical_strategy='align-promoted-carry-pblocks')
+                       physical_strategy=strategy)
     original = (context.run / 'implement/build.tcl').read_text()
     expected = original.replace('  phys_opt_design -directive AggressiveExplore\n',
                                 '  puts C1_PRE_ROUTE_PHYS_OPT_SKIPPED_BY_EXPLICIT_STRATEGY\n')
+    repair = m.CARRY_PBLOCK_SCRIPT + (m.complete_carry_pblock_script() if strategy == 'align-complete-promoted-carry-pblocks' else '')
     expected = expected.replace('write_checkpoint -force $run/post_opt.dcp\n',
-                                m.CARRY_PBLOCK_SCRIPT + 'write_checkpoint -force $run/post_opt.dcp\n')
+                                repair + 'write_checkpoint -force $run/post_opt.dcp\n')
     assert (out / 'run.tcl').read_text() == expected
     assert inputs['source_checkpoint']['sha256'] == b.sha(context.previous['checkpoint'])
     assert inputs['source_revision'] != inputs['executor_revision']
     for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
         assert (out / name).read_bytes() == (context.run / 'implement' / name).read_bytes()
+    # Additive diagnostic output must survive the ordinary stage receipt inventory.
+    (out / 'complete_carry_pblock_repair.tcldata').write_text('raw repair observations\n')
     fake_tool(context, monkeypatch, 'implement')
     m.execute(out, 'implement', context.origin, context.previous, inputs, context.hdk, 'vivado')
     m.verify_previous(out, b.sha(out / 'stage-result.json'), 'implement', context.origin)
+    receipt = json.loads((out / 'stage-result.json').read_text())
+    assert receipt['outputs']['complete_carry_pblock_repair.tcldata']['sha256'] == b.sha(out / 'complete_carry_pblock_repair.tcldata')
 
 
 def test_carry_pblock_repair_rejects_changed_post_opt_anchor(context):
