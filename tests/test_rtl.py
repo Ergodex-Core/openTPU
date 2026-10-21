@@ -392,6 +392,92 @@ def test_collective_reads_held_behind_dma_reads(have_verilator, seed, tmp_path, 
     assert sorted(held) == [0, 1] and held[0] > 0, held
 
 
+# The collective through the board's hub at S > 1 (otpu_top COLL_HUB: otpu_coll_hub next to the
+# unit, two register stages each way, an otpu_coll_port per slice, as otpu_board g_xs): one read
+# in flight (COLL_PIPE 0: the F2 card's 470cf908), 16 (the pipelined hub, otpu_coll_pu; the ports'
+# default 8 writes), and the tightest limits (2 reads, 2 writes a port: both credits bind)
+COLL_HUBS = {"k0": {"COLL_HUB": 1}, "k16": {"COLL_HUB": 1, "COLL_PIPE": 16},
+             "k2f2": {"COLL_HUB": 1, "COLL_PIPE": 2, "COLL_F": 2}}
+
+
+@pytest.mark.parametrize("hub", sorted(COLL_HUBS))
+@pytest.mark.parametrize("seed", [0, 1])
+def test_fuzz_two_slices_through_the_hub(have_verilator, hub, seed):
+    """test_fuzz_two_slices's programs (GATHERs and BARs among the instructions) at S = 2 with
+    the collective through the board's hub: every slice's DRAM and TMEM are the ISA's."""
+    rng = np.random.default_rng(2000 + seed)
+    cfg = Config(S=2)
+    prog = _random_program(rng, cfg)
+    assert any(i.op == I.GATHER for i in prog)
+    imgs = _images(rng, 2)
+    m = Machine(cfg, [prog, prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog, prog], [i.copy() for i in imgs],
+                                 uarch=COLL_HUBS[hub])
+    for s in range(2):
+        assert np.array_equal(drams[s], m.slices[s].dram), f"slice {s} DRAM"
+        assert np.array_equal(tmems[s], m.slices[s].tmem), f"slice {s} TMEM"
+
+
+@pytest.mark.parametrize("hub", sorted(COLL_HUBS))
+def test_collective_reads_held_behind_dma_reads_through_the_hub(have_verilator, hub):
+    """test_collective_reads_held_behind_dma_reads (release r2's TMEM, the collective the DMA's
+    guest, an ST of 4,096 words beside two GATHERs) with the collective through the board's hub:
+    each port holds its reads while the guest rule blocks them (with K reads queued behind the
+    head at COLL_PIPE K), and the results are the ISA's."""
+    rng = np.random.default_rng(7000)
+    cfg = Config(S=2)
+    progs = [held_collective_program() for _ in range(2)]
+    imgs = _images(rng, 2)
+    m = Machine(cfg, progs, [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, progs, [i.copy() for i in imgs],
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB,
+                                        **COLL_HUBS[hub]},
+                                 max_cycles=1_000_000)
+    for s in range(2):
+        assert np.array_equal(tmems[s], m.slices[s].tmem), f"slice {s} TMEM"
+        assert np.array_equal(drams[s], m.slices[s].dram), f"slice {s} DRAM"
+
+
+def gemma_gather_program(S: int, out: int = SCRATCH) -> list:
+    """Every slice: its TMEM words loaded, then one layer's six all-gathers of Gemma 3 1B split
+    over S slices (opentpu/llm/gemma4.py: k and v 1 x 64, o 1 x 256, the attention's and the
+    MLP's output rows 1 x 1152 / S, the product 1 x 6912 / S, a slice's segment each), a BAR,
+    the gathered words to DRAM."""
+    segs = [64, 64, 256, 1152 // S, 6912 // S, 1152 // S]
+    prog = [I.ld(DATA, 0, 4096), I.ld(DATA + 4 * 4096, 4096, 4096)]
+    dst, outs = 16384, []
+    for n in segs:
+        prog.append(I.gather(256 * len(outs), dst, 1, n, n, n, n))
+        outs.append((dst, S * n))
+        dst += S * n
+    prog.append(I.bar())
+    for k, (d, n) in enumerate(outs):
+        prog.append(I.st(out + 0x8000 * k, d, n))
+    return prog + [I.halt()]
+
+
+@pytest.mark.parametrize("S", [2, 4])
+def test_pipelined_hub_streams_gathers(have_verilator, S):
+    """Gemma 3 1B's six all-gathers of a layer at S slices through the board's hub: with one read
+    in flight (COLL_PIPE 0) a beat of 8 words costs the read's round trip; the pipelined hub
+    (COLL_PIPE 16) streams them, at under half the cycles (P4's card: 11% of a token's cycles in
+    the collectives, docs/v4/p4-status.md). Both bit-exact against the ISA simulator."""
+    rng = np.random.default_rng(7100 + S)
+    cfg = Config(S=S)
+    progs = [gemma_gather_program(S) for _ in range(S)]
+    imgs = _images(rng, S)
+    m = Machine(cfg, progs, [i.copy() for i in imgs]).run()
+    cyc = {}
+    for hub in ("k0", "k16"):
+        drams, tmems, st = rtlsim.run(cfg, progs, [i.copy() for i in imgs], uarch=COLL_HUBS[hub])
+        for s in range(S):
+            assert np.array_equal(tmems[s], m.slices[s].tmem), (hub, s)
+            assert np.array_equal(drams[s], m.slices[s].dram), (hub, s)
+        cyc[hub] = st["cycles"]
+    print(f"S = {S}: one read in flight {cyc['k0']} cycles, 16 in flight {cyc['k16']}")
+    assert cyc["k16"] < cyc["k0"] / 2, cyc
+
+
 @pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16)])
 @pytest.mark.parametrize("M,wf,pair", [(1, I.W8, False), (3, I.W8, False), (1, I.W4F, True),
                                        (2, I.WNV, True), (4, I.W4I, False), (6, I.W4F, False),

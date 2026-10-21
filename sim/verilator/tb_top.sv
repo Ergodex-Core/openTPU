@@ -43,6 +43,9 @@ module tb_top;
   parameter bit COLL_GATHER = 1'b1;   // 0: the BAR-only collective unit (otpu_coll_bar) at S = 1,
                                       // as the card builds it (rtlsim.BOARD_UARCH); S > 1 has GATHER
   parameter int NCH        = 2;       // AXI = 1: memory channels per slice (OTPU_NCH; F2 HBM: 8)
+  parameter bit COLL_HUB   = 1'b0;    // S > 1: the collective through the board's hub (otpu_top)
+  parameter int COLL_PIPE  = 0;       // COLL_HUB: the hub's reads in flight (otpu_board COLL_PIPE)
+  parameter int COLL_F     = 8;       // COLL_HUB: the writes a port holds (otpu_board COLL_F)
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -59,7 +62,8 @@ module tb_top;
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
-             .COLL_GATHER(COLL_GATHER || S > 1)) dut (
+             .COLL_GATHER(COLL_GATHER || S > 1), .COLL_HUB(COLL_HUB), .COLL_PIPE(COLL_PIPE),
+             .COLL_F(COLL_F)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 

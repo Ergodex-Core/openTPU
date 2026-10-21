@@ -70,6 +70,11 @@ module otpu_board #(
   parameter bit HOSTCAL     = 1'b0,    // the host calibrates the DDR3 controllers (CAPS bit27: LiteDRAM)
   parameter bit COLL_GATHER = 1'b1,    // 0 (S = 1 only): the collective unit runs BAR alone, no
                                        // GATHER (otpu_coll_bar; CAPS2 bit0 = 0, docs/infra_hunt.md 5)
+  parameter int COLL_PIPE   = 0,       // S > 1: 0 one collective read in flight across the crossings
+                                       // (otpu_coll, otpu_coll_hub); K (a power of two) up to K
+                                       // (otpu_coll_pu, the hub and the ports at K; timing only;
+                                       // ignored at S = 1, where the unit is on the slice's port)
+  parameter int COLL_F      = 8,       // S > 1: the writes a slice's collective port holds (a power of two)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait entries (WAITC, docs/seq_vpu.md; CFG_UARCH bit24)
   parameter int PLATFORM    = 0,       // the target's platform id (CFG_PLATFORM; opentpu/target.py)
   parameter logic [31:0] ARCH_HASH = 32'h0  // the target's arch_hash (CFG_HASH)
@@ -307,6 +312,8 @@ module otpu_board #(
   // hub and a port per slice between them at S > 1
   logic [S-1:0] coll_req;
   logic         coll_ack, coll_gnt;
+  logic         coll_rgnt, coll_rvalid, coll_rtake;   // COLL_PIPE > 0 (otpu_coll_pu)
+  localparam int PIPE = (S > 1) ? COLL_PIPE : 0;
   cmd_t         coll_cmds [S];
   logic [S-1:0][LANES-1:0]       coll_ren;
   logic [S-1:0][LANES-1:0][31:0] coll_raddr, coll_rdata;
@@ -348,19 +355,29 @@ module otpu_board #(
     if (coll_rst && |coll_req) $fatal(1, "otpu_board: a collective request in reset");
 `endif
   initial if (S > 1 && !COLL_GATHER) $fatal(1, "otpu_board: COLL_GATHER 0 needs S = 1");
-  if (COLL_GATHER) begin : g_coll
+  if (COLL_GATHER && PIPE == 0) begin : g_coll
     // RQ: its reads from its own request register on the slice's port at S = 1; at S > 1 each
     // slice's otpu_coll_port presents them a cycle later (TMEM's input stage)
     otpu_coll #(.S(S), .LANES(LANES), .RQ(S == 1)) u_coll (
       .clk, .rst(coll_rst), .req(coll_req), .cmds(coll_cmds), .gnt(coll_gnt), .ack(coll_ack),
       .r_en(coll_ren), .r_addr(coll_raddr), .r_data(coll_rdata),
       .w_en(coll_wen), .w_addr(coll_waddr), .w_data(coll_wdata));
+    assign coll_rtake = 1'b0;
+    assign coll_gerr = 1'b0;
+  end else if (COLL_GATHER) begin : g_coll
+    // COLL_PIPE (S > 1): its reads go ahead of their data, through otpu_coll_hub K (g_xs)
+    otpu_coll_pu #(.S(S), .LANES(LANES)) u_coll (
+      .clk, .rst(coll_rst), .req(coll_req), .cmds(coll_cmds), .ack(coll_ack),
+      .r_en(coll_ren), .r_addr(coll_raddr), .r_gnt(coll_rgnt), .r_valid(coll_rvalid),
+      .r_data(coll_rdata[0]), .r_take(coll_rtake),
+      .w_en(coll_wen), .w_addr(coll_waddr), .w_data(coll_wdata), .w_gnt(coll_gnt));
     assign coll_gerr = 1'b0;
   end else begin : g_coll_bar
     otpu_coll_bar #(.S(S), .LANES(LANES)) u_coll (
       .clk, .rst(coll_rst), .req(coll_req), .cmds(coll_cmds), .gnt(coll_gnt), .ack(coll_ack),
       .r_en(coll_ren), .r_addr(coll_raddr), .r_data(coll_rdata),
       .w_en(coll_wen), .w_addr(coll_waddr), .w_data(coll_wdata), .gerr(coll_gerr));
+    assign coll_rtake = 1'b0;
   end
 
   // ---- memory: the native adapter
@@ -479,6 +496,8 @@ module otpu_board #(
     assign sc_wdata[0] = coll_wdata;
     assign coll_gnt = &sc_gl;           // every slice's TMEM grant
     assign sc_gnt = coll_gnt;
+    assign coll_rgnt = 1'b0;
+    assign coll_rvalid = 1'b0;
   end else begin : g_xs
     // ---- S slices, each in its own SLR: two register stages each way between a slice and the
     // control block / the collective unit (otpu_xr: u_*_tx on the sending side, u_*_rx on the
@@ -502,10 +521,11 @@ module otpu_board #(
     cmd_t                   h_cmd [S];
     logic [S-1:0][DCW-1:0]  sl_drd, sl_dwr;
 
-    otpu_coll_hub #(.S(S), .LANES(L)) u_chub (
+    otpu_coll_hub #(.S(S), .LANES(L), .F(COLL_F), .K(PIPE)) u_chub (
       .clk, .rst(coll_rst),
       .u_req(coll_req), .u_cmds(coll_cmds), .u_gnt(coll_gnt), .u_ack(coll_ack),
       .u_ren(coll_ren), .u_raddr(coll_raddr), .u_rdata(coll_rdata),
+      .u_rgnt(coll_rgnt), .u_rvalid(coll_rvalid), .u_rtake(coll_rtake),
       .u_wen(coll_wen), .u_waddr(coll_waddr), .u_wdata(coll_wdata),
       .x_req(h_req), .x_cmds(h_cmd), .x_ack(h_ack), .x_rv(h_rv), .x_rm(h_rm), .x_ra(h_ra),
       .x_dv(h_dv), .x_dd(h_dd), .x_wv(h_wv), .x_wm(h_wm), .x_wa(h_wa), .x_wd(h_wd),
@@ -533,7 +553,7 @@ module otpu_board #(
               p_wm, p_ra, p_rm, p_wv, p_rv, sc_ack[s]} = dn_q;
       assign x_rst[s] = rx_crst;
 
-      otpu_coll_port #(.LANES(L)) u_cport (
+      otpu_coll_port #(.LANES(L), .F(COLL_F), .K(PIPE)) u_cport (
         .clk, .rst(x_rst[s]), .rv(p_rv), .rm(p_rm), .ra(p_ra), .wv(p_wv), .wm(p_wm), .wa(p_wa),
         .wd(p_wd), .dv(p_dv), .dd(p_dd), .pop(p_pop),
         .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),

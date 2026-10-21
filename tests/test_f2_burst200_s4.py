@@ -28,6 +28,10 @@ S4_SLOWER = [(ROOT / 'targets/f2-burst200-s4-175.toml',
              (ROOT / 'targets/f2-burst200-s4-162.toml',
               ROOT / 'rtl/boards/f2/burst200-s4-162/cl_opentpu.sv', 162500, 162.5)]
 PORTS4 = [0, 4, 8, 12, 16, 20, 26, 28]
+# the pipelined collective's image (docs/v4/p4-status.md "The pipelined collective"): the 175 MHz
+# target with COLL_PIPE / COLL_F and its closing floorplan
+S4P = ROOT / 'targets/f2-burst200-s4-175p.toml'
+TOP4P = ROOT / 'rtl/boards/f2/burst200-s4-175p/cl_opentpu.sv'
 
 
 def _module(name, path):
@@ -95,7 +99,8 @@ def test_generator_keeps_the_one_and_three_slice_tops():
         (ROOT / 'rtl/boards/f2/burst200/cl_opentpu.sv').read_text()
 
 
-@pytest.mark.parametrize('toml,top', [(S4, TOP4)] + [(a, b) for a, b, _, _ in S4_SLOWER])
+@pytest.mark.parametrize('toml,top', [(S4, TOP4)] + [(a, b) for a, b, _, _ in S4_SLOWER] +
+                         [(S4P, TOP4P)])
 def test_four_slice_wrappers_are_the_generators(toml, top):
     """The checked-in four-slice tops are the generator's output for their targets."""
     assert gen.generate(T.load(str(toml)), hdk()) == top.read_text()
@@ -109,6 +114,28 @@ def test_build_variants_differ_in_the_core_clock_alone():
         assert len(a) == len(b)
         assert [(x, y) for x, y in zip(a, b) if x != y] == \
             [('  .CORE_KHZ(200000),', f'  .CORE_KHZ({khz}),')]
+
+
+def test_pipelined_collective_target():
+    """f2-burst200-s4-175p: the 175 MHz target with the collective's two parameters (COLL_PIPE 16
+    reads in flight, COLL_F 8 writes a port) and floorplan_s4_tmem.tcl, nothing else; the same
+    CFG_HASH (a host takes either image); its top is the 175 MHz top with .COLL_PIPE / .COLL_F
+    alone; its simulations take the board's hub (sim_uarch COLL_HUB) with both."""
+    t, t175 = T.load(str(S4P)), T.load(str(S4_SLOWER[0][0]))
+    assert t.arch == t175.arch and t.tech == t175.tech and t.platform_id == t175.platform_id
+    assert t.uarch == dict(t175.uarch, COLL_PIPE=16, COLL_F=8)
+    assert t.platform == dict(t175.platform, rtl_board=S4P.stem, floorplan='floorplan_s4_tmem.tcl')
+    assert T.arch_hash(T.config(t)) == T.arch_hash(T.config(t175))
+    p, p175 = T.rtl_params(t), T.rtl_params(t175)
+    assert p == dict(p175, COLL_PIPE=16, COLL_F=8)
+    assert T.sim_uarch(t) == dict(T.sim_uarch(t175), COLL_PIPE=16, COLL_F=8)
+    assert T.sim_uarch(t175)['COLL_HUB'] == 1 and 'COLL_PIPE' not in T.sim_uarch(t175)
+    a, b = S4_SLOWER[0][1].read_text().splitlines(), TOP4P.read_text().splitlines()
+    extra = [x for x in b if x not in a]
+    assert extra == ['  .COLL_PIPE(16),', '  .COLL_F(8),'] and [x for x in a if x not in b] == []
+    pl = flow.plan(S4P)
+    assert pl['floorplan'].name == 'floorplan_s4_tmem.tcl' and pl['core_mhz'] == 175.0
+    assert any(q == TOP4P for q in pl['rtl'])
 
 
 def test_four_slice_top_wiring():
@@ -165,7 +192,7 @@ def test_four_slice_top_wiring():
     assert text.count('.s_axi_rid()') == 4 + 6 and text.count('.s_axi_bid()') == 4 + 6
 
 
-@pytest.mark.parametrize('top', [TOP4] + [b for _, b, _, _ in S4_SLOWER])
+@pytest.mark.parametrize('top', [TOP4] + [b for _, b, _, _ in S4_SLOWER] + [TOP4P])
 def test_no_unsized_literal_from_2_31_up(top):
     """Vivado reads an unsized decimal literal as a signed 32-bit integer (Synth 8-11057): no
     parameter value of 2^31 or more is unsized (the S = 4 ARCH_HASH, 0x2f01ab9b, is below it,
@@ -300,16 +327,44 @@ def test_tiny_gemma3_four_slices_on_board_model(have_verilator, tmp_path):
         assert np.array_equal(brd.backend.read(s, 0, n), isa.backend.machine.slices[s].dram[:n])
 
 
+@pytest.mark.parametrize('pipe', [16])
+def test_tiny_gemma3_four_slices_pipelined_collective_on_board_model(have_verilator, tmp_path,
+                                                                      pipe):
+    """test_tiny_gemma3_four_slices_on_board_model on f2-burst200-s4-175p's board: the
+    collective with up to 16 reads in flight across the crossings (otpu_board COLL_PIPE from the
+    target: otpu_coll_pu, the hub and the ports at K 16): logits bit-identical to the ISA
+    simulator at S = 4, each slice's DRAM the ISA simulator's."""
+    from conftest import sim_board_config
+    from opentpu.host.board import BoardBackend, SimTransport
+    from opentpu.llm.qwen3 import Engine
+    from test_gemma3 import _model
+    _, W, spec = _model(tmp_path, layers=2, hidden=256, ffn=512)
+    cfg = sim_board_config(DRAM_BYTES=1 << 24, S=4)
+    isa = Engine(spec, W, cap=256, cfg=cfg)
+    tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2, stall=0, seed=5, target=S4P.stem,
+                      native=True)
+    brd = Engine(spec, W, cap=256, cfg=cfg,
+                 backend=lambda c, imgs: BoardBackend(c, imgs, transport=tr))
+    assert brd.backend.info['cfg']['S'] == 4 and brd.backend.info['cfg']['platform'] == 3
+    for tok in (11, 222, 333):
+        a, b = isa.step(tok), brd.step(tok)
+        assert np.array_equal(a.view(np.uint32), b.view(np.uint32))
+        st = brd.stats[-1]
+        assert st['cycles'] > 0 and st['instructions'] == isa.stats[-1]['instructions']
+        print(f"token {tok}: {st['cycles']} cycles, {st['instructions']} instructions a slice")
+    n = isa.image.nbytes
+    for s in range(4):
+        assert np.array_equal(brd.backend.read(s, 0, n), isa.backend.machine.slices[s].dram[:n])
+
+
 REAL = ROOT / 'models/gemma-3-1b-it'
 
 
-@pytest.mark.skipif(not REAL.exists(), reason='models/gemma-3-1b-it not downloaded')
-def test_gemma3_1b_token_on_four_slice_rtl_is_bit_exact(have_verilator):
-    """The one-token gate of the real model at S = 4 (the S = 3 gate's pattern): the chat
-    prompt's tokens but the last on the ISA simulator, then the last step on the Verilator RTL
-    (otpu_top S = 4, the native memory model never withholding a handshake, 30 cycles of
-    latency: the HBM-like reference) and on the ISA simulator from the same DRAM state: logits
-    and every slice's DRAM equal bit for bit. Slow (about a quarter of an hour)."""
+def _gemma3_1b_token(uarch: dict, what: str) -> int:
+    """The chat prompt's tokens but the last on the ISA simulator, then the last step on the
+    Verilator RTL (otpu_top S = 4 with `uarch`, the native memory model never withholding a
+    handshake, 30 cycles of latency: the HBM-like reference) and on the ISA simulator from the
+    same DRAM state: logits and every slice's DRAM equal bit for bit. Returns the RTL's cycles."""
     from opentpu import rtlsim
     from opentpu.host.board import sim_config
     from opentpu.isasim import board_config
@@ -330,18 +385,41 @@ def test_gemma3_1b_token_on_four_slice_rtl_is_bit_exact(have_verilator):
     n = eng.image.nbytes
     rtlsim.MEMORY['LAT'] = 30
     rtl = RtlBackend(eng.cfg, [s.dram[:n] for s in eng.backend.machine.slices],
-                     uarch=dict(rtlsim.BOARD_UARCH), axi=True, stall=0)
+                     uarch=uarch, axi=True, stall=0)
     isa = eng.backend
     want = eng.step(ids[-1])
     eng.backend, eng.pos = rtl, eng.pos - 1
     got = eng.step(ids[-1])
     st = eng.stats[-1]
-    print(f"S = 4 RTL token at pos {len(ids) - 1}: {st['cycles']} cycles, next token "
-          f"{int(np.argmax(got))} ({tok.decode([int(np.argmax(got))])!r})")
+    coll = {k: v for k, v in uarch.items() if k.startswith('COLL_')}
+    print(f"S = 4 RTL token at pos {len(ids) - 1} ({what}; {coll}): {st['cycles']} cycles, "
+          f"next token {int(np.argmax(got))} ({tok.decode([int(np.argmax(got))])!r})")
     assert np.array_equal(want.view(np.uint32), got.view(np.uint32))
     assert int(np.argmax(want)) == int(np.argmax(got))
     for s in range(4):
         assert np.array_equal(isa.machine.slices[s].dram[:n], rtl.drams[s][:n])
+    return st['cycles']
+
+
+@pytest.mark.skipif(not REAL.exists(), reason='models/gemma-3-1b-it not downloaded')
+def test_gemma3_1b_token_on_four_slice_rtl_is_bit_exact(have_verilator):
+    """The one-token gate of the real model at S = 4 (the S = 3 gate's pattern) on the board's
+    uarch (rtlsim.BOARD_UARCH: OTPU_COLL_HUB=1 takes the collective through the board's hub, as
+    470cf908 builds it). Slow (about a quarter of an hour)."""
+    from opentpu import rtlsim
+    _gemma3_1b_token(dict(rtlsim.BOARD_UARCH), 'the board uarch')
+
+
+@pytest.mark.skipif(not REAL.exists(), reason='models/gemma-3-1b-it not downloaded')
+def test_gemma3_1b_token_through_the_pipelined_collective_is_bit_exact(have_verilator):
+    """The one-token gate on f2-burst200-s4-175p's uarch (sim_uarch: the collective through the
+    board's hub, two register stages each way and a port per slice, with up to COLL_PIPE reads
+    in flight): bit-exact, and in fewer cycles than the S = 4 gate's 2,301,972 with no hub at all
+    (the hub's round trips gone). Slow (about a quarter of an hour)."""
+    from opentpu import rtlsim
+    cyc = _gemma3_1b_token({**rtlsim.BOARD_UARCH, **T.sim_uarch(T.load(str(S4P)))},
+                           'f2-burst200-s4-175p')
+    assert cyc < 2_301_972 * 1.01, cyc
 
 
 def test_tmem_floorplan_is_s4s_with_a_box_per_slice():

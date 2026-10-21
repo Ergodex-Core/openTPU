@@ -222,6 +222,13 @@ for _k in ("NSB", "SBP", "SBH", "RPL", "TDP", "GST", "PMP", "PRK", "SDM"):
 # TMEM lanes of the MXU and the quantizer when fewer than LANES (timing only): OTPU_ULANES=8
 if os.environ.get("OTPU_ULANES"):
     UARCH["ULANES"] = int(os.environ["OTPU_ULANES"])
+# The collective at S > 1 (timing only): OTPU_COLL_HUB=1 runs it as otpu_board builds it (otpu_top
+# COLL_HUB: the hub next to the unit, two register stages each way, a port per slice; an FPGA
+# target at S > 1 sets it, opentpu.target.sim_uarch), OTPU_COLL_PIPE=K with up to K reads in
+# flight (otpu_board COLL_PIPE, docs/v4/p4-status.md), OTPU_COLL_F=n the writes a port holds
+for _k in ("HUB", "PIPE", "F"):
+    if os.environ.get("OTPU_COLL_" + _k):
+        UARCH["COLL_" + _k] = BOARD_UARCH["COLL_" + _k] = int(os.environ["OTPU_COLL_" + _k])
 
 # The memory path. AXI: the board's memory path -- its adapter (otpu_native_dram) in front of a
 # two-channel native memory model (sim/verilator/otpu_native_mem.sv) with random stalls (percent)
