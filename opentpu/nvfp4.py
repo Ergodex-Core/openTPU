@@ -189,3 +189,41 @@ def aligned_dot16(activations, codes, *, fraction_bits=24, mask=0xffff):
         total += aligned * D2[c & 7] * (-1 if c & 8 else 1)
     assert -(1 << (fraction_bits + 16)) <= total < 1 << (fraction_bits + 16)
     return AlignedDot(total, top, discarded, fraction_bits)
+
+
+def convert_subtotal(integer, e_star):
+    """F24 signed41 subtotal to FP32 RNE, BEFORE the scale multiplication."""
+    if type(integer) is not int or not -(1 << 40) <= integer < 1 << 40:
+        raise ValueError("subtotal outside signed41")
+    if type(e_star) is not int or not -133 <= e_star <= 120:
+        raise NumericalFault("e_star outside finite BF16 decode range")
+    return round32(integer * pow2(e_star - 25))
+
+
+def accumulate_subtotals(subtotals, scales, global_bits, *, profile=STRICT_GRADUAL):
+    """Ordered, separately rounded epilogue for one already-produced row.
+
+    Strict profiles consume FP32 tree subtotal bits; FAST_F24 consumes AlignedDot
+    records. Fast discarded alignment is rejected until a separate error policy
+    is approved. This does not turn an aligned subtotal into the strict tree.
+    """
+    if profile not in (STRICT_GRADUAL, STRICT_FTZ, FAST_F24):
+        raise ValueError("unsupported epilogue profile")
+    if not subtotals or len(subtotals) != len(scales):
+        raise ValueError("nonempty matching subtotals/scales required")
+    if global_bits >> 31 or fp32_value(global_bits) < 0:
+        raise NumericalFault("global scale must be unsigned finite FP32")
+    ftz = profile == STRICT_FTZ
+    acc = 0
+    for dot, scale in zip(subtotals, scales):
+        if profile == FAST_F24:
+            if not isinstance(dot, AlignedDot) or dot.fraction_bits != 24:
+                raise ValueError("F24 epilogue needs F24 AlignedDot")
+            if dot.discarded:
+                raise NumericalFault("discarded alignment requires strict fallback")
+            dot = convert_subtotal(dot.integer, dot.e_star)
+        else:
+            fp32_value(dot)
+        term = mul32(dot, round32(e4m3_value(scale)), ftz=ftz)
+        acc = add32(acc, term, ftz=ftz)
+    return mul32(acc, global_bits, ftz=ftz)

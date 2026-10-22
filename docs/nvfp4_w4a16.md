@@ -1,9 +1,80 @@
-# NVFP4 W4A16 first numerical slice
+# NVFP4 W4A16 numerical slice
 
-This implements the proposal's contract/reference and a single F24 decode-align-dot
-block. It is independently testable and is not connected to the sequencer, DMA,
-existing ACT RAM, model runtime or F2 shell. The strict backend is a software
-conformance oracle; the hardware subtotal is a separately named approximate profile.
+This implements the proposal's contract/reference, a single F24 decode-align-dot
+block, and a folded FP32 epilogue. It is independently testable and is not
+connected to the sequencer, DMA, existing ACT RAM, model runtime or F2 shell.
+The strict BF16/E2M1 tree is still a software oracle; the new RTL accepts its
+already-rounded FP32 subtotal or a separately labeled approximate F24 subtotal.
+
+## Second gate: FP32 epilogue and ownership
+
+`rtl/mxu/otpu_nvfp4_fp.sv` implements portable RNE FP32 conversion, multiplication,
+addition and E4M3 scale decoding. Gradual underflow and DAZ/FTZ are distinct
+policies. Exact wide integer addition handles cancellation across the entire
+FP32 exponent range. This prioritizes conformance, with a 280-bit arithmetic
+workspace; it is not an area-optimized floating-point pipeline or qualified F2 IP.
+There is no native FP32 DSP assumption. Overflow/nonfinite inputs fault with
+canonical zero bits; a later zero or compensating scale cannot undo a fault.
+
+`rtl/mxu/otpu_nvfp4_scale_acc.sv` is a single-context folded backend with separate
+CONVERT, SCALE, ACCUMULATE and GLOBAL register boundaries. Every block first
+normalizes the signed 41-bit F24 subtotal to RNE32 (or consumes a strict FP32
+tree result), then multiplies the E4M3 scale, then adds into a +0 accumulator in
+increasing K16 order. The last block invokes a separate final global multiply.
+There is no fusion or reassociation. A non-last block occupies four clocks from
+acceptance to the next input-ready state; final output becomes valid only after
+the additional global stage. These are state-machine cycles, not measured F2
+throughput. The FSM serializes the FP32 recurrence and holds terminal output
+until consumed.
+
+| RTL mode | Subtotal input | Underflow policy |
+|---|---|---|
+| 0 | External strict FP32 tree result | Gradual |
+| 1 | External strict FP32 tree result | DAZ before each FP32 op; FTZ after RNE |
+| 2 | F24 integer plus e_star | Gradual; remains approximate relative to strict tree |
+
+Mode 3 is rejected. Mode 2 rejects discarded alignment, because no bounded-error
+profile is approved. Even mode 2 without discarded bits is not strict tree
+arithmetic. No descriptor capability or binary ISA allocation was added.
+
+Each input atom includes group, K16 index and epoch, with an independently checked
+scale identity. A scale can arrive late using `in_scale_valid`; the complete atom
+is accepted only when the scale is available. This qualifies one composite atom,
+not an independently handshaken scale channel. The source must hold the operand,
+scale and identities stable until acceptance. First/last, monotonic K16 index,
+profile, job tag, group, epoch and global-factor consistency are checked. An
+unexpected first or changed identity poisons the current row while preserving its
+original output identity. Fault bits are sticky through last: bit 0 protocol/input,
+bit 1 conversion, bit 2 scale multiplication, bit 3 accumulation, bit 4 final
+global multiplication. Failed output is +0 and must not be consumed as a result.
+
+`buffer_free` is the input-atom acceptance event, with `free_group`,
+`free_k16_index`, and `free_epoch` valid on that event. The full atom has been
+snapshotted, so its staging slot may be reused. This releases neither an entire
+DMA allocation nor the unfinished accumulator context. `output_committed` occurs
+only on successful terminal `out_valid && out_ready`, after every required
+rounding stage. It describes **local numerical result acceptance**, not host/DMA
+visibility, model-state commit, or speculative token publication. Terminal faults
+still drain via out_valid/out_ready but never assert output_committed.
+
+No next row is accepted until the previous terminal result drains. Group/epoch
+reuse, including wrap to zero, is tested only after that drain. Reset gates both
+events and abandons in-flight contexts; the enclosing job controller must advance
+its generation and prevent stale external traffic from reentering. It is not
+implemented by a CPU speculative issuer or by these local epoch tags.
+Reuse also requires every external operand/scale/subtotal holder to drain or be
+generation-fenced. A local output handshake alone cannot distinguish stale traffic
+after a complete group/K/epoch key is reused; that lifetime gate is upstream.
+
+The dot module now has `TAG_W` (default 32, preserving its original interface).
+The composed test uses 128 bits for group/epoch/K16/block identity. It directly
+connects dot valid/ready to epilogue valid/ready and verifies atomic scale/tag
+association through the subtotal pipeline under accumulator backpressure.
+
+An independent `gpt-6.1-sol` reviewer at high reasoning reviewed arithmetic,
+protocol and golden tests. No blocking finding was reported. Its suggested
+overflow-threshold, partial-row reset, and composed-pipeline checks were added.
+No independent physical implementation or hardware review is claimed.
 
 ## Provenance and repository audit
 
@@ -53,9 +124,9 @@ before a later compensating scale. Underflow follows one of two distinct IDs:
 
 | Profile | Contract | Implemented backend |
 |---|---|---|
-| `nvfp4-w4a16-tree16-rne-gradual-v1` | Gradual underflow throughout | Software oracle |
-| `nvfp4-w4a16-tree16-rne-daz-ftz-v1` | DAZ before each operation; FTZ after RNE | Software oracle |
-| `nvfp4-w4a16-align-f24-rne-gradual-v1` | BF16 common exponent F24 alignment | RTL subtotal and software subtotal |
+| `nvfp4-w4a16-tree16-rne-gradual-v1` | Gradual underflow throughout | Software tree; RTL epilogue from strict subtotal |
+| `nvfp4-w4a16-tree16-rne-daz-ftz-v1` | DAZ before each operation; FTZ after RNE | Software tree; RTL epilogue from strict subtotal |
+| `nvfp4-w4a16-align-f24-rne-gradual-v1` | BF16 common exponent F24 alignment | RTL/software subtotal and epilogue, rejecting discarded alignment |
 
 Strict row evaluation widens BF16 exactly, forms separately rounded FP32 products,
 reduces adjacent pairs through a fixed four-level K16 tree, multiplies the block
@@ -147,9 +218,12 @@ Use the installed Python environment with NumPy and pytest. On this Mac it is
 The default `python3` lacks NumPy. No software was installed for these checks.
 
 ```
-python -m pytest -q tests/test_nvfp4.py tests/test_mx.py tests/test_isa.py tests/test_quant.py tests/test_fp.py
+python -m pytest -q tests/test_nvfp4.py tests/test_nvfp4_epilogue.py tests/test_mx.py tests/test_isa.py tests/test_quant.py tests/test_fp.py
 python -m pytest -q -s --basetemp=build/nvfp4-evidence/rtl tests/test_nvfp4_rtl.py
+python -m pytest -q tests/test_nvfp4_epilogue.py
+python -m pytest -q -s --basetemp=build/nvfp4-gate2/final-rtl tests/test_nvfp4_rtl.py tests/test_nvfp4_scale_acc_rtl.py
 verilator --lint-only --top-module otpu_nvfp4_dot16 rtl/mxu/otpu_nvfp4_dot16.sv
+verilator --lint-only --top-module otpu_nvfp4_scale_acc rtl/mxu/otpu_nvfp4_fp.sv rtl/mxu/otpu_nvfp4_scale_acc.sv
 ```
 
 The software checks cover all format codes, canonical packing, RNE ties,
@@ -160,7 +234,7 @@ against a separate NumPy pairwise implementation under both subnormal policies.
 F16/F24 width and error bounds use 2,400 seeded rational block comparisons.
 Descriptor tests reject unsupported profiles, unknown layouts, RHT, inverse
 scales, bad spans/strides, 64-bit wrap and output aliasing.
-The selected software/legacy arithmetic and ISA regression completed with
+At the first gate (`00087551`), the selected software/legacy arithmetic and ISA regression completed with
 **144 passed**; the standalone RTL regression completed with **2 passed**.
 Verilator standalone lint completed without warnings.
 
@@ -180,13 +254,52 @@ watchdog following a PASS/$finish path. The final harness exits its bounded loop
 before calling $finish and rejects fatal text even when a simulator returns zero.
 This was a verification harness issue; no arithmetic acceptance check was relaxed.
 
+The second gate adds `tests/test_nvfp4_epilogue.py` and
+`tests/test_nvfp4_scale_acc_rtl.py`. Primitive vectors cover every E4M3 byte,
+all 512 signed e_star encodings crossed with subtotal extrema/ties, exact converter
+overflow-threshold neighbors, FP32 cancellation, signed zeros, normal/subnormal
+promotion, invalid operands, and seeded IEEE word pairs under both policies.
+Row vectors cover separate rounding witnesses, increasing K16 order, immutable
+group/epoch/profile/global identity, coherent operand/scale identity mutations,
+independent scale identity errors, sticky faults, delayed scales, seven reset
+phases including a partial row awaiting its next block, stalls, and drained
+owner reuse across epoch wrap. A composed BF16/E2M1-dot-to-epilogue test adds
+masked tails, invalid/discarded poisoning, 128-bit identities, thirteen in-flight
+reset phases, and accumulator-driven backpressure. It does not model independently
+reordered memory responses or prove global epoch lifetime fencing.
+
+Both Icarus 13.0 and Verilator 5.048 execute all RTL families. Two portability
+issues in verification were corrected before the passing aggregate run: Icarus
+needed direct enum-state if/else assignment and declarations before composed
+testbench instance references. The composed testbench also snapshots stimulus
+identity before the sampling edge, avoiding a source/scoreboard race. No numeric
+comparison, fault condition or watchdog was removed.
+
+Final second-gate results: **149 software tests passed** and **8 RTL tests passed**;
+standalone dot and scale/accumulator Verilator lint both pass without warnings.
+Each simulator completes the following identical scoreboard totals:
+
+| Family | Completed evidence |
+|---|---|
+| F24 dot pipeline | 5,835 vectors; 5,825 checked and ten reset-flushed |
+| FP32 primitives | 14,088 exact golden comparisons |
+| Ordered epilogue | 2,665 blocks / 1,425 rows; seven reset phases; 7,205 stalled-output and 9,098 delayed-scale cycles |
+| Composed dot/epilogue | 800 blocks / 220 rows; thirteen reset phases; 1,463 stalled-output and 2,219 delayed-scale cycles |
+
+The final logs, generated benches/vectors and hashes are retained under
+`build/nvfp4-gate2/final-rtl` with aggregate logs in `build/nvfp4-gate2`.
+Every run requires explicit TEST_PASS and rejects fatal/error/watchdog text,
+including simulator failures that return exit status zero. These are behavioral
+simulations; clock-cycle counts are not F2 frequency or TPS measurements.
+
 ## Next implementation gate and exclusions
 
-Next implement RNE32 conversion of the signed 41-bit subtotal with its exponent,
-then a separately rounded E4M3 scale multiply and ordered FP32 accumulator.
-Qualify gradual and DAZ/FTZ behavior explicitly. Do not reuse the existing FTZ
-FP32 RTL as a gradual-underflow strict backend. Only after arithmetic conformance
-should a bounded local buffer/job controller connect a descriptor to one result.
+Next implement the strict folded BF16/E2M1 tree in RTL, then a bounded local
+buffer/job controller connecting one checked descriptor to a private result.
+Retain explicit generation/drain ownership and qualify a selected implementation
+under the actual F2 Vivado/HDK flow before pipelining or replicating arithmetic.
+The wide-port worker owns the separate two-credit prefetch A/B experiment.
+No Megakernels/GPU TPS result is imported into this numerical backend.
 
 F2/VU47P at 200 MHz remains a target. There is no native FP32 DSP on VU47P.
 No Vivado executable or MCP was available through the configured environment.
