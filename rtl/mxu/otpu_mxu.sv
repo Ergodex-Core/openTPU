@@ -331,6 +331,7 @@ module otpu_mxu
     logic [31:0]      out, total;
     logic             tz;              // total == 0 (registered: off the drain path)
     logic [15:0]      KB, KBa;         // KBa: advances per row
+    logic [7:0]       KBa_last;        // last advance index, computed before the pop path
     logic             pair;
     logic [MCOLS-1:0] hi;              // PAIR: the columns that take the odd blocks (j >= M)
     logic             t2, qd;          // t2 weights; QUAD (T2)
@@ -369,6 +370,7 @@ module otpu_mxu
     cmd_e.tz    = cmd_tz;
     cmd_e.KB    = 16'(cmd_KB8);
     cmd_e.KBa   = cmd_KBa;
+    cmd_e.KBa_last = 8'(cmd_KBa - 16'd1);
     cmd_e.pair  = cmd_pair;
     cmd_e.t2    = cmd_t2;
     cmd_e.qd    = cmd_qd;
@@ -490,7 +492,16 @@ module otpu_mxu
   logic        cl_ld;
   logic [RFW:0] rows_live;                  // the head's rows popped (first block), not drained
   logic [RFW:0] rows_p;                     // the pop head's, while it is not the head
-  wire last_k   = (ck + 1 == c_KBa);
+  // KB is an 8-bit command field, so KBa is at most 255. Compare the current advance with the
+  // command's registered last index instead of incrementing ck on the ACT RAM read-address path.
+  // A zero-length command has no last advance; keep the full-width ck check for exact equivalence.
+  wire last_k   = (c_KBa != 16'd0) && (ck[15:8] == 8'd0) &&
+                  (ck[7:0] == pop_e.KBa_last);
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && p_act && (last_k !== (ck + 1 == c_KBa)))
+      $fatal(1, "otpu_mxu: last_k differs from ck + 1 == KBa (ck=%0d, KBa=%0d)", ck, c_KBa);
+`endif
   wire last_g   = (cg + 1 == p_G);          // the row's last group: its pops free FIFO entries
   wire more     = p_act && (c_left != 0);
   // the chunk of advance ck (4-bit without PAIR: two advances a chunk; t2 four, with PAIR two,
