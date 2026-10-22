@@ -369,13 +369,53 @@ negative oracles and RF64 saturation passed in `ownership-v3`. The saved-artifac
 audit reran only tiny ISA/model comparisons, never RTL. Receipts include
 `ownership-v3/final-ownership-audit.json` and the matching logs/status.
 
-The next finite gate is an independent native-adapter model for these two full
-64-byte writes, write completion and A-cache/prefetch invalidation, followed by
-new-epoch read closure against this same saved fixture. DMA request production,
-dependency-driven sequencer dispatch/release and output drain/epilogue timing
-remain external after that. Keep calibration false and TPS null until those and
-other-unit dependencies are qualified. No full Gemma/Qwen simulation, physical
-build, license configuration or hardware action was performed in this gate.
+The following write/reuse gate adds a command-generated single-chunk DMA ST
+producer and a native adapter model for masked writes, independent command/data
+handshakes, write completion and delayed A-cache/prefetch invalidation. The
+three-MM program and arithmetic remain unchanged. Only simulation tracing was
+added to RTL; synthesized RTL is unchanged by this gate.
+
+Accepted DMA/MM starts remain explicit frontend inputs. The ST producer derives
+its read/gather pipeline, request and completion from each ST instruction,
+B-ready and generated write-idle. Native ready/read/write-completion timing
+comes from the configured deterministic memory schedule. Observed request,
+acknowledgement, cache-state and data fields are comparison oracles only. ST
+source words come from an independent functional ISA oracle; this does not yet
+model their dynamic TMEM value production. Initial DMA load/loader requests,
+MXU release and drain epilogue, and TMEM drain grants remain external.
+
+Both saved credit variants independently generate all five STs (including the
+two 64-byte patches), then close every native command/read/write completion.
+Each case checks 1,252 native payloads, 108 A-cache payloads and 482 joined B
+chunks against independently sampled data. Old-epoch reads must retire before
+page overwrite; new-epoch reads require both generated patch completions.
+The new epoch generates and retires 288 weight beats and 32 scale beats, versus
+288/128 for each initial page epoch. Final generated DRAM equals the exact ISA
+result. The supported D128/NCH8/PORTB4/ALINE64/PMP0 configuration, program and
+functional DRAM input are pinned before comparison.
+
+The first instrumented case passed. A strengthened regression then exposed two
+model bookkeeping errors: hashing boot-loader storage beyond the functional
+DRAM input, and assigning multi-chunk read identities with the first chunk's
+CHASH parity. Both were corrected structurally; failed logs/traces are retained.
+No aggregate timing correction was introduced.
+
+Final checks on the existing EC2 builder passed 84 focused/regression tests,
+then 10 held-out-oracle checks. With native write-done lag increased from 4 to
+31 cycles, the same RTL program and negative checks passed another 11 tests.
+The default one/two-credit case remains 2,183/1,868 cycles; the delayed-ack case
+is 2,310/2,004 cycles. All four cases have exact ISA TMEM/DRAM, identical input
+program and memory, 1,252 read beats and five native write commands. The
+post-run audit independently rechecks saved outputs and generated closure,
+never relaunching RTL. Evidence is under `writes-v3`, `writes-delay31` and
+`final-writes-audit.json`; preliminary `writes-v1/v2` and their failures remain
+preserved. These are bounded simulated cycles, not decode TPS or clock closure.
+
+The next finite gate is independent initial DMA load/loader request production,
+followed by dependency-driven sequencer dispatch/release and output drain timing.
+Keep calibration false and TPS null until those and other-unit dependencies are
+qualified. No full Gemma/Qwen simulation, physical build, license configuration
+or hardware action was performed in this gate.
 
 ## Physical target and prerequisites
 

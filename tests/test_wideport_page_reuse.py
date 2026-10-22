@@ -3,7 +3,8 @@
 MM0 and MM1 use distinct weight/scale pages. DMA then patches one 64-byte
 line of MM0's pages from preloaded TMEM scratch, and MM2 reads those pages
 again. This checks a conservative completed-write handoff, not the earliest
-possible page release or an independently modeled adapter write path.
+possible page release. The coupled checker generates the DMA ST and native
+write/invalidation timing; accepted starts remain external frontend inputs.
 """
 
 from collections import deque
@@ -27,6 +28,7 @@ from tools.wideport_unit_feedback import validate_feedback_trace
 from tools.wideport_native_memory import logical_beat
 from tools.wideport_pipeline_ownership import validate_pipeline_ownership
 from tools.wideport_page_reuse import validate_page_epochs
+from tools.wideport_write_coupled import validate_write_coupled
 
 
 OUT2 = OUT + 8192
@@ -150,7 +152,7 @@ def _ownership_evidence(events, native_header, native_events, program, mode):
             "sequencer_dispatch_checked": bool(dispatched),
             "conservative_completed_write_handoff": True,
             "earliest_page_release_proven": False,
-            "independent_adapter_write_model": False}
+            "independent_adapter_write_model": True}
 
 
 def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
@@ -202,6 +204,8 @@ def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
                     f"+nat_feedback={keep / 'native-feedback.jsonl'}",
                     f"+adapter_feedback={keep / 'adapter-feedback.jsonl'}",
                     f"+tmfeedback={keep / 'tmfeedback.jsonl'}", "+tmfeedback_limit=32768"]
+        if os.environ.get("WP_NATIVE_WRITE_DELAY"):
+            plusargs.append("+nat_wdl=" + str(int(os.environ["WP_NATIVE_WRITE_DELAY"])))
         manifest = {"variant": mode, "mxu_window_cap": queue_cap,
                     "pmp": 0, "nch": 8, "requested_uarch": board,
                     "program_sha256": _sha(words.tobytes()),
@@ -250,11 +254,14 @@ def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
             native = validate_native_trace(keep / "native-feedback.jsonl")
             pipeline = validate_pipeline_ownership(keep)
             epochs = validate_page_epochs(keep)
+            coupled_writes = validate_write_coupled(keep)
+            assert coupled_writes["new_epoch_read_ownership_closed"]
             assert resource["command_driven_vadd"] and resource["command_driven_mxu_row_valid"]
             assert native["write_commands"] >= 2
             summary = {"mode": mode, "cycles": stats["cycles"], "structure": structure,
                        "resource": resource, "native": native,
                        "pipeline_ownership": pipeline, "page_epochs": epochs,
+                       "write_coupled": coupled_writes,
                        "isa_exact_tmem_dram": True,
                        "whole_program_coupled_predictor": False,
                        "initial_dram_sha256": _sha(dram.tobytes()),

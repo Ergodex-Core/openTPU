@@ -168,8 +168,16 @@ module otpu_top
         end else begin
           $fwrite(af_fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"rst\":%0d,\"a_flush\":%0d,\"a_req\":%0d,\"a_addr\":%0d,\"a_ready\":%0d,\"a_rvalid\":%0d,",
                   af_cyc, sys_rst, rst || ld_start || a_inval, a_req, a_addr, a_rdy, a_rvalid);
-          $fwrite(af_fd, "\"b_req\":%0d,\"b_tag\":%0d,\"b_we\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"b_ready\":%0d,\"b_rvalid\":%0d,\"b_rtag\":%0d,\"b_rcm\":%0d,\"b_rlast\":%0d,\"sw_req\":%0d}\n",
-                  b_req, b_tag, b_we, b_addr, b_n, b_rdy, b_rvalid, b_rtag, b_rcm, b_rlast, sw_req);
+          $fwrite(af_fd, "\"b_req\":%0d,\"b_tag\":%0d,\"b_we\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"b_ready\":%0d,\"b_rvalid\":%0d,\"b_rtag\":%0d,\"b_rcm\":%0d,\"b_rlast\":%0d,\"sw_req\":%0d,\"wr_idle\":%0d,\"rd_idle\":%0d,\"write_invalidate\":%0d,\"a_cache_valid\":%0d,\"a_run_valid\":%0d",
+                  b_req, b_tag, b_we, b_addr, b_n, b_rdy, b_rvalid, b_rtag, b_rcm, b_rlast, sw_req,
+                  wr_idle, rd_idle, $unsigned(u_adapt.wk_v), $unsigned(u_adapt.al_v), $unsigned(u_adapt.pv));
+          if (b_req && b_we)
+            $fwrite(af_fd, ",\"b_wmask\":\"%08h\",\"b_wdata\":\"%0256h\"", b_wmask, b_wdata);
+          if (a_rvalid)
+            $fwrite(af_fd, ",\"a_rdata\":\"%0128h\"", a_rdata);
+          if (b_rvalid)
+            $fwrite(af_fd, ",\"b_rdata\":\"%01024h\"", b_rdata);
+          $fwrite(af_fd, "}\n");
           af_cyc++;
           if (dump) begin
             $fwrite(af_fd, "{\"kind\":\"end\",\"cycles\":%0d}\n", af_cyc);
