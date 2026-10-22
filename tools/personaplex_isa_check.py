@@ -150,7 +150,7 @@ def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap
     if not isinstance(cap, int) or isinstance(cap, bool) or not 4 <= cap <= Spec().context:
         raise ValueError("cap must be between 4 and the native 3000-frame context")
     # Prevent a mistaken cache root from managing entries in an input/source tree.
-    for protected in (model_dir, reference_dir, ROOT, output_dir):
+    for protected in (model_dir, embeddings_file, reference_dir, ROOT, output_dir):
         if cache_dir == protected or cache_dir in protected.parents:
             raise ValueError(f"Cache must be an isolated directory, not an input/output ancestor: {cache_dir}")
     os.environ["OTPU_IMAGE_CACHE"] = str(cache_dir)
