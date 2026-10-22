@@ -4,6 +4,11 @@ This document is the contract between the compiler (`opentpu/compiler.py`), the 
 instruction-set simulator (`opentpu/isasim.py`) and the RTL (`rtl/`). All three must agree on
 every bit written to TMEM or DRAM.
 
+The separate [W4A16 proposal interface](nvfp4_w4a16.md) uses BF16 activations and
+NVFP4 K16 weights. Its checked logical descriptor and standalone numerical block
+are experimental; no instruction opcode, capability bit or MM behavior changes.
+In this ISA, MM WF=3 continues to consume the int8 ACT RAM described below.
+
 ## Machine model
 
 - `S` slices. Each slice has: a sequencer with 16 x 32-bit registers (`R0` reads as 0), an
