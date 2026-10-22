@@ -176,9 +176,11 @@ timing, utilization, power or inference measurements.
 
 ## Remaining gates
 
-Add a real authorized memory frontend and protected descriptor parser/job runtime,
-bounded tile buffers and tail handling, dependency/fence semantics, source lifetime
-and generation allocation, actual Y writes and completion visibility. Then run
+A bounded simulated descriptor transport, one tile slot and staged simulated Y
+visibility are now described in [gate four](nvfp4_transport.md). A real authorized
+memory frontend still needs a protected production descriptor/runtime, dependency
+and fence semantics, source lifetime/generation allocation and actual device Y
+writes/completion visibility. Then run
 captured tensor/layer golden comparisons and qualify the actual F2 HDK/Vivado flow.
 The conformance-first wide FP32 logic needs measured resource/latency/timing work
 before replication; no throughput gain or 200 MHz closure follows from these tests.
