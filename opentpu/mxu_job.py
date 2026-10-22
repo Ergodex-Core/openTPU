@@ -130,3 +130,26 @@ class W4A16Job:
             return cls(**v)
         except (KeyError, TypeError) as e:
             raise ValueError("incomplete or malformed job") from e
+
+
+def local_job_fields(job: W4A16Job, session_generation: int):
+    """Internal RTL test/local-stream adapter, NOT a binary ISA descriptor ABI.
+
+    One private output, K<=64, strict profiles and no dependencies. Address fields
+    are validated metadata; the local controller never dereferences them or
+    authorizes DMA. External holders must drain/fence before generation reuse.
+    """
+    if type(job) is not W4A16Job:
+        raise ValueError("expected a checked W4A16Job")
+    _integer(session_generation,(1 << 64)-1,"session_generation")
+    if job.tokens!=1 or job.outputs!=1 or job.k>64 or job.dependencies:
+        raise ValueError("unsupported local job subset")
+    if job.generation!=session_generation:
+        raise ValueError("stale local job generation")
+    d=job.to_mapping()
+    return dict(abi_major=job.abi_major,abi_minor=job.abi_minor,flags=job.flags,
+                reserved=job.reserved,contract=127,mode=int(job.profile==STRICT_FTZ),
+                digest=int(job.profile_digest,16),tokens=job.tokens,outputs=job.outputs,
+                k=job.k,global_bits=job.global_bits,a=d['a'],w=d['w'],scales=d['scales'],
+                y=d['y'],context_id=job.context,generation=job.generation,
+                request_id=job.request,position=job.position,epoch=job.epoch,dependency_count=0)
