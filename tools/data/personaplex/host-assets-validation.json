@@ -1,0 +1,702 @@
+{
+  "started_at": "2026-10-21T17:29:05.110205+00:00",
+  "passed": true,
+  "script_sha256": "e4f4612bf18a0c264253a1b261bce4ae0ddf3847a2d6d278dc7b3702d116a2bb",
+  "stage": "complete",
+  "scope": "real local host payloads and one CPU codec frame",
+  "offline": true,
+  "fpga_access": false,
+  "temporal_execution": false,
+  "temporal_numerics_validated": false,
+  "hardware_validated": false,
+  "end_to_end_inference": false,
+  "speech_quality_validated": false,
+  "versions": {
+    "torch": "2.4.1+cpu",
+    "numpy": "2.1.3",
+    "moshi-personaplex": "0.1.0",
+    "sentencepiece": "0.2.0",
+    "safetensors": "0.4.5"
+  },
+  "threads": {
+    "intraop": 2,
+    "interop": 2
+  },
+  "assets": {
+    "config": {
+      "path": "/home/ubuntu/personaplex-prep-20261021/assets/config.json",
+      "bytes": 56,
+      "mtime_ns": 1792602931912895700
+    },
+    "mimi": {
+      "path": "/home/ubuntu/personaplex-prep-20261021/assets/tokenizer-e351c8d8-checkpoint125.safetensors",
+      "bytes": 384644900,
+      "mtime_ns": 1792602935159961000
+    },
+    "tokenizer": {
+      "path": "/home/ubuntu/personaplex-prep-20261021/model/tokenizer_spm_32k_3.model",
+      "bytes": 552778,
+      "mtime_ns": 1792598416660608000
+    },
+    "browser_index": {
+      "path": "/home/ubuntu/personaplex-prep-20261021/assets/dist/index.html",
+      "bytes": 641,
+      "mtime_ns": 1768218419000000000
+    },
+    "browser_check": "index exists; browser execution not tested"
+  },
+  "host": {
+    "schema": {
+      "header_only": true,
+      "source_tensor_count": 282,
+      "loaded_tensor_count": 282,
+      "copied_tensor_count": 0,
+      "expanded_attention_count": 0,
+      "source_storage_bytes": 1719861248,
+      "host_parameter_count": 1794473984,
+      "host_fp32_bytes": 7177895936
+    },
+    "payload_loaded": true,
+    "strict_assignment": true,
+    "all_loaded_payloads_finite": true,
+    "device": "cpu",
+    "dtype": "torch.float32",
+    "temporal_parameters_loaded": false,
+    "depth_transformer_executed": false,
+    "text_head_executed": false
+  },
+  "input_embeddings": {
+    "shape": [
+      1,
+      1,
+      4096
+    ],
+    "dtype": "torch.float32",
+    "finite": true,
+    "min": -0.88134765625,
+    "max": 0.540771484375,
+    "saved_shape": [
+      1,
+      4096
+    ],
+    "path": "/home/ubuntu/personaplex-prep-20261021/host-validation-001/input_embeddings.npy",
+    "sha256": "4bb620bb0e0f7541060ac145b6c5c68bebb4c97890af6ebe65c0da2aeced6899",
+    "source": "native LMModel.embed_codes(LMModel._get_initial_token())",
+    "initial_codes": [
+      32000,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048,
+      2048
+    ],
+    "repeat_bit_exact": true,
+    "is_temporal_output": false
+  },
+  "tokenizer": {
+    "vocabulary_size": 32000,
+    "sample_tokens": [
+      11725,
+      263
+    ],
+    "sample_decoded": "Hello.",
+    "loaded": true
+  },
+  "voices": {
+    "count": 18,
+    "weights_only": true,
+    "payloads": [
+      {
+        "name": "NATF0.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATF0.pt",
+        "bytes": 419724,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            51,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1868
+        }
+      },
+      {
+        "name": "NATF1.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATF1.pt",
+        "bytes": 395266,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            48,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1939
+        }
+      },
+      {
+        "name": "NATF2.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATF2.pt",
+        "bytes": 419724,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            51,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2015
+        }
+      },
+      {
+        "name": "NATF3.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATF3.pt",
+        "bytes": 419724,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            51,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1978
+        }
+      },
+      {
+        "name": "NATM0.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATM0.pt",
+        "bytes": 411532,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            50,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 2,
+          "max": 2018
+        }
+      },
+      {
+        "name": "NATM1.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATM1.pt",
+        "bytes": 419724,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            51,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1978
+        }
+      },
+      {
+        "name": "NATM2.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATM2.pt",
+        "bytes": 411532,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            50,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "NATM3.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/NATM3.pt",
+        "bytes": 378764,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            46,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "VARF0.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARF0.pt",
+        "bytes": 558988,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            68,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "VARF1.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARF1.pt",
+        "bytes": 411532,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            50,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1744
+        }
+      },
+      {
+        "name": "VARF2.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARF2.pt",
+        "bytes": 419724,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            51,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1808
+        }
+      },
+      {
+        "name": "VARF3.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARF3.pt",
+        "bytes": 509836,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            62,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "VARF4.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARF4.pt",
+        "bytes": 468876,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            57,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "VARM0.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARM0.pt",
+        "bytes": 354188,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            43,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1715
+        }
+      },
+      {
+        "name": "VARM1.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARM1.pt",
+        "bytes": 378764,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            46,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2010
+        }
+      },
+      {
+        "name": "VARM2.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARM2.pt",
+        "bytes": 567180,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            69,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 1978
+        }
+      },
+      {
+        "name": "VARM3.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARM3.pt",
+        "bytes": 378764,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            46,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2008
+        }
+      },
+      {
+        "name": "VARM4.pt",
+        "path": "/home/ubuntu/personaplex-prep-20261021/assets/voices/VARM4.pt",
+        "bytes": 452492,
+        "mtime_ns": 1767771365000000000,
+        "embeddings": {
+          "shape": [
+            55,
+            1,
+            1,
+            4096
+          ],
+          "dtype": "torch.bfloat16",
+          "finite": true,
+          "min": -0.87890625,
+          "max": 0.5390625
+        },
+        "cache": {
+          "shape": [
+            1,
+            17,
+            4
+          ],
+          "dtype": "torch.int64",
+          "finite": true,
+          "min": 3,
+          "max": 2043
+        }
+      }
+    ],
+    "replayed_through_temporal_model": false
+  },
+  "mimi": {
+    "loaded": true,
+    "all_checkpoint_tensors_finite": true,
+    "device": "cpu",
+    "streaming_frames": 1,
+    "sample_rate": 24000,
+    "frame_rate": 12.5,
+    "input": {
+      "shape": [
+        1,
+        1,
+        1920
+      ],
+      "dtype": "torch.float32",
+      "finite": true,
+      "min": 0,
+      "max": 0
+    },
+    "codes": {
+      "shape": [
+        1,
+        8,
+        1
+      ],
+      "dtype": "torch.int64",
+      "finite": true,
+      "min": 306,
+      "max": 2008
+    },
+    "decoded": {
+      "shape": [
+        1,
+        1,
+        1920
+      ],
+      "dtype": "torch.float32",
+      "finite": true,
+      "min": -0.003592254826799035,
+      "max": 0.01239106897264719
+    },
+    "speech_quality_tested": false
+  },
+  "elapsed_seconds": 12.029624645016156,
+  "finished_at": "2026-10-21T17:29:17.139894+00:00",
+  "ssm_command_id": "6ca25950-4308-4aaf-b6cc-51cb28a1e39e",
+  "retrieval_command_id": "60b64bcd-b77f-4a4e-bd64-674eb9bd1b43",
+  "source_verification": {
+    "file_count": 228,
+    "mismatches": [],
+    "compatibility_patch": "unsigned-word-safetensors-0.4.5"
+  },
+  "runtime_source_hashes": {
+    "opentpu/llm/personaplex_weights.py": "d7aae5c9216240e9eaf1e04e50eb21d09c553fa3010a39ec83e2521080100f2e",
+    "tests/test_personaplex_weights.py": "d4f6d2b8e0d1c3e02bdd5c0b2b78a28a5ae6bd797f87fc8d3237a62099884241",
+    "tools/personaplex_fpga.py": "5f7493b320432cb5a325a4bd9dc8ca4dc37e4efcf5be28c31f02b7b27b28b82b",
+    "opentpu/llm/personaplex_bridge.py": "b29a8be422bc56b543ec52d25bd8a705662530305435d6e8c526659f0a30b588"
+  }
+}

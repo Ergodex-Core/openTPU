@@ -1,0 +1,90 @@
+{
+  "passed": true,
+  "scope": "Header-only names, shapes, dtypes, quantization metadata, offsets and config validation",
+  "checkpoint_revision": "8c686347007de51d9017706e5543d6f1757ecf5d",
+  "upstream_revision": "3428dfd95309a7f3c84fd93259ded0f810d1ff91",
+  "acquisition": {
+    "checkpoint_headers_ssm_command": "bff8074a-f50a-4626-bd39-066b1baa2843",
+    "genuine_meta_schema_ssm_command": "cd8c5cd2-3006-4207-bd75-9d8974ebdecd",
+    "schema_torch_version": "2.4.1+cpu"
+  },
+  "input_sha256": {
+    "checkpoint-headers.json.gz.b64": "09b05e3514dcf24951e008000aaebaf129422d2c2e161a80ef2c8f6085b25003",
+    "moshi-meta-schema.json": "4f15038697bf9a975656c8ad7865fd11a10a243e171408a332ba7007c71a124b"
+  },
+  "production_code_sha256": {
+    "personaplex_weights.py": "eb6d3b4714e7f35a39d091b742c439f7b5a89a2d947aecd3d05e8bed8f8e9c25",
+    "personaplex_bridge.py": "b29a8be422bc56b543ec52d25bd8a705662530305435d6e8c526659f0a30b588"
+  },
+  "temporal_spec": {
+    "hidden": 4096,
+    "layers": 32,
+    "n_heads": 32,
+    "ffn": 11264,
+    "eps": 1e-08,
+    "rope_base": 10000.0,
+    "context": 3000
+  },
+  "temporal": {
+    "validated_layer_count": 32,
+    "logical_tensor_count": 193,
+    "logical_precision_counts": {
+      "F16": 65,
+      "affine_int4_group64": 128
+    },
+    "all_physical_keys_consumed": true
+  },
+  "host": {
+    "header_only": true,
+    "source_tensor_count": 282,
+    "loaded_tensor_count": 282,
+    "copied_tensor_count": 0,
+    "expanded_attention_count": 0,
+    "source_storage_bytes": 1719861248,
+    "host_parameter_count": 1794473984,
+    "host_fp32_bytes": 7177895936,
+    "logical_precision_counts": {
+      "F16": 62,
+      "affine_int4_group64": 220
+    }
+  },
+  "files": {
+    "temporal.safetensors": {
+      "tensor_count": 449,
+      "file_bytes": 3699957408,
+      "tensor_storage_bytes": 3699908608,
+      "safetensors_header_bytes": 48792,
+      "physical_dtype_counts": {
+        "F16": 321,
+        "U32": 128
+      }
+    },
+    "depformer.safetensors": {
+      "tensor_count": 672,
+      "file_bytes": 731478800,
+      "tensor_storage_bytes": 731406336,
+      "safetensors_header_bytes": 72456,
+      "physical_dtype_counts": {
+        "F16": 452,
+        "U32": 220
+      }
+    },
+    "embeddings.safetensors": {
+      "tensor_count": 50,
+      "file_bytes": 988459536,
+      "tensor_storage_bytes": 988454912,
+      "safetensors_header_bytes": 4616,
+      "physical_dtype_counts": {
+        "F16": 50
+      }
+    }
+  },
+  "tensor_payload_bytes_read": 0,
+  "numerical_weights_constructed": false,
+  "model_quality_validated": false,
+  "fpga_execution_validated": false,
+  "limitations": [
+    "Does not inspect numerical values, verify tensor payload hashes, dequantize or run inference.",
+    "Genuine model schema was acquired separately on F2; local validation uses that schema's names and shapes."
+  ]
+}

@@ -1,0 +1,92 @@
+{
+  "observed_at": "2026-10-21",
+  "instance": "i-0c78de2253f66519d",
+  "scope": "CPU dependency, source, checkpoint metadata and RTL simulation validation; no FPGA access",
+  "full_suite": {
+    "ssm_command_id": "da545afa-2e55-47c5-b642-6a21ecd75ddd",
+    "status": "Success",
+    "exit_code": 0,
+    "command": "python -m pytest -q --tb=short tests/test_personaplex_*.py",
+    "passed": 128,
+    "skipped": 0,
+    "wall_seconds": 22.99,
+    "verilator": "5.048",
+    "verilator_path": "/home/ubuntu/opt/verilator-5.048/bin",
+    "no_torch_compile": true
+  },
+  "compatibility": {
+    "ssm_command_id": "baae7793-d2c2-48ae-b3dc-8b0cf143cbaf",
+    "status": "Success",
+    "exit_code": 0,
+    "weights_bridge_tests": {
+      "passed": 39,
+      "wall_seconds": 1.57
+    },
+    "tiny_rtl_reset_test": {
+      "passed": 1,
+      "wall_seconds": 138.65
+    },
+    "safetensors": "0.4.5",
+    "torch": "2.4.1+cpu",
+    "patch": "Read packed U32 words via NumPy while keeping the torch path for BF16/floating tensors"
+  },
+  "preflight": {
+    "ssm_command_id": "8f98eab3-59e7-469c-86f7-6274dbcf57fe",
+    "status": "Success",
+    "exit_code": 0,
+    "voice_count": 18,
+    "browser_index": true,
+    "pip_check": "passed",
+    "report": {
+      "source_preflight_passed": true,
+      "hardware_validated": false,
+      "offline_assets": true,
+      "dependencies": {
+        "torch": true,
+        "safetensors": true,
+        "huggingface_hub": true,
+        "aiohttp": true,
+        "sentencepiece": true,
+        "sphn": true,
+        "moshi": true
+      },
+      "layout": {
+        "context_frames": 1024,
+        "context_seconds_before_reset": 81.92,
+        "image_bytes": 3793524224,
+        "program_reservation_bytes": 163840,
+        "required_bytes": 3793690624,
+        "dram_bytes": 4294967296,
+        "fits": true,
+        "temporal_weight_bytes_per_frame": 3516416000,
+        "weight_code_bytes_per_frame": 3288334336,
+        "burst200_peak_weight_floor_ms": 128.45056,
+        "audio_frame_budget_ms": 80,
+        "caveat": "Packed-weight-only floor excludes scales/norms, KV, activations, CPU depth/codec and host overhead."
+      },
+      "program_words": [
+        8624,
+        11440,
+        14256,
+        17072
+      ],
+      "host_checkpoint": {
+        "header_only": true,
+        "source_tensor_count": 282,
+        "loaded_tensor_count": 282,
+        "copied_tensor_count": 0,
+        "expanded_attention_count": 0,
+        "source_storage_bytes": 1719861248,
+        "host_parameter_count": 1794473984,
+        "host_fp32_bytes": 7177895936
+      },
+      "errors": []
+    }
+  },
+  "hardware": {
+    "accessed": false,
+    "configuration_measured": false,
+    "correctness_measured": false,
+    "latency_measured": false
+  }
+}

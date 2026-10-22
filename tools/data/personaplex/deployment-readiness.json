@@ -1,0 +1,157 @@
+{
+  "observed_at": "2026-10-21",
+  "account": "438374459156",
+  "instance": "i-0c78de2253f66519d",
+  "region": "us-east-1",
+  "runtime_directory": "/home/ubuntu/personaplex-prep-20261021",
+  "source": {
+    "base_commit": "e55992e4621f1930c57c9712dd96d5f1ec7c4e1c",
+    "archive_sha256": "e3310ac387b87961ce8337420df9eac8e39779ad63bfc96568cc56de3b12d016",
+    "s3_prefix": "s3://ergodex-bonsai-on-chip-438374459156-us-east-1/opentpu-personaplex/20261021/e3310ac3/",
+    "uploaded_parts": 7,
+    "overlay": {
+      "key": "opentpu-personaplex/20261021/c5bbd5e7/readiness-overlay.tar.gz.b64",
+      "decoded_sha256": "fb679653e62fbd0c6a2146cb651e68c3c89199650d54c527a57da2124417ffc6"
+    },
+    "instance_download": {
+      "status": "verified",
+      "command_id": "d98a40f8-eaf2-468c-9158-3c499448f36d",
+      "verified_manifest_files": 228
+    },
+    "remote_source_installed": true,
+    "install_mode": "editable",
+    "directory": "/home/ubuntu/personaplex-prep-20261021/personaplex-fpga-source",
+    "compatibility_patch": {
+      "command_id": "baae7793-d2c2-48ae-b3dc-8b0cf143cbaf",
+      "status": "applied",
+      "name": "unsigned-word-safetensors-0.4.5",
+      "source_hashes": {
+        "opentpu/llm/personaplex_weights.py": "d7aae5c9216240e9eaf1e04e50eb21d09c553fa3010a39ec83e2521080100f2e",
+        "tests/test_personaplex_weights.py": "d4f6d2b8e0d1c3e02bdd5c0b2b78a28a5ae6bd797f87fc8d3237a62099884241"
+      },
+      "manifest_recheck": {
+        "command_id": "60b64bcd-b77f-4a4e-bd64-674eb9bd1b43",
+        "verified_files": 228,
+        "mismatches": 0
+      }
+    },
+    "archive_caveat": "Immutable base and readiness archives precede the two-file compatibility patch and latest receipts.",
+    "latest_local_bundle_receipt": "build/personaplex/installed-source-package.json"
+  },
+  "dependencies": {
+    "status": "installed",
+    "pip_check": "passed",
+    "native_imports": "passed",
+    "torch": "2.4.1+cpu",
+    "numpy": "2.1.3",
+    "safetensors": "0.4.5",
+    "nvidia_revision": "3428dfd95309a7f3c84fd93259ded0f810d1ff91",
+    "install_command": "ef1d43e3-b3ab-4282-85e3-74d4a7aae1b1",
+    "imports_command": "a458b1a7-b858-4f91-8d1c-9c80e23500ed"
+  },
+  "checkpoint": {
+    "repository": "aufklarer/PersonaPlex-7B-MLX-4bit",
+    "revision": "8c686347007de51d9017706e5543d6f1757ecf5d",
+    "status": "downloaded",
+    "model_directory": "/home/ubuntu/personaplex-prep-20261021/model",
+    "header_read_command": "bff8074a-f50a-4626-bd39-066b1baa2843",
+    "genuine_meta_schema_command": "cd8c5cd2-3006-4207-bd75-9d8974ebdecd"
+  },
+  "audio_assets": {
+    "repository": "nvidia/personaplex-7b-v1",
+    "revision": "fdaf4090a61cb315c138a1faee287ffd6c716309",
+    "status": "downloaded_and_extracted",
+    "directory": "/home/ubuntu/personaplex-prep-20261021/assets",
+    "voice_count": 18,
+    "browser_index": true,
+    "codec": "tokenizer-e351c8d8-checkpoint125.safetensors",
+    "command_id": "acd356c3-f351-465e-816e-a08b5ea4dfba",
+    "extraction_preflight_command": "8f98eab3-59e7-469c-86f7-6274dbcf57fe"
+  },
+  "authorization": {
+    "role": "opentpu-f2-ssm",
+    "source_read_policy": "PersonaPlexSourceRead20261021c5bbd5e7",
+    "source_read_policy_applied": true,
+    "source_read_policy_readback_verified": true,
+    "source_read_scope": "s3:GetObject on exactly seven source chunk objects and one readiness overlay",
+    "user_authorized": true,
+    "policies_changed": true,
+    "persistent_credentials_changed": false,
+    "billing_changed": false
+  },
+  "validation": {
+    "preflight_passed": true,
+    "preflight_command": "8f98eab3-59e7-469c-86f7-6274dbcf57fe",
+    "full_suite_passed": 128,
+    "full_suite_skipped": 0,
+    "full_suite_wall_seconds": 22.99,
+    "full_suite_command": "da545afa-2e55-47c5-b642-6a21ecd75ddd",
+    "verilator": "5.048",
+    "receipt": "instance-source-validation.json",
+    "host_payloads_passed": true,
+    "host_payloads_command": "6ca25950-4308-4aaf-b6cc-51cb28a1e39e",
+    "host_payloads_receipt": "host-assets-validation.json",
+    "host_check_scope": "Strict real host payload assignment, native initial summed embeddings, SentencePiece, all18voice payloads, and one CPU Mimi encode/decode frame; no temporal or depth execution",
+    "cpu_temporal_reference": {
+      "status": "completed",
+      "frames": 1,
+      "layers": 32,
+      "arithmetic": "FP64 over dequantized MLX checkpoint",
+      "ssm_command_id": "88ec0231-42d5-4739-b75d-11fd2259fe1e",
+      "receipt": "checkpoint-reference.json",
+      "input_sha256": "4bb620bb0e0f7541060ac145b6c5c68bebb4c97890af6ebe65c0da2aeced6899",
+      "output_sha256": "84ea0792e2667b9e11e4ab6a792004f54fabc525108e870a7f8687bb2bffb721",
+      "fpga_comparison_performed": false
+    }
+  },
+  "precision": {
+    "checkpoint": "MLX affine INT4 group64 matrices with F16 nonquantized tensors",
+    "planned_fpga": "Requantized openTPU INT4 matrices; INT8 dot inputs and KV; FP32 norms, softmax and residual activations",
+    "cpu_host": "dequantized FP32",
+    "hardware_precision_observed": false
+  },
+  "hardware": {
+    "owner": "Nanbeige task 01a159d9-b0a4-777c-9b65-06ee9956608e",
+    "release_confirmed": false,
+    "ownership_verification_blocker": "Codex read_thread/list_threads return MCP -32000; no explicit release receipt found",
+    "personaplex_device_access": false,
+    "configuration_measured": false,
+    "hardware_correctness_measured": false,
+    "hardware_latency_measured": false,
+    "conversation_started": false,
+    "tunnel_started": false,
+    "target_configuration": {
+      "core_mhz": 200,
+      "tmem_mhz": 400,
+      "memory": "HBM",
+      "native_channels": 2,
+      "logical_bytes": 4294967296,
+      "agfi": "agfi-0d06cb48544a02106",
+      "loaded_verified": false
+    }
+  },
+  "simulation": {
+    "temporal_ms_extrapolated": 145.42352,
+    "full_model_measured": false,
+    "reference": "verilator-validation.json"
+  },
+  "resolved_blockers": [
+    {
+      "stage": "source download",
+      "http_status": 403,
+      "command_id": "eec50d3a-d0ce-4c6c-bb60-f9bd0a5123cd",
+      "resolution": "Explicitly authorized exact-object GetObject grant applied; download and 228 hashes verified"
+    },
+    {
+      "stage": "audio assets",
+      "http_status": 401,
+      "command_id": "c6220766-9f45-454b-bd55-89add64f5477",
+      "resolution": "Downloaded with user-provided Hugging Face access; no token persisted"
+    },
+    {
+      "stage": "initial remote tests",
+      "command_id": "d98a40f8-eaf2-468c-9158-3c499448f36d",
+      "resolution": "Safetensors 0.4.5 U32 compatibility patch and explicit Verilator5.048; all128tests subsequently passed"
+    }
+  ]
+}
