@@ -359,7 +359,9 @@ module otpu_native_mem #(
   string feedback_name;
   integer feedback_fd = 0;
   int feedback_limit = 32768, feedback_cycles = 0;
+  bit feedback_payload = 0;
   initial begin
+    feedback_payload = $test$plusargs("nat_feedback_payload=1");
     if ($value$plusargs("nat_feedback=%s", feedback_name)) begin
       feedback_fd = $fopen(feedback_name, "w");
       if (feedback_fd == 0) $fatal(1, "cannot open native feedback trace");
@@ -378,8 +380,13 @@ module otpu_native_mem #(
       $fwrite(feedback_fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"rst\":%0d,\"channels\":[", cyc, rst);
       for (int c = 0; c < NCH; c++) begin
         if (c != 0) $fwrite(feedback_fd, ",");
-        $fwrite(feedback_fd, "{\"cv\":%0d,\"we\":%0d,\"addr\":%0d,\"wv\":%0d,\"cr\":%0d,\"wr\":%0d,\"rv\":%0d,\"wdone\":%0d}",
+        $fwrite(feedback_fd, "{\"cv\":%0d,\"we\":%0d,\"addr\":%0d,\"wv\":%0d,\"cr\":%0d,\"wr\":%0d,\"rv\":%0d,\"wdone\":%0d",
                 n_cvalid[c], n_cwe[c], n_caddr[c], n_wvalid[c], n_cready[c], n_wready[c], n_rvalid[c], n_wdone[c]);
+        if (feedback_payload && n_rvalid[c])
+          $fwrite(feedback_fd, ",\"rdata\":\"%0128h\"", n_rdata[c]);
+        if (feedback_payload && n_wvalid[c])
+          $fwrite(feedback_fd, ",\"wdata\":\"%0128h\",\"wmask\":\"%016h\"", n_wdata[c], n_wmask[c]);
+        $fwrite(feedback_fd, "}");
       end
       $fwrite(feedback_fd, "]}\n");
       feedback_cycles++;

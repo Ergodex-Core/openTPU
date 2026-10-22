@@ -15,6 +15,7 @@ from test_quant_rtl import _xrows
 from test_wide_port_rtl import _rl_matrix, _rl_prog
 from test_wideport_slice_feedback import _feedback_records
 from tools.wideport_unit_feedback import validate_feedback_trace
+from tools.wideport_pipeline_ownership import validate_pipeline_ownership
 
 
 @pytest.mark.parametrize("mxu_cl,rf_capacity", [(8, 32), (16, 64)])
@@ -136,6 +137,11 @@ def test_wideport_mxu_result_fifo_capacity(
     assert any(e["mxu"]["d_pop"] for e in active if e["cycle"] > blocked[0]["cycle"]), \
         "MXU drain did not resume after saturation"
     assert summary["mxu_result_push_while_drain_denied"] > 0, summary
+    if "ownership" in events[0]:
+        ownership = validate_pipeline_ownership(keep)
+        assert ownership["output_backpressure_cycles"] > 0, ownership
+        assert ownership["result_slot_reuses"] > 0, ownership
+        (keep / "ownership-summary.json").write_text(json.dumps(ownership, indent=2) + "\n")
     (keep / "feedback-summary.json").write_text(json.dumps(
         {"mxu_cl": mxu_cl, "rf_capacity": rf_capacity, "cycles": stats["cycles"],
          "events": len(events), "first_capacity_block_cycle": blocked[0]["cycle"],

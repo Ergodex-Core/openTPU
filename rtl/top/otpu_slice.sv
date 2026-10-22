@@ -1197,6 +1197,10 @@ module otpu_slice
   if (TMEM_IMPL == 3 && TMEM_RPL && ARB_MASK && LANES == 8 && ULANES == 8 && HAS_SS) begin : g_feedback_trace
     integer fd = 0, limit = 32768, cyc = 0;
     bit seen_run = 0;
+    wire [MCOLS-1:0] acc_first;
+    for (genvar j = 0; j < MCOLS; j++) begin : g_acc_first
+      assign acc_first[j] = u_mxu.g_col_end[j].fst;
+    end
     initial begin
       string fn;
       if ($value$plusargs("tmfeedback=%s", fn)) begin
@@ -1280,6 +1284,18 @@ module otpu_slice
               u_mxu.rv1, u_mxu.tg_n, u_mxu.occ);
       $fwrite(fd, "\"memory_sources\":{\"dma_req\":%0d,\"dma_we\":%0d,\"dma_addr\":%0d,\"loader_busy\":%0d,\"loader_req\":%0d,\"loader_addr\":%0d},",
               dma_breq, dma_bwe, dma_baddr, ld_busy, ld_req, ld_a);
+      // Direct pre-edge dispatch fields; urel and sq_ev.g_slot are paired
+      // registered release outputs. Avoid mixing evq D/E with current starts.
+      $fwrite(fd, "\"ownership\":{\"fifo_depth\":%0d,\"f_head\":%0d,\"f_tail\":%0d,\"s_head\":%0d,\"s_tail\":%0d,\"rf_q\":%0d,\"rf_t\":%0d,\"rf_hs\":%0d,\"m0p_v\":%0d,\"m0p_first\":%0d,\"m0p_last\":%0d,\"m0_v\":%0d,\"m0_first\":%0d,\"m0_last\":%0d,\"acc_first\":%0d,\"tl_v\":%0d,\"c_act\":%0d,\"c_left\":%0d,\"h_go\":%0d,\"n_go\":%0d,\"pipe_busy\":%0d,\"c_drained\":%0d},",
+              u_mxu.DEPTH, u_mxu.f_head, u_mxu.f_tail, u_mxu.s_head, u_mxu.s_tail,
+              u_mxu.rf_q, u_mxu.rf_t, u_mxu.rf_hs, u_mxu.m0p.v, u_mxu.m0p.first, u_mxu.m0p.last,
+              u_mxu.m0.v, u_mxu.m0.first, u_mxu.m0.last, $unsigned(acc_first), u_mxu.tl_v,
+              u_mxu.c_act, u_mxu.c_left, u_mxu.h.go, u_mxu.n.go,
+              u_mxu.ln_n != 0 || u_mxu.rmw_n != 0 || u_mxu.rA.v || u_mxu.r0.v ||
+              u_mxu.r1.v || u_mxu.rx.v || u_mxu.rw.v || u_mxu.lo.v, u_mxu.c_drained);
+      $fwrite(fd, "\"seq\":{\"dispatch\":%0d,\"slot\":%0d,\"pc\":%0d,\"op\":%0d,\"mxu_start_slot\":%0d,\"release\":%0d,\"release_slot\":%0d,\"end_mask\":%0d},",
+              !srst && u_seq.c_go, u_seq.free_slot, u_seq.c_pc, u_seq.c_cmd.op,
+              u_seq.ucs[U_MXU], urel, sq_ev.g_slot, $unsigned(u_seq.fin));
       $fdisplay(fd, "\"dram\":{\"a_ready\":%0d,\"b_ready\":%0d,\"write_ready\":%0d,\"q_want\":%0d},\"coll_gnt\":%0d,\"start\":%0d,\"done\":%0d,\"icount\":%0d}",
                 a_rdy_i, b_rdy_i, sw_rdy_i, q_awant, coll_gnt, $unsigned(ustart), $unsigned(udone), sq_icount);
       cyc = cyc + 1;

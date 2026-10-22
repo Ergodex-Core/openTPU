@@ -13,14 +13,15 @@ import struct
 
 from opentpu import isa as I
 from tools.wideport_memory_feedback import native_config, read_trace, require
-from tools.wideport_native_memory import NativeCommand, NativeInput, NativeMemory
+from tools.wideport_native_memory import NativeCommand, NativeInput, NativeMemory, logical_beat
 from tools.wideport_native_adapter import ARead, BRead, NativeAdapter, NativePins
 from tools.wideport_mxu_issue import MxuIssueModel
 from tools.wideport_mxu_producer import MxuRowProducer
 from tools.wideport_unit_feedback import MxuQueueFeedback
+from tools.wideport_pipeline_ownership import PipelineOwnership
 
 
-def validate_memory_coupled(directory):
+def validate_memory_coupled(directory, *, mm_prefix=None):
     root = Path(directory)
     header, native_events = read_trace(root / "native-feedback.jsonl")
     ah, adapter_events = read_trace(root / "adapter-feedback.jsonl")
@@ -36,7 +37,17 @@ def validate_memory_coupled(directory):
     digest = hashlib.sha256(b"".join(struct.pack("<I", w) for w in words)).hexdigest()
     require(digest, manifest["program_sha256"], "program.sha256", -1)
     mms = [I.Instr.decode(words[i:i+8]) for i in range(0, len(words), 8) if words[i] & 255 == I.MM]
+    total_mms = len(mms)
+    if mm_prefix is not None:
+        if not isinstance(mm_prefix, int) or not 0 < mm_prefix < total_mms:
+            raise ValueError("MM prefix must exclude a nonempty command suffix")
+        mms = mms[:mm_prefix]
+    page_reads = {str(p): {"weight": 0, "scale": 0} for p in range(2)}
     issue, rows, queues = MxuIssueModel(mms), MxuRowProducer(mms), MxuQueueFeedback()
+    mm_pcs = [i // 8 for i in range(0, len(words), 8) if words[i] & 255 == I.MM][:len(mms)]
+    ownership = (PipelineOwnership(mms, depth=manifest["parameters"]["FIFO_DEPTH"],
+                                   cl=manifest["parameters"].get("MXU_CL", 16), program_pcs=mm_pcs)
+                 if "ownership" in slice_events[0] else None)
     memory, adapter = NativeMemory(native_config(header)), NativeAdapter()
     a_reg, b_reg, b_in = None, None, None
     aid = bid = 0
@@ -120,6 +131,8 @@ def validate_memory_coupled(directory):
         if rows.accepted or pop:
             require(me["fpop"], int(pop), "consumer.fpop", cycle)
             fields["fpop"] = int(pop)
+        drain_pop = bool(me["t_gnt"] and queues.rf_nz and queues.rl_nz and
+                         (not me["c_asc"] or me["al_st"] == 2) and me["d_fin"])
         queues.check_and_step(fields, cycle, me["t_gnt"])
         require(ie["a_rvalid"], int(ar.a_response_id is not None), "issue.a_rvalid", cycle)
         require(ie["b_rvalid"], int(bool(b_in and not b_in.tag)), "issue.b_rvalid", cycle)
@@ -135,6 +148,11 @@ def validate_memory_coupled(directory):
         if issued.b_req:
             require(ie["b_addr"], issued.b_addr, "issue.b_addr", cycle)
             require(ie["b_n"], issued.b_n, "issue.b_n", cycle)
+        if ownership is not None:
+            ownership.step(se, b_issue=issued.b_req,
+                           scale_issue=bool(issued.a_req and issued.tag.ent and issued.tag.cpl),
+                           b_push=b_push, r_cpl=r_cpl, pop=pop, rf_push=rf_push,
+                           d_pop=drain_pop, cycle=cycle)
         # Slice request and response registers advance after this cycle's use.
         if ae["rst"]:
             a_reg = b_reg = b_in = None
@@ -158,6 +176,14 @@ def validate_memory_coupled(directory):
                 bid += int(b_reg is not None)
             b_in = ar.b_response
         edge = memory.step(native_inputs, reset=bool(ne["rst"]))
+        if mm_prefix is not None:
+            from tools.wideport_credit_budget import classify_byte
+            for channel, command in enumerate(edge.accepted_commands):
+                if command is not None:
+                    key = classify_byte(64 * logical_beat(command.beat, channel, chash=bool(header["chash"])))
+                    if key is not None:
+                        kind, page = key
+                        page_reads[str(page)][kind] += 1
         traffic_seen |= any(cmd is not None for cmd in edge.accepted_commands)
         counts["cycles_checked"] += 1
         counts["a_requests"] += int(issued.a_req)
@@ -170,7 +196,10 @@ def validate_memory_coupled(directory):
         raise ValueError("bounded adapter comparison did not reach its explicit first-write boundary")
     issue.finish()
     rows.finish()
-    return {**counts, "first_write_boundary": stop, "all_mm_issuers_and_arrivals_drained": True,
+    ownership_result = {"ownership": ownership.finish()} if ownership is not None else {}
+    prefix_result = ({"command_scope": f"first {mm_prefix} MM commands of {total_mms}; suffix excluded",
+                      "predicted_initial_page_native_reads": page_reads} if mm_prefix is not None else {})
+    return {**counts, **ownership_result, **prefix_result, "first_write_boundary": stop, "all_mm_issuers_and_arrivals_drained": True,
             "mismatches": 0, "whole_program_predictor": False, "calibrated": False, "tok_s": None,
             "external_inputs": ["reset/a_flush and accepted MM starts", "MXU c_done/pn/more and drain epilogue",
                                 "TMEM drain grant", "DMA/loader requests and addresses"],
