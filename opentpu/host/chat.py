@@ -450,10 +450,12 @@ class Chat:
     /reset starts over."""
 
     def __init__(self, engine: Engine, tok, think: bool, pick, max_new: int,
-                 clock_mhz: float = 0.0, *, fpga_only: bool = False):
+                 clock_mhz: float = 0.0, *, fpga_only: bool = False, phase_trace=None):
         self.eng, self.tok, self.think, self.pick, self.max_new = engine, tok, think, pick, max_new
         self.clock_mhz = clock_mhz
         self.fpga_only = fpga_only
+        self.phase_trace = phase_trace
+        self._trace_turn = self._trace_generation = self._trace_start_len = 0
         self.history: list[dict] = []
         self.fed: list[int] = []            # tokens whose K/V are in the device cache
         self.session = Session()
@@ -477,6 +479,13 @@ class Chat:
         warm = getattr(pick, "warm", None)
         if warm is not None and not fpga_only:  # no host pick, including the first, in this mode
             warm()
+
+    def _record(self, event: str, **data) -> None:
+        """Opt-in host observations; callers should collect in memory and serialize later."""
+        if self.phase_trace is not None:
+            self.phase_trace({"source": "chat", "event": event,
+                              "host_s": time.perf_counter(), "turn_index": self._trace_turn,
+                              "generation_index": self._trace_generation, **data})
 
     def _check_fpga_only(self) -> None:
         """Fail before prompt work if this qualified device-loop contract cannot be met.
@@ -602,6 +611,9 @@ class Chat:
         self._check_fpga_only()              # settings/capabilities may change between turns
         on_update = on_update or (lambda delta, turn: None)
         t0 = time.perf_counter()
+        self._trace_turn += 1
+        self._trace_generation = 0
+        self._record("request_begin", submit_s=t0, kind="ask", fpga_only=self.fpga_only)
         turn = Turn(clock_mhz=self.clock_mhz, cap=self.eng.cap, context=self.eng.pos)
         imgs, self.pending = self.pending, []
         if imgs:                            # (MiniCPM-V: the images before the text, as HF's)
@@ -616,6 +628,7 @@ class Chat:
         else:
             self.history.append({"role": "user", "content": text})
         ids = self._template()
+        self._record("prompt_ready", prompt_tokens=len(ids))
         if self.fpga_only and not ids:
             self.history.pop()
             raise ValueError("FPGA-only mode needs a nonempty prompt")
@@ -638,6 +651,8 @@ class Chat:
         n = turn.reused = len(self.fed)
         turn.prefill_total = last - n
         turn.device_first = self.fpga_only
+        self._record("prefill_begin", reused=n, prefill_tokens=last - n,
+                     prompt_handoff_tokens=int(self.fpga_only))
         # the snapshot of the state for the next turn's rollback: at the reply's start (MTP: a
         # token before, rollback's, unless the decoder holds the row before it), within this
         # turn's prompt
@@ -664,6 +679,8 @@ class Chat:
                     turn.prefill_s = time.perf_counter() - t0
                     turn.prefill_cycles += (self.eng.stats[-1] or {}).get("cycles", 0)
                     turn.context = self.eng.pos
+                    self._record("prefill_chunk_return", rows=len(part), position=self.eng.pos,
+                                 cycles=int((self.eng.stats[-1] or {}).get("cycles", 0)))
                     on_update("", turn)
                     if stop() and len(self.fed) < len(ids):
                         turn.end = "stopped"
@@ -674,6 +691,7 @@ class Chat:
                     self._snapshot()
             if self.fpga_only and not turn.end:
                 logits = ids[-1]            # unconsumed prompt token, not a host-picked reply
+        self._record("prefill_end", position=self.eng.pos, end=turn.end)
         reply = self._decode(logits, [], turn, t0, on_update, stop)
         self.history.append({"role": "assistant", "content": reply})
         self.session.add(turn)
@@ -686,6 +704,9 @@ class Chat:
         assert self.can_resume, "no reply to continue"
         self._check_fpga_only()
         on_update = on_update or (lambda delta, turn: None)
+        self._trace_turn += 1
+        self._trace_generation = 0
+        self._record("request_begin", kind="resume", fpga_only=self.fpga_only)
         turn = Turn(clock_mhz=self.clock_mhz, cap=self.eng.cap, context=self.eng.pos)
         logits, self._next = self._next, None
         reply = self._decode(logits, self._reply, turn, time.perf_counter(), on_update, stop)
@@ -790,12 +811,17 @@ class Chat:
         """Generate after `out` (the reply so far) from `logits` (or, after a reply cut on the
         device, from its last token, an int: picked, not fed yet); returns the whole reply."""
         self._check_fpga_only()
+        self._trace_start_len = len(out)
+        self._record("decode_begin", device_loop=self.on_card, device_first=turn.device_first)
         self._experts(turn, False)
         if self.on_card:
             return self._decode_card(logits, out, turn, t0, on_update, stop)
         if isinstance(logits, int):          # the reply's last token, picked on the device
             self.fed.append(logits)
+            self._record("host_resume_step_begin", token_id=int(logits), position=self.eng.pos)
             logits = self.eng.step(logits)
+            self._record("host_resume_step_return", position=self.eng.pos,
+                         cycles=int((self.eng.stats[-1] or {}).get("cycles", 0)))
         k1 = len(self.eng.stats)
         out, n0, t_first = list(out), len(out), None
         detok = Detok(self.tok, out)
@@ -805,7 +831,10 @@ class Chat:
             if len(out) - n0 >= self.max_new:
                 turn.end = "max_new"
                 break
+            self._record("host_pick_begin", streamed=sink is not None)
             t = sink.result() if sink is not None else self.pick(logits, self.fed)
+            self._record("token_observed", token_id=int(t), eos=t in self.eng.spec.eos,
+                         selection="host")
             if t in self.eng.spec.eos:
                 turn.end = "eos"
                 break
@@ -821,7 +850,9 @@ class Chat:
             if turn.end:
                 delta = detok.add(t)
                 shown += delta
+                self._record("text_callback_begin", token_id=int(t), delta_chars=len(delta))
                 on_update(delta, turn)
+                self._record("text_callback_done", token_id=int(t))
                 break
 
             def started(t=t):
@@ -830,13 +861,18 @@ class Chat:
                 nonlocal shown
                 delta = detok.add(t)
                 shown += delta
+                self._record("text_callback_begin", token_id=int(t), delta_chars=len(delta))
                 on_update(delta, turn)
+                self._record("text_callback_done", token_id=int(t))
             # the sampler takes the logits as they come (the next pick's context includes t)
             self.fed.append(t)
             stream = getattr(self.pick, "stream", None)
             sink = stream(self.fed) if stream is not None else None
             try:
+                self._record("host_step_begin", token_id=int(t), position=self.eng.pos)
                 logits = self.eng.step(t, on_start=started, sink=sink)
+                self._record("host_step_return", position=self.eng.pos,
+                             cycles=int((self.eng.stats[-1] or {}).get("cycles", 0)))
             except BaseException:
                 self.fed.pop()
                 raise
@@ -853,6 +889,13 @@ class Chat:
         reply = self.tok.decode(out, skip_special_tokens=False)
         if len(reply) > len(shown) and reply.startswith(shown):
             on_update(reply[len(shown):], turn)       # a held-back incomplete character
+        if self.phase_trace is not None:
+            self._record("turn_complete", non_eos_token_ids=list(out[self._trace_start_len:]),
+                         displayed_tokens=turn.gen_tokens,
+                         wall_decode_intervals=max(turn.gen_tokens - 1, 0),
+                         wall_decode_s=turn.decode_s, device_steps=turn.decode_steps,
+                         device_cycles=turn.decode_cycles, clock_mhz=turn.clock_mhz,
+                         device_first=turn.device_first, end=turn.end)
         return reply
 
     def _decode_card(self, logits, out: list[int], turn: Turn, t0: float, on_update,
@@ -872,8 +915,10 @@ class Chat:
         shown = self.tok.decode(out, skip_special_tokens=False) if out else ""
         t_first = None
 
-        def take(t: int) -> None:
+        def take(t: int, selection="device") -> None:
             nonlocal shown, t_first
+            self._record("token_observed", token_id=int(t), eos=t in eng.spec.eos,
+                         selection=selection)
             if t in eng.spec.eos:
                 return
             out.append(t)
@@ -883,20 +928,22 @@ class Chat:
             turn.gen_tokens, turn.decode_s = len(out) - n0, now - t_first
             delta = detok.add(t)
             shown += delta
+            self._record("text_callback_begin", token_id=int(t), delta_chars=len(delta))
             on_update(delta, turn)
+            self._record("text_callback_done", token_id=int(t))
 
         if isinstance(logits, _Picked):     # by MTP's prefill
             t = int(logits)
             if t in eng.spec.eos:
                 turn.end = "eos"
-            take(t)
+            take(t, selection="mtp_prefill")
         elif isinstance(logits, int):
             t = logits
         elif logits is not None and not turn.end:
             t = self.pick(logits, self.fed)
             if t in eng.spec.eos:
                 turn.end = "eos"
-            take(t)
+            take(t, selection="host_prefill")
         else:
             t = None
         room = eng.cap - (2 if self.use_mtp else 0)     # (a verify's two rows)
@@ -916,9 +963,17 @@ class Chat:
                 if self.use_mtp:
                     got, cycles = self._mtp_run(t, left, take, stop, samp, turn)
                 else:
+                    trace_kw = {}
+                    if self.phase_trace is not None:
+                        self._trace_generation += 1
+                        def trace(event):
+                            self.phase_trace({"turn_index": self._trace_turn,
+                                              "generation_index": self._trace_generation,
+                                              **event})
+                        trace_kw["phase_trace"] = trace
                     got = eng.generate_card(t, left, stop_ids=eng.spec.eos, on_token=take,
                                             stop=stop, sampling=samp, context=self.fed,
-                                            rng=getattr(self.pick, "rng", None))
+                                            rng=getattr(self.pick, "rng", None), **trace_kw)
                     cycles = sum((st or {}).get("cycles", 0) for st in eng.stats[k1:])
             except BaseException:
                 self.fed.pop()
@@ -1085,6 +1140,9 @@ def main(argv=None):
                     help="require a board's resident dense text generate loop, including the "
                          "first token; reject host sampling/row/expert fallbacks (prompt "
                          "chunk launches, setup and text output still use the host)")
+    ap.add_argument("--decode-trace", metavar="PATH",
+                    help="collect host-observed decode phases, token IDs and cycle counters "
+                         "in memory; write JSONL on exit (opt-in profiling adds overhead)")
     ap.add_argument("--prompt", help="ask one question and exit (plain output)")
     ap.add_argument("--plain", action="store_true",
                     help="a line-by-line REPL instead of the full-screen interface")
@@ -1250,7 +1308,9 @@ def main(argv=None):
         khz = eng.backend.info.get("core_khz")
         clock = a.clock_mhz or (khz / 1e3 if khz else 100.0)
     try:
-        chat = Chat(eng, tok, a.think, pick, a.max_new, clock_mhz=clock, fpga_only=a.fpga_only)
+        trace_events = [] if a.decode_trace else None
+        chat = Chat(eng, tok, a.think, pick, a.max_new, clock_mhz=clock, fpga_only=a.fpga_only,
+                    phase_trace=trace_events.append if trace_events is not None else None)
     except ValueError as e:                 # MTPDecoder's checks (one slice; PAIR, MCOLS)
         raise SystemExit(f"otpu-chat: {e}") from None
     if a.mtp and not chat.use_mtp:
@@ -1266,33 +1326,40 @@ def main(argv=None):
             chat.attach(src)
     except ValueError as e:
         raise SystemExit(f"otpu-chat: --image: {e}") from None
-    if a.prompt:
-        chat.ask_plain(a.prompt)
-        return
-    if not a.plain:
-        from opentpu.host.chat_tui import ChatApp
-        ChatApp(chat, panel_meta(eng, a.backend, a.dev, path.name,
-                                 dict(sp, greedy=a.greedy), a.max_new, clock, weights)).run()
-        return
-    print("type a message (/continue, /reset, /image PATH; empty line or Ctrl-D to quit)")
-    while True:
-        try:
-            text = input("\n> ").strip()
-        except EOFError:
-            break
-        if not text:
-            break
-        if text == "/reset":
-            chat.reset()
-        elif text.startswith("/image "):
+    try:
+        if a.prompt:
+            chat.ask_plain(a.prompt)
+            return
+        if not a.plain:
+            from opentpu.host.chat_tui import ChatApp
+            ChatApp(chat, panel_meta(eng, a.backend, a.dev, path.name,
+                                     dict(sp, greedy=a.greedy), a.max_new, clock, weights)).run()
+            return
+        print("type a message (/continue, /reset, /image PATH; empty line or Ctrl-D to quit)")
+        while True:
             try:
-                chat.attach(text[7:].strip())
-            except ValueError as e:
-                print(f"otpu-chat: {e}")
-        elif text == "/continue":
-            chat.ask_plain(None) if chat.can_resume else print("nothing to continue")
-        else:
-            chat.ask_plain(text)
+                text = input("\n> ").strip()
+            except EOFError:
+                break
+            if not text:
+                break
+            if text == "/reset":
+                chat.reset()
+            elif text.startswith("/image "):
+                try:
+                    chat.attach(text[7:].strip())
+                except ValueError as e:
+                    print(f"otpu-chat: {e}")
+            elif text == "/continue":
+                chat.ask_plain(None) if chat.can_resume else print("nothing to continue")
+            else:
+                chat.ask_plain(text)
+    finally:
+        if trace_events is not None:
+            # Keep serialization and filesystem latency outside the token callbacks.
+            with Path(a.decode_trace).open("w") as f:
+                for event in trace_events:
+                    f.write(json.dumps(event) + "\n")
 
 
 if __name__ == "__main__":

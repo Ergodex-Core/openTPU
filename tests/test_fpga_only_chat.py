@@ -1,5 +1,6 @@
 """Fail-closed dense device decode, including the first reply token, without a card."""
 from dataclasses import replace
+import json
 from types import SimpleNamespace
 
 import numpy as np
@@ -142,6 +143,63 @@ def test_fully_cached_prompt_reexecutes_its_final_token(model):
     again, turn = chat.ask("same cached prompt")
     assert again == text and chat._reply == reply
     assert turn.device_first and chat.fed[:len(ids)] == ids
+
+
+def test_sampled_context_cap_and_resume_keep_device_position(model):
+    args = (0.8, 5, 0.9, 3, 1.1)
+    chat = make_chat(model, True, args, n=1)
+    # The allocated image stays at 512; this tests the logical request cap near a prompt.
+    chat.eng.cap = 7
+    chat.ask("hello")
+    assert chat.eng.pos == len(chat.fed) == 5 and chat.can_resume
+    chat.resume()
+    assert chat.eng.pos == len(chat.fed) == 6 and chat.can_resume
+    _, turn = chat.resume()
+    assert chat.eng.pos == len(chat.fed) == 7 and turn.gen_tokens == 1
+    _, turn = chat.resume()
+    assert turn.end == "cap" and turn.gen_tokens == 0 and not chat.can_resume
+
+
+def test_trace_separates_first_pick_text_and_exact_numerators(model):
+    chat = make_chat(model, True, n=3)
+    events = []
+    chat.phase_trace = events.append
+    chat.ask("hello")
+    summary = events[-1]
+    assert summary["event"] == "turn_complete"
+    assert summary["non_eos_token_ids"] == chat._reply
+    assert summary["displayed_tokens"] == summary["device_steps"] == 3
+    assert summary["wall_decode_intervals"] == 2 and summary["device_first"]
+    assert any(e["event"] == "prepare_begin" and e["source"] == "engine" for e in events)
+    observed = [e for e in events if e["event"] == "token_observed"]
+    assert [e["token_id"] for e in observed] == chat._reply
+    assert all(e["selection"] == "device" and not e["eos"] for e in observed)
+    before = [e for e in events if e["event"] == "text_callback_begin"]
+    after = [e for e in events if e["event"] == "text_callback_done"]
+    assert len(before) == len(after) == 3
+    assert all(a["host_s"] <= b["host_s"] for a, b in zip(before, after))
+    chat.resume()
+    assert events[-1]["turn_index"] == 2
+    assert len(events[-1]["non_eos_token_ids"]) == 3
+
+
+def test_cli_writes_trace_after_a_cpu_isa_reply(model, tmp_path, monkeypatch):
+    from opentpu.host import chat as CH, gen_warm as GW
+    W, spec, cfg = model
+    monkeypatch.setattr(CH, "model_dir", lambda name: tmp_path)
+    monkeypatch.setattr(CH, "load_spec", lambda path: spec)
+    monkeypatch.setattr(CH, "load_weights", lambda path: W)
+    monkeypatch.setattr(CH, "load_tokenizer", lambda path: lambda: _Tok())
+    monkeypatch.setattr(CH, "make_backend", lambda *a, **kw: ("isa", cfg))
+    monkeypatch.setattr(GW, "start", lambda *a: None)
+    path = tmp_path / "trace.jsonl"
+    main(["--raw", "--greedy", "--cap", "512", "--max-new", "3", "--prompt", "hello",
+          "--decode-trace", str(path)])
+    events = [json.loads(line) for line in path.read_text().splitlines()]
+    assert events[-1]["event"] == "turn_complete"
+    assert events[-1]["displayed_tokens"] == 3
+    assert [e["selection"] for e in events if e["event"] == "token_observed"][0] == \
+        "host_prefill"
 
 
 @pytest.mark.parametrize("args", [["--fpga-only"],

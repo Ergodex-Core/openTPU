@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import json
 import math
+import time
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -3329,7 +3330,8 @@ class Engine:
                 self.backend.write(s, g["pb"], pb)
 
     def generate_card(self, tok: int, n: int, stop_ids=None, on_token=None,
-                      stop=None, sampling=None, context=(), rng=None) -> list:
+                      stop=None, sampling=None, context=(), rng=None,
+                      phase_trace=None) -> list:
         """Feed `tok` at the next position and generate up to n tokens after it on the device:
         the generate loop picks each token there and feeds it back, and stops at a stop id
         (default: the model's EOS ids; the stop id is returned, not fed). Greedy, or with
@@ -3339,7 +3341,10 @@ class Engine:
         device. on_token(t) for each token as the host reads it; stop() (polled while the card
         runs, on backends that stream the tokens) halts the loop after the token in flight.
         Returns the tokens; self.pos is then the position of the last one (fed next, unless it
-        is a stop id)."""
+        is a stop id). phase_trace(event_dict), when supplied, receives host-clock phase
+        observations and raw token IDs (including EOS) for each run. It is opt-in; the callback
+        must not raise. Readback timestamps are when the host observed an ID, not when the
+        device produced it."""
         if not self.can_generate:
             raise RuntimeError("generate_card needs resident decode on a backend that runs "
                                "the generate loop")
@@ -3349,47 +3354,78 @@ class Engine:
         ids = list(self.spec.eos if stop_ids is None else stop_ids)
         n = min(n, self.cap - self.pos)
         out, g, ctx = [], self.image.lookup["gen"], list(context)
+        run_index = 0
+
+        def record(event: str, **data) -> None:
+            if phase_trace is not None:
+                phase_trace({"source": "engine", "event": event,
+                             "host_s": time.perf_counter(), "run_index": run_index,
+                             "position": self.pos, **data})
+
         while n > 0:
             p = self.pos
             if p < self._conv_lo:             # before the first run-time position
+                record("preconv_host_step_begin", token_id=int(tok))
                 lg = self.step(tok)
                 got = [int(np.argmax(lg)) if samp is None else
                        G.reference_pick(lg, samp, ctx, rng.random(), self.cfg.S,
                                         getattr(self.spec, "softcap", None))]
+                record("preconv_host_pick", token_ids=[int(x) for x in got],
+                       device_cycles=int((self.stats[-1] or {}).get("cycles", 0)))
                 if on_token is not None:
                     on_token(got[0])
             else:
                 b0 = p // self.block + 1
                 b1 = b0
+                record("prepare_begin", token_id=int(tok), requested=n, first_bucket=b0,
+                       sampled=samp is not None)
                 if getattr(self.backend, "chains", False):     # the whole run on the device
                     b1 = (p + n - 1) // self.block + 1
                     self._generate_chain(b0, b1, samp)
+                record("chain_ready", last_bucket=b1)
                 progs = self._generate_prog(b0, samp)
+                record("program_ready", first_bucket=b0)
                 if isinstance(progs, tuple):      # split: the run starts at the first part
                     progs = progs[0]
                 nb = min(n, b1 * self.block - p)
                 if samp is not None:
                     self._generate_inputs(samp, p, nb, ctx, rng)
+                record("sampling_inputs_ready")
                 self._write_host_rows([tok])        # the first token's rows (then the loop's
+                record("host_rows_ready")
                 for s in range(self.cfg.S):         # requests, served while it runs)
                     self.backend.write(s, g["state"], G.state_words(self.spec, tok, p, n, ids,
                                                                     self.block, samp))
+                    record("state_written", slice=s)
                     self.backend.write(s, g["out"] + 4 * (p + 1),
                                        np.full(nb, G.OUT_MARK, np.uint32))
+                    record("output_markers_written", slice=s, words=nb)
                 runner = getattr(self.backend, "run_generate", None)
+                record("run_dispatch", requested=nb, first_bucket=b0, last_bucket=b1)
                 if runner is not None:     # the card: tokens as they land, stop() halts
-                    st, got = runner(progs, g["out"] + 4 * (p + 1), nb, on_token, stop,
-                                     g["state"])
+                    if phase_trace is None:
+                        st, got = runner(progs, g["out"] + 4 * (p + 1), nb, on_token, stop,
+                                         g["state"])
+                    else:
+                        def board_phase(event):
+                            phase_trace({"run_index": run_index, "position": p, **event})
+                        st, got = runner(progs, g["out"] + 4 * (p + 1), nb, on_token, stop,
+                                         g["state"], phase_trace=board_phase)
                 else:
                     st = self.backend.run(progs)
                     w = self.backend.read(0, g["out"] + 4 * (p + 1), 4 * nb).view(np.uint32)
                     k = int(np.argmax(w == G.OUT_MARK)) if (w == G.OUT_MARK).any() else nb
                     got = [int(x) for x in w[:k].view(np.float32)]
+                    record("output_readback", token_ids=list(got), backend="nonstreaming")
                     if on_token is not None:
                         for t in got:
                             on_token(t)
                 self.stats.append(st)
                 self.pos += len(got)
+                record("run_return", token_ids=[int(x) for x in got],
+                       generated_steps=len(got),
+                       cycles=int((st or {}).get("cycles", 0)),
+                       instructions=[int(x) for x in (st or {}).get("instructions", [])])
                 if self.gen_debug:          # the logits of the run's last token
                     io, v = self.image.io, self.image.v_loc
                     self.gen_logits = np.concatenate([
@@ -3401,6 +3437,7 @@ class Engine:
             if not got or got[-1] in ids or (stop is not None and stop()):
                 break
             tok = got[-1]
+            run_index += 1
         return out
 
     def generate(self, prompt, max_new: int = 32, sampler=None, on_token=None) -> list:
