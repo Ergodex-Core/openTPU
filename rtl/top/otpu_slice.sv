@@ -1284,6 +1284,20 @@ module otpu_slice
               u_mxu.rv1, u_mxu.tg_n, u_mxu.occ);
       $fwrite(fd, "\"memory_sources\":{\"dma_req\":%0d,\"dma_we\":%0d,\"dma_addr\":%0d,\"loader_busy\":%0d,\"loader_req\":%0d,\"loader_addr\":%0d},",
               dma_breq, dma_bwe, dma_baddr, ld_busy, ld_req, ld_a);
+      $fwrite(fd, "\"input_loading\":{\"boot_start\":%0d,\"boot_addr\":%0d,\"boot_n\":%0d,\"dma_rst\":%0d,\"dma_busy\":%0d,\"dma_rdy\":%0d,\"loader_im_we\":%0d,\"loader_im_row\":%0d,\"loader_sc_we\":%0d,\"loader_sc_row\":%0d,\"loader_sc_data\":\"%064h\",\"loader_im_data\":\"%0256h\",\"dma_writes\":[",
+              ld_start, ld_addr, ld_n, rst_dma, u_dma.busy, r_dma,
+              im_we, im_row, sc_we, sc_row, sc_data, b_rdata_i[1023:0]);
+      first = 1;
+      for (int l = 0; l < LANES; l++) if (dma_wen[l]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "[%0d,%0d]", $unsigned(dma_waddr[l]), $unsigned(dma_wdata[l]));
+      end
+      $fwrite(fd, "],\"issued_dma_writes\":["); first = 1;
+      for (int l = 0; l < LANES; l++) if (w_en[W_DMA][l]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "[%0d,%0d]", $unsigned(w_addr[W_DMA][l]), $unsigned(w_data[W_DMA][l]));
+      end
+      $fwrite(fd, "]},");
       // Direct pre-edge dispatch fields; urel and sq_ev.g_slot are paired
       // registered release outputs. Avoid mixing evq D/E with current starts.
       $fwrite(fd, "\"ownership\":{\"fifo_depth\":%0d,\"f_head\":%0d,\"f_tail\":%0d,\"s_head\":%0d,\"s_tail\":%0d,\"rf_q\":%0d,\"rf_t\":%0d,\"rf_hs\":%0d,\"m0p_v\":%0d,\"m0p_first\":%0d,\"m0p_last\":%0d,\"m0_v\":%0d,\"m0_first\":%0d,\"m0_last\":%0d,\"acc_first\":%0d,\"tl_v\":%0d,\"c_act\":%0d,\"c_left\":%0d,\"h_go\":%0d,\"n_go\":%0d,\"pipe_busy\":%0d,\"c_drained\":%0d},",

@@ -157,6 +157,8 @@ def _ownership_evidence(events, native_header, native_events, program, mode):
 
 def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
     cfg, program, dram, weight, scale = _fixture()
+    stall=int(os.environ.get("WP_INPUT_STALL","50"))
+    latency=int(os.environ.get("WP_INPUT_LAT","120"))
     board = {**target.sim_uarch("f2-hbm:p4rl8a64"), "TMEM_PMP": 0}
     assert board["FIFO_DEPTH"] == 1024
     root = Path(os.environ.get("WP_PAGE_REUSE_EVIDENCE", tmp_path)).resolve()
@@ -206,6 +208,8 @@ def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
                     f"+tmfeedback={keep / 'tmfeedback.jsonl'}", "+tmfeedback_limit=32768"]
         if os.environ.get("WP_NATIVE_WRITE_DELAY"):
             plusargs.append("+nat_wdl=" + str(int(os.environ["WP_NATIVE_WRITE_DELAY"])))
+        if os.environ.get("WP_NATIVE_CQ"):
+            plusargs.append("+nat_cq=" + str(int(os.environ["WP_NATIVE_CQ"])))
         manifest = {"variant": mode, "mxu_window_cap": queue_cap,
                     "pmp": 0, "nch": 8, "requested_uarch": board,
                     "program_sha256": _sha(words.tobytes()),
@@ -214,7 +218,7 @@ def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
                     "instruction_count": len(program),
                     "loader_instruction_bytes": words.nbytes,
                     "loader_wait_bytes": waits.nbytes,
-                    "stall": 50, "seed": 7, "lat": 120, "plusargs": plusargs,
+                    "stall": stall, "seed": 7, "lat": latency, "plusargs": plusargs,
                     "epoch2": {"weight_page": WB, "scale_page": SB,
                                "weight_stage": STAGE_W, "scale_stage": STAGE_S,
                                "weight_scratch": SCRATCH_W, "scale_scratch": SCRATCH_S,
@@ -236,7 +240,7 @@ def test_wideport_two_page_epoch_reuse(have_verilator, monkeypatch, tmp_path):
             assert np.array_equal(expected_dram[SB:SB + PATCH_BYTES], scale)
             drams, tmems, stats = rtlsim.run(
                 cfg, [program], [dram.copy()], axi=True, boot=True,
-                stall=50, seed=7, lat=120, max_cycles=1_000_000,
+                stall=stall, seed=7, lat=latency, max_cycles=1_000_000,
                 keep=keep, uarch=board, plusargs=plusargs)
             assert np.array_equal(drams[0], expected_dram), "DRAM differs from ISA"
             assert np.array_equal(tmems[0], expected_tmem), "TMEM differs from ISA"

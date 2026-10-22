@@ -4,6 +4,9 @@ New store/native request, completion and cache-response timing is generated.
 Accepted command starts, MXU release/drain state and initial load/loader
 requests remain explicit frontend inputs. Functional ST source words come
 from the small ISA oracle, never observed RTL payload. No TPS calibration.
+With generate_input_loading=True, initial DMA/boot requests and their input
+payload writes are independently generated as well; only boot start/config
+and accepted DMA/MM starts are supplied by the frontend.
 """
 import hashlib
 import json
@@ -25,7 +28,8 @@ from tools.wideport_credit_budget import WB, SB, classify_byte
 
 
 def validate_write_coupled(directory, *, require_adapter_payload=True,
-                           native_oracles=None, adapter_oracles=None, slice_oracles=None):
+                           native_oracles=None, adapter_oracles=None, slice_oracles=None,
+                           generate_input_loading=False):
     root = Path(directory)
     header, native_events = read_trace(root / "native-feedback.jsonl")
     ah, adapter_events = read_trace(root / "adapter-feedback.jsonl")
@@ -77,6 +81,13 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
     if [i.op for i in dma_commands] != [I.LD]*5 + [I.ST]*5:
         raise ValueError("write producer requires five initial LDs then five single-chunk STs")
     store, dma_index = DmaStore(), 0
+    if generate_input_loading:
+        from tools.wideport_boot_loader import BootConfig, BootLoader
+        from tools.wideport_dma_load import DmaLoadModel
+        boot_config = BootConfig.from_fixture(root)
+        loader, load = BootLoader(boot_config), DmaLoadModel()
+        boot_im, boot_sc, loaded_words = [], [], {}
+    b_in_data = None
     stores_started = False
     payloads = [deque() for _ in range(8)]
     samples = {}
@@ -198,6 +209,39 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
         b_ready_i = b_reg is None or ar.b_ready
         write_idle_i = bool(ar.wr_idle and not isinstance(b_reg,BWrite))
         ds = store.snapshot()
+        boot = ls = None
+        if generate_input_loading:
+            li = se["input_loading"]
+            if li["boot_start"]:
+                require(li["boot_addr"],boot_config.byte_addr,"boot.input_address",cycle)
+                require(li["boot_n"],boot_config.instructions,"boot.input_count",cycle)
+            boot = loader.step(start=bool(li["boot_start"]),
+                               rd_idle_i=bool(ar.rd_idle and a_reg is None and not isinstance(b_reg,BRead) and b_in is None),
+                               b_gnt=b_ready_i,
+                               b_response_id=b_in.id if b_in and b_in.tag and loader.busy else None,
+                               sys_rst=bool(ae["rst"]))
+            for key,value in (("loader_busy",boot.busy),("loader_req",boot.request)):
+                require(sources[key],int(value),"boot.generated_"+key,cycle)
+            if boot.request:
+                require(sources["loader_addr"],boot.word_addr,"boot.generated_address",cycle)
+            for key,value in (("loader_im_we",boot.instruction_write),("loader_sc_we",boot.sidecar_write)):
+                require(li[key],int(value),"boot."+key,cycle)
+            if boot.instruction_write:
+                require(li["loader_im_row"],boot.instruction_row,"boot.im_row",cycle)
+                require(int(li["loader_im_data"],16).to_bytes(128,"little"),b_in_data,"boot.im_data",cycle)
+                boot_im.append(b_in_data)
+            if boot.sidecar_write:
+                value=b_in_data[32*boot.sidecar_quarter:32*(boot.sidecar_quarter+1)]
+                require(li["loader_sc_row"],boot.sidecar_row,"boot.sc_row",cycle)
+                require(int(li["loader_sc_data"],16).to_bytes(32,"little"),value,"boot.sc_data",cycle)
+                boot_sc.append(value)
+            ls=vars(load.snapshot())
+            for key,value in (("dma_writes",ls["writes"]),("issued_dma_writes",ls["writes"])):
+                require(li[key],[list(w) for w in value],"load."+key,cycle)
+            for address,value in ls["writes"]:
+                if address in loaded_words:
+                    raise ValueError("fixture input load overwrites a previously loaded word")
+                loaded_words[address]=value
         store_scope = stores_started or (bool(se["start"]&1) and dma_index >= 5)
         dma_request = ds["request"]
         if store_scope:
@@ -209,7 +253,16 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
             require(se["raw_reads"][1],ds["read_words"],"dma.generated_tmem_reads",cycle)
             if ds["read_words"] and ((se["lost"]|se["frozen"])&2):
                 raise ValueError("ST fixture violates conflict-free DMA TMEM-read contract")
-        dma_valid = dma_request is not None if store_scope else bool(sources["dma_req"])
+        if generate_input_loading and not store_scope:
+            dma_request=ls["request"]
+            require(sources["dma_req"],int(dma_request is not None),"load.generated_request",cycle)
+            require(int(bool(se["done"]&1)),int(ls["done"]),"load.generated_done",cycle)
+            require(li["dma_busy"],int(ls["busy"]),"load.busy",cycle)
+            require(li["dma_rdy"],int(not ls["busy"]),"load.rdy",cycle)
+            if dma_request is not None:
+                require(sources["dma_we"],0,"load.read_request",cycle)
+                require(sources["dma_addr"],dma_request.word_addr,"load.generated_address",cycle)
+        dma_valid = dma_request is not None if store_scope or generate_input_loading else bool(sources["dma_req"])
         b_gnt = not dma_valid and b_ready_i
         require(ie["a_gnt"], int(a_gnt), "issue.a_gnt", cycle)
         require(ie["b_gnt"], int(b_gnt), "issue.b_gnt", cycle)
@@ -256,6 +309,7 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
                            b_push=b_push, r_cpl=r_cpl, pop=pop, rf_push=rf_push,
                            d_pop=drain_pop, cycle=cycle)
         # Slice request and response registers advance after this cycle's use.
+        ld_response = None
         if ae["rst"]:
             a_reg = b_reg = b_in = None
         else:
@@ -263,11 +317,14 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
                 a_reg = ARead(aid, issued.a_addr) if issued.a_req else None
                 aid += int(issued.a_req)
             if b_ready_i:
-                if sources["loader_busy"]:
-                    b_reg = BRead(bid, sources["loader_addr"], 1, True) if sources["loader_req"] else None
+                if (boot.busy if generate_input_loading else sources["loader_busy"]):
+                    b_reg = (BRead(boot.request_id,boot.word_addr,1,True) if boot.request else None) if generate_input_loading else (
+                        BRead(bid, sources["loader_addr"], 1, True) if sources["loader_req"] else None)
                 elif dma_valid:
                     if store_scope:
                         b_reg = BWrite(bid,dma_request.word_addr,dma_request.data,dma_request.word_mask)
+                    elif generate_input_loading:
+                        b_reg = BRead(bid,dma_request.word_addr,1,True)
                     elif sources["dma_we"]:
                         raise ValueError("external DMA writes are forbidden")
                     else:
@@ -275,17 +332,32 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
                 else:
                     b_reg = BRead(bid, issued.b_addr, issued.b_n + 1, False) if issued.b_req else None
                 bid += int(b_reg is not None)
+            if generate_input_loading:
+                ld_response = b_in_data if b_in and b_in.tag and not boot.busy else None
             b_in = ar.b_response
+            b_in_data = None
+            if ar.b_response and ar.b_response.tag:
+                require(len(ar.b_response_sources),1,"tagged_response.single_chunk",cycle)
+                chunk=ar.b_response_sources[0]
+                b_in_data=samples[chunk.low_id]+samples[chunk.high_id]
         start_store = None
+        start_load = None
         if se["start"]&1:
             instruction = dma_commands[dma_index]
             if instruction.op == I.ST:
                 source,n=instruction.w[1:3]
-                start_store = StoreCommand(dma_index,instruction,tuple(map(int,oracle[source:source+n])))
+                values=(tuple(loaded_words[a] for a in range(source,source+n))
+                        if generate_input_loading and dma_index < 7 else tuple(map(int,oracle[source:source+n])))
+                start_store = StoreCommand(dma_index,instruction,values)
                 stores_started = True
+            elif generate_input_loading:
+                start_load=instruction
             dma_index += 1
         store.step(start=start_store,b_ready=b_ready_i,
                    wr_idle=write_idle_i,reset=bool(me["rst"] and not stores_started))
+        if generate_input_loading:
+            load.step(start=start_load,b_ready=bool(ls["request"] and b_ready_i and not boot.busy),
+                      response=ld_response if not ae["rst"] else None,reset=bool(li["dma_rst"]))
         edge = memory.step(native_inputs, reset=bool(ne["rst"]))
         for channel, took in enumerate(edge.accepted_write_data):
             if took:
@@ -339,7 +411,19 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
     if bytes(content[:cfg.DRAM_BYTES]) != functional.dram.tobytes():
         raise ValueError("generated final DRAM differs from exact ISA functional oracle")
     ownership_result = {"ownership": ownership.finish()} if ownership is not None else {}
-    return {**counts, **ownership_result,"all_mm_issuers_and_arrivals_drained": True,
+    input_result = {}
+    if generate_input_loading:
+        for ins in dma_commands[:5]:
+            source,dest,n=ins.w[:3]
+            expected=struct.unpack("<"+"I"*n,image[source:source+4*n].tobytes())
+            require(tuple(loaded_words[a] for a in range(dest,dest+n)),expected,"load.final_input_words",-1)
+        require(b"".join(boot_im),b"".join(struct.pack("<I",w) for w in words),"boot.final_program",-1)
+        waits=b"".join(struct.pack("<Q",int(v,16)) for v in (root/"waits.hex").read_text().splitlines())
+        require(b"".join(boot_sc)[:len(waits)],waits,"boot.final_waits",-1)
+        input_result=dict(input_loading=dict(boot=loader.finish(),dma=load.finish(expected_loads=5,expected_chunks=40,expected_words=1200),
+                          loaded_tmem_words=len(loaded_words),instruction_rows=len(boot_im),
+                          sidecar_rows=len(boot_sc),independent_requests_data_and_completion=True))
+    return {**counts, **ownership_result,**input_result,"all_mm_issuers_and_arrivals_drained": True,
             "stores":store_result,"generated_write_events":generated_write_events,
             "generated_page_read_requests":page_reads,"generated_page_read_responses":page_responses,
             "native_payloads_checked":native_data_checks,"a_cache_payloads_checked":a_data_checks,
@@ -348,7 +432,7 @@ def validate_write_coupled(directory, *, require_adapter_payload=True,
             "generated_final_dram_matches_isa":True,
             "mismatches": 0, "whole_program_predictor": False, "calibrated": False, "tok_s": None,
             "external_inputs": ["reset/a_flush and accepted MM/DMA command starts", "MXU c_done/pn/more and drain epilogue",
-                                "TMEM drain grant", "initial read-only DMA/loader requests and addresses",
-                                "immutable ST source words from exact ISA functional oracle"],
-            "excluded": ["SW/A writes", "initial DMA load/loader request generation",
+                                "TMEM drain grant", "initial testbench boot start and pinned boot configuration" if generate_input_loading else "initial read-only DMA/loader requests and addresses",
+                                "final MM-output ST source words from exact ISA functional oracle" if generate_input_loading else "immutable ST source words from exact ISA functional oracle"],
+            "excluded": ["SW/A writes", *([] if generate_input_loading else ["initial DMA load/loader request generation"]),
                          "independent sequencer and output drain epilogue"]}

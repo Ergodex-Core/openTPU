@@ -419,6 +419,46 @@ or hardware action was performed in this gate.
 
 ## Physical target and prerequisites
 
+The subsequent bounded input-loading gate generates the initial boot loader
+and all five DMA LDs for the same three-MM program. Boot configuration is
+pinned to the saved simulation command and the exact program/wait bytes in
+DRAM. The loader's requests, IMEM rows and wait-sidecar rows advance on modeled
+B-register grants and generated responses. The LD model represents its reserved
+chunk buffer, synchronous read-first RAM, segment delivery, TMEM write register
+and completion pipeline. Observed request/address/data/done fields are held-out
+checks. The two page-patch ST payloads now come from generated LD data; the
+three final MM-output ST payloads still come from the functional ISA oracle.
+
+All four default/severe-memory credit cases independently generate ten boot
+reads (five instruction rows and five sidecar rows), 40 LD chunk requests and
+responses, 150 delivery segments, 1,200 TMEM words, and five LD done pulses.
+Every request, enabled word/address/data, IMEM/sidecar row, grant ordering and
+completion matches the trace. Mutations reject changed LD request/address/data,
+early done, issued-word address, loader request/address/instruction bytes, and
+sidecar row/data. Unit tests additionally cover denied grants, delayed responses,
+partial segments, wrong response order, orphan responses and incomplete closure.
+
+The final regression passed 114 tests in 14.26 s. A separate same-program run
+with stall85%, read latency241, native command queue1 and write-done lag31
+passed 22 tests in 28.56 s. Default cycles remain 2,183/1,868; severe-memory
+cycles are 4,481/3,959. The LD producer sees 9/33 denied request-grant cycles
+under that schedule, compared with zero at default. The initial loader has zero
+denied-grant cycles in these RTL fixtures; its unit tests explicitly hold both
+read-idle and grant low. All four cases have exact ISA TMEM/DRAM and identical
+read and masked-write traffic. The original two-MM comparison remains separate
+and unchanged at 1,464/1,198 cycles. A first model test rejected the saved HEX
+format's omitted zero operand words; explicit instruction-count padding and the
+existing full-program hash fixed that provenance check. Its failed log remains.
+
+Receipts: `input-v1`, `input-delay`, `input-regression` and
+`final-input-audit.json`. The saved-artifact audit reruns only tiny ISA/model
+checks, not RTL. Remaining external inputs are the initial testbench boot start,
+sys_rst/dma_rst/a_flush, accepted DMA/MM starts, MXU c_done/pn/more and drain
+epilogue, TMEM drain grants, and functional final MM-output store words. The
+next finite gate is dependency-driven sequencer dispatch/start/release for this
+fixed program, then independent output-drain timing. Calibration remains false
+and TPS null; this gate supplies no FPGA execution or 200MHz closure result.
+
 Target `f2-hbm:p4rl8a64tdp`: S1, D128, PORTB4, MCOLS8, row lanes, ALINE64,
 NCH8, FIFO1024, WIN16, MXU_E4, TMEM_IMPL3/NSB2/RPL/TDP/GST, PMP0; core200 MHz,
 HBM450 MHz, shell250 MHz. PMP0 removes functional fast-clock TMEM endpoints;
