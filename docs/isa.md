@@ -8,6 +8,8 @@ The separate [W4A16 proposal interface](nvfp4_w4a16.md) uses BF16 activations an
 NVFP4 K16 weights. Its checked logical descriptor and standalone numerical block
 are experimental; no instruction opcode, capability bit or MM behavior changes.
 In this ISA, MM WF=3 continues to consume the int8 ACT RAM described below.
+The opt-in [simulated host frontend](nvfp4_frontend.md) negotiates the bounded
+logical job and memory fences; it allocates no production opcode or capability bit.
 
 ## Machine model
 

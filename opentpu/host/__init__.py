@@ -2,6 +2,7 @@
 its tools.
 
     board      transports (XDMA, the Verilator board model), Board, BoardBackend (Engine)
+    nvfp4      opt-in negotiated W4A16 frontend over simulated memory only
     regs       the control register map (versions 1 and 2; docs/observability.md)
     runstate   the device lock and the runner's status file (/tmp/otpu)
     fake       FakeTransport: an in-memory card with register map 2 (tests, demos)
