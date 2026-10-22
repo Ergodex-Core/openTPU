@@ -57,11 +57,18 @@ def samplings(sampling: dict | None) -> list:
 def start(eng, sampling: dict | None = None):
     """The background process compiling eng's generate programs (its multiprocessing Process),
     or None: an engine without the device's decode loop (can_generate), without the program
-    cache (prog_cache), of more than one sequence, or no disk cache."""
+    cache (prog_cache), or no disk cache. A Qwen3 batch image keeps sequence 0's generate
+    loop; other multi-sequence layouts are not warmed."""
     from opentpu import progcache as PC
     if not getattr(eng, "can_generate", False) or not getattr(eng, "prog_cache", False) \
-            or getattr(eng, "batch", 1) != 1 or PC.cache_dir() is None:
+            or PC.cache_dir() is None:
         return None
+    if getattr(eng, "batch", 1) != 1:
+        from opentpu.llm.qwen3 import Spec
+        # Only Qwen3's image allocates per-sequence KV slots while retaining the ordinary
+        # generate program for slot 0 (the same restriction as serve.api.batchable).
+        if type(eng.spec) is not Spec or getattr(eng.image, "batch", None) != eng.batch:
+            return None
     import multiprocessing as mp
     be = eng.backend
     p = mp.get_context("spawn").Process(
