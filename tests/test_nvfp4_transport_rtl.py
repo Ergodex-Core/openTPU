@@ -10,6 +10,7 @@ import pytest
 
 from opentpu import nvfp4 as N
 from opentpu.mxu_job import local_job_fields
+from opentpu.host.nvfp4 import SimEndpoint,ProtectedFrontend
 from opentpu.nvfp4_transport import DeviceResult,Identity,encode_descriptor
 from test_nvfp4_transport import fixture,drain,output,SENTINEL
 from test_nvfp4_local_job import TB,desc_pack,packet_pack,expected
@@ -63,10 +64,14 @@ def bridge_tb(count):
 
 @pytest.mark.parametrize('backend',['iverilog','verilator'])
 def test_simulated_transport_rtl_bridge(tmp_path,backend):
-    rows=bridge_cases();ds=[];ps=[];wants=[]
+    rows=bridge_cases();ds=[];ps=[];wants=[];hosts=[];active=[]
     rng=random.Random(498)
     for j,m,t,a,c,s in rows:
-        t.submit(encode_descriptor(j))
+        endpoint=SimEndpoint(m,context=j.context,generation=j.generation)
+        host=ProtectedFrontend(endpoint,context=j.context,generation=j.generation)
+        wire=encode_descriptor(j)
+        host.submit(wire,host.release_inputs(wire))
+        t=endpoint.transport;hosts.append(host);active.append((j,m,t,a,c,s))
         packets=[packet_fields(p) for p in drain(t,rng)]
         d=local_job_fields(j,j.generation)
         accepted,bits,fault=expected(d,packets)
@@ -86,17 +91,17 @@ def test_simulated_transport_rtl_bridge(tmp_path,backend):
     for index,(idx,bits,faults) in enumerate(observed):
         assert int(idx)==index
         bits=int(bits,16);faults=int(faults,16)
-        j,m,t,a,c,s=rows[index]
+        j,m,t,a,c,s=active[index];host=hosts[index]
         assert (bits,bool(faults))==wants[index]
         t.receive_result(t._handle,DeviceResult(Identity.of(j),j.profile,bits,faults))
         if faults:
             assert t.completion.status=='FAILED' and output(j,m)==SENTINEL
         else:
-            assert t.issue_write(ready=False) is None and t.completion is None
+            assert t.issue_write(ready=False) is None and host.poll_completion() is None
             ticket=t.issue_write()
-            assert output(j,m)==SENTINEL and t.completion is None
+            assert output(j,m)==SENTINEL and host.acquire_completion() is None
             t.acknowledge_write(ticket)
             assert output(j,m)==bits.to_bytes(4,'little') and t.completion.status=='SUCCEEDED'
-        cpl=t.take_completion(context=j.context)
+        cpl=host.acquire_completion()
         assert cpl.handle.identity==Identity.of(j) and not m._leases and not m._writes
     print(f'TEST_PASS transport_memory_visibility={len(observed)} backend={backend}')

@@ -130,6 +130,7 @@ class _Region:
     generation:int
     permissions:frozenset
     revision:int
+    content_revision:int=0
     leases:set=field(default_factory=set)
 
 
@@ -204,6 +205,8 @@ class SimMemory:
         r=self._locate(address,len(data),context,generation,'write')
         if r.leases:raise Busy('mapped window leased')
         off=address-r.address;r.data[off:off+len(data)]=data
+        r.content_revision+=1
+        self.audit.append(('HOST_WRITE',address,len(data)))
 
     def unmap(self,address,*,context,generation):
         uint(address);uint(context);uint(generation)
@@ -235,6 +238,23 @@ class SimMemory:
         for r in regions:r.leases.add(lease.serial)
         self._leases[lease.serial]=lease
         return lease
+
+    def input_snapshot(self,job):
+        """Host simulation release snapshot, not a hardware/cache fence.
+
+        Validate every allocation, bind mapping lifetime plus complete input
+        window content versions. Callers must check and acquire a lease within
+        the same single-threaded operation; a snapshot alone reserves nothing.
+        """
+        if type(job) is not W4A16Job:raise DescriptorError('checked job required')
+        result=[]
+        for role in ('a','w','scales','y'):
+            b=getattr(job,role)
+            r=self._locate(b.address,b.span,job.context,job.generation,
+                           'write' if role=='y' else 'read')
+            if r.leases:raise Busy('mapped window already leased')
+            result.append((role,r.address,r.revision,r.content_revision if role!='y' else None))
+        return tuple(result)
 
     def _check(self,lease):
         if self._leases.get(lease.serial)!=lease:raise StaleResponse('inactive memory lease')
@@ -273,6 +293,7 @@ class SimMemory:
         j=lease.job;r=self._locate(j.y.address,4,j.context,j.generation,'write')
         data=pending[1];off=j.y.address-r.address
         r.data[off:off+4]=data
+        r.content_revision+=1
         del self._writes[ticket.serial]
         self.audit.append(('Y_VISIBLE',ticket.serial,j.y.address,4))
 

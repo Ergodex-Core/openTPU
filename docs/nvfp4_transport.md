@@ -164,7 +164,9 @@ Commands and logs are recorded in `build/nvfp4-gate4`:
 /Users/rachittibrewal/anaconda3/bin/python -m pytest -q -s --basetemp=build/nvfp4-gate4/final-rtl tests/test_nvfp4_rtl.py tests/test_nvfp4_scale_acc_rtl.py tests/test_nvfp4_strict_rtl.py tests/test_nvfp4_local_job.py tests/test_nvfp4_transport_rtl.py -k 'not local_adapter'
 ```
 
-The next gate is a deliberately specified live/runtime frontend with protected
+An opt-in negotiated host adapter with input-release fencing is now described
+in [gate five](nvfp4_frontend.md), using simulated memory only.
+The next production gate is a deliberately specified live/runtime frontend with protected
 allocation ownership, device/host fencing, external response drain, dependency
 semantics and a real descriptor ABI/capability negotiation. This gate provides
 none of those hardware guarantees. Larger tiles/matrices, actual model tensors,
