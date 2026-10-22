@@ -117,7 +117,7 @@ module tb_board;
                // the channels: NCH a slice of 2^32 / NCH bytes each (the DDR boards' two of 2 GiB), the
                // adapter's wide port B (otpu_native_dram PORTB)
                .NCH(NCH), .CH_LOG2(32 - $clog2(NCH)), .PORTB(PORTB), .RL(RL), .ALINE(ALINE)) dut (
-    .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
+    .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led, .aux_idle(),
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),
     .s_ctl_wdata(wdata), .s_ctl_wstrb(4'hF), .s_ctl_wvalid(wvalid), .s_ctl_wready(wready),

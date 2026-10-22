@@ -60,7 +60,7 @@ def test_legacy_transports_fail_closed_without_any_io():
     legacy.reg_read=lambda *a:pytest.fail('negotiation touched legacy registers')
     with pytest.raises(CapabilityMismatch):ProtectedFrontend(legacy,context=0,generation=0)
     # Existing fallback only concerns GATHER; it cannot imply a new W4A16 feature.
-    assert R.caps2(None)=={'gather':True} and 'w4a16' not in R.caps(caps)
+    assert R.caps2(None)=={'gather':True,'portb':1,'rowlanes':False,'aline':32} and 'w4a16' not in R.caps(caps)
 
 
 def test_context_generation_and_opaque_session_fence_tokens():

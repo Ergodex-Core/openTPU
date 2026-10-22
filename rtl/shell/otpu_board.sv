@@ -88,6 +88,7 @@ module otpu_board #(
                                        //   domain; STATUS ECC_DED)
   input  logic [11:0]  temp,           // XADC die-temperature code (any clock domain, slow)
   output logic [2:0]   led,
+  output wire         aux_idle,
   // ---- I2C pins (otpu_fpga_top_ld's IOBUFs): 1 drives the line low; the levels (any clock)
   output logic [3:0]   i2c_lo,         // SCL0 SDA0 (LM73 bus), SCL1 SDA1 (PCIe SMBus)
   input  logic [4:0]   i2c_pin,        // the same four lines, then ALERT0 (LM73, active low)
@@ -191,6 +192,8 @@ module otpu_board #(
 
   // ---- control (slice 0's signals; the others' in g_slice)
   logic run, ld_start, ld_busy, halted, error, wait_to, wr_idle, rd_idle, a_inval;
+  logic load_pending;
+  assign aux_idle=!rst && (&cal_all) && !run && !ld_start && !ld_busy && !load_pending && rd_idle && wr_idle;
   logic [31:0] ld_addr, ld_n;
   logic [S-1:0][31:0] icount;        // each slice's
   // every slice's, as the control block sees it: [0] slice 0's, [s] g_slice[s]'s
@@ -270,7 +273,7 @@ module otpu_board #(
     .s_bready(c_bready), .s_araddr(c_araddr), .s_arvalid(c_arvalid),
     .s_arready(c_arready), .s_rdata(c_rdata), .s_rresp(c_rresp),
     .s_rvalid(c_rvalid), .s_rready(c_rready),
-    .run, .ld_start, .arg, .ld_addr, .ld_n, .ld_busy, .halted, .error, .wait_to, .icount, .wr_idle,
+    .run, .ld_start, .load_pending, .arg, .ld_addr, .ld_n, .ld_busy, .halted, .error, .wait_to, .icount, .wr_idle,
     .axi_err(|n_err),                  // the channels' bridges (otpu_mem_ch)
     .calib(cal_all), .ecc_ded(|ded_s2),
     .b_rd(b_req && b_rdy && !b_we), .b_wr(b_req && b_rdy && b_we),

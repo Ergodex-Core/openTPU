@@ -493,7 +493,7 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
 
 
 @pytest.mark.parametrize('name,S,nch,dram_log2,portb,khz',
-                         [('f2-hbm', 1, 8, 32, 1, 200000), ('f2-hbm:s2', 2, 8, 32, 1, 200000),
+                         [('f2-hbm:nvfp4', 1, 8, 32, 1, 200000), ('f2-hbm', 1, 8, 32, 1, 200000), ('f2-hbm:s2', 2, 8, 32, 1, 200000),
                           ('f2-hbm16', 1, 16, 33, 1, 200000),
                           ('f2-hbm:p2', 1, 8, 32, 2, 200000), ('f2-hbm16:p4', 1, 16, 33, 4, 200000),
                           ('f2-hbm:p4rl8a64c150', 1, 8, 32, 4, 150000)])
@@ -546,6 +546,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
         (S, nch, 29, dram_log2)
     assert params['CORE_KHZ'] == khz and 'CH_BYTES' not in params and 'DDR_MTS' not in params
+    assert params['NVFP4_MAILBOX'] == int(name.endswith(':nvfp4'))
     vh = (d / 'opentpu_params.vh').read_text()
     assert f".NCH(32'h{nch:x})" in vh and ".TMEM_PMP(32'h1)" in vh
     assert params['PORTB'] == portb and f".PORTB(32'h{portb:x})" in vh

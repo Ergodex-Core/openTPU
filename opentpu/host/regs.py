@@ -86,6 +86,8 @@ CAP2_ROWLANES = 1 << 4
 # CAPS2 bit5: port A's line is 64 bytes (Config.ALINE 64; docs/row_lanes.md "Port A at 64
 # bytes"); 0: 32, as every build before the bit
 CAP2_ALINE64 = 1 << 5
+# Optional NV41 one-job OCL mailbox, ABI discovery at0x400; old bit meanings unchanged.
+CAP2_NVFP4_MAILBOX = 1 << 6
 
 
 def caps2(v: int | None) -> dict:

@@ -57,7 +57,7 @@ TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_
               "TMEM_PRK", "TMEM_SDM")
 # platform keys a [variants.<name>] table may set (a board build at another core clock: the
 # F2 HBM build's c150, docs/wide_port.md "Alex's shell")
-VARIANT_PLATFORM_KEYS = ("core_mhz",)
+VARIANT_PLATFORM_KEYS = ("core_mhz", "nvfp4_mailbox")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
@@ -95,7 +95,12 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
           # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
           # (since the alex-shell rework: Alex's burst200 memory path, otpu_native_axi per channel
           # into SmartConnect; otpu_f2_hbm_nch / _port / _host / _mem are no longer built)
-          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+          "f2-hbm": ["mxu/otpu_nvfp4_fp.sv", "mxu/otpu_nvfp4_job.sv",
+                     "mxu/otpu_nvfp4_strict_dot16.sv", "mxu/otpu_nvfp4_scale_acc.sv",
+                     "mxu/otpu_nvfp4_local_job.sv", "mxu/otpu_nvfp4_hbm_job.sv",
+                     "mxu/otpu_nvfp4_mailbox.sv", "mxu/otpu_nvfp4_native_owner.sv",
+                     "boards/f2/otpu_f2_nvfp4_ocl.sv",
+                     "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
                      "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_pcis_gate.sv",
                      "boards/f2/otpu_f2_hbm_axi.sv", "boards/f2/otpu_hbm_geometry.sv",
                      "boards/f2/otpu_f2_hbm_sys.sv"]}
@@ -192,6 +197,10 @@ def load(name: str | None = None) -> Target:
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key "
                                   f"(or a platform key a variant may set: {VARIANT_PLATFORM_KEYS})")
+    mailbox = raw["platform"].get("nvfp4_mailbox", False)
+    if type(mailbox) is not bool or (mailbox and
+            (raw["platform"].get("board") != "f2" or raw["platform"].get("mem") != "hbm")):
+        raise TargetError(f"{path}: nvfp4_mailbox requires a boolean on the F2 HBM platform")
     cf = _config_fields()
     bad = sorted(set(raw["arch"]) - set(cf))
     if bad:

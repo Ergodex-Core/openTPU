@@ -122,3 +122,7 @@ MCOLS = 8                       # build.py --target f2-hbm:p2rl8
 [variants.p2m8]                 # PORTB 2 on MCOLS 8 without row lanes: t2 QUAD at M = 2 (a
 PORTB = 2                       # verify's two rows or two sequences a chunk a cycle: MTP on
 MCOLS = 8                       # the t2 images, docs/ternary.md 9). build.py --target f2-hbm:p2m8
+
+# Optional one-job strict NV41 sidecar; code/simulation only, no physical qualification.
+[variants.nvfp4]
+nvfp4_mailbox = true
