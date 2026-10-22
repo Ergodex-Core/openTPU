@@ -298,6 +298,8 @@ simulations; clock-cycle counts are not F2 frequency or TPS measurements.
 The strict folded tree and bounded local-stream job controller are now implemented
 and described in [the third gate](nvfp4_local_job.md). Next connect authorized
 memory/tile buffers and real output visibility to the checked logical job.
+[Gate four](nvfp4_transport.md) now supplies a bounded simulated-memory adapter
+and completion-visibility contract; live device integration remains a later gate.
 Retain explicit generation/drain ownership and qualify a selected implementation
 under the actual F2 Vivado/HDK flow before pipelining or replicating arithmetic.
 The wide-port worker owns the separate two-credit prefetch A/B experiment.
