@@ -2307,7 +2307,7 @@ class Engine:
                  pool_map: bool = True, prog_cache: bool | None = None,
                  prompt_runs: bool = False, layer_ahead=None, expert_major: bool = False,
                  snapshots: int = 0, batch_area: bool = False, tile_runs: bool | None = None,
-                 tile_rows: int | None = None):
+                 tile_rows: int | None = None, gemma_prompt_lookup: bool = False):
         from . import prefill as PF
         self.spec, self.cap, self.block = spec, cap, block
         self.prog_cache = PC.enabled() if prog_cache is None else bool(prog_cache)
@@ -2316,6 +2316,12 @@ class Engine:
         #                                     on unless OTPU_TILE=0)
         self.batch, self.rows = batch, max(rows, batch)
         wkw = dict(wformat=wformat, head_format=head_format)
+        if gemma_prompt_lookup:
+            from .gemma3 import Spec as Gemma3Spec
+            if type(spec) is not Gemma3Spec or not resident or batch != 1 or self.rows < 2:
+                raise ValueError("prompt lookup requires a resident Gemma 3 engine, batch 1, "
+                                 "and at least two rows")
+            wkw["gemma_prompt_lookup"] = True
         if experts is not None:             # a MoE model's expert slots per layer
             wkw["experts"] = experts
         if embed_host is not None:          # the int8 embedding table on the host (default: the
