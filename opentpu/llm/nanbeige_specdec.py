@@ -7,12 +7,22 @@ Every returned token comes from target logits, including rejection corrections.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+import operator
 import time
 
 import numpy as np
 
 from ..compiler import CompileError
 from .dspark import Context, verify_greedy
+
+
+def _integer(value, name):
+    if isinstance(value, (bool, np.bool_)):
+        raise ValueError(f"{name} must be an integer")
+    try:
+        return operator.index(value)
+    except TypeError:
+        raise ValueError(f"{name} must be an integer") from None
 
 
 @dataclass
@@ -140,9 +150,10 @@ class Decoder:
         return n, logits, hidden
 
     def generate(self, prompt, *, max_new_tokens=64, eos_tokens=None) -> Result:
-        prompt = tuple(int(t) for t in prompt)
+        prompt = tuple(_integer(t, "Prompt token ID") for t in prompt)
         if not prompt or any(t < 0 or t >= self.target.spec.vocab for t in prompt):
             raise ValueError("A nonempty prompt of target-vocabulary token IDs is required")
+        max_new_tokens = _integer(max_new_tokens, "max_new_tokens")
         if max_new_tokens < 0:
             raise ValueError("max_new_tokens must be nonnegative")
         if len(prompt) > self.target.cap:

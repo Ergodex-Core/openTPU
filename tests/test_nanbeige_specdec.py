@@ -167,3 +167,66 @@ def test_missing_capture_is_rejected_before_running(fixture):
                     rows=4, prog_cache=False)
     with pytest.raises(ValueError, match="capture_layers"):
         Decoder(engine, Reference(draft, dw, target_weights=tw))
+
+
+@pytest.fixture
+def validation_decoder():
+    """Validation needs no weights, compiler or ISA execution."""
+    target = SimpleNamespace(
+        batch=1, stateful=False, cap=8, pos=5, resets=0,
+        spec=SimpleNamespace(hidden=4, vocab=8, eos=()),
+        image=SimpleNamespace(capture_slots=(0,), rows=2),
+        backend=object(), stats=[{"preserved": True}],
+    )
+
+    def reset():
+        target.resets += 1
+        target.pos = 0
+
+    target.reset = reset
+    draft = SimpleNamespace(
+        spec=SimpleNamespace(target_hidden=4, capture_layers=(0,), block_size=2),
+        target_vocab=8, backend="validation-stub",
+    )
+    decoder = Decoder(target, draft, draft_tokens=1, prefill_chunk=1)
+    decoder.stats, decoder.context = object(), object()
+    decoder._phase = "preserved"
+    return decoder
+
+
+@pytest.mark.parametrize("prompt", [
+    [-0.5, 7], [2.9, 7], [2.0, 7], ["2", 7], [True, 7],
+    [np.bool_(False), 7], [None, 7], [np.nan, 7], [np.inf, 7],
+    [], [-1, 7], [8, 7], [1] * 9,
+])
+def test_invalid_prompt_preserves_decoder_state(validation_decoder, prompt):
+    decoder = validation_decoder
+    stats, context = decoder.stats, decoder.context
+    with pytest.raises(ValueError):
+        decoder.generate(prompt, max_new_tokens=0)
+    assert decoder.target.resets == 0 and decoder.target.pos == 5
+    assert decoder.target.stats == [{"preserved": True}]
+    assert decoder.stats is stats and decoder.context is context
+    assert decoder._phase == "preserved"
+
+
+@pytest.mark.parametrize("budget", [
+    1.5, 0.0, np.float64(2), np.nan, np.inf, "0", True, np.bool_(False), None, -1,
+])
+def test_invalid_budget_preserves_decoder_state(validation_decoder, budget):
+    decoder = validation_decoder
+    stats, context = decoder.stats, decoder.context
+    with pytest.raises(ValueError):
+        decoder.generate([2, 7], max_new_tokens=budget)
+    assert decoder.target.resets == 0 and decoder.target.pos == 5
+    assert decoder.target.stats == [{"preserved": True}]
+    assert decoder.stats is stats and decoder.context is context
+    assert decoder._phase == "preserved"
+
+
+def test_numpy_integer_prompt_and_zero_budget_are_accepted(validation_decoder):
+    decoder = validation_decoder
+    result = decoder.generate(np.array([2, 7], dtype=np.int64), max_new_tokens=np.int64(0))
+    assert result.tokens == () and result.stop_reason == "length"
+    assert result.stats.prompt_tokens == 2 and result.stats.target_calls == 0
+    assert decoder.target.resets == 1 and decoder.target.pos == 0
