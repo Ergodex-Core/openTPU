@@ -145,6 +145,39 @@ module otpu_top
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
       end
+`ifndef SYNTHESIS
+      string af_name;
+      integer af_fd = 0;
+      int af_cyc = 0, af_limit = 32768;
+      initial begin
+        if ($value$plusargs("adapter_feedback=%s", af_name)) begin
+          if (S != 1 || AXI != 1 || NAXI) $fatal(1, "adapter feedback requires direct S1 native model");
+          af_fd = $fopen(af_name, "w");
+          if (af_fd == 0) $fatal(1, "cannot open adapter feedback trace");
+        end
+        void'($value$plusargs("adapter_feedback_limit=%d", af_limit));
+        if (af_limit < 1 || af_limit > 131072) $fatal(1, "bad adapter feedback limit");
+      end
+      always @(posedge clk) if (af_fd != 0) begin
+        if (af_cyc == 0)
+          $fwrite(af_fd, "{\"kind\":\"config\",\"schema\":1,\"channels\":%0d,\"portb\":%0d,\"aline\":%0d,\"qd\":%0d,\"rd\":%0d,\"ad\":%0d,\"apf\":%0d,\"apr\":%0d}\n",
+                  NCH, PORTB, ALINE, u_adapt.QD, u_adapt.RD, u_adapt.AD, u_adapt.APF, u_adapt.APR);
+        if (af_cyc >= af_limit) begin
+          $fwrite(af_fd, "{\"kind\":\"truncated\",\"cycles\":%0d}\n", af_cyc);
+          $fclose(af_fd); af_fd = 0;
+        end else begin
+          $fwrite(af_fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"rst\":%0d,\"a_flush\":%0d,\"a_req\":%0d,\"a_addr\":%0d,\"a_ready\":%0d,\"a_rvalid\":%0d,",
+                  af_cyc, sys_rst, rst || ld_start || a_inval, a_req, a_addr, a_rdy, a_rvalid);
+          $fwrite(af_fd, "\"b_req\":%0d,\"b_tag\":%0d,\"b_we\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"b_ready\":%0d,\"b_rvalid\":%0d,\"b_rtag\":%0d,\"b_rcm\":%0d,\"b_rlast\":%0d,\"sw_req\":%0d}\n",
+                  b_req, b_tag, b_we, b_addr, b_n, b_rdy, b_rvalid, b_rtag, b_rcm, b_rlast, sw_req);
+          af_cyc++;
+          if (dump) begin
+            $fwrite(af_fd, "{\"kind\":\"end\",\"cycles\":%0d}\n", af_cyc);
+            $fclose(af_fd); af_fd = 0;
+          end
+        end
+      end
+`endif
       // the adapter's counters (rtlsim: A runs and fill reads, the partial writes by source)
       always @(posedge clk) if (dump)
         for (int c = 0; c < NCH; c++) begin

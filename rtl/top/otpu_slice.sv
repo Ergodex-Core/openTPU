@@ -1273,6 +1273,13 @@ module otpu_slice
               u_mxu.drain_go, gnt[G_MXU], u_mxu.d_fin, u_mxu.d_pop, u_mxu.c_asc, u_mxu.al_st,
               u_mxu.f_count, u_mxu.s_count, u_mxu.fpop, u_mxu.b_push, u_mxu.r_cpl, u_mxu.c_unit,
               u_mxu.q_n, u_mxu.RF, mxu_pop, u_mxu.more, u_mxu.f_av, u_mxu.s_av, u_mxu.row_in);
+      $fwrite(fd, "\"issue\":{\"a_req\":%0d,\"a_addr\":%0d,\"b_req\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"a_gnt\":%0d,\"b_gnt\":%0d,\"a_rvalid\":%0d,\"b_rvalid\":%0d,\"b_rlast\":%0d,\"i_ini\":%0d,\"i_act\":%0d,\"need_a\":%0d,\"need_b\":%0d,\"want\":%0d,\"tag_ent\":%0d,\"tag_cpl\":%0d,\"rv1\":%0d,\"tg_n\":%0d,\"occ\":%0d},",
+              mxu_areq, mxu_aaddr, mxu_breq, mxu_baddr, mxu_bn, mxu_agnt, mxu_bgnt,
+              a_rvalid, b_rvalid_i && !b_rtag_i, b_rlast_i, u_mxu.i_ini, u_mxu.i_act,
+              u_mxu.need_a, u_mxu.need_b, u_mxu.want_iss, u_mxu.a_tag.ent, u_mxu.a_tag.cpl,
+              u_mxu.rv1, u_mxu.tg_n, u_mxu.occ);
+      $fwrite(fd, "\"memory_sources\":{\"dma_req\":%0d,\"dma_we\":%0d,\"dma_addr\":%0d,\"loader_busy\":%0d,\"loader_req\":%0d,\"loader_addr\":%0d},",
+              dma_breq, dma_bwe, dma_baddr, ld_busy, ld_req, ld_a);
       $fdisplay(fd, "\"dram\":{\"a_ready\":%0d,\"b_ready\":%0d,\"write_ready\":%0d,\"q_want\":%0d},\"coll_gnt\":%0d,\"start\":%0d,\"done\":%0d,\"icount\":%0d}",
                 a_rdy_i, b_rdy_i, sw_rdy_i, q_awant, coll_gnt, $unsigned(ustart), $unsigned(udone), sq_icount);
       cyc = cyc + 1;

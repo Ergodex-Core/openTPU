@@ -42,6 +42,7 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
     stream; whole-TMEM and whole-DRAM state must also match the bit-exact ISA.
     """
     rng = np.random.default_rng(9041)
+    deterministic_memory = os.environ.get("WP_DETERMINISTIC_MEMORY") == "1"
     cfg = Config(S=1, D=128, MCOLS=8, ACT_BLOCKS=16, ACT_ROWS=16, PAIR=True,
                  DSTEP=True,
                  PORTB=4, ROWLANES=True, ALINE=64, DRAM_BYTES=1 << 20)
@@ -65,6 +66,11 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
     prog[:0] = [I.ld(dram_a, a, n), I.ld(dram_b, b, n)]
     prog.insert(5, I.vop(I.V_ADD, dst, a, b, 32, 256, 256, 256, 256, I.B_FULL))
     prog.insert(-1, I.st(dram_out, dst, n))
+    if deterministic_memory:
+        # The scoped adapter models reads only. The VPU's independent ST can
+        # otherwise overtake a still-running MM (the preserved PMP2 v1 case).
+        # BAR explicitly completes all older work before that first write.
+        prog.insert(-2, I.bar())
     assert any(ins.op == I.MM and I.mm_layout(ins) == 4 for ins in prog)
     assert sum(ins.op == I.VOP for ins in prog) == 1
 
@@ -72,6 +78,10 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
     evidence_root.mkdir(parents=True, exist_ok=True)
     keep = Path(tempfile.mkdtemp(prefix=f"pmp{pmp}-", dir=evidence_root))
     trace = keep / "tmfeedback.jsonl"
+    plusargs = [f"+tmfeedback={trace}", "+tmfeedback_limit=32768"]
+    if deterministic_memory:
+        plusargs += ["+nat_deterministic=1", f"+nat_feedback={keep / 'native-feedback.jsonl'}",
+                     f"+adapter_feedback={keep / 'adapter-feedback.jsonl'}"]
     original_run_sim = rtlsim.run_sim
 
     def record_sim_output(cmd, timeout=None):
@@ -94,8 +104,11 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
         "program_sha256": hashlib.sha256(np.asarray([ins.encode() for ins in prog], dtype="<u4").tobytes()).hexdigest(),
         "source_sha256": {str(path.relative_to(rtlsim.ROOT)): hashlib.sha256(path.read_bytes()).hexdigest()
                           for path in (rtlsim.RTL / "top/otpu_slice.sv", rtlsim.RTL / "mem/otpu_tmem.sv",
-                                       rtlsim.RTL / "vpu/otpu_vpu.sv", rtlsim.RTL / "mxu/otpu_mxu.sv")},
-        "stall": 50, "seed": 7, "lat": 120}
+                                       rtlsim.RTL / "vpu/otpu_vpu.sv", rtlsim.RTL / "mxu/otpu_mxu.sv",
+                                       rtlsim.RTL / "top/otpu_top.sv", rtlsim.TB / "otpu_native_mem.sv")},
+        "stall": 50, "seed": 7, "lat": 120, "deterministic_memory": deterministic_memory,
+        "read_phase_barrier": deterministic_memory,
+        "plusargs": plusargs}
     original_build = rtlsim.build
 
     def record_build(top, sources, params=None):
@@ -112,7 +125,7 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
         cfg, [prog], [dram.copy()], axi=True, boot=True, stall=50, seed=7, lat=120,
         max_cycles=1_000_000, keep=keep,
         uarch=uarch,
-        plusargs=[f"+tmfeedback={trace}", "+tmfeedback_limit=32768"],
+        plusargs=plusargs,
     )
     assert np.array_equal(drams[0], isa.slices[0].dram), "DRAM differs from the ISA"
     assert np.array_equal(tmems[0], isa.slices[0].tmem), "TMEM differs from the ISA"
@@ -135,9 +148,15 @@ def test_wideport_mixed_mxu_vpu_tmem_feedback(have_verilator, monkeypatch, tmp_p
     assert any(e["vpu"]["en"] and (e["mxu"]["rows_live"] or e["mxu"]["drain_go"])
                for e in active), "VPU never overlapped MXU compute/drain"
     assert any(e["lost"] or e["frozen"] for e in active), "no TMEM replay exercised"
+    memory_summary = None
+    if deterministic_memory:
+        from tools.wideport_memory_feedback import validate_native_trace
+        from tools.wideport_memory_coupled import validate_memory_coupled
+        memory_summary = {"native_boundary": validate_native_trace(keep / "native-feedback.jsonl"),
+                          "coupled_arrivals": validate_memory_coupled(keep)}
     (keep / "feedback-summary.json").write_text(json.dumps(
         {"pmp": pmp, "cycles": stats["cycles"], "events": len(events),
-         "resource": summary}, indent=2, default=str) + "\n")
+         "resource": summary, "memory": memory_summary}, indent=2, default=str) + "\n")
 
 
 @pytest.mark.parametrize("key,value", [("TMEM_GST", 0), ("S", 2), ("TMEM_PRK", 1)])

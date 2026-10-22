@@ -165,6 +165,70 @@ digests, full-capacity cycles and recovery. Full-model LPN estimates/errors in
 the first table remain unchanged; `calibrated=false` and `tok_s=null` remain
 mandatory. No 200 MHz routed or on-card result is implied by these simulations.
 
+## Deterministic native-memory milestone (2026-10-22)
+
+The opt-in `+nat_deterministic=1` schedule in the simulation-only native memory
+model uses a portable 32-bit hash keyed by seed, free-running core cycle,
+channel and draw kind. It controls command/write readiness, performed-read/
+write jitter and response bubbles. Default `$urandom` behavior remains selected
+without that flag. This does not reconstruct the legacy simulator's global
+random-call stream or model physical HBM/AXI timing. DDR3 timing mode is rejected
+by the new predictor. Native data/masked-write contents remain separate from
+its timing model and are checked by the fixture's full ISA comparison.
+
+`wideport_native_memory.py`, `wideport_native_adapter.py` and
+`wideport_mxu_issue.py` now couple issued MM commands through slice A/B request
+registers, NCH8 read queues, APF32/APR16 scale prefetch/reuse, native memory,
+B part joins, the slice B response register and the MXU scale-tag pipeline.
+`wideport_memory_coupled.py` generates MM `b_push` and `r_cpl`; those observed
+RTL signals are comparison targets only. Consumer admission and FIFO counts
+use these generated arrivals. The prefix requires every MM issuer, operand
+and scale entry, result pipeline and command to drain before it can pass.
+
+The scoped adapter is read-only. The original PMP2 fixture allowed its VPU ST
+to start before the last MM completed; its full-coverage guard correctly
+failed despite matching through the first-write boundary. That trace is retained
+in `native-mixed-v1`. The opt-in fixture now adds an explicit BAR before ST so
+all five MMs lie in the modeled interval. The default fixture's program is
+unchanged. This BAR is validation stimulus, not a production scheduling change.
+
+| Deterministic mixed fixture | PMP0 | PMP2 |
+|---|---:|---:|
+| RTL run cycles, including validation BAR | 4,859 | 5,246 |
+| Full slice trace cycles | 5,018 | 5,405 |
+| Native boundary cycles through dump | 5,274 | 5,661 |
+| Coupled command-to-arrival read-prefix cycles | 4,068 | 4,457 |
+| Generated MM B entries / scale entries | 180 / 108 | 180 / 108 |
+| MM A requests / B requests | 108 / 180 | 108 / 180 |
+| Whole-TMEM/DRAM ISA / all-MM arrival checks | pass | pass |
+
+Two standalone native tests additionally match 287 cycles with 640 accepted
+commands, 512 read responses and 128 completed writes. The focused deterministic
+suite passed 25 tests; the relevant default-mode regression passed 83 tests
+(three unchanged standalone TMEM RTL cases deselected), including legacy mixed
+ISA checks, model/calibration gates and board RF64 saturation. Corrupted native
+response oracles are rejected. The saved-artifact audit also corrupts each
+MM arrival oracle independently and requires a mismatch rather than feedback.
+
+This is still not a whole-program predictor. External inputs are reset/A-flush,
+accepted MM starts and release/head state (`more`, `pn`, `c_done`), drain epilogue,
+TMEM drain grants, and DMA/loader requests/addresses. Adapter writes/SW and the
+post-first-write interval are excluded from coupled prediction. The native-only
+boundary comparison covers write-done timing from supplied native requests, not
+independent generation of those write requests. No full Gemma/Qwen run was
+repeated. Full LPN integration, calibration and TPS remain disabled.
+
+Read-only license checks at 2026-10-22 10:39-10:40 UTC successfully sourced the
+installed Vivado settings but found no configured `XILINXD_LICENSE_FILE` or
+`LM_LICENSE_FILE` and no license at the three checked standard paths. The
+installed lmutil's legacy ELF loader is absent; invoking it through the system
+loader works, but `lmstat -a` exits 255 with "Cannot find license file" and no
+feature/seat records. A bounded project/HDK script inspection found no additional
+license-source configuration. This explains the current uncertainty, not prior
+owner build licensing or global license availability. No server endpoint was
+invented, no license checkout or configuration change occurred, and no physical
+build started. Receipts: `license-status-v3.json` and its context companion.
+
 ## Physical target and prerequisites
 
 Target `f2-hbm:p4rl8a64tdp`: S1, D128, PORTB4, MCOLS8, row lanes, ALINE64,
