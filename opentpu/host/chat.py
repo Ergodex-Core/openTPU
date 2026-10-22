@@ -307,6 +307,7 @@ class Turn:
     gen_tokens: int = 0
     decode_s: float = 0.0             # first -> latest generated token
     decode_steps: int = 0             # device steps after the prefill
+    device_first: bool = False        # the final prompt token and first pick ran in decode
     decode_cycles: int = 0
     context: int = 0                  # KV positions filled
     reused: int = 0                   # KV positions kept from the earlier turns
@@ -449,9 +450,10 @@ class Chat:
     /reset starts over."""
 
     def __init__(self, engine: Engine, tok, think: bool, pick, max_new: int,
-                 clock_mhz: float = 0.0):
+                 clock_mhz: float = 0.0, *, fpga_only: bool = False):
         self.eng, self.tok, self.think, self.pick, self.max_new = engine, tok, think, pick, max_new
         self.clock_mhz = clock_mhz
+        self.fpga_only = fpga_only
         self.history: list[dict] = []
         self.fed: list[int] = []            # tokens whose K/V are in the device cache
         self.session = Session()
@@ -468,12 +470,51 @@ class Chat:
         if getattr(pick, "softcap", cap) != cap:    # it gets the engine's raw logits
             raise ValueError(f"the sampler's softcap {pick.softcap} is not the model's {cap} "
                              f"(chat.sampler(softcap=spec.softcap))")
+        self._check_fpga_only()
         if getattr(engine.spec, "mtp", False):
             from opentpu.llm.mtp import MTPDecoder
             self.mtp = MTPDecoder(engine)
         warm = getattr(pick, "warm", None)
-        if warm is not None:                # the first pick then costs what the others do
+        if warm is not None and not fpga_only:  # no host pick, including the first, in this mode
             warm()
+
+    def _check_fpga_only(self) -> None:
+        """Fail before prompt work if this qualified device-loop contract cannot be met.
+
+        ISA/fake backends may exercise the same contract in tests; the CLI requires a board.
+        This is a dense text path: MTP/vision and compile-time convolution warmup need their
+        own first-token qualification. Prompt chunks are still launched by the host.
+        """
+        if not self.fpga_only:
+            return
+        from opentpu.llm.gemma3 import Spec as Gemma3Spec
+        from opentpu.llm.qwen3 import Spec as Qwen3Spec
+        eng, be = self.eng, self.eng.backend
+        img = getattr(eng, "image", None)
+        checks = ((type(eng.spec) in (Qwen3Spec, Gemma3Spec)
+                   and not getattr(eng.spec, "experts", 0), "a qualified dense Qwen3/Gemma3 model"),
+                  (not getattr(eng, "stateful", False), "a qualified stateless-KV model"),
+                  (getattr(be, "args", False), "resident run arguments (CAPS.args)"),
+                  (getattr(be, "generates", False), "device generation (CAPS.gen)"),
+                  (getattr(be, "chains", False), "device program chaining"),
+                  (getattr(eng, "resident", False), "resident decode"),
+                  (getattr(eng, "device_inputs", False), "device input tables"),
+                  (getattr(eng, "can_generate", False), "a generate program in the image"),
+                  (self.on_card, "sampling supported by the device"))
+        missing = [why for ok, why in checks if not ok]
+        if getattr(img, "offload", None) is not None or getattr(eng, "server", None) is not None:
+            missing.append("experts resident on the device (host offload is enabled)")
+        if any(getattr(img, k, False) for k in ("ple_host", "embed_host", "prompt_host_rows")) \
+                or getattr(eng, "row_server", None) is not None:
+            missing.append("all embedding/PLE rows resident on the device")
+        if getattr(be, "host", None) is not None:
+            missing.append("no host service during inference")
+        if getattr(eng, "_conv_lo", 0):
+            missing.append("a device first-token path without convolution host-step warmup")
+        if getattr(eng.spec, "mtp", False) or getattr(img, "vision", None) is not None:
+            missing.append("the qualified plain dense text path (MTP/vision are not qualified)")
+        if missing:
+            raise ValueError("FPGA-only mode requires " + "; ".join(missing))
 
     def _template(self, add_prompt=True, history=None) -> list[int]:
         history = self.history if history is None else history
@@ -558,6 +599,7 @@ class Chat:
         card runs the next step (Engine.step's on_start), so the interface draws during the
         run, not while the host starts it; at the end of the reply it comes at once. stop()
         is polled between runs (the reply so far is kept)."""
+        self._check_fpga_only()              # settings/capabilities may change between turns
         on_update = on_update or (lambda delta, turn: None)
         t0 = time.perf_counter()
         turn = Turn(clock_mhz=self.clock_mhz, cap=self.eng.cap, context=self.eng.pos)
@@ -574,6 +616,9 @@ class Chat:
         else:
             self.history.append({"role": "user", "content": text})
         ids = self._template()
+        if self.fpga_only and not ids:
+            self.history.pop()
+            raise ValueError("FPGA-only mode needs a nonempty prompt")
         if len(ids) >= self.eng.cap:         # no room for the prompt and a reply token
             self.history.pop()
             del self.images[len(self.images) - len(imgs):]
@@ -584,24 +629,33 @@ class Chat:
         if k < len(self.fed):               # rendered otherwise than fed: from the common part
             had = len(self.fed)
             turn.restarted = self._rollback(k) == 0 and had > 0
+        last = len(ids) - int(self.fpga_only)
+        if self.fpga_only and len(self.fed) > last:
+            # Even an entirely cached prompt must feed its last token through the device
+            # sampler; no cached host logits or CPU pick are used. Stateful rollback may
+            # restart earlier when it has no suitable snapshot.
+            turn.restarted |= self._rollback(last) == 0
         n = turn.reused = len(self.fed)
-        turn.prefill_total = len(ids) - n
+        turn.prefill_total = last - n
+        turn.device_first = self.fpga_only
         # the snapshot of the state for the next turn's rollback: at the reply's start (MTP: a
         # token before, rollback's, unless the decoder holds the row before it), within this
         # turn's prompt
         at = self.reply_start(ids) if getattr(self.eng, "stateful", False) else None
         if at is not None and self.use_mtp and not self.mtp.holds:
             at -= 1
-        if at is not None and not n < at <= len(ids):
+        if at is not None and not n < at <= last:
             at = None
         logits = None
         vis = self._image_rows(ids, n, turn)
         if self.use_mtp:
             logits = self._prefill_mtp(ids, n, turn, t0, on_update, stop, at, vis)
         else:
-            cut = [at] if at is not None and at < len(ids) else []
-            for a, b in zip([n] + cut, cut + [len(ids)]):
-                kw = {} if b == len(ids) else {"logits": False}     # up to the snapshot: no head
+            cut = [at] if at is not None and at < last else []
+            for a, b in zip([n] + cut, cut + [last]):
+                if a >= b:
+                    continue
+                kw = {} if b == len(ids) else {"logits": False}     # no host logits needed
                 if vis is not None:
                     kw["vis"] = vis[a - n:b - n]
                 for part, logits in self.eng.prefill_chunks(ids[a:b], **kw):
@@ -618,6 +672,8 @@ class Chat:
                     break
                 if self.eng.pos == at:
                     self._snapshot()
+            if self.fpga_only and not turn.end:
+                logits = ids[-1]            # unconsumed prompt token, not a host-picked reply
         reply = self._decode(logits, [], turn, t0, on_update, stop)
         self.history.append({"role": "assistant", "content": reply})
         self.session.add(turn)
@@ -628,6 +684,7 @@ class Chat:
         """Continue the last reply where max_new cut it (can_resume): the same reply grows
         by up to max_new tokens more."""
         assert self.can_resume, "no reply to continue"
+        self._check_fpga_only()
         on_update = on_update or (lambda delta, turn: None)
         turn = Turn(clock_mhz=self.clock_mhz, cap=self.eng.cap, context=self.eng.pos)
         logits, self._next = self._next, None
@@ -732,6 +789,7 @@ class Chat:
     def _decode(self, logits, out: list[int], turn: Turn, t0: float, on_update, stop) -> str:
         """Generate after `out` (the reply so far) from `logits` (or, after a reply cut on the
         device, from its last token, an int: picked, not fed yet); returns the whole reply."""
+        self._check_fpga_only()
         self._experts(turn, False)
         if self.on_card:
             return self._decode_card(logits, out, turn, t0, on_update, stop)
@@ -799,11 +857,14 @@ class Chat:
 
     def _decode_card(self, logits, out: list[int], turn: Turn, t0: float, on_update,
                      stop) -> str:
-        """_decode with the decode loop on the device: the host picks the first token from the
-        prefill's logits (resume: the reply's last token, picked on the device), then each
+        """_decode with the decode loop on the device: normally the host picks the first token
+        from prefill logits; FPGA-only mode instead feeds the final prompt token through this
+        loop (resume: the reply's last token, picked on the device), then each
         Engine.generate_card run feeds it and generates the rest there (the sampler's settings
         and generator), up to max_new or an EOS id; the tokens are shown as they land. The
         last token of a run is not fed (a cut reply resumes from it)."""
+        if self.fpga_only and logits is not None and type(logits) is not int:
+            raise ValueError("FPGA-only mode refuses host logits/first-token sampling")
         eng = self.eng
         samp = None if getattr(self.pick, "greedy", False) else G.Sampling(**self.pick.params)
         out, n0 = list(out), len(out)
@@ -1020,6 +1081,10 @@ def main(argv=None):
                     help="compile a decode program per position (the fallback; by default "
                          "one resident program per 256-token bucket takes the position as a "
                          "run argument when the bitstream has them, CAPS bit25)")
+    ap.add_argument("--fpga-only", action="store_true",
+                    help="require a board's resident dense text generate loop, including the "
+                         "first token; reject host sampling/row/expert fallbacks (prompt "
+                         "chunk launches, setup and text output still use the host)")
     ap.add_argument("--prompt", help="ask one question and exit (plain output)")
     ap.add_argument("--plain", action="store_true",
                     help="a line-by-line REPL instead of the full-screen interface")
@@ -1095,6 +1160,8 @@ def main(argv=None):
                           "for: spin (the default), sleep S seconds, or predict each gap "
                           "(docs/offload.md 10.10): less host CPU, the same speed on Gen2")
     a = ap.parse_args(argv)
+    if a.fpga_only and (a.backend not in ("board", "board-sim") or a.per_position or a.mtp):
+        ap.error("--fpga-only needs --backend board or board-sim, resident, without --mtp")
     if a.top_p is not None and not 0 <= a.top_p <= 1:     # (Hugging Face's range)
         ap.error(f"--top-p {a.top_p}: 0 .. 1 (0 keeps the most likely token only)")
     path = model_dir(a.model)
@@ -1183,9 +1250,9 @@ def main(argv=None):
         khz = eng.backend.info.get("core_khz")
         clock = a.clock_mhz or (khz / 1e3 if khz else 100.0)
     try:
-        chat = Chat(eng, tok, a.think, pick, a.max_new, clock_mhz=clock)
+        chat = Chat(eng, tok, a.think, pick, a.max_new, clock_mhz=clock, fpga_only=a.fpga_only)
     except ValueError as e:                 # MTPDecoder's checks (one slice; PAIR, MCOLS)
-        raise SystemExit(f"otpu-chat: --mtp: {e}") from None
+        raise SystemExit(f"otpu-chat: {e}") from None
     if a.mtp and not chat.use_mtp:
         print("otpu-chat: --mtp: these sampling settings stay on the host; plain decode",
               flush=True)
