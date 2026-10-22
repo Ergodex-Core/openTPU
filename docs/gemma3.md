@@ -128,6 +128,9 @@ model. It publishes its second output only if the draft matches the first
 target pick, the first pick is not a stop ID, and two outputs remain. Drafts
 stay in private history rather than the streaming output buffer. A single-row
 program handles misses, the final bucket position, and a one-token budget.
+It also handles a proposed stop ID: verification could not produce a second
+output whether that proposal matches or fails. This rule does not use measured
+acceptance rates or prompt-specific thresholds.
 Host stop requests take effect after the current one- or two-output iteration.
 
 This path has separate ISA numerical/control tests. Instruction-memory fit is

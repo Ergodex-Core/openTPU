@@ -10,7 +10,7 @@ import pytest
 from opentpu.isasim import board_config
 from opentpu.llm import generate as G
 from opentpu.llm.gemma_specdec import (E, V, GemmaPromptLookupDecoder, S_ACC, S_ITER,
-                                      S_VER, compile_gen)
+                                      S_VER, compile_gen, prog_addr, ptab_addr)
 from opentpu.llm.qwen3 import Engine
 from test_gemma3 import tiny
 
@@ -203,3 +203,43 @@ def test_zero_budget_and_invalid_requests_do_not_mutate_prefix(tiny):
         with pytest.raises(ValueError):
             dec.generate_card(2, 1, context=context)
     assert candidate.pos == 0 and len(candidate.stats) == before
+
+
+@pytest.mark.parametrize("proposal,stops,next_kind", [
+    (1, [1, 106], E), (106, [1, 106], E), (50, [50], E),
+    (106, [], V), (50, [1, 106], V), (7, [1, 106], V),
+], ids=["bos-eos-set", "turn-eos", "custom-stop", "no-stops", "not-target-eos", "normal"])
+def test_device_lookup_bypasses_only_configured_stop_proposals(tiny, monkeypatch,
+                                                            proposal, stops, next_kind):
+    """An ISA control fixture, independent of the measured prompt and its IDs.
+
+    The first head pick is fixed to 42 solely to make every lookup branch
+    reachable. Separate tests compare the real numerical heads to plain decode.
+    The chained leaf's R3 tag observes the actual device decision.
+    """
+    from opentpu import isa as I, language as ol
+    _, weights, spec, _ = tiny
+    candidate = _engine(spec, weights, True, cap=256)
+    GemmaPromptLookupDecoder(candidate)
+    a, g = candidate.image.lookup["gemma_sd"], candidate.image.lookup["gen"]
+    p, seed = 3, 31
+    hist = np.zeros(a["n"], np.float32)
+    hist[:p + 1] = [42, proposal, 8, seed]
+    candidate.backend.write(0, a["hist"], hist)
+    candidate.backend.write(0, g["state"], G.state_words(spec, seed, p, 5, stops, candidate.block))
+    candidate.backend.write(0, g["out"] + 4 * (p + 1), np.full(5, G.OUT_MARK, np.uint32))
+    tab = np.zeros(4, np.uint32)
+    for kind in (V, E):
+        leaf = [I.li(3, 100 + kind), I.halt()]
+        at = prog_addr(a, 1, kind)
+        candidate.backend.write(0, at, I.assemble(leaf))
+        tab[2 * kind:2 * kind + 2] = [at, len(leaf)]
+    candidate.backend.write(0, ptab_addr(a, 1), tab)
+    monkeypatch.setattr(G.Greedy, "token", lambda self: ol.full([1], 42.0))
+    candidate.backend.run(compile_gen(candidate.image, 1, E))
+    assert candidate.backend.machine.chains == 1
+    assert candidate.backend.machine.slices[0].R[3] == 100 + next_kind
+    raw = candidate.backend.read(0, g["out"] + 4 * (p + 1), 20).view(np.uint32)
+    assert raw[0].view(np.float32) == 42.0 and (raw[1:] == G.OUT_MARK).all()
+    stored = candidate.backend.read(0, a["hist"] + 4 * (p + 2), 4).view(np.float32)
+    assert stored[0] == proposal

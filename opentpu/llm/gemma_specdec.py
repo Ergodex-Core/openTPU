@@ -162,6 +162,10 @@ def _program(m, pos, block: int, R: int, cap: int):
     lim = float(lc) + wrap * float(ln - lc)
     use_e = ol.maximum(ol.maximum(found * -1.0 + 1.0, _flag(tw - lim)),
                        _flag(2.0 - left))
+    # A stop-ID draft can never earn a second output: matching it ends the
+    # request at a0, and not matching it rejects the draft. Run just the seed.
+    # This depends only on the configured stop IDs, not observed acceptance.
+    use_e = ol.maximum(use_e, _stop(st, proposal))
     end = ol.maximum(ol.maximum(stop, ol.load(g.state[G.S_HALT:G.S_HALT + 1])),
                      _flag(left * -1.0 + 1.0))
     _args(b, at, words)
