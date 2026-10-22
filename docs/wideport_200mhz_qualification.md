@@ -229,6 +229,69 @@ owner build licensing or global license availability. No server endpoint was
 invented, no license checkout or configuration change occurred, and no physical
 build started. Receipts: `license-status-v3.json` and its context companion.
 
+## Bounded one/two-descriptor scheduling experiment (2026-10-22)
+
+This is the first static ownership/prefetch experiment informed by the reviewed
+Megakernels source at `7309cec801537b61fea3b50d7dfe454a6cde578e`:
+https://github.com/HazyResearch/Megakernels/tree/7309cec801537b61fea3b50d7dfe454a6cde578e.
+No GPU repository installation, runtime execution, numeric reordering or GPU
+benchmark extrapolation is involved.
+
+`tests/test_wideport_two_credit.py` compares the existing simulation-only
+`+hz_uq=0:1:0:0:0` and `+hz_uq=0:2:0:0:0` dispatch caps. Both runs use the exact
+same program, initial image, wait entries, compiled sources and parameters:
+PMP0, NCH8, PORTB4, RL4 W8 M1, two N13/KB9 MMs, disjoint weight/scale pages and
+output tiles, deterministic native stall50/seed7/lat120. The two MM inputs are
+identical and both output tiles must match. A small V_ADD finishes before the
+MM compute phase; this is not a transformer-layer or full-model benchmark.
+
+The first BAR/NOP control was rejected: BAR intentionally allows early weight
+prefetch in this RTL, so it did not serialize descriptor starts. Its traces and
+failed assertion remain in `two-credit-v1`. The corrected control gates dispatch
+until the previous instruction completes, without changing synthesized RTL.
+This tests the benefit already provided by the existing two-descriptor design;
+it does not introduce or prove a new production scheduling improvement.
+
+| Short fixture result | One credit | Two credits |
+|---|---:|---:|
+| RTL run cycles | 1,464 | 1,198 |
+| Second MM start, pre-edge trace cycle | 1,179 | 359 |
+| First / second MM output committed | 1,174 / 1,562 | 1,256 / 1,293 |
+| Last-old to first-new accepted native weight-read gap | 800 | -76 |
+| Owner weight / scale native payload bytes, both MMs | 36,864 / 16,384 | 36,864 / 16,384 |
+| Peak weight / scale FIFO entries | 36 / 36 | 72 / 72 |
+| Peak result FIFO rows | 1 | 1 |
+| Whole-TMEM/DRAM exact ISA and A/B match | pass | pass |
+
+The complete fixture saves 266 cycles (18.17%) with no extra weight/scale
+traffic and no observed ownership/dependency violations. Earlier prefetch also
+delays the first MM's output by 82 cycles, so the analysis includes competition
+with other traffic rather than subtracting a fitted handoff penalty. Signed
+read gaps and phase gaps denote overlap when negative; they are not additive
+idle-cycle budgets. Native port statistics cover boot and non-MM traffic too.
+
+`tools/wideport_credit_budget.py` audits native channel-order read identities,
+separate weight/scale arrivals, pop-order compute ownership, pipelined result
+credits, drain, commits and conservative last-response page-release boundaries.
+Actual buffer reuse/overwrite is not exercised. Exact dispatch timestamps,
+explicit buffer release and accumulator availability remain uninstrumented;
+per-owner collective completion is only a later-event candidate. Activation
+readiness uses the fixture's sole preceding QACT completion.
+
+Six focused tests passed in 2.90s on EC2. A saved-artifact audit independently
+reconstructed both tiny ISA executions, checked original input/source hashes,
+revalidated native timing, resource feedback and 2,889 coupled read-prefix
+cycles, with no RTL rerun. Receipts are in `two-credit-v2/two-credit-2ds9puw7/`
+including `comparison.json`, `credit-budget.json` and `final-credit-audit.json`.
+
+This budget is an oracle analysis, not an independent sequencer or whole-program
+LPN predictor. Calibration stays false and TPS null. Before chunk-level ready
+edges or production scheduling changes, model command dispatch/release and
+drain feedback independently, instrument missing ownership transitions, and
+use a bounded dependent-producer/consumer fixture with exact operand/scale and
+collective visibility. Neither this experiment nor nominal clock scaling proves
+full-model accepted-output TPS, physical timing closure or FPGA execution.
+
 ## Physical target and prerequisites
 
 Target `f2-hbm:p4rl8a64tdp`: S1, D128, PORTB4, MCOLS8, row lanes, ALINE64,
