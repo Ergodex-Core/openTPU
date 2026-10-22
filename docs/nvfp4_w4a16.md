@@ -3,8 +3,9 @@
 This implements the proposal's contract/reference, a single F24 decode-align-dot
 block, and a folded FP32 epilogue. It is independently testable and is not
 connected to the sequencer, DMA, existing ACT RAM, model runtime or F2 shell.
-The strict BF16/E2M1 tree is still a software oracle; the new RTL accepts its
-already-rounded FP32 subtotal or a separately labeled approximate F24 subtotal.
+The [third gate](nvfp4_local_job.md) adds the strict BF16/E2M1 tree in RTL and a
+bounded descriptor-to-private-result controller. The earlier F24 mode remains
+separately labeled; it does not substitute for strict tree validation.
 
 ## Second gate: FP32 epilogue and ownership
 
@@ -294,8 +295,9 @@ simulations; clock-cycle counts are not F2 frequency or TPS measurements.
 
 ## Next implementation gate and exclusions
 
-Next implement the strict folded BF16/E2M1 tree in RTL, then a bounded local
-buffer/job controller connecting one checked descriptor to a private result.
+The strict folded tree and bounded local-stream job controller are now implemented
+and described in [the third gate](nvfp4_local_job.md). Next connect authorized
+memory/tile buffers and real output visibility to the checked logical job.
 Retain explicit generation/drain ownership and qualify a selected implementation
 under the actual F2 Vivado/HDK flow before pipelining or replicating arithmetic.
 The wide-port worker owns the separate two-credit prefetch A/B experiment.
