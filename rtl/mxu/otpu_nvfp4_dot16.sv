@@ -4,7 +4,7 @@
 // Seven registered stages, II=1 when unstalled. A full output freezes ALL stages.
 // Nonfinite active BF16 or signed/NaN scale: invalid=1, dot/e/discarded=0.
 // Reset discards in-flight transactions. Upstream owns tag generations/lifetimes.
-module otpu_nvfp4_dot16 (
+module otpu_nvfp4_dot16 #(parameter integer TAG_W = 32) (
   input  logic clk,
   input  logic rst,
   input  logic in_valid,
@@ -13,7 +13,7 @@ module otpu_nvfp4_dot16 (
   input  logic [63:0] in_w,        // lane i: [4*i +: 4], even K low nibble
   input  logic [15:0] in_mask,     // missing tail terms: exact +0, no validation
   input  logic [7:0] in_scale,     // unsigned finite E4M3FN: 00..7e
-  input  logic [31:0] in_tag,
+  input  logic [TAG_W-1:0] in_tag,
   output logic out_valid,
   input  logic out_ready,
   output logic signed [40:0] out_dot,
@@ -21,14 +21,14 @@ module otpu_nvfp4_dot16 (
   output logic out_discarded,     // any nonzero alignment bits discarded
   output logic out_invalid,
   output logic [7:0] out_scale,
-  output logic [31:0] out_tag
+  output logic [TAG_W-1:0] out_tag
 );
   logic advance;
   logic [6:0] valid;
   logic signed [8:0] exps [0:6];
   logic [6:0] invalid, discarded;
   logic [7:0] scales [0:6];
-  logic [31:0] tags [0:6];
+  logic [TAG_W-1:0] tags [0:6];
   logic [7:0] mant_in [0:15], mant [0:15];
   logic signed [8:0] exp_in [0:15], exp_lane [0:15];
   logic sign_a [0:15], sign_in [0:15];
