@@ -1,0 +1,250 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "started_utc": "2026-10-23T11:15:47.132095+00:00",
+  "hardware_executed": false,
+  "model_forward_executed": false,
+  "physical_open_attempts": 0,
+  "cpu_forward_attempts": 0,
+  "source_files": {
+    "opentpu/llm/staged.py": "426220258c426c85da10406da6b140f1bc4fb77d6ec5638ffce6723e49c8c165",
+    "opentpu/host/validation_window.py": "65e3452707bdeaa1596135290de4e66f2688634dd2831cfaa8741a11bdf55554",
+    "tests/test_staged_models.py": "ed796af6772550cf4b9a00efbff6fea79307da0c0d361ef43dd4246aa098de2c",
+    "tests/test_validation_window.py": "4f6fa475aa9b0ecb1e62f4fc97ce75669cf332cc5bd4f2c8fe8231f313a8d7d7",
+    "tools/nanbeige_stage.py": "a1c11f8f73446ad5723eeb22939e961adffddc0734a000aa433ea88cc7522207",
+    "tests/test_nanbeige_stage.py": "8f5ee2e3a8dd1609a9cdfaf801f2c56e643e6eb0b4055b82a400edae538fe71b",
+    "docs/data/nanbeige_wideport/physical-gate.py": "9e91b792d30eb3601812f8182f3c8ae541ebd5c0595582e76cd0eaad024a8914"
+  },
+  "affinity": [
+    21
+  ],
+  "old_300_second_harness_allowed": false,
+  "outage_budget_qualified": false,
+  "updated_utc": "2026-10-23T11:17:54.944099+00:00",
+  "elapsed_seconds": 126.72627581807319,
+  "timestamp_utc": "2026-10-23T11:17:53.858935+00:00",
+  "preparation_seconds": 126.72662709408905,
+  "profile_contract": {
+    "arch_hash": 3714814630,
+    "core_khz": 150000,
+    "platform": 5,
+    "channels": 8,
+    "channel_bytes": 536870912,
+    "build_id": 1098007537,
+    "image": "agfi-0001de1dd3df8e21e"
+  },
+  "native_helper_preparation_seconds": 0.03355241590179503,
+  "source_hash": "917ce91eba930b5523d41d9da0df3eb5",
+  "models": {
+    "nanbeige": {
+      "name": "nanbeige",
+      "config": {
+        "S": 1,
+        "D": 128,
+        "MCOLS": 8,
+        "ACT_BLOCKS": 128,
+        "TMEM_WORDS": 65536,
+        "DRAM_BYTES": 4294967296,
+        "IMEM_WORDS": 32768,
+        "LANES": 8,
+        "PAIR": true,
+        "DSTEP": true,
+        "STREAM": true,
+        "ACT_ROWS": 16,
+        "PORTB": 4,
+        "T2": true,
+        "ROWLANES": true,
+        "ALINE": 64,
+        "SEQ_WC": true
+      },
+      "cap": 128,
+      "image_bytes": [
+        4247624448
+      ],
+      "image_sha256": [
+        "d98035c9818f2641c21700178cead5d9207cd82d3c7b58035826d2a2cfa2b84c"
+      ],
+      "cases": [
+        {
+          "name": "raw",
+          "prompt": [
+            166100,
+            15050
+          ],
+          "expected": [
+            90956,
+            13
+          ]
+        },
+        {
+          "name": "raw_reset_replay",
+          "prompt": [
+            166100,
+            15050
+          ],
+          "expected": [
+            90956,
+            13
+          ]
+        }
+      ],
+      "provenance": {
+        "source_hash": "917ce91eba930b5523d41d9da0df3eb5",
+        "profile": {
+          "arch_hash": 3714814630,
+          "core_khz": 150000,
+          "platform": 5,
+          "channels": 8,
+          "channel_bytes": 536870912,
+          "build_id": 1098007537,
+          "image": "agfi-0001de1dd3df8e21e"
+        },
+        "checkpoint_identity": [
+          [
+            "config.json",
+            1959,
+            1792509092039850313,
+            ""
+          ],
+          [
+            "model-00001-of-00002.safetensors",
+            4171576104,
+            1792509110073210143,
+            "b2d9ef0c923222e4309aa4065de0cd43"
+          ],
+          [
+            "model-00002-of-00002.safetensors",
+            1020788864,
+            1792509095987929074,
+            "1b8f0a2bfd4d617423a028849cd72513"
+          ]
+        ],
+        "model": {
+          "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+          "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+        },
+        "precision_source_equivalent": false
+      },
+      "prepared_programs": 2,
+      "program_words": [
+        7136,
+        7576
+      ],
+      "preparation_seconds": 102.44508902099915,
+      "numpy_version": "2.5.4",
+      "hardware_executed": false,
+      "model_forward_executed": false,
+      "host_images_read_only": true,
+      "identity": "1e835dd35457c2ea1c61abc2991f0d3f8cf225410e1221709523ba30735f8e46"
+    },
+    "gemma": {
+      "name": "gemma",
+      "config": {
+        "S": 1,
+        "D": 128,
+        "MCOLS": 8,
+        "ACT_BLOCKS": 128,
+        "TMEM_WORDS": 65536,
+        "DRAM_BYTES": 4294967296,
+        "IMEM_WORDS": 32768,
+        "LANES": 8,
+        "PAIR": true,
+        "DSTEP": true,
+        "STREAM": true,
+        "ACT_ROWS": 16,
+        "PORTB": 4,
+        "T2": true,
+        "ROWLANES": true,
+        "ALINE": 64,
+        "SEQ_WC": true
+      },
+      "cap": 768,
+      "image_bytes": [
+        1396966272
+      ],
+      "image_sha256": [
+        "27cae27dfa8e0ba85c31fd2d85f447580c19e6fc9dcd21303d97f09c0aeb9a35"
+      ],
+      "cases": [
+        {
+          "name": "verify",
+          "prompt": [
+            2,
+            105,
+            2364,
+            107,
+            11355,
+            563,
+            506,
+            7217,
+            3730,
+            236881,
+            25685,
+            528,
+            886,
+            13315,
+            236761,
+            106,
+            107,
+            105,
+            4368,
+            107
+          ],
+          "expected": [
+            818,
+            7217
+          ]
+        }
+      ],
+      "provenance": {
+        "source_hash": "917ce91eba930b5523d41d9da0df3eb5",
+        "profile": {
+          "arch_hash": 3714814630,
+          "core_khz": 150000,
+          "platform": 5,
+          "channels": 8,
+          "channel_bytes": 536870912,
+          "build_id": 1098007537,
+          "image": "agfi-0001de1dd3df8e21e"
+        },
+        "checkpoint_identity": [
+          [
+            "config.json",
+            899,
+            1791998728259188630,
+            ""
+          ],
+          [
+            "model.safetensors",
+            1999811208,
+            1791998769875224988,
+            "73c9c1257862cf66c7b26631e57fc7b0"
+          ]
+        ],
+        "baseline_config_sha256": "19cb5d28c97778271ba2b3c3df47bf76bdd6706724777a2318b3522230afe91e"
+      },
+      "prepared_programs": 4,
+      "program_words": [
+        5320,
+        6328,
+        6592,
+        6904
+      ],
+      "preparation_seconds": 19.874268386978656,
+      "numpy_version": "2.5.4",
+      "hardware_executed": false,
+      "model_forward_executed": false,
+      "host_images_read_only": true,
+      "identity": "6bcd909dd28525c4afc0526e60560353248e929d08cc51650e5c998de7da2365"
+    }
+  },
+  "retained_image_bytes": 5644590720,
+  "physical_acceptance": "pending",
+  "production_mutated": false,
+  "max_total_outage_seconds": 30,
+  "owner_adapter_implemented": false,
+  "peak_rss_bytes": 9118728192,
+  "resident_rss_bytes": 8110280704,
+  "retained_hold_seconds": 1.0,
+  "finished_utc": "2026-10-23T11:17:54.944062+00:00"
+}

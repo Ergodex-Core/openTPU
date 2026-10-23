@@ -1,0 +1,19 @@
+{
+  "status": "complete",
+  "started_utc": "2026-10-23T11:11:56.411482+00:00",
+  "publication_base": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+  "source_files": {
+    "opentpu/llm/staged.py": "426220258c426c85da10406da6b140f1bc4fb77d6ec5638ffce6723e49c8c165",
+    "opentpu/host/validation_window.py": "65e3452707bdeaa1596135290de4e66f2688634dd2831cfaa8741a11bdf55554",
+    "tests/test_staged_models.py": "ed796af6772550cf4b9a00efbff6fea79307da0c0d361ef43dd4246aa098de2c",
+    "tests/test_validation_window.py": "4f6fa475aa9b0ecb1e62f4fc97ce75669cf332cc5bd4f2c8fe8231f313a8d7d7",
+    "tools/nanbeige_stage.py": "a1c11f8f73446ad5723eeb22939e961adffddc0734a000aa433ea88cc7522207",
+    "tests/test_nanbeige_stage.py": "8f5ee2e3a8dd1609a9cdfaf801f2c56e643e6eb0b4055b82a400edae538fe71b",
+    "docs/data/nanbeige_wideport/physical-gate.py": "9e91b792d30eb3601812f8182f3c8ae541ebd5c0595582e76cd0eaad024a8914"
+  },
+  "hardware_used": false,
+  "physical_open_attempts": 0,
+  "exit_code": 0,
+  "seconds": 44.02265594305936,
+  "finished_utc": "2026-10-23T11:12:40.493919+00:00"
+}

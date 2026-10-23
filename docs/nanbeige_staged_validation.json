@@ -1,0 +1,71 @@
+{
+  "publication_base": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+  "branch": "codex/nanbeige-staged-host-20261023",
+  "tests": {
+    "passed": 148,
+    "pytest_seconds": 43.94,
+    "command_id": "dd246e72-8de2-4009-9d45-74074d19a55e",
+    "physical_open_attempts": 0
+  },
+  "host_preparation": {
+    "preparation_seconds": 126.72662709408905,
+    "retained_image_bytes": 5644590720,
+    "peak_rss_bytes": 9118728192,
+    "resident_rss_bytes": 8110280704,
+    "native_helper_preparation_seconds": 0.03355241590179503,
+    "source_hash": "917ce91eba930b5523d41d9da0df3eb5",
+    "models": {
+      "nanbeige": {
+        "preparation_seconds": 102.44508902099915,
+        "image_bytes": [
+          4247624448
+        ],
+        "prepared_programs": 2,
+        "program_words": [
+          7136,
+          7576
+        ],
+        "identity": "1e835dd35457c2ea1c61abc2991f0d3f8cf225410e1221709523ba30735f8e46",
+        "numpy_version": "2.5.4"
+      },
+      "gemma": {
+        "preparation_seconds": 19.874268386978656,
+        "image_bytes": [
+          1396966272
+        ],
+        "prepared_programs": 4,
+        "program_words": [
+          5320,
+          6328,
+          6592,
+          6904
+        ],
+        "identity": "6bcd909dd28525c4afc0526e60560353248e929d08cc51650e5c998de7da2365",
+        "numpy_version": "2.5.4"
+      }
+    },
+    "command_id": "7708a71e-261b-431e-b2a4-06d9e2c167d2",
+    "physical_open_attempts": 0,
+    "cpu_forward_attempts": 0,
+    "retention_after_measurement": "buffers released on process exit; --hold or owner process needed for a future window"
+  },
+  "max_total_outage_seconds": 30,
+  "outage_budget_qualified": false,
+  "production_owner_adapter_implemented": false,
+  "hardware_validated": false,
+  "old_300_second_harness_allowed": false,
+  "remaining_blockers": [
+    "production-owner integration for atomic idle gating, prepared-buffer adoption, normal dual-lock handoff, verified restore and reopening",
+    "bounded physical Nanbeige upload/execution/cleanup and same-owner Gemma restoration timings",
+    "transport/native-call deadline behavior and independent restoration watchdog"
+  ],
+  "source_files": {
+    "opentpu/llm/staged.py": "426220258c426c85da10406da6b140f1bc4fb77d6ec5638ffce6723e49c8c165",
+    "opentpu/host/validation_window.py": "65e3452707bdeaa1596135290de4e66f2688634dd2831cfaa8741a11bdf55554",
+    "tests/test_staged_models.py": "ed796af6772550cf4b9a00efbff6fea79307da0c0d361ef43dd4246aa098de2c",
+    "tests/test_validation_window.py": "4f6fa475aa9b0ecb1e62f4fc97ce75669cf332cc5bd4f2c8fe8231f313a8d7d7",
+    "tools/nanbeige_stage.py": "a1c11f8f73446ad5723eeb22939e961adffddc0734a000aa433ea88cc7522207",
+    "tests/test_nanbeige_stage.py": "8f5ee2e3a8dd1609a9cdfaf801f2c56e643e6eb0b4055b82a400edae538fe71b",
+    "docs/data/nanbeige_wideport/physical-gate.py": "9e91b792d30eb3601812f8182f3c8ae541ebd5c0595582e76cd0eaad024a8914"
+  }
+}
