@@ -46,8 +46,9 @@ The compiled depth layout with six layers, 16 heads, 128 physical positions
 and 64-wide heads padded to 128 uses 3,244,032 bytes. The native runtime overrides
 JSON context8 to None and uses a 16-step cache; its final-step boundary defect
 excludes slot0. The [reusable depth layer](personaplex_depth_layer.md) implements
-that pinned policy, independent per-layer KV and reset. One checkpoint layer
-and synthetic composition are validated; six-layer checkpoint execution is not.
+that pinned policy, independent per-layer KV and reset. All six checkpoint
+layers now execute over16 saved diagnostic inputs with exact output/cache reset
+on CPU/ISA; source-reference error remains separate from implementation parity.
 Codec state, prompt-cache capacity and complete activation liveness remain
 unverified.
 
@@ -87,8 +88,8 @@ correct halted paging before considering a separately qualified overlap scheme.
 Measured six-layer layout and compilation give 1,253,031,936 bytes for all
 16 INT8 banks per layer, including shared norms and repeated chunk scales.
 The program uses 24,088 of 32,768 instruction words with no host arguments.
-One checkpoint layer has been materialized and executed; the full six-layer
-checkpoint payload has not. Sixteen 4096→1024 input projections add 67,698,688
+All six checkpoint layers have now been materialized and executed on CPU/ISA,
+including exact reset replay. This is standalone depth, not full speech. Sixteen 4096→1024 input projections add 67,698,688
 bytes, already materialized and CPU/ISA-validated. B would hold 1,320,730,624
 bytes with 21,446,656 bytes of slack. Programs, KV and interstage activations
 belong in P; the standalone layout must be relocated accordingly. Unified
@@ -116,7 +117,7 @@ allocation only. It is not proof that the complete speech model fits4GiB.
    submissions exchange only persistent addresses, never host activation math.
 3. Device final norm/text head stores its greedy text ID in a token slot.
 4. Depth step0 reads that ID, selects its projection/text embedding and runs
-   the compiled six-layer depth program after checkpoint/integration validation. Its audio head stores the
+   the six-layer depth program after shared-residency/integration validation. Its audio head stores the
    greedy audio ID directly for the next step. Steps1–15 use device-selected
    projection/previous-audio embeddings and appropriate per-step weights/state.
 5. Update delayed stream queues on device. Add Mimi stages only after their
@@ -175,3 +176,14 @@ normal canonical/legacy locks and fresh exact image/profile/capability/calibrati
 idle/drained/error checks. Preserve warm Gemma and wide-port priority. Do not
 restore burst200 or infer compatibility from frequency. This planning step used
 no hardware and measured no new FPGA performance.
+
+## Bounded implementation sequence
+
+The [resident depth-chain plan](personaplex_depth_chain_plan.md) is the next
+concrete software deliverable. Reuse final P/B placements with A empty; combined
+listed depth weights/projections/step tables/audio heads/KV total1,614,954,496B
+before I/O/masks/programs/alignment. Add a sparse shared allocator and one runner,
+alias interstage vectors, and keep counter/token feedback on device. The current
+depth program increments the counter; audio selection must use counter−1.
+Validate this16-step resident chain before refactoring four temporal packets.
+None of that shared runtime is implemented by the standalone checkpoint checker.

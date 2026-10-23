@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""One real-checkpoint depth layer over16 codebooks plus reset, CPU/ISA only.
+"""One or six real-checkpoint depth layers over16 codebooks plus reset, CPU/ISA only.
 
 Uses cached conditioning outputs and actual installed native streaming layer.
-No temporal resimulation, complete six-layer run, audio generation or FPGA use.
+No temporal resimulation, audio generation or FPGA use.
 """
 from __future__ import annotations
 import os
@@ -78,6 +78,56 @@ def native_pass(model,inputs):
     return np.stack(outputs),positions
 
 
+def native_stack(layers, spec):
+    """Original native transformer container with strictly loaded source layers."""
+    import torch
+    from moshi.modules.transformer import StreamingTransformer
+    if len(layers) != spec.layers or spec.layers < 1:
+        raise ValueError("Native stack layer count differs from specification")
+    pending = iter(layers)
+    one = replace(spec, layers=1)
+    def loaded_layer(**kwargs):
+        # StreamingTransformer owns order, streaming propagation and offset state.
+        # native_layer performs strict state loading with no random leftover tensor.
+        if kwargs["rope"] is not None or kwargs["context"] is not None:
+            raise ValueError("Unexpected native depth position/context configuration")
+        return native_layer(next(pending), one)
+    return StreamingTransformer(d_model=spec.hidden, num_heads=spec.n_heads,
+        num_layers=spec.layers, dim_feedforward=3*spec.ffn//2, causal=True,
+        context=None, positional_embedding="none", norm="rms_norm_f32",
+        layer_scale=None, gating="silu", weights_per_step=spec.steps,
+        layer_class=loaded_layer, device="cpu", dtype=torch.float32).eval()
+
+
+def native_stack_pass(model, inputs):
+    """Record each native layer and its actual cache positions without replacing math."""
+    import torch
+    outputs = []
+    positions = [[] for _ in model.layers]
+    intermediate = [[] for _ in model.layers]
+    hooks = []
+    try:
+        with torch.no_grad(), model.streaming(1):
+            for index, layer in enumerate(model.layers):
+                cache = layer.self_attn._streaming_state.kv_cache
+                complete = cache.complete
+                def record(k, v, complete=complete, index=index):
+                    result = complete(k, v)
+                    positions[index].append(result.positions.detach().cpu().tolist())
+                    return result
+                cache.complete = record
+                def capture(module, args, output, index=index):
+                    intermediate[index].append(output.detach().numpy().reshape(-1).copy())
+                hooks.append(layer.register_forward_hook(capture))
+            for row in inputs:
+                value = model(torch.from_numpy(row).reshape(1,1,-1))
+                outputs.append(value.detach().numpy().reshape(-1).copy())
+    finally:
+        for hook in hooks:
+            hook.remove()
+    return np.stack(outputs), positions, np.stack([np.stack(x) for x in intermediate], axis=1)
+
+
 def check_native_positions(positions,steps):
     if len(positions)!=steps:
         raise AssertionError("Native cache did not record every depth step")
@@ -89,7 +139,11 @@ def check_native_positions(positions,steps):
             raise AssertionError(f"Native cache position contract changed at step{step}")
 
 
-def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
+def run(model_dir,conditioning_dir,output_dir,*,layer_index=0,layers=1,single_layer_dir=None):
+    if layers not in (1, 6) or (layers == 6 and layer_index != 0):
+        raise ValueError("Checker supports one selected layer or all six layers from index0")
+    if layers == 6 and single_layer_dir is None:
+        raise ValueError("Six-layer check requires its completed one-layer baseline")
     import torch
     from moshi.modules.transformer import StreamingTransformerLayer
     torch.set_num_threads(1)
@@ -116,7 +170,41 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
     if not np.isfinite(values).all() or set(map(int,requests[:16,0]))!=set(range(16)):
         raise ValueError("Invalid bounded conditioning input coverage")
     order=np.argsort(requests[:16,0]);inputs=values[:16][order].copy()
-    weights=MLXWeights(model_dir);metadata=weights.depth_layer_metadata(layer_index)
+    weights=MLXWeights(model_dir)
+    if layers == 6 and weights.config["depformer"]["num_layers"] != 6:
+        raise ValueError("Expected the pinned six-layer depth checkpoint")
+    indices = list(range(6)) if layers == 6 else [layer_index]
+    metadata=[item for index in indices for item in weights.depth_layer_metadata(index)]
+    single_files = {}
+    prior = None
+    if layers == 6:
+        single_layer_dir = Path(single_layer_dir).resolve()
+        if (output_dir == single_layer_dir or output_dir in single_layer_dir.parents
+                or single_layer_dir in output_dir.parents):
+            raise ValueError("Output must be isolated from the one-layer baseline")
+        prior_path = single_layer_dir/"depth_layer_check.json"
+        if prior_path.stat().st_size > 1<<20:
+            raise ValueError("One-layer receipt exceeds1MiB")
+        prior = json.loads(prior_path.read_text())
+        if (prior.get("status") != "completed" or prior.get("layer_index") != 0
+                or prior.get("spec",{}).get("layers") != 1
+                or prior.get("reset_bit_exact") is not True
+                or prior.get("kv_reset_bit_exact") is not True
+                or prior.get("native_reset_bit_exact") is not True
+                or prior.get("checkpoint_revision") != PINNED_REVISION):
+            raise ValueError("Completed pinned layer0 baseline with reset is required")
+        for name in ("inputs", "native_hidden", "isa_kv"):
+            path = single_layer_dir/(name+".npy")
+            if sha256(path) != prior[name+"_output"]["sha256"]:
+                raise ValueError("One-layer baseline array hash differs")
+            single_files[path] = sha256(path)
+        single_files[prior_path] = sha256(prior_path)
+        exact(np.load(single_layer_dir/"inputs.npy",allow_pickle=False),inputs,"saved single-layer inputs")
+        if prior["baseline_receipt_sha256"] != sha256(basepath):
+            raise ValueError("One-layer baseline used another conditioning receipt")
+        for name in ("opentpu/llm/personaplex_depth_layer.py","opentpu/llm/personaplex_weights.py"):
+            if sha256(ROOT/name) != prior["source_files"][name]:
+                raise ValueError("Core depth implementation differs from one-layer baseline")
     files={}
     for name in ("config.json","depformer.safetensors"):
         path=model_dir/name;stat=path.stat();files[name]={"bytes":stat.st_size,"mtime_ns":stat.st_mtime_ns}
@@ -129,7 +217,7 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
     for name,digest in EXPECTED_NATIVE_SOURCE.items():
         if sha256(native_root/name)!=digest:
             raise ValueError(f"Native contract source changed: {name}")
-    cfg=target.config(target.load(str(PROFILE)));spec=DepthLayerSpec()
+    cfg=target.config(target.load(str(PROFILE)));spec=DepthLayerSpec(layers=layers)
     layout=DepthLayerImage(spec,cfg);program=layout.compile()
     six=DepthLayerImage(replace(spec,layers=6),cfg);six_program=six.compile()
     # CPU simulator may allocate only the required mapped range. Production
@@ -138,9 +226,9 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
     receipt={"status":"running","stage":"materializing_one_layer","started_utc":datetime.now(timezone.utc).isoformat(),
         "backend":"isa","hardware_used":False,"hardware_performance_measured":False,
         "full_fpga_model_inference":False,"speech_generated":False,"quality_accepted":False,
-        "scope":"One depth transformer layer,16 device-selected banks and persistent KV, plus reset replay",
+        "scope":f"{layers} depth transformer layer(s),16 device-selected banks each and persistent KV, plus reset replay",
         "input_scope":"Reordered cached conditioning outputs from four saved temporal frames; bounded diagnostic sequence",
-        "checkpoint_revision":PINNED_REVISION,"checkpoint_files":files,"layer_index":layer_index,
+        "checkpoint_revision":PINNED_REVISION,"checkpoint_files":files,"layer_index":layer_index,"layer_indices":indices,
         "component_metadata":metadata,"checkpoint_payload_hashes_verified":False,
         "baseline_receipt_sha256":sha256(basepath),"baseline_input_sha256":sha256(inputs_path),
         "baseline_requests_sha256":sha256(requests_path),"input_source_case_order":order.tolist(),
@@ -164,16 +252,34 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
         raise InterruptedError("Depth layer check interrupted; inspect receipt before retry")
     previous=signal.signal(signal.SIGTERM,interrupted);engine=None;started=time.perf_counter();save()
     try:
-        materialize=time.perf_counter();lazy=weights.depth_layer_weights(layer_index)
-        layer={"norm1":lazy["norm1"],"norm2":lazy["norm2"],"steps":[{k:bank[k] for k in bank} for bank in lazy["steps"]]}
+        materialize=time.perf_counter();payload=[]
+        for index in indices:
+            receipt.update(stage="materializing_source_layer",source_layer=index);save()
+            lazy=weights.depth_layer_weights(index)
+            payload.append({"norm1":lazy["norm1"],"norm2":lazy["norm2"],
+                "steps":[{k:bank[k] for k in bank} for bank in lazy["steps"]]})
         receipt["source_materialize_cpu_seconds"]=time.perf_counter()-materialize
-        receipt['stage']='native_reference';save();native=native_layer(layer,spec)
-        original,positions=native_pass(native,inputs);check_native_positions(positions,spec.steps)
+        receipt['stage']='native_reference';save()
+        if layers == 1:
+            native=native_layer(payload[0],spec)
+            original,positions=native_pass(native,inputs);check_native_positions(positions,spec.steps)
+            original_repeat,_=native_pass(native,inputs)
+        else:
+            native=native_stack(payload,spec)
+            original,positions,intermediate=native_stack_pass(native,inputs)
+            for per_layer in positions:check_native_positions(per_layer,spec.steps)
+            original_repeat,repeated_positions,repeated_intermediate=native_stack_pass(native,inputs)
+            if positions != repeated_positions:raise AssertionError("Native cache positions changed after reset")
+            exact(repeated_intermediate,intermediate,"native layerwise reset")
+            exact(intermediate[:,0,:],np.load(single_layer_dir/"native_hidden.npy",allow_pickle=False),"native layer0 baseline")
+            receipt.update(single_layer_native_bit_exact=True,
+                single_layer_baseline_sha256=single_files[single_layer_dir/"depth_layer_check.json"])
         receipt['native_cache_positions']=positions
-        original_repeat,_=native_pass(native,inputs);exact(original_repeat,original,'native reset')
+        exact(original_repeat,original,'native reset')
         receipt['native_reset_bit_exact']=True;del native
         receipt['stage']='building_isa_image';save();build=time.perf_counter()
-        engine=DepthLayerEngine([layer],spec=spec,cfg=isa_cfg)
+        engine=DepthLayerEngine(payload,spec=spec,cfg=isa_cfg)
+        del payload
         receipt['image_build_cpu_seconds']=time.perf_counter()-build
         actual=[]
         for step,row in enumerate(inputs):
@@ -182,7 +288,12 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
             if engine.read_counter()!=step+1:
                 raise AssertionError('Device counter did not advance exactly once')
             actual.append(value);receipt['frames'].append({'step':step,'precision':precision_metrics(value,original[step]),'stats':engine.last_stats});save()
-        actual=np.stack(actual);cached=engine.read_cache();receipt['precision_delta']=precision_metrics(actual,original)
+        actual=np.stack(actual);caches=[engine.read_cache(i) for i in range(layers)]
+        cached=np.concatenate(caches);receipt['precision_delta']=precision_metrics(actual,original)
+        if layers == 6:
+            if not np.array_equal(caches[0],np.load(single_layer_dir/"isa_kv.npy",allow_pickle=False)):
+                raise AssertionError("Integrated layer0 KV differs from completed one-layer baseline")
+            receipt['single_layer_isa_kv_bit_exact']=True
         engine.reset()
         if engine.read_counter()!=0:
             raise AssertionError('Device counter reset failed')
@@ -192,10 +303,13 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
             if engine.read_counter()!=step+1:
                 raise AssertionError('Device reset counter diverged')
             receipt['reset_frames'].append({'step':step,'stats':engine.last_stats})
-        if not np.array_equal(engine.read_cache(),cached):
-            raise AssertionError('Full16-step reset KV bytes differ')
+        for index,before in enumerate(caches):
+            if not np.array_equal(engine.read_cache(index),before):
+                raise AssertionError(f'Full16-step reset KV bytes differ at layer{index}')
         receipt.update(reset_bit_exact=True,kv_reset_bit_exact=True)
-        for name,array in [('inputs',inputs),('isa_hidden',actual),('native_hidden',original),('isa_kv',cached)]:
+        arrays=[('inputs',inputs),('isa_hidden',actual),('native_hidden',original),('isa_kv',cached)]
+        if layers == 6:arrays.append(('native_layer_hidden',intermediate))
+        for name,array in arrays:
             path=output_dir/(name+'.npy')
             with path.open('xb') as handle:np.save(handle,array,allow_pickle=False)
             receipt[name+'_output']={'sha256':sha256(path),'shape':list(array.shape),'dtype':str(array.dtype)}
@@ -206,6 +320,9 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
             if {'bytes':stat.st_size,'mtime_ns':stat.st_mtime_ns}!=before:raise RuntimeError('Checkpoint changed during check')
         for name,digest in EXPECTED_NATIVE_SOURCE.items():
             if sha256(native_root/name)!=digest:raise RuntimeError('Native source changed during check')
+        for path,digest in single_files.items():
+            if sha256(path)!=digest:raise RuntimeError('One-layer baseline changed during check')
+        receipt['six_layer_capacity_only']['checkpoint_execution_tested'] = layers == 6
         receipt.update(status='completed',stage='completed')
     except BaseException as error:
         receipt.update(status='failed',error=f'{type(error).__name__}: {error}',traceback=traceback.format_exc());raise
@@ -219,8 +336,11 @@ def run(model_dir,conditioning_dir,output_dir,*,layer_index=0):
 
 def main():
     p=argparse.ArgumentParser(description=__doc__);p.add_argument('--model-dir',required=True);p.add_argument('--conditioning-dir',required=True)
-    p.add_argument('--output-dir',required=True);p.add_argument('--layer-index',type=int,default=0);a=p.parse_args()
-    result=run(a.model_dir,a.conditioning_dir,a.output_dir,layer_index=a.layer_index)
+    p.add_argument('--output-dir',required=True);p.add_argument('--layer-index',type=int,default=0)
+    p.add_argument('--layers',type=int,choices=[1,6],default=1)
+    p.add_argument('--single-layer-dir');a=p.parse_args()
+    result=run(a.model_dir,a.conditioning_dir,a.output_dir,layer_index=a.layer_index,
+               layers=a.layers,single_layer_dir=a.single_layer_dir)
     print(json.dumps({k:result[k] for k in ['status','precision_delta','reset_bit_exact','kv_reset_bit_exact','native_reset_bit_exact','cpu_wall_seconds']},indent=2))
 
 

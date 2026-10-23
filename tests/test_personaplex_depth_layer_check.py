@@ -47,3 +47,59 @@ def test_existing_receipt_is_never_overwritten(tmp_path):
     receipt=saved/'depth_layer_check.json';receipt.write_text('preserved')
     with pytest.raises(FileExistsError):run(tmp_path/'model',tmp_path/'baseline',saved)
     assert receipt.read_text()=='preserved'
+
+
+def test_native_stack_uses_original_container_order_independent_caches_and_reset():
+    from contextlib import ExitStack
+    import torch
+    from moshi.modules.transformer import StreamingTransformer
+    from tools.personaplex_depth_layer_check import native_stack, native_stack_pass
+    spec=DepthLayerSpec(hidden=32,n_heads=2,ffn=64,steps=4,layers=2)
+    rng=np.random.default_rng(867)
+    payload=[]
+    for index in range(spec.layers):
+        layer=zero_layer(spec)
+        layer['norm1']*=1+index/4
+        for bank in layer['steps']:
+            for name,value in bank.items():bank[name]=rng.normal(0,.05,value.shape).astype(np.float32)
+        payload.append(layer)
+    inputs=rng.normal(size=(4,32)).astype(np.float32)
+    model=native_stack(payload,spec)
+    assert isinstance(model,StreamingTransformer)
+    actual,positions,intermediate=native_stack_pass(model,inputs)
+    for history in positions:check_native_positions(history,4)
+    one=replace(spec,layers=1)
+    independent=[native_layer(layer,one) for layer in payload]
+    expected=[];first=[]
+    with torch.no_grad(),ExitStack() as context:
+        for layer in independent:context.enter_context(layer.streaming(1))
+        for row in inputs:
+            value=torch.from_numpy(row).reshape(1,1,-1)
+            for index,layer in enumerate(independent):
+                value=layer(value)
+                if index==0:first.append(value.detach().numpy().reshape(-1).copy())
+            expected.append(value.detach().numpy().reshape(-1).copy())
+    np.testing.assert_array_equal(actual.view(np.uint32),np.stack(expected).view(np.uint32))
+    np.testing.assert_array_equal(intermediate[:,0,:].view(np.uint32),np.stack(first).view(np.uint32))
+    replay,repeated,replayed_intermediate=native_stack_pass(model,inputs)
+    np.testing.assert_array_equal(replay.view(np.uint32),actual.view(np.uint32))
+    np.testing.assert_array_equal(replayed_intermediate.view(np.uint32),intermediate.view(np.uint32))
+    assert repeated==positions
+    assert all(not layer._forward_hooks for layer in model.layers)
+
+
+@pytest.mark.parametrize('count',[0,2])
+def test_native_stack_rejects_payload_count(count):
+    from tools.personaplex_depth_layer_check import native_stack
+    spec=DepthLayerSpec(hidden=32,n_heads=2,ffn=64,steps=4)
+    with pytest.raises(ValueError,match='layer count'):
+        native_stack([zero_layer(spec)]*count,spec)
+
+
+@pytest.mark.parametrize('kwargs',[
+    {'layers':2}, {'layers':0}, {'layers':6,'layer_index':1}, {'layers':6},
+])
+def test_unbounded_or_unbased_stack_check_is_rejected(tmp_path,kwargs):
+    with pytest.raises(ValueError,match='Checker supports|requires its completed'):
+        run(tmp_path/'model',tmp_path/'conditioning',tmp_path/'out',**kwargs)
+    assert not (tmp_path/'out').exists()

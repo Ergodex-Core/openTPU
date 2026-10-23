@@ -110,9 +110,9 @@ hashes and checkpoint/native-source metadata remained unchanged.
 
 The later [reusable depth layer](personaplex_depth_layer.md) implements native
 per-step weights, RMSNorm/SiLU, attention and persistent device KV. One real
-checkpoint layer and reset are CPU/ISA-validated; six layers compile within the
-current program/memory limits. Full six-layer checkpoint execution, resident
-stage integration, stream/prompt/cache/delay scheduling, Mimi/RVQ and PCM
+checkpoint layer and reset were initially CPU/ISA-validated; the later six-layer
+check now executes all layers with exact output/KV reset and reported source
+error. Resident stage integration, stream/prompt/cache/delay scheduling, Mimi/RVQ and PCM
 validation remain. Prior temporal32.9% error and181.39ms/frame
 are still unaccepted; a correct conditioning stage does not establish quality.
 

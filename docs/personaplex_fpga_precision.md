@@ -107,7 +107,7 @@ Output NPY SHA-256 for both mixed backends is
 | Temporal transformer, KV and final norm | FPGA, measured above | Precision acceptance, context/capacity and latency improvements |
 | RoPE coefficients | Resident device table in the CPU/ISA-validated token slice; original temporal bridge computes on host | Qualified physical combined-path validation |
 | Text vocabulary projection | INT8 device head/greedy in the CPU/ISA-validated token slice; original server still uses CPU | Combined physical path and quality acceptance |
-| Depth projections, step embeddings, six-layer depth transformer and audio heads | Standalone conditioning/audio-head programs and one checkpoint depth layer validated on CPU/ISA; six-layer program compiled, integrated server remains CPU | Six-layer checkpoint correctness, unified state/residency and physical chaining |
+| Depth projections, step embeddings, six-layer depth transformer and audio heads | Standalone conditioning/audio-head programs and all six checkpoint depth layers/reset validated on CPU/ISA; integrated server remains CPU | Unified state/residency, generated-sequence quality and physical chaining |
 | Temperature, top-k and token sampling/RNG | Native CPU LMGen; device greedy is implemented in standalone heads | Explicit greedy-only final mode, or separately implement native stochastic mode |
 
 `personaplex_bridge.install_bridge` replaces only `lm.transformer` and
