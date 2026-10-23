@@ -1,0 +1,94 @@
+{
+  "tokenizer": {
+    "revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+    "files": [
+      {
+        "name": "vocab.json",
+        "bytes": 2776833,
+        "sha256": "ca10d7e9fb3ed18575dd1e277a2579c16d108e32f27439684afa0e10b1440910",
+        "git_blob_sha1": "4783fe10ac3adce15ac8f358ef5462739852c569"
+      },
+      {
+        "name": "merges.txt",
+        "bytes": 1671839,
+        "sha256": "599bab54075088774b1733fde865d5bd747cbcc7a547c5bc12610e874e26f5e3",
+        "git_blob_sha1": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0"
+      },
+      {
+        "name": "tokenizer_config.json",
+        "bytes": 7344,
+        "sha256": "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670",
+        "git_blob_sha1": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7"
+      }
+    ],
+    "transformers_available": true
+  },
+  "prompts": [
+    {
+      "text": "Hello.",
+      "wrapped": "<|im_start|>assistant\nHello.<|im_end|>\n<|im_start|>assistant\n",
+      "input_ids": [
+        151644,
+        77091,
+        198,
+        9707,
+        13,
+        151645,
+        198,
+        151644,
+        77091,
+        198
+      ],
+      "body_ids": [
+        9707,
+        13
+      ]
+    },
+    {
+      "text": "Good morning.",
+      "wrapped": "<|im_start|>assistant\nGood morning.<|im_end|>\n<|im_start|>assistant\n",
+      "input_ids": [
+        151644,
+        77091,
+        198,
+        15216,
+        6556,
+        13,
+        151645,
+        198,
+        151644,
+        77091,
+        198
+      ],
+      "body_ids": [
+        15216,
+        6556,
+        13
+      ]
+    },
+    {
+      "text": "The FPGA speaks.",
+      "wrapped": "<|im_start|>assistant\nThe FPGA speaks.<|im_end|>\n<|im_start|>assistant\n",
+      "input_ids": [
+        151644,
+        77091,
+        198,
+        785,
+        89462,
+        21191,
+        13,
+        151645,
+        198,
+        151644,
+        77091,
+        198
+      ],
+      "body_ids": [
+        785,
+        89462,
+        21191,
+        13
+      ]
+    }
+  ]
+}

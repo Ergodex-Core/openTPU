@@ -1,0 +1,7 @@
+{
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "header_sha256": "b125649e98d52f4ac605666a212eee68c6f4f5faf9b9a5e7b930565b578f96a1",
+  "tensors": 316,
+  "tensor_contract_sha256": "bb91d158fbdee5e680a5f8c94085354ce8ddcbca216ec91de4b6537726a274df",
+  "parameter_elements": 764218368
+}
