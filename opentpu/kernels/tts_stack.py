@@ -5,6 +5,19 @@ from ..compiler import current
 from .attention import _attend
 from .lib import rmsnorm, rope
 from .mlp import swiglu_down
+from .tts_talker import _embedding
+from .tts_projection import text_projection
+
+
+@ol.jit
+def talker_role_row(m):
+    """Source role prefix: projected text only, with no codec embedding added."""
+    ids = ol.load(m.ids)
+    ol.store(m.text_scratch, _embedding(m.text_embedding, ids[0:1]))
+    text_projection.fn(m.text_scratch, m.fc1, m.bias1, m.fc2, m.bias2, m.projected)
+    projected = ol.load(m.projected)
+    ol.store(m.assembled, projected)
+    ol.store(m.output, projected)
 
 
 @ol.jit

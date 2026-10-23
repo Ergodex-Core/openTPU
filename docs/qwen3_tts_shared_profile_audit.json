@@ -1,0 +1,140 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_sha": "30100afb075374381601a6e01d9f914a58dbec91",
+  "target_file_sha256": "8e28c82c378a60c62288c334f2cb3752d568639ebb1f6c45552f35af87860f3b",
+  "programs": [
+    {
+      "capacity": 512,
+      "position": 0,
+      "kind": "role",
+      "parts": 30,
+      "dram_bytes": 1742852480,
+      "total_imem_words": 70920,
+      "max_part_imem_words": 2520,
+      "max_tmem_words": 15160,
+      "opcodes": {
+        "LI": 2,
+        "LD": 428,
+        "RLD": 1,
+        "ST": 64,
+        "QACT": 759,
+        "MM": 1235,
+        "VOP": 5898,
+        "HALT": 30,
+        "QST": 448
+      },
+      "mm_flags": [
+        2,
+        64,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        16,
+        18,
+        32,
+        38
+      ]
+    },
+    {
+      "capacity": 512,
+      "position": 256,
+      "kind": "aligned",
+      "parts": 29,
+      "dram_bytes": 1742852480,
+      "total_imem_words": 90640,
+      "max_part_imem_words": 3432,
+      "max_tmem_words": 15162,
+      "opcodes": {
+        "LI": 3,
+        "LD": 652,
+        "RLD": 2,
+        "ST": 63,
+        "QACT": 983,
+        "MM": 1683,
+        "VOP": 7467,
+        "QST": 448,
+        "HALT": 29
+      },
+      "mm_flags": [
+        2,
+        64,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        16,
+        18,
+        32,
+        38
+      ]
+    },
+    {
+      "capacity": 32768,
+      "position": 32767,
+      "kind": "aligned",
+      "parts": 29,
+      "dram_bytes": 3666858368,
+      "total_imem_words": 155592,
+      "max_part_imem_words": 5744,
+      "max_tmem_words": 15162,
+      "opcodes": {
+        "LI": 58,
+        "LD": 1324,
+        "RLD": 2,
+        "ST": 63,
+        "QACT": 1655,
+        "MM": 3027,
+        "VOP": 11723,
+        "QST": 448,
+        "LOOP": 224,
+        "ADDI": 896,
+        "HALT": 29
+      },
+      "mm_flags": [
+        2,
+        64,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        18,
+        32,
+        38
+      ]
+    }
+  ],
+  "historical_caps": "f70a0ef3",
+  "historical_caps2": "00000039",
+  "live_registers_read": false
+}

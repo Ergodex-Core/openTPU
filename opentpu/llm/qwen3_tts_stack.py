@@ -14,7 +14,7 @@ from .. import isa as I
 from .. import quant as Q
 from ..compiler import KVDesc, QTensor, k_scale_bytes
 from ..isasim import Machine
-from ..kernels.tts_stack import talker_layer, codec_logits
+from ..kernels.tts_stack import talker_layer, codec_logits, talker_role_row
 from .qwen3_tts_talker import TalkerBlockImage, _tensor
 
 
@@ -86,10 +86,20 @@ class TalkerStackImage(TalkerBlockImage):
     def compile(self, position):
         raise NotImplementedError("use sequential compile_parts; parts are not parallel slices")
 
-    def compile_parts(self, position):
-        programs, budget = TalkerBlockImage.compile(self, position)
-        parts = [("layer.0", programs, budget)]
-        for index, layer in enumerate(self.layers[1:], 1):
+    def compile_parts(self, position, input_kind="aligned"):
+        if input_kind not in ("aligned", "role"):
+            raise ValueError("unsupported talker input row kind")
+        if type(position) is not int or not 0 <= position < self.capacity:
+            raise ValueError("position outside resident KV capacity")
+        if input_kind == "aligned":
+            programs, budget = TalkerBlockImage.compile(self, position)
+            parts = [("layer.0", programs, budget)]
+            first = 1
+        else:
+            b = talker_role_row.trace(self.cfg, 0, {"m": self.desc})
+            parts = [("prompt.role", [b.finish()], {"tmem_peak_words": b.tmem_peak})]
+            first = 0
+        for index, layer in enumerate(self.layers[first:], first):
             b = talker_layer.trace(self.cfg, 0, {"m": layer, "position": position,
                                                "attention_block": self.attention_block})
             parts.append((f"layer.{index}", [b.finish()], {"tmem_peak_words": b.tmem_peak}))
@@ -117,9 +127,9 @@ class StackISASession:
         n = 4 * math.prod(t.shape)
         return self.machine.slices[0].dram[t.base.const:t.base.const + n].view(np.float32).copy().reshape(-1)
 
-    def step(self, text_id, codec_id, observe=None):
+    def step(self, text_id, codec_id, observe=None, *, input_kind="aligned"):
         encoded = self.image.token_bytes(text_id, codec_id)
-        parts = self.image.compile_parts(self.position)
+        parts = self.image.compile_parts(self.position, input_kind)
         address = self.image.desc.ids.base.const
         self.machine.slices[0].dram[address:address + 8] = encoded
         for name, programs, _ in parts:

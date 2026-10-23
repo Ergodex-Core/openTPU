@@ -18,6 +18,7 @@ from opentpu.target import load
 from opentpu.llm.qwen3_tts import MODEL_ID, MODEL_REVISION, SOURCE_REVISION
 from opentpu.llm.qwen3_tts_talker import TalkerSpec
 from opentpu.llm.qwen3_tts_stack import TalkerStackImage, StackISASession
+from opentpu.llm.qwen3_tts_shared import shared_tts_config, profile_metadata
 from tools.qwen3_tts_checkpoint_acceptance import BF16Checkpoint, metrics, sha256
 from qwen3_tts_stack_reference import StackReference
 
@@ -56,7 +57,7 @@ def run(args):
     reader = BF16Checkpoint(args.checkpoint, manifest)
     config = json.loads((ROOT / "tests/fixtures/qwen3_tts_06b_config.json").read_text())
     spec = TalkerSpec.from_config(config)
-    cfg = Config(**{k: v for k, v in load("f2").arch.items() if k in Config.__dataclass_fields__})
+    cfg = shared_tts_config()
     image = TalkerStackImage(spec, cfg, 512)
     weights = {name: reader.tensor(name, shape) for name, (_, _, shape) in image.parameters.items()}
     references = {"fp64": StackReference(spec, weights, 28),
@@ -135,6 +136,7 @@ def run(args):
                          "greedy_mismatch_positions": {policy: [r["position"] for r in rows if not r[name]["greedy"][policy]["agrees"]] for policy in ("raw", "fixed_mask")}}
     parity = all(count == len(pairs) for s in summary.values() for count in s["greedy_agreement_counts"].values())
     result = {"model_id": MODEL_ID, "model_revision": MODEL_REVISION, "source_revision": SOURCE_REVISION,
+              "target_profile": profile_metadata(),
               "checkpoint_manifest": manifest, "layers": 28, "parameter_tensors": len(image.parameters),
               "parameter_elements": sum(math.prod(shape) for _, _, shape in image.parameters.values()),
               "positions": len(pairs), "input_semantics": "Common diagnostic aligned rows, not valid full CustomVoice prompts or free-running audio",

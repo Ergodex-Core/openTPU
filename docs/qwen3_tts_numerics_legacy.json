@@ -1,0 +1,228 @@
+{
+  "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "target_profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "checkpoint_manifest": {
+    "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+    "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+    "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+    "license": "Apache-2.0",
+    "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/resolve/85e237c12c027371202489a0ec509ded67b5e4b5/model.safetensors",
+    "file_bytes": 1811626576,
+    "file_sha256": "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
+    "header_bytes": 49224,
+    "header_sha256": "b125649e98d52f4ac605666a212eee68c6f4f5faf9b9a5e7b930565b578f96a1",
+    "metadata_sha256": "d83a2c21996b42c230418a42641abca1aa6dae2e4e70d20bd62aaeba0845a105",
+    "verified_lfs_sha256": true,
+    "checkpoint_path": "/home/ubuntu/qwen3-tts-checkpoint-20261023-01/model.safetensors",
+    "weight_file_only": true,
+    "upstream_code_executed": false,
+    "hardware_access": false,
+    "materialized_utc": "2026-10-23T10:48:24Z"
+  },
+  "layers": 28,
+  "parameter_tensors": 316,
+  "parameter_elements": 764218368,
+  "positions": 16,
+  "input_semantics": "Common diagnostic aligned rows, not valid full CustomVoice prompts or free-running audio",
+  "summary": {
+    "fp64": {
+      "layer_max_relative_l2": [
+        0.021630956084779357,
+        0.05099071316355521,
+        0.07042135390036601,
+        0.10933255983344367,
+        0.10150096585554155,
+        0.10655947500960365,
+        0.09761602900102342,
+        0.09244825636326814,
+        0.09464002158298347,
+        0.10865319125495576,
+        0.12777217381901598,
+        0.11101994102176835,
+        0.18810985244010084,
+        0.18242412023730287,
+        0.21742590147783764,
+        0.2525242214240238,
+        0.2709173592712895,
+        0.2763876468984599,
+        0.2807171557176034,
+        0.2898309065201798,
+        0.27834645093208216,
+        0.37613776739843924,
+        0.2998365663579606,
+        0.29521171675554925,
+        0.3562834617289511,
+        0.3905773021780738,
+        0.4030976948627283,
+        0.5415149258461044
+      ],
+      "max_normalized_relative_l2": 0.5146400706472309,
+      "max_logit_relative_l2": 0.5119109888624311,
+      "mean_logit_relative_l2": 0.25270909150536736,
+      "min_logit_cosine": 0.8744332032198815,
+      "max_absolute_logit_error": 8.245486698603408,
+      "greedy_agreement_counts": {
+        "raw": 10,
+        "fixed_mask": 10
+      },
+      "greedy_mismatch_positions": {
+        "raw": [
+          5,
+          6,
+          7,
+          9,
+          12,
+          14
+        ],
+        "fixed_mask": [
+          5,
+          6,
+          7,
+          9,
+          12,
+          14
+        ]
+      }
+    },
+    "bf16_eager": {
+      "layer_max_relative_l2": [
+        0.024924746717084098,
+        0.0575949920817065,
+        0.07449228429479425,
+        0.1155714289020835,
+        0.10855688198979116,
+        0.11366970520736976,
+        0.10399613975431035,
+        0.09806725319864375,
+        0.10280922493179694,
+        0.11832637827322087,
+        0.1371720182713003,
+        0.12339700785092589,
+        0.20227898007769265,
+        0.19526340588541868,
+        0.23206036022488416,
+        0.27076653187267513,
+        0.2877564989495074,
+        0.2950860071009467,
+        0.29692234503029147,
+        0.30424524003912673,
+        0.29564533284576033,
+        0.3997609874071866,
+        0.3209200511840949,
+        0.31716413894699563,
+        0.3825919119200174,
+        0.4203510949733527,
+        0.4388806167980156,
+        0.5971363047924124
+      ],
+      "max_normalized_relative_l2": 0.5752671287219415,
+      "max_logit_relative_l2": 0.566330135491451,
+      "mean_logit_relative_l2": 0.27880728491358936,
+      "min_logit_cosine": 0.8455371966706885,
+      "max_absolute_logit_error": 10.099275588989258,
+      "greedy_agreement_counts": {
+        "raw": 12,
+        "fixed_mask": 12
+      },
+      "greedy_mismatch_positions": {
+        "raw": [
+          6,
+          9,
+          10,
+          12
+        ],
+        "fixed_mask": [
+          6,
+          9,
+          10,
+          12
+        ]
+      }
+    }
+  },
+  "greedy_parity_observed": false,
+  "reference_greedy_agreement_count": 11,
+  "future_cache_bitwise_mismatch_positions": [],
+  "device_greedy_invariant_mismatch_positions": [],
+  "reset_bitwise_mismatch_positions": [],
+  "reset_positions": 2,
+  "budgets": [
+    {
+      "capacity": 512,
+      "position": 0,
+      "dram_bytes": 1742852480,
+      "kv_bytes": 30277632,
+      "program_parts": 29,
+      "total_imem_words": 70928,
+      "max_part_imem_words": 2728,
+      "max_part_tmem_words": 15162
+    },
+    {
+      "capacity": 512,
+      "position": 256,
+      "dram_bytes": 1742852480,
+      "kv_bytes": 30277632,
+      "program_parts": 29,
+      "total_imem_words": 90640,
+      "max_part_imem_words": 3432,
+      "max_part_tmem_words": 15162
+    },
+    {
+      "capacity": 32768,
+      "position": 32767,
+      "dram_bytes": 3666858368,
+      "kv_bytes": 1937768448,
+      "program_parts": 29,
+      "total_imem_words": 155592,
+      "max_part_imem_words": 5744,
+      "max_part_tmem_words": 15162
+    }
+  ],
+  "imem_word_limit": 32768,
+  "dram_byte_limit": 4294967296,
+  "policy_limit": "Device raw/fixed-suppression greedy only; no repetition penalty or stochastic sampler",
+  "upstream_model_code_executed": false,
+  "hardware_access": false,
+  "tts_enabled": false,
+  "seconds": 112.09890987502877,
+  "python": "3.12.3",
+  "numpy": "2.5.4",
+  "torch": "2.14.1+cpu",
+  "code_sha256": {
+    "tools/qwen3_tts_stack_acceptance.py": "9156348cab800db00e5cabee234305e47df7349c2f46348493637882fe667544",
+    "opentpu/llm/qwen3_tts_stack.py": "924a827ecbe041162449b29000f9441e793459feb4b57d62d25f3dea6f6e16a7",
+    "opentpu/kernels/tts_stack.py": "f3817a8cdbbcf7bca2250c9e0864dfeae387883b8995156f85841cfc03631046",
+    "tests/qwen3_tts_stack_reference.py": "736d3cac0de1a5b2f8e6072e084fdc2a20effc08af07eb5a711763282b5d961c",
+    "tools/qwen3_tts_checkpoint_acceptance.py": "798da5f4cbb9da810b5d520b0f9542ef652739a5023d50c255d45cc41df2e8e8"
+  },
+  "positions_sha256": "8663d1d6ede90b40158119eeceaea226905fd9729d31a4fb99d54521e79faed1"
+}
