@@ -515,3 +515,106 @@ def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path
     with pytest.raises(FileExistsError):
         cli.main()
     assert output.read_bytes() == b"another writer's evidence" and closed == [True]
+
+
+@pytest.mark.parametrize("wformat,weight_formats,needs_w4", [
+    ("int8", None, False), ("int4", None, True),
+    ("int8", ("int8",), False), ("int8", ("int8", "int4"), True),
+    ("int4", ("int8",), False),
+])
+@pytest.mark.parametrize("after_probe", [False, True])
+def test_resolved_layer_formats_guard_w4_before_upload(cli, burst200_probe,
+                                                       wformat, weight_formats, needs_w4,
+                                                       after_probe):
+    from opentpu.host import regs as R
+    fixture = burst200_probe
+    options = {"wformat": wformat, "weight_formats": weight_formats}
+    session = cli.BoardSession("f2:0", **options) if after_probe else None
+    fixture.overrides[R.R_CAPS] = fixture.transport.reg_read(R.R_CAPS) & ~R.CAP_W4
+    try:
+        if needs_w4:
+            with pytest.raises(RuntimeError, match="require CAP_W4"):
+                if session is None:
+                    session = cli.BoardSession("f2:0", **options)
+                session.factory(fixture.cfg, [b"must not upload"])
+        else:
+            if session is None:
+                session = cli.BoardSession("f2:0", **options)
+            session.factory(fixture.cfg, [b"int8-only image"])
+    finally:
+        if session is not None:
+            session.close()
+    assert fixture.events["opened"] == ["f2:0"]
+    assert fixture.events["closed"] == 1 and not fixture.events["writes"]
+    assert len(fixture.events["uploads"]) == (0 if needs_w4 else 1)
+
+
+@pytest.mark.parametrize("weight_formats", [(), ("fp4",), ("int8", "nvfp4"), "int8", True])
+def test_invalid_resolved_formats_rejected_before_transport(cli, burst200_probe, weight_formats):
+    with pytest.raises(ValueError, match="resolved int4/int8"):
+        cli.BoardSession("f2:0", wformat="int8", weight_formats=weight_formats)
+    assert not burst200_probe.events["opened"]
+
+
+@pytest.mark.parametrize("formats", ["attn=fp4", "attn@2-1=int8", "unknown=int8"])
+def test_invalid_format_rules_rejected_before_board(cli, monkeypatch, tmp_path, formats):
+    from opentpu import target
+    from opentpu.llm import personaplex_temporal, personaplex_weights
+    from opentpu.isasim import Config
+    spec = personaplex_temporal.Spec(hidden=64, layers=2, n_heads=2, ffn=128)
+    cfg = Config(S=1, D=32, MCOLS=4, ACT_ROWS=8, ACT_BLOCKS=32,
+                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 22)
+    monkeypatch.setattr(personaplex_weights, "MLXWeights", lambda path: SimpleNamespace(spec=spec))
+    monkeypatch.setattr(target, "config", lambda profile: cfg)
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Invalid formats must fail before physical device access")
+
+    monkeypatch.setattr(cli, "BoardSession", forbidden)
+    inputs = tmp_path / "inputs.npy"
+    np.save(inputs, np.zeros((1, 64), np.float32))
+    monkeypatch.setattr(sys, "argv", ["personaplex_fpga.py", "benchmark", "--model-dir", str(tmp_path),
+                                     "--embeddings", str(inputs), "--cap", "4", "--formats", formats])
+    with pytest.raises(ValueError):
+        cli.main()
+
+
+@pytest.mark.parametrize("formats,expected", [
+    ("", {"int8"}), ("attn@0=int4", {"int4", "int8"}),
+    ("mlp@1=int4", {"int4", "int8"}), ("attn=int4,mlp=int4", {"int4"}),
+])
+def test_cli_forwards_actual_layer_formats_to_board(cli, monkeypatch, tmp_path, formats, expected):
+    from opentpu import target
+    from opentpu.llm import personaplex_temporal, personaplex_weights
+    from opentpu.isasim import Config
+    spec = personaplex_temporal.Spec(hidden=64, layers=2, n_heads=2, ffn=128)
+    cfg = Config(S=1, D=32, MCOLS=4, ACT_ROWS=8, ACT_BLOCKS=32,
+                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 22)
+    monkeypatch.setattr(personaplex_weights, "MLXWeights",
+                        lambda path: SimpleNamespace(spec=spec, layers=[], final_norm=[]))
+    monkeypatch.setattr(target, "config", lambda profile: cfg)
+    events = []
+
+    def session(dev, *, profile, wformat, weight_formats):
+        assert wformat == "int8" and weight_formats == expected
+        events.append("open")
+        return SimpleNamespace(cfg=cfg, factory=object(), info={}, close=lambda: events.append("close"))
+
+    class Engine:
+        last_stats = {}
+
+        def __init__(self, *args, **kwargs):
+            assert kwargs["formats"] == formats
+
+        def step(self, row):
+            return row
+
+    monkeypatch.setattr(cli, "BoardSession", session)
+    monkeypatch.setattr(personaplex_temporal, "Engine", Engine)
+    inputs = tmp_path / "inputs.npy"
+    np.save(inputs, np.zeros((1, 64), np.float32))
+    monkeypatch.setattr(sys, "argv", ["personaplex_fpga.py", "benchmark", "--model-dir", str(tmp_path),
+                                     "--embeddings", str(inputs), "--cap", "4", "--wformat", "int8",
+                                     "--formats", formats])
+    assert cli.main() == 0
+    assert events == ["open", "close"]

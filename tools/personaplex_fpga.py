@@ -24,23 +24,39 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 PROFILE = Path(__file__).parent / "data/personaplex/burst200.toml"
 
 
+def _board_profile(profile):
+    """Reject unsupported profiles without opening a transport or building an image."""
+    from opentpu.target import config, load
+    baseline, selected = load(str(PROFILE)), load(str(profile))
+    if (config(selected) != config(baseline) or selected.kind != baseline.kind
+            or selected.platform_id != baseline.platform_id
+            or selected.core_khz != baseline.core_khz
+            or selected.uarch != baseline.uarch
+            or any(selected.platform.get(key) != baseline.platform.get(key)
+                   for key in ("mem", "mem_ctrl", "hostcal", "channels_per_slice",
+                               "channel_bytes", "beat_bytes"))):
+        raise ValueError("board execution requires the recorded burst200 profile")
+    return selected
+
+
 class BoardSession:
     """Hold the transport lock and qualify burst200 before any device writes."""
 
-    def __init__(self, dev, *, profile=PROFILE, wformat="int4"):
+    def __init__(self, dev, *, profile=PROFILE, wformat="int4", weight_formats=None):
         from opentpu.host.board import open_transport
-        from opentpu.target import config, load
-        baseline, selected = load(str(PROFILE)), load(str(profile))
-        if (config(selected) != config(baseline) or selected.kind != baseline.kind
-                or selected.platform_id != baseline.platform_id
-                or selected.core_khz != baseline.core_khz
-                or selected.uarch != baseline.uarch
-                or any(selected.platform.get(key) != baseline.platform.get(key)
-                       for key in ("mem", "mem_ctrl", "hostcal", "channels_per_slice",
-                                   "channel_bytes", "beat_bytes"))):
-            raise ValueError("board execution requires the recorded burst200 profile")
+        from opentpu.target import config
+        selected = _board_profile(profile)
         if wformat not in ("int4", "int8"):
             raise ValueError("board weights must use int4 or int8")
+        # The base format can be INT8 while explicit layer overrides use INT4.
+        # Callers that omit resolved formats retain the original uniform API.
+        try:
+            resolved = frozenset((wformat,) if weight_formats is None else weight_formats)
+        except TypeError as exc:
+            raise ValueError("weight_formats must contain resolved int4/int8 formats") from exc
+        if not resolved or not resolved <= {"int4", "int8"}:
+            raise ValueError("weight_formats must contain resolved int4/int8 formats")
+        self.weight_formats = resolved
         self.profile, self.wformat = selected, wformat
         self.expected_cfg = config(selected)
         self.transport = open_transport(dev)
@@ -77,7 +93,7 @@ class BoardSession:
             raise ConfigMismatch("FPGA compute configuration does not match the burst200 profile")
         if not caps.get("args"):
             raise ConfigMismatch("PersonaPlex requires runtime argument registers (CAP_ARGS)")
-        if self.wformat == "int4" and not caps.get("w4"):
+        if "int4" in self.weight_formats and not caps.get("w4"):
             raise ConfigMismatch("INT4 PersonaPlex weights require CAP_W4")
         status = info["status"]
         calibration = R.ST_CALIB0 | R.ST_CALIB1
@@ -394,19 +410,26 @@ def main():
         parser.error("serve requires --backend board")
     inputs = (validate_embeddings(args.embeddings, spec, args.cap)
               if args.mode == "benchmark" else None)
+    # Resolve every layer and reject invalid rules/layouts before opening a device.
+    # BoardSession independently requires the probed config to equal this profile.
+    if args.backend == "board":
+        _board_profile(args.profile)
+    cfg = config(args.profile)
+    report = inspect_layout(spec, cfg, args.cap, args.wformat, formats=args.formats)
+    if not report["fits"]:
+        raise MemoryError("PersonaPlex temporal image exceeds the profile device memory")
     session = None
     engine = None
     try:
         if args.backend == "board":
-            session = BoardSession(args.dev, profile=args.profile, wformat=args.wformat)
+            resolved = {fmt for layer in report["weight_formats"]["layers"] for fmt in layer}
+            session = BoardSession(args.dev, profile=args.profile, wformat=args.wformat,
+                                   weight_formats=resolved)
             cfg, backend = session.cfg, session.factory
             print(json.dumps({"board": session.info}, default=str), flush=True)
         else:
-            cfg, backend = config(args.profile), "isa"
-        report = inspect_layout(spec, cfg, args.cap, args.wformat, formats=args.formats)
+            backend = "isa"
         print(json.dumps(report, indent=2), flush=True)
-        if not report["fits"]:
-            raise MemoryError("PersonaPlex temporal image exceeds the probed device memory")
         engine = TimedEngine(Engine(spec, weights.layers, weights.final_norm, cfg=cfg,
                                    backend=backend, cap=args.cap, wformat=args.wformat,
                                    formats=args.formats), args.backend)

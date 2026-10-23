@@ -282,6 +282,12 @@ class Engine:
             cfg = replace(probe_cfg, DRAM_BYTES=probe.required_bytes)
         self.cfg = cfg
         self.image = Image(spec, cfg, cap, wformat, formats=formats)
+        if backend == "board" and wformat == "int8" and any(
+                "int4" in layer for layer in self.image.lf):
+            # The shared direct backend checks only the base/head formats. A
+            # qualified factory must check actual layer formats before upload.
+            raise ValueError("INT4 layer overrides with an INT8 base require a "
+                             "qualified backend factory for board execution")
         # Catch hardware instruction/TMEM capacity errors before costly quantization.
         for bucket in range(1, (cap + self.image.block - 1) // self.image.block + 1):
             self._programs[bucket] = self.image.compile_bucket(bucket)

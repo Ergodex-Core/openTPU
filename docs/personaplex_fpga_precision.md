@@ -71,6 +71,16 @@ open attempts. The combined test/cap1024 job exited1 solely at the instruction
 capacity gate; cap128 then passed separately. The four-frame mixed ISA check and
 four reset replays completed successfully in386.81 seconds of CPU job wall time.
 
+Follow-up review added capability guards for INT4 overrides under an INT8 base:
+the CLI resolves actual layer formats before opening a transport, checks CAP_W4
+at both probes, and preserves early rejection of an unsupported board profile.
+The direct `Engine(backend="board")` reverse-base path requires a qualified
+backend factory. After fixing an error-ordering regression caught by the first
+guard run (106 passed,1 failed), both changed suites passed:107 tests in14.27s,
+zero physical transport opens, SSM `017409d5-f798-4f3f-981e-84a6699c633e`.
+These guards do not alter the measured base-INT4 candidate's arithmetic, so the
+checkpoint simulation and physical execution were not repeated.
+
 Evidence IDs: layerwise attribution `ec1b905f-b600-4640-a0d3-6569ccdba87d`;
 CPU aggregate `0cff5212-37ac-41b9-bb08-42a4e373a4d8`; cap128
 `6679458e-4f0b-4b64-94d0-ea5d71da9c5d`; mixed ISA
@@ -123,3 +133,8 @@ locks nonblocking, and queue/return busy on `DeviceBusy`. Monitors read status
 and lock metadata without attempting lock acquisition or quiescing the card.
 Never release another owner's locks, restart services or program an image as an
 availability probe. Saved receipts do not establish current card availability.
+`BoardSession` owns the canonical transport lock; the validation driver acquires
+the legacy lock separately. A UI adapter must provide that same wrapper and a
+shared queue; neither the queue nor the legacy wrapper is an HTTP API here.
+A long-lived `serve` process holds the card for its lifetime, so it must not be
+launched as an automatic availability or UI startup check.

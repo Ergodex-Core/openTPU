@@ -359,3 +359,58 @@ def test_first_four_and_last_int8_layer_candidate_layout_without_weight_allocati
     assert candidate.weight_code_bytes - baseline.weight_code_bytes == 5 * (
         int8.weight_code_bytes - int4.weight_code_bytes)
     assert candidate.required_bytes <= 1 << 32
+
+
+
+def test_direct_board_rejects_reverse_base_int4_before_compile_build_or_transport(monkeypatch):
+    from opentpu.host import board
+    spec, cfg, _, _, _ = fixture_model()
+    events = []
+
+    def forbidden(*args, **kwargs):
+        events.append("side effect")
+        raise AssertionError("Reject the format combination before compile/build/device access")
+
+    monkeypatch.setattr(Image, "compile_bucket", forbidden)
+    monkeypatch.setattr(Image, "build", forbidden)
+    monkeypatch.setattr(board, "BoardBackend", forbidden)
+    monkeypatch.setattr(board, "open_transport", forbidden)
+    with pytest.raises(ValueError, match="qualified backend factory"):
+        Engine(spec, object(), object(), cfg=cfg, backend="board", cap=1,
+               wformat="int8", formats="attn@1=int4", transport=object())
+    assert events == []
+
+
+def test_reverse_base_int4_override_accepts_backend_factory(monkeypatch):
+    from types import SimpleNamespace
+    from opentpu.host import board
+    spec, cfg, weights, norm, _ = fixture_model()
+    events = []
+    images = [b"synthetic image"]
+
+    def compile_bucket(image, bucket):
+        events.append("compile")
+        return [[]], []
+
+    def build(image, layer_weights, final_norm):
+        assert layer_weights is weights and final_norm is norm
+        events.append("build")
+        return images
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("A backend factory must not enter the direct board path")
+
+    def factory(actual_cfg, actual_images):
+        assert actual_cfg is cfg and actual_images is images
+        events.append("factory")
+        return SimpleNamespace(args=True, close=lambda: events.append("close"))
+
+    monkeypatch.setattr(Image, "compile_bucket", compile_bucket)
+    monkeypatch.setattr(Image, "build", build)
+    monkeypatch.setattr(board, "BoardBackend", forbidden)
+    monkeypatch.setattr(board, "open_transport", forbidden)
+    with Engine(spec, weights, norm, cfg=cfg, backend=factory, cap=1,
+                wformat="int8", formats="attn@1=int4") as engine:
+        assert engine.image.lf == (("int8", "int8", "int8"), ("int4", "int8", "int8"))
+        assert events == ["compile", "build", "factory"]
+    assert events == ["compile", "build", "factory", "close"]
