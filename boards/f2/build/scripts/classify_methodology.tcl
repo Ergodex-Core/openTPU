@@ -13,10 +13,18 @@ proc otpu_qualify_methodology {shell_dcp evidence_prefix audit} {
     set scoped [otpu_classify_scoped_clocks $names $evidence_prefix $audit]
     set inherited [dict get $shell inherited]
     set context [dict get $scoped context]
+    # The context findings a CL has (check_scoped_clocks.tcl names the CL it found, fail
+    # closed): the DDR CL three (the HDK's DDR UI clock group, the main / core pair), the HBM CL
+    # two (the pair). The 35 inherited shell findings are the same exact match for both.
+    if {![dict exists $scoped kind] || [dict get $scoped kind] ni {ddr hbm}} {
+        error "openTPU: the scoped-clock classifier did not name the CL"
+    }
+    set kind [dict get $scoped kind]
+    set want [dict get {ddr 3 hbm 2} $kind]
     set accepted [concat $inherited $context]
-    if {[llength $inherited] != 35 || [llength $context] != 3 ||
-        [llength [lsort -unique $accepted]] != 38} {
-        error "openTPU: unexpected methodology classification inventory"
+    if {[llength $inherited] != 35 || [llength $context] != $want ||
+        [llength [lsort -unique $accepted]] != 35 + $want} {
+        error "openTPU: unexpected methodology classification inventory ($kind CL: [llength $inherited] inherited, [llength $context] context)"
     }
     foreach name $accepted {
         if {$name ni $raw} {
@@ -25,8 +33,8 @@ proc otpu_qualify_methodology {shell_dcp evidence_prefix audit} {
     }
     set remaining {}
     foreach name $raw {if {$name ni $accepted} {lappend remaining $name}}
-    puts $audit [list methodology_summary raw_blockers [llength $raw] \
+    puts $audit [list methodology_summary cl $kind raw_blockers [llength $raw] \
         inherited_shell [llength $inherited] scoped_clock_context [llength $context] \
         remaining_blockers [llength $remaining]]
-    return [dict create raw_blockers $raw inherited $inherited context $context blockers $remaining]
+    return [dict create raw_blockers $raw inherited $inherited context $context blockers $remaining kind $kind]
 }

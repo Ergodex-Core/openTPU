@@ -12,9 +12,22 @@ if {[lindex [exec sha256sum -- $parent_dcp] 0] ne $::env(OTPU_PARENT_SHA256)} {
   error "openTPU: inherited routed DCP hash mismatch"
 }
 open_checkpoint $parent_dcp
-source ${scripts_dir}/inspect_ddr_init.tcl
-if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
-  error "openTPU: inherited DDR firmware sentinel mismatch"
+# The parent's CL (route_opt.py, from its frozen target): the DDR CL carries the DIMM's
+# calibration firmware, its sentinel pinned by the launcher (OTPU_EXPECTED_DDR_INIT); the HBM CL
+# (platform mem "hbm": no DIMM, the SmartConnect fabric WRAPPER/CL/u_sc) has none, and the
+# launcher passes none_hbm. The checkpoint must be that CL.
+set otpu_expect_hbm [expr {$::env(OTPU_EXPECTED_DDR_INIT) eq "none_hbm"}]
+set otpu_sc_cells [llength [get_cells -quiet WRAPPER/CL/u_sc]]
+if {($otpu_expect_hbm && $otpu_sc_cells != 1) || (!$otpu_expect_hbm && $otpu_sc_cells != 0)} {
+  error "openTPU: the checkpoint's CL (SmartConnect fabric cells: $otpu_sc_cells) differs from the parent run's target"
+}
+if {$otpu_expect_hbm} {
+  set ddr_cal_init none_hbm
+} else {
+  source ${scripts_dir}/inspect_ddr_init.tcl
+  if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
+    error "openTPU: inherited DDR firmware sentinel mismatch"
+  }
 }
 report_timing_summary -delay_type min_max -file ${reports_dir}/${CL}.${TAG}.before_route_opt.rpt
 phys_opt_design -directive Explore
@@ -34,9 +47,11 @@ set candidate ${checkpoints_dir}/${CL}.${TAG}.route_opt.unvalidated.dcp
 write_checkpoint $candidate
 close_design
 open_checkpoint $candidate
-source ${scripts_dir}/inspect_ddr_init.tcl
-if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
-  error "openTPU: optimized DDR firmware sentinel changed"
+if {!$otpu_expect_hbm} {
+  source ${scripts_dir}/inspect_ddr_init.tcl
+  if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
+    error "openTPU: optimized DDR firmware sentinel changed"
+  }
 }
 source ${scripts_dir}/validate_route.tcl
 report_timing -delay_type min_max -max_paths 10 -nworst 1 -sort_by group \

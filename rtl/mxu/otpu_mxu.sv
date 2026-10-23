@@ -151,6 +151,7 @@ module otpu_mxu
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
   output logic [LANES-1:0][31:0]  t_wdata,
+  output logic [LANES-1:0]        t_wbm,       // the banks t_wen / t_waddr write, from registers
   input  logic                    t_gnt
 );
   localparam int BW = $clog2(LANES);
@@ -618,8 +619,9 @@ module otpu_mxu
   assign b_addr = chunk_addr >> 2;
   assign b_n    = WP ? (i_klast ? i_nl : i_nb) : 2'd0;
   assign a_req  = go_iss && need_a;
-  assign a_addr = !a_req ? '0 : (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2)
-                                                                           : (scale_addr >> 2);
+  // (not gated with a_req, as b_addr: the slice's port A register takes it with a_req; the issue
+  // decision, go_iss from a_gnt and b_gnt, reaches a_req alone)
+  assign a_addr = (i_sws || i_rsc) ? (srow_addr >> 2) : i_s2 ? (i_sa2 >> 2) : (scale_addr >> 2);
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst && i_act && i_gw && w_sod != i_soff + w_ds)
     $fatal(1, "otpu_mxu: group walk w_sod %0h, i_soff %0h + w_ds %0h", w_sod, i_soff, w_ds);
@@ -1756,6 +1758,43 @@ module otpu_mxu
       end
     end
   end
+
+  // The write request's banks (t_wbm, the slice's write-bank mask of the MXU for its arbiter), kept
+  // in registers beside the request's sources instead of decoded from t_waddr: the lanes' (lo, a
+  // non-ACC drain write) as lo_bm, loaded with lo_ad and lvm from the stage before them; the RMW's
+  // (rw) through a delay line beside u_rw (r1's banks, the same length and enable); the RMAX lanes'
+  // (mxm at mxl) from their registers. The three are never active together (lo writes only for
+  // !c_acc commands and rw only for c_acc ones, the head changing once drained; RMAX writes start
+  // after the drain), so the OR is the request's bank set; the simulation checks it every cycle.
+  // ba86b5df routed lo_ad -> t_waddr's mux -> the bank decode -> the slice's acf -> its grants ->
+  // alpha's enables (-0.157 ns, 144 MXU endpoints) and -> the TMEM's rpv (-0.177, the worst path):
+  // the cone now starts at a few flip-flops, the decode before them (docs/wide_port.md "SLR2
+  // without the hot spot"). No cycle changes.
+  logic [LANES-1:0] lo_bm, lo_bm_nx, r1_bm, rw_bm, mx_bm;
+  always_comb begin
+    lo_bm_nx = '0; r1_bm = '0; mx_bm = '0;
+    if (lvm[LLAT-3][NL])
+      for (int k = 0; k < NL; k++) if (lvm[LLAT-3][k]) lo_bm_nx[lo_p.ad[k][BW-1:0]] = 1'b1;
+    if (r1.v)
+      for (int k = 0; k < NL; k++) if (r1.m[k]) r1_bm[r1.ad[k][BW-1:0]] = 1'b1;
+    if (mx_go)
+      for (int k = 0; k < LANES; k++) if (mxm[k]) mx_bm[mxl[k][BW-1:0]] = 1'b1;
+  end
+  always_ff @(posedge clk)
+    if (rst) lo_bm <= '0;
+    else if (t_gnt) lo_bm <= lo_bm_nx;
+  otpu_delay #(.W(LANES), .N(LM + LA)) u_rwbm (.clk, .en(t_gnt), .d(r1_bm), .q(rw_bm));
+  assign t_wbm = (c_acc ? '0 : lo_bm) | rw_bm | mx_bm;
+`ifndef SYNTHESIS
+  always @(posedge clk) begin
+    logic [LANES-1:0] b;
+    b = '0;
+    for (int k = 0; k < LANES; k++) if (t_wen[k]) b[t_waddr[k][BW-1:0]] = 1'b1;
+    if (b != t_wbm)
+      $fatal(1, "otpu_mxu: write banks %b, the registered mask %b (lo %b, rw %b, RMAX %b)", b, t_wbm,
+             lo_bm, rw_bm, mx_bm);
+  end
+`endif
 
   // ---- statistics for the profiler (per completed command): cycles the stream was starved
   // (work, no chunk), backpressured (chunks, no consumption), the drain frozen by the TMEM grant,

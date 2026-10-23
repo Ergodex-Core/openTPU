@@ -1529,6 +1529,328 @@ tests/test_observability.py 18 passed, tests/test_native_nch.py 10 passed, tests
 87 passed (the floorplan mock knows the clock group and the OCL's box), tests/test_target.py 25
 passed. Receipts (as above, run locally): int8 949,550 (+53 cycles, +0.006%), int4 565,721 (+43, +0.008%).
 
+### Alex's shell (2026-10-19/20; branch wide-port-alexshell, Verilator only)
+
+Rounds 3-8 held our own 450 MHz domain (the bridges, port arbiters and host path: 117K
+endpoints) at -2.2 ns for four rounds. Alex's burst200 design (ergodex-openTPU `alex-burst200`,
+commit 06c169cb), which closed on the F2 at WNS +0.032 ns with the same clocks, keeps only
+SmartConnect and the HDK wrapper at 450 MHz: per channel his native-to-AXI adapter
+(otpu_native_axi) at the core clock into a SmartConnect for the clock and width conversion. It
+is now the f2-hbm memory path at 8 channels (docs/f2_hbm.md "The memory path"): the native
+ports' SLR chain as before, u_naxi per channel in SLR0, a SmartConnect per channel (the channel
+@200 and the host's branch @250 onto HBM port c @450), the host's PCIS through a register gate
+and a 1 x 8 SmartConnect. The slice (PORTB 4, row lanes, ALINE 64, MCOLS 8, NCH 8), the adapter
+and the address map are unchanged. Commits cf49e17f (the path, the IP Tcl, the tests) and
+cd16e195 (READ_WAIT 0, chosen on the receipts below).
+
+**The receipts** (tools/perf_qwen.py `--model gemma3 --layers 4 --wformat int8 --head-format
+int8 --mhz 200 --portb 4 --rowlanes --mcols 8 --aline 64`, OTPU_TARGET=f2-hbm OTPU_NCH=8; the
+4-layer + head token in cycles, the whole model as "Measured on the RTL" extrapolates it:
+the head whole, the layers' phases x 26 / 4). The native model's --lat is the port's read
+latency without the SLR chain (both paths have its 6 cycles; the reference never modelled
+them); the new path's estimate is +9 cycles at the native port (u_naxi's queue and AR register,
+3 cycles for an isolated read, and SmartConnect's clock and width conversion, ~17, against the
+deleted bridges' ~10: estimated from Xilinx's documented structure, PG247's register slices
+and PG085's asynchronous converters of 5+ destination cycles, not from Alex's numbers, which
+bound his round trip only below ~690 ns at his 128 reads in flight). OTPU_NAXI=1 runs the
+build's otpu_native_axi itself in front of the native model (sim/verilator/otpu_naxi_mem.sv;
+LAT 65 = the same 69-cycle idle round trip with u_naxi's 3 and the shim's 1), OTPU_NAXI_XR=3
+the SLR chain too.
+
+| memory model | 4 layers + head | vs reference | whole model (int8 tok/s at 200 MHz) |
+|---|---|---|---|
+| native, --lat 60 (the reference, 5d0a5f9a) | 949,550 | | 83.5 |
+| native, --lat 69 (the new path's estimate) | 1,049,617 | +10.5% | 76.2 |
+| u_naxi in the loop (burst 4, READ_WAIT 0), LAT 65 | 1,066,263 | +12.3% | 75.1 |
+| the same, burst 1 / burst 16 (no wait) | 1,064,695 / 1,069,424 | +12.1% / +12.6% | |
+| the same, Alex's waiting bursts (burst 4, idle 1) | 1,100,116 | +15.9% | |
+| u_naxi + the SLR chain (XR 3), the build: burst 4, no wait | 1,133,177 | +19.3% | 71.2 |
+| the same, Alex's waiting bursts: burst 4 / idle 1, burst 16 / idle 4 (LAT 65) | 1,167,578 / 1,312,539 | +23.0% / +38.2% | |
+
+The decode token is latency-bound at 64 reads in flight a channel: every cycle on the round
+trip is ~1.1% of it (the rounds' --lat 66, 1,015,899, the old path with its SLR chain, is the
+row the XR 3 line compares with: +11.5%). A waiting burst holds its first beat's credit until
+its last is taken, so Alex's 16-beat bursts (his design carried 128 reads a channel on two
+channels) cost +38%; READ_WAIT 0 takes only what is queued: in the token the channels see a
+beat at a time (channel 0: 806,549 single-beat bursts of 808,478, 1,770 of four), so
+coalescing costs nothing and u_naxi costs 1.6% over the native model at the same latency (its
+direction barriers and queue). Levers, not taken here: more reads in flight a channel (otpu_board
+NRD 64 at NCH > 2: 96 or 128 would take the round trip's cost back, at the adapter's tag RAM),
+the AR straight from the queue's head (a cycle), two SLR stages a direction instead of three.
+
+**LPN next to the RTL** (tools/wideport_lpn.py, the same flags, `--measured` the receipt):
+
+| point | LPN (estimate) | RTL (measured) | error | mean phase error |
+|---|---|---|---|---|
+| --lat 60 vs the reference | 988,141 | 949,550 | +4.1% | 2.9% |
+| --lat 69 vs the native model at 69 | 1,100,906 | 1,049,617 | +4.9% | 3.8% |
+| --lat 69 vs u_naxi in the loop (XR 0) | 1,100,906 | 1,066,263 | +3.2% | 5.8% (attention -10.2%) |
+| --lat 75 (69 + the chain's 6) vs u_naxi + XR 3 | 1,176,101 | 1,133,177 | +3.8% | 4.1% |
+
+Tests (Verilator 5.048, all on the Mac: the m7a could not be written from this session):
+tests/test_f2_rtl.py 33 passed (test_native_axi 9 configurations, Alex's tb ported;
+test_f2_hbm_axi 6, the 8-channel fabric on a SmartConnect + HBM model; the missing-order check;
+the rounds-1-8 tests kept), tests/test_f2_build.py 94 (the floorplan, the IP Tcl under a Vivado
+mock, the instance generator), tests/test_native_nch.py 10, tests/test_target.py 25,
+tests/test_rtl.py `-k "replay or act_reads or attention or lane_count"` (OTPU_TARGET=f2-hbm
+OTPU_NCH=8) 27 passed, 1 skipped, tests/test_observability.py 18, tests/test_wide_port_rtl.py
+168 (63 minutes, no xdist).
+
+### Alex's shell at 150 MHz, and AWS's chain (2026-10-20; Verilator only)
+
+The first F2 build of cd16e195 (f2-hbm:p4rl8a64, 200 MHz) placed at WNS -1.609 ns: clk_main_a0
+-1.609 inside the host's 1 x 8 SmartConnect (21.6K LUTs / 46K FFs), hclk -1.350 inside the 2 x 1
+channel SmartConnects' 450 MHz side (8.5K LUTs / 16.2K FFs each), the core clock -1.078 (the
+MXU), clk -> clk_f -0.756 and clk_f -> clk -0.793 (the pumped TMEM). The rework (docs/f2_hbm.md
+"Since the first placed build"):
+
+- **f2-hbm:p4rl8a64c150**, the same slice at a 150 MHz core (TMEM pumped at 300; the shell's 250
+  and the HBM AXI's 450 unchanged): a variant may now set `core_mhz` (opentpu/target.py
+  VARIANT_PLATFORM_KEYS); build.py's HBM_CORE_MMCM gives u_mmcm VCO 1200 /8 /4 (200: /6 /3; 175:
+  PFD 50, VCO 1050, /6 /3), CORE_KHZ 150000 into CFG (the host's tok/s at the real clock), the
+  block design's core_clk at 150 MHz; the CDC bounds and otpu_clk2x read the clocks' periods
+  (6.667 / 3.333). It fixes the core clock's -1.078 and clk -> clk_f's -0.756 with ~1.67 ns of
+  period; clk_f -> clk (the pumped read data's return, one fast period) gains ~0.83 ns, to ~+0.04:
+  a capture register on clk at the piece would add a core cycle of TMEM read latency, not taken;
+  otpu_clk2x.tcl now prints the worst return paths and their starts (if they are not a piece's
+  qa / qb register, they are outside the read-data exception by design).
+- **AWS's chain** (cl_dram_hbm_dma's cl_hbm_axi4.sv) per channel and for the host: the HDK's
+  axi_register_slice -> a 1 x 1 SmartConnect (the channels': cl_axi_sc_1x1's settings with S00
+  at the core clock; the host: cl_axi_sc_1x1 as shipped) -> cl_axi3_256b_reg_slice at 450 ->
+  the HBM port; the host on its own port (8), reaching the channels' pseudo-channels through the
+  global switch. Each port's SmartConnect and 450 MHz slice boxed in its port's clock-region
+  column (Y0:Y1).
+- **otpu_native_axi READ_BURST 8, READ_WAIT 1** (bursts wait one cycle for their next command):
+  AWS's 1 x 1 SmartConnect takes 32 transactions a direction, so 512-byte bursts keep 16 KB in
+  flight a channel. The receipt now caps the shim at 32 transactions (OTPU_NAXI_OT).
+
+Expected slack by domain (reasoning, not a placed number): the core clock at 150 MHz has +1.67
+ns over 200's period against -1.078 (MXU) and -0.756 (clk -> clk_f): ~+0.6 / +0.9 ns; clk_f ->
+clk ~+0.04 ns (one fast period gains 0.83 against -0.793): the tightest, riding on the margin and
+the TMEM box; clk_main_a0: the 1 x 8 demux (all 5,034 failing endpoints) is gone, the host's
+chain is AWS's own (closed in AWS's examples at 250) and the shell -> gate -> slice crossing flop
+to flop: expected positive; hclk: the failing structure (a 2 x 1 SmartConnect's node FIFO into
+its exit register, route-dominated) is replaced by 1 x 1s (no arbitration, half the slave side)
+each boxed by its port with a full register slice before the port: expected to close, the risk
+being the SmartConnect's own node -> exit path if its column box is congested.
+
+IP sizes (estimates from the placed build's per-instance numbers; synthesis will give them):
+before, per channel 8.5K LUT / 16.2K FF (2 x 1 SmartConnect) x 8 + host demux 21.6K / 46.1K =
+89.6K LUT / 175.7K FF; after, per channel ~5K / ~9K (1 x 1 SmartConnect) + ~0.7K / ~2.6K (512-bit
+slice, full) + ~0.4K / ~1.5K (256-bit slice) = ~6.1K LUT / ~13K FF / 0 BRAM, x 8 + the host chain
+~6K / ~13K = ~55K LUT / ~117K FF. NCH 16 (f2-hbm16): ~104K LUT / ~221K FF in SLR0's ~290K LUTs;
+32 channels leave the host no port (refused).
+
+**The receipt at 150 MHz** (tools/perf_qwen.py `--model gemma3 --layers 4 --wformat int8
+--head-format int8 --mhz 150 --portb 4 --rowlanes --mcols 8 --aline 64`, OTPU_TARGET=f2-hbm
+OTPU_NCH=8; the path's latency in nanoseconds held from the 200 MHz estimate, ~335 ns at the
+native port with AWS's chain's two register slices, so 50 cycles at 150 MHz: the native model at
+--lat 53 (with u_naxi's 3), u_naxi + the SLR chain in the loop at LAT 49):
+
+| memory model at 150 MHz | 4 layers + head | whole model, int8 tok/s |
+|---|---|---|
+| native, --lat 53 | 871,485 | 67.8 |
+| u_naxi + SLR chain, no transaction cap (burst 4, no wait) | 947,522 | 62.9 |
+| the same, 32 transactions (the SmartConnect), burst 4, no wait | 1,030,204 | 58.3 |
+| the same, burst 8, no wait | 1,108,236 | 54.3 |
+| **the same, burst 8, waiting (the build)** | **1,027,452** | **58.5** |
+
+(200 MHz, the same methodology before the cap: 1,133,177, 71.2 tok/s; the reference 83.5.) LPN
+(tools/wideport_lpn.py --mhz 150): --lat 53 902,447 (+3.6% vs the native model), --lat 59
+(53 + the chain's 6) 976,038 (+3.0% vs the uncapped loop, -5.0% vs the build's), --lat 62 (+3
+for the bursts' wait) 1,013,343 (-1.4% vs the build's 1,027,452; mean phase error 4.2%): 60.0
+tok/s. The lever stays reads in flight: the adapter's 64 a channel and the SmartConnect's 32
+transactions.
+
+### Alex's shell at 150 MHz, placed on the m7a build box (2026-10-20)
+
+Built from the FPGA Developer AMI on an m7a.8xlarge (Vivado 2025.2, the F2 host's HDK v2.3.0
+copied over; another session kept stopping build units on the F2 host). Target
+f2-hbm:p4rl8a64c150, `--place-directive Default`, the HDK's AggressiveExplore strategies.
+Three placements in one night, each fixing what the previous one measured:
+
+| commit | placed WNS | the failing family |
+|---|---|---|
+| 62b34824 | -1.421 ns | clk_main_a0: every worst path u_hrs512 (SLR1, pb_otpu_pcis) straight into cl_axi_sc_1x1's entry FIFO at the bottom of SLR0, 4.1 ns of route on 4.0; hclk_raw -0.261: AWS's single PIPE_HBM_AXI_RST register fanning out to all 32 ports' ARESET_N across the die's bottom edge (2.25 ns of route on 2.222, a recovery check); clk_raw +0.305, clk_f_raw +0.446, every inter-clock group positive |
+| da7dc503 | -0.041 ns | a second HDK register slice (u_hrs512x, pb_otpu_hxs at X4Y3) splits the host chain's crossing into two hops (clk_main_a0 +0.504); the copied HBM wrapper drives every port's ARESET_N from its own four-stage pipe (build.py `hbm_wrapper_per_port_reset`, fail-closed); the host column box made the full SLR height, which let u_hrs256 (the host's 450 MHz slice) drift up it: HBM port 8's WREADY -> its W pipe CE, 1.9 ns, 131 endpoints |
+| ba86b5df | **+0.089 ns** | the host SmartConnect alone in the column (pb_otpu_hsc, Y0:Y3), u_hrs256 back in the port's Y0:Y1 box: every domain met at placement |
+
+Two floorplan facts learned on the way (also in cl_pnr_user_hbm.tcl): Vivado's get_cells
+takes brackets literally, so `g_ch[0].u_rs256` matches and the escaped form matches nothing
+(the first build boxed one cell of nine); the HBM AXI ports are the sites
+BLI_HBM_AXI_INTF_X<p>Y0, four or five a clock region along the bottom row (ports 0-3 in
+X0Y0, 4-7 in X1Y0, 8-12 in X2Y0, ..., 30-31 in X7Y0).
+
+ba86b5df routed at **WNS -0.177 ns, TNS -49.4 ns, hold met** (post_route.VIOLATED.dcp,
+route_design 7 h 06 min): the first pass ended at -0.457; the router then moved cells itself
+("Incr Placement Change"), re-routed to +0.004 with hold at -0.220, and its hold fix (leaf clock
+programmable delays) gave the setup margin back; its own physical synthesis recovered -0.214 to
+-0.177. AWS's check flagged an MXU -> TMEM pin pair (u_mxu/lo_ad_reg -> u_tmem/g_one.rpv_reg)
+as tight in both setup and hold. The congestion of the routed da7dc503 is all in SLR2's western
+half: level 5-7 windows over the slice adapter (u_board/u_mem, 56-80% LUT-RAM) right above the
+SLR1 crossing and over the MXU (DSP 65-91%, block RAM 84-100%).
+
+### Incremental implementation (build.py --incremental-from, 2026-10-20)
+
+For a small change on a design that already placed and routed (a register added, one module
+fixed, a constraint tightened), the implementation can start from a previous run's routed
+checkpoint instead of from nothing. Vivado applies the reference's placement and routing to every
+cell of the new netlist that matches it and re-implements only the rest:
+
+```
+build.py --hdk ... --target f2-hbm:p4rl8a64c150 --out RUN --flow ImplCL \
+  --from-synth SYNTH_RUN --synth-sha256 SHA \
+  --incremental-from REF_RUN --incremental-sha256 REF_SHA [--incremental-directive TimingClosure] \
+  [--incremental-force] --package
+```
+
+- The reference is the one routed checkpoint of a finished ImplCL or BuildAll run, met or
+  VIOLATED (a reference is never packaged itself), pinned by its digest, for the same platform and
+  part. build.py copies it into `RUN/incremental_reference/`, records it in inputs.json
+  (`incremental_reference`: run, build, digest, met or not, directive) and passes it to Vivado as
+  OTPU_INCR_*.
+- build_level_1_cl.tcl wraps the HDK's place_design once: it re-checks the copy's digest, runs
+  `read_checkpoint -incremental -directive D` (plus `-force_incr` with --incremental-force),
+  writes `<CL>.<TAG>.incremental_reuse.rpt` and prints `OTPU_INCREMENTAL_REFERENCE`; the HDK's
+  place_design, phys_opt_design and route_design then run incrementally. A run without the
+  marker fails. Without --incremental-from the HDK sequence is untouched.
+- Directives: TimingClosure (the default here) targets WNS 0 and rips up the failing paths;
+  RuntimeOptimized keeps the reference's WNS (useful only from a met reference); Quick is not
+  timing-driven. Vivado may still fall back to its default algorithms when the reuse or the
+  reference's quality is too low; --incremental-force overrides that, and the log says which ran.
+- When not to use it: floorplan changes (the reference's placement is what is being changed),
+  wide RTL changes (reuse falls, and Vivado falls back anyway), a different clock target.
+- Reuse depends on stable cell names: keep the synthesis settings and hierarchy unchanged
+  between the reference and the change.
+
+### SLR2 without the hot spot (2026-10-20; branch wide-port-slr2, Verilator only)
+
+**What ba86b5df's routed checkpoint says** (post_route.VIOLATED.dcp; route_rpt/ on the m7a:
+report_timing, report_design_analysis -timing / -congestion / -complexity, utilization by SLR,
+hierarchy and pblock, every failing endpoint grouped by start / end, report_qor_suggestions).
+Only clk_raw fails: 722 endpoints of 986,509, WNS -0.177 ns, TNS -49.4 ns; hold met; every
+other clock and inter-clock group meets (hclk +0.010, clk_main_a0 +0.207, clk_f +0.376;
+clk_raw -> clk_f +0.018 and clk_f -> clk_raw +0.003: the pumped TMEM, no margin to give away).
+Every failing path runs SLR2 -> SLR2, 86-94% route, 5-14 levels, clock skew -0.36 to -0.50 ns
+(the common path's MMCM pessimism -0.27 to -0.35 of it), its start and end far apart: lo_ad at
+SLICE_X178Y566 -> LUTs at X159, X137, X147, X123, X103 -> rpv at X118Y633; the SW skid's o_d at
+X176Y552 -> X68, X31, X28 -> the gather buffer at X105; the adapter's qa_n at X21Y535 -> X147 ->
+port B's b_wdata at X80Y586.
+
+| family (start -> end) | endpoints | worst (ns) | the cone |
+|---|---|---|---|
+| u_mxu -> u_mxu (lo_ad -> alpha's CE) | 144 | -0.157 | the drain's write address -> the bank decode -> the slice's write-bank arbiter (acf) -> t_gnt -> the RMW pipeline's enables |
+| u_mem/qa_n -> u_slice/b_wdata, b_wmask CE | 109 | -0.173 | a_rdy -> the MXU's issue (go_iss) -> b_req_c -> port B's register enable, 1,089 loads (2.4 ns of the path) |
+| u_slice/a_addr -> u_mem/pnx, qam, qa_n | 105 | -0.165 | port A's register -> the A run compare, the reuse compare and the queue write, 12-14 levels |
+| u_mxu -> u_vpu (t_ren -> g_wbuf.en_r replicas) | 98 | -0.173 | the TMEM's conflict compares -> lost -> rhold -> 394 en_r copies (1.85 ns of the path) |
+| u_slice/sw_reg.u_sw -> u_mem/gb strobes' CE | 71 | -0.174 | the skid's address -> the channel decode -> the gather buffers' enables |
+| u_mem/qa_n -> u_mem/al_beat, al_cb | 69 | -0.127 | a_rdy -> a_take -> the A reuse allocation |
+| g_coll.u_coll asel -> qd | 67 | -0.080 | the GATHER unit's read request -> its grant -> its data register |
+| u_mem/qb_n -> u_slice/u_dma | 27 | -0.165 | b_rdy -> the DMA's grant -> gh |
+| u_seq -> u_seq | 22 | -0.108 | |
+| u_mxu -> u_tmem (lo_ad -> rpv), others | 10 | -0.177 | the worst path: the same cone as the first row into the replay register |
+
+The congestion: the placer's level 5-6 windows over the adapter (u_board/u_mem 61-76% of the
+cells, LUT RAM 58-67%, block RAM 100%) with the MXU's block RAMs and DSPs in the same windows
+(SLR2's Y8-Y9, CLE X 11-55: the west), over the MXU alone (DSP 85-94%) and over the TMEM box's
+west edge (block RAM 100%); the router's initial level-6 South Long window over the chains'
+middle stage in SLR1 (u_sys/u_mem 99%) and level 5 from SLR2's LAGUNA rows into the adapter (LUT
+RAM 75%). pb_otpu_tmem had 97.6% of its CLBs in use (its own 48K LUTs and 34K of other units'). The
+9,208 SLR1 <-> SLR2 nets (the up chain on the Lagunas' TX / RX registers) all crossed in SLR1's
+west half: pb_otpu_mid was X0Y4:X3Y7. The adapter holds 18,076 of SLR2's 27,186 LUT-RAM LUTs.
+
+**The changes** (one commit each; the floorplans place from ba86b5df's synthesis, its design
+sources being 417243f1's; the RTL needs its own synthesis):
+
+1. **V-A, the crossing and the grant cone's units** (12d7d033, floorplan): pb_otpu_mid over the
+   CL's whole SLR1 but pb_otpu_pcis (X0Y4:X4Y7, X5Y4, X5Y7; otpu_contain takes the I/O shim's
+   sites of X4Y5 out), so the crossings use six clock-region columns of Lagunas and their
+   traversal of SLR1 spreads as wide; u_quant and the collective unit into pb_otpu_tmem with
+   the TMEM and the VPU (the units whose requests and grants make the cone). Both of the pumped
+   TMEM's zero-margin paths were the unboxed quantizer's: a piece's RAM -> u_quant's
+   g_pre[4].x2_reg at +0.003 ns (clk_f -> clk, 4.8 ns of route) and u_quant's t_ren -> a piece's
+   ADDR at +0.021 (clk -> clk_f, 5.1 ns of route).
+2. **V-B, SLR2's bottom row for the adapter** (406ecbb5, floorplan): pb_otpu_mem2 =
+   X0Y8:X5Y8, a child of pb_otpu_board over the crossings' columns, holds the adapter
+   (u_board/u_mem), every SLR2 stage of the chains, and the two slice registers whose loads are
+   the adapter's queue logic: the SW skid buffer (sw_reg.u_sw) and port A's request register
+   (a_addr, and a_req when synthesis kept its name: `otpu_cells_opt`, a warning line if not).
+   Six regions give the adapter's LUT RAM ~37K SLICEM LUTs (~49%) instead of ~3 regions of
+   the west; the skid's and the register's outputs stay local, their inputs (the quantizer's,
+   the MXU issuer's registers) arrive register to register.
+3. **RTL, four exact changes** (e5fd4eed; no cycle changes, every one checked
+   by the receipt and the simulation's own assertions):
+   - *Port A / B's fields load whenever the register is free* (otpu_slice `b_ld`, a_rdy_i):
+     b_tag ... b_n with the DMA's write data and mask (1,089 flip-flops) and a_addr no longer
+     load only with a request, so the MXU's issue cone (a_rdy, b_rdy -> go_iss) reaches b_req
+     and a_req alone; what the fields hold while the valid is low is read by nobody (the
+     adapter takes them with b_req / a_req, its BREG stage loads them every cycle and uses them
+     with its take; the idle checks AND them with the valid); the MXU's a_addr is no longer
+     gated by its a_req. (109 + some of the 105.)
+   - *The MXU's write banks from registers* (otpu_mxu `t_wbm`, otpu_slice amk[G_MXU] at ULANES =
+     LANES): lo_bm loaded with lo_ad and lvm from the stage before them, a delay line beside
+     u_rw (r1's banks, its length and enable), the RMAX lanes' from mxm / mxl; their OR is the
+     request's bank set (lo writes only for !c_acc commands, rw only for c_acc ones, RMAX after
+     the drain), which the simulation checks against t_wen / t_waddr every cycle. The arbiter's
+     cone starts at a few flip-flops beside it, not at the drain's 256 address bits. (144 + 3.)
+   - *The VPU's WBUF enable as en_r && !en_h* (otpu_vpu): rhold (the TMEM's lost of VA or VB)
+     is registered in en_h (a few copies) instead of entering the D input of every one of
+     en_r's ~400 replicas; en is the same value every cycle; ren, the arbiter's view, is one
+     register of its own (ren_r, checked equal to en every cycle) so no LUT precedes the
+     grants'. If synthesis folds the AND into the enables' own logic the worst case is the old
+     fan-out. (98.)
+   - *A one-slice F2 HBM build's collective unit runs BAR alone* (otpu_f2_hbm_sys COLL_GATHER S >
+     1): as the card's since release r2 and as every simulation of a one-slice FPGA target
+     builds it (rtlsim BOARD_UARCH); no program compiled for one slice has a GATHER and the host
+     refuses one where CAPS2 bit0 is 0 (check_no_gather). The GATHER unit was dead area inside
+     the grant cone (67). pb_otpu_tmem's pattern takes either unit (`g_coll*.u_coll`).
+
+**Gates** (this Mac, Verilator 5.048; receipts, LPN and Lens under
+~/ergodex-03/lens-runs/wp-slr2/):
+
+- The receipt at 150 MHz (as "The receipt at 150 MHz": OTPU_TARGET=f2-hbm OTPU_NCH=8 OTPU_NAXI=1
+  XR 3, burst 8 waiting, 32 transactions, --lat 49, --check): **1,027,452 cycles before and
+  after** (58.5 tok/s int8 whole-model as before), bit-exact vs the ISA simulator, the run's JSON
+  (phases, unit busy, VOP counts, MXU gaps) identical in every field. Delta 0: the changes move
+  no cycle by construction (the fields' extra loads are never read; the masks and the enable
+  are the same values from other registers).
+- LPN, wide-port (tools/wideport_lpn.py --mhz 150 --lat 62 --measured, the receipt): 1,013,343
+  estimated against 1,027,452 measured, -1.37%, mean phase error 4.2% (calibrated): unchanged,
+  nothing in the model moves. VLA (~/ergodex-03/openTPU-vla tools/pi05_lpn.py --full --backend
+  both, f2-vla32: OTPU_MCOLS=32 OTPU_LANES=32 OTPU_PACK=1, 200 MHz): lpnlang 309,729,493 cycles =
+  1.549 s (0.65 Hz), the dialect 306,305,713 = 1.532 s: docs/vla_frequency_plan.md 6j's numbers,
+  unchanged (the change is no micro-architecture).
+- Lens (perf_qwen.py --dump -> lens): the int8 decode token's profile before (base_406ecbb5,
+  the tree at 406ecbb5) and after (rtl_r1r6r8) is byte-identical: port B streaming 78.8%, the
+  MXU 99.7% busy, its drain's TMEM losses 3.0% (31,171 cycles), "MXU not consuming" 15.5%. No
+  profile gain is claimed: this is a timing change, and its gain is the 150 MHz bitstream.
+- Tests at e5fd4eed (Verilator 5.048, this Mac, six groups in parallel, still running when this
+  was written; no failure): test_f2_build.py 119 and test_target.py 25 passed; test_wide_port_rtl.py
+  39 of 168, tests/test_rtl.py -k "replay or act_reads or attention or lane_count" (OTPU_TARGET=f2-hbm
+  OTPU_NCH=8) 7 of 28, test_t2_rtl.py / test_observability.py / test_native_nch.py / test_f2_rtl.py
+  25 of 85 passed so far (logs ~/ergodex-03/slr2-scratch/tests/). The receipt's run builds the board
+  uarch (TMEM_IMPL 3, replays, ARB_MASK: the VPU's WBUF and the slice's mask arbiter), so R6's and
+  R8's paths and their assertions ran on the whole decode token.
+
+**What to measure on the box**: for V-A (12d7d033) and V-B (406ecbb5) placed from ba86b5df's
+synthesis, and for the RTL commit e5fd4eed with V-B (its own synthesis): the placed WNS / TNS by clock and
+the failing families as above; the placer's final and the router's initial congestion windows
+(levels); report_utilization -pblocks for pb_otpu_mem2 (LUT RAM, CLB occupancy), pb_otpu_tmem
+(CLB occupancy, its foreign cells) and pb_otpu_mid; the SLR1 <-> SLR2 nets by clock-region
+column (report_utilization -slr, and the Laguna sites used per column). Route the best. The
+expected direction: the adapter <-> slice families (~400 endpoints) and the MXU families (~250)
+are the cones these changes shorten; u_seq's 22 and the A reuse allocation's 69 rely on the
+lower congestion only.
+
+**Next levers, not taken**: the adapter's 64-deep LUT-RAM FIFOs (per channel rbm and ram, 64 x
+512 each) in URAM (16 x 8 = 128 of SLR2's 320 unused URAM288: ~9K LUT-RAM LUTs freed, a
+prefetched head register to keep the cycles); the write data across the SLRs at a quarter
+width (a 576-bit beat in four cycles: 8 x 432 fewer SLLs at each boundary, a streamed store
+keeps its rate on the pair rotation); USER_CLOCK_ROOT in SLR2 for clk and clk_f (the core
+tree's root is X3Y5, in SLR1); the MXU's drain (lanes, RMW, result FIFO) into the TMEM box with
+EXCLUDE_PLACEMENT; the adapter in SLR1 behind credit-based ports (SLR2 loses 45K LUTs, the round
+trip gains ~2 cycles, ~+2%).
+
 ## Expected effect (projections, Gemma-3-1B int8, ~1.0 GB a token)
 
 | PORTB | weight ceiling | at the measured ~78% |

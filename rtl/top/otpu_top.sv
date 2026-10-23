@@ -49,7 +49,13 @@ module otpu_top
                                       // delivers them: otpu_dram, otpu_native_dram NCH >= 2 PORTB)
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
-  parameter int NCH        = 2        // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
+  parameter int NCH        = 2,       // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
+  parameter bit NAXI       = 1'b0,    // AXI = 1: the F2 HBM build's channel path in front of the
+  parameter int NAXI_XR    = 3,       //   model (sim/verilator/otpu_naxi_mem.sv: NAXI_XR SLR
+  parameter int NAXI_BURST = 4,       //   stages each way, otpu_native_axi with its read bursts
+  parameter int NAXI_IDLE  = 1,       //   and gather timeout; rtlsim OTPU_NAXI)
+  parameter bit NAXI_WAIT  = 1'b0,
+  parameter int NAXI_OT    = 32
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -120,6 +126,14 @@ module otpu_top
       if (AXI == 2) begin : g_ldc
         otpu_ldc_mem #(.WORDS(DRAM_WORDS), .SID(s)) u_mem (
           .clk, .rst(sys_rst),
+          .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
+          .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
+          .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
+      end else if (NAXI) begin : g_naxi
+        otpu_naxi_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(NCH), .NXR(NAXI_XR),
+                        .READ_BURST(NAXI_BURST), .READ_IDLE(NAXI_IDLE), .READ_WAIT(NAXI_WAIT),
+                        .OT(NAXI_OT)) u_mem (
+          .clk, .rst(sys_rst), .run_rst(rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);

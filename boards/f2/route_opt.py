@@ -24,6 +24,23 @@ RECOVERY_SCRIPTS = ('opt_route.tcl', 'validate_route.tcl',
 VALIDATION_SCRIPTS = ('validate_only.tcl', *RECOVERY_SCRIPTS[1:])
 
 
+def cl_kind(info: dict) -> str:
+    """The parent's CL from its frozen target: 'hbm' (platform mem "hbm": no DIMM, the
+    SmartConnect fabric; boards/f2/design/cl_opentpu_hbm.sv) or 'ddr'."""
+    return 'hbm' if info.get('platform', {}).get('mem') == 'hbm' else 'ddr'
+
+
+def parent_target(info: dict):
+    """The frozen target of a parent run (its inputs.json: build.py's provenance holds the
+    target's name and variant), an F2 one."""
+    name = info.get('name', 'f2')
+    variant = info.get('variant', '')
+    t = flow.target.load(f'{name}:{variant}' if variant else name)
+    if t.platform.get('board') != 'f2':
+        raise RuntimeError(f'Parent target {name} is not an F2 target')
+    return t
+
+
 def load_parent(run: Path, checkpoint: Path, expected_sha: str) -> tuple[dict, dict]:
     """Require a finished run and immutable source/DCP evidence, even if timing failed."""
     if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
@@ -48,8 +65,16 @@ def load_parent(run: Path, checkpoint: Path, expected_sha: str) -> tuple[dict, d
         raise RuntimeError('Parent final routed timing report is absent')
     log = (run / 'console.log').read_text()
     init = re.findall(r"^OTPU_DDR_CALIBRATION_INIT_2C=(256'h[0-9a-fA-F]{64})$", log, re.M)
-    if not init or not int(init[-1].split("'h")[1], 16):
+    if cl_kind(info) == 'hbm':
+        # the HBM CL has no DIMM: its validator prints no calibration sentinel (one would be
+        # another CL's log); the Tcl drivers take none_hbm as the sentinel to expect
+        if init:
+            raise RuntimeError('HBM parent run carries a DDR calibration sentinel')
+        ddr_init = 'none_hbm'
+    elif not init or not int(init[-1].split("'h")[1], 16):
         raise RuntimeError('Parent has no verified persisted DDR calibration sentinel')
+    else:
+        ddr_init = init[-1]
     if flow.sha(checkpoint) != expected_sha.lower():
         raise RuntimeError('Parent routed checkpoint SHA256 mismatch')
     if not info.get('sources') or not any(n.startswith('design/') for n in info['sources']):
@@ -65,7 +90,8 @@ def load_parent(run: Path, checkpoint: Path, expected_sha: str) -> tuple[dict, d
                 'inputs_sha256': flow.sha(run / 'inputs.json'),
                 'console_sha256': flow.sha(run / 'console.log'),
                 'exit_code_sha256': flow.sha(run / 'exit_code'),
-                'timing_report_sha256': flow.sha(timing), 'ddr_init_2c': init[-1],
+                'timing_report_sha256': flow.sha(timing), 'ddr_init_2c': ddr_init,
+                'cl': cl_kind(info),
                 'source_inventory': info['sources']}
     return info, evidence
 
@@ -126,13 +152,15 @@ def main() -> None:
     parser.add_argument('--prepare-only', action='store_true')
     args = parser.parse_args()
     out, run, checkpoint = args.out.resolve(), args.from_run.resolve(), args.checkpoint.resolve()
-    target = flow.target.load('f2')
-    shell = flow.check_hdk(args.hdk.resolve(), target, shell=True)
-    flow.check_vivado_version(flow.command('vivado', '-version'), target.platform['vivado'])
     parent_info, _ = load_parent(run, checkpoint, args.checkpoint_sha256)
+    # the parent's own target (f2, or an HBM target: f2-hbm:p4rl8a64c150), as this tree defines
+    # it: its frozen platform and tech must be that target's before the HDK is looked at
+    target = parent_target(parent_info)
     for key in ('platform', 'tech'):
         if parent_info.get(key) != target.to_dict().get(key):
-            raise RuntimeError(f'Parent {key} differs from the pinned F2 target')
+            raise RuntimeError(f'Parent {key} differs from the pinned F2 target {target.name}')
+    shell = flow.check_hdk(args.hdk.resolve(), target, shell=True)
+    flow.check_vivado_version(flow.command('vivado', '-version'), target.platform['vivado'])
     cl, info = prepare(out, run, checkpoint, args.checkpoint_sha256,
                        validate_only=args.validate_only)
     env = dict(os.environ, BUILD_TAG=info['build_id'], HDK_SHELL_DIR=str(shell),

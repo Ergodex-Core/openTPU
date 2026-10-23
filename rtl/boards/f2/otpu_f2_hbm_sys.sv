@@ -1,17 +1,20 @@
 // The accelerator on an AWS F2 slot with the HBM (cl_opentpu_hbm, boards/f2/design): otpu_board
 // with S slices of NCH channels each, channel c of slice s on HBM AXI port (and pseudo-channel)
-// p = NCH s + c through one otpu_f2_hbm_nch each (BASE p x 512 MiB), the host's PCIS onto every
-// port through otpu_f2_hbm_host, the two masters of each port shared by an otpu_f2_hbm_port, and
-// the shell's OCL onto the control registers through otpu_axil_cdc (held while the host's PCIS
-// writes are in flight). Clocks: the core on clk (and clk_f, 2x, the pumped TMEM), the OCL and
-// PCIS on aclk (clk_main_a0, 250 MHz), the HBM's AXI ports on hclk (450 MHz). docs/f2_hbm.md.
+// p = NCH s + c through one otpu_native_axi each (otpu_f2_hbm_axi u_mem, BASE p x 512 MiB) as an
+// AXI4 master at the core clock (ch_*) into the CL's SmartConnect fabric (u_sc: per channel a
+// SmartConnect with this master and the host's branch onto HBM port p, 256 bits at 450 MHz),
+// the host's PCIS through otpu_f2_pcis_gate to the fabric's host branch (h_*), and the shell's
+// OCL onto the control registers through otpu_axil_cdc (held while the host's PCIS writes are
+// in flight). Alex's burst200 memory path (ergodex-openTPU 06c169cb) at NCH channels. Clocks:
+// the core on clk (and clk_f, 2x, the pumped TMEM), the OCL and PCIS on aclk (clk_main_a0, 250
+// MHz); nothing here runs at the HBM's 450 MHz. docs/f2_hbm.md.
 //   hbm_ready: cl_mem_hbm_wrapper's o_hbm_ready (aclk): every channel's STATUS CALIB bits.
 // The parameters are the target's (targets/f2-hbm.toml through opentpu.target rtl_params).
 //
-// The floorplan (boards/f2/build/constraints/small_shell_cl_pnr_user_hbm.xdc; docs/wide_port.md
-// "Placement"): u_mem (the bridges, the host path, the ports) in SLR0 by the HBM's ports, the
+// The floorplan (boards/f2/build/constraints/cl_pnr_user_hbm.tcl; docs/wide_port.md
+// "Placement"): u_mem's channels (u_naxi) with the SmartConnects in SLR0 by the HBM's ports, the
 // board (the slice, its adapter, the control block) in SLR2, and NXR = 3 register stages, one
-// per SLR, on everything between them: the native ports (otpu_f2_hbm_mem NXR), the control path
+// per SLR, on everything between them: the native ports (otpu_f2_hbm_axi NXR), the control path
 // from the OCL's crossing (otpu_axil_xr u_cx) and, board-bound, the core reset and the HBM's
 // ready (g_rs[k]): the board enters and leaves reset NXR cycles after the fabric, idle both
 // times. A port B request costs 2 NXR core cycles more from the adapter to the HBM and back.
@@ -61,16 +64,17 @@ module otpu_f2_hbm_sys #(
   parameter int NCH        = 8,          // channels (HBM ports, pseudo-channels) per slice
   parameter int CH_LOG2    = 29,         // a pseudo-channel's 512 MiB
   parameter int DRAM_LOG2  = 32,         // what a slice addresses (otpu_board; CFG_DRAM)
-  parameter int NXR        = 3           // SLR crossing stages each way (the floorplan's three
+  parameter int NXR        = 3,          // SLR crossing stages each way (the floorplan's three
                                          //   SLRs; 0: wired, no floorplan)
+  parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
+  parameter int READ_IDLE  = 1,          //   gather timeout,
+  parameter bit READ_WAIT  = 1'b1        //   and wait (docs/f2_hbm.md "The memory path")
 ) (
   input  logic          clk,
   input  logic          clk_f,
   input  logic          rst,
   input  logic          aclk,
   input  logic          arst,
-  input  logic          hclk,
-  input  logic          hrst,
   input  logic          hbm_ready,
   output logic [2:0]    led,
   // ---- the shell's OCL (AppPF BAR0), aclk
@@ -121,32 +125,57 @@ module otpu_f2_hbm_sys #(
   output logic          pcis_rlast,
   output logic          pcis_rvalid,
   input  logic          pcis_rready,
-  // ---- the HBM's AXI3 ports 0 .. S NCH - 1 (hclk; cl_mem_hbm_wrapper, AXI4_INTERFACE 0)
-  output logic [S*NCH-1:0][5:0]   hbm_awid,
-  output logic [S*NCH-1:0][33:0]  hbm_awaddr,
-  output logic [S*NCH-1:0][3:0]   hbm_awlen,
-  output logic [S*NCH-1:0]        hbm_awvalid,
-  input  logic [S*NCH-1:0]        hbm_awready,
-  output logic [S*NCH-1:0][255:0] hbm_wdata,
-  output logic [S*NCH-1:0][31:0]  hbm_wstrb,
-  output logic [S*NCH-1:0]        hbm_wlast,
-  output logic [S*NCH-1:0]        hbm_wvalid,
-  input  logic [S*NCH-1:0]        hbm_wready,
-  input  logic [S*NCH-1:0][5:0]   hbm_bid,
-  input  logic [S*NCH-1:0][1:0]   hbm_bresp,
-  input  logic [S*NCH-1:0]        hbm_bvalid,
-  output logic [S*NCH-1:0]        hbm_bready,
-  output logic [S*NCH-1:0][5:0]   hbm_arid,
-  output logic [S*NCH-1:0][33:0]  hbm_araddr,
-  output logic [S*NCH-1:0][3:0]   hbm_arlen,
-  output logic [S*NCH-1:0]        hbm_arvalid,
-  input  logic [S*NCH-1:0]        hbm_arready,
-  input  logic [S*NCH-1:0][5:0]   hbm_rid,
-  input  logic [S*NCH-1:0][255:0] hbm_rdata,
-  input  logic [S*NCH-1:0][1:0]   hbm_rresp,
-  input  logic [S*NCH-1:0]        hbm_rlast,
-  input  logic [S*NCH-1:0]        hbm_rvalid,
-  output logic [S*NCH-1:0]        hbm_rready
+  // ---- the host branch towards the SmartConnect fabric (cl_opentpu_hbm u_sc S_HOST, aclk)
+  output logic [15:0]   h_awid,
+  output logic [63:0]   h_awaddr,
+  output logic [7:0]    h_awlen,
+  output logic [2:0]    h_awsize,
+  output logic [1:0]    h_awburst,
+  output logic          h_awvalid,
+  input  logic          h_awready,
+  output logic [511:0]  h_wdata,
+  output logic [63:0]   h_wstrb,
+  output logic          h_wlast,
+  output logic          h_wvalid,
+  input  logic          h_wready,
+  input  logic [15:0]   h_bid,
+  input  logic [1:0]    h_bresp,
+  input  logic          h_bvalid,
+  output logic          h_bready,
+  output logic [15:0]   h_arid,
+  output logic [63:0]   h_araddr,
+  output logic [7:0]    h_arlen,
+  output logic [2:0]    h_arsize,
+  output logic [1:0]    h_arburst,
+  output logic          h_arvalid,
+  input  logic          h_arready,
+  input  logic [15:0]   h_rid,
+  input  logic [511:0]  h_rdata,
+  input  logic [1:0]    h_rresp,
+  input  logic          h_rlast,
+  input  logic          h_rvalid,
+  output logic          h_rready,
+  // ---- the channels' AXI4 masters at the core clock (u_sc S_N<p>: the channel's SmartConnect
+  //      onto HBM AXI3 port p at 450 MHz; otpu_f2_hbm_axi ch_*)
+  output logic [S*NCH-1:0][33:0]  ch_awaddr,
+  output logic [S*NCH-1:0]        ch_awvalid,
+  input  logic [S*NCH-1:0]        ch_awready,
+  output logic [S*NCH-1:0][511:0] ch_wdata,
+  output logic [S*NCH-1:0][63:0]  ch_wstrb,
+  output logic [S*NCH-1:0]        ch_wvalid,
+  input  logic [S*NCH-1:0]        ch_wready,
+  input  logic [S*NCH-1:0]        ch_bvalid,
+  input  logic [S*NCH-1:0][1:0]   ch_bresp,
+  output logic [S*NCH-1:0]        ch_bready,
+  output logic [S*NCH-1:0][33:0]  ch_araddr,
+  output logic [S*NCH-1:0][7:0]   ch_arlen,
+  output logic [S*NCH-1:0]        ch_arvalid,
+  input  logic [S*NCH-1:0]        ch_arready,
+  input  logic [S*NCH-1:0][511:0] ch_rdata,
+  input  logic [S*NCH-1:0]        ch_rvalid,
+  input  logic [S*NCH-1:0]        ch_rlast,
+  input  logic [S*NCH-1:0][1:0]   ch_rresp,
+  output logic [S*NCH-1:0]        ch_rready
 );
   localparam int NPORT = S * NCH;
   initial if (NPORT > 32 || CH_LOG2 != 29)
@@ -203,15 +232,16 @@ module otpu_f2_hbm_sys #(
     .m_araddr(x_araddr), .m_arvalid(x_arvalid), .m_arready(x_arready),
     .m_rdata(x_rdata), .m_rresp(x_rresp), .m_rvalid(x_rvalid), .m_rready(x_rready));
 
-  // ---- the slices' channels: a bridge each
+  // ---- the slices' channels
   logic [NPORT-1:0]        n_cvalid, n_cready, n_cwe, n_wvalid, n_wready, n_rvalid, n_err;
   logic [NPORT-1:0][24:0]  n_caddr;
   logic [NPORT-1:0][511:0] n_wdata, n_rdata;
   logic [NPORT-1:0][63:0]  n_wmask;
   logic [NPORT-1:0][15:0]  n_wdone;
-  // the slices' channels, the host, the HBM ports
-  otpu_f2_hbm_mem #(.NPORT(NPORT), .NXR(NXR)) u_mem (
-    .clk, .rst, .aclk, .arst, .hclk, .hrst,
+  // the slices' channels and the host onto the SmartConnect fabric's slaves
+  otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .CH_LOG2(CH_LOG2), .READ_BURST(READ_BURST),
+                    .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT)) u_mem (
+    .clk, .rst, .aclk, .arst,
     .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask, .n_rvalid,
     .n_rdata, .n_wdone, .n_err,
     .pcis_awid, .pcis_awaddr, .pcis_awlen, .pcis_awsize, .pcis_awburst, .pcis_awvalid,
@@ -219,12 +249,22 @@ module otpu_f2_hbm_sys #(
     .pcis_bresp, .pcis_bvalid, .pcis_bready, .pcis_arid, .pcis_araddr, .pcis_arlen, .pcis_arsize,
     .pcis_arburst, .pcis_arvalid, .pcis_arready, .pcis_rid, .pcis_rdata, .pcis_rresp,
     .pcis_rlast, .pcis_rvalid, .pcis_rready, .pcis_wbusy,
-    .hbm_awid, .hbm_awaddr, .hbm_awlen, .hbm_awvalid, .hbm_awready, .hbm_wdata, .hbm_wstrb,
-    .hbm_wlast, .hbm_wvalid, .hbm_wready, .hbm_bid, .hbm_bresp, .hbm_bvalid, .hbm_bready,
-    .hbm_arid, .hbm_araddr, .hbm_arlen, .hbm_arvalid, .hbm_arready, .hbm_rid, .hbm_rdata,
-    .hbm_rresp, .hbm_rlast, .hbm_rvalid, .hbm_rready);
+    .h_awid, .h_awaddr, .h_awlen, .h_awsize, .h_awburst, .h_awvalid, .h_awready, .h_wdata,
+    .h_wstrb, .h_wlast, .h_wvalid, .h_wready, .h_bid, .h_bresp, .h_bvalid, .h_bready, .h_arid,
+    .h_araddr, .h_arlen, .h_arsize, .h_arburst, .h_arvalid, .h_arready, .h_rid, .h_rdata,
+    .h_rresp, .h_rlast, .h_rvalid, .h_rready,
+    .ch_awaddr, .ch_awvalid, .ch_awready, .ch_wdata, .ch_wstrb, .ch_wvalid, .ch_wready, .ch_bvalid,
+    .ch_bresp, .ch_bready, .ch_araddr, .ch_arlen, .ch_arvalid, .ch_arready, .ch_rdata, .ch_rvalid,
+    .ch_rlast, .ch_rresp, .ch_rready);
 
-  // ---- the accelerator (HAS_I2C 0: no I2C on the slot; temp 0: the shell owns the SYSMON)
+  // ---- the accelerator (HAS_I2C 0: no I2C on the slot; temp 0: the shell owns the SYSMON).
+  // COLL_GATHER S > 1: a one-slice build's collective unit runs BAR alone (otpu_coll_bar, CAPS2
+  // bit0 0), as the card's since release r2 and as the simulations build every one-slice FPGA
+  // target (rtlsim BOARD_UARCH): no program compiled for one slice has a GATHER and the host
+  // refuses one there (opentpu/host/board.py check_no_gather). The GATHER unit (otpu_coll) at
+  // S = 1 was dead area in SLR2 inside the TMEM's grant cone: ba86b5df routed its asel -> qd
+  // enables through its grant at -0.080 ns (67 failing endpoints; docs/wide_port.md "SLR2
+  // without the hot spot"). S > 1 keeps GATHER.
   logic [3:0] i2c_lo;
   otpu_board #(.S(S), .NCH(NCH), .CH_LOG2(CH_LOG2), .DRAM_LOG2(DRAM_LOG2), .D(D), .MCOLS(MCOLS), .ACT_ROWS(ACT_ROWS), .ACT_BLOCKS(ACT_BLOCKS),
                .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS), .FIFO_DEPTH(FIFO_DEPTH),
@@ -232,7 +272,7 @@ module otpu_f2_hbm_sys #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES),
                .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID), .DDR_MTS(DDR_MTS),
                .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_I2C(1'b0), .CHASH(CHASH),
-               .DSTEP(DSTEP), .HOSTCAL(1'b0), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .PLATFORM(PLATFORM),
+               .DSTEP(DSTEP), .HOSTCAL(1'b0), .COLL_GATHER(S > 1), .SEQ_WC(SEQ_WC), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .PLATFORM(PLATFORM),
                .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),

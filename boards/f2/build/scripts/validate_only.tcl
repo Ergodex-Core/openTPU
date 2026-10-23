@@ -22,9 +22,22 @@ proc otpu_validate_existing_route {scripts_dir} {
         set_param general.maxThreads 8
         open_checkpoint $parent_dcp
         set opened 1
-        source ${scripts_dir}/inspect_ddr_init.tcl
-        if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
+        # The parent's CL (route_opt.py, from its frozen target): the DDR CL carries the DIMM's
+        # calibration firmware, its sentinel pinned by the launcher (OTPU_EXPECTED_DDR_INIT); the HBM CL
+        # (platform mem "hbm": no DIMM, the SmartConnect fabric WRAPPER/CL/u_sc) has none, and the
+        # launcher passes none_hbm. The checkpoint must be that CL.
+        set otpu_expect_hbm [expr {$::env(OTPU_EXPECTED_DDR_INIT) eq "none_hbm"}]
+        set otpu_sc_cells [llength [get_cells -quiet WRAPPER/CL/u_sc]]
+        if {($otpu_expect_hbm && $otpu_sc_cells != 1) || (!$otpu_expect_hbm && $otpu_sc_cells != 0)} {
+          error "openTPU: the checkpoint's CL (SmartConnect fabric cells: $otpu_sc_cells) differs from the parent run's target"
+        }
+        if {$otpu_expect_hbm} {
+          set ddr_cal_init none_hbm
+        } else {
+          source ${scripts_dir}/inspect_ddr_init.tcl
+          if {![string equal -nocase $ddr_cal_init $::env(OTPU_EXPECTED_DDR_INIT)]} {
             error "openTPU: inherited DDR firmware sentinel mismatch"
+          }
         }
         source ${scripts_dir}/validate_route.tcl
         set f [open $marker r]
