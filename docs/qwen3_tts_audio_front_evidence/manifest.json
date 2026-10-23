@@ -1,0 +1,16 @@
+[
+  {
+    "file": "tokenizer-config.py",
+    "url": "https://raw.githubusercontent.com/QwenLM/Qwen3-TTS/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/configuration_qwen3_tts_tokenizer_v2.py",
+    "sha256": "9e30c24394b00cb0366d7da3482b7436468acc1cd3da1a6fe614a1d34653a5e3",
+    "bytes": 7946,
+    "executed": false
+  },
+  {
+    "file": "transformers-masking-4.57.3.py",
+    "url": "https://raw.githubusercontent.com/huggingface/transformers/v4.57.3/src/transformers/masking_utils.py",
+    "sha256": "7a963feed8173b8265298dd24350c166222ce6b4719442fce48ab414d0478a6a",
+    "bytes": 60515,
+    "executed": false
+  }
+]

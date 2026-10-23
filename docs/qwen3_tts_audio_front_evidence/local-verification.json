@@ -1,0 +1,15 @@
+{
+  "acceptance_code_hashes_verified": 6,
+  "source_tree_component_files_verified": 49,
+  "runtime_files_verified_against_30100afb": 95,
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "mismatches": [],
+  "standalone_bytes": 37765248,
+  "combined_bytes": 2713376640,
+  "delta_bytes": 37765120,
+  "free_dram_bytes": 1581590656,
+  "preserved_codec_fixture_rows_verified": 9,
+  "upstream_summary_thresholds_and_failed_gate_preserved": true
+}

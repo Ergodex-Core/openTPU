@@ -1,0 +1,1 @@
+{"command": ["/home/ubuntu/otpu-venv/bin/python", "-m", "pytest", "-q", "tests/test_qwen3_tts_audio_front.py"], "cwd": "/home/ubuntu/qwen3-tts-waveform-20261023-01/source", "timeout": 600}

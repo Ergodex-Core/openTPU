@@ -1,0 +1,250 @@
+{
+  "talker_commit": "883edbdd7e6278055be382abe48807803ea9a3e1",
+  "talker_receipt_sha256": "d553b53081fcb0ff2f4bbfa325ebd53944cc590ea87c84f8dbc32913ba6abc1d",
+  "arithmetic_target": "FP32 source algebra",
+  "upstream_overall_gate_passed": false,
+  "upstream_thresholds": {
+    "logit_relative_l2": 0.035,
+    "generated_greedy_agreement": 1.0
+  },
+  "upstream_summary": {
+    "fp32": {
+      "generated_ids": 144,
+      "open_loop_id_agreement": 144,
+      "complete_frame_agreement": 9,
+      "open_loop_predictor_greedy_agreement": 135,
+      "predictor_decisions": 135,
+      "conditional_predictor_greedy_agreement": 135,
+      "max_open_loop_predictor_logit_error": 0.00027106587932356906,
+      "max_conditional_predictor_logit_error": 0.0001988854239718339,
+      "max_feedback_logit_error": 0.00026749757444859156,
+      "max_embedding_sum_error": 0.0,
+      "prefill_final_greedy_agreement": 3,
+      "prefill_all_row_fixed_mask_greedy_agreement": 42,
+      "prefill_all_rows": 42,
+      "final_prefill_rows": 3,
+      "eos_decision_agreement": 9,
+      "eos_decisions": 9
+    },
+    "bf16": {
+      "generated_ids": 144,
+      "open_loop_id_agreement": 127,
+      "complete_frame_agreement": 6,
+      "open_loop_predictor_greedy_agreement": 118,
+      "predictor_decisions": 135,
+      "conditional_predictor_greedy_agreement": 127,
+      "max_open_loop_predictor_logit_error": 0.3664298384476359,
+      "max_conditional_predictor_logit_error": 0.07513693524724374,
+      "max_feedback_logit_error": 0.070254249313969,
+      "max_embedding_sum_error": 0.001841214192911817,
+      "prefill_final_greedy_agreement": 3,
+      "prefill_all_row_fixed_mask_greedy_agreement": 37,
+      "prefill_all_rows": 42,
+      "final_prefill_rows": 3,
+      "eos_decision_agreement": 9,
+      "eos_decisions": 9
+    }
+  },
+  "frames": [
+    {
+      "text": "Hello.",
+      "frame": 0,
+      "ids": [
+        1995,
+        117,
+        1114,
+        1723,
+        1443,
+        1543,
+        1751,
+        240,
+        1242,
+        329,
+        293,
+        1347,
+        747,
+        2027,
+        1900,
+        786
+      ]
+    },
+    {
+      "text": "Hello.",
+      "frame": 1,
+      "ids": [
+        215,
+        1782,
+        519,
+        1176,
+        350,
+        1573,
+        1636,
+        145,
+        883,
+        455,
+        743,
+        1382,
+        1677,
+        344,
+        1008,
+        803
+      ]
+    },
+    {
+      "text": "Hello.",
+      "frame": 2,
+      "ids": [
+        212,
+        1009,
+        519,
+        677,
+        1210,
+        1748,
+        1636,
+        1434,
+        1611,
+        1974,
+        743,
+        362,
+        1555,
+        781,
+        82,
+        1978
+      ]
+    },
+    {
+      "text": "Good morning.",
+      "frame": 0,
+      "ids": [
+        1995,
+        117,
+        1114,
+        1723,
+        1443,
+        1543,
+        1751,
+        240,
+        1242,
+        329,
+        293,
+        1347,
+        747,
+        2027,
+        1900,
+        786
+      ]
+    },
+    {
+      "text": "Good morning.",
+      "frame": 1,
+      "ids": [
+        215,
+        1782,
+        519,
+        1176,
+        350,
+        1573,
+        1636,
+        145,
+        883,
+        455,
+        743,
+        1382,
+        1677,
+        344,
+        1008,
+        803
+      ]
+    },
+    {
+      "text": "Good morning.",
+      "frame": 2,
+      "ids": [
+        212,
+        1009,
+        519,
+        677,
+        1210,
+        1748,
+        1052,
+        1202,
+        1019,
+        1333,
+        223,
+        796,
+        896,
+        781,
+        82,
+        803
+      ]
+    },
+    {
+      "text": "The FPGA speaks.",
+      "frame": 0,
+      "ids": [
+        1995,
+        117,
+        1114,
+        1723,
+        1443,
+        1543,
+        1751,
+        240,
+        1242,
+        329,
+        293,
+        1347,
+        747,
+        2027,
+        1900,
+        786
+      ]
+    },
+    {
+      "text": "The FPGA speaks.",
+      "frame": 1,
+      "ids": [
+        215,
+        1782,
+        519,
+        1176,
+        350,
+        1573,
+        1636,
+        145,
+        883,
+        455,
+        743,
+        1382,
+        1677,
+        344,
+        1008,
+        803
+      ]
+    },
+    {
+      "text": "The FPGA speaks.",
+      "frame": 2,
+      "ids": [
+        212,
+        1009,
+        519,
+        677,
+        1210,
+        1748,
+        1636,
+        1434,
+        1504,
+        1974,
+        223,
+        1377,
+        783,
+        781,
+        85,
+        803
+      ]
+    }
+  ],
+  "complete_utterances": false,
+  "waveform_quality_evidence": false
+}
