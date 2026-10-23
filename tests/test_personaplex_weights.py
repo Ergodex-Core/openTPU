@@ -186,6 +186,59 @@ def test_text_head_rejects_invalid_checkpoint_projection(checkpoint, fault):
         _ = weights.text_head
 
 
+def test_component_readers_preserve_order_and_do_not_materialize_other_components(checkpoint, monkeypatch):
+    path, _, _ = checkpoint
+    weights = MLXWeights(path)
+    # Exercise the reader with small independent shapes, without relaxing the
+    # production read_config contract or generating a large test checkpoint.
+    weights.config["temporal"].update(text_card=8, card=4)
+    weights.config["delays"] = [0, 0, 1, 1]
+    weights.config["depformer"].update(num_steps=3, dim=32, card=7)
+    values = {"text_emb.weight": np.full((9, 128), 0.25, np.float16)}
+    values.update({f"emb.{i}.weight": np.full((5, 128), i + 1, np.float16) for i in range(3)})
+    values.update({f"linears.{i}.weight": np.full((7, 32), i + 5, np.float16) for i in range(3)})
+    values["text_linear.weight"] = np.zeros((2, 2), np.float16)  # deliberately unrelated
+    _save_file(values, path / "embeddings.safetensors")
+    original, reads = _TensorFile.raw, []
+    def read(reader, key, rows=None):
+        reads.append(key)
+        return original(reader, key, rows)
+    monkeypatch.setattr(_TensorFile, "raw", read)
+    assert len(weights.input_embedding_metadata()) == 4
+    assert len(weights.audio_head_metadata()) == 3
+    assert reads == []
+    embeddings = weights.input_embeddings
+    assert reads == ["text_emb.weight", "emb.0.weight", "emb.1.weight", "emb.2.weight"]
+    heads = weights.audio_heads
+    assert reads[4:] == [f"linears.{i}.weight" for i in range(3)]
+    for index, table in enumerate(embeddings):
+        np.testing.assert_array_equal(table, values[reads[index]].astype(np.float32))
+    np.testing.assert_array_equal(heads[:, 0, 0], [5, 6, 7])
+
+
+@pytest.mark.parametrize("kind", ["input", "audio"])
+@pytest.mark.parametrize("fault", ["missing", "shape", "nonfinite"])
+def test_component_readers_reject_invalid_selected_payload(checkpoint, kind, fault):
+    path, _, _ = checkpoint
+    weights = MLXWeights(path)
+    weights.config["temporal"].update(text_card=8, card=4)
+    weights.config["delays"] = [0, 0]
+    weights.config["depformer"].update(num_steps=1, dim=32, card=7)
+    values = {"text_emb.weight": np.ones((9, 128), np.float16),
+              "emb.0.weight": np.ones((5, 128), np.float16),
+              "linears.0.weight": np.ones((7, 32), np.float16)}
+    key = "text_emb.weight" if kind == "input" else "linears.0.weight"
+    if fault == "missing":
+        del values[key]
+    elif fault == "shape":
+        values[key] = values[key][:-1]
+    else:
+        values[key][0, 0] = np.nan
+    _save_file(values, path / "embeddings.safetensors")
+    with pytest.raises(ValueError):
+        _ = weights.input_embeddings if kind == "input" else weights.audio_heads
+
+
 @pytest.mark.parametrize("fault", ["missing", "shape", "metadata"])
 def test_corrupt_checkpoint_is_refused(checkpoint, fault):
     path, _, values = checkpoint

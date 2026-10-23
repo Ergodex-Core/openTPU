@@ -5,6 +5,12 @@ execute only the 32-layer temporal transformer, attention/KV updates and final
 RMSNorm. They produce hidden activations from captured voice embeddings, not
 audio or generated tokens. Neither numerical quality nor full speech is accepted.
 
+Later development adds CPU/ISA-validated standalone device slices for resident
+RoPE/text-head/greedy selection and input embeddings/stored voice/audio heads.
+See [token slice](personaplex_token_slice.md) and
+[device components](personaplex_device_components.md). These were not part of the
+physical measurements below and do not make the hybrid server FPGA-only.
+
 ## Diagnosis and targeted source correction
 
 Both runs use the existing pinned `aufklarer/PersonaPlex-7B-MLX-4bit` checkpoint,
@@ -95,12 +101,12 @@ Output NPY SHA-256 for both mixed backends is
 | Component | Current execution boundary | Required for full-FPGA completion |
 |---|---|---|
 | Mimi audio encoder/decoder, codebook operations and codec state | Native upstream CPU codec | Device codec kernels, weights and streaming state; PCM-in/PCM-out validation |
-| Text/audio embeddings and their sum; voice conditioning tensors | Native CPU `LMModel.forward_embeddings`; captured inputs bypass this in the benchmark | Resident device tables and stream assembly |
+| Text/audio embeddings and their sum; voice conditioning tensors | Standalone device programs validated on CPU/ISA; hybrid server still uses native CPU | Combined residency, device chaining and native prompt/cache/delay scheduling |
 | Temporal transformer, KV and final norm | FPGA, measured above | Precision acceptance, context/capacity and latency improvements |
-| RoPE coefficients | `Engine.step` calls host `G.rope_tables` for every frame | Device-resident precomputed tables or device coefficient generation |
-| Text vocabulary projection | CPU `text_linear` | Device head and token/logit verification |
-| Depth projections, step embeddings, six-layer depth transformer and audio heads | Native CPU depth/depformer path | Device kernels, per-codebook state and checkpoint conversion |
-| Temperature, top-k and token sampling/RNG | Native CPU LMGen sampling | Device sampling with an explicit reproducibility contract |
+| RoPE coefficients | Resident device table in the CPU/ISA-validated token slice; original temporal bridge computes on host | Qualified physical combined-path validation |
+| Text vocabulary projection | INT8 device head/greedy in the CPU/ISA-validated token slice; original server still uses CPU | Combined physical path and quality acceptance |
+| Depth projections, step embeddings, six-layer depth transformer and audio heads | Standalone device audio heads validated on CPU/ISA; depth path remains CPU | Device conditioning/transformer, per-codebook state, residency and chaining |
+| Temperature, top-k and token sampling/RNG | Native CPU LMGen; device greedy is implemented in standalone heads | Explicit greedy-only final mode, or separately implement native stochastic mode |
 
 `personaplex_bridge.install_bridge` replaces only `lm.transformer` and
 `lm.out_norm`; `load_host_model` deliberately loads remaining tensors on CPU.

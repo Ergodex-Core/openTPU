@@ -344,6 +344,48 @@ class MLXWeights:
         return self._text_head_reader().matrix(
             "text_linear.weight", (self.config["temporal"]["text_card"], self.spec.hidden))
 
+    def input_embedding_metadata(self):
+        """Header-only input tables in API order: text, then the audio streams."""
+        reader = self._text_head_reader()
+        temporal = self.config["temporal"]
+        names = [("text_emb.weight", temporal["text_card"] + 1)] + [
+            (f"emb.{index}.weight", temporal["card"] + 1)
+            for index in range(len(self.config["delays"]) - 1)]
+        result = []
+        for name, rows in names:
+            item = reader.metadata(name)
+            if tuple(item["shape"]) != (rows, self.spec.hidden):
+                raise ValueError(f"{name}: invalid input embedding shape {item['shape']}")
+            result.append(item)
+        return result
+
+    @property
+    def input_embeddings(self):
+        """Materialize only input tables for offline FP32 device-image preparation."""
+        entries = self.input_embedding_metadata()
+        reader = self._text_head_reader()
+        return tuple(reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries)
+
+    def audio_head_metadata(self):
+        """Header-only codebook head bank, excluding depth-transformer tensors."""
+        reader = self._text_head_reader()
+        spec = self.config["depformer"]
+        result = []
+        for index in range(spec["num_steps"]):
+            name = f"linears.{index}.weight"
+            item = reader.metadata(name)
+            if tuple(item["shape"]) != (spec["card"], spec["dim"]):
+                raise ValueError(f"{name}: invalid audio head shape {item['shape']}")
+            result.append(item)
+        return result
+
+    @property
+    def audio_heads(self):
+        """Materialize only the audio output heads for offline device conversion."""
+        reader = self._text_head_reader()
+        entries = self.audio_head_metadata()
+        return np.stack([reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries])
+
     def host_checkpoint_fingerprint(self):
         """Invalidate a cached preflight if checkpoint files change on disk."""
         if read_config(self.model_dir) != self.config:
