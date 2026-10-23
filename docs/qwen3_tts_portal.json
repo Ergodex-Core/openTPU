@@ -1,0 +1,59 @@
+{
+  "id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "task": "text-to-speech",
+  "display_name": "Qwen3-TTS 0.6B CustomVoice",
+  "license": "Apache-2.0",
+  "execution_target": "fpga-only",
+  "status": "blocked",
+  "enabled": false,
+  "readiness": "text_projection_slice_only",
+  "hardware_validated": false,
+  "speakers": [
+    "Vivian",
+    "Serena",
+    "Uncle_Fu",
+    "Dylan",
+    "Eric",
+    "Ryan",
+    "Aiden",
+    "Ono_Anna",
+    "Sohee"
+  ],
+  "languages": [
+    "Auto",
+    "Chinese",
+    "English",
+    "Japanese",
+    "Korean",
+    "German",
+    "French",
+    "Russian",
+    "Portuguese",
+    "Spanish",
+    "Italian"
+  ],
+  "style_instructions": false,
+  "voice_cloning": false,
+  "streaming_available": false,
+  "sample_rate_hz": 24000,
+  "channels": 1,
+  "codec_frames_per_second": 12.5,
+  "samples_per_codec_frame": 1920,
+  "codebooks_per_frame": 16,
+  "implemented_slices": [
+    "text_projection_int8_silu_fp32"
+  ],
+  "blockers": [
+    "device_text_embedding_and_prompt_assembly",
+    "talker_28_layer_transformer_and_codec_head",
+    "code_predictor_5_layers_and_15_codebook_heads",
+    "device_sampling_rng_and_generation_control",
+    "rvq_and_audio_decoder_transformer",
+    "causal_convolution_transpose_convolution_and_stream_state",
+    "decoder_exact_gelu_and_snakebeta",
+    "checkpoint_precision_audio_quality_and_shared_image_validation"
+  ],
+  "fallback": null,
+  "reference_url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice"
+}

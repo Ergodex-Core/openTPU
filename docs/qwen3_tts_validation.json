@@ -1,0 +1,55 @@
+{
+  "backend": "isa",
+  "host": "existing EC2 i-0c78de2253f66519d",
+  "source_directory": "/home/ubuntu/qwen3-tts-audit-20261023-01/source",
+  "ssm_command_id": "1268b94d-ef94-4b39-a485-4e46ddae1ba4",
+  "command": "python -m pytest tests/test_qwen3_tts.py -q",
+  "result": "18 passed in 0.34s",
+  "exit_code": 0,
+  "python": "3.12.3",
+  "numpy": "2.5.4",
+  "pytest": "9.1.1",
+  "base_sha": "bbee9039ac65fa54bd3f9b29ceb4007e070a5d75",
+  "tested_compiler_base_sha": "e55992e4621f1930c57c9712dd96d5f1ec7c4e1c",
+  "base_delta": "Only existing publisher deployment logging fix and regression; no compiler/runtime changes",
+  "hardware_access": false,
+  "rtl_simulation": false,
+  "upstream_code_executed": false,
+  "tensor_payload_downloaded": false,
+  "full_model_validated": false,
+  "test_source_sha256": {
+    "opentpu/llm/qwen3_tts.py": "b2b5a3cb5bf8a07c5e0fe8a7fea832c7f91cdfe458e69d8d6dc6ec0bf3753b03",
+    "opentpu/kernels/tts_projection.py": "779f2e1dec425a4705bf4afe52d5019f4c3f71bc3a3a82b881180da5e51731bf",
+    "tests/test_qwen3_tts.py": "a0674b1d3fdcfe67557e70f3a6588add854f53256476a86c68796b8e348e0b36",
+    "tests/fixtures/qwen3_tts_06b_config.json": "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455"
+  },
+  "native_compile": {
+    "ssm_command_id": "68c47f4f-ddca-497f-ad66-541f6e4f3a29",
+    "shape": [
+      2048,
+      2048,
+      1024
+    ],
+    "rows": 1,
+    "instructions_per_slice": [
+      16
+    ],
+    "imem_words_per_slice": [
+      128
+    ],
+    "imem_word_limit": 32768,
+    "dram_used_bytes_per_slice": 6377472,
+    "dram_allocation_bytes_per_slice": 8388608,
+    "tmem_word_limit": 65536,
+    "opcode_histogram": {
+      "LD": 3,
+      "QACT": 2,
+      "MM": 2,
+      "VOP": 7,
+      "ST": 1,
+      "HALT": 1
+    },
+    "real_checkpoint_values": false,
+    "target": "f2 configuration only; shared card not queried"
+  }
+}
