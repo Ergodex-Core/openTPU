@@ -1,0 +1,9 @@
+{
+  "acceptance_start_source_files": 44,
+  "all_match": true,
+  "rows_hash_matches": true,
+  "supplemental_hashes": {
+    "tools/qwen3_tts_gelu_domain_acceptance.py": true,
+    "opentpu/kernels/tts_audio_upsample.py": true
+  }
+}

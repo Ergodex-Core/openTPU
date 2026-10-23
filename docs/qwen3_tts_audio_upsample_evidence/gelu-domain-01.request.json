@@ -1,0 +1,1 @@
+{"command": ["/home/ubuntu/otpu-venv/bin/python", "tools/qwen3_tts_gelu_domain_acceptance.py", "--output", "/home/ubuntu/qwen3-tts-upsample-20261023-01/gelu-domain-01.json"], "cwd": "/home/ubuntu/qwen3-tts-upsample-20261023-01/source", "timeout": 120}

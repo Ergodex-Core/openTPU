@@ -1,0 +1,8 @@
+{
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "stable_component_ancestor": "e0d68fea470e68f424df0888d38083a7d34f504d",
+  "resident_chunk_source_root": "/home/ubuntu/qwen3-tts-resident-chunks-20261023-01/source",
+  "chunk_commit_pending_validation": true,
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "physical_hardware_access": false
+}
