@@ -3,6 +3,7 @@
 Every test runs the same program on the same DRAM images through both and requires identical
 DRAM and TMEM contents in every slice.
 """
+import os
 import re
 import subprocess
 
@@ -1465,3 +1466,218 @@ def test_additive_mask_block_rtl(have_verilator, board):
     drams, tmems, _ = rtlsim.run(cfg, [prog], [img.copy()], **kw)
     assert np.array_equal(np.asarray(tmems[0]).view(np.uint32), tm)
     assert np.array_equal(drams[0][:len(m.slices[0].dram)], m.slices[0].dram)
+
+
+# ------------------------------------------------------------------- MXU chunk lanes (MXU_C)
+# The lock-step chunk lanes (otpu_mxu_lanes, docs/v4/proposal-2-four-lanes.md; MXU_C in the
+# uarch): C copies of the MXU, lane l streaming rows l, l + C, ... of every MM, C chunks a cycle
+# through port B and the memory models' lane ports. A uarch key: the programs and the images are
+# the same, and the results must be the ISA simulator's bit for bit -- MMs of any N (not a
+# multiple of C: a lane with fewer rows), RMAX folded over the lanes, ACC and ASCALE, PAIR and
+# the 4-bit formats, replay (M > MCOLS), and the random programs' hazards around them.
+@pytest.mark.parametrize("seed,C", [(0, 2), (1, 4), (2, 4), (3, 4), (4, 3)])
+def test_chunk_lanes_fuzz(have_verilator, seed, C):
+    rng = np.random.default_rng(7000 + seed)
+    cfg = Config(S=1)
+    prog = _random_program(rng, cfg)
+    assert any(i.op == I.MM and (i.w[3] & 0xFFFF) % C for i in prog)   # N not a multiple of C
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs], uarch={"MXU_C": C})
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+
+
+@pytest.mark.parametrize("mcols,rows,seed", [(4, 16, 4), (2, 8, 1)])
+def test_chunk_lanes_replay(have_verilator, mcols, rows, seed):
+    """Replayed rows (M > MCOLS) on 4 lanes: each lane replays its own rows from its FIFO."""
+    rng = np.random.default_rng(3000 + seed)
+    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows)
+    prog = _random_program(rng, cfg, n_ops=60)
+    assert any(i.op == I.MM and (i.w[5] >> 16) & 0xFF > mcols for i in prog)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs], uarch={"MXU_C": 4})
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+
+
+@pytest.mark.parametrize("prog,seed,stall,lat", [("hazard", 0, 0, 20), ("random", 3, 40, 20),
+                                                 ("hazard", 2, 60, 120)])
+def test_chunk_lanes_board_memory_path(have_verilator, prog, seed, stall, lat):
+    """4 lanes on the board's memory path: lane 0 through the native adapter (with the DMA and
+    the loader), lanes 1-3 on the memory model's lane ports, every handshake stalled at random
+    and the data late; the hazard programs' dependencies (a QST before an MM's rows, wr_idle)
+    hold across the lane ports, bit for bit."""
+    rng = np.random.default_rng(6100 + seed)
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    p = (_hazard_program if prog == "hazard" else _random_program)(rng, cfg)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=stall, seed=seed + 1, lat=lat,
+                                  uarch={"MXU_C": 4, "MXU_E": 4})
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 4)
+
+
+def _assert_lane_copies(st, C):
+    """The lane memory (otpu_lane_mem, docs/v4/p2-f2.md) ran: C image copies with equal hashes at
+    the dump (rtlsim raises when they differ), and copies 1 .. C-1 read their lanes' chunks."""
+    if os.environ.get("OTPU_LMEM", "1") == "0":
+        return
+    assert sorted(st["lmem_hash"][0]) == list(range(C)), st.get("lmem_hash")
+    for l in range(1, C):
+        assert sum(d["b_rd"] for d in st["native_copies"] if d["copy"] == l) > 0, l
+
+
+def test_chunk_lanes_on_the_board_uarch(have_verilator):
+    """The card's configuration with MXU_C 4 (targets/ypcb-00338.toml's c4 variant: the one
+    pumped TMEM copy, WAITC, E 4 -> one epilogue lane a chunk lane) on the board's memory
+    path."""
+    rng = np.random.default_rng(6101)
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    p = _hazard_program(rng, cfg, gather=False)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=50, seed=2, uarch={**rtlsim.BOARD_UARCH, "MXU_C": 4})
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 4)
+
+
+# ------------------------------------------------------------------- packed PEs (MXU_PACK)
+# v4 candidate P3 (docs/v4/proposal-3-eight-lanes-packed.md): packed PEs, two stationary rows a
+# DSP sharing its weight (otpu_pe_2r: w (x1 2^19 + x0), split at the chain end: exact for the
+# quantizer's activations), MCOLS / 2 physical columns a lane; PAIR at an odd M moves the high
+# columns up a slot (a DSP's two rows share one weight block). A uarch key like MXU_C: bit for
+# bit the ISA simulator's, alone and on P3's 8 chunk lanes (1 KiB a cycle).
+@pytest.mark.parametrize("seed,C,pack,mcols", [(20, 1, 1, 8), (21, 8, 1, 8), (22, 8, 0, 8),
+                                               (23, 3, 1, 8), (24, 8, 1, 4), (25, 1, 1, 4),
+                                               (26, 4, 1, 8)])
+def test_packed_pes_fuzz(have_verilator, seed, C, pack, mcols):
+    """Random programs (PAIR at odd and even M among them, every weight format, RMAX, ACC,
+    ASCALE, RSC, k0) on packed PEs at 1, 3 and 8 chunk lanes."""
+    rng = np.random.default_rng(7000 + seed)
+    cfg = Config(S=1, MCOLS=mcols)
+    prog = _random_program(rng, cfg)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
+                                 uarch={"MXU_C": C, "MXU_PACK": pack})
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+
+
+@pytest.mark.parametrize("mcols", [4, 8])
+@pytest.mark.parametrize("wf", [I.W4I, I.W4F, I.WNV])
+def test_packed_pes_pair_every_m(have_verilator, mcols, wf):
+    """PAIR at every M <= MCOLS / 2 and odd and even KB on packed PEs: at an odd M the high
+    columns M .. 2M-1 sit a slot up (columns M - 1 and M would share a DSP and its weight),
+    and their sums still join their rows'. One lane and 8."""
+    rng = np.random.default_rng(310 + mcols + 7 * wf)
+    D = 128 if wf == I.WNV else 32
+    cfg = Config(S=1, D=D, MCOLS=mcols, ACT_BLOCKS=16, PAIR=True)
+    img = _images(rng, 1)[0]
+    prog = [I.ld(DATA, 0, 4096)]
+    out = 8192
+    for M in range(1, mcols // 2 + 1):
+        for KB in (1, 2, 3, 5):
+            N = int(rng.integers(5, 20))
+            ssa, srs, k0, rsc = _mx_scales(rng, wf, N, KB, True, False)
+            rs = -(-KB // 2) * D
+            src = D * int(rng.integers(0, (4096 - M * KB * D) // D + 1))   # in the loaded words
+            prog += [I.qact(src, M, 0, KB, KB * D, dup=True),
+                     I.mm(INT8, ssa, out, N, KB, rs, N, M, 0, srs, wf=wf, pair=True, k0=k0,
+                          rsc=rsc)]
+            out += M * N + M
+    prog.append(I.halt())
+    m = Machine(cfg, [prog], [img.copy()]).run()
+    for C in (1, 8):
+        drams, tmems, _ = rtlsim.run(cfg, [prog], [img.copy()],
+                                     uarch={"MXU_C": C, "MXU_PACK": 1, "MXU_E": 4})
+        assert np.array_equal(tmems[0], m.slices[0].tmem), C
+        assert np.array_equal(drams[0], m.slices[0].dram), C
+
+
+def test_packed_pes_are_cycle_exact_at_mcols_4(have_verilator):
+    """At MCOLS 4 a packed lane's row latency is the unpacked one's (two physical columns, each
+    PKL = 2 cycles later: LROW 25 both), so the packed MXU runs every program in the same
+    cycles as the unpacked one, at one lane and at 8."""
+    rng = np.random.default_rng(6202)
+    cfg = Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=16)
+    prog = _random_program(rng, cfg)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    for C in (1, 8):
+        cyc = {}
+        for pack in (0, 1):
+            drams, tmems, st = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
+                                          uarch={"MXU_C": C, "MXU_PACK": pack, "MXU_E": 4})
+            assert np.array_equal(tmems[0], m.slices[0].tmem), (C, pack)
+            assert np.array_equal(drams[0], m.slices[0].dram), (C, pack)
+            cyc[pack] = st["cycles"]
+        assert cyc[0] == cyc[1], (C, cyc)
+
+
+@pytest.mark.parametrize("prog,seed,stall,lat", [("hazard", 0, 0, 30), ("random", 3, 40, 20),
+                                                 ("hazard", 2, 60, 120)])
+def test_eight_packed_lanes_board_memory_path(have_verilator, prog, seed, stall, lat):
+    """8 packed lanes on the board's memory path: lane 0 through the native adapter (with the
+    DMA and the loader), lanes 1-7 on the memory model's lane ports, handshakes stalled at
+    random and the data late, bit for bit."""
+    rng = np.random.default_rng(6300 + seed)
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    p = (_hazard_program if prog == "hazard" else _random_program)(rng, cfg)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=stall, seed=seed + 1, lat=lat,
+                                  uarch={"MXU_C": 8, "MXU_E": 4, "MXU_PACK": 1})
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 8)
+
+
+def test_eight_packed_lanes_on_the_board_uarch(have_verilator):
+    """The card's configuration at P3's c8p (targets/ypcb-00338.toml: 8 packed lanes, the one
+    pumped TMEM copy, WAITC, E 4 -> one epilogue lane a chunk lane) on the board's memory
+    path."""
+    rng = np.random.default_rng(6301)
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    p = _hazard_program(rng, cfg, gather=False)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [p], [i.copy() for i in imgs]).run()
+    u = {**rtlsim.BOARD_UARCH, **_target.sim_uarch("ypcb-00338:c8p")}
+    assert u["MXU_C"] == 8 and u["MXU_PACK"] == 1
+    drams, tmems, st = rtlsim.run(cfg, [p], [i.copy() for i in imgs], axi=True, boot=True,
+                                  stall=50, seed=2, uarch=u)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    _assert_lane_copies(st, 8)
+
+
+def test_chunk_lanes_stream_c_chunks_a_cycle(have_verilator):
+    """A decode MM of N rows x KB chunks (M = 1) takes about N x KB cycles on one lane and
+    N x KB / C on C: the lanes stream their rows side by side, the port B bound divided by C."""
+    cfg = Config(S=1, D=128, ACT_BLOCKS=16)
+    D, KB, N = cfg.D, 8, 256
+    prog = [I.ld(DATA, 0, 2048), I.qact(0, 1, 0, KB, KB * D),
+            I.mm(INT8, SC8, 4096, N, KB, KB * D, N, 1, 0, 64), I.halt()]
+    img = _images(np.random.default_rng(9), 1)[0]
+    m = Machine(cfg, [prog], [img.copy()]).run()
+    cyc = {}
+    for C, pack in ((1, 0), (4, 0), (8, 1)):
+        drams, tmems, st = rtlsim.run(cfg, [prog], [img.copy()],
+                                      uarch={"MXU_C": C, "MXU_E": 4, "MXU_PACK": pack})
+        assert np.array_equal(drams[0], m.slices[0].dram)
+        assert np.array_equal(tmems[0], m.slices[0].tmem)
+        cyc[C] = st["cycles"]
+    assert cyc[1] > N * KB                                # the stream is the run
+    assert cyc[4] < cyc[1] * 0.45, cyc                    # 4 chunks a cycle (a fixed start / drain)
+    # the stream part: N x KB / C chunk-cycles (the LD, QACT, start and drain, ~630 cycles,
+    # do not shrink with C): 8 packed lanes save 7/8 of it
+    for C in (4, 8):
+        assert cyc[1] - cyc[C] >= 0.95 * N * KB * (1 - 1 / C), cyc

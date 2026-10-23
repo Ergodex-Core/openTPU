@@ -394,19 +394,23 @@ def main():
         print(f"generate {a.generate} tokens ({'sampled ' + a.sample if samp else 'greedy'}): "
               f"{st['cycles']} cycles, {st['cycles'] / a.generate:.0f} per token, "
               f"{len(progs[0])} instructions; tokens {got}")
-    p = parse(st["trace"], cfg, progs, path.name)
+    # the MXU's chunk lanes (MXU_C, docs/v4/proposal-2-four-lanes.md / proposal-3-eight-lanes-
+    # packed.md): C chunks and C scale words a cycle through the ports
+    C = rtlsim.chunk_lanes(rtlsim.BOARD_UARCH)
+    p = parse(st["trace"], cfg, progs, path.name, C=C)
     p.cycles = st["cycles"]
     rl = p.roofline()
     # port B (chunks) runs at bw; port A (one scale word per block, from buffered beats) and the
     # MXU (one block per cycle) do not: 4-bit weights stream two blocks per chunk
     ps = rl["per_slice"][0]
-    ideal = max(ps["portb"] * 100 / a.bw, ps["porta_cycles"], ps["mxu"])
+    ideal = max(ps["portb"] * 100 / a.bw / C, ps["porta_cycles"] / C, ps["mxu"])
     if a.rows:
         print(f"rows={R} (positions {a.pos}..{a.pos + R - 1}, logits {a.logits}) "
               f"MCOLS={cfg.MCOLS}: {p.cycles / R:.0f} cycles per row")
     print(f"layers={spec.layers} pos={a.pos} bw={a.bw}% lat={a.lat}: {p.cycles} cycles "
           f"({wall:.0f}s sim), core-port roofline {ideal:.0f} cycles (port B {ps['portb']} "
-          f"chunks, port A {ps['porta_cycles']}, MXU {ps['mxu']}), "
+          f"chunks, port A {ps['porta_cycles']}, MXU {ps['mxu']}"
+          + (f"; {C} chunk lanes" if C > 1 else "") + f"), "
           f"efficiency {100 * ideal / p.cycles:.1f}%")
     ar = st.get("axi_reads", [])
     if ar:
@@ -527,7 +531,7 @@ def main():
     if a.dump:
         import json
         from opentpu import lens as L
-        Path(a.dump).write_text(json.dumps(L.to_data(p)))
+        Path(a.dump).write_text(json.dumps(L.to_data(p, rtlsim.BOARD_UARCH)))
     if a.check:
         m = Machine(cfg, [progs[0]], [dram.copy()], args)
         m.run()

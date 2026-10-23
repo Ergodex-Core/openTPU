@@ -32,12 +32,28 @@
 // word address), written at that core cycle (a run's: WAITW's tests); <dir>/pokeb_<SID>.txt,
 // lines "run word value", written when run `run` - 1 ends (run_rst, the core's reset, rises: tb_top
 // +runs).
+// Lane ports (NL > 1: the MXU's chunk lanes 1 .. NL-1, otpu_mxu_lanes, docs/v4/
+// proposal-2-four-lanes.md; [0] unused): per lane a chunk read (lb_*, 128 B) and a scale-line
+// read (la_*, 32 B) a cycle, up to +nat_lq=128 in flight a lane (the adapter's), taken when
+// offered unless withheld at random (+axi_stall, as a
+// channel's commands), performed at the request (the slice orders its reads after the writes
+// they depend on through wr_idle, which counts performed writes), the data back in order LAT
+// (+axi_lat) cycles later plus 0..7 cycles of jitter and random bubbles. A stand-in for an
+// HBM pseudo-channel group a lane: no bandwidth limit (+axi_bw) and no DDR3 bank model apply
+// to them; the real adapter is the proposal's M4. l_idle: no lane read in flight (rd_idle).
+// COPY > 0: one of the lane memory's image copies (otpu_lane_mem, docs/v4/p2-f2.md): it loads the
+// same image and the same pokes (the host writes every copy), counts its channels as "MEM cp<COPY>
+// ch<c>" and writes no image at the dump. HASH: the image's hash at the dump, "MEM s<SID> copy<COPY>
+// hash=<16 hex digits>" (FNV-1a over the words; rtlsim requires the copies' hashes equal).
 module otpu_native_mem #(
   parameter int WORDS = 1 << 18,
   parameter int PHYS  = 0,
   parameter int LAT   = 20,              // minimum read latency (performed -> data)
   parameter int SID   = 0,
-  parameter bit CHASH = 1'b1             // otpu_native_dram's address map
+  parameter bit CHASH = 1'b1,            // otpu_native_dram's address map
+  parameter int NL    = 1,               // chunk lanes (the lane ports [NL-1:1])
+  parameter int COPY  = 0,               // the lane memory's copy (see the top)
+  parameter bit HASH  = 1'b0             // the image's hash at the dump (see the top)
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -53,6 +69,18 @@ module otpu_native_mem #(
   output logic [1:0]            n_rvalid,
   output logic [1:0][511:0]     n_rdata,
   output logic [1:0][15:0]      n_wdone,
+  // the chunk lanes' reads ([0] unused)
+  input  logic [NL-1:0]          lb_req,
+  input  logic [NL-1:0][31:0]    lb_addr,    // word address of the chunk (128 B aligned)
+  output logic [NL-1:0]          lb_rdy,
+  output logic [NL-1:0]          lb_rvalid,
+  output logic [NL-1:0][1023:0]  lb_rdata,
+  input  logic [NL-1:0]          la_req,
+  input  logic [NL-1:0][31:0]    la_addr,    // word address
+  output logic [NL-1:0]          la_rdy,
+  output logic [NL-1:0]          la_rvalid,
+  output logic [NL-1:0][255:0]   la_rdata,
+  output logic                   l_idle,
   input  logic                  dump
 );
   // the image's words: word i is mem_lo[i] below H, else mem_hi[i - H] (two arrays, as Verilator
@@ -71,6 +99,8 @@ module otpu_native_mem #(
   int bw = 100;
   int lat = LAT;
   int cqd = 16, wqd = 16;                // command / write-data FIFO entries
+  int lqd = 128;                         // lane-port reads in flight a lane (+nat_lq; the adapter
+                                         // keeps 128 chunk requests in flight a lane, proposal 2)
   int wdl = 4;                           // n_wdone lag, cycles (+ 0..7)
   int ahead = 16;                        // DDR3 model: data-bus backlog, controller cycles
   longint n_rd [2], n_wr [2], n_miss [2], n_rmw [2];
@@ -257,10 +287,78 @@ module otpu_native_mem #(
     end
   end
 
+  // ---- the lane ports
+  typedef struct { longint t; logic [1023:0] d; } lq_t;
+  typedef struct { longint t; logic [255:0] d; } la_t;
+  lq_t     lbq [NL][$];                  // chunk reads due, per lane
+  la_t     laq [NL][$];                  // scale-line reads due
+  longint  n_lrd [NL], n_lard [NL];
+  logic [NL-1:0] l_busy;
+  for (genvar l = 0; l < NL; l++) begin : g_ln
+    logic brr, arr, brv, arv;
+    logic [1023:0] brd;
+    logic [255:0]  ard;
+    longint blast = 0, alast = 0;
+    always_ff @(posedge clk) begin
+      brr <= !rnd_stall();
+      arr <= !rnd_stall();
+    end
+    assign lb_rdy[l] = (l != 0) && brr && lbq[l].size() < lqd;
+    assign la_rdy[l] = (l != 0) && arr && laq[l].size() < lqd;
+    assign lb_rvalid[l] = brv;
+    assign lb_rdata[l] = brd;
+    assign la_rvalid[l] = arv;
+    assign la_rdata[l] = ard;
+    assign l_busy[l] = (l != 0) && (lbq[l].size() != 0 || laq[l].size() != 0 || brv || arv);
+    always_ff @(posedge clk) begin
+      if (rst) begin
+        lbq[l].delete(); laq[l].delete();
+        brv <= 1'b0; arv <= 1'b0; blast = 0; alast = 0;
+      end else if (l != 0) begin
+        if (lb_req[l] && lb_rdy[l]) begin
+          logic [1023:0] d;
+          longint t;
+          if (int'(lb_addr[l]) + 32 > WORDS) $fatal(1, "lane %0d chunk read beyond memory", l);
+          for (int k = 0; k < 32; k++) d[32 * k +: 32] = rdw(int'(lb_addr[l]) + k);
+          t = cyc + lat + ($urandom % 8);
+          if (t < blast) t = blast;
+          blast = t;
+          lbq[l].push_back('{t, d});
+          n_lrd[l]++;
+        end
+        if (la_req[l] && la_rdy[l]) begin
+          logic [255:0] d;
+          longint t;
+          int b;
+          b = int'(la_addr[l]) & ~7;
+          if (b + 8 > WORDS) $fatal(1, "lane %0d scale read beyond memory", l);
+          for (int k = 0; k < 8; k++) d[32 * k +: 32] = rdw(b + k);
+          t = cyc + lat + ($urandom % 8);
+          if (t < alast) t = alast;
+          alast = t;
+          laq[l].push_back('{t, d});
+          n_lard[l]++;
+        end
+        if (lbq[l].size() != 0 && lbq[l][0].t <= cyc && !rnd_stall()) begin
+          brv <= 1'b1;
+          brd <= lbq[l][0].d;
+          void'(lbq[l].pop_front());
+        end else brv <= 1'b0;
+        if (laq[l].size() != 0 && laq[l][0].t <= cyc && !rnd_stall()) begin
+          arv <= 1'b1;
+          ard <= laq[l][0].d;
+          void'(laq[l].pop_front());
+        end else arv <= 1'b0;
+      end
+    end
+  end
+  assign l_idle = (l_busy == '0);
+
   string dir;
   integer fd, nread;
   logic [31:0] chm [WORDS / 2];
   initial begin
+    for (int l = 0; l < NL; l++) begin n_lrd[l] = 0; n_lard[l] = 0; end
     void'($value$plusargs("axi_stall=%d", stall));
     void'($value$plusargs("axi_bw=%d", bw));
     void'($value$plusargs("axi_lat=%d", lat));
@@ -278,6 +376,7 @@ module otpu_native_mem #(
     void'($value$plusargs("axi_tpc=%d", tpc));
     void'($value$plusargs("axi_tpu=%d", tpu));
     void'($value$plusargs("nat_cq=%d", cqd));
+    void'($value$plusargs("nat_lq=%d", lqd));
     void'($value$plusargs("nat_wq=%d", wqd));
     void'($value$plusargs("nat_wdl=%d", wdl));
     void'($value$plusargs("nat_ahead=%d", ahead));
@@ -330,10 +429,24 @@ module otpu_native_mem #(
       if (nw != 0 || wq_d[c].size() != 0)
         $display("MEM ch%0d: %0d write commands and %0d write beats not performed at the dump",
                  c, nw, wq_d[c].size());
-      $display("MEM ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", c, n_rd[c], n_wr[c], n_miss[c],
-               n_rmw[c]);
+      if (COPY == 0)
+        $display("MEM ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", c, n_rd[c], n_wr[c], n_miss[c],
+                 n_rmw[c]);
+      else
+        $display("MEM cp%0d ch%0d rd=%0d wr=%0d row_miss=%0d rmw=%0d", COPY, c, n_rd[c], n_wr[c],
+                 n_miss[c], n_rmw[c]);
     end
-    if (PHYS == 0) begin
+    for (int l = 1; l < NL; l++)
+      $display("MEM lane%0d rd=%0d ard=%0d", l, n_lrd[l], n_lard[l]);
+    if (HASH) begin
+      longint unsigned h;
+      h = 64'hcbf29ce484222325;
+      for (int i = 0; i < WORDS; i++) h = (h ^ 64'(rdw(i))) * 64'h00000100000001b3;
+      $display("MEM s%0d copy%0d hash=%016x", SID, COPY, h);
+    end
+    if (COPY != 0) begin
+      // (no image file: the copy's hash stands for it)
+    end else if (PHYS == 0) begin
       fd = $fopen($sformatf("%s/dram_out_%0d.bin", dir, SID), "wb");
       for (int i = 0; i < WORDS; i++) $fwrite(fd, "%u", rdw(i));
       $fclose(fd);

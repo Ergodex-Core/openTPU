@@ -67,9 +67,12 @@
 //   0x88 CFG_IMEM     RO  IMEM words per slice (8 per instruction)
 //   0x8C CFG_ACT      RO  ACT RAM blocks
 //   0x90 CFG_DRAM     RO  [7:0] log2 DRAM bytes per slice, [15:8] memory channels per slice,
-//                         [23:16] log2 bytes a slice addresses per channel
+//                         [23:16] log2 bytes a slice addresses per channel, [31:24] the image's
+//                         copies - 1 (the lane memory's: copy k on channels after copy k - 1's,
+//                         the host writes every copy and reads copy 0; docs/v4/p2-f2.md; 0 before)
 //   0x94 CFG_UARCH    RO  [3:0] MXU_IMPL, [7:4] TMEM_IMPL, [15:8] VPU_CL, [23:16] ULANES,
-//                         [24] SEQ_WC (otpu_seq's wait entries: every program needs them, docs/isa.md)
+//                         [24] SEQ_WC (otpu_seq's wait entries: every program needs them, docs/isa.md),
+//                         [28:25] MXU_C - 1 (the MXU's lock-step chunk lanes; 0 before)
 //   0x98 CFG_PLATFORM RO  the target's platform id (1 YPCB-00338, 2 BCU1525; 256 and up ASICs)
 //   0x9C CFG_HASH     RO  opentpu.target.arch_hash of the target's Config at build time
 //   0xA0 + 4s         (reserved: slice s's DRAM window, docs/targets.md)
@@ -116,6 +119,9 @@ module otpu_ctrl #(
   parameter int DRAM_LOG2  = 32,         // log2 DRAM bytes per slice
   parameter int NCH        = 2,          // memory channels per slice
   parameter int CH_LOG2    = 31,         // log2 bytes a slice addresses per channel
+  parameter int COPIES     = 1,          // the image's copies (CFG_DRAM [31:24] + 1; see above)
+  parameter int MXU_C      = 1,          // the MXU's chunk lanes (CFG_UARCH [28:25] + 1)
+  parameter int NBEAT      = S * NCH * COPIES,  // the channels whose beats DRAM_RD / DRAM_WR count
   parameter int MXU_IMPL   = 2,
   parameter int TMEM_IMPL  = 0,
   parameter int VPU_CL     = 2,
@@ -126,7 +132,7 @@ module otpu_ctrl #(
   // the free-running counters' increment widths (2 and 2 for the YPCB's one slice on two
   // channels): DRAM_RD / DRAM_WR the beats every slice's channels move in a cycle, INSTR the
   // instructions every slice retires in a cycle (up to 2 each)
-  parameter int CW         = $clog2(S * NCH + 1),
+  parameter int CW         = $clog2(NBEAT + 1),
   parameter int IW         = $clog2(2 * S + 1)
 ) (
   input  logic        clk,
@@ -354,8 +360,8 @@ module otpu_ctrl #(
       10'h021: r_d <= 32'(TMEM_WORDS);
       10'h022: r_d <= 32'(IMEM_WORDS);
       10'h023: r_d <= 32'(ACT_BLOCKS);
-      10'h024: r_d <= {8'd0, 8'(CH_LOG2), 8'(NCH), 8'(DRAM_LOG2)};
-      10'h025: r_d <= {7'd0, SEQ_WC, 8'(ULANES), 8'(VPU_CL), 4'(TMEM_IMPL), 4'(MXU_IMPL)};
+      10'h024: r_d <= {8'(COPIES - 1), 8'(CH_LOG2), 8'(NCH), 8'(DRAM_LOG2)};
+      10'h025: r_d <= {3'd0, 4'(MXU_C - 1), SEQ_WC, 8'(ULANES), 8'(VPU_CL), 4'(TMEM_IMPL), 4'(MXU_IMPL)};
       10'h026: r_d <= 32'(PLATFORM);
       10'h027: r_d <= ARCH_HASH;
       10'h080: r_d <= {28'd0, tr_busy, tr_stop, 1'b0, tr_en};

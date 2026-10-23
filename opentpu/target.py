@@ -51,12 +51,23 @@ FAMILIES = ("generic", "xilinx7", "xilinxus", "asic")
 UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB", "WIN",
               "FIFO_DEPTH", "TRACE_DEPTH", "PQ_WIN", "CHASH")
 # and the optional ones (absent: the RTL's default): MXU_E, the MXU's epilogue lanes (0: MCOLS / 2;
-# above MCOLS: MCOLS); with TMEM_IMPL 3 the one copy's knobs (otpu_slice TMEM_<K>,
-# docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
+# above MCOLS: MCOLS); MXU_C, the MXU's lock-step chunk lanes (1: today's MXU; C: C copies of
+# the MCOLS x D array, lane l streaming row n + l of every MM, C chunks a cycle through port B;
+# timing only, the rows' sums and the ISA, image and programs unchanged: docs/v4/
+# proposal-2-four-lanes.md, otpu_mxu_lanes); MXU_PACK, packed PEs (0: one row a DSP; 1: MCOLS / 2
+# physical columns of DSP48E2s, two stationary rows a DSP sharing its weight, w * (x1 2^19 + x0),
+# exact for the quantizer's activations: timing only, docs/v4/proposal-3-eight-lanes-packed.md,
+# otpu_pe_2r; an FPGA build needs the xilinxus cells); with TMEM_IMPL 3 the one copy's knobs
+# (otpu_slice TMEM_<K>, docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
+MXU_OPT_KEYS = ("MXU_E", "MXU_C", "MXU_PACK")
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
+# platform keys a [variants.<name>] table may set (a board build at another core clock: the
+# F2 HBM builds' 150 / 175 / 200 MHz, wide-port-alexshell docs/wide_port.md "Alex's shell")
+VARIANT_PLATFORM_KEYS = ("core_mhz", "channels_per_slice", "hbm_chain_nxf",
+                         "lane_memory_slr")   # (f2-p2: P3's variants)
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
 # (OTPU_LANES=16): RPB = 0 ("every read lane": TMEM replicated per read port) simulates as
 # NRP x 16, the board build as NRP x LANES; both select the slice's write-mask arbiter.
@@ -78,12 +89,19 @@ TECH = {"generic": ["tech/generic/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram
         "xilinxus": ["tech/xilinxus/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         # the RAMs on SRAM macros: the leaves (otpu_sram_*) come from tools/asic/flow.py
         "asic": ["tech/generic/otpu_tech_dsp.sv", "tech/asic/otpu_tech_ram.sv"]}
-SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
-         "mem/otpu_native_dram.sv", "shell/otpu_afifo.sv", "shell/otpu_mem_ch.sv",
-         "shell/otpu_axi_split2.sv"]
+SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_xr.sv", "shell/otpu_board.sv",
+         "mem/otpu_native_dram.sv", "mem/otpu_lane_mem.sv", "shell/otpu_afifo.sv",
+         "shell/otpu_mem_ch.sv", "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                          "boards/ypcb-00338/otpu_fpga_top_ld.sv"],
-          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"]}
+          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"],
+          # the F2 slot with the HBM (board f2, mem "hbm": targets/f2-p2.toml; its top,
+          # boards/f2/design/cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: the
+          # wide-port-alexshell memory path, docs/f2_hbm.md there, docs/v4/p2-f2.md here)
+          "f2-hbm": ["shell/otpu_skidbuf.sv", "boards/f2/otpu_axil_cdc.sv",
+                     "boards/f2/otpu_axil_xr.sv", "boards/f2/otpu_native_axi.sv",
+                     "boards/f2/otpu_f2_pcis_gate.sv", "boards/f2/otpu_f2_hbm_axi.sv",
+                     "boards/f2/otpu_hbm_geometry.sv", "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -156,7 +174,7 @@ def load(name: str | None = None) -> Target:
         if base not in variants:
             raise TargetError(f"{path}: [target] variant {base!r} has no [variants.{base}]")
         diff = sorted(k for k, v in variants[base].items()
-                      if raw["arch"].get(k, raw["uarch"].get(k)) != v)
+                      if raw["arch"].get(k, raw["uarch"].get(k, raw["platform"].get(k))) != v)
         if diff:
             raise TargetError(f"{path}: [arch] / [uarch] {diff} differ from the default variant "
                               f"{base!r}'s")
@@ -166,13 +184,17 @@ def load(name: str | None = None) -> Target:
             raise TargetError(f"{path}: no variant {var!r} (its variants: "
                               f"{', '.join(sorted(variants)) or 'none'})")
         raw["arch"], raw["uarch"] = dict(raw["arch"]), dict(raw["uarch"])
+        raw["platform"] = dict(raw["platform"])
         for k, v in variants[var].items():
-            if k in raw["arch"]:
+            if k in VARIANT_PLATFORM_KEYS:
+                raw["platform"][k] = v
+            elif k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + MXU_OPT_KEYS + TMEM3_KEYS:
                 raw["uarch"][k] = v
             else:
-                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
+                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key "
+                                  f"(or a platform key a variant may set: {VARIANT_PLATFORM_KEYS})")
     cf = _config_fields()
     bad = sorted(set(raw["arch"]) - set(cf))
     if bad:
@@ -195,6 +217,12 @@ def load(name: str | None = None) -> Target:
     a = raw["arch"]
     if a["S"] < 1 or a["D"] % 32 or a["MCOLS"] < 1 or a["LANES"] & (a["LANES"] - 1):
         raise TargetError(f"{path}: bad arch (S >= 1, D a multiple of 32, LANES a power of two)")
+    if int(raw["uarch"].get("MXU_C", 1)) < 1:
+        raise TargetError(f"{path}: MXU_C (the MXU's chunk lanes) is at least 1")
+    if int(raw["uarch"].get("MXU_PACK", 0)) not in (0, 1) or (
+            int(raw["uarch"].get("MXU_PACK", 0)) and a["MCOLS"] % 4):
+        raise TargetError(f"{path}: MXU_PACK is 0 or 1, and packs two rows a DSP: MCOLS a multiple "
+                          f"of 4 (PAIR at an odd M moves its high columns up a slot)")
     if raw["arch"]["SEQ_WC"] and raw["uarch"]["WIN"] > 16:
         raise TargetError(f"{path}: SEQ_WC (otpu_seq's wait entries) needs WIN <= 16: 4-bit "
                           f"counts name a unit's last 15 instructions")
@@ -264,6 +292,10 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
+    if int(u.get("MXU_C", 1)) != 1:             # the chunk lanes (1: left out, today's MXU)
+        d["MXU_C"] = int(u["MXU_C"])
+    if int(u.get("MXU_PACK", 0)):               # packed PEs (0: left out, one row a DSP)
+        d["MXU_PACK"] = 1
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
     return d
@@ -282,6 +314,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
         "IMEM_WORDS": a["IMEM_WORDS"], "LANES": a["LANES"], "DSTEP": int(a["DSTEP"]),
         "MXU_IMPL": u["MXU_IMPL"], "MXU_CL": u["MXU_CL"], "MXU_E": u.get("MXU_E", 0),
+        "MXU_C": int(u.get("MXU_C", 1)), "MXU_PACK": int(u.get("MXU_PACK", 0)),
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
@@ -304,7 +337,10 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    board = t.platform["board"]
+    if board == "f2" and t.platform.get("mem") == "hbm":
+        board = "f2-hbm"
+    return core + SHELL + BOARDS.get(board, [])
 
 
 def build_config(t: Target | str | None = None, **knobs):

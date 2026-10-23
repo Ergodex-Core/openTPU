@@ -34,6 +34,9 @@ MXU_IMPL = 2                    # systolic (docs/mxu_systolic.md)
 MXU_CL = 16
 MXU_E = 4                       # epilogue lanes: MCOLS, full rate (docs/mx_mxu.md 9: E = MCOLS at
                                 # MCOLS 8; E 4 halves prefill q.K^T at d 128 and G 5-8 decode)
+MXU_C = 1                       # lock-step chunk lanes (docs/v4/proposal-2-four-lanes.md): 1 is
+                                # today's MXU; C copies of the MCOLS x D array, lane l streaming
+                                # row n + l of every MM, C chunks a cycle (the c4 variant below)
 VPU_CL = 2
 ULANES = 8
 TMEM_IMPL = 3                   # 0: one copy per read port (block RAM); 1: banked 1R1W macros;
@@ -84,3 +87,16 @@ TMEM_WORDS = 131072
 MCOLS = 4                       # rest of r2, 64K TMEM words (CFG_HASH 4ffd1e17)
 MXU_E = 4
 TMEM_WORDS = 65536
+
+[variants.c4]                   # v4 candidate P2 (docs/v4/proposal-2-four-lanes.md, M1-M2): the m4
+MXU_C = 4                       # arch with 4 lock-step chunk lanes (4 chunks a cycle through port
+                                # B, the memory model's lane ports in simulation); the same
+                                # CFG_HASH as m4 (a uarch key: the programs and images do not change)
+
+[variants.c8]                   # v4 candidate P3 (docs/v4/proposal-3-eight-lanes-packed.md): the m4
+MXU_C = 8                       # arch with 8 lock-step chunk lanes (1 KiB a cycle through port B),
+                                # unpacked; the same CFG_HASH as m4
+
+[variants.c8p]                  # v4 candidate P3: c8 with packed PEs (two rows a DSP48E2, MCOLS / 2
+MXU_C = 8                       # physical columns a lane: 8 x 256 PE DSPs). Simulation and the F2's
+MXU_PACK = 1                    # xilinxus cells only: the card's DSP48E1s cannot pack (otpu_pe_2r)

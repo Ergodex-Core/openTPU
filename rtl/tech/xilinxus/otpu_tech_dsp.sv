@@ -56,6 +56,49 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
 endmodule
 
 
+// A packed position of the systolic MXU (otpu_mxu SPACK, docs/v4/proposal-3-eight-lanes-packed.md;
+// rtl/exp/mx_mxu/otpu_mx_us.sv's otpu_pack_pe, docs/mx_mxu.md section 5): one DSP48E2, two
+// stationary rows. A = x1 * 2^19 (A[26:19]) and D = x0 into the 27-bit pre-adder (AREG / DREG 1,
+// AMULTSEL "AD"), B = the weight (BREG 1): the select's pick of wlo / whi in fabric (the
+// pre-adder holds the activations), M registered, P = PCIN + M (FIRST: P = M) registered at
+// every position, the chain's last too (otpu_mxu splits it: the low row's sum P[18:0]
+// sign-extended, the high row's P[47:19] + P[18]). The same cycles as rtl/tech/generic's model.
+module otpu_pe_2r #(parameter bit FIRST = 1'b0) (
+  input  logic               clk,
+  input  logic               en,
+  input  logic [7:0]         x0,
+  input  logic [7:0]         x1,
+  input  logic [7:0]         wlo,
+  input  logic [7:0]         whi,
+  input  logic               sel,
+  input  logic [47:0]        pcin,
+  output logic [47:0]        pcout,
+  output logic [47:0]        p
+);
+  wire [7:0] w = sel ? whi : wlo;
+  DSP48E2 #(
+    .A_INPUT("DIRECT"), .B_INPUT("DIRECT"), .AMULTSEL("AD"), .BMULTSEL("B"),
+    .PREADDINSEL("A"), .USE_MULT("MULTIPLY"), .USE_WIDEXOR("FALSE"),
+    .USE_SIMD("ONE48"), .AREG(1), .ACASCREG(1), .BREG(1), .BCASCREG(1), .CREG(0), .DREG(1),
+    .ADREG(0), .MREG(1), .PREG(1), .INMODEREG(0), .OPMODEREG(0), .ALUMODEREG(0),
+    .CARRYINREG(0), .CARRYINSELREG(0), .USE_PATTERN_DETECT("NO_PATDET"),
+    .AUTORESET_PATDET("NO_RESET"), .MASK(48'h3fffffffffff), .PATTERN(48'h0),
+    .SEL_MASK("MASK"), .SEL_PATTERN("PATTERN")
+  ) u_dsp (
+    .CLK(clk),
+    .A({{3{x1[7]}}, x1, 19'd0}), .B({{10{w[7]}}, w}), .C(48'd0), .D({{19{x0[7]}}, x0}),
+    .INMODE(5'b00100), .OPMODE(FIRST ? 9'b00_000_01_01 : 9'b00_001_01_01),
+    .ALUMODE(4'b0000), .CARRYIN(1'b0), .CARRYINSEL(3'b000),
+    .CEA1(en), .CEA2(en), .CEB1(en), .CEB2(en), .CEC(1'b0), .CED(en), .CEAD(1'b0),
+    .CEM(en), .CEP(en), .CEALUMODE(1'b0), .CECTRL(1'b0), .CECARRYIN(1'b0), .CEINMODE(1'b0),
+    .RSTA(1'b0), .RSTB(1'b0), .RSTC(1'b0), .RSTD(1'b0), .RSTM(1'b0), .RSTP(1'b0),
+    .RSTALLCARRYIN(1'b0), .RSTALUMODE(1'b0), .RSTCTRL(1'b0), .RSTINMODE(1'b0),
+    .ACIN(30'd0), .BCIN(18'd0), .PCIN(pcin), .CARRYCASCIN(1'b0), .MULTSIGNIN(1'b0),
+    .ACOUT(), .BCOUT(), .PCOUT(pcout), .P(p), .CARRYCASCOUT(), .MULTSIGNOUT(), .CARRYOUT(),
+    .OVERFLOW(), .UNDERFLOW(), .PATTERNDETECT(), .PATTERNBDETECT(), .XOROUT());
+endmodule
+
+
 // The MX column end (otpu_mxu, docs/mx_mxu.md): nine DSP48E2s, as rtl/tech/xilinx7's DSP48E1s. DSP g (g < 8) takes group g's
 // chain end on A (and, at two chains a group, the second on D: the pre-adder sums them) and its
 // B = m << sh on B (unsigned, < 2^17), all registered at E, and multiplies into M. Groups 0..3:
