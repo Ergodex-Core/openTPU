@@ -1,0 +1,51 @@
+{
+  "policy_id": "phonon2-transformers-eager-fp32-eval-qualification-v1",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "transformers_source_revision": "ea52711b4850c332be3f778396ce882ab84a9011",
+  "production_ready": false,
+  "frontend": {
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "encoding": "pcm_s16le",
+    "pcm_scale": 0.000030517578125,
+    "minimum_samples": 320,
+    "maximum_samples": 480000,
+    "duration_policy": "Reject shorter than two valid feature frames or longer than 30 seconds; no silent truncation, resampling or chunking.",
+    "dither": 0.0,
+    "dither_ambiguity": "The NeMo archive config says 1e-5; the pinned Transformers and CUDA paths omit dither. This qualification explicitly follows the nondithered Transformers path and makes no MLX/NeMo parity claim.",
+    "preemphasis": 0.97,
+    "n_fft": 512,
+    "hop_length": 160,
+    "win_length": 400,
+    "window": "Hann periodic=false, centered in 512 samples (56 zeros each side)",
+    "stft": "center=true, constant zero padding 256 samples each side",
+    "power": "sqrt(real^2 + imag^2)^2",
+    "mel": "128 filters, Slaney scale and area normalization, 0..8000Hz, float32 filter storage",
+    "log_guard": "2^-24",
+    "stored_frames": "floor(samples/160) + 1",
+    "valid_frames": "floor(samples/160)",
+    "normalization": "Mean over valid frames; variance divided by valid_frames-1; divide by sqrt(variance)+1e-5; zero masked output frames.",
+    "subsampling_mask_lengths": "ceil(valid_frames/2), then ceil(/2), then ceil(/2); stored lengths propagate separately.",
+    "silence_policy": "Preserve source equations; do not force normalized silence to zero. FP32 reduction order requires explicit device tolerance qualification."
+  },
+  "conformer": {
+    "eval_only": true,
+    "layer_norm_epsilon": 0.00001,
+    "batch_norm_epsilon": 0.00001,
+    "attention": "Noncausal eager FP32 softmax with relative positions; valid-query AND valid-key mask applied to relative scores as finite float32 minimum before content-score addition.",
+    "convolution_mask": "Zero invalid rows after GLU and before depthwise convolution. Do not zero residuals or final padded rows.",
+    "qualification_envelope": "Batch 1, H=1024, F=4096, 8 heads, kernel=9, 1..8 stored encoder frames, nonempty contiguous valid prefix.",
+    "runtime_dynamic_mask_supported": false
+  },
+  "tdt": {
+    "implemented": false,
+    "durations": [0, 1, 2, 3, 4],
+    "token_classes": 8193,
+    "blank_token_id": 8192,
+    "duration_classes": 5,
+    "selection": "Independent argmax over token logits [0:8193] and duration logits [8193:8198]; never one argmax over all 8198.",
+    "pinned_transformers_guard": "If blank and predicted duration is zero, advance one encoder frame. A nonblank zero-duration emission does not advance the frame.",
+    "runtime_disagreement": "Fermion CUDA additionally forces advance after max_symbols_per_step=10 zero-duration emissions; the inspected Transformers TDT update does not apply that guard. This slice implements neither decoder and does not silently substitute one policy.",
+    "future_liveness_requirement": "Select and qualify the decoder policy before device integration. A safety watchdog must report an incomplete/error result rather than inventing a transcript or silently changing duration semantics."
+  }
+}

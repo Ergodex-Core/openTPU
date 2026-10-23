@@ -15,11 +15,11 @@ CONTAINER_SHA256 = "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c1
 BLOCKERS = (
     ("audio_frontend", "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."),
     ("subsampling", "Device 8x Conv2D/depthwise subsampling and its length masks are missing."),
-    ("conformer", "Complete device FastConformer blocks, relative-position attention and convolution are missing."),
+    ("conformer", "One complete full-width block is ISA-qualified for 1..8 stored frames; the full-length 24-block encoder and device graph integration remain missing."),
     ("predictor", "Resident two-layer LSTM, token embedding and state commit on non-blank are missing."),
     ("tdt_decode", "Device joint head, separate token/duration selection, blank/zero-duration control and termination are missing."),
     ("text_output", "Device token-to-text output and timestamp conventions are not implemented or qualified."),
-    ("numerics", "INT8 activation quantization and two-plane accumulation need real-weight encoder/transcript validation."),
+    ("numerics", "A real-weight block is qualified on synthetic activations; frontend numerical parity, full-encoder and transcript validation remain missing."),
     ("hardware_evidence", "No real audio-to-transcript FPGA run; a coordinated hardware window is required."),
 )
 
@@ -49,10 +49,14 @@ def model_status() -> dict:
         "license": {"weights": "CC-BY-4.0", "code": "Apache-2.0",
                     "attribution_url": f"https://huggingface.co/{MODEL_ID}/blob/{MODEL_REVISION}/NOTICE"},
         "input_contract": {"encoding": "pcm_s16le", "sample_rate_hz": 16000,
-                           "channels": 1, "max_seconds": 30,
+                           "channels": 1, "min_samples": 320, "max_seconds": 30,
                            "resampling": "unsupported", "hotwords": "unsupported",
                            "note": "Proposed first integration envelope; endpoint remains unavailable."},
-        "implemented_slice": "Offline five-value unpacking and two-plane device linear projection",
+        "implemented_slice": "Five-value projections and one complete bounded Conformer block on the existing ISA; offline audited frontend golden vectors",
+        "qualification": {"conformer_blocks": 1, "max_stored_encoder_frames": 8,
+                          "frontend_device_implemented": False, "tdt_device_implemented": False,
+                          "evidence": "docs/phonon2/conformer_validation.json",
+                          "frontend_policy": "docs/phonon2/semantic_policy.json"},
         "error": {"code": "ASR_FPGA_NOT_READY", "http_status": 503},
         "blockers": [{"code": code, "detail": detail} for code, detail in BLOCKERS],
     }
