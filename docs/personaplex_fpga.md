@@ -9,6 +9,9 @@ The [2026-10-23 precision and FPGA-only audit](personaplex_fpga_precision.md)
 records actual four-frame hardware results, the mixed precision correction and
 the remaining device implementation gates. Earlier readiness receipts below are
 historical; they do not establish current device availability or full speech.
+The [resident temporal-to-token slice](personaplex_token_slice.md) adds resident
+RoPE, an INT8 text head and device greedy selection, with CPU/ISA validation
+kept separate from physical execution and full speech readiness.
 
 ## Current implementation and validation boundary
 

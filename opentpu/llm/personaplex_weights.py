@@ -316,6 +316,34 @@ class MLXWeights:
     def final_norm(self):
         return self.temporal.norm("out_norm.alpha", self.spec.hidden)
 
+    def _text_head_reader(self):
+        # Open only the embeddings file; a token diagnostic must not materialize
+        # the depth transformer or the other CPU model tensors.
+        reader = getattr(self, "_text_head_file", None)
+        if reader is None:
+            q = self.config["quantization"]
+            reader = _TensorFile(self.model_dir / "embeddings.safetensors",
+                                 q["bits"], q["group_size"])
+            self._text_head_file = reader
+        return reader
+
+    def text_head_metadata(self):
+        """Header-only shape/type check of the untied vocabulary projection."""
+        reader = self._text_head_reader()
+        metadata = reader.metadata("text_linear.weight")
+        expected = (self.config["temporal"]["text_card"], self.spec.hidden)
+        if tuple(metadata["shape"]) != expected:
+            raise ValueError(f"text_linear.weight: expected matrix {expected}, "
+                             f"got {metadata['shape']}")
+        return metadata
+
+    @property
+    def text_head(self):
+        """Read only the finite FP32 text head for offline device-image conversion."""
+        self.text_head_metadata()
+        return self._text_head_reader().matrix(
+            "text_linear.weight", (self.config["temporal"]["text_card"], self.spec.hidden))
+
     def host_checkpoint_fingerprint(self):
         """Invalidate a cached preflight if checkpoint files change on disk."""
         if read_config(self.model_dir) != self.config:

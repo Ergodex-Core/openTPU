@@ -42,7 +42,8 @@ def _board_profile(profile):
 class BoardSession:
     """Hold the transport lock and qualify burst200 before any device writes."""
 
-    def __init__(self, dev, *, profile=PROFILE, wformat="int4", weight_formats=None):
+    def __init__(self, dev, *, profile=PROFILE, wformat="int4", weight_formats=None,
+                 require_gen=False):
         from opentpu.host.board import open_transport
         from opentpu.target import config
         selected = _board_profile(profile)
@@ -56,6 +57,9 @@ class BoardSession:
             raise ValueError("weight_formats must contain resolved int4/int8 formats") from exc
         if not resolved or not resolved <= {"int4", "int8"}:
             raise ValueError("weight_formats must contain resolved int4/int8 formats")
+        if type(require_gen) is not bool:
+            raise ValueError("require_gen must be a boolean")
+        self.require_gen = require_gen
         self.weight_formats = resolved
         self.profile, self.wformat = selected, wformat
         self.expected_cfg = config(selected)
@@ -95,6 +99,8 @@ class BoardSession:
             raise ConfigMismatch("PersonaPlex requires runtime argument registers (CAP_ARGS)")
         if "int4" in self.weight_formats and not caps.get("w4"):
             raise ConfigMismatch("INT4 PersonaPlex weights require CAP_W4")
+        if self.require_gen and not caps.get("gen"):
+            raise ConfigMismatch("PersonaPlex device token selection requires CAP_GEN")
         status = info["status"]
         calibration = R.ST_CALIB0 | R.ST_CALIB1
         if status & calibration != calibration:

@@ -278,10 +278,10 @@ class Engine:
             probe_cfg = Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=128, ACT_ROWS=16,
                                TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True,
                                DRAM_BYTES=1 << 40)
-            probe = Image(spec, probe_cfg, cap, wformat, formats=formats)
+            probe = self._make_image(spec, probe_cfg, cap, wformat, formats)
             cfg = replace(probe_cfg, DRAM_BYTES=probe.required_bytes)
         self.cfg = cfg
-        self.image = Image(spec, cfg, cap, wformat, formats=formats)
+        self.image = self._make_image(spec, cfg, cap, wformat, formats)
         if backend == "board" and wformat == "int8" and any(
                 "int4" in layer for layer in self.image.lf):
             # The shared direct backend checks only the base/head formats. A
@@ -309,6 +309,10 @@ class Engine:
         except BaseException:
             self.close()
             raise
+
+    def _make_image(self, spec, cfg, cap, wformat, formats):
+        """Protected layout/build extension point; the default temporal image is unchanged."""
+        return Image(spec, cfg, cap, wformat, formats=formats)
 
     @property
     def pos(self):

@@ -146,6 +146,46 @@ def test_layer_conversion_preserves_packed_qkv_gate_order_and_no_transpose(check
         layer["q_norm"]
 
 
+def test_text_head_reader_is_header_only_until_requested_and_skips_other_tensors(
+        checkpoint, monkeypatch):
+    path, _, _ = checkpoint
+    expected = np.linspace(-1, 1, 32000 * 128, dtype=np.float32).reshape(32000, 128).astype(np.float16)
+    _save_file({"text_linear.weight": expected,
+                "text_emb.weight": np.zeros((2, 128), np.float16)}, path / "embeddings.safetensors")
+    weights = MLXWeights(path)
+    raw = _TensorFile.raw
+    reads = []
+
+    def checked_read(reader, key, rows=None):
+        reads.append((reader.path.name, key))
+        assert reader.path.name == "embeddings.safetensors" and key == "text_linear.weight"
+        return raw(reader, key, rows)
+
+    monkeypatch.setattr(_TensorFile, "raw", checked_read)
+    metadata = weights.text_head_metadata()
+    assert tuple(metadata["shape"]) == (32000, 128) and metadata["source_dtype"] == "F16"
+    assert reads == []
+    actual = weights.text_head
+    assert actual.dtype == np.float32 and actual.flags.c_contiguous
+    np.testing.assert_array_equal(actual, expected.astype(np.float32))
+    assert reads == [("embeddings.safetensors", "text_linear.weight")]
+
+
+@pytest.mark.parametrize("fault", ["missing", "shape", "nonfinite"])
+def test_text_head_rejects_invalid_checkpoint_projection(checkpoint, fault):
+    path, _, _ = checkpoint
+    values = {}
+    if fault != "missing":
+        head = np.ones((31999 if fault == "shape" else 32000, 128), np.float16)
+        if fault == "nonfinite":
+            head[3, 4] = np.nan
+        values["text_linear.weight"] = head
+    _save_file(values, path / "embeddings.safetensors")
+    weights = MLXWeights(path)
+    with pytest.raises(ValueError):
+        _ = weights.text_head
+
+
 @pytest.mark.parametrize("fault", ["missing", "shape", "metadata"])
 def test_corrupt_checkpoint_is_refused(checkpoint, fault):
     path, _, values = checkpoint

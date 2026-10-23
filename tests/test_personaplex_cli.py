@@ -556,6 +556,25 @@ def test_invalid_resolved_formats_rejected_before_transport(cli, burst200_probe,
     assert not burst200_probe.events["opened"]
 
 
+@pytest.mark.parametrize("after_probe", [False, True])
+def test_device_token_selection_requires_gen_before_upload(cli, burst200_probe, after_probe):
+    from opentpu.host import regs as R
+    fixture = burst200_probe
+    fixture.overrides[R.R_CAPS] = fixture.transport.reg_read(R.R_CAPS) | R.CAP_GEN
+    session = cli.BoardSession("f2:0", require_gen=True) if after_probe else None
+    fixture.overrides[R.R_CAPS] = fixture.transport.reg_read(R.R_CAPS) & ~R.CAP_GEN
+    try:
+        with pytest.raises(RuntimeError, match="requires CAP_GEN"):
+            if session is None:
+                session = cli.BoardSession("f2:0", require_gen=True)
+            session.factory(fixture.cfg, [b"must not upload"])
+    finally:
+        if session is not None:
+            session.close()
+    assert fixture.events["closed"] == 1
+    assert not fixture.events["writes"] and not fixture.events["uploads"]
+
+
 @pytest.mark.parametrize("formats", ["attn=fp4", "attn@2-1=int8", "unknown=int8"])
 def test_invalid_format_rules_rejected_before_board(cli, monkeypatch, tmp_path, formats):
     from opentpu import target
