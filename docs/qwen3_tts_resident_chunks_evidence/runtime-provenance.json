@@ -1,0 +1,8 @@
+{
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_base_revision": "e0d68fea470e68f424df0888d38083a7d34f504d",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "data_reused": "/home/ubuntu/qwen3-tts-audio-transformer-20261023-01/data",
+  "arithmetic": "source weights evaluated with FP32 algebra; overall BF16 gate unchanged failed",
+  "physical_hardware_access": false
+}

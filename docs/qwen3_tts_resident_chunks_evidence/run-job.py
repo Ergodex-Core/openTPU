@@ -1,0 +1,8 @@
+import pathlib,json,subprocess,time,os,resource,sys
+r=pathlib.Path(__file__).resolve().parent
+name=sys.argv[1];request=json.loads((r/(name+".request.json")).read_text());started=time.monotonic();os.nice(19);resource.setrlimit(resource.RLIMIT_AS,(64<<30,64<<30))
+env=dict(os.environ,OMP_NUM_THREADS="1",OPENBLAS_NUM_THREADS="1");error=None;code=None
+try:
+ with (r/(name+".log")).open("w") as out:code=subprocess.run(request["command"],cwd=request["cwd"],env=env,stdout=out,stderr=subprocess.STDOUT,timeout=request["timeout"]).returncode
+except Exception as exc:error=repr(exc)
+(r/(name+".result.json")).write_text(json.dumps({"exit_code":code,"error":error,"seconds":time.monotonic()-started}))
