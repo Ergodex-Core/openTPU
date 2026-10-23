@@ -1,7 +1,7 @@
 """Phonon-2's strict FPGA-only serving contract.
 
-This module does not load a model, import a remote runtime, or open a device. The
-five-value projection slice is in phonon2_linear; it is not an ASR engine.
+This module does not load a model, import a remote runtime, or open a device.
+The learned encoder has CPU/ISA evidence; audio-to-transcript remains gated.
 """
 from __future__ import annotations
 
@@ -14,12 +14,12 @@ CONTAINER_SHA256 = "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c1
 
 BLOCKERS = (
     ("audio_frontend", "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."),
-    ("subsampling", "The complete learned 8x subsampler is ISA-qualified with real speech features; resident graph and device waveform-frontend handoff are not integrated."),
-    ("conformer", "One complete full-width block is ISA-qualified for 1..8 stored frames; the full-length 24-block encoder and device graph integration remain missing."),
+    ("subsampling", "The complete learned 8x subsampler is shared-profile ISA-qualified; its device waveform-frontend and physical runtime handoff are not integrated."),
+    ("encoder_integration", "All 24 whole-context Conformer layers and one-slot residency are shared-profile ISA-qualified with real checkpoint weights; physical program/wait loading and execution remain unverified."),
     ("predictor", "Resident two-layer LSTM, token embedding and state commit on non-blank are missing."),
     ("tdt_decode", "Device joint head, separate token/duration selection, blank/zero-duration control and termination are missing."),
     ("text_output", "Device token-to-text output and timestamp conventions are not implemented or qualified."),
-    ("numerics", "The learned subsampler and one block are tested on speech-derived features; device frontend parity, full-encoder and transcript validation remain missing."),
+    ("numerics", "Learned subsampler plus 24 layers pass real-speech CPU/ISA comparisons with two-pass device QACT; device frontend parity, larger-context numerical coverage and transcript/WER acceptance remain missing."),
     ("hardware_evidence", "No real audio-to-transcript FPGA run; a coordinated hardware window is required."),
 )
 
@@ -38,7 +38,7 @@ def model_status() -> dict:
         "parameters": 627008134,
         "checkpoint_download_bytes": 163515201,
         "status": "blocked",
-        "readiness": "kernel_slice_only",
+        "readiness": "learned_encoder_isa_only",
         "available": False,
         "ready": False,
         "execution_policy": "fpga_only",
@@ -52,10 +52,18 @@ def model_status() -> dict:
                            "channels": 1, "min_samples": 320, "max_seconds": 30,
                            "resampling": "unsupported", "hotwords": "unsupported",
                            "note": "Proposed first integration envelope; endpoint remains unavailable."},
-        "implemented_slice": "Five-value projections, the complete learned 8x subsampler and one bounded Conformer block on the existing ISA; offline frontend golden vectors",
-        "qualification": {"conformer_blocks": 1, "max_stored_encoder_frames": 8,
+        "implemented_slice": "Complete learned 8x subsampler and 24 whole-context Conformer layers on the shared-profile ISA; device-only residual QACT and one weight slot; offline waveform oracle",
+        "shared_image": {"profile": "f2-hbm:p4rl8a64c150", "agfi": "agfi-0001de1dd3df8e21e",
+                         "declared_cfg_hash": "dd6b92a6", "hardware_identity_verified": False,
+                         "per_model_image_reload": False, "maximum_serving_interruption_seconds": 30,
+                         "runtime_source_revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+                         "manifest": "docs/phonon2/shared_profile.json"},
+        "qualification": {"conformer_blocks": 24, "max_stored_encoder_frames": 376,
+                          "max_real_checkpoint_tested_encoder_frames": 89,
+                          "longer_context_status": "compile/resource qualification only",
                           "frontend_device_implemented": False, "tdt_device_implemented": False,
-                          "evidence": "docs/phonon2/conformer_validation.json",
+                          "evidence": "docs/phonon2/encoder_validation.json",
+                          "activation_passes": 2, "encoder_reset_bitwise_passed": True,
                           "subsampler_isa_implemented": True,
                           "subsampler_max_stored_mel_frames": 3001,
                           "subsampler_max_stored_encoder_frames": 376,
@@ -74,9 +82,10 @@ def inferlab_model_status() -> dict:
         "size": "627M · five-value encoder · INT6 tables",
         "execution": "Blocked · ASR integration incomplete", "ready": False,
         "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
-        "reason": "Device frontend, Conformer, LSTM predictor and TDT decoding are incomplete; audio input stays disabled.",
+        "reason": "Shared-profile learned encoder passes CPU/ISA checks; device waveform frontend, LSTM/TDT decoder and physical ASR acceptance remain incomplete.",
         "model_id": MODEL_ID, "revision": MODEL_REVISION,
         "execution_policy": "fpga_only", "cpu_gpu_fallback": False,
+        "shared_image_profile": "f2-hbm:p4rl8a64c150", "image_reload_required": False,
         "hardware_validated": False, "error_code": "ASR_FPGA_NOT_READY",
     }
 

@@ -1,9 +1,11 @@
 # Phonon-2: FPGA-only ASR readiness
 
-Status: **blocked; projection, the complete learned subsampler and one bounded
-Conformer block are qualified in the ISA simulator**. The latest
-[subsampler report](phonon2_subsampler.md) includes real-speech, reset and
-device-handoff results. The earlier [Conformer/front-end report](phonon2_conformer.md)
+Status: **blocked; the complete learned subsampler and 24-layer encoder are
+qualified in the shared-profile ISA simulator**. The latest
+[encoder report](phonon2_encoder.md) binds the evidence to the shared Gemma
+profile, with real-speech comparisons, masks/reset and an explicit program/weight
+residency scheme. The previous [subsampler report](phonon2_subsampler.md) and
+[Conformer/front-end report](phonon2_conformer.md)
 contains the new golden vectors, policies, full-width block budgets and real-weight
 receipt. The original projection receipt below retains its historical compiler binding.
 There is no audio-to-transcript engine, FPGA transcript, latency result, or WER
@@ -160,29 +162,32 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 | Missing integration | Existing-ISA possibility / exact gap |
 |---|---|
 | Waveform frontend | No FFT/STFT/mel ASR kernels. FP32 add/mul/reductions/log2/rsqrt can express the math, but fixed-coefficient transforms, permutations, masks and normalization need lowering and validation. No native FFT or PCM16 conversion opcode. |
-| Learned subsampling | The complete Conv2D/depthwise/pointwise/projection path, masks, layout and reset are ISA-qualified with real speech. Device waveform frontend and resident graph handoff remain missing. |
-| FastConformer | One full-width, complete 1..8-frame block is ISA-qualified with real weights; tiled full-context attention, all 24 blocks and device mask handoff are not integrated. |
+| Learned subsampling | The complete Conv2D/depthwise/pointwise/projection path and handoff through all 24 layers are shared-profile ISA-qualified with real speech. Device waveform frontend and physical runtime integration remain missing. |
+| FastConformer | All 24 layers with tiled full-context attention, device mask handoff, one-slot residency and reset are shared-profile ISA-qualified. Physical loading/execution and larger-context numerical coverage remain gated. |
 | LSTM predictor | No resident two-layer Phonon LSTM, embedding lookup or cache commit policy. Affines and sigmoid/tanh can use existing units; state/gate layout and gating must be compiled. |
 | TDT and text output | ARGMAX, RLD, LOOP and HALT CHAIN exist; token/duration split, blank masking, zero-duration bounds, state updates, UTF-8 token assembly and termination are not compiled. |
-| Native five-value storage | No trit/nonuniform-five-level MXU format. This slice bypasses that gap at roughly two matrix passes and greater storage. Native packing would need an ISA/RTL proposal and a separate image. |
+| Five-value storage | No native trit/nonuniform-five-level MXU format is required: two disjoint INT8 planes preserve the exact stored levels on the shared image, at greater storage/bandwidth cost. |
 
 No new image has yet been shown necessary for correctness. Frontend qualification
-semantics and vectors, and one complete Conformer block, are now available in the
-follow-up reports. The learned subsampler and short handoff into that block are
-also qualified. Next implement the bounded device waveform frontend and test its
-handoff into the subsampler. Resolve the documented TDT runtime disagreement,
-then add
-INT6 export and resident LSTM/joint/TDT control, test blank/zero-duration/limit
-cases, and assemble the tiled 24-layer graph. Compare features, encoder outputs,
+semantics and vectors are available in the follow-up reports. The learned
+subsampler and tiled 24-layer graph are now qualified with real checkpoint
+weights on `f2-hbm:p4rl8a64c150`; see the encoder report for precise scope.
+Next implement the bounded device waveform frontend and test its handoff into
+the subsampler. Resolve the documented TDT runtime disagreement, then add
+INT6 export and resident LSTM/joint/TDT control and test blank/zero-duration/limit
+cases. Compare features, encoder outputs,
 decoder states and tokens against the selected reference. Only if an existing
 instruction cannot implement a required operation or measured budgets fail,
-propose a specific opcode/image change **before synthesis**.
+report the exact shared-image capability gap. Model-specific image changes are
+outside the user's shared-image requirement; no synthesis is authorized here.
 
 Final acceptance needs a coordinated hardware window, both normal locks,
 verified loaded-image capabilities, real audio-to-transcript evidence with
 model/revision/input hashes, token/text and quality results, timings, and proof
 that frontend, learned layers and decoding stay on FPGA. Never reload an image
 or evict the resident Gemma worker to obtain this evidence without coordination.
+The required shared image is `agfi-0001de1dd3df8e21e`, with at most 30 seconds
+of serving interruption in any future coordinated acceptance window.
 
 ## Inferlab adapter contract
 
