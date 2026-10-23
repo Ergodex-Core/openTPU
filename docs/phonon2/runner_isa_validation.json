@@ -1,0 +1,6475 @@
+{
+  "text": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+  "receipt": {
+    "schema": 1,
+    "request_id": "real-checkpoint-prepared-artifact-isa",
+    "backend": "isa",
+    "model": "FermionResearch/Phonon-2",
+    "revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "agfi_expected": "agfi-0001de1dd3df8e21e",
+    "artifact_sha256": "324b23203fe12f9df2601ed3e1d5e80945a090aeed58ba7d5935ca312749daaf",
+    "pcm_sha256": "6fa2ff5fbd3c1e7ed5102e94e0f83041abd6fd1506552ba530d310ee363e0408",
+    "samples": 112960,
+    "lease_id": "offline-isa-no-physical-lease",
+    "ready": false,
+    "physical_acceptance": false,
+    "hardware_used": false,
+    "host_audio_or_model_compute": false,
+    "dispatches": 693,
+    "immutable_bytes": 1272022400,
+    "program_wait_bytes": 3191080,
+    "events": [
+      {
+        "name": "request_reset",
+        "kind": "program",
+        "seconds": 0.7634536409750581,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.constants.0",
+        "kind": "write",
+        "seconds": 0.002235881984233856
+      },
+      {
+        "name": "pcm_s16le",
+        "kind": "pcm",
+        "seconds": 2.7111032977700233e-05
+      },
+      {
+        "name": "waveform.0",
+        "kind": "program",
+        "seconds": 0.04141277098096907,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.1",
+        "kind": "program",
+        "seconds": 20.377321833046153,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.2",
+        "kind": "program",
+        "seconds": 0.11920068599283695,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.3",
+        "kind": "program",
+        "seconds": 20.981139105046168,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.4",
+        "kind": "program",
+        "seconds": 3.8394856370287016,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform.5",
+        "kind": "program",
+        "seconds": 8.10001673095394,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "waveform_to_subsampler",
+        "kind": "program",
+        "seconds": 0.03211851301603019,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.constants.0",
+        "kind": "write",
+        "seconds": 0.005029975087381899
+      },
+      {
+        "name": "subsampler.constants.1",
+        "kind": "write",
+        "seconds": 0.0001551531022414565
+      },
+      {
+        "name": "subsampler.0",
+        "kind": "program",
+        "seconds": 0.5576752150664106,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.1",
+        "kind": "program",
+        "seconds": 0.032080722972750664,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.2",
+        "kind": "program",
+        "seconds": 45.82380454696249,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.3",
+        "kind": "program",
+        "seconds": 13.804396583000198,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.4",
+        "kind": "program",
+        "seconds": 7.78275156696327,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.5",
+        "kind": "program",
+        "seconds": 3.4896385410102084,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.6",
+        "kind": "program",
+        "seconds": 1.9592257300391793,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.7",
+        "kind": "program",
+        "seconds": 0.10606233694124967,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "subsampler.8",
+        "kind": "program",
+        "seconds": 1.7782108309911564,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.handoff",
+        "kind": "program",
+        "seconds": 0.006097774021327496,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.constants.0",
+        "kind": "write",
+        "seconds": 0.0638607059372589
+      },
+      {
+        "name": "encoder.0.0",
+        "kind": "program",
+        "seconds": 0.06997336097992957,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.1",
+        "kind": "program",
+        "seconds": 6.074508794932626,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.2",
+        "kind": "program",
+        "seconds": 1.4710470479913056,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.3",
+        "kind": "program",
+        "seconds": 0.8630702280206606,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.4",
+        "kind": "program",
+        "seconds": 0.7524003450525925,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.5",
+        "kind": "program",
+        "seconds": 1.04902494198177,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.6",
+        "kind": "program",
+        "seconds": 0.7503524160711095,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.7",
+        "kind": "program",
+        "seconds": 1.0467056380584836,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.8",
+        "kind": "program",
+        "seconds": 0.7513356349663809,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.9",
+        "kind": "program",
+        "seconds": 1.0460276060039178,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.10",
+        "kind": "program",
+        "seconds": 0.7531676369253546,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.11",
+        "kind": "program",
+        "seconds": 1.0419563360046595,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.12",
+        "kind": "program",
+        "seconds": 0.7448953010607511,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.13",
+        "kind": "program",
+        "seconds": 1.0439355729613453,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.14",
+        "kind": "program",
+        "seconds": 0.74620837403927,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.15",
+        "kind": "program",
+        "seconds": 1.0432928499067202,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.16",
+        "kind": "program",
+        "seconds": 0.7480394999729469,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.17",
+        "kind": "program",
+        "seconds": 1.0459054100792855,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.18",
+        "kind": "program",
+        "seconds": 0.7463645579991862,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.19",
+        "kind": "program",
+        "seconds": 1.0485686600441113,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.20",
+        "kind": "program",
+        "seconds": 0.4496478090295568,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.21",
+        "kind": "program",
+        "seconds": 0.8980601150542498,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.22",
+        "kind": "program",
+        "seconds": 0.0060382429510355,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.23",
+        "kind": "program",
+        "seconds": 0.5354723799973726,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.24",
+        "kind": "program",
+        "seconds": 0.45334567897953093,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.25",
+        "kind": "program",
+        "seconds": 4.534899132093415,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.0.26",
+        "kind": "program",
+        "seconds": 0.14374938793480396,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.handoff",
+        "kind": "program",
+        "seconds": 0.005952071980573237,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.constants.0",
+        "kind": "write",
+        "seconds": 0.06615135108586401
+      },
+      {
+        "name": "encoder.1.0",
+        "kind": "program",
+        "seconds": 0.0704455329105258,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.1",
+        "kind": "program",
+        "seconds": 4.605858464958146,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.2",
+        "kind": "program",
+        "seconds": 1.4622390770819038,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.3",
+        "kind": "program",
+        "seconds": 0.8657771250000224,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.4",
+        "kind": "program",
+        "seconds": 0.7454853790113702,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.5",
+        "kind": "program",
+        "seconds": 1.0518183859530836,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.6",
+        "kind": "program",
+        "seconds": 0.7472030000062659,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.7",
+        "kind": "program",
+        "seconds": 1.051347307045944,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.8",
+        "kind": "program",
+        "seconds": 0.7460787389427423,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.9",
+        "kind": "program",
+        "seconds": 1.0378180029802024,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.10",
+        "kind": "program",
+        "seconds": 0.7470471870619804,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.11",
+        "kind": "program",
+        "seconds": 1.0507805770030245,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.12",
+        "kind": "program",
+        "seconds": 0.7495463439263403,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.13",
+        "kind": "program",
+        "seconds": 1.052120992098935,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.14",
+        "kind": "program",
+        "seconds": 0.7511461079120636,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.15",
+        "kind": "program",
+        "seconds": 1.0523833780316636,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.16",
+        "kind": "program",
+        "seconds": 0.7504771200474352,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.17",
+        "kind": "program",
+        "seconds": 1.0516151229385287,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.18",
+        "kind": "program",
+        "seconds": 0.7493892799830064,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.19",
+        "kind": "program",
+        "seconds": 1.0491887179668993,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.20",
+        "kind": "program",
+        "seconds": 0.45143870601896197,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.21",
+        "kind": "program",
+        "seconds": 0.8956566549604759,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.22",
+        "kind": "program",
+        "seconds": 0.005995513056404889,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.23",
+        "kind": "program",
+        "seconds": 0.5394118570256978,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.24",
+        "kind": "program",
+        "seconds": 0.4531117669539526,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.25",
+        "kind": "program",
+        "seconds": 4.5846827160567045,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.1.26",
+        "kind": "program",
+        "seconds": 0.1427904509473592,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.handoff",
+        "kind": "program",
+        "seconds": 0.006253246916458011,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.constants.0",
+        "kind": "write",
+        "seconds": 0.06699335807934403
+      },
+      {
+        "name": "encoder.2.0",
+        "kind": "program",
+        "seconds": 0.07028959994204342,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.1",
+        "kind": "program",
+        "seconds": 4.605272885994054,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.2",
+        "kind": "program",
+        "seconds": 1.46412112202961,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.3",
+        "kind": "program",
+        "seconds": 0.8720528830308467,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.4",
+        "kind": "program",
+        "seconds": 0.7508068580646068,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.5",
+        "kind": "program",
+        "seconds": 1.0497474969597533,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.6",
+        "kind": "program",
+        "seconds": 0.7476083179935813,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.7",
+        "kind": "program",
+        "seconds": 1.0507045650156215,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.8",
+        "kind": "program",
+        "seconds": 0.7490994760300964,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.9",
+        "kind": "program",
+        "seconds": 1.0551046780310571,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.10",
+        "kind": "program",
+        "seconds": 0.7498388789827004,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.11",
+        "kind": "program",
+        "seconds": 1.0586979949148372,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.12",
+        "kind": "program",
+        "seconds": 0.750110395019874,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.13",
+        "kind": "program",
+        "seconds": 1.0589623500127345,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.14",
+        "kind": "program",
+        "seconds": 0.7486920189112425,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.15",
+        "kind": "program",
+        "seconds": 1.0559849339770153,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.16",
+        "kind": "program",
+        "seconds": 0.7472953819669783,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.17",
+        "kind": "program",
+        "seconds": 1.0476071269949898,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.18",
+        "kind": "program",
+        "seconds": 0.7482679899549112,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.19",
+        "kind": "program",
+        "seconds": 1.0504986980231479,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.20",
+        "kind": "program",
+        "seconds": 0.4540283130481839,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.21",
+        "kind": "program",
+        "seconds": 0.8983044510241598,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.22",
+        "kind": "program",
+        "seconds": 0.006033602985553443,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.23",
+        "kind": "program",
+        "seconds": 0.5408213909249753,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.24",
+        "kind": "program",
+        "seconds": 0.45232829998712987,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.25",
+        "kind": "program",
+        "seconds": 4.614076248020865,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.2.26",
+        "kind": "program",
+        "seconds": 0.14335164101794362,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.handoff",
+        "kind": "program",
+        "seconds": 0.0059867530362680554,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.constants.0",
+        "kind": "write",
+        "seconds": 0.06620718305930495
+      },
+      {
+        "name": "encoder.3.0",
+        "kind": "program",
+        "seconds": 0.0697082889964804,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.1",
+        "kind": "program",
+        "seconds": 4.555953157017939,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.2",
+        "kind": "program",
+        "seconds": 1.4502028910210356,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.3",
+        "kind": "program",
+        "seconds": 0.8600134029984474,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.4",
+        "kind": "program",
+        "seconds": 0.7338258950039744,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.5",
+        "kind": "program",
+        "seconds": 1.027136433054693,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.6",
+        "kind": "program",
+        "seconds": 0.7335775739047676,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.7",
+        "kind": "program",
+        "seconds": 1.0278270789422095,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.8",
+        "kind": "program",
+        "seconds": 0.7342877559131011,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.9",
+        "kind": "program",
+        "seconds": 1.0286796339787543,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.10",
+        "kind": "program",
+        "seconds": 0.7313594620209187,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.11",
+        "kind": "program",
+        "seconds": 1.023186810896732,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.12",
+        "kind": "program",
+        "seconds": 0.734027182101272,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.13",
+        "kind": "program",
+        "seconds": 1.0283577080117539,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.14",
+        "kind": "program",
+        "seconds": 0.7356880329316482,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.15",
+        "kind": "program",
+        "seconds": 1.0268958810484037,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.16",
+        "kind": "program",
+        "seconds": 0.7369723470183089,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.17",
+        "kind": "program",
+        "seconds": 1.0231704709585756,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.18",
+        "kind": "program",
+        "seconds": 0.7350905518978834,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.19",
+        "kind": "program",
+        "seconds": 1.0276256540091708,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.20",
+        "kind": "program",
+        "seconds": 0.4492073740111664,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.21",
+        "kind": "program",
+        "seconds": 0.8910970310680568,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.22",
+        "kind": "program",
+        "seconds": 0.006039993022568524,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.23",
+        "kind": "program",
+        "seconds": 0.5254888359922916,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.24",
+        "kind": "program",
+        "seconds": 0.4498102260986343,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.25",
+        "kind": "program",
+        "seconds": 4.46146518306341,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.3.26",
+        "kind": "program",
+        "seconds": 0.1383787770755589,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.handoff",
+        "kind": "program",
+        "seconds": 0.0058922210009768605,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.constants.0",
+        "kind": "write",
+        "seconds": 0.067088937968947
+      },
+      {
+        "name": "encoder.4.0",
+        "kind": "program",
+        "seconds": 0.07024734804872423,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.1",
+        "kind": "program",
+        "seconds": 4.438703138031997,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.2",
+        "kind": "program",
+        "seconds": 1.4514704060275108,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.3",
+        "kind": "program",
+        "seconds": 0.860820172005333,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.4",
+        "kind": "program",
+        "seconds": 0.7377066829940304,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.5",
+        "kind": "program",
+        "seconds": 1.0275049000047147,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.6",
+        "kind": "program",
+        "seconds": 0.7381525909295306,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.7",
+        "kind": "program",
+        "seconds": 1.0264503200305626,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.8",
+        "kind": "program",
+        "seconds": 0.7365941419266164,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.9",
+        "kind": "program",
+        "seconds": 1.0248108300147578,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.10",
+        "kind": "program",
+        "seconds": 0.7349266509991139,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.11",
+        "kind": "program",
+        "seconds": 1.026687876903452,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.12",
+        "kind": "program",
+        "seconds": 0.7368827880127355,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.13",
+        "kind": "program",
+        "seconds": 1.027288477984257,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.14",
+        "kind": "program",
+        "seconds": 0.7391371909761801,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.15",
+        "kind": "program",
+        "seconds": 1.0280169720062986,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.16",
+        "kind": "program",
+        "seconds": 0.7364890810567886,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.17",
+        "kind": "program",
+        "seconds": 1.0293031049659476,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.18",
+        "kind": "program",
+        "seconds": 0.7364331800490618,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.19",
+        "kind": "program",
+        "seconds": 1.025407303008251,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.20",
+        "kind": "program",
+        "seconds": 0.4484791860450059,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.21",
+        "kind": "program",
+        "seconds": 0.885937356040813,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.22",
+        "kind": "program",
+        "seconds": 0.006026393035426736,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.23",
+        "kind": "program",
+        "seconds": 0.5255804930347949,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.24",
+        "kind": "program",
+        "seconds": 0.4480451380368322,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.25",
+        "kind": "program",
+        "seconds": 4.4544821619056165,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.4.26",
+        "kind": "program",
+        "seconds": 0.13875436398666352,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.handoff",
+        "kind": "program",
+        "seconds": 0.006001202040351927,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.constants.0",
+        "kind": "write",
+        "seconds": 0.06653206900227815
+      },
+      {
+        "name": "encoder.5.0",
+        "kind": "program",
+        "seconds": 0.07079008803702891,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.1",
+        "kind": "program",
+        "seconds": 4.437147481017746,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.2",
+        "kind": "program",
+        "seconds": 1.4516200490761548,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.3",
+        "kind": "program",
+        "seconds": 0.861642898991704,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.4",
+        "kind": "program",
+        "seconds": 0.737875065067783,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.5",
+        "kind": "program",
+        "seconds": 1.0294626670656726,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.6",
+        "kind": "program",
+        "seconds": 0.737313404912129,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.7",
+        "kind": "program",
+        "seconds": 1.0282468040240929,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.8",
+        "kind": "program",
+        "seconds": 0.7347254870692268,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.9",
+        "kind": "program",
+        "seconds": 1.018387899035588,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.10",
+        "kind": "program",
+        "seconds": 0.7335635250201449,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.11",
+        "kind": "program",
+        "seconds": 1.0279654990881681,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.12",
+        "kind": "program",
+        "seconds": 0.7341641560196877,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.13",
+        "kind": "program",
+        "seconds": 1.0300508580403402,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.14",
+        "kind": "program",
+        "seconds": 0.7384298060787842,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.15",
+        "kind": "program",
+        "seconds": 1.031218779971823,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.16",
+        "kind": "program",
+        "seconds": 0.7402108500245959,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.17",
+        "kind": "program",
+        "seconds": 1.0331082950579002,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.18",
+        "kind": "program",
+        "seconds": 0.7355144019238651,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.19",
+        "kind": "program",
+        "seconds": 1.0295633689966053,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.20",
+        "kind": "program",
+        "seconds": 0.44909247709438205,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.21",
+        "kind": "program",
+        "seconds": 0.8892609069589525,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.22",
+        "kind": "program",
+        "seconds": 0.005937931011430919,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.23",
+        "kind": "program",
+        "seconds": 0.5253899280214682,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.24",
+        "kind": "program",
+        "seconds": 0.44831901194993407,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.25",
+        "kind": "program",
+        "seconds": 4.450155664933845,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.5.26",
+        "kind": "program",
+        "seconds": 0.13869473291561007,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.handoff",
+        "kind": "program",
+        "seconds": 0.005933501059189439,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.constants.0",
+        "kind": "write",
+        "seconds": 0.06682790396735072
+      },
+      {
+        "name": "encoder.6.0",
+        "kind": "program",
+        "seconds": 0.07057019392959774,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.1",
+        "kind": "program",
+        "seconds": 4.437900533899665,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.2",
+        "kind": "program",
+        "seconds": 1.4518361899536103,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.3",
+        "kind": "program",
+        "seconds": 0.8595907769631594,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.4",
+        "kind": "program",
+        "seconds": 0.7365386190358549,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.5",
+        "kind": "program",
+        "seconds": 1.0285126869566739,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.6",
+        "kind": "program",
+        "seconds": 0.735844666021876,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.7",
+        "kind": "program",
+        "seconds": 1.0282366720493883,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.8",
+        "kind": "program",
+        "seconds": 0.7356957140145823,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.9",
+        "kind": "program",
+        "seconds": 1.0296695190481842,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.10",
+        "kind": "program",
+        "seconds": 0.7362321330001578,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.11",
+        "kind": "program",
+        "seconds": 1.0289102250244468,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.12",
+        "kind": "program",
+        "seconds": 0.735774444998242,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.13",
+        "kind": "program",
+        "seconds": 1.025778905954212,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.14",
+        "kind": "program",
+        "seconds": 0.734437569975853,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.15",
+        "kind": "program",
+        "seconds": 1.0297152489656582,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.16",
+        "kind": "program",
+        "seconds": 0.7345318319275975,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.17",
+        "kind": "program",
+        "seconds": 1.0301711580250412,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.18",
+        "kind": "program",
+        "seconds": 0.7351557540241629,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.19",
+        "kind": "program",
+        "seconds": 1.0323188680922613,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.20",
+        "kind": "program",
+        "seconds": 0.4490234589902684,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.21",
+        "kind": "program",
+        "seconds": 0.8899960339767858,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.22",
+        "kind": "program",
+        "seconds": 0.005992372985929251,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.23",
+        "kind": "program",
+        "seconds": 0.528400055016391,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.24",
+        "kind": "program",
+        "seconds": 0.4483517650514841,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.25",
+        "kind": "program",
+        "seconds": 4.505123875918798,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.6.26",
+        "kind": "program",
+        "seconds": 0.14369869395159185,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.handoff",
+        "kind": "program",
+        "seconds": 0.005991253070533276,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.constants.0",
+        "kind": "write",
+        "seconds": 0.06684968306217343
+      },
+      {
+        "name": "encoder.7.0",
+        "kind": "program",
+        "seconds": 0.07077995699364692,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.1",
+        "kind": "program",
+        "seconds": 4.550974365090951,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.2",
+        "kind": "program",
+        "seconds": 1.491374698933214,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.3",
+        "kind": "program",
+        "seconds": 0.8864636879879981,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.4",
+        "kind": "program",
+        "seconds": 0.7492181949783117,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.5",
+        "kind": "program",
+        "seconds": 1.0753471690695733,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.6",
+        "kind": "program",
+        "seconds": 0.7457250409061089,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.7",
+        "kind": "program",
+        "seconds": 1.0753625199431553,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.8",
+        "kind": "program",
+        "seconds": 0.7463006520411,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.9",
+        "kind": "program",
+        "seconds": 1.0808594730915502,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.10",
+        "kind": "program",
+        "seconds": 0.7471758080646396,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.11",
+        "kind": "program",
+        "seconds": 1.0656287979800254,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.12",
+        "kind": "program",
+        "seconds": 0.7478522920282558,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.13",
+        "kind": "program",
+        "seconds": 1.076678383979015,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.14",
+        "kind": "program",
+        "seconds": 0.7482963799266145,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.15",
+        "kind": "program",
+        "seconds": 1.0787743140244856,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.16",
+        "kind": "program",
+        "seconds": 0.7480185240274295,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.17",
+        "kind": "program",
+        "seconds": 1.0741181570338085,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.18",
+        "kind": "program",
+        "seconds": 0.7462904319399968,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.19",
+        "kind": "program",
+        "seconds": 1.0753106389893219,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.20",
+        "kind": "program",
+        "seconds": 0.4626187849789858,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.21",
+        "kind": "program",
+        "seconds": 0.9181505480082706,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.22",
+        "kind": "program",
+        "seconds": 0.006008852971717715,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.23",
+        "kind": "program",
+        "seconds": 0.5456439239205793,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.24",
+        "kind": "program",
+        "seconds": 0.46123190002981573,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.25",
+        "kind": "program",
+        "seconds": 4.571068121003918,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.7.26",
+        "kind": "program",
+        "seconds": 0.14360860595479608,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.handoff",
+        "kind": "program",
+        "seconds": 0.005987291922792792,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.constants.0",
+        "kind": "write",
+        "seconds": 0.06666272203437984
+      },
+      {
+        "name": "encoder.8.0",
+        "kind": "program",
+        "seconds": 0.07088826107792556,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.1",
+        "kind": "program",
+        "seconds": 4.549844185006805,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.2",
+        "kind": "program",
+        "seconds": 1.4937954760389403,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.3",
+        "kind": "program",
+        "seconds": 0.8860109889646992,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.4",
+        "kind": "program",
+        "seconds": 0.7490656099980697,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.5",
+        "kind": "program",
+        "seconds": 1.0755049149738625,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.6",
+        "kind": "program",
+        "seconds": 0.7474757890449837,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.7",
+        "kind": "program",
+        "seconds": 1.0775211330037564,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.8",
+        "kind": "program",
+        "seconds": 0.747870436985977,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.9",
+        "kind": "program",
+        "seconds": 1.05773500201758,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.10",
+        "kind": "program",
+        "seconds": 0.747884780052118,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.11",
+        "kind": "program",
+        "seconds": 1.0707250939449295,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.12",
+        "kind": "program",
+        "seconds": 0.7493111389921978,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.13",
+        "kind": "program",
+        "seconds": 1.074421223020181,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.14",
+        "kind": "program",
+        "seconds": 0.7476116570178419,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.15",
+        "kind": "program",
+        "seconds": 1.0760652739554644,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.16",
+        "kind": "program",
+        "seconds": 0.748569825082086,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.17",
+        "kind": "program",
+        "seconds": 1.0671460659941658,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.18",
+        "kind": "program",
+        "seconds": 0.7502897069789469,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.19",
+        "kind": "program",
+        "seconds": 1.0769002789165825,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.20",
+        "kind": "program",
+        "seconds": 0.45974057202693075,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.21",
+        "kind": "program",
+        "seconds": 0.9189524339744821,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.22",
+        "kind": "program",
+        "seconds": 0.0060241640312597156,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.23",
+        "kind": "program",
+        "seconds": 0.5447390680201352,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.24",
+        "kind": "program",
+        "seconds": 0.46163719799369574,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.25",
+        "kind": "program",
+        "seconds": 4.55314250907395,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.8.26",
+        "kind": "program",
+        "seconds": 0.14317711803596467,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.handoff",
+        "kind": "program",
+        "seconds": 0.005936361965723336,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.constants.0",
+        "kind": "write",
+        "seconds": 0.06678361399099231
+      },
+      {
+        "name": "encoder.9.0",
+        "kind": "program",
+        "seconds": 0.0710714339511469,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.1",
+        "kind": "program",
+        "seconds": 4.72590640198905,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.2",
+        "kind": "program",
+        "seconds": 1.4982944149523973,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.3",
+        "kind": "program",
+        "seconds": 0.8874857899500057,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.4",
+        "kind": "program",
+        "seconds": 0.7918054340407252,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.5",
+        "kind": "program",
+        "seconds": 1.1238474060082808,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.6",
+        "kind": "program",
+        "seconds": 0.7958224890753627,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.7",
+        "kind": "program",
+        "seconds": 1.1156069920398295,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.8",
+        "kind": "program",
+        "seconds": 0.800618369015865,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.9",
+        "kind": "program",
+        "seconds": 1.1197041590930894,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.10",
+        "kind": "program",
+        "seconds": 0.8057572449324653,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.11",
+        "kind": "program",
+        "seconds": 1.1182280509965494,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.12",
+        "kind": "program",
+        "seconds": 0.8004859060747549,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.13",
+        "kind": "program",
+        "seconds": 1.1141103159170598,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.14",
+        "kind": "program",
+        "seconds": 0.8000837439903989,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.15",
+        "kind": "program",
+        "seconds": 1.117005584994331,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.16",
+        "kind": "program",
+        "seconds": 0.8031055909814313,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.17",
+        "kind": "program",
+        "seconds": 1.1170418760739267,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.18",
+        "kind": "program",
+        "seconds": 0.8006591349840164,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.19",
+        "kind": "program",
+        "seconds": 1.1114205709891394,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.20",
+        "kind": "program",
+        "seconds": 0.46513943502213806,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.21",
+        "kind": "program",
+        "seconds": 0.9258426349842921,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.22",
+        "kind": "program",
+        "seconds": 0.00656101293861866,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.23",
+        "kind": "program",
+        "seconds": 0.5611567980377004,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.24",
+        "kind": "program",
+        "seconds": 0.4621482689399272,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.25",
+        "kind": "program",
+        "seconds": 4.784226079937071,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.9.26",
+        "kind": "program",
+        "seconds": 0.14807411993388087,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.handoff",
+        "kind": "program",
+        "seconds": 0.006719466997310519,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.constants.0",
+        "kind": "write",
+        "seconds": 0.06651662895455956
+      },
+      {
+        "name": "encoder.10.0",
+        "kind": "program",
+        "seconds": 0.08049350103829056,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.1",
+        "kind": "program",
+        "seconds": 4.773113162023947,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.2",
+        "kind": "program",
+        "seconds": 1.4981506769545376,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.3",
+        "kind": "program",
+        "seconds": 0.8886165149742737,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.4",
+        "kind": "program",
+        "seconds": 0.7923076960723847,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.5",
+        "kind": "program",
+        "seconds": 1.1265155950095505,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.6",
+        "kind": "program",
+        "seconds": 0.7958263019099832,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.7",
+        "kind": "program",
+        "seconds": 1.1196155650541186,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.8",
+        "kind": "program",
+        "seconds": 0.7963396910345182,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.9",
+        "kind": "program",
+        "seconds": 1.1110098130302504,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.10",
+        "kind": "program",
+        "seconds": 0.7962226900272071,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.11",
+        "kind": "program",
+        "seconds": 1.116122639970854,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.12",
+        "kind": "program",
+        "seconds": 0.792467848979868,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.13",
+        "kind": "program",
+        "seconds": 1.1159967470448464,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.14",
+        "kind": "program",
+        "seconds": 0.7919139890000224,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.15",
+        "kind": "program",
+        "seconds": 1.1160408080322668,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.16",
+        "kind": "program",
+        "seconds": 0.8016603708965704,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.17",
+        "kind": "program",
+        "seconds": 1.1188586209900677,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.18",
+        "kind": "program",
+        "seconds": 0.7895373139763251,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.19",
+        "kind": "program",
+        "seconds": 1.1063935769489035,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.20",
+        "kind": "program",
+        "seconds": 0.46387630503159016,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.21",
+        "kind": "program",
+        "seconds": 0.9236177220009267,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.22",
+        "kind": "program",
+        "seconds": 0.006459041032940149,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.23",
+        "kind": "program",
+        "seconds": 0.5712508029537275,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.24",
+        "kind": "program",
+        "seconds": 0.46464051003567874,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.25",
+        "kind": "program",
+        "seconds": 4.764284640084952,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.10.26",
+        "kind": "program",
+        "seconds": 0.1489699080120772,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.handoff",
+        "kind": "program",
+        "seconds": 0.006864177994430065,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.constants.0",
+        "kind": "write",
+        "seconds": 0.06654885003808886
+      },
+      {
+        "name": "encoder.11.0",
+        "kind": "program",
+        "seconds": 0.08303655998315662,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.1",
+        "kind": "program",
+        "seconds": 4.750035663018934,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.2",
+        "kind": "program",
+        "seconds": 1.5022537240292877,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.3",
+        "kind": "program",
+        "seconds": 0.8913185279816389,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.4",
+        "kind": "program",
+        "seconds": 0.7916220269398764,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.5",
+        "kind": "program",
+        "seconds": 1.1178868599236012,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.6",
+        "kind": "program",
+        "seconds": 0.7980620879679918,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.7",
+        "kind": "program",
+        "seconds": 1.1198134260484949,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.8",
+        "kind": "program",
+        "seconds": 0.7949002080131322,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.9",
+        "kind": "program",
+        "seconds": 1.121956565999426,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.10",
+        "kind": "program",
+        "seconds": 0.7982551720924675,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.11",
+        "kind": "program",
+        "seconds": 1.1213071150705218,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.12",
+        "kind": "program",
+        "seconds": 0.804764483938925,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.13",
+        "kind": "program",
+        "seconds": 1.108866980066523,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.14",
+        "kind": "program",
+        "seconds": 0.7884064570534974,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.15",
+        "kind": "program",
+        "seconds": 1.1077028790023178,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.16",
+        "kind": "program",
+        "seconds": 0.8027261850656942,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.17",
+        "kind": "program",
+        "seconds": 1.1068858230719343,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.18",
+        "kind": "program",
+        "seconds": 0.787210083915852,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.19",
+        "kind": "program",
+        "seconds": 1.1203980549471453,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.20",
+        "kind": "program",
+        "seconds": 0.46465144003741443,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.21",
+        "kind": "program",
+        "seconds": 0.9220553329214454,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.22",
+        "kind": "program",
+        "seconds": 0.006503822049126029,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.23",
+        "kind": "program",
+        "seconds": 0.5589299179846421,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.24",
+        "kind": "program",
+        "seconds": 0.46425046294461936,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.25",
+        "kind": "program",
+        "seconds": 4.77722011692822,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.11.26",
+        "kind": "program",
+        "seconds": 0.14845168602187186,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.handoff",
+        "kind": "program",
+        "seconds": 0.006644724984653294,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.constants.0",
+        "kind": "write",
+        "seconds": 0.06652936805039644
+      },
+      {
+        "name": "encoder.12.0",
+        "kind": "program",
+        "seconds": 0.0805939119309187,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.1",
+        "kind": "program",
+        "seconds": 4.7514325639931485,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.2",
+        "kind": "program",
+        "seconds": 1.5020899979863316,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.3",
+        "kind": "program",
+        "seconds": 0.8885091230040416,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.4",
+        "kind": "program",
+        "seconds": 0.7958806549431756,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.5",
+        "kind": "program",
+        "seconds": 1.115779335028492,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.6",
+        "kind": "program",
+        "seconds": 0.8064572610892355,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.7",
+        "kind": "program",
+        "seconds": 1.1082814839901403,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.8",
+        "kind": "program",
+        "seconds": 0.8013169739861041,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.9",
+        "kind": "program",
+        "seconds": 1.11487173801288,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.10",
+        "kind": "program",
+        "seconds": 0.8036373180802912,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.11",
+        "kind": "program",
+        "seconds": 1.1165233589708805,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.12",
+        "kind": "program",
+        "seconds": 0.7954997660126537,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.13",
+        "kind": "program",
+        "seconds": 1.1249382860260084,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.14",
+        "kind": "program",
+        "seconds": 0.7962442400166765,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.15",
+        "kind": "program",
+        "seconds": 1.1212574479868636,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.16",
+        "kind": "program",
+        "seconds": 0.8078336169710383,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.17",
+        "kind": "program",
+        "seconds": 1.1116196269867942,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.18",
+        "kind": "program",
+        "seconds": 0.8052316680550575,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.19",
+        "kind": "program",
+        "seconds": 1.1164330169558525,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.20",
+        "kind": "program",
+        "seconds": 0.4651742280693725,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.21",
+        "kind": "program",
+        "seconds": 0.9233429450541735,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.22",
+        "kind": "program",
+        "seconds": 0.006648804992437363,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.23",
+        "kind": "program",
+        "seconds": 0.571897471905686,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.24",
+        "kind": "program",
+        "seconds": 0.46457197796553373,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.25",
+        "kind": "program",
+        "seconds": 4.7514087880263105,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.12.26",
+        "kind": "program",
+        "seconds": 0.1504980840254575,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.handoff",
+        "kind": "program",
+        "seconds": 0.0067151859402656555,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.constants.0",
+        "kind": "write",
+        "seconds": 0.06666889099869877
+      },
+      {
+        "name": "encoder.13.0",
+        "kind": "program",
+        "seconds": 0.07909926399588585,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.1",
+        "kind": "program",
+        "seconds": 4.739844961091876,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.2",
+        "kind": "program",
+        "seconds": 1.508437025011517,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.3",
+        "kind": "program",
+        "seconds": 0.8937349109910429,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.4",
+        "kind": "program",
+        "seconds": 0.7891617979621515,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.5",
+        "kind": "program",
+        "seconds": 1.1170725410338491,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.6",
+        "kind": "program",
+        "seconds": 0.7989343219669536,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.7",
+        "kind": "program",
+        "seconds": 1.1262385869631544,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.8",
+        "kind": "program",
+        "seconds": 0.7994435080327094,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.9",
+        "kind": "program",
+        "seconds": 1.1055456770118326,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.10",
+        "kind": "program",
+        "seconds": 0.7995787309482694,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.11",
+        "kind": "program",
+        "seconds": 1.1084924220340326,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.12",
+        "kind": "program",
+        "seconds": 0.8031691679498181,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.13",
+        "kind": "program",
+        "seconds": 1.1104099490912631,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.14",
+        "kind": "program",
+        "seconds": 0.8058707179734483,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.15",
+        "kind": "program",
+        "seconds": 1.1182043940061703,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.16",
+        "kind": "program",
+        "seconds": 0.7890138030052185,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.17",
+        "kind": "program",
+        "seconds": 1.1107440650230274,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.18",
+        "kind": "program",
+        "seconds": 0.7865510269766673,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.19",
+        "kind": "program",
+        "seconds": 1.109858638024889,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.20",
+        "kind": "program",
+        "seconds": 0.46600890601985157,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.21",
+        "kind": "program",
+        "seconds": 0.9208305840147659,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.22",
+        "kind": "program",
+        "seconds": 0.006389610003679991,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.23",
+        "kind": "program",
+        "seconds": 0.5575484529836103,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.24",
+        "kind": "program",
+        "seconds": 0.46493270597420633,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.25",
+        "kind": "program",
+        "seconds": 4.755632378044538,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.13.26",
+        "kind": "program",
+        "seconds": 0.14867093903012574,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.handoff",
+        "kind": "program",
+        "seconds": 0.006485232035629451,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.constants.0",
+        "kind": "write",
+        "seconds": 0.06679964205250144
+      },
+      {
+        "name": "encoder.14.0",
+        "kind": "program",
+        "seconds": 0.08028805500362068,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.1",
+        "kind": "program",
+        "seconds": 4.732195379096083,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.2",
+        "kind": "program",
+        "seconds": 1.5026582649443299,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.3",
+        "kind": "program",
+        "seconds": 0.888718458940275,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.4",
+        "kind": "program",
+        "seconds": 0.7934522430878133,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.5",
+        "kind": "program",
+        "seconds": 1.1188939460553229,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.6",
+        "kind": "program",
+        "seconds": 0.8026323650265113,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.7",
+        "kind": "program",
+        "seconds": 1.1188609659438953,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.8",
+        "kind": "program",
+        "seconds": 0.7945871429983526,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.9",
+        "kind": "program",
+        "seconds": 1.1230690740048885,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.10",
+        "kind": "program",
+        "seconds": 0.795074949041009,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.11",
+        "kind": "program",
+        "seconds": 1.1140033890260383,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.12",
+        "kind": "program",
+        "seconds": 0.7963311730418354,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.13",
+        "kind": "program",
+        "seconds": 1.1234294960740954,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.14",
+        "kind": "program",
+        "seconds": 0.7914651309838519,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.15",
+        "kind": "program",
+        "seconds": 1.1216211919672787,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.16",
+        "kind": "program",
+        "seconds": 0.7889295329805464,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.17",
+        "kind": "program",
+        "seconds": 1.113765824935399,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.18",
+        "kind": "program",
+        "seconds": 0.788932214025408,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.19",
+        "kind": "program",
+        "seconds": 1.1119246300077066,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.20",
+        "kind": "program",
+        "seconds": 0.4660483989864588,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.21",
+        "kind": "program",
+        "seconds": 0.9263828909024596,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.22",
+        "kind": "program",
+        "seconds": 0.006500562070868909,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.23",
+        "kind": "program",
+        "seconds": 0.562093140091747,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.24",
+        "kind": "program",
+        "seconds": 0.4655972010223195,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.25",
+        "kind": "program",
+        "seconds": 4.754378005047329,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.14.26",
+        "kind": "program",
+        "seconds": 0.1479769330471754,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.handoff",
+        "kind": "program",
+        "seconds": 0.006542152957990766,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.constants.0",
+        "kind": "write",
+        "seconds": 0.06663992896210402
+      },
+      {
+        "name": "encoder.15.0",
+        "kind": "program",
+        "seconds": 0.08057982998434454,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.1",
+        "kind": "program",
+        "seconds": 4.737032152013853,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.2",
+        "kind": "program",
+        "seconds": 1.499565155012533,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.3",
+        "kind": "program",
+        "seconds": 0.8928148730192333,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.4",
+        "kind": "program",
+        "seconds": 0.7914559340570122,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.5",
+        "kind": "program",
+        "seconds": 1.1102124579483643,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.6",
+        "kind": "program",
+        "seconds": 0.7978394030360505,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.7",
+        "kind": "program",
+        "seconds": 1.1183213000185788,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.8",
+        "kind": "program",
+        "seconds": 0.7960355289978907,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.9",
+        "kind": "program",
+        "seconds": 1.122230872977525,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.10",
+        "kind": "program",
+        "seconds": 0.7918292909162119,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.11",
+        "kind": "program",
+        "seconds": 1.1098548310110345,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.12",
+        "kind": "program",
+        "seconds": 0.7915544370189309,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.13",
+        "kind": "program",
+        "seconds": 1.1148671100381762,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.14",
+        "kind": "program",
+        "seconds": 0.7887656510574743,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.15",
+        "kind": "program",
+        "seconds": 1.1134967650286853,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.16",
+        "kind": "program",
+        "seconds": 0.7941754430066794,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.17",
+        "kind": "program",
+        "seconds": 1.1111342509975657,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.18",
+        "kind": "program",
+        "seconds": 0.7907138279406354,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.19",
+        "kind": "program",
+        "seconds": 1.1126695789862424,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.20",
+        "kind": "program",
+        "seconds": 0.4674780019558966,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.21",
+        "kind": "program",
+        "seconds": 0.924005710054189,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.22",
+        "kind": "program",
+        "seconds": 0.006428260006941855,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.23",
+        "kind": "program",
+        "seconds": 0.5569724820088595,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.24",
+        "kind": "program",
+        "seconds": 0.4628713160054758,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.25",
+        "kind": "program",
+        "seconds": 4.763474466977641,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.15.26",
+        "kind": "program",
+        "seconds": 0.1476013499777764,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.handoff",
+        "kind": "program",
+        "seconds": 0.006613973993808031,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.constants.0",
+        "kind": "write",
+        "seconds": 0.06656788906548172
+      },
+      {
+        "name": "encoder.16.0",
+        "kind": "program",
+        "seconds": 0.07863780600018799,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.1",
+        "kind": "program",
+        "seconds": 4.735579361091368,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.2",
+        "kind": "program",
+        "seconds": 1.4996329689165577,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.3",
+        "kind": "program",
+        "seconds": 0.8898371569812298,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.4",
+        "kind": "program",
+        "seconds": 0.7942067730473354,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.5",
+        "kind": "program",
+        "seconds": 1.1156886549433693,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.6",
+        "kind": "program",
+        "seconds": 0.8101815329864621,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.7",
+        "kind": "program",
+        "seconds": 1.117077040951699,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.8",
+        "kind": "program",
+        "seconds": 0.7949680770980194,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.9",
+        "kind": "program",
+        "seconds": 1.1118542529875413,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.10",
+        "kind": "program",
+        "seconds": 0.7907346379943192,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.11",
+        "kind": "program",
+        "seconds": 1.1128488909453154,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.12",
+        "kind": "program",
+        "seconds": 0.8028600650141016,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.13",
+        "kind": "program",
+        "seconds": 1.1161107129883021,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.14",
+        "kind": "program",
+        "seconds": 0.7901200560154393,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.15",
+        "kind": "program",
+        "seconds": 1.116250296938233,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.16",
+        "kind": "program",
+        "seconds": 0.8000665130093694,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.17",
+        "kind": "program",
+        "seconds": 1.120245611993596,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.18",
+        "kind": "program",
+        "seconds": 0.7966872110264376,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.19",
+        "kind": "program",
+        "seconds": 1.115068614948541,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.20",
+        "kind": "program",
+        "seconds": 0.46568844898138195,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.21",
+        "kind": "program",
+        "seconds": 0.9307222249917686,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.22",
+        "kind": "program",
+        "seconds": 0.006465052021667361,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.23",
+        "kind": "program",
+        "seconds": 0.5574868420371786,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.24",
+        "kind": "program",
+        "seconds": 0.4667225379962474,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.25",
+        "kind": "program",
+        "seconds": 4.739711734000593,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.16.26",
+        "kind": "program",
+        "seconds": 0.14897871506400406,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.handoff",
+        "kind": "program",
+        "seconds": 0.0066992349456995726,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.constants.0",
+        "kind": "write",
+        "seconds": 0.06632754497695714
+      },
+      {
+        "name": "encoder.17.0",
+        "kind": "program",
+        "seconds": 0.08155990100931376,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.1",
+        "kind": "program",
+        "seconds": 4.729066908010282,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.2",
+        "kind": "program",
+        "seconds": 1.4976993969175965,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.3",
+        "kind": "program",
+        "seconds": 0.8885991510469466,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.4",
+        "kind": "program",
+        "seconds": 0.7902957459446043,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.5",
+        "kind": "program",
+        "seconds": 1.124188739922829,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.6",
+        "kind": "program",
+        "seconds": 0.8001456710044295,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.7",
+        "kind": "program",
+        "seconds": 1.127463371027261,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.8",
+        "kind": "program",
+        "seconds": 0.8001266909996048,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.9",
+        "kind": "program",
+        "seconds": 1.1266906970413402,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.10",
+        "kind": "program",
+        "seconds": 0.796006134012714,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.11",
+        "kind": "program",
+        "seconds": 1.1205855830339715,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.12",
+        "kind": "program",
+        "seconds": 0.7926429900107905,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.13",
+        "kind": "program",
+        "seconds": 1.1156703910091892,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.14",
+        "kind": "program",
+        "seconds": 0.7965089930221438,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.15",
+        "kind": "program",
+        "seconds": 1.115227782051079,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.16",
+        "kind": "program",
+        "seconds": 0.7946201669983566,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.17",
+        "kind": "program",
+        "seconds": 1.1203355219913647,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.18",
+        "kind": "program",
+        "seconds": 0.7997243970166892,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.19",
+        "kind": "program",
+        "seconds": 1.1193427350372076,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.20",
+        "kind": "program",
+        "seconds": 0.4677759991027415,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.21",
+        "kind": "program",
+        "seconds": 0.9196542169665918,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.22",
+        "kind": "program",
+        "seconds": 0.006699375924654305,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.23",
+        "kind": "program",
+        "seconds": 0.5597859950503334,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.24",
+        "kind": "program",
+        "seconds": 0.4632514730328694,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.25",
+        "kind": "program",
+        "seconds": 4.768346550059505,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.17.26",
+        "kind": "program",
+        "seconds": 0.1486733800265938,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.handoff",
+        "kind": "program",
+        "seconds": 0.0065813029650598764,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.constants.0",
+        "kind": "write",
+        "seconds": 0.06622877193149179
+      },
+      {
+        "name": "encoder.18.0",
+        "kind": "program",
+        "seconds": 0.07779090001713485,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.1",
+        "kind": "program",
+        "seconds": 4.739101001992822,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.2",
+        "kind": "program",
+        "seconds": 1.5043154180748388,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.3",
+        "kind": "program",
+        "seconds": 0.8927276519825682,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.4",
+        "kind": "program",
+        "seconds": 0.7968983229948208,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.5",
+        "kind": "program",
+        "seconds": 1.1326577430590987,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.6",
+        "kind": "program",
+        "seconds": 0.8004611199721694,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.7",
+        "kind": "program",
+        "seconds": 1.1234140100423247,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.8",
+        "kind": "program",
+        "seconds": 0.7973001110367477,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.9",
+        "kind": "program",
+        "seconds": 1.1220980149228126,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.10",
+        "kind": "program",
+        "seconds": 0.7925780520308763,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.11",
+        "kind": "program",
+        "seconds": 1.1108529339544475,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.12",
+        "kind": "program",
+        "seconds": 0.7961244779871777,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.13",
+        "kind": "program",
+        "seconds": 1.1231618160381913,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.14",
+        "kind": "program",
+        "seconds": 0.7996425740420818,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.15",
+        "kind": "program",
+        "seconds": 1.1203855930361897,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.16",
+        "kind": "program",
+        "seconds": 0.8022125230636448,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.17",
+        "kind": "program",
+        "seconds": 1.1217872590059415,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.18",
+        "kind": "program",
+        "seconds": 0.801971378037706,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.19",
+        "kind": "program",
+        "seconds": 1.1201962300110608,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.20",
+        "kind": "program",
+        "seconds": 0.4690083999885246,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.21",
+        "kind": "program",
+        "seconds": 0.9221639229217544,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.22",
+        "kind": "program",
+        "seconds": 0.006415880983695388,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.23",
+        "kind": "program",
+        "seconds": 0.5488466079114005,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.24",
+        "kind": "program",
+        "seconds": 0.4652651500655338,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.25",
+        "kind": "program",
+        "seconds": 4.753449131036177,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.18.26",
+        "kind": "program",
+        "seconds": 0.14837039401754737,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.handoff",
+        "kind": "program",
+        "seconds": 0.006748736021108925,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.constants.0",
+        "kind": "write",
+        "seconds": 0.06647466798312962
+      },
+      {
+        "name": "encoder.19.0",
+        "kind": "program",
+        "seconds": 0.07927779702004045,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.1",
+        "kind": "program",
+        "seconds": 4.74341444298625,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.2",
+        "kind": "program",
+        "seconds": 1.501205298001878,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.3",
+        "kind": "program",
+        "seconds": 0.8896234120475128,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.4",
+        "kind": "program",
+        "seconds": 0.7890139450319111,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.5",
+        "kind": "program",
+        "seconds": 1.1093619629973546,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.6",
+        "kind": "program",
+        "seconds": 0.801270411000587,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.7",
+        "kind": "program",
+        "seconds": 1.1222018010448664,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.8",
+        "kind": "program",
+        "seconds": 0.7928544440073892,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.9",
+        "kind": "program",
+        "seconds": 1.1154815959744155,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.10",
+        "kind": "program",
+        "seconds": 0.7938227420672774,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.11",
+        "kind": "program",
+        "seconds": 1.1106082550249994,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.12",
+        "kind": "program",
+        "seconds": 0.79700038197916,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.13",
+        "kind": "program",
+        "seconds": 1.1168036999879405,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.14",
+        "kind": "program",
+        "seconds": 0.7973830380942672,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.15",
+        "kind": "program",
+        "seconds": 1.062564372899942,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.16",
+        "kind": "program",
+        "seconds": 0.7486277640564367,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.17",
+        "kind": "program",
+        "seconds": 1.0647133439779282,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.18",
+        "kind": "program",
+        "seconds": 0.7474262709729373,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.19",
+        "kind": "program",
+        "seconds": 1.0591242590453476,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.20",
+        "kind": "program",
+        "seconds": 0.4615009679691866,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.21",
+        "kind": "program",
+        "seconds": 0.917542762006633,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.22",
+        "kind": "program",
+        "seconds": 0.0060226330533623695,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.23",
+        "kind": "program",
+        "seconds": 0.5424930260051042,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.24",
+        "kind": "program",
+        "seconds": 0.4602919860044494,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.25",
+        "kind": "program",
+        "seconds": 4.5372055830666795,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.19.26",
+        "kind": "program",
+        "seconds": 0.14431656699161977,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.handoff",
+        "kind": "program",
+        "seconds": 0.005978852976113558,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.constants.0",
+        "kind": "write",
+        "seconds": 0.06655875802971423
+      },
+      {
+        "name": "encoder.20.0",
+        "kind": "program",
+        "seconds": 0.07068512693513185,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.1",
+        "kind": "program",
+        "seconds": 4.536274673999287,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.2",
+        "kind": "program",
+        "seconds": 1.4900227069156244,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.3",
+        "kind": "program",
+        "seconds": 0.8808336569927633,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.4",
+        "kind": "program",
+        "seconds": 0.7501552449539304,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.5",
+        "kind": "program",
+        "seconds": 1.0666510739829391,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.6",
+        "kind": "program",
+        "seconds": 0.7471095179207623,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.7",
+        "kind": "program",
+        "seconds": 1.0597577739972621,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.8",
+        "kind": "program",
+        "seconds": 0.7466937000863254,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.9",
+        "kind": "program",
+        "seconds": 1.0569810019806027,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.10",
+        "kind": "program",
+        "seconds": 0.748039745958522,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.11",
+        "kind": "program",
+        "seconds": 1.0587980860145763,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.12",
+        "kind": "program",
+        "seconds": 0.7477256200509146,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.13",
+        "kind": "program",
+        "seconds": 1.0580692120129243,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.14",
+        "kind": "program",
+        "seconds": 0.7444040069822222,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.15",
+        "kind": "program",
+        "seconds": 1.0554443229921162,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.16",
+        "kind": "program",
+        "seconds": 0.7463650940917432,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.17",
+        "kind": "program",
+        "seconds": 1.0581151240039617,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.18",
+        "kind": "program",
+        "seconds": 0.7463117529405281,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.19",
+        "kind": "program",
+        "seconds": 1.0555649959715083,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.20",
+        "kind": "program",
+        "seconds": 0.4614781580166891,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.21",
+        "kind": "program",
+        "seconds": 0.9176905489293858,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.22",
+        "kind": "program",
+        "seconds": 0.006057433900423348,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.23",
+        "kind": "program",
+        "seconds": 0.5433516249759123,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.24",
+        "kind": "program",
+        "seconds": 0.46184920601081103,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.25",
+        "kind": "program",
+        "seconds": 4.557629824033938,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.20.26",
+        "kind": "program",
+        "seconds": 0.1438312348909676,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.handoff",
+        "kind": "program",
+        "seconds": 0.005987702053971589,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.constants.0",
+        "kind": "write",
+        "seconds": 0.06676343106664717
+      },
+      {
+        "name": "encoder.21.0",
+        "kind": "program",
+        "seconds": 0.07042331900447607,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.1",
+        "kind": "program",
+        "seconds": 4.542714900919236,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.2",
+        "kind": "program",
+        "seconds": 1.4886681750649586,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.3",
+        "kind": "program",
+        "seconds": 0.8841434359783307,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.4",
+        "kind": "program",
+        "seconds": 0.7464289260096848,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.5",
+        "kind": "program",
+        "seconds": 1.058314361027442,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.6",
+        "kind": "program",
+        "seconds": 0.7714456550311297,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.7",
+        "kind": "program",
+        "seconds": 1.0606368139851838,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.8",
+        "kind": "program",
+        "seconds": 0.7421957369660959,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.9",
+        "kind": "program",
+        "seconds": 1.0588463710155338,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.10",
+        "kind": "program",
+        "seconds": 0.7458252949872985,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.11",
+        "kind": "program",
+        "seconds": 1.0570427059428766,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.12",
+        "kind": "program",
+        "seconds": 0.7459961279528216,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.13",
+        "kind": "program",
+        "seconds": 1.0579622129444033,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.14",
+        "kind": "program",
+        "seconds": 0.7486485360423103,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.15",
+        "kind": "program",
+        "seconds": 1.0558006790233776,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.16",
+        "kind": "program",
+        "seconds": 0.7452959739603102,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.17",
+        "kind": "program",
+        "seconds": 1.0571207939647138,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.18",
+        "kind": "program",
+        "seconds": 0.7452968430006877,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.19",
+        "kind": "program",
+        "seconds": 1.0554791629547253,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.20",
+        "kind": "program",
+        "seconds": 0.4607354929903522,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.21",
+        "kind": "program",
+        "seconds": 0.9171918269712478,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.22",
+        "kind": "program",
+        "seconds": 0.006061253021471202,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.23",
+        "kind": "program",
+        "seconds": 0.5436127140419558,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.24",
+        "kind": "program",
+        "seconds": 0.4615416789893061,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.25",
+        "kind": "program",
+        "seconds": 4.5618966079782695,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.21.26",
+        "kind": "program",
+        "seconds": 0.14298029302153736,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.handoff",
+        "kind": "program",
+        "seconds": 0.005991172045469284,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.constants.0",
+        "kind": "write",
+        "seconds": 0.06623177800793201
+      },
+      {
+        "name": "encoder.22.0",
+        "kind": "program",
+        "seconds": 0.07082158396951854,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.1",
+        "kind": "program",
+        "seconds": 4.542720031924546,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.2",
+        "kind": "program",
+        "seconds": 1.4911682599922642,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.3",
+        "kind": "program",
+        "seconds": 0.8867802610620856,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.4",
+        "kind": "program",
+        "seconds": 0.7475605020299554,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.5",
+        "kind": "program",
+        "seconds": 1.060752953053452,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.6",
+        "kind": "program",
+        "seconds": 0.7477228750940412,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.7",
+        "kind": "program",
+        "seconds": 1.0623590620234609,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.8",
+        "kind": "program",
+        "seconds": 0.7462770879501477,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.9",
+        "kind": "program",
+        "seconds": 1.0570809640921652,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.10",
+        "kind": "program",
+        "seconds": 0.7459830930456519,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.11",
+        "kind": "program",
+        "seconds": 1.057292388053611,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.12",
+        "kind": "program",
+        "seconds": 0.7503536239964887,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.13",
+        "kind": "program",
+        "seconds": 1.0731365049723536,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.14",
+        "kind": "program",
+        "seconds": 0.7462267871014774,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.15",
+        "kind": "program",
+        "seconds": 1.0752384139923379,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.16",
+        "kind": "program",
+        "seconds": 0.7471913649933413,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.17",
+        "kind": "program",
+        "seconds": 1.0752916850615293,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.18",
+        "kind": "program",
+        "seconds": 0.7494052270194516,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.19",
+        "kind": "program",
+        "seconds": 1.0602487629512325,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.20",
+        "kind": "program",
+        "seconds": 0.4625415790360421,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.21",
+        "kind": "program",
+        "seconds": 0.9210398029536009,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.22",
+        "kind": "program",
+        "seconds": 0.005995162995532155,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.23",
+        "kind": "program",
+        "seconds": 0.5347507629776374,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.24",
+        "kind": "program",
+        "seconds": 0.460641484009102,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.25",
+        "kind": "program",
+        "seconds": 4.5646847690222785,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.22.26",
+        "kind": "program",
+        "seconds": 0.1434308880707249,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.handoff",
+        "kind": "program",
+        "seconds": 0.006015232997015119,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.constants.0",
+        "kind": "write",
+        "seconds": 0.0666172489291057
+      },
+      {
+        "name": "encoder.23.0",
+        "kind": "program",
+        "seconds": 0.07062120398040861,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.1",
+        "kind": "program",
+        "seconds": 4.5452395140891895,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.2",
+        "kind": "program",
+        "seconds": 1.4856665460392833,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.3",
+        "kind": "program",
+        "seconds": 0.8846640950068831,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.4",
+        "kind": "program",
+        "seconds": 0.7453452119370922,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.5",
+        "kind": "program",
+        "seconds": 1.0789189799688756,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.6",
+        "kind": "program",
+        "seconds": 0.7494801090797409,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.7",
+        "kind": "program",
+        "seconds": 1.0730836499715224,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.8",
+        "kind": "program",
+        "seconds": 0.7474830619757995,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.9",
+        "kind": "program",
+        "seconds": 1.0837623110273853,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.10",
+        "kind": "program",
+        "seconds": 0.7509827080648392,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.11",
+        "kind": "program",
+        "seconds": 1.0738225140376016,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.12",
+        "kind": "program",
+        "seconds": 0.749522490077652,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.13",
+        "kind": "program",
+        "seconds": 1.083775460952893,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.14",
+        "kind": "program",
+        "seconds": 0.7498470660066232,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.15",
+        "kind": "program",
+        "seconds": 1.0716045619919896,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.16",
+        "kind": "program",
+        "seconds": 0.7472108469810337,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.17",
+        "kind": "program",
+        "seconds": 1.0813168950844556,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.18",
+        "kind": "program",
+        "seconds": 0.7446320280432701,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.19",
+        "kind": "program",
+        "seconds": 1.073456775979139,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.20",
+        "kind": "program",
+        "seconds": 0.4628751940326765,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.21",
+        "kind": "program",
+        "seconds": 0.9193723950302228,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.22",
+        "kind": "program",
+        "seconds": 0.006023113033734262,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.23",
+        "kind": "program",
+        "seconds": 0.5443989540217444,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.24",
+        "kind": "program",
+        "seconds": 0.4623866069596261,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.25",
+        "kind": "program",
+        "seconds": 4.562663238029927,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder.23.26",
+        "kind": "program",
+        "seconds": 0.14341255801264197,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "encoder_to_tdt",
+        "kind": "program",
+        "seconds": 0.005953220999799669,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "tdt.constants.0",
+        "kind": "write",
+        "seconds": 0.04640670004300773
+      },
+      {
+        "name": "tdt.0",
+        "kind": "program",
+        "seconds": 0.004968274035491049,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "tdt.1",
+        "kind": "program",
+        "seconds": 0.25853272492531687,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      },
+      {
+        "name": "tdt.2",
+        "kind": "program",
+        "seconds": 2.9300478879595175,
+        "device_counters": {
+          "status": 1,
+          "ecc_ded": false
+        }
+      }
+    ],
+    "outcome": "completed",
+    "timing_kind": "host_wall_observation; physical timing unmeasured for mock",
+    "graph_bytes": 56851456,
+    "program_at": 4294803456,
+    "live_identity": {
+      "D": 128,
+      "MCOLS": 8,
+      "LANES": 8,
+      "act_rows": 16,
+      "core_khz": 150000,
+      "calibrated": true,
+      "running": false,
+      "status": 8,
+      "cfg": {
+        "S": 1,
+        "TMEM_WORDS": 65536,
+        "IMEM_WORDS": 32768,
+        "ACT_BLOCKS": 128,
+        "DRAM_BYTES": 4294967296,
+        "SEQ_WC": true,
+        "hash": 3714814630
+      },
+      "caps": {
+        "mx": true,
+        "pair": true,
+        "gen": true,
+        "dstep": true,
+        "stream": true,
+        "t2": true
+      },
+      "caps2": {
+        "portb": 4,
+        "rowlanes": true,
+        "aline": 64
+      },
+      "identity_source": "SYNTHETIC ISA CONFIGURATION, NOT DEVICE REGISTERS"
+    },
+    "image_query_evidence": "SYNTHETIC ISA ONLY",
+    "health_evidence": "SYNTHETIC ISA ONLY",
+    "device_status": 1,
+    "steps": 53,
+    "emitted": 29,
+    "text_sha256": "9ff0bbd8c282679516d904987db7e1119e07b59936d900d2be8609898ac5a75f",
+    "text_bytes": 98,
+    "reset_completed": true,
+    "elapsed_seconds": 832.4938587099314,
+    "physical_execution_completed": false
+  },
+  "text_equal_to_prior_golden": true,
+  "steps_equal_to_prior_golden": true,
+  "source_sha256": {
+    "opentpu/asr/phonon2_runner.py": "fd8454ceefb2cd92b568947ef9b6265a36777a06d5de163367fb97b34d5537d8",
+    "tools/phonon2_prepare_runner.py": "d7c1367159454761726791f1f00ad55f78cb356f5e9b2a51c83201184ba193ca",
+    "tools/phonon2_runner_isa.py": "368ceab8866797a847c6c4fd4d8e4e6b3dafd5db6a49cea5d00fae3d96b24b7c"
+  },
+  "preparation": {
+    "manifest_sha256": "324b23203fe12f9df2601ed3e1d5e80945a090aeed58ba7d5935ca312749daaf",
+    "samples": 112960,
+    "frames": 89,
+    "valid": 89,
+    "dispatches": 693,
+    "unique_blob_bytes": 1272202312,
+    "graph_bytes": 56851456,
+    "program_slot_bytes": 163840,
+    "hardware_used": false,
+    "ready": false,
+    "elapsed_preparation_seconds": 14.54668159596622,
+    "scope": "offline real-checkpoint artifact preparation; no model execution or hardware"
+  }
+}

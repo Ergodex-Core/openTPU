@@ -1,0 +1,87 @@
+{
+  "schema_version": 1,
+  "model": "FermionResearch/Phonon-2",
+  "revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "shared_profile": "f2-hbm:p4rl8a64c150",
+  "agfi_expected": "agfi-0001de1dd3df8e21e",
+  "cfg_hash": "dd6b92a6",
+  "base_revision_preserved": "b91e839fc5a95e48acda0473f00d313b7859f094",
+  "hardware_used": false,
+  "physical_audio_to_transcript_validated": false,
+  "ready": false,
+  "public_adapter_changed": false,
+  "source_sha256": {
+    "opentpu/asr/phonon2_runner.py": "fd8454ceefb2cd92b568947ef9b6265a36777a06d5de163367fb97b34d5537d8",
+    "tools/phonon2_prepare_runner.py": "d7c1367159454761726791f1f00ad55f78cb356f5e9b2a51c83201184ba193ca",
+    "tools/phonon2_runner_isa.py": "368ceab8866797a847c6c4fd4d8e4e6b3dafd5db6a49cea5d00fae3d96b24b7c"
+  },
+  "builder_protocol_tests": {
+    "receipt": "runner_builder_validation.json",
+    "passed": 33,
+    "failed": 0,
+    "skipped": 0,
+    "host": "opentpu-m8a-build"
+  },
+  "local_targeted_baseline": {
+    "passed": 68,
+    "scope": "33 runner/native-protocol plus 35 existing public-adapter tests, before builder route became available"
+  },
+  "preserved_component_baseline": {
+    "passed": 193,
+    "skipped": 1,
+    "skip_reason": "optional Transformers unavailable",
+    "scope": "b91e839f full ISA frontend/encoder/TDT source receipts unchanged"
+  },
+  "prepared_real_checkpoint": {
+    "manifest_sha256": "324b23203fe12f9df2601ed3e1d5e80945a090aeed58ba7d5935ca312749daaf",
+    "samples": 112960,
+    "frames": 89,
+    "valid": 89,
+    "dispatches": 693,
+    "unique_blob_bytes": 1272202312,
+    "graph_bytes": 56851456,
+    "program_slot_bytes": 163840,
+    "hardware_used": false,
+    "ready": false,
+    "elapsed_preparation_seconds": 14.54668159596622,
+    "scope": "offline real-checkpoint artifact preparation; no model execution or hardware"
+  },
+  "full_speech_isa": {
+    "accepted": true,
+    "samples": 112960,
+    "dispatches": 693,
+    "steps": 53,
+    "text_equal_to_prior_golden": true,
+    "step_count_equal_to_prior_golden": true,
+    "token_duration_trace_revalidated_by_this_runner": false,
+    "prior_full_trace_evidence": "waveform_validation.json",
+    "text": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+    "immutable_bytes": 1272022400,
+    "program_wait_bytes": 3191080,
+    "graph_bytes": 56851456,
+    "elapsed_cpu_isa_seconds": 832.4938587099314,
+    "receipt": "runner_isa_validation.json",
+    "ssm_command": "67fd78bd-6bee-42ce-bce1-f5b7546df366",
+    "original_receipt_compressed_sha256": "67d541ac4a49959e2e0a018da70311e19f95352fa4a2e61986b65a8922c0a2bc"
+  },
+  "minimum_context_reset": {
+    "accepted": true,
+    "cases": 3,
+    "whole_final_graph_repeat_bitwise": true,
+    "silence_matches_prior": true,
+    "receipt": "runner_reset_validation.json",
+    "ssm_command": "e1350928-52a4-4250-a92c-1943e1425123"
+  },
+  "host_compute_field_scope": "The Runner has no host DSP/model operators. ISA transport actually emulates model programs on CPU; this is audit-only and never a serving fallback.",
+  "physical_timing": "Unmeasured: DMA, phase dispatch/wait, model time, cancellation/drain, context restoration; no <=30-second serving interruption claim",
+  "binding": "runner_source_binding.json",
+  "integration_contract": "../phonon2_runner_contract.md",
+  "integration_metadata": "runner_integration.json",
+  "new_physical_blockers": [
+    "Separate parent approval and exclusive idle spare-card lease",
+    "Live AGFI/config/capability/health and initialized-DRAM preflight",
+    "Physical PCM-to-text/reset/error/cancel evidence",
+    "Measured <=30-second interruption plus context restoration before any warm-card integration",
+    "Deployment-owner API and wider context/WER acceptance"
+  ]
+}
