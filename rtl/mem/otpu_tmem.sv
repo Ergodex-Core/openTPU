@@ -76,13 +76,15 @@ module otpu_tmem #(
   parameter bit   GST   = 1'b0,           // IMPL 3: SH_MASK's ports are SH_HOST's guests (see IMPL 3)
   parameter int   PMP   = 0,              // TDP: 1 the RAMs pumped at 2x on clk_f (otpu_pump_bank), 2
                                           //   its model at the core clock (see IMPL 3)
-  parameter bit   IQ    = 1'b0            // the input stage: the granted writes registered (below)
+  parameter bit   IQ    = 1'b0,           // the input stage: the granted writes registered (below)
+  parameter logic [NRP-1:0] RDEC = '0     // IMPL 3: externally predecoded bank/sub-bank requests
 ) (
   input  logic                                clk,
   input  logic                                clk_f,    // PMP 1: 2 x clk, aligned (else unused)
   input  logic [NRP-1:0][LANES-1:0]           r_en,     // granted reads
   input  logic [NRP-1:0][LANES-1:0]           r_req,    // requested reads (r_en before the grant)
   input  logic [NRP-1:0][LANES-1:0][31:0]     r_addr,
+  input  logic [NRP-1:0][LANES-1:0][NSB-1:0] r_dec,
   output logic [NRP-1:0][LANES-1:0][31:0]     r_data,
   input  logic [NWP-1:0][LANES-1:0]           w_en,     // granted writes
   input  logic [NWP-1:0][LANES-1:0]           w_req,    // requested writes (w_en before the grant)
@@ -164,11 +166,35 @@ module otpu_tmem #(
     logic [NWP-1:0][LANES-1:0][31:0]   pdt;
     for (genvar p = 0; p < NWP; p++) begin : g_wp
       if (GEN_W[p]) begin : g_x
+        logic [LANES-1:0][LANES-1:0] pick;
+        if (IQ) begin : g_pick
+          // Decode beside wi_en/wi_addr, not after them. wi_addr holds when
+          // w_gnt is low; use that post-edge address even for an ungranted
+          // port, so equality does not depend on w_en implying w_gnt.
+          always_ff @(posedge clk)
+            for (int b = 0; b < LANES; b++)
+              for (int l = 0; l < LANES; l++)
+                pick[b][l] <= w_en[p][l] &&
+                  (w_gnt[p] ? w_addr[p][l][BW-1:0] : wi_addr[p][l][BW-1:0]) == BW'(b);
+`ifndef SYNTHESIS
+          initial pick = '0;
+          always @(posedge clk)
+            for (int b = 0; b < LANES; b++)
+              for (int l = 0; l < LANES; l++)
+                if (pick[b][l] !== (wi_req[p][l] && wi_addr[p][l][BW-1:0] == BW'(b)))
+                  $fatal(1, "TMEM%0d: IQ write pick differs on port %0d bank %0d lane %0d", SID, p, b, l);
+`endif
+        end else begin : g_pick_comb
+          always_comb
+            for (int b = 0; b < LANES; b++)
+              for (int l = 0; l < LANES; l++)
+                pick[b][l] = wi_req[p][l] && wi_addr[p][l][BW-1:0] == BW'(b);
+        end
         always_comb begin
           pv[p] = '0; pa[p] = '0; pdt[p] = '0;
           for (int b = 0; b < LANES; b++)
             for (int l = 0; l < LANES; l++)
-              if (wi_req[p][l] && wi_addr[p][l][BW-1:0] == BW'(b)) begin
+              if (pick[b][l]) begin
                 pv[p][b] = 1'b1;
                 pa[p][b] = pa[p][b] | wi_addr[p][l][BW +: IW];
                 pdt[p][b] = pdt[p][b] | wi_data[p][l];
@@ -428,17 +454,34 @@ module otpu_tmem #(
     // it asks nothing itself; a guest asks nothing)
     logic [NRP-1:0][LANES-1:0]         qe;
     logic [NRP-1:0][LANES-1:0][IW-1:0] qa;
+    logic [NRP-1:0][LANES-1:0][NSB-1:0] pb_dec, qe_dec, rp_dec, ask_dec;
+    for (genvar p = 0; p < NRP; p++) begin : g_dec
+      for (genvar b = 0; b < LANES; b++) begin : g_b
+        for (genvar k = 0; k < NSB; k++) begin : g_k
+          wire old_dec = pb_en[p][b] && sub_of(pb_a[p][b]) == LW'(k);
+          assign pb_dec[p][b][k] = RDEC[p] ? r_dec[p][b][k] : old_dec;
+`ifndef SYNTHESIS
+          always @(posedge clk)
+            if (RDEC[p] && pb_dec[p][b][k] !== old_dec)
+              $fatal(1, "TMEM%0d: port %0d bank %0d sub-bank %0d decode differs", SID, p, b, k);
+`endif
+        end
+      end
+    end
     always_comb begin
       logic take;
       qe = pb_en; qa = pb_a;
+      qe_dec = pb_dec;
       take = |r_req[SH_HOST];
       if (GST)
         for (int g = 0; g < NRP; g++)
           if (SH_MASK[g]) begin
             if (!take && |r_req[g]) begin
               qe[SH_HOST] = pb_en[g]; qa[SH_HOST] = pb_a[g]; take = 1'b1;
+              qe_dec[SH_HOST] = pb_dec[g];
             end
             qe[g] = '0;
+            qe_dec[g] = '0;
           end
     end
     // each asker's banks, bank rows, sub-banks and RAM rows
@@ -457,6 +500,23 @@ module otpu_tmem #(
         assign aa[i][b] = rp[i] ? rpa[i][b] : qa[i][b];
         assign asb[i][b] = sub_of(aa[i][b]);
         assign arw[i][b] = ram_row(aa[i][b]);
+        for (genvar k = 0; k < NSB; k++) begin : g_k
+          // Decode the replay's POST-edge payload alongside rpv/rpe/rpa. Do
+          // not put their replay mux in front of the sub-bank compare again.
+          always_ff @(posedge clk)
+            rp_dec[i][b][k] <= rp_nx[i] &&
+              (rpv[i] ? (rpe[i][b] && sub_of(rpa[i][b]) == LW'(k)) : qe_dec[i][b][k]);
+          assign ask_dec[i][b][k] = rp_dec[i][b][k] || (!rp[i] && qe_dec[i][b][k]);
+`ifndef SYNTHESIS
+          initial rp_dec[i][b][k] = 1'b0;
+          always @(posedge clk) begin
+            if (rp_dec[i][b][k] !== (rp[i] && rpe[i][b] && sub_of(rpa[i][b]) == LW'(k)))
+              $fatal(1, "TMEM%0d: replay decode differs on port %0d bank %0d sub-bank %0d", SID, i, b, k);
+            if (ask_dec[i][b][k] !== (ae[i][b] && asb[i][b] == LW'(k)))
+              $fatal(1, "TMEM%0d: asker decode differs on port %0d bank %0d sub-bank %0d", SID, i, b, k);
+          end
+`endif
+        end
       end
     end
     // The replays' age (RPL, a forward-progress guarantee): of two replays the older ranks first
@@ -551,7 +611,7 @@ module otpu_tmem #(
       for (genvar k = 0; k < NSB; k++) begin : g_k
         logic [NRP-1:0] rq, win;
         for (genvar i = 0; i < NRP; i++) begin : g_i
-          assign rq[i] = ae[i][b] && asb[i][b] == LW'(k);
+          assign rq[i] = ask_dec[i][b][k];
           assign win[i] = rq[i] && !(|(rq & bf[i]));
         end
         always_comb
@@ -582,8 +642,14 @@ module otpu_tmem #(
         if (o < i && sd_of(o) == sd_of(i)) begin : g_c
           logic [LANES-1:0] hb;
           for (genvar b = 0; b < LANES; b++) begin : g_b
-            assign hb[b] = ae[i][b] && ae[o][b] && asb[o][b] == asb[i][b] && !wk[i][b] &&
+            assign hb[b] = (|(ask_dec[i][b] & ask_dec[o][b])) && !wk[i][b] &&
                            (!SHARE || aa[o][b] != aa[i][b]);
+`ifndef SYNTHESIS
+            always @(posedge clk)
+              if (hb[b] !== (ae[i][b] && ae[o][b] && asb[o][b] == asb[i][b] && !wk[i][b] &&
+                             (!SHARE || aa[o][b] != aa[i][b])))
+                $fatal(1, "TMEM%0d: read conflict differs on ports %0d/%0d bank %0d", SID, i, o, b);
+`endif
           end
 `ifdef OTPU_TMEM_ABL_CMP
           assign cp[i][o] = 1'b0;
@@ -674,8 +740,8 @@ module otpu_tmem #(
           // taken before the register, so the bank's write pins (on clk_f, a half core cycle
           // from the register) come straight from flip-flops kept next to it, not through the
           // bank-level pw's decode and fanout (r2m4: pw_* -> the pumped banks, clk -> clk2x)
-          (* keep = "true" *) logic          pk_v;
-          (* keep = "true" *) logic [RW-1:0] pk_a;
+          (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic pk_v;
+          (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic [RW-1:0] pk_a;
           (* keep = "true" *) logic [31:0]   pk_d;
           always_ff @(posedge clk) begin
             pk_v <= bw_v[b][0] && sub_of(bw_a[b][0]) == LW'(k);
@@ -694,10 +760,47 @@ module otpu_tmem #(
               $fatal(1, "TMEM%0d: bank %0d RAM %0d's write copy differs from the write stage", SID,
                      b, k);
 `endif
-          otpu_pump_bank #(.N(RD), .STYLE("block"), .FW(1'b1)) u_pb (
-            .clk, .clk_f, .wv(pk_v), .wa(pk_a), .wd(pkd),
-            .rena(s_en[b][k][1]), .ra(s_a[b][k][1]), .renb(s_en[b][k][0]), .rb(s_a[b][k][0]),
-            .qa(s_q[b][k][1]), .qb(s_q[b][k][0]));
+          // Width stripes of at most 32 Kibit: one TDP RAMB36 per stripe for
+          // the board's power-of-two depths. No output mux or extra read stage.
+          // Each stripe gets write-address/valid copies loaded from the SAME
+          // D inputs as pk_a/pk_v, plus its own fast-clock phase registers.
+          // Larger / non-power-of-two depths keep the original wide RAM.
+          // These write copies are consumed at the intervening odd fast edge:
+          // still a HALF core period, never a two-fast-cycle multicycle path.
+          localparam int PW = (RD > 1024 && RD <= 32768 && (RD & (RD - 1)) == 0) ? 32768 / RD : 32;
+          for (genvar z = 0; z < 32 / PW; z++) begin : g_word
+            wire v;
+            wire [RW-1:0] a;
+            if (z == 0) begin : g_first
+              assign v = pk_v;
+              assign a = pk_a;
+            end else begin : g_copy
+              (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic cv;
+              (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic [RW-1:0] ca;
+              always_ff @(posedge clk) begin
+                cv <= bw_v[b][0] && sub_of(bw_a[b][0]) == LW'(k);
+                ca <= ram_row(bw_a[b][0]);
+              end
+              assign v = cv;
+              assign a = ca;
+`ifndef SYNTHESIS
+              initial cv = 1'b0;
+              always @(posedge clk)
+                if (cv !== pk_v || ca !== pk_a)
+                  $fatal(1, "TMEM%0d: bank %0d sub-bank %0d stripe %0d write replica differs", SID, b, k, z);
+`endif
+            end
+            otpu_pump_bank #(.N(RD), .W(PW), .STYLE("block"), .FW(1'b1)) u_pb (
+              .clk, .clk_f, .wv(v), .wa(a), .wd(pkd[z*PW +: PW]),
+              .rena(s_en[b][k][1]), .ra(s_a[b][k][1]), .renb(s_en[b][k][0]), .rb(s_a[b][k][0]),
+              .qa(s_q[b][k][1][z*PW +: PW]), .qb(s_q[b][k][0][z*PW +: PW]));
+`ifndef SYNTHESIS
+            always @(posedge clk_f)
+              if ({u_pb.tog, u_pb.tq, u_pb.evr} !==
+                  {g_word[0].u_pb.tog, g_word[0].u_pb.tq, g_word[0].u_pb.evr})
+                $fatal(1, "TMEM%0d: bank %0d sub-bank %0d stripe %0d phase replica differs", SID, b, k, z);
+`endif
+          end
 `ifndef SYNTHESIS
           // the dump: a shadow of the RAM's words (the same writes), not a reference into u_pb
           logic [31:0] shd [RD];
@@ -1040,6 +1143,7 @@ endmodule
 (* keep_hierarchy = "yes" *)
 module otpu_pump_bank #(
   parameter int    N     = 8192,
+  parameter int    W     = 32,
   parameter string STYLE = "block",
   parameter bit    FW    = 1'b1      // the phase from a fast-domain register (below)
 ) (
@@ -1047,22 +1151,22 @@ module otpu_pump_bank #(
   input  logic                 clk_f,
   input  logic                 wv,
   input  logic [$clog2(N)-1:0] wa,
-  input  logic [31:0]          wd,
+  input  logic [W-1:0]         wd,
   input  logic                 rena,
   input  logic [$clog2(N)-1:0] ra,
   input  logic                 renb,
   input  logic [$clog2(N)-1:0] rb,
-  output logic [31:0]          qa,
-  output logic [31:0]          qb
+  output logic [W-1:0]         qa,
+  output logic [W-1:0]         qb
 );
   // the phase: tog flips at every core edge; tq is its copy a fast edge later. They differ during
   // a core cycle's first half (the next fast edge is odd) and agree in its second (even next).
   // FW: ev is a fast-domain register loaded with that at every fast edge (the edge after next's
   // parity is the opposite of the next's), so no core-domain net reaches the RAM's enables; it
   // aligns itself at the first fast edge, as tq does.
-  (* keep *) logic tog;
-  (* keep *) logic tq;
-  logic evr;
+  (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic tog;
+  (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic tq;
+  (* keep = "true", dont_touch = "yes", equivalent_register_removal = "no" *) logic evr;
   always_ff @(posedge clk) tog <= !tog;
   always_ff @(posedge clk_f) begin
     tq <= tog;
@@ -1077,7 +1181,7 @@ module otpu_pump_bank #(
   wire [$clog2(N)-1:0] ad_a = ev ? ra : wa;
   wire                 en_b = ev && renb;
   if (STYLE == "ultra") begin : g_u
-    (* ram_style = "ultra" *) logic [31:0] mem [N];
+    (* ram_style = "ultra" *) logic [W-1:0] mem [N];
     always_ff @(posedge clk_f)
       if (en_a) begin
         if (we_a) mem[ad_a] <= wd;
@@ -1089,7 +1193,7 @@ module otpu_pump_bank #(
     initial for (int i = 0; i < N; i++) mem[i] = '0;
 `endif
   end else begin : g_b
-    (* ram_style = "block" *) logic [31:0] mem [N];
+    (* ram_style = "block" *) logic [W-1:0] mem [N];
     always_ff @(posedge clk_f)
       if (en_a) begin
         if (we_a) mem[ad_a] <= wd;

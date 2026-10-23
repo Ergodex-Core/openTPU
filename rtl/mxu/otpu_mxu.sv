@@ -54,7 +54,8 @@ module otpu_mxu
   parameter int IMPL  = 2,       // the dot product: 2 systolic (the only one; CFG_UARCH reports it)
   parameter int CL    = 16,      // products per cascade chain (at most D/8)
   parameter int E     = 0,       // epilogue lanes (0: MCOLS / 2, at least 1; more than MCOLS: MCOLS)
-  parameter int SID   = 0
+  parameter int SID   = 0,
+  parameter int WBANKS = LANES   // physical TMEM banks (may exceed the drain's lane count)
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -99,6 +100,7 @@ module otpu_mxu
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
   output logic [LANES-1:0][31:0]  t_wdata,
+  output logic [WBANKS-1:0]       t_wbanks,
   input  logic                    t_gnt
 );
   localparam int BW = $clog2(LANES);
@@ -1022,6 +1024,24 @@ module otpu_mxu
   lmeta_t lo_p;
   otpu_delay #(.W($bits(lmeta_t)), .N(LLAT - 2)) u_lm (.clk, .en(t_gnt), .d(p1), .q(lo_p));
   logic [LLAT-2:0][NL:0] lvm;
+  // Direct (non-ACC) drain writes, decoded beside lo's last metadata stage.
+  // hx.acc below is the post-edge head, including accept / completion / swap.
+  // Keep one vector per lane so RW and RMAX can override exactly the lanes
+  // they override in t_wen/t_waddr; no assumption of mutually exclusive writers.
+  logic [NL-1:0][WBANKS-1:0] lo_banks;
+  function automatic logic [NL-1:0][WBANKS-1:0] drain_banks(
+    input logic [NL:0] vm, input logic [NL-1:0][31:0] addr, input logic acc);
+    logic [NL-1:0][WBANKS-1:0] v;
+    v = '0;
+    if (vm[NL] && !acc)
+      for (int k = 0; k < NL; k++) if (vm[k]) v[k][addr[k] % WBANKS] = 1'b1;
+    return v;
+  endfunction
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && lo_banks !== drain_banks({lo.v, lo.m}, lo.ad, c_acc))
+      $fatal(1, "otpu_mxu: direct drain bank decode differs from lo/head");
+`endif
   always_ff @(posedge clk)
     if (rst) lvm <= '0;
     else if (t_gnt) begin
@@ -1224,6 +1244,28 @@ module otpu_mxu
     end
   end
 
+  always_comb begin
+    t_wbanks = '0;
+    for (int k = 0; k < LANES; k++) begin
+      if (mx_go && mxm[k]) t_wbanks[mxl[k] % WBANKS] = 1'b1;
+      else if (k < NL) begin
+        if (rw.v && rw.m[k]) t_wbanks[rw.ad[k] % WBANKS] = 1'b1;
+        else t_wbanks |= lo_banks[k];
+      end
+    end
+  end
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst) begin
+      logic [WBANKS-1:0] ref_banks;
+      ref_banks = '0;
+      for (int k = 0; k < LANES; k++)
+        if (t_wen[k]) ref_banks[t_waddr[k] % WBANKS] = 1'b1;
+      if (t_wbanks !== ref_banks)
+        $fatal(1, "otpu_mxu: write bank mask differs from request");
+    end
+`endif
+
   // ---- statistics for the profiler (per completed command): cycles the stream was starved
   // (work, no chunk), backpressured (chunks, no consumption), the drain frozen by the TMEM grant,
   // the issuer denied a DRAM port. The conditions are registered (st_c) and summed a cycle
@@ -1256,6 +1298,7 @@ module otpu_mxu
       r0 <= '0; rA <= '0; rx <= '0; rmw_n <= '0; ln_n <= '0;
       st_starve <= '0; st_bp <= '0; st_frz <= '0; st_deny <= '0;
       st_c <= '0; st_f <= 1'b0; mx_q <= 1'b0; mx_gq <= 1'b0;
+      lo_banks <= '0;
     end else begin
       logic [1:0] qn;
       logic [RFW:0] rn;
@@ -1569,6 +1612,8 @@ module otpu_mxu
           hx = hn; nx = nn; hpx = hp; npx = np;
         end
         h <= hx; n <= nx;
+        lo_banks <= drain_banks(t_gnt ? lvm[LLAT-3] : lvm[LLAT-2],
+                                t_gnt ? lo_p.ad : lo_ad, hx.acc);
         // the drain's next step: a new head starts at its first row's group 0 (all of it if the
         // row is one group); a drain step moves on in the group, or to the next group / row
         if (c_done || (start && q_n == 0)) begin

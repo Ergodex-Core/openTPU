@@ -43,7 +43,8 @@ module otpu_dma
   parameter int D     = 32,
   parameter int LANES = 8,
   parameter int DEPTH = 128,                          // LD chunk buffer (a power of two)
-  parameter bit HAS_DSTEP = 1'b1                      // streams: DSTEP, STREAM (SE's tail in u_vpu)
+  parameter bit HAS_DSTEP = 1'b1,                     // streams: DSTEP, STREAM (SE's tail in u_vpu)
+  parameter int RNSB = 1, RSBP = $clog2(LANES)        // unhashed TMEM read sub-bank decode
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -66,6 +67,7 @@ module otpu_dma
   // TMEM lanes (read port A, write port)
   output logic [LANES-1:0]        t_ren,
   output logic [LANES-1:0][31:0]  t_raddr,
+  output logic [LANES-1:0][RNSB-1:0] t_rbanks,
   input  logic [LANES-1:0][31:0]  t_rdata,
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
@@ -584,6 +586,34 @@ module otpu_dma
   assign st_push = busy && is_st && !ackw && st_wr && adv;
   assign st_iss  = st_wq && b_gnt;
 
+  // Both start branches exclude these captures, whatever cmd.op is. Keep
+  // their enable outside that opcode-dependent priority tree: in build 13
+  // it reached cb / t_rq through five levels from the sequencer's command.
+  (* keep = "true" *) wire st_capture = !rst && !start && !ackw && busy && is_st && adv;
+  always_ff @(posedge clk) if (st_capture) begin
+    t_rq <= t_rdata;
+    if (st_pend && !pl)
+      for (int l = 0; l < W; l++) cb[pp * W + l] <= t_rq[l];
+  end
+`ifndef SYNTHESIS
+  // Reproduce the old enclosing branches, independently of st_capture.
+  logic st_capture_ref;
+  always_comb begin
+    st_capture_ref = 1'b0;
+    if (rst) begin end
+    else if (start && (cmd.op == OP_DSTEP || cmd.op == OP_STREAM)) begin end
+    else if (start) begin end
+    else if (ackw) begin end
+    else if (busy) begin
+      if (!is_st) begin end
+      else if (adv) st_capture_ref = 1'b1;
+    end
+  end
+  always @(posedge clk)
+    if (st_capture !== st_capture_ref)
+      $fatal(1, "otpu_dma: ST capture enable differs from original command priority");
+`endif
+
   // TMEM's input stage (release r2, docs/tmem_nocopy.md 7): the read request (t_*_c) goes to
   // TMEM from flip-flops, a cycle after it forms, moving with adv (a held request is asked
   // again once adv returns); the stream fill's address (fs_k's lanes) and ST's segment
@@ -601,6 +631,14 @@ module otpu_dma
   (* max_fanout = 16 *) logic [LANES-1:0]       t_re_q;
   (* max_fanout = 16 *) logic [LANES-1:0][31:0] t_ra_q;
   logic [LANES-1:0][31:0] t_raddr_c;
+  function automatic logic [LANES-1:0][RNSB-1:0] read_banks(
+    input logic [LANES-1:0] re, input logic [LANES-1:0][31:0] addr);
+    logic [LANES-1:0][RNSB-1:0] v;
+    v = '0;
+    for (int l = 0; l < LANES; l++)
+      if (re[l]) v[addr[l] % LANES][(addr[l] >> RSBP) % RNSB] = 1'b1;
+    return v;
+  endfunction
   assign t_raddr = t_ra_q;
   // st_pend, pl and oc_nf move in the ST branch of the process below (st_pend and pl with adv,
   // occ with the push and the issue); a start clears st_pend; elsewhere st_pend is low, so adv
@@ -615,10 +653,14 @@ module otpu_dma
     else adv_nx = adv;
   end
   always_ff @(posedge clk)
-    if (rst) begin t_rv <= '0; t_re_q <= '0; end
+    if (rst) begin t_rv <= '0; t_re_q <= '0; t_rbanks <= '0; end
     else begin
       if (adv) begin t_rv <= t_ren_c; t_ra_q <= t_raddr_c; end
       t_re_q <= adv_nx ? (adv ? t_ren_c : t_rv) : '0;
+      // The same post-edge enable and address as t_re_q / t_ra_q, including
+      // a held request becoming visible again when adv returns.
+      t_rbanks <= adv_nx ? read_banks(adv ? t_ren_c : t_rv,
+                                     adv ? t_raddr_c : t_ra_q) : '0;
     end
   assign t_ren = t_re_q;
 `ifndef SYNTHESIS
@@ -631,6 +673,8 @@ module otpu_dma
     if (rst) adv_rst <= 1'b1;
     if (!rst && adv_rst && (adv_q != adv || t_re_q != (adv ? t_rv : '0)))
       $fatal(1, "otpu_dma: adv %0d predicted %0d, read %b of pending %b", adv, adv_q, t_re_q, t_rv);
+    if (!rst && adv_rst && t_rbanks !== read_banks(t_ren, t_raddr))
+      $fatal(1, "otpu_dma: registered read banks differ from request");
   end
 `endif
   always_comb begin
@@ -946,7 +990,6 @@ module otpu_dma
             if (pl) cbm <= '0;                  // the chunk goes into the buffer this cycle
             else
               for (int l = 0; l < W; l++) begin
-                cb[pp * W + l] <= t_rq[l];
                 cbm[pp * W + l] <= pm[l];
               end
           end
@@ -954,7 +997,6 @@ module otpu_dma
           pp <= ppa;
           pm <= pma;
           pl <= pla;
-          t_rq <= t_rdata;
           pa0 <= st_rd;
           ppa0 <= pos_of(sw);
           pma0 <= sm;
