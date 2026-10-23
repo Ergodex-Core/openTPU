@@ -1,0 +1,11 @@
+{
+  "scope": "Immutable input-independent frontend coefficients, not host preprocessing",
+  "source_policy": "docs/phonon2/semantic_policy.json",
+  "dither": 0.0,
+  "hann": "Torch 2.14.1 nonperiodic FP32 Hann400, zero-centered in512",
+  "dft": "512 FP32 roots of unity, exact quarter-turn axes; 257x512 tables indexed by (frequency*sample)%512",
+  "mel": "Pinned Slaney coefficients, float32",
+  "sha256": "e6e48a9ed4f366b765cfb50f955f300552534aa60f199976297251627c9c6dfb",
+  "bytes": 7134,
+  "storage": "Compact 512-root tables; host expands input-independent coefficient matrix using integer phase indices, never audio"
+}

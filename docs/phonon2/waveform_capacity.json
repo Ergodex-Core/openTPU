@@ -1,0 +1,53 @@
+{
+  "dram_image_bytes": 15286144,
+  "immutable_prefix_bytes": 1251840,
+  "samples": 480000,
+  "stored_frames": 3001,
+  "valid_frames": 3000,
+  "raw_padded_bytes": 960000,
+  "phases": [
+    {
+      "name": "reset_frontend",
+      "instruction_words": 64,
+      "tmem_peak_live_words": 512
+    },
+    {
+      "name": "pcm16_exact_bytes",
+      "instruction_words": 208,
+      "tmem_peak_live_words": 2168
+    },
+    {
+      "name": "preemphasis_and_center_padding",
+      "instruction_words": 80,
+      "tmem_peak_live_words": 768
+    },
+    {
+      "name": "stft_direct_dft_power",
+      "instruction_words": 312,
+      "tmem_peak_live_words": 17472
+    },
+    {
+      "name": "slaney_mel_log",
+      "instruction_words": 1216,
+      "tmem_peak_live_words": 33409
+    },
+    {
+      "name": "valid_unbiased_normalization",
+      "instruction_words": 25328,
+      "tmem_peak_live_words": 9005
+    }
+  ],
+  "max_instruction_words": 25328,
+  "max_tmem_live_words": 33409,
+  "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+  "dither": 0.0,
+  "hardware_validated": false,
+  "model_ready": false,
+  "scope": "Compile-only maximum context, input-independent coefficients; numerical edge tests are separate",
+  "profile": "f2-hbm:p4rl8a64c150",
+  "declared_cfg_hash": "dd6b92a6",
+  "largest_program_wait_bytes": 126704,
+  "program_wait_slot_bytes": 163840,
+  "normalization": "Pinned PyTorch 5c488690 ARM64 Vec4/ILP4 cascade with corrected count division",
+  "normalization_source_sha256": "9b88aa14e626dd708e50816a5ca89acfc66798226dc82501cf1857caebe96f95"
+}

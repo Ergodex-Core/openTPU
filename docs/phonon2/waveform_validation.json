@@ -1,0 +1,5028 @@
+{
+  "model_id": "FermionResearch/Phonon-2",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "profile": "f2-hbm:p4rl8a64c150",
+  "agfi": "agfi-0001de1dd3df8e21e",
+  "declared_cfg_hash": "dd6b92a6",
+  "runtime_manifest": {
+    "revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+    "files": {
+      "opentpu/__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+      "opentpu/compiler.py": "d490923a7c44c2de7d4131a44029667c172d94fdbc57103783c1d75f1caa6533",
+      "opentpu/isasim.py": "14d6b84e2330e366c17ac6ea1d55ff4e82922fb9a6db2027f764a4dd9601ebe6",
+      "opentpu/isa.py": "a5af8a04945ef5cb9bc0d6929dee509cefaa8cebc8dee79ca1c5ea9668e9487d",
+      "opentpu/quant.py": "337a4c297ddcf4c25c2ccda546b96d73faabfe221b0cfee4418a1523d1df6aed",
+      "opentpu/fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+      "opentpu/language.py": "81a5a192ae69fad247be7307e3fb888d9d613d16cc52898cc9a872360f8a0d92",
+      "opentpu/target.py": "e65273a8da53d832fbbcfda1afd0bcaafe40f9035adb8c010f84f68728dfeb2f",
+      "opentpu/waits.py": "ad33168a68a53ce966bee76c8168416010937ff2719513ab391c5c996144baa3",
+      "opentpu/kernels/__init__.py": "b94e2b05a22069885ef32ee1ba2e6d6f637ad9bd665904f1f83dfe0f96c5befe",
+      "opentpu/kernels/lib.py": "b5a1f136c6d1ac9169539c97d6b55b9f95d6340065cddcf43307324ee77d9502",
+      "opentpu/kernels/vit.py": "ab5e5d69a630a75fe295c0d5b2e545f12f08d0bb3bb80bfdb4250e4498a643fd",
+      "opentpu/kernels/attention.py": "69cff970c5f60a81d26f98f7bcb9f37d93e53ee6d83979b1b64b9393fa62a827",
+      "opentpu/kernels/pieces.py": "d63689701da5283f0d3352802e648769773b6800498cad3d932f035d6ebf2312",
+      "opentpu/kernels/mlp.py": "104152447f22deef5ad5954878ed97c274c58cdae6365265ce3855d219feb32d",
+      "targets/f2-hbm.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
+      "opentpu/kernels/hadamard.py": "54b642310305fda10787ed67c24d60a570e8bf44200aa5fa60c7f06877ab2d3f"
+    }
+  },
+  "prior_binding": {
+    "preserved_commit": "09f3ee763bb24a0c46de74c2e2c1469aa4221110",
+    "runtime_manifest": {
+      "revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+      "files": {
+        "opentpu/__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+        "opentpu/compiler.py": "d490923a7c44c2de7d4131a44029667c172d94fdbc57103783c1d75f1caa6533",
+        "opentpu/isasim.py": "14d6b84e2330e366c17ac6ea1d55ff4e82922fb9a6db2027f764a4dd9601ebe6",
+        "opentpu/isa.py": "a5af8a04945ef5cb9bc0d6929dee509cefaa8cebc8dee79ca1c5ea9668e9487d",
+        "opentpu/quant.py": "337a4c297ddcf4c25c2ccda546b96d73faabfe221b0cfee4418a1523d1df6aed",
+        "opentpu/fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+        "opentpu/language.py": "81a5a192ae69fad247be7307e3fb888d9d613d16cc52898cc9a872360f8a0d92",
+        "opentpu/target.py": "e65273a8da53d832fbbcfda1afd0bcaafe40f9035adb8c010f84f68728dfeb2f",
+        "opentpu/waits.py": "ad33168a68a53ce966bee76c8168416010937ff2719513ab391c5c996144baa3",
+        "opentpu/kernels/__init__.py": "b94e2b05a22069885ef32ee1ba2e6d6f637ad9bd665904f1f83dfe0f96c5befe",
+        "opentpu/kernels/lib.py": "b5a1f136c6d1ac9169539c97d6b55b9f95d6340065cddcf43307324ee77d9502",
+        "opentpu/kernels/vit.py": "ab5e5d69a630a75fe295c0d5b2e545f12f08d0bb3bb80bfdb4250e4498a643fd",
+        "opentpu/kernels/attention.py": "69cff970c5f60a81d26f98f7bcb9f37d93e53ee6d83979b1b64b9393fa62a827",
+        "opentpu/kernels/pieces.py": "d63689701da5283f0d3352802e648769773b6800498cad3d932f035d6ebf2312",
+        "opentpu/kernels/mlp.py": "104152447f22deef5ad5954878ed97c274c58cdae6365265ce3855d219feb32d",
+        "targets/f2-hbm.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
+        "opentpu/kernels/hadamard.py": "54b642310305fda10787ed67c24d60a570e8bf44200aa5fa60c7f06877ab2d3f"
+      }
+    },
+    "preserved_source_sha256": {
+      "opentpu/asr/phonon2_encoder.py": "9efe5de6a77435c98c4fd727a5ffac9760e402e86ba5a59dfa767a8e63b5ec84",
+      "opentpu/asr/phonon2_precision.py": "8862408bf79db97c5a3249d56826ab0ba7bb9ee7596fecab97f1792831c3fea6",
+      "opentpu/asr/phonon2_precise_subsampler.py": "c6b0e61da10ade718f89977f5793c348bc7ec84c324db48796f761f40025f2c1",
+      "tools/phonon2_encoder_reference.py": "4c72f4e35cafbe3471d2d796e6f9767b4c5aa2617b0c1daf6ec7380dc1d8dab2",
+      "tools/phonon2_qualify_encoder.py": "90aaf8634ce65d9e540e8aeecaa8911ab52fce700767705181a0b4674b16dfeb",
+      "opentpu/asr/phonon2_conformer.py": "56134b41ed8a803f108310d36857540a5534b4400b932bd7535e8f5ff12d8bff",
+      "opentpu/asr/phonon2_subsampler.py": "7c86ef974ce17dbd7e2f7e6cc0fc701776f13e4ceb6c65ce495a391ba51cc086",
+      "opentpu/asr/phonon2_linear.py": "ac10f55a5b09ef4dfd4cffa75ba8d10767566f0bf9c2d2e2c93831b134b5d30c",
+      "opentpu/asr/phonon2_int6.py": "bfc71951135d067aad0af6ef7eee124871a150f88f99e748c14a3fbf46b5d9ea",
+      "tools/phonon2_subsample_reference.py": "9daef2ead5e85345521e11b17cc799c3ad07ec0fa76b9c66804ae990c6f611f4",
+      "tools/phonon2_torch_audit.py": "d186c3d87ea030af43b0dd36fef2ba3eb626374a250cbcb81b4f1474713d5ade",
+      "opentpu/asr/phonon2_tdt.py": "66a65abf1c70f13e98a50b2be2a18dc0d5bcaebc8cd7299a60076edb5bc0f21f",
+      "tools/phonon2_tdt_reference.py": "3801c6a49a6a635c474a56b74f5aff2d44624d21e742c308b32cceee752cffef",
+      "tools/phonon2_qualify_tdt.py": "2bb3dc1c62873b78992fb54ecbf68976f98c137cd93b2817d3c6fc0993a91c6d",
+      "tools/phonon2_program_device.py": "5370774ad96708c4d66a9015eb8310c9a7ae59cfe9d3fc9965236a313b7b061f",
+      "docs/phonon2/token_text_vocabulary.json": "6a134f91e10e12d95d1abd5a8cf7f8b8d621b17a226401fe303d10263e87f682",
+      "docs/phonon2/tdt_semantic_policy.json": "0420b768e256baf50e413912a1c42a6b1efcfb6128cbeb6159e49903b4fc4420",
+      "docs/phonon2/encoder_handoff_binding.json": "ef0acc559b9dfe9cf841768d8d8ff62ccb3876c30cc833c31a40c314f2cdc4b2"
+    }
+  },
+  "hardware_used": false,
+  "model_ready": false,
+  "physical_audio_to_transcript_validated": false,
+  "frontend_policy": "Nondithered pinned source equations; deterministic Torch 5c488690 ARM64 Vec4/ILP4 statistics matching retained vectors",
+  "host_role": "PCM byte transport and UTF-8 byte output I/O only in proposed serving path; all Torch code is separate audit",
+  "cases": [
+    {
+      "name": "short",
+      "accepted": true,
+      "hardware_validated": false,
+      "model_ready": false,
+      "pcm_sha256": "7f84e087aa28b5a33212af26a4273b4902761b2543afadc32c3236bf51ca3f74",
+      "samples": 8960,
+      "frame_counts": {
+        "mel_stored": 57,
+        "mel_valid": 56,
+        "encoder_stored": 8,
+        "encoder_valid": 7
+      },
+      "frontend": {
+        "accepted": true,
+        "pcm_exact": true,
+        "preemphasis_exact": true,
+        "mask_exact": true,
+        "log_mel_vs_torch": {
+          "relative_l2": 1.3231203585356717e-06,
+          "max_abs": 0.00030517578125,
+          "cosine": 0.9999999999991266
+        },
+        "features_vs_pinned_arm_stats": {
+          "relative_l2": 3.928418262055887e-06,
+          "max_abs": 7.808208465576172e-05,
+          "cosine": 0.9999999999922852
+        },
+        "features_max_abs_vs_pinned_arm_stats": 7.808208465576172e-05,
+        "features_vs_native_cpu_torch": {
+          "relative_l2": 3.930208419827704e-06,
+          "max_abs": 7.784366607666016e-05,
+          "cosine": 0.9999999999922783
+        },
+        "native_cpu_vs_pinned_arm_stats_max_abs": 9.5367431640625e-07,
+        "output_sha256": "de7660c1f6005877fd5c7ba77363506d8499f042741ad1f6ff236c78ad199a7b",
+        "budget": {
+          "dram_image_bytes": 1520000,
+          "immutable_prefix_bytes": 1251840,
+          "samples": 8960,
+          "stored_frames": 57,
+          "valid_frames": 56,
+          "raw_padded_bytes": 17920,
+          "phases": [
+            {
+              "name": "reset_frontend",
+              "instruction_words": 64,
+              "tmem_peak_live_words": 512
+            },
+            {
+              "name": "pcm16_exact_bytes",
+              "instruction_words": 208,
+              "tmem_peak_live_words": 2168
+            },
+            {
+              "name": "preemphasis_and_center_padding",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 768
+            },
+            {
+              "name": "stft_direct_dft_power",
+              "instruction_words": 312,
+              "tmem_peak_live_words": 17472
+            },
+            {
+              "name": "slaney_mel_log",
+              "instruction_words": 1216,
+              "tmem_peak_live_words": 33409
+            },
+            {
+              "name": "valid_unbiased_normalization",
+              "instruction_words": 1424,
+              "tmem_peak_live_words": 173
+            }
+          ],
+          "max_instruction_words": 1424,
+          "max_tmem_live_words": 33409,
+          "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+          "dither": 0.0,
+          "hardware_validated": false,
+          "model_ready": false
+        }
+      },
+      "waveform_to_subsampler_handoff": {
+        "source": 1489792,
+        "destination": 4368384,
+        "bytes": 29184,
+        "reverse": false,
+        "host_activation_transform_or_reupload": false
+      },
+      "encoder_layers": [
+        {
+          "layer": 0,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.408051842368579e-05,
+            "max_abs": 0.0026826858520507812,
+            "cosine": 0.9999999979479288
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 1,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.218369368199497e-05,
+            "max_abs": 0.0040912628173828125,
+            "cosine": 0.9999999966261303
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 2,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.226338171330434e-05,
+            "max_abs": 0.004242420196533203,
+            "cosine": 0.9999999957455541
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 3,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.040169509284315e-05,
+            "max_abs": 0.004431724548339844,
+            "cosine": 0.9999999959138842
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 4,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.912575427847719e-05,
+            "max_abs": 0.005260467529296875,
+            "cosine": 0.9999999960302558
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 5,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.922341694592056e-05,
+            "max_abs": 0.0069789886474609375,
+            "cosine": 0.9999999960210052
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 6,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.446764296358006e-05,
+            "max_abs": 0.0063266754150390625,
+            "cosine": 0.9999999964340995
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 7,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.414507334762812e-05,
+            "max_abs": 0.005565643310546875,
+            "cosine": 0.9999999964623567
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 8,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.818777477773494e-05,
+            "max_abs": 0.006633758544921875,
+            "cosine": 0.9999999961143183
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 9,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.98108730789527e-05,
+            "max_abs": 0.006396293640136719,
+            "cosine": 0.9999999959671305
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 10,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.955432851730332e-05,
+            "max_abs": 0.006865501403808594,
+            "cosine": 0.9999999959903538
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 11,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.58551748020736e-05,
+            "max_abs": 0.0074558258056640625,
+            "cosine": 0.9999999963146188
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 12,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.849310419435862e-05,
+            "max_abs": 0.0067901611328125,
+            "cosine": 0.99999999692099
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 13,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.460582285876907e-05,
+            "max_abs": 0.0098876953125,
+            "cosine": 0.9999999972170597
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 14,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.757732321973294e-05,
+            "max_abs": 0.0103759765625,
+            "cosine": 0.9999999969908795
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 15,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.152352622525573e-05,
+            "max_abs": 0.014251708984375,
+            "cosine": 0.9999999974560124
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 16,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.563236514542705e-05,
+            "max_abs": 0.0058231353759765625,
+            "cosine": 0.999999997142522
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 17,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.613976319795771e-05,
+            "max_abs": 0.005552530288696289,
+            "cosine": 0.9999999971029293
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 18,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.289514192573736e-05,
+            "max_abs": 0.0045623779296875,
+            "cosine": 0.999999997344369
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 19,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.174277758416189e-05,
+            "max_abs": 0.0041027069091796875,
+            "cosine": 0.9999999974267373
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 20,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.595720085532955e-05,
+            "max_abs": 0.0049724578857421875,
+            "cosine": 0.999999997115348
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 21,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.748503056754385e-05,
+            "max_abs": 0.004395484924316406,
+            "cosine": 0.9999999969980378
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 22,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.210802700845761e-05,
+            "max_abs": 0.0063323974609375,
+            "cosine": 0.99999999807214
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 23,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.650746463955875e-05,
+            "max_abs": 6.601214408874512e-06,
+            "cosine": 0.9999999962586187
+          },
+          "masks_passed": true,
+          "finite": true
+        }
+      ],
+      "encoder_output_sha256": "2f44a11483337742ff42195df3a234aaf79651f8771fe1f821080949cdc09e42",
+      "decoder": {
+        "accepted": true,
+        "model_ready": false,
+        "hardware_validated": false,
+        "status": 1,
+        "expected_status": 1,
+        "steps": 7,
+        "token_duration_frame_trace_equal": true,
+        "text_equal": true,
+        "text_utf8": "",
+        "expected_text_utf8": "",
+        "trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            1,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            3,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ],
+          [
+            8192,
+            1,
+            5,
+            0
+          ],
+          [
+            8192,
+            1,
+            6,
+            0
+          ]
+        ],
+        "expected_trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            1,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            3,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ],
+          [
+            8192,
+            1,
+            5,
+            0
+          ],
+          [
+            8192,
+            1,
+            6,
+            0
+          ]
+        ],
+        "all_states_finite": true,
+        "state_comparisons": [
+          {
+            "step": 0,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 1,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 2,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 3,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 4,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 5,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 6,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          }
+        ],
+        "maximum_state_relative_l2": 5.881014838991981e-06,
+        "maximum_cache_relative_l2": 2.6289770551331118e-05,
+        "encoder_projector_vs_dense": {
+          "relative_l2": 2.6648577069311705e-05,
+          "max_abs": 1.7881393432617188e-05,
+          "cosine": 0.9999999996453357
+        },
+        "state": [
+          7.0,
+          8192.0,
+          1.0,
+          7.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "state_sha256": "cbc04c1345ca220632f35c1c392e75e9d6e379d68a1954ea8c036a81ed94359b",
+        "hidden_cell_cache_sha256": "c7554babe6d42121b369c27e469e4700ddd1f594ec7aa19bbb22feb0bd9b23ed",
+        "text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "checkpoint_record_sha256": {
+          "encoder_projector.weight": "98fccf408f092ab3b79692b2bf604af7d19638bd6d158ac984863b4f911b3fcc",
+          "encoder_projector.bias": "444e9e004a928b684b05b8eb498a03edd3aeff1aabeeb6866a1939f85c6dc64b",
+          "decoder.embedding.weight": "99eba1ec2bf6c52958d0ad6219ad2826364c49bd69a7ddfecaf11c4179f65c03",
+          "decoder.lstm.weight_ih_l0": "7c2d6befaecd46ee4a4bf963850973e7f9861eb24790f38e82826bf4e52b207f",
+          "decoder.lstm.bias_ih_l0": "f3c69cb615ec9dd5e2e70aab0e1311d3ab062f340776e01338e2f76675f3c821",
+          "decoder.lstm.weight_hh_l0": "1076b2c3643396e397027cf575733161e197c3c3a0320536adaac8ea1df17d8d",
+          "decoder.lstm.bias_hh_l0": "611fef3003f7737cad19825546ffb9f4ea9a15c35ce4d8b7e5606bb849f1c645",
+          "decoder.lstm.weight_ih_l1": "50e35fc400ec638002cf713e4c93da80cc44c89c38e2d28962df5105c2055ff4",
+          "decoder.lstm.bias_ih_l1": "570f1d1a538c93bfe3236c449ed1155378c7e8ba09fc1928a0ed312c3eaab1c6",
+          "decoder.lstm.weight_hh_l1": "93f84a87a0ed322245f60c92dbac25145b0fbf18cf41229acc82637cb83d9e77",
+          "decoder.lstm.bias_hh_l1": "e95c4611c220a5402066da9b73cf40f7fbdc0356e859e82e7229a92e75d14d03",
+          "decoder.decoder_projector.weight": "be43efd9e47539632fd41709137eda44eb02594a24e59c2e231c4ef3212fb411",
+          "decoder.decoder_projector.bias": "7c800be462fcf0fd8f222fb1ffabead153a865b66b4ede784f91cb6ce43dbdab",
+          "joint.head.weight": "fc66e8a76561883fce4a15fcd0085f620042610b7051a488193eed9b34012bb7",
+          "joint.head.bias": "82643b482b4cfe6871d5af2adeefff2b91c58ba525e55bc84fc71ca706813cac"
+        },
+        "budget": {
+          "dram_image_bytes": 35718272,
+          "immutable_prefix_bytes": 34636672,
+          "phases": [
+            {
+              "name": "reset_decoder",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 513
+            },
+            {
+              "name": "encoder_projector",
+              "instruction_words": 336,
+              "tmem_peak_live_words": 7432
+            },
+            {
+              "name": "bounded_device_tdt",
+              "instruction_words": 2376,
+              "tmem_peak_live_words": 25879
+            }
+          ],
+          "max_instruction_words": 2376,
+          "max_tmem_live_words": 25879,
+          "frames": 8,
+          "valid": 7,
+          "max_steps": 79,
+          "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+          "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+          "hardware_validated": false,
+          "model_ready": false
+        },
+        "actual_dispatches": 4,
+        "immutable_bytes_staged": 34636672,
+        "program_wait_bytes_uploaded": 14496,
+        "wait_checker_instructions": 1884,
+        "host_encoder_reupload_or_model_compute_in_handoff": false,
+        "elapsed_seconds": 0.43641613598447293
+      },
+      "complete_canonical_dense_trace_and_text_equal": true,
+      "complete_native_torch_dense_trace_and_text_equal": true,
+      "canonical_reference_text": "",
+      "native_reference_text": "",
+      "canonical_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          1,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          3,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ],
+        [
+          8192,
+          1,
+          5,
+          0
+        ],
+        [
+          8192,
+          1,
+          6,
+          0
+        ]
+      ],
+      "native_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          1,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          3,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ],
+        [
+          8192,
+          1,
+          5,
+          0
+        ],
+        [
+          8192,
+          1,
+          6,
+          0
+        ]
+      ],
+      "total_dispatches": 693,
+      "immutable_bytes_staged": 1256097152,
+      "program_wait_bytes_uploaded": 1327112,
+      "graph_high_water_bytes": 51179776,
+      "host_audio_preprocessing_or_model_compute_in_serving_path": false,
+      "elapsed_seconds": 67.41094718698878
+    },
+    {
+      "name": "full_speech",
+      "accepted": true,
+      "hardware_validated": false,
+      "model_ready": false,
+      "pcm_sha256": "6fa2ff5fbd3c1e7ed5102e94e0f83041abd6fd1506552ba530d310ee363e0408",
+      "samples": 112960,
+      "frame_counts": {
+        "mel_stored": 707,
+        "mel_valid": 706,
+        "encoder_stored": 89,
+        "encoder_valid": 89
+      },
+      "frontend": {
+        "accepted": true,
+        "pcm_exact": true,
+        "preemphasis_exact": true,
+        "mask_exact": true,
+        "log_mel_vs_torch": {
+          "relative_l2": 6.225942777732628e-07,
+          "max_abs": 0.00030517578125,
+          "cosine": 0.9999999999998014
+        },
+        "features_vs_pinned_arm_stats": {
+          "relative_l2": 1.8787542606539431e-06,
+          "max_abs": 7.128715515136719e-05,
+          "cosine": 0.9999999999982271
+        },
+        "features_max_abs_vs_pinned_arm_stats": 7.128715515136719e-05,
+        "features_vs_native_cpu_torch": {
+          "relative_l2": 1.8827241995803738e-06,
+          "max_abs": 7.140636444091797e-05,
+          "cosine": 0.99999999999822
+        },
+        "native_cpu_vs_pinned_arm_stats_max_abs": 7.152557373046875e-07,
+        "output_sha256": "313bc6c113df58aca740e79ac7c78743adcc73548abace0d30d518b8f27420e4",
+        "budget": {
+          "dram_image_bytes": 4559488,
+          "immutable_prefix_bytes": 1251840,
+          "samples": 112960,
+          "stored_frames": 707,
+          "valid_frames": 706,
+          "raw_padded_bytes": 225920,
+          "phases": [
+            {
+              "name": "reset_frontend",
+              "instruction_words": 64,
+              "tmem_peak_live_words": 512
+            },
+            {
+              "name": "pcm16_exact_bytes",
+              "instruction_words": 208,
+              "tmem_peak_live_words": 2168
+            },
+            {
+              "name": "preemphasis_and_center_padding",
+              "instruction_words": 120,
+              "tmem_peak_live_words": 768
+            },
+            {
+              "name": "stft_direct_dft_power",
+              "instruction_words": 312,
+              "tmem_peak_live_words": 17472
+            },
+            {
+              "name": "slaney_mel_log",
+              "instruction_words": 1216,
+              "tmem_peak_live_words": 33409
+            },
+            {
+              "name": "valid_unbiased_normalization",
+              "instruction_words": 6976,
+              "tmem_peak_live_words": 2123
+            }
+          ],
+          "max_instruction_words": 6976,
+          "max_tmem_live_words": 33409,
+          "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+          "dither": 0.0,
+          "hardware_validated": false,
+          "model_ready": false
+        }
+      },
+      "waveform_to_subsampler_handoff": {
+        "source": 4196480,
+        "destination": 4368384,
+        "bytes": 361984,
+        "reverse": true,
+        "host_activation_transform_or_reupload": false
+      },
+      "encoder_layers": [
+        {
+          "layer": 0,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.774680822936864e-05,
+            "max_abs": 0.0050792694091796875,
+            "cosine": 0.9999999977052196
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 1,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.37646955641953e-05,
+            "max_abs": 0.007572174072265625,
+            "cosine": 0.9999999964921449
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 2,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.078076940842439e-05,
+            "max_abs": 0.0075190067291259766,
+            "cosine": 0.9999999958795545
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 3,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.889251935355639e-05,
+            "max_abs": 0.007213592529296875,
+            "cosine": 0.999999996049185
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 4,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.433232703561234e-05,
+            "max_abs": 0.007252693176269531,
+            "cosine": 0.9999999964441582
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 5,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.784181769819656e-05,
+            "max_abs": 0.00768280029296875,
+            "cosine": 0.9999999969703427
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 6,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.146427799529492e-05,
+            "max_abs": 0.007610321044921875,
+            "cosine": 0.999999997446857
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 7,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.78901973288476e-05,
+            "max_abs": 0.0071430206298828125,
+            "cosine": 0.9999999976961307
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 8,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.011127493670481e-05,
+            "max_abs": 0.007052898406982422,
+            "cosine": 0.9999999975429078
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 9,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.229621525841065e-05,
+            "max_abs": 0.006284236907958984,
+            "cosine": 0.9999999973866371
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 10,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.193884398686004e-05,
+            "max_abs": 0.006382942199707031,
+            "cosine": 0.9999999974126308
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 11,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.900923073125202e-05,
+            "max_abs": 0.00728607177734375,
+            "cosine": 0.9999999976193201
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 12,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.457596588319725e-05,
+            "max_abs": 0.00800323486328125,
+            "cosine": 0.9999999979150151
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 13,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.247526059604115e-05,
+            "max_abs": 0.01222991943359375,
+            "cosine": 0.9999999980484212
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 14,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.416199843212406e-05,
+            "max_abs": 0.0113983154296875,
+            "cosine": 0.9999999979418218
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 15,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 5.8978790192893944e-05,
+            "max_abs": 0.01416778564453125,
+            "cosine": 0.9999999982607618
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 16,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.548102674975454e-05,
+            "max_abs": 0.006955146789550781,
+            "cosine": 0.999999997856185
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 17,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.626684670867041e-05,
+            "max_abs": 0.01274871826171875,
+            "cosine": 0.9999999978046991
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 18,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.092229493869383e-05,
+            "max_abs": 0.014923095703125,
+            "cosine": 0.9999999981445132
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 19,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 5.869198053122182e-05,
+            "max_abs": 0.0104217529296875,
+            "cosine": 0.9999999982776884
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 20,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.817281280881771e-05,
+            "max_abs": 0.01003265380859375,
+            "cosine": 0.9999999976762294
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 21,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.532511367370223e-05,
+            "max_abs": 0.01473236083984375,
+            "cosine": 0.9999999971630893
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 22,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.264208712008605e-05,
+            "max_abs": 0.0168609619140625,
+            "cosine": 0.9999999980382065
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 23,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.328754124487927e-05,
+            "max_abs": 2.4275854229927063e-05,
+            "cosine": 0.9999999956506181
+          },
+          "masks_passed": true,
+          "finite": true
+        }
+      ],
+      "encoder_output_sha256": "4195ef5d13f567767ddeed3208ea88a7e98246c125fb765c9673c2e3ab6810ef",
+      "decoder": {
+        "accepted": true,
+        "model_ready": false,
+        "hardware_validated": false,
+        "status": 1,
+        "expected_status": 1,
+        "steps": 53,
+        "token_duration_frame_trace_equal": true,
+        "text_equal": true,
+        "text_utf8": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+        "expected_text_utf8": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+        "trace": [
+          [
+            8192,
+            2,
+            0,
+            0
+          ],
+          [
+            8192,
+            2,
+            2,
+            0
+          ],
+          [
+            8192,
+            2,
+            4,
+            0
+          ],
+          [
+            380,
+            2,
+            6,
+            1
+          ],
+          [
+            8192,
+            1,
+            8,
+            0
+          ],
+          [
+            5600,
+            2,
+            9,
+            1
+          ],
+          [
+            8192,
+            2,
+            11,
+            0
+          ],
+          [
+            924,
+            2,
+            13,
+            1
+          ],
+          [
+            8192,
+            1,
+            15,
+            0
+          ],
+          [
+            5254,
+            2,
+            16,
+            1
+          ],
+          [
+            8192,
+            1,
+            18,
+            0
+          ],
+          [
+            4457,
+            1,
+            19,
+            1
+          ],
+          [
+            8192,
+            2,
+            20,
+            0
+          ],
+          [
+            799,
+            2,
+            22,
+            1
+          ],
+          [
+            314,
+            2,
+            24,
+            1
+          ],
+          [
+            335,
+            2,
+            26,
+            1
+          ],
+          [
+            8192,
+            2,
+            28,
+            0
+          ],
+          [
+            8192,
+            2,
+            30,
+            0
+          ],
+          [
+            592,
+            2,
+            32,
+            1
+          ],
+          [
+            8192,
+            1,
+            34,
+            0
+          ],
+          [
+            3306,
+            1,
+            35,
+            1
+          ],
+          [
+            7898,
+            1,
+            36,
+            1
+          ],
+          [
+            381,
+            1,
+            37,
+            1
+          ],
+          [
+            8192,
+            1,
+            38,
+            0
+          ],
+          [
+            4384,
+            1,
+            39,
+            1
+          ],
+          [
+            8192,
+            2,
+            40,
+            0
+          ],
+          [
+            6268,
+            2,
+            42,
+            1
+          ],
+          [
+            4457,
+            2,
+            44,
+            1
+          ],
+          [
+            8192,
+            2,
+            46,
+            0
+          ],
+          [
+            3306,
+            1,
+            48,
+            1
+          ],
+          [
+            725,
+            1,
+            49,
+            1
+          ],
+          [
+            8192,
+            1,
+            50,
+            0
+          ],
+          [
+            326,
+            2,
+            51,
+            1
+          ],
+          [
+            380,
+            2,
+            53,
+            1
+          ],
+          [
+            924,
+            2,
+            55,
+            1
+          ],
+          [
+            8192,
+            2,
+            57,
+            0
+          ],
+          [
+            8192,
+            2,
+            59,
+            0
+          ],
+          [
+            407,
+            2,
+            61,
+            1
+          ],
+          [
+            8192,
+            1,
+            63,
+            0
+          ],
+          [
+            4566,
+            2,
+            64,
+            1
+          ],
+          [
+            8192,
+            1,
+            66,
+            0
+          ],
+          [
+            450,
+            2,
+            67,
+            1
+          ],
+          [
+            769,
+            2,
+            69,
+            1
+          ],
+          [
+            592,
+            2,
+            71,
+            1
+          ],
+          [
+            3470,
+            2,
+            73,
+            1
+          ],
+          [
+            8192,
+            1,
+            75,
+            0
+          ],
+          [
+            813,
+            2,
+            76,
+            1
+          ],
+          [
+            8192,
+            2,
+            78,
+            0
+          ],
+          [
+            5635,
+            2,
+            80,
+            1
+          ],
+          [
+            8192,
+            2,
+            82,
+            0
+          ],
+          [
+            8192,
+            2,
+            84,
+            0
+          ],
+          [
+            7883,
+            2,
+            86,
+            1
+          ],
+          [
+            8192,
+            1,
+            88,
+            0
+          ]
+        ],
+        "expected_trace": [
+          [
+            8192,
+            2,
+            0,
+            0
+          ],
+          [
+            8192,
+            2,
+            2,
+            0
+          ],
+          [
+            8192,
+            2,
+            4,
+            0
+          ],
+          [
+            380,
+            2,
+            6,
+            1
+          ],
+          [
+            8192,
+            1,
+            8,
+            0
+          ],
+          [
+            5600,
+            2,
+            9,
+            1
+          ],
+          [
+            8192,
+            2,
+            11,
+            0
+          ],
+          [
+            924,
+            2,
+            13,
+            1
+          ],
+          [
+            8192,
+            1,
+            15,
+            0
+          ],
+          [
+            5254,
+            2,
+            16,
+            1
+          ],
+          [
+            8192,
+            1,
+            18,
+            0
+          ],
+          [
+            4457,
+            1,
+            19,
+            1
+          ],
+          [
+            8192,
+            2,
+            20,
+            0
+          ],
+          [
+            799,
+            2,
+            22,
+            1
+          ],
+          [
+            314,
+            2,
+            24,
+            1
+          ],
+          [
+            335,
+            2,
+            26,
+            1
+          ],
+          [
+            8192,
+            2,
+            28,
+            0
+          ],
+          [
+            8192,
+            2,
+            30,
+            0
+          ],
+          [
+            592,
+            2,
+            32,
+            1
+          ],
+          [
+            8192,
+            1,
+            34,
+            0
+          ],
+          [
+            3306,
+            1,
+            35,
+            1
+          ],
+          [
+            7898,
+            1,
+            36,
+            1
+          ],
+          [
+            381,
+            1,
+            37,
+            1
+          ],
+          [
+            8192,
+            1,
+            38,
+            0
+          ],
+          [
+            4384,
+            1,
+            39,
+            1
+          ],
+          [
+            8192,
+            2,
+            40,
+            0
+          ],
+          [
+            6268,
+            2,
+            42,
+            1
+          ],
+          [
+            4457,
+            2,
+            44,
+            1
+          ],
+          [
+            8192,
+            2,
+            46,
+            0
+          ],
+          [
+            3306,
+            1,
+            48,
+            1
+          ],
+          [
+            725,
+            1,
+            49,
+            1
+          ],
+          [
+            8192,
+            1,
+            50,
+            0
+          ],
+          [
+            326,
+            2,
+            51,
+            1
+          ],
+          [
+            380,
+            2,
+            53,
+            1
+          ],
+          [
+            924,
+            2,
+            55,
+            1
+          ],
+          [
+            8192,
+            2,
+            57,
+            0
+          ],
+          [
+            8192,
+            2,
+            59,
+            0
+          ],
+          [
+            407,
+            2,
+            61,
+            1
+          ],
+          [
+            8192,
+            1,
+            63,
+            0
+          ],
+          [
+            4566,
+            2,
+            64,
+            1
+          ],
+          [
+            8192,
+            1,
+            66,
+            0
+          ],
+          [
+            450,
+            2,
+            67,
+            1
+          ],
+          [
+            769,
+            2,
+            69,
+            1
+          ],
+          [
+            592,
+            2,
+            71,
+            1
+          ],
+          [
+            3470,
+            2,
+            73,
+            1
+          ],
+          [
+            8192,
+            1,
+            75,
+            0
+          ],
+          [
+            813,
+            2,
+            76,
+            1
+          ],
+          [
+            8192,
+            2,
+            78,
+            0
+          ],
+          [
+            5635,
+            2,
+            80,
+            1
+          ],
+          [
+            8192,
+            2,
+            82,
+            0
+          ],
+          [
+            8192,
+            2,
+            84,
+            0
+          ],
+          [
+            7883,
+            2,
+            86,
+            1
+          ],
+          [
+            8192,
+            1,
+            88,
+            0
+          ]
+        ],
+        "all_states_finite": true,
+        "state_comparisons": [
+          {
+            "step": 0,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 1,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 2,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 3,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 4,
+            "state_vs_dense": {
+              "relative_l2": 2.4683032281249716e-05,
+              "max_abs": 0.00031828880310058594,
+              "cosine": 0.9999999996954361
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.4576000253862484e-05,
+              "max_abs": 0.0002856738865375519,
+              "cosine": 0.9999999990078484
+            }
+          },
+          {
+            "step": 5,
+            "state_vs_dense": {
+              "relative_l2": 2.4683032281249716e-05,
+              "max_abs": 0.00031828880310058594,
+              "cosine": 0.9999999996954361
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.4576000253862484e-05,
+              "max_abs": 0.0002856738865375519,
+              "cosine": 0.9999999990078484
+            }
+          },
+          {
+            "step": 6,
+            "state_vs_dense": {
+              "relative_l2": 3.549482597522932e-05,
+              "max_abs": 0.0003445148468017578,
+              "cosine": 0.9999999993700621
+            },
+            "cache_vs_dense": {
+              "relative_l2": 6.389756278782086e-05,
+              "max_abs": 0.00016021728515625,
+              "cosine": 0.99999999830742
+            }
+          },
+          {
+            "step": 7,
+            "state_vs_dense": {
+              "relative_l2": 3.549482597522932e-05,
+              "max_abs": 0.0003445148468017578,
+              "cosine": 0.9999999993700621
+            },
+            "cache_vs_dense": {
+              "relative_l2": 6.389756278782086e-05,
+              "max_abs": 0.00016021728515625,
+              "cosine": 0.99999999830742
+            }
+          },
+          {
+            "step": 8,
+            "state_vs_dense": {
+              "relative_l2": 3.369989845603742e-05,
+              "max_abs": 0.0003458932042121887,
+              "cosine": 0.9999999994366506
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.4776103773363947e-05,
+              "max_abs": 9.34600830078125e-05,
+              "cosine": 0.9999999996930903
+            }
+          },
+          {
+            "step": 9,
+            "state_vs_dense": {
+              "relative_l2": 3.369989845603742e-05,
+              "max_abs": 0.0003458932042121887,
+              "cosine": 0.9999999994366506
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.4776103773363947e-05,
+              "max_abs": 9.34600830078125e-05,
+              "cosine": 0.9999999996930903
+            }
+          },
+          {
+            "step": 10,
+            "state_vs_dense": {
+              "relative_l2": 2.9560886042604218e-05,
+              "max_abs": 0.00035631656646728516,
+              "cosine": 0.9999999995681295
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.349308001213706e-05,
+              "max_abs": 7.326528429985046e-05,
+              "cosine": 0.9999999990567208
+            }
+          },
+          {
+            "step": 11,
+            "state_vs_dense": {
+              "relative_l2": 2.9560886042604218e-05,
+              "max_abs": 0.00035631656646728516,
+              "cosine": 0.9999999995681295
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.349308001213706e-05,
+              "max_abs": 7.326528429985046e-05,
+              "cosine": 0.9999999990567208
+            }
+          },
+          {
+            "step": 12,
+            "state_vs_dense": {
+              "relative_l2": 2.7424683737380726e-05,
+              "max_abs": 0.00036266446113586426,
+              "cosine": 0.999999999626555
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.65926882367538e-05,
+              "max_abs": 0.00018596649169921875,
+              "cosine": 0.9999999992816263
+            }
+          },
+          {
+            "step": 13,
+            "state_vs_dense": {
+              "relative_l2": 2.7424683737380726e-05,
+              "max_abs": 0.00036266446113586426,
+              "cosine": 0.999999999626555
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.65926882367538e-05,
+              "max_abs": 0.00018596649169921875,
+              "cosine": 0.9999999992816263
+            }
+          },
+          {
+            "step": 14,
+            "state_vs_dense": {
+              "relative_l2": 3.566272888926334e-05,
+              "max_abs": 0.0003644004464149475,
+              "cosine": 0.9999999993651983
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.682456590814288e-05,
+              "max_abs": 0.00013705343008041382,
+              "cosine": 0.9999999989197702
+            }
+          },
+          {
+            "step": 15,
+            "state_vs_dense": {
+              "relative_l2": 3.986150281820708e-05,
+              "max_abs": 0.0005631446838378906,
+              "cosine": 0.9999999992075236
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.5161948203350835e-05,
+              "max_abs": 9.989738464355469e-05,
+              "cosine": 0.9999999990191836
+            }
+          },
+          {
+            "step": 16,
+            "state_vs_dense": {
+              "relative_l2": 3.862682207983832e-05,
+              "max_abs": 0.0005919933319091797,
+              "cosine": 0.999999999254008
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.523194908519066e-05,
+              "max_abs": 0.00012606382369995117,
+              "cosine": 0.9999999989771794
+            }
+          },
+          {
+            "step": 17,
+            "state_vs_dense": {
+              "relative_l2": 3.862682207983832e-05,
+              "max_abs": 0.0005919933319091797,
+              "cosine": 0.999999999254008
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.523194908519066e-05,
+              "max_abs": 0.00012606382369995117,
+              "cosine": 0.9999999989771794
+            }
+          },
+          {
+            "step": 18,
+            "state_vs_dense": {
+              "relative_l2": 3.862682207983832e-05,
+              "max_abs": 0.0005919933319091797,
+              "cosine": 0.999999999254008
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.523194908519066e-05,
+              "max_abs": 0.00012606382369995117,
+              "cosine": 0.9999999989771794
+            }
+          },
+          {
+            "step": 19,
+            "state_vs_dense": {
+              "relative_l2": 2.9886731839129813e-05,
+              "max_abs": 0.000500112771987915,
+              "cosine": 0.9999999995567037
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.445885111531253e-05,
+              "max_abs": 9.143352508544922e-05,
+              "cosine": 0.9999999994236125
+            }
+          },
+          {
+            "step": 20,
+            "state_vs_dense": {
+              "relative_l2": 2.9886731839129813e-05,
+              "max_abs": 0.000500112771987915,
+              "cosine": 0.9999999995567037
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.445885111531253e-05,
+              "max_abs": 9.143352508544922e-05,
+              "cosine": 0.9999999994236125
+            }
+          },
+          {
+            "step": 21,
+            "state_vs_dense": {
+              "relative_l2": 2.962366038893947e-05,
+              "max_abs": 0.0004611015319824219,
+              "cosine": 0.9999999995765385
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.5827784804939882e-05,
+              "max_abs": 0.00017189979553222656,
+              "cosine": 0.9999999996670398
+            }
+          },
+          {
+            "step": 22,
+            "state_vs_dense": {
+              "relative_l2": 3.340649464563075e-05,
+              "max_abs": 0.0004239082336425781,
+              "cosine": 0.9999999994836271
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.3638836926790665e-05,
+              "max_abs": 0.00017762184143066406,
+              "cosine": 0.9999999992496406
+            }
+          },
+          {
+            "step": 23,
+            "state_vs_dense": {
+              "relative_l2": 3.270041314618277e-05,
+              "max_abs": 0.00048828125,
+              "cosine": 0.9999999995091029
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.8456442707080135e-05,
+              "max_abs": 0.00015306472778320312,
+              "cosine": 0.9999999996797191
+            }
+          },
+          {
+            "step": 24,
+            "state_vs_dense": {
+              "relative_l2": 3.270041314618277e-05,
+              "max_abs": 0.00048828125,
+              "cosine": 0.9999999995091029
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.8456442707080135e-05,
+              "max_abs": 0.00015306472778320312,
+              "cosine": 0.9999999996797191
+            }
+          },
+          {
+            "step": 25,
+            "state_vs_dense": {
+              "relative_l2": 3.881207223569674e-05,
+              "max_abs": 0.0009077377617359161,
+              "cosine": 0.9999999993026248
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.603233844872133e-05,
+              "max_abs": 0.00017499923706054688,
+              "cosine": 0.9999999986680285
+            }
+          },
+          {
+            "step": 26,
+            "state_vs_dense": {
+              "relative_l2": 3.881207223569674e-05,
+              "max_abs": 0.0009077377617359161,
+              "cosine": 0.9999999993026248
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.603233844872133e-05,
+              "max_abs": 0.00017499923706054688,
+              "cosine": 0.9999999986680285
+            }
+          },
+          {
+            "step": 27,
+            "state_vs_dense": {
+              "relative_l2": 3.040283220842335e-05,
+              "max_abs": 0.0005784034729003906,
+              "cosine": 0.9999999995824844
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.560317001721391e-05,
+              "max_abs": 0.00011396408081054688,
+              "cosine": 0.9999999990504206
+            }
+          },
+          {
+            "step": 28,
+            "state_vs_dense": {
+              "relative_l2": 2.7266791947677978e-05,
+              "max_abs": 0.0004782676696777344,
+              "cosine": 0.9999999996672554
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.885587354848903e-05,
+              "max_abs": 0.00011301040649414062,
+              "cosine": 0.9999999997508079
+            }
+          },
+          {
+            "step": 29,
+            "state_vs_dense": {
+              "relative_l2": 2.7266791947677978e-05,
+              "max_abs": 0.0004782676696777344,
+              "cosine": 0.9999999996672554
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.885587354848903e-05,
+              "max_abs": 0.00011301040649414062,
+              "cosine": 0.9999999997508079
+            }
+          },
+          {
+            "step": 30,
+            "state_vs_dense": {
+              "relative_l2": 3.111863021460358e-05,
+              "max_abs": 0.0008974075317382812,
+              "cosine": 0.9999999995560754
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.9617745514197696e-05,
+              "max_abs": 0.0001773834228515625,
+              "cosine": 0.9999999996129882
+            }
+          },
+          {
+            "step": 31,
+            "state_vs_dense": {
+              "relative_l2": 3.195436008666356e-05,
+              "max_abs": 0.0010194778442382812,
+              "cosine": 0.9999999995335527
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.7268964013357966e-05,
+              "max_abs": 9.384192526340485e-05,
+              "cosine": 0.9999999988832999
+            }
+          },
+          {
+            "step": 32,
+            "state_vs_dense": {
+              "relative_l2": 3.195436008666356e-05,
+              "max_abs": 0.0010194778442382812,
+              "cosine": 0.9999999995335527
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.7268964013357966e-05,
+              "max_abs": 9.384192526340485e-05,
+              "cosine": 0.9999999988832999
+            }
+          },
+          {
+            "step": 33,
+            "state_vs_dense": {
+              "relative_l2": 3.4951806920265535e-05,
+              "max_abs": 0.0010213851928710938,
+              "cosine": 0.9999999994180226
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.425624201524318e-05,
+              "max_abs": 7.24494457244873e-05,
+              "cosine": 0.9999999991138455
+            }
+          },
+          {
+            "step": 34,
+            "state_vs_dense": {
+              "relative_l2": 3.005851728931286e-05,
+              "max_abs": 0.0005917549133300781,
+              "cosine": 0.9999999995502503
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.06877475409154e-05,
+              "max_abs": 0.0002107173204421997,
+              "cosine": 0.9999999987324529
+            }
+          },
+          {
+            "step": 35,
+            "state_vs_dense": {
+              "relative_l2": 2.8923569634966245e-05,
+              "max_abs": 0.00049591064453125,
+              "cosine": 0.9999999995821018
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.7485901521923564e-05,
+              "max_abs": 0.0002751350402832031,
+              "cosine": 0.9999999996304595
+            }
+          },
+          {
+            "step": 36,
+            "state_vs_dense": {
+              "relative_l2": 2.8923569634966245e-05,
+              "max_abs": 0.00049591064453125,
+              "cosine": 0.9999999995821018
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.7485901521923564e-05,
+              "max_abs": 0.0002751350402832031,
+              "cosine": 0.9999999996304595
+            }
+          },
+          {
+            "step": 37,
+            "state_vs_dense": {
+              "relative_l2": 2.8923569634966245e-05,
+              "max_abs": 0.00049591064453125,
+              "cosine": 0.9999999995821018
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.7485901521923564e-05,
+              "max_abs": 0.0002751350402832031,
+              "cosine": 0.9999999996304595
+            }
+          },
+          {
+            "step": 38,
+            "state_vs_dense": {
+              "relative_l2": 2.5071517341095487e-05,
+              "max_abs": 0.0005693435668945312,
+              "cosine": 0.9999999996864135
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.823295394394612e-05,
+              "max_abs": 5.850568413734436e-05,
+              "cosine": 0.9999999993027461
+            }
+          },
+          {
+            "step": 39,
+            "state_vs_dense": {
+              "relative_l2": 2.5071517341095487e-05,
+              "max_abs": 0.0005693435668945312,
+              "cosine": 0.9999999996864135
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.823295394394612e-05,
+              "max_abs": 5.850568413734436e-05,
+              "cosine": 0.9999999993027461
+            }
+          },
+          {
+            "step": 40,
+            "state_vs_dense": {
+              "relative_l2": 2.3757415865192976e-05,
+              "max_abs": 0.0005731582641601562,
+              "cosine": 0.9999999997192653
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.484184481290827e-05,
+              "max_abs": 0.00023221969604492188,
+              "cosine": 0.9999999992551267
+            }
+          },
+          {
+            "step": 41,
+            "state_vs_dense": {
+              "relative_l2": 2.3757415865192976e-05,
+              "max_abs": 0.0005731582641601562,
+              "cosine": 0.9999999997192653
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.484184481290827e-05,
+              "max_abs": 0.00023221969604492188,
+              "cosine": 0.9999999992551267
+            }
+          },
+          {
+            "step": 42,
+            "state_vs_dense": {
+              "relative_l2": 2.648263885343285e-05,
+              "max_abs": 0.0008001327514648438,
+              "cosine": 0.9999999996494782
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.5788562961047764e-05,
+              "max_abs": 0.00017386674880981445,
+              "cosine": 0.9999999993638319
+            }
+          },
+          {
+            "step": 43,
+            "state_vs_dense": {
+              "relative_l2": 2.5226107686155737e-05,
+              "max_abs": 0.0008020401000976562,
+              "cosine": 0.9999999996818224
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.0960640650483177e-05,
+              "max_abs": 0.00024509429931640625,
+              "cosine": 0.9999999999406568
+            }
+          },
+          {
+            "step": 44,
+            "state_vs_dense": {
+              "relative_l2": 2.3834589696873288e-05,
+              "max_abs": 0.0007572174072265625,
+              "cosine": 0.9999999997162108
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.2847232893309692e-05,
+              "max_abs": 2.7954578399658203e-05,
+              "cosine": 0.9999999997523319
+            }
+          },
+          {
+            "step": 45,
+            "state_vs_dense": {
+              "relative_l2": 2.3426891871870782e-05,
+              "max_abs": 0.0007572174072265625,
+              "cosine": 0.9999999997264852
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.687699682505549e-05,
+              "max_abs": 6.592273712158203e-05,
+              "cosine": 0.9999999993496245
+            }
+          },
+          {
+            "step": 46,
+            "state_vs_dense": {
+              "relative_l2": 2.3426891871870782e-05,
+              "max_abs": 0.0007572174072265625,
+              "cosine": 0.9999999997264852
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.687699682505549e-05,
+              "max_abs": 6.592273712158203e-05,
+              "cosine": 0.9999999993496245
+            }
+          },
+          {
+            "step": 47,
+            "state_vs_dense": {
+              "relative_l2": 2.3231357022127812e-05,
+              "max_abs": 0.0007600784301757812,
+              "cosine": 0.9999999997311425
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.7101896806984984e-05,
+              "max_abs": 0.00011613965034484863,
+              "cosine": 0.9999999983742948
+            }
+          },
+          {
+            "step": 48,
+            "state_vs_dense": {
+              "relative_l2": 2.3231357022127812e-05,
+              "max_abs": 0.0007600784301757812,
+              "cosine": 0.9999999997311425
+            },
+            "cache_vs_dense": {
+              "relative_l2": 5.7101896806984984e-05,
+              "max_abs": 0.00011613965034484863,
+              "cosine": 0.9999999983742948
+            }
+          },
+          {
+            "step": 49,
+            "state_vs_dense": {
+              "relative_l2": 2.1019276802095957e-05,
+              "max_abs": 0.000762939453125,
+              "cosine": 0.9999999997813961
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.206524146595219e-05,
+              "max_abs": 0.00010585784912109375,
+              "cosine": 0.9999999991421905
+            }
+          },
+          {
+            "step": 50,
+            "state_vs_dense": {
+              "relative_l2": 2.1019276802095957e-05,
+              "max_abs": 0.000762939453125,
+              "cosine": 0.9999999997813961
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.206524146595219e-05,
+              "max_abs": 0.00010585784912109375,
+              "cosine": 0.9999999991421905
+            }
+          },
+          {
+            "step": 51,
+            "state_vs_dense": {
+              "relative_l2": 2.1019276802095957e-05,
+              "max_abs": 0.000762939453125,
+              "cosine": 0.9999999997813961
+            },
+            "cache_vs_dense": {
+              "relative_l2": 4.206524146595219e-05,
+              "max_abs": 0.00010585784912109375,
+              "cosine": 0.9999999991421905
+            }
+          },
+          {
+            "step": 52,
+            "state_vs_dense": {
+              "relative_l2": 2.0500486597953195e-05,
+              "max_abs": 0.000762939453125,
+              "cosine": 0.9999999997925217
+            },
+            "cache_vs_dense": {
+              "relative_l2": 3.105100905479234e-05,
+              "max_abs": 0.0002130270004272461,
+              "cosine": 0.9999999995244946
+            }
+          }
+        ],
+        "maximum_state_relative_l2": 3.986150281820708e-05,
+        "maximum_cache_relative_l2": 6.389756278782086e-05,
+        "encoder_projector_vs_dense": {
+          "relative_l2": 2.9659737437063476e-05,
+          "max_abs": 3.921985626220703e-05,
+          "cosine": 0.9999999995603717
+        },
+        "state": [
+          89.0,
+          8192.0,
+          1.0,
+          53.0,
+          29.0,
+          1.0,
+          29.0,
+          98.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "state_sha256": "b9c13b1bff6e14b18c3d2012b36f0fd8123ea3cde65fb874e0bbb020fbb05131",
+        "hidden_cell_cache_sha256": "75b52b73e1cb4657b09ce792e260086863ec8722221b49768b13f61e1bd6c8e3",
+        "text_sha256": "9ff0bbd8c282679516d904987db7e1119e07b59936d900d2be8609898ac5a75f",
+        "checkpoint_record_sha256": {
+          "encoder_projector.weight": "98fccf408f092ab3b79692b2bf604af7d19638bd6d158ac984863b4f911b3fcc",
+          "encoder_projector.bias": "444e9e004a928b684b05b8eb498a03edd3aeff1aabeeb6866a1939f85c6dc64b",
+          "decoder.embedding.weight": "99eba1ec2bf6c52958d0ad6219ad2826364c49bd69a7ddfecaf11c4179f65c03",
+          "decoder.lstm.weight_ih_l0": "7c2d6befaecd46ee4a4bf963850973e7f9861eb24790f38e82826bf4e52b207f",
+          "decoder.lstm.bias_ih_l0": "f3c69cb615ec9dd5e2e70aab0e1311d3ab062f340776e01338e2f76675f3c821",
+          "decoder.lstm.weight_hh_l0": "1076b2c3643396e397027cf575733161e197c3c3a0320536adaac8ea1df17d8d",
+          "decoder.lstm.bias_hh_l0": "611fef3003f7737cad19825546ffb9f4ea9a15c35ce4d8b7e5606bb849f1c645",
+          "decoder.lstm.weight_ih_l1": "50e35fc400ec638002cf713e4c93da80cc44c89c38e2d28962df5105c2055ff4",
+          "decoder.lstm.bias_ih_l1": "570f1d1a538c93bfe3236c449ed1155378c7e8ba09fc1928a0ed312c3eaab1c6",
+          "decoder.lstm.weight_hh_l1": "93f84a87a0ed322245f60c92dbac25145b0fbf18cf41229acc82637cb83d9e77",
+          "decoder.lstm.bias_hh_l1": "e95c4611c220a5402066da9b73cf40f7fbdc0356e859e82e7229a92e75d14d03",
+          "decoder.decoder_projector.weight": "be43efd9e47539632fd41709137eda44eb02594a24e59c2e231c4ef3212fb411",
+          "decoder.decoder_projector.bias": "7c800be462fcf0fd8f222fb1ffabead153a865b66b4ede784f91cb6ce43dbdab",
+          "joint.head.weight": "fc66e8a76561883fce4a15fcd0085f620042610b7051a488193eed9b34012bb7",
+          "joint.head.bias": "82643b482b4cfe6871d5af2adeefff2b91c58ba525e55bc84fc71ca706813cac"
+        },
+        "budget": {
+          "dram_image_bytes": 46667648,
+          "immutable_prefix_bytes": 34636672,
+          "phases": [
+            {
+              "name": "reset_decoder",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 513
+            },
+            {
+              "name": "encoder_projector",
+              "instruction_words": 336,
+              "tmem_peak_live_words": 7432
+            },
+            {
+              "name": "bounded_device_tdt",
+              "instruction_words": 2376,
+              "tmem_peak_live_words": 25879
+            }
+          ],
+          "max_instruction_words": 2376,
+          "max_tmem_live_words": 25879,
+          "frames": 89,
+          "valid": 89,
+          "max_steps": 889,
+          "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+          "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+          "hardware_validated": false,
+          "model_ready": false
+        },
+        "actual_dispatches": 4,
+        "immutable_bytes_staged": 34636672,
+        "program_wait_bytes_uploaded": 14496,
+        "wait_checker_instructions": 0,
+        "host_encoder_reupload_or_model_compute_in_handoff": false,
+        "elapsed_seconds": 3.178338186000474
+      },
+      "complete_canonical_dense_trace_and_text_equal": true,
+      "complete_native_torch_dense_trace_and_text_equal": true,
+      "canonical_reference_text": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+      "native_reference_text": "I really was very much afraid of showing him how much shocked I was at some parts of what he said.",
+      "canonical_reference_trace": [
+        [
+          8192,
+          2,
+          0,
+          0
+        ],
+        [
+          8192,
+          2,
+          2,
+          0
+        ],
+        [
+          8192,
+          2,
+          4,
+          0
+        ],
+        [
+          380,
+          2,
+          6,
+          1
+        ],
+        [
+          8192,
+          1,
+          8,
+          0
+        ],
+        [
+          5600,
+          2,
+          9,
+          1
+        ],
+        [
+          8192,
+          2,
+          11,
+          0
+        ],
+        [
+          924,
+          2,
+          13,
+          1
+        ],
+        [
+          8192,
+          1,
+          15,
+          0
+        ],
+        [
+          5254,
+          2,
+          16,
+          1
+        ],
+        [
+          8192,
+          1,
+          18,
+          0
+        ],
+        [
+          4457,
+          1,
+          19,
+          1
+        ],
+        [
+          8192,
+          2,
+          20,
+          0
+        ],
+        [
+          799,
+          2,
+          22,
+          1
+        ],
+        [
+          314,
+          2,
+          24,
+          1
+        ],
+        [
+          335,
+          2,
+          26,
+          1
+        ],
+        [
+          8192,
+          2,
+          28,
+          0
+        ],
+        [
+          8192,
+          2,
+          30,
+          0
+        ],
+        [
+          592,
+          2,
+          32,
+          1
+        ],
+        [
+          8192,
+          1,
+          34,
+          0
+        ],
+        [
+          3306,
+          1,
+          35,
+          1
+        ],
+        [
+          7898,
+          1,
+          36,
+          1
+        ],
+        [
+          381,
+          1,
+          37,
+          1
+        ],
+        [
+          8192,
+          1,
+          38,
+          0
+        ],
+        [
+          4384,
+          1,
+          39,
+          1
+        ],
+        [
+          8192,
+          2,
+          40,
+          0
+        ],
+        [
+          6268,
+          2,
+          42,
+          1
+        ],
+        [
+          4457,
+          2,
+          44,
+          1
+        ],
+        [
+          8192,
+          2,
+          46,
+          0
+        ],
+        [
+          3306,
+          1,
+          48,
+          1
+        ],
+        [
+          725,
+          1,
+          49,
+          1
+        ],
+        [
+          8192,
+          1,
+          50,
+          0
+        ],
+        [
+          326,
+          2,
+          51,
+          1
+        ],
+        [
+          380,
+          2,
+          53,
+          1
+        ],
+        [
+          924,
+          2,
+          55,
+          1
+        ],
+        [
+          8192,
+          2,
+          57,
+          0
+        ],
+        [
+          8192,
+          2,
+          59,
+          0
+        ],
+        [
+          407,
+          2,
+          61,
+          1
+        ],
+        [
+          8192,
+          1,
+          63,
+          0
+        ],
+        [
+          4566,
+          2,
+          64,
+          1
+        ],
+        [
+          8192,
+          1,
+          66,
+          0
+        ],
+        [
+          450,
+          2,
+          67,
+          1
+        ],
+        [
+          769,
+          2,
+          69,
+          1
+        ],
+        [
+          592,
+          2,
+          71,
+          1
+        ],
+        [
+          3470,
+          2,
+          73,
+          1
+        ],
+        [
+          8192,
+          1,
+          75,
+          0
+        ],
+        [
+          813,
+          2,
+          76,
+          1
+        ],
+        [
+          8192,
+          2,
+          78,
+          0
+        ],
+        [
+          5635,
+          2,
+          80,
+          1
+        ],
+        [
+          8192,
+          2,
+          82,
+          0
+        ],
+        [
+          8192,
+          2,
+          84,
+          0
+        ],
+        [
+          7883,
+          2,
+          86,
+          1
+        ],
+        [
+          8192,
+          1,
+          88,
+          0
+        ]
+      ],
+      "native_reference_trace": [
+        [
+          8192,
+          2,
+          0,
+          0
+        ],
+        [
+          8192,
+          2,
+          2,
+          0
+        ],
+        [
+          8192,
+          2,
+          4,
+          0
+        ],
+        [
+          380,
+          2,
+          6,
+          1
+        ],
+        [
+          8192,
+          1,
+          8,
+          0
+        ],
+        [
+          5600,
+          2,
+          9,
+          1
+        ],
+        [
+          8192,
+          2,
+          11,
+          0
+        ],
+        [
+          924,
+          2,
+          13,
+          1
+        ],
+        [
+          8192,
+          1,
+          15,
+          0
+        ],
+        [
+          5254,
+          2,
+          16,
+          1
+        ],
+        [
+          8192,
+          1,
+          18,
+          0
+        ],
+        [
+          4457,
+          1,
+          19,
+          1
+        ],
+        [
+          8192,
+          2,
+          20,
+          0
+        ],
+        [
+          799,
+          2,
+          22,
+          1
+        ],
+        [
+          314,
+          2,
+          24,
+          1
+        ],
+        [
+          335,
+          2,
+          26,
+          1
+        ],
+        [
+          8192,
+          2,
+          28,
+          0
+        ],
+        [
+          8192,
+          2,
+          30,
+          0
+        ],
+        [
+          592,
+          2,
+          32,
+          1
+        ],
+        [
+          8192,
+          1,
+          34,
+          0
+        ],
+        [
+          3306,
+          1,
+          35,
+          1
+        ],
+        [
+          7898,
+          1,
+          36,
+          1
+        ],
+        [
+          381,
+          1,
+          37,
+          1
+        ],
+        [
+          8192,
+          1,
+          38,
+          0
+        ],
+        [
+          4384,
+          1,
+          39,
+          1
+        ],
+        [
+          8192,
+          2,
+          40,
+          0
+        ],
+        [
+          6268,
+          2,
+          42,
+          1
+        ],
+        [
+          4457,
+          2,
+          44,
+          1
+        ],
+        [
+          8192,
+          2,
+          46,
+          0
+        ],
+        [
+          3306,
+          1,
+          48,
+          1
+        ],
+        [
+          725,
+          1,
+          49,
+          1
+        ],
+        [
+          8192,
+          1,
+          50,
+          0
+        ],
+        [
+          326,
+          2,
+          51,
+          1
+        ],
+        [
+          380,
+          2,
+          53,
+          1
+        ],
+        [
+          924,
+          2,
+          55,
+          1
+        ],
+        [
+          8192,
+          2,
+          57,
+          0
+        ],
+        [
+          8192,
+          2,
+          59,
+          0
+        ],
+        [
+          407,
+          2,
+          61,
+          1
+        ],
+        [
+          8192,
+          1,
+          63,
+          0
+        ],
+        [
+          4566,
+          2,
+          64,
+          1
+        ],
+        [
+          8192,
+          1,
+          66,
+          0
+        ],
+        [
+          450,
+          2,
+          67,
+          1
+        ],
+        [
+          769,
+          2,
+          69,
+          1
+        ],
+        [
+          592,
+          2,
+          71,
+          1
+        ],
+        [
+          3470,
+          2,
+          73,
+          1
+        ],
+        [
+          8192,
+          1,
+          75,
+          0
+        ],
+        [
+          813,
+          2,
+          76,
+          1
+        ],
+        [
+          8192,
+          2,
+          78,
+          0
+        ],
+        [
+          5635,
+          2,
+          80,
+          1
+        ],
+        [
+          8192,
+          2,
+          82,
+          0
+        ],
+        [
+          8192,
+          2,
+          84,
+          0
+        ],
+        [
+          7883,
+          2,
+          86,
+          1
+        ],
+        [
+          8192,
+          1,
+          88,
+          0
+        ]
+      ],
+      "total_dispatches": 693,
+      "immutable_bytes_staged": 1272022400,
+      "program_wait_bytes_uploaded": 3191720,
+      "graph_high_water_bytes": 56851456,
+      "host_audio_preprocessing_or_model_compute_in_serving_path": false,
+      "elapsed_seconds": 888.5153408800252
+    },
+    {
+      "name": "silence_min",
+      "accepted": true,
+      "hardware_validated": false,
+      "model_ready": false,
+      "pcm_sha256": "9e132485d5107211de325a45e7917cbe3e4b5b9cde3e4ee91d7d2102317759ee",
+      "samples": 320,
+      "frame_counts": {
+        "mel_stored": 3,
+        "mel_valid": 2,
+        "encoder_stored": 1,
+        "encoder_valid": 1
+      },
+      "frontend": {
+        "accepted": true,
+        "pcm_exact": true,
+        "preemphasis_exact": true,
+        "mask_exact": true,
+        "log_mel_vs_torch": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 1.0
+        },
+        "features_vs_pinned_arm_stats": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 0.0
+        },
+        "features_max_abs_vs_pinned_arm_stats": 0.0,
+        "features_vs_native_cpu_torch": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 0.0
+        },
+        "native_cpu_vs_pinned_arm_stats_max_abs": 0.0,
+        "output_sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca",
+        "budget": {
+          "dram_image_bytes": 1267584,
+          "immutable_prefix_bytes": 1251840,
+          "samples": 320,
+          "stored_frames": 3,
+          "valid_frames": 2,
+          "raw_padded_bytes": 640,
+          "phases": [
+            {
+              "name": "reset_frontend",
+              "instruction_words": 64,
+              "tmem_peak_live_words": 512
+            },
+            {
+              "name": "pcm16_exact_bytes",
+              "instruction_words": 208,
+              "tmem_peak_live_words": 2168
+            },
+            {
+              "name": "preemphasis_and_center_padding",
+              "instruction_words": 120,
+              "tmem_peak_live_words": 768
+            },
+            {
+              "name": "stft_direct_dft_power",
+              "instruction_words": 312,
+              "tmem_peak_live_words": 17472
+            },
+            {
+              "name": "slaney_mel_log",
+              "instruction_words": 1216,
+              "tmem_peak_live_words": 33409
+            },
+            {
+              "name": "valid_unbiased_normalization",
+              "instruction_words": 792,
+              "tmem_peak_live_words": 41
+            }
+          ],
+          "max_instruction_words": 1216,
+          "max_tmem_live_words": 33409,
+          "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+          "dither": 0.0,
+          "hardware_validated": false,
+          "model_ready": false
+        }
+      },
+      "waveform_to_subsampler_handoff": {
+        "source": 1265024,
+        "destination": 4368384,
+        "bytes": 1536,
+        "reverse": false,
+        "host_activation_transform_or_reupload": false
+      },
+      "encoder_layers": [
+        {
+          "layer": 0,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.89783951784793e-05,
+            "max_abs": 0.00353240966796875,
+            "cosine": 0.999999996888773
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 1,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.703061482209354e-05,
+            "max_abs": 0.006031036376953125,
+            "cosine": 0.9999999962694012
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 2,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.958451690966225e-05,
+            "max_abs": 0.00525665283203125,
+            "cosine": 0.9999999950449096
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 3,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.423743640911432e-05,
+            "max_abs": 0.005706787109375,
+            "cosine": 0.9999999955604384
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 4,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.121070148775939e-05,
+            "max_abs": 0.0067138671875,
+            "cosine": 0.9999999958475588
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 5,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.748575533723392e-05,
+            "max_abs": 0.00750732421875,
+            "cosine": 0.9999999970272981
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 6,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.169510986704833e-05,
+            "max_abs": 0.0068511962890625,
+            "cosine": 0.9999999974439711
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 7,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.296678825724986e-05,
+            "max_abs": 0.006367206573486328,
+            "cosine": 0.999999998023896
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 8,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 5.997116953777703e-05,
+            "max_abs": 0.006269693374633789,
+            "cosine": 0.9999999982038794
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 9,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.480369048288393e-05,
+            "max_abs": 0.006062507629394531,
+            "cosine": 0.99999999790042
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 10,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.334970071927672e-05,
+            "max_abs": 0.0062694549560546875,
+            "cosine": 0.9999999979937353
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 11,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 5.907551482136439e-05,
+            "max_abs": 0.006200313568115234,
+            "cosine": 0.9999999982555756
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 12,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 4.562500862581064e-05,
+            "max_abs": 0.005513191223144531,
+            "cosine": 0.9999999989603006
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 13,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 3.912610650137012e-05,
+            "max_abs": 0.004723072052001953,
+            "cosine": 0.999999999234993
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 14,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 4.7970246238177624e-05,
+            "max_abs": 0.005093097686767578,
+            "cosine": 0.9999999988494287
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 15,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 3.828448928083278e-05,
+            "max_abs": 0.005086421966552734,
+            "cosine": 0.9999999992710386
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 16,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.423416853711391e-05,
+            "max_abs": 0.006073951721191406,
+            "cosine": 0.9999999979438369
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 17,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.445951195188471e-05,
+            "max_abs": 0.0041561126708984375,
+            "cosine": 0.999999997925015
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 18,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.429807149303327e-05,
+            "max_abs": 0.0033512115478515625,
+            "cosine": 0.9999999979345161
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 19,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.54332876386227e-05,
+            "max_abs": 0.00283050537109375,
+            "cosine": 0.9999999978616464
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 20,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.668623124375699e-05,
+            "max_abs": 0.002880096435546875,
+            "cosine": 0.9999999970600705
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 21,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.835652959969441e-05,
+            "max_abs": 0.00363922119140625,
+            "cosine": 0.9999999969361747
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 22,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.683622303646353e-05,
+            "max_abs": 0.008941650390625,
+            "cosine": 0.9999999978455649
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 23,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00010974584295682849,
+            "max_abs": 5.416572093963623e-06,
+            "cosine": 0.9999999941977724
+          },
+          "masks_passed": true,
+          "finite": true
+        }
+      ],
+      "encoder_output_sha256": "1754764734a6361d6d03e133e584ef60f8e232c4eab4cbd063995fb41bc39664",
+      "decoder": {
+        "accepted": true,
+        "model_ready": false,
+        "hardware_validated": false,
+        "status": 1,
+        "expected_status": 1,
+        "steps": 1,
+        "token_duration_frame_trace_equal": true,
+        "text_equal": true,
+        "text_utf8": "",
+        "expected_text_utf8": "",
+        "trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ]
+        ],
+        "expected_trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ]
+        ],
+        "all_states_finite": true,
+        "state_comparisons": [
+          {
+            "step": 0,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          }
+        ],
+        "maximum_state_relative_l2": 5.881014838991981e-06,
+        "maximum_cache_relative_l2": 2.6289770551331118e-05,
+        "encoder_projector_vs_dense": {
+          "relative_l2": 2.5472086570150695e-05,
+          "max_abs": 1.3887882232666016e-05,
+          "cosine": 0.9999999996756698
+        },
+        "state": [
+          1.0,
+          8192.0,
+          1.0,
+          1.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "state_sha256": "a7fd993a8a2c568f788684c37d088039cad9334b41a733e2a1168073092a7093",
+        "hidden_cell_cache_sha256": "c7554babe6d42121b369c27e469e4700ddd1f594ec7aa19bbb22feb0bd9b23ed",
+        "text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "checkpoint_record_sha256": {
+          "encoder_projector.weight": "98fccf408f092ab3b79692b2bf604af7d19638bd6d158ac984863b4f911b3fcc",
+          "encoder_projector.bias": "444e9e004a928b684b05b8eb498a03edd3aeff1aabeeb6866a1939f85c6dc64b",
+          "decoder.embedding.weight": "99eba1ec2bf6c52958d0ad6219ad2826364c49bd69a7ddfecaf11c4179f65c03",
+          "decoder.lstm.weight_ih_l0": "7c2d6befaecd46ee4a4bf963850973e7f9861eb24790f38e82826bf4e52b207f",
+          "decoder.lstm.bias_ih_l0": "f3c69cb615ec9dd5e2e70aab0e1311d3ab062f340776e01338e2f76675f3c821",
+          "decoder.lstm.weight_hh_l0": "1076b2c3643396e397027cf575733161e197c3c3a0320536adaac8ea1df17d8d",
+          "decoder.lstm.bias_hh_l0": "611fef3003f7737cad19825546ffb9f4ea9a15c35ce4d8b7e5606bb849f1c645",
+          "decoder.lstm.weight_ih_l1": "50e35fc400ec638002cf713e4c93da80cc44c89c38e2d28962df5105c2055ff4",
+          "decoder.lstm.bias_ih_l1": "570f1d1a538c93bfe3236c449ed1155378c7e8ba09fc1928a0ed312c3eaab1c6",
+          "decoder.lstm.weight_hh_l1": "93f84a87a0ed322245f60c92dbac25145b0fbf18cf41229acc82637cb83d9e77",
+          "decoder.lstm.bias_hh_l1": "e95c4611c220a5402066da9b73cf40f7fbdc0356e859e82e7229a92e75d14d03",
+          "decoder.decoder_projector.weight": "be43efd9e47539632fd41709137eda44eb02594a24e59c2e231c4ef3212fb411",
+          "decoder.decoder_projector.bias": "7c800be462fcf0fd8f222fb1ffabead153a865b66b4ede784f91cb6ce43dbdab",
+          "joint.head.weight": "fc66e8a76561883fce4a15fcd0085f620042610b7051a488193eed9b34012bb7",
+          "joint.head.bias": "82643b482b4cfe6871d5af2adeefff2b91c58ba525e55bc84fc71ca706813cac"
+        },
+        "budget": {
+          "dram_image_bytes": 34772224,
+          "immutable_prefix_bytes": 34636672,
+          "phases": [
+            {
+              "name": "reset_decoder",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 513
+            },
+            {
+              "name": "encoder_projector",
+              "instruction_words": 144,
+              "tmem_peak_live_words": 3714
+            },
+            {
+              "name": "bounded_device_tdt",
+              "instruction_words": 2376,
+              "tmem_peak_live_words": 25879
+            }
+          ],
+          "max_instruction_words": 2376,
+          "max_tmem_live_words": 25879,
+          "frames": 1,
+          "valid": 1,
+          "max_steps": 9,
+          "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+          "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+          "hardware_validated": false,
+          "model_ready": false
+        },
+        "actual_dispatches": 4,
+        "immutable_bytes_staged": 34636672,
+        "program_wait_bytes_uploaded": 13536,
+        "wait_checker_instructions": 0,
+        "host_encoder_reupload_or_model_compute_in_handoff": false,
+        "elapsed_seconds": 0.1600424749776721
+      },
+      "complete_canonical_dense_trace_and_text_equal": true,
+      "complete_native_torch_dense_trace_and_text_equal": true,
+      "canonical_reference_text": "",
+      "native_reference_text": "",
+      "canonical_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ]
+      ],
+      "native_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ]
+      ],
+      "total_dispatches": 693,
+      "immutable_bytes_staged": 1254720896,
+      "program_wait_bytes_uploaded": 846280,
+      "graph_high_water_bytes": 56851456,
+      "host_audio_preprocessing_or_model_compute_in_serving_path": false,
+      "elapsed_seconds": 19.086609660065733
+    },
+    {
+      "name": "silence_reduction_boundary",
+      "accepted": true,
+      "hardware_validated": false,
+      "model_ready": false,
+      "pcm_sha256": "9428e9b2c29630a92cb5792eebb11155973343f9d9350b8637f4f21c95ba7748",
+      "samples": 5280,
+      "frame_counts": {
+        "mel_stored": 34,
+        "mel_valid": 33,
+        "encoder_stored": 5,
+        "encoder_valid": 5
+      },
+      "frontend": {
+        "accepted": true,
+        "pcm_exact": true,
+        "preemphasis_exact": true,
+        "mask_exact": true,
+        "log_mel_vs_torch": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 1.0
+        },
+        "features_vs_pinned_arm_stats": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 1.0
+        },
+        "features_max_abs_vs_pinned_arm_stats": 0.0,
+        "features_vs_native_cpu_torch": {
+          "relative_l2": 0.0,
+          "max_abs": 0.0,
+          "cosine": 1.0
+        },
+        "native_cpu_vs_pinned_arm_stats_max_abs": 0.0,
+        "output_sha256": "c8064ded243948f75f6a5bba0dc2629f803718cf1756f57fef814f203f55a52b",
+        "budget": {
+          "dram_image_bytes": 1412736,
+          "immutable_prefix_bytes": 1251840,
+          "samples": 5280,
+          "stored_frames": 34,
+          "valid_frames": 33,
+          "raw_padded_bytes": 10624,
+          "phases": [
+            {
+              "name": "reset_frontend",
+              "instruction_words": 64,
+              "tmem_peak_live_words": 512
+            },
+            {
+              "name": "pcm16_exact_bytes",
+              "instruction_words": 208,
+              "tmem_peak_live_words": 2168
+            },
+            {
+              "name": "preemphasis_and_center_padding",
+              "instruction_words": 120,
+              "tmem_peak_live_words": 768
+            },
+            {
+              "name": "stft_direct_dft_power",
+              "instruction_words": 312,
+              "tmem_peak_live_words": 17472
+            },
+            {
+              "name": "slaney_mel_log",
+              "instruction_words": 1216,
+              "tmem_peak_live_words": 33409
+            },
+            {
+              "name": "valid_unbiased_normalization",
+              "instruction_words": 1208,
+              "tmem_peak_live_words": 107
+            }
+          ],
+          "max_instruction_words": 1216,
+          "max_tmem_live_words": 33409,
+          "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+          "dither": 0.0,
+          "hardware_validated": false,
+          "model_ready": false
+        }
+      },
+      "waveform_to_subsampler_handoff": {
+        "source": 1394304,
+        "destination": 4368384,
+        "bytes": 17408,
+        "reverse": false,
+        "host_activation_transform_or_reupload": false
+      },
+      "encoder_layers": [
+        {
+          "layer": 0,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.958890356874432e-05,
+            "max_abs": 0.0037841796875,
+            "cosine": 0.9999999968372831
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 1,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.649382361520784e-05,
+            "max_abs": 0.00489044189453125,
+            "cosine": 0.9999999953444917
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 2,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00011901159752012901,
+            "max_abs": 0.0075225830078125,
+            "cosine": 0.9999999929335834
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 3,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00013569917448988844,
+            "max_abs": 0.012233734130859375,
+            "cosine": 0.9999999908018818
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 4,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.0001528059405818596,
+            "max_abs": 0.013427734375,
+            "cosine": 0.9999999883251941
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 5,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00015833159943775014,
+            "max_abs": 0.02032470703125,
+            "cosine": 0.9999999874790276
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 6,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00017954920017457037,
+            "max_abs": 0.019256591796875,
+            "cosine": 0.9999999838912672
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 7,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00014960488556527263,
+            "max_abs": 0.0214691162109375,
+            "cosine": 0.9999999888730865
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 8,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00012872203682320343,
+            "max_abs": 0.0150604248046875,
+            "cosine": 0.9999999917243824
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 9,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00013527175328549058,
+            "max_abs": 0.0146331787109375,
+            "cosine": 0.9999999908510443
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 10,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00013453343816509635,
+            "max_abs": 0.01543426513671875,
+            "cosine": 0.9999999909522075
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 11,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00012128917480090853,
+            "max_abs": 0.01587963104248047,
+            "cosine": 0.9999999926448769
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 12,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.676088303247248e-05,
+            "max_abs": 0.014981269836425781,
+            "cosine": 0.9999999953186656
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 13,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.95081115777401e-05,
+            "max_abs": 0.01605224609375,
+            "cosine": 0.9999999959941854
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 14,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.953450759848214e-05,
+            "max_abs": 0.0149993896484375,
+            "cosine": 0.999999995046497
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 15,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.598692222877451e-05,
+            "max_abs": 0.021575927734375,
+            "cosine": 0.9999999963038972
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 16,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.0001158948422264868,
+            "max_abs": 0.014874935150146484,
+            "cosine": 0.9999999933144825
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 17,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.0001086570057821497,
+            "max_abs": 0.01256704330444336,
+            "cosine": 0.9999999940970948
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 18,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.935953375694295e-05,
+            "max_abs": 0.008855819702148438,
+            "cosine": 0.999999995078157
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 19,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.458058826159085e-05,
+            "max_abs": 0.0069103240966796875,
+            "cosine": 0.9999999955277845
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 20,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.969599913243429e-05,
+            "max_abs": 0.00457763671875,
+            "cosine": 0.9999999959811625
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 21,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.070045703691925e-05,
+            "max_abs": 0.00806427001953125,
+            "cosine": 0.9999999958996578
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 22,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.441332548827057e-05,
+            "max_abs": 0.016998291015625,
+            "cosine": 0.9999999972768401
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 23,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 0.00010747573846320677,
+            "max_abs": 9.251758456230164e-06,
+            "cosine": 0.9999999942252512
+          },
+          "masks_passed": true,
+          "finite": true
+        }
+      ],
+      "encoder_output_sha256": "a7cc3b39a0126f8db6e5f8b0eb215107fdd118760e103b40aeb2046fc80424e4",
+      "decoder": {
+        "accepted": true,
+        "model_ready": false,
+        "hardware_validated": false,
+        "status": 1,
+        "expected_status": 1,
+        "steps": 4,
+        "token_duration_frame_trace_equal": true,
+        "text_equal": true,
+        "text_utf8": "",
+        "expected_text_utf8": "",
+        "trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            2,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ]
+        ],
+        "expected_trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            2,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ]
+        ],
+        "all_states_finite": true,
+        "state_comparisons": [
+          {
+            "step": 0,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 1,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 2,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 3,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          }
+        ],
+        "maximum_state_relative_l2": 5.881014838991981e-06,
+        "maximum_cache_relative_l2": 2.6289770551331118e-05,
+        "encoder_projector_vs_dense": {
+          "relative_l2": 2.2299199475604347e-05,
+          "max_abs": 1.3709068298339844e-05,
+          "cosine": 0.9999999997518494
+        },
+        "state": [
+          5.0,
+          8192.0,
+          1.0,
+          4.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "state_sha256": "a238eded0ca08f0d6b8a6d0470cfc8008cd1085e4c574ccc0e70c6fbd5656b09",
+        "hidden_cell_cache_sha256": "c7554babe6d42121b369c27e469e4700ddd1f594ec7aa19bbb22feb0bd9b23ed",
+        "text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "checkpoint_record_sha256": {
+          "encoder_projector.weight": "98fccf408f092ab3b79692b2bf604af7d19638bd6d158ac984863b4f911b3fcc",
+          "encoder_projector.bias": "444e9e004a928b684b05b8eb498a03edd3aeff1aabeeb6866a1939f85c6dc64b",
+          "decoder.embedding.weight": "99eba1ec2bf6c52958d0ad6219ad2826364c49bd69a7ddfecaf11c4179f65c03",
+          "decoder.lstm.weight_ih_l0": "7c2d6befaecd46ee4a4bf963850973e7f9861eb24790f38e82826bf4e52b207f",
+          "decoder.lstm.bias_ih_l0": "f3c69cb615ec9dd5e2e70aab0e1311d3ab062f340776e01338e2f76675f3c821",
+          "decoder.lstm.weight_hh_l0": "1076b2c3643396e397027cf575733161e197c3c3a0320536adaac8ea1df17d8d",
+          "decoder.lstm.bias_hh_l0": "611fef3003f7737cad19825546ffb9f4ea9a15c35ce4d8b7e5606bb849f1c645",
+          "decoder.lstm.weight_ih_l1": "50e35fc400ec638002cf713e4c93da80cc44c89c38e2d28962df5105c2055ff4",
+          "decoder.lstm.bias_ih_l1": "570f1d1a538c93bfe3236c449ed1155378c7e8ba09fc1928a0ed312c3eaab1c6",
+          "decoder.lstm.weight_hh_l1": "93f84a87a0ed322245f60c92dbac25145b0fbf18cf41229acc82637cb83d9e77",
+          "decoder.lstm.bias_hh_l1": "e95c4611c220a5402066da9b73cf40f7fbdc0356e859e82e7229a92e75d14d03",
+          "decoder.decoder_projector.weight": "be43efd9e47539632fd41709137eda44eb02594a24e59c2e231c4ef3212fb411",
+          "decoder.decoder_projector.bias": "7c800be462fcf0fd8f222fb1ffabead153a865b66b4ede784f91cb6ce43dbdab",
+          "joint.head.weight": "fc66e8a76561883fce4a15fcd0085f620042610b7051a488193eed9b34012bb7",
+          "joint.head.bias": "82643b482b4cfe6871d5af2adeefff2b91c58ba525e55bc84fc71ca706813cac"
+        },
+        "budget": {
+          "dram_image_bytes": 35312896,
+          "immutable_prefix_bytes": 34636672,
+          "phases": [
+            {
+              "name": "reset_decoder",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 513
+            },
+            {
+              "name": "encoder_projector",
+              "instruction_words": 336,
+              "tmem_peak_live_words": 7432
+            },
+            {
+              "name": "bounded_device_tdt",
+              "instruction_words": 2376,
+              "tmem_peak_live_words": 25879
+            }
+          ],
+          "max_instruction_words": 2376,
+          "max_tmem_live_words": 25879,
+          "frames": 5,
+          "valid": 5,
+          "max_steps": 49,
+          "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+          "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+          "hardware_validated": false,
+          "model_ready": false
+        },
+        "actual_dispatches": 4,
+        "immutable_bytes_staged": 34636672,
+        "program_wait_bytes_uploaded": 14496,
+        "wait_checker_instructions": 0,
+        "host_encoder_reupload_or_model_compute_in_handoff": false,
+        "elapsed_seconds": 0.2755993789760396
+      },
+      "complete_canonical_dense_trace_and_text_equal": true,
+      "complete_native_torch_dense_trace_and_text_equal": true,
+      "canonical_reference_text": "",
+      "native_reference_text": "",
+      "canonical_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          2,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ]
+      ],
+      "native_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          2,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ]
+      ],
+      "total_dispatches": 693,
+      "immutable_bytes_staged": 1255507328,
+      "program_wait_bytes_uploaded": 1353504,
+      "graph_high_water_bytes": 56851456,
+      "host_audio_preprocessing_or_model_compute_in_serving_path": false,
+      "elapsed_seconds": 50.36632404499687
+    },
+    {
+      "name": "short_after_reset",
+      "accepted": true,
+      "hardware_validated": false,
+      "model_ready": false,
+      "pcm_sha256": "7f84e087aa28b5a33212af26a4273b4902761b2543afadc32c3236bf51ca3f74",
+      "samples": 8960,
+      "frame_counts": {
+        "mel_stored": 57,
+        "mel_valid": 56,
+        "encoder_stored": 8,
+        "encoder_valid": 7
+      },
+      "frontend": {
+        "accepted": true,
+        "pcm_exact": true,
+        "preemphasis_exact": true,
+        "mask_exact": true,
+        "log_mel_vs_torch": {
+          "relative_l2": 1.3231203585356717e-06,
+          "max_abs": 0.00030517578125,
+          "cosine": 0.9999999999991266
+        },
+        "features_vs_pinned_arm_stats": {
+          "relative_l2": 3.928418262055887e-06,
+          "max_abs": 7.808208465576172e-05,
+          "cosine": 0.9999999999922852
+        },
+        "features_max_abs_vs_pinned_arm_stats": 7.808208465576172e-05,
+        "features_vs_native_cpu_torch": {
+          "relative_l2": 3.930208419827704e-06,
+          "max_abs": 7.784366607666016e-05,
+          "cosine": 0.9999999999922783
+        },
+        "native_cpu_vs_pinned_arm_stats_max_abs": 9.5367431640625e-07,
+        "output_sha256": "de7660c1f6005877fd5c7ba77363506d8499f042741ad1f6ff236c78ad199a7b",
+        "budget": {
+          "dram_image_bytes": 1520000,
+          "immutable_prefix_bytes": 1251840,
+          "samples": 8960,
+          "stored_frames": 57,
+          "valid_frames": 56,
+          "raw_padded_bytes": 17920,
+          "phases": [
+            {
+              "name": "reset_frontend",
+              "instruction_words": 64,
+              "tmem_peak_live_words": 512
+            },
+            {
+              "name": "pcm16_exact_bytes",
+              "instruction_words": 208,
+              "tmem_peak_live_words": 2168
+            },
+            {
+              "name": "preemphasis_and_center_padding",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 768
+            },
+            {
+              "name": "stft_direct_dft_power",
+              "instruction_words": 312,
+              "tmem_peak_live_words": 17472
+            },
+            {
+              "name": "slaney_mel_log",
+              "instruction_words": 1216,
+              "tmem_peak_live_words": 33409
+            },
+            {
+              "name": "valid_unbiased_normalization",
+              "instruction_words": 1424,
+              "tmem_peak_live_words": 173
+            }
+          ],
+          "max_instruction_words": 1424,
+          "max_tmem_live_words": 33409,
+          "spectral_algorithm": "FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode",
+          "dither": 0.0,
+          "hardware_validated": false,
+          "model_ready": false
+        }
+      },
+      "waveform_to_subsampler_handoff": {
+        "source": 1489792,
+        "destination": 4368384,
+        "bytes": 29184,
+        "reverse": false,
+        "host_activation_transform_or_reupload": false
+      },
+      "encoder_layers": [
+        {
+          "layer": 0,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.408051842368579e-05,
+            "max_abs": 0.0026826858520507812,
+            "cosine": 0.9999999979479288
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 1,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.218369368199497e-05,
+            "max_abs": 0.0040912628173828125,
+            "cosine": 0.9999999966261303
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 2,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.226338171330434e-05,
+            "max_abs": 0.004242420196533203,
+            "cosine": 0.9999999957455541
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 3,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 9.040169509284315e-05,
+            "max_abs": 0.004431724548339844,
+            "cosine": 0.9999999959138842
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 4,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.912575427847719e-05,
+            "max_abs": 0.005260467529296875,
+            "cosine": 0.9999999960302558
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 5,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.922341694592056e-05,
+            "max_abs": 0.0069789886474609375,
+            "cosine": 0.9999999960210052
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 6,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.446764296358006e-05,
+            "max_abs": 0.0063266754150390625,
+            "cosine": 0.9999999964340995
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 7,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.414507334762812e-05,
+            "max_abs": 0.005565643310546875,
+            "cosine": 0.9999999964623567
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 8,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.818777477773494e-05,
+            "max_abs": 0.006633758544921875,
+            "cosine": 0.9999999961143183
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 9,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.98108730789527e-05,
+            "max_abs": 0.006396293640136719,
+            "cosine": 0.9999999959671305
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 10,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.955432851730332e-05,
+            "max_abs": 0.006865501403808594,
+            "cosine": 0.9999999959903538
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 11,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.58551748020736e-05,
+            "max_abs": 0.0074558258056640625,
+            "cosine": 0.9999999963146188
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 12,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.849310419435862e-05,
+            "max_abs": 0.0067901611328125,
+            "cosine": 0.99999999692099
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 13,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.460582285876907e-05,
+            "max_abs": 0.0098876953125,
+            "cosine": 0.9999999972170597
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 14,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.757732321973294e-05,
+            "max_abs": 0.0103759765625,
+            "cosine": 0.9999999969908795
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 15,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.152352622525573e-05,
+            "max_abs": 0.014251708984375,
+            "cosine": 0.9999999974560124
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 16,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.563236514542705e-05,
+            "max_abs": 0.0058231353759765625,
+            "cosine": 0.999999997142522
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 17,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.613976319795771e-05,
+            "max_abs": 0.005552530288696289,
+            "cosine": 0.9999999971029293
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 18,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.289514192573736e-05,
+            "max_abs": 0.0045623779296875,
+            "cosine": 0.999999997344369
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 19,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.174277758416189e-05,
+            "max_abs": 0.0041027069091796875,
+            "cosine": 0.9999999974267373
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 20,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.595720085532955e-05,
+            "max_abs": 0.0049724578857421875,
+            "cosine": 0.999999997115348
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 21,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 7.748503056754385e-05,
+            "max_abs": 0.004395484924316406,
+            "cosine": 0.9999999969980378
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 22,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 6.210802700845761e-05,
+            "max_abs": 0.0063323974609375,
+            "cosine": 0.99999999807214
+          },
+          "masks_passed": true,
+          "finite": true
+        },
+        {
+          "layer": 23,
+          "encoder_vs_canonical_dense": {
+            "relative_l2": 8.650746463955875e-05,
+            "max_abs": 6.601214408874512e-06,
+            "cosine": 0.9999999962586187
+          },
+          "masks_passed": true,
+          "finite": true
+        }
+      ],
+      "encoder_output_sha256": "2f44a11483337742ff42195df3a234aaf79651f8771fe1f821080949cdc09e42",
+      "decoder": {
+        "accepted": true,
+        "model_ready": false,
+        "hardware_validated": false,
+        "status": 1,
+        "expected_status": 1,
+        "steps": 7,
+        "token_duration_frame_trace_equal": true,
+        "text_equal": true,
+        "text_utf8": "",
+        "expected_text_utf8": "",
+        "trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            1,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            3,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ],
+          [
+            8192,
+            1,
+            5,
+            0
+          ],
+          [
+            8192,
+            1,
+            6,
+            0
+          ]
+        ],
+        "expected_trace": [
+          [
+            8192,
+            1,
+            0,
+            0
+          ],
+          [
+            8192,
+            1,
+            1,
+            0
+          ],
+          [
+            8192,
+            1,
+            2,
+            0
+          ],
+          [
+            8192,
+            1,
+            3,
+            0
+          ],
+          [
+            8192,
+            1,
+            4,
+            0
+          ],
+          [
+            8192,
+            1,
+            5,
+            0
+          ],
+          [
+            8192,
+            1,
+            6,
+            0
+          ]
+        ],
+        "all_states_finite": true,
+        "state_comparisons": [
+          {
+            "step": 0,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 1,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 2,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 3,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 4,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 5,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          },
+          {
+            "step": 6,
+            "state_vs_dense": {
+              "relative_l2": 5.881014838991981e-06,
+              "max_abs": 3.349781036376953e-05,
+              "cosine": 0.9999999999827113
+            },
+            "cache_vs_dense": {
+              "relative_l2": 2.6289770551331118e-05,
+              "max_abs": 0.00014030933380126953,
+              "cosine": 0.9999999996911846
+            }
+          }
+        ],
+        "maximum_state_relative_l2": 5.881014838991981e-06,
+        "maximum_cache_relative_l2": 2.6289770551331118e-05,
+        "encoder_projector_vs_dense": {
+          "relative_l2": 2.6648577069311705e-05,
+          "max_abs": 1.7881393432617188e-05,
+          "cosine": 0.9999999996453357
+        },
+        "state": [
+          7.0,
+          8192.0,
+          1.0,
+          7.0,
+          0.0,
+          1.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "state_sha256": "cbc04c1345ca220632f35c1c392e75e9d6e379d68a1954ea8c036a81ed94359b",
+        "hidden_cell_cache_sha256": "c7554babe6d42121b369c27e469e4700ddd1f594ec7aa19bbb22feb0bd9b23ed",
+        "text_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "checkpoint_record_sha256": {
+          "encoder_projector.weight": "98fccf408f092ab3b79692b2bf604af7d19638bd6d158ac984863b4f911b3fcc",
+          "encoder_projector.bias": "444e9e004a928b684b05b8eb498a03edd3aeff1aabeeb6866a1939f85c6dc64b",
+          "decoder.embedding.weight": "99eba1ec2bf6c52958d0ad6219ad2826364c49bd69a7ddfecaf11c4179f65c03",
+          "decoder.lstm.weight_ih_l0": "7c2d6befaecd46ee4a4bf963850973e7f9861eb24790f38e82826bf4e52b207f",
+          "decoder.lstm.bias_ih_l0": "f3c69cb615ec9dd5e2e70aab0e1311d3ab062f340776e01338e2f76675f3c821",
+          "decoder.lstm.weight_hh_l0": "1076b2c3643396e397027cf575733161e197c3c3a0320536adaac8ea1df17d8d",
+          "decoder.lstm.bias_hh_l0": "611fef3003f7737cad19825546ffb9f4ea9a15c35ce4d8b7e5606bb849f1c645",
+          "decoder.lstm.weight_ih_l1": "50e35fc400ec638002cf713e4c93da80cc44c89c38e2d28962df5105c2055ff4",
+          "decoder.lstm.bias_ih_l1": "570f1d1a538c93bfe3236c449ed1155378c7e8ba09fc1928a0ed312c3eaab1c6",
+          "decoder.lstm.weight_hh_l1": "93f84a87a0ed322245f60c92dbac25145b0fbf18cf41229acc82637cb83d9e77",
+          "decoder.lstm.bias_hh_l1": "e95c4611c220a5402066da9b73cf40f7fbdc0356e859e82e7229a92e75d14d03",
+          "decoder.decoder_projector.weight": "be43efd9e47539632fd41709137eda44eb02594a24e59c2e231c4ef3212fb411",
+          "decoder.decoder_projector.bias": "7c800be462fcf0fd8f222fb1ffabead153a865b66b4ede784f91cb6ce43dbdab",
+          "joint.head.weight": "fc66e8a76561883fce4a15fcd0085f620042610b7051a488193eed9b34012bb7",
+          "joint.head.bias": "82643b482b4cfe6871d5af2adeefff2b91c58ba525e55bc84fc71ca706813cac"
+        },
+        "budget": {
+          "dram_image_bytes": 35718272,
+          "immutable_prefix_bytes": 34636672,
+          "phases": [
+            {
+              "name": "reset_decoder",
+              "instruction_words": 80,
+              "tmem_peak_live_words": 513
+            },
+            {
+              "name": "encoder_projector",
+              "instruction_words": 336,
+              "tmem_peak_live_words": 7432
+            },
+            {
+              "name": "bounded_device_tdt",
+              "instruction_words": 2376,
+              "tmem_peak_live_words": 25879
+            }
+          ],
+          "max_instruction_words": 2376,
+          "max_tmem_live_words": 25879,
+          "frames": 8,
+          "valid": 7,
+          "max_steps": 79,
+          "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+          "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+          "hardware_validated": false,
+          "model_ready": false
+        },
+        "actual_dispatches": 4,
+        "immutable_bytes_staged": 34636672,
+        "program_wait_bytes_uploaded": 14496,
+        "wait_checker_instructions": 0,
+        "host_encoder_reupload_or_model_compute_in_handoff": false,
+        "elapsed_seconds": 0.37842165504116565
+      },
+      "complete_canonical_dense_trace_and_text_equal": true,
+      "complete_native_torch_dense_trace_and_text_equal": true,
+      "canonical_reference_text": "",
+      "native_reference_text": "",
+      "canonical_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          1,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          3,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ],
+        [
+          8192,
+          1,
+          5,
+          0
+        ],
+        [
+          8192,
+          1,
+          6,
+          0
+        ]
+      ],
+      "native_reference_trace": [
+        [
+          8192,
+          1,
+          0,
+          0
+        ],
+        [
+          8192,
+          1,
+          1,
+          0
+        ],
+        [
+          8192,
+          1,
+          2,
+          0
+        ],
+        [
+          8192,
+          1,
+          3,
+          0
+        ],
+        [
+          8192,
+          1,
+          4,
+          0
+        ],
+        [
+          8192,
+          1,
+          5,
+          0
+        ],
+        [
+          8192,
+          1,
+          6,
+          0
+        ]
+      ],
+      "total_dispatches": 693,
+      "immutable_bytes_staged": 1256097152,
+      "program_wait_bytes_uploaded": 1327112,
+      "graph_high_water_bytes": 56851456,
+      "host_audio_preprocessing_or_model_compute_in_serving_path": false,
+      "elapsed_seconds": 72.54820632899646
+    }
+  ],
+  "reset_bitwise_passed": true,
+  "accepted": true,
+  "source_sha256": {
+    "opentpu/asr/phonon2_waveform.py": "da77289a61987d54a08505be6b7c292493a363b9547fdb53fe57734242aaffc2",
+    "tools/phonon2_waveform_audit.py": "5cf91f0f3a4391307361bbd074c3c0d5a819577147e2a36fa7e5d4aae010c060",
+    "tools/phonon2_qualify_waveform.py": "02c96f67643c08ad766a58a85387450c9769673fc45d9de53353b77dc1e0d5f6",
+    "docs/phonon2/waveform_coefficients.npz": "e6e48a9ed4f366b765cfb50f955f300552534aa60f199976297251627c9c6dfb",
+    "docs/phonon2/waveform_coefficients.json": "b3591e6c1ad16fd1c64878154886b8e609f1e82190e13039b0c63a63741ee5e4",
+    "docs/phonon2/waveform_prior_binding.json": "a5a7a71ca6e72b1ce9797936ec9c39abf092ab382fe6ce52d69e360da81563b7"
+  },
+  "environment": {
+    "python": "3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]",
+    "numpy": "2.5.4",
+    "torch": "2.14.1+cpu",
+    "torch_git": "5c4886908584029761b579af026dcfb627c84070"
+  },
+  "delivered_source_sha256": {
+    "opentpu/asr/phonon2_waveform.py": "eda3c8a59385ff0255ac6c95081f817e02e89da4e3bc9a463739750d213626a6",
+    "tools/phonon2_waveform_audit.py": "5cf91f0f3a4391307361bbd074c3c0d5a819577147e2a36fa7e5d4aae010c060",
+    "tools/phonon2_qualify_waveform.py": "02c96f67643c08ad766a58a85387450c9769673fc45d9de53353b77dc1e0d5f6",
+    "docs/phonon2/waveform_coefficients.npz": "e6e48a9ed4f366b765cfb50f955f300552534aa60f199976297251627c9c6dfb",
+    "docs/phonon2/waveform_coefficients.json": "b3591e6c1ad16fd1c64878154886b8e609f1e82190e13039b0c63a63741ee5e4",
+    "docs/phonon2/waveform_prior_binding.json": "a5a7a71ca6e72b1ce9797936ec9c39abf092ab382fe6ce52d69e360da81563b7"
+  },
+  "comment_only_source_equivalence": "docs/phonon2/waveform_source_equivalence.json",
+  "capture": {
+    "command_id": "e810832e-a67f-4734-a1e5-b3beded9235d",
+    "status": "Success",
+    "instance_id": "i-0c78de2253f66519d",
+    "execution_started_utc": "2026-10-23T13:21:37.634Z",
+    "execution_finished_utc": "2026-10-23T13:39:56.634Z",
+    "original_receipt_sha256": "4cf4f43de68e9bbce198472b2527ff0938517e9c3ce298ea4a6ed628c3beb6b0",
+    "compressed_transfer_sha256": "1c8601a81e00f0bcf42adcc80ff01622158848c1e8388115d07353e034d1a87c",
+    "recovery": "Original EC2 command inspected after environment reconnection; no duplicate qualification execution",
+    "hardware_access": false,
+    "new_resources": false
+  },
+  "local_regression": {
+    "result": "193 passed, 1 skipped (Transformers absent)",
+    "source": "bound shared runtime first, isolated ASR package overlay",
+    "coverage": "Every PCM16 value; retained frontend goldens; silence normalization through30s; reset; overlap both directions; learned encoder/TDT regressions; max-context compile",
+    "comment_fix": "Executable AST and every instruction/image byte match at320,5280,112960,480000 samples"
+  }
+}

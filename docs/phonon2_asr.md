@@ -1,9 +1,10 @@
 # Phonon-2: FPGA-only ASR readiness
 
-Status: **blocked; the learned subsampler, 24-layer encoder and LSTM/TDT/text
-path are qualified in the shared-profile ISA simulator**. The latest
-[TDT report](phonon2_tdt.md) includes real-checkpoint state/trace/text parity,
-the explicit source policy, reset and a reproducible common-runtime manifest.
+Status: **blocked; the complete raw-PCM-to-text graph is qualified in the
+shared-profile ISA simulator**. The latest [waveform report](phonon2_waveform.md)
+includes exact PCM conversion, source statistics, full-model transcript/trace
+agreement, boundary/reset results and actual resource budgets. The earlier
+[TDT report](phonon2_tdt.md) documents decoder policy and state qualification.
 The [encoder report](phonon2_encoder.md) binds its evidence to the shared Gemma
 profile and documents the program/weight residency scheme. The previous
 [subsampler report](phonon2_subsampler.md) and
@@ -153,9 +154,9 @@ the eventual model must keep intermediate activations on device.
 | Total proposed weight storage | 1,238,983,188 bytes before allocation alignment; graph scratch/programs/outputs additional |
 | Dense reference parameter storage | 2,508,032,536 bytes FP32; 1,254,016,268 bytes FP16 |
 
-The current loaded image was deliberately not queried. The Inferlab worker
-knows burst200 and wideport150 profiles, but that is not fresh device identity
-evidence. Qualification must read and check actual capabilities within a
+The current loaded image was deliberately not queried. The shared target's
+source declaration is not fresh device identity evidence. Physical acceptance
+must read and check actual capabilities within a
 parent-coordinated lock window. Memory arithmetic alone does not prove full
 graph fit, bandwidth, timing closure or usable ASR latency.
 
@@ -163,8 +164,8 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 
 | Missing integration | Existing-ISA possibility / exact gap |
 |---|---|
-| Waveform frontend | No FFT/STFT/mel ASR kernels. FP32 add/mul/reductions/log2/rsqrt can express the math, but fixed-coefficient transforms, permutations, masks and normalization need lowering and validation. No native FFT or PCM16 conversion opcode. |
-| Learned subsampling | The complete Conv2D/depthwise/pointwise/projection path and handoff through all 24 layers are shared-profile ISA-qualified with real speech. Device waveform frontend and physical runtime integration remain missing. |
+| Waveform frontend | Complete PCM16 conversion, preemphasis, DFT/STFT power, Slaney mel/log, source normalization and masks are shared-profile ISA-qualified and chained to the model. Physical PCM ingress and execution remain unverified. |
+| Learned subsampling | The complete path and waveform-to-model handoff pass ISA tests, including overlapping device copies. Physical runtime integration remains unverified. |
 | FastConformer | All 24 layers with tiled full-context attention, device mask handoff, one-slot residency and reset are shared-profile ISA-qualified. Physical loading/execution and larger-context numerical coverage remain gated. |
 | LSTM predictor | INT6 embedding, both layers and Transformers cache behavior are shared-profile ISA-qualified with real weights. Physical state/cache residency remains unverified. |
 | TDT and text output | Autonomous token/duration selection, blank/EOS/watchdog behavior and device-selected UTF-8 segments pass real-speech trace/text parity and reset. Physical loader/output I/O integration remains unverified. |
@@ -176,10 +177,11 @@ subsampler and tiled 24-layer graph are now qualified with real checkpoint
 weights on `f2-hbm:p4rl8a64c150`; see the encoder report for precise scope.
 The TDT follow-up explicitly chooses the pinned Transformers cache, duration,
 EOS and tokenizer rules, with an incomplete-result watchdog instead of the
-Fermion CUDA ten-symbol forced advance. Next implement the bounded device
-waveform frontend and its handoff into the subsampler, then integrate the
-physical shared-image loader and validate complete features, encoder outputs,
-decoder states, tokens and transcripts against the selected reference. Only if an existing
+Fermion CUDA ten-symbol forced advance. The waveform follow-up completes the
+device graph and matches complete reference traces/text on real speech,
+silence boundaries and reset. Next integrate the physical shared-image loader,
+PCM ingress and output I/O, then validate complete features, encoder outputs,
+decoder states, tokens and transcripts on the card. Only if an existing
 instruction cannot implement a required operation or measured budgets fail,
 report the exact shared-image capability gap. Model-specific image changes are
 outside the user's shared-image requirement; no synthesis is authorized here.
