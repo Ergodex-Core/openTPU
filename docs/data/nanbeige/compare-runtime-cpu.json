@@ -1,0 +1,2950 @@
+{
+  "aggregates": {
+    "hybrid": {
+      "acceptance_rate_median": 0.7777777777777778,
+      "decode_seconds_median": 2.113742117944639,
+      "decode_tps_median": 4.257851477526228,
+      "draft_cycles_median": 0.0,
+      "draft_seconds_median": 0.9100144809344783,
+      "prefill_seconds_median": 4.563103555992711,
+      "samples": 3,
+      "target_cycles_median": 952898152.0,
+      "target_decode_cycles_median": 190722499.0,
+      "target_prefill_cycles_median": 762194464.0,
+      "target_seconds_median": 5.767184830096085,
+      "tokens_consistent": true,
+      "total_seconds_median": 6.678172137006186
+    },
+    "target": {
+      "acceptance_rate_median": null,
+      "decode_seconds_median": 3.0455408489797264,
+      "decode_tps_median": 2.9551401364440903,
+      "draft_cycles_median": null,
+      "draft_seconds_median": null,
+      "prefill_seconds_median": 4.338505617983174,
+      "samples": 3,
+      "target_cycles_median": 1291635745.0,
+      "target_decode_cycles_median": 529460597.0,
+      "target_prefill_cycles_median": 762196184.0,
+      "target_seconds_median": null,
+      "tokens_consistent": true,
+      "total_seconds_median": 7.384047886996996
+    }
+  },
+  "architecture": {
+    "ACT_BLOCKS": 128,
+    "ACT_ROWS": 16,
+    "D": 128,
+    "DRAM_BYTES": 4294967296,
+    "DSTEP": true,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": true,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "backend": "board",
+  "board_info": {
+    "D": 128,
+    "LANES": 8,
+    "MCOLS": 4,
+    "act_rows": 16,
+    "build_id": 2118297126,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "caps": {
+      "act_rows": true,
+      "args": true,
+      "chash": true,
+      "ddr": false,
+      "dstep": true,
+      "gen": true,
+      "hostcal": false,
+      "i2c": false,
+      "mx": true,
+      "pair": true,
+      "pq_window": 1024,
+      "stream": true,
+      "temp": true,
+      "trace": true,
+      "trace_depth": 16384,
+      "w4": true,
+      "waitw": true
+    },
+    "caps2": {
+      "gather": true
+    },
+    "cfg": {
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "MXU_IMPL": 2,
+      "S": 1,
+      "SEQ_WC": 1,
+      "TMEM_IMPL": 3,
+      "TMEM_WORDS": 65536,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "channel_bytes": 2147483648,
+      "channels": 2,
+      "hash": 1341988375,
+      "platform": 3
+    },
+    "core_khz": 200000,
+    "ddr_mts": null,
+    "regmap": 5,
+    "running": false,
+    "status": 104,
+    "temp_c": null
+  },
+  "cap": 128,
+  "capture_layers": [
+    2,
+    11,
+    22,
+    33,
+    41
+  ],
+  "command": "benchmark",
+  "comparison": {
+    "baseline_includes_capture_writes": true,
+    "cache_note": "shared Engine; hybrid may reuse target compilation caches",
+    "exact_target_tokens_match": true,
+    "exact_target_tokens_match_by_repeat": [
+      true,
+      true,
+      true
+    ],
+    "median_decode_tps_ratio": 1.44082895596609,
+    "observed_decode_tps_ratio": 1.44082895596609,
+    "order": [
+      "target",
+      "hybrid"
+    ],
+    "same_target_image_and_precision": true
+  },
+  "draft_backend_selected": "cpu",
+  "draft_fully_on_fpga": false,
+  "draft_setup_seconds": 1.9304067029734142,
+  "fpga_draft_hardware_executed": false,
+  "fpga_draft_implemented": false,
+  "max_new_tokens": 16,
+  "measured_runs": [
+    {
+      "iteration": 0,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.111303915968165,
+          "decode_tokens": 9,
+          "decode_tps": 4.262768581979794,
+          "draft_backend": "numpy-fp32-reference",
+          "draft_calls": 3,
+          "draft_cycles": 0,
+          "draft_cycles_are_hardware_measured": false,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [],
+          "draft_seconds": 0.9094745249603875,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.566783838963602,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187476,
+              "b_writes": 40904,
+              "cycles": 63791638,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189053,
+              "b_writes": 40904,
+              "cycles": 63794305,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187990,
+              "b_writes": 40904,
+              "cycles": 63817698,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188204,
+              "b_writes": 40904,
+              "cycles": 63782577,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188524,
+              "b_writes": 40904,
+              "cycles": 64190761,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187569,
+              "b_writes": 40904,
+              "cycles": 64195372,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189699,
+              "b_writes": 40904,
+              "cycles": 64191348,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187427,
+              "b_writes": 40904,
+              "cycles": 64196481,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186417,
+              "b_writes": 40904,
+              "cycles": 63785477,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186678,
+              "b_writes": 40904,
+              "cycles": 63808927,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188047,
+              "b_writes": 40904,
+              "cycles": 63787034,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18299,
+              "b_writes": 5672,
+              "cycles": 58823559,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38160,
+              "b_writes": 22688,
+              "cycles": 63369858,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37971,
+              "b_writes": 22688,
+              "cycles": 63676053,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38251,
+              "b_writes": 22688,
+              "cycles": 63678683,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952889771,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190724594,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762165177,
+          "target_prefill_runs": 12,
+          "target_seconds": 5.767184830096085,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.678172137006186
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.9178241859772243,
+          "decode_tokens": 9,
+          "decode_tps": 3.0844901633392148,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.181948813027702,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188890,
+              "b_writes": 40904,
+              "cycles": 63774246,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185913,
+              "b_writes": 40904,
+              "cycles": 63775227,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 190017,
+              "b_writes": 40904,
+              "cycles": 63803513,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188672,
+              "b_writes": 40904,
+              "cycles": 63820389,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 190617,
+              "b_writes": 40904,
+              "cycles": 64197119,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187838,
+              "b_writes": 40904,
+              "cycles": 64194108,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187157,
+              "b_writes": 40904,
+              "cycles": 64193183,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 184890,
+              "b_writes": 40904,
+              "cycles": 64191752,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188715,
+              "b_writes": 40904,
+              "cycles": 63799981,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187442,
+              "b_writes": 40904,
+              "cycles": 63813019,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187649,
+              "b_writes": 40904,
+              "cycles": 63788131,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18221,
+              "b_writes": 5672,
+              "cycles": 58824480,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18501,
+              "b_writes": 5672,
+              "cycles": 58822771,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18487,
+              "b_writes": 5672,
+              "cycles": 58822863,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18421,
+              "b_writes": 5672,
+              "cycles": 58823212,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18649,
+              "b_writes": 5672,
+              "cycles": 58829571,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18511,
+              "b_writes": 5672,
+              "cycles": 58831057,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18542,
+              "b_writes": 5672,
+              "cycles": 58833164,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18465,
+              "b_writes": 5672,
+              "cycles": 58830848,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18420,
+              "b_writes": 5672,
+              "cycles": 58833352,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18600,
+              "b_writes": 5672,
+              "cycles": 58833759,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291635745,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529460597,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762175148,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.099775349022821
+        }
+      }
+    },
+    {
+      "iteration": 1,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.133611358003691,
+          "decode_tokens": 9,
+          "decode_tps": 4.218200266997468,
+          "draft_backend": "numpy-fp32-reference",
+          "draft_calls": 3,
+          "draft_cycles": 0,
+          "draft_cycles_are_hardware_measured": false,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [],
+          "draft_seconds": 0.9105498759890907,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.555421146971639,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185856,
+              "b_writes": 40904,
+              "cycles": 63815404,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189701,
+              "b_writes": 40904,
+              "cycles": 63791730,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187356,
+              "b_writes": 40904,
+              "cycles": 63791880,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189104,
+              "b_writes": 40904,
+              "cycles": 63784110,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187772,
+              "b_writes": 40904,
+              "cycles": 64189594,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187385,
+              "b_writes": 40904,
+              "cycles": 64199735,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189915,
+              "b_writes": 40904,
+              "cycles": 64191404,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188261,
+              "b_writes": 40904,
+              "cycles": 64201849,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187732,
+              "b_writes": 40904,
+              "cycles": 63810117,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187666,
+              "b_writes": 40904,
+              "cycles": 63798903,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188686,
+              "b_writes": 40904,
+              "cycles": 63830789,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18289,
+              "b_writes": 5672,
+              "cycles": 58819247,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38003,
+              "b_writes": 22688,
+              "cycles": 63375918,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38012,
+              "b_writes": 22688,
+              "cycles": 63674553,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37850,
+              "b_writes": 22688,
+              "cycles": 63672028,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952947261,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190722499,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762224762,
+          "target_prefill_runs": 12,
+          "target_seconds": 5.777024392096791,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.6891056669992395
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 3.045569740002975,
+          "decode_tokens": 9,
+          "decode_tps": 2.955112103258292,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.341773569001816,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187134,
+              "b_writes": 40904,
+              "cycles": 63797371,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188753,
+              "b_writes": 40904,
+              "cycles": 63772499,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186761,
+              "b_writes": 40904,
+              "cycles": 63792273,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188677,
+              "b_writes": 40904,
+              "cycles": 63803408,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188155,
+              "b_writes": 40904,
+              "cycles": 64197921,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186093,
+              "b_writes": 40904,
+              "cycles": 64190608,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188222,
+              "b_writes": 40904,
+              "cycles": 64192258,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188171,
+              "b_writes": 40904,
+              "cycles": 64195667,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187508,
+              "b_writes": 40904,
+              "cycles": 63814072,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187203,
+              "b_writes": 40904,
+              "cycles": 63816128,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189206,
+              "b_writes": 40904,
+              "cycles": 63801873,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18475,
+              "b_writes": 5672,
+              "cycles": 58823324,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18316,
+              "b_writes": 5672,
+              "cycles": 58819609,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18422,
+              "b_writes": 5672,
+              "cycles": 58827174,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18417,
+              "b_writes": 5672,
+              "cycles": 58827495,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18318,
+              "b_writes": 5672,
+              "cycles": 58835496,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18463,
+              "b_writes": 5672,
+              "cycles": 58834193,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18544,
+              "b_writes": 5672,
+              "cycles": 58832855,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18662,
+              "b_writes": 5672,
+              "cycles": 58834088,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18544,
+              "b_writes": 5672,
+              "cycles": 58833536,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18288,
+              "b_writes": 5672,
+              "cycles": 58828834,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291670682,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529473280,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762197402,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.387344857968856
+        }
+      }
+    },
+    {
+      "iteration": 2,
+      "runs": {
+        "hybrid": {
+          "acceptance_rate": 0.7777777777777778,
+          "accepted_tokens": 7,
+          "compile_fallbacks": 0,
+          "computed_draft_tokens": 9,
+          "computed_query_tokens": 21,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 2.113742117944639,
+          "decode_tokens": 9,
+          "decode_tps": 4.257851477526228,
+          "draft_backend": "numpy-fp32-reference",
+          "draft_calls": 3,
+          "draft_cycles": 0,
+          "draft_cycles_are_hardware_measured": false,
+          "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+          "draft_query_tokens": 7,
+          "draft_raw_runs": [],
+          "draft_seconds": 0.9100144809344783,
+          "generated_tokens": 10,
+          "iterations": [
+            {
+              "accepted": 3,
+              "committed_position": 49,
+              "draft_queries": 7,
+              "emitted": 4,
+              "position": 45,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 1,
+              "committed_position": 51,
+              "draft_queries": 7,
+              "emitted": 2,
+              "position": 49,
+              "proposed": 3,
+              "verify_rows": 4
+            },
+            {
+              "accepted": 3,
+              "committed_position": 55,
+              "draft_queries": 7,
+              "emitted": 3,
+              "position": 51,
+              "proposed": 3,
+              "verify_rows": 4
+            }
+          ],
+          "max_verify_draft_tokens": 3,
+          "prefill_seconds": 4.563103555992711,
+          "prompt_tokens": 45,
+          "proposed_tokens": 9,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186641,
+              "b_writes": 40904,
+              "cycles": 63787227,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186844,
+              "b_writes": 40904,
+              "cycles": 63796731,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188753,
+              "b_writes": 40904,
+              "cycles": 63800028,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189156,
+              "b_writes": 40904,
+              "cycles": 63789143,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188566,
+              "b_writes": 40904,
+              "cycles": 64194673,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188635,
+              "b_writes": 40904,
+              "cycles": 64199447,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185817,
+              "b_writes": 40904,
+              "cycles": 64193825,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185453,
+              "b_writes": 40904,
+              "cycles": 64194382,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188725,
+              "b_writes": 40904,
+              "cycles": 63819422,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188026,
+              "b_writes": 40904,
+              "cycles": 63787452,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186731,
+              "b_writes": 40904,
+              "cycles": 63809088,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18392,
+              "b_writes": 5672,
+              "cycles": 58823046,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38031,
+              "b_writes": 22688,
+              "cycles": 63353566,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 37829,
+              "b_writes": 22688,
+              "cycles": 63675173,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 53966460,
+              "b_stall": 38005,
+              "b_writes": 22688,
+              "cycles": 63674949,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                77967
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_calls": 15,
+          "target_cycles": 952898152,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 190703688,
+          "target_decode_runs": 3,
+          "target_prefill_cycles": 762194464,
+          "target_prefill_runs": 12,
+          "target_seconds": 5.765356533054728,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 6.676928555010818
+        },
+        "target": {
+          "compile_fallbacks": 0,
+          "cycles_are_hardware_measured": true,
+          "decode_seconds": 3.0455408489797264,
+          "decode_tokens": 9,
+          "decode_tps": 2.9551401364440903,
+          "draft_backend": null,
+          "generated_tokens": 10,
+          "prefill_seconds": 4.338505617983174,
+          "raw_runs": [
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188294,
+              "b_writes": 40904,
+              "cycles": 63799728,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187530,
+              "b_writes": 40904,
+              "cycles": 63785099,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186635,
+              "b_writes": 40904,
+              "cycles": 63775878,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 185934,
+              "b_writes": 40904,
+              "cycles": 63799443,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188083,
+              "b_writes": 40904,
+              "cycles": 64195553,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 188770,
+              "b_writes": 40904,
+              "cycles": 64198161,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 189073,
+              "b_writes": 40904,
+              "cycles": 64190436,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187587,
+              "b_writes": 40904,
+              "cycles": 64191805,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 184945,
+              "b_writes": 40904,
+              "cycles": 63817226,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 187765,
+              "b_writes": 40904,
+              "cycles": 63821349,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53549056,
+              "a_writes": 228096,
+              "b_reads": 54000252,
+              "b_stall": 186426,
+              "b_writes": 40904,
+              "cycles": 63802560,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                80459
+              ],
+              "rows": 4,
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18356,
+              "b_writes": 5672,
+              "cycles": 58818946,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18285,
+              "b_writes": 5672,
+              "cycles": 58820643,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18492,
+              "b_writes": 5672,
+              "cycles": 58817190,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18527,
+              "b_writes": 5672,
+              "cycles": 58820308,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18572,
+              "b_writes": 5672,
+              "cycles": 58828476,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18654,
+              "b_writes": 5672,
+              "cycles": 58835103,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18343,
+              "b_writes": 5672,
+              "cycles": 58827872,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18581,
+              "b_writes": 5672,
+              "cycles": 58829026,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18704,
+              "b_writes": 5672,
+              "cycles": 58828841,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            },
+            {
+              "a_reads": 53278720,
+              "a_writes": 57024,
+              "b_reads": 53383952,
+              "b_stall": 18327,
+              "b_writes": 5672,
+              "cycles": 58830111,
+              "ecc_ded": false,
+              "host_program_cache_hit": true,
+              "instructions": [
+                24843
+              ],
+              "runtime_host": true,
+              "status": 233
+            }
+          ],
+          "stop_reason": "eos",
+          "target_backend": "board",
+          "target_cycles": 1291633754,
+          "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+          "target_decode_cycles": 529437570,
+          "target_decode_runs": 9,
+          "target_prefill_cycles": 762196184,
+          "target_prefill_runs": 12,
+          "text": "The capital of India is **New Delhi**.<|im_end|>",
+          "timing_scope": "host wall clock including compilation, target execution and transfers",
+          "tokens": [
+            764,
+            5463,
+            290,
+            5424,
+            322,
+            1472,
+            4965,
+            26112,
+            35906,
+            166101
+          ],
+          "total_seconds": 7.384047886996996
+        }
+      }
+    }
+  ],
+  "mode": "compare",
+  "precision": {
+    "checkpoint": "compressed-tensors channelwise INT8 weights, BF16 activations/head",
+    "draft_execution": "CPU NumPy FP32 DSpark reference with original BF16 shared weights",
+    "source_equivalent": false,
+    "target_execution": "openTPU MXU W8A8 repack, INT8 head, original BF16 embedding values expanded to host FP32, FP32 residual/norm/RoPE/softmax"
+  },
+  "prompt": "What is the capital of India? Reply briefly.",
+  "prompt_tokens": [
+    166100,
+    8481,
+    13,
+    18215,
+    19433,
+    154675,
+    152372,
+    21863,
+    152672,
+    57437,
+    162001,
+    46372,
+    152590,
+    5004,
+    15825,
+    152435,
+    3237,
+    3942,
+    152389,
+    166101,
+    13,
+    166100,
+    2714,
+    13,
+    3512,
+    322,
+    269,
+    5463,
+    290,
+    5424,
+    152470,
+    18550,
+    20089,
+    152361,
+    166101,
+    13,
+    166100,
+    66354,
+    13,
+    166103,
+    13,
+    13,
+    166104,
+    13,
+    13
+  ],
+  "repeat": 3,
+  "resident": false,
+  "runs": {
+    "hybrid": {
+      "acceptance_rate": 0.7777777777777778,
+      "accepted_tokens": 7,
+      "compile_fallbacks": 0,
+      "computed_draft_tokens": 9,
+      "computed_query_tokens": 21,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 2.113742117944639,
+      "decode_tokens": 9,
+      "decode_tps": 4.257851477526228,
+      "draft_backend": "numpy-fp32-reference",
+      "draft_calls": 3,
+      "draft_cycles": 0,
+      "draft_cycles_are_hardware_measured": false,
+      "draft_cycles_scope": "draft accelerator runs only; excludes host context fusion and Markov head",
+      "draft_query_tokens": 7,
+      "draft_raw_runs": [],
+      "draft_seconds": 0.9100144809344783,
+      "generated_tokens": 10,
+      "iterations": [
+        {
+          "accepted": 3,
+          "committed_position": 49,
+          "draft_queries": 7,
+          "emitted": 4,
+          "position": 45,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 1,
+          "committed_position": 51,
+          "draft_queries": 7,
+          "emitted": 2,
+          "position": 49,
+          "proposed": 3,
+          "verify_rows": 4
+        },
+        {
+          "accepted": 3,
+          "committed_position": 55,
+          "draft_queries": 7,
+          "emitted": 3,
+          "position": 51,
+          "proposed": 3,
+          "verify_rows": 4
+        }
+      ],
+      "max_verify_draft_tokens": 3,
+      "prefill_seconds": 4.563103555992711,
+      "prompt_tokens": 45,
+      "proposed_tokens": 9,
+      "raw_runs": [
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186641,
+          "b_writes": 40904,
+          "cycles": 63787227,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186844,
+          "b_writes": 40904,
+          "cycles": 63796731,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188753,
+          "b_writes": 40904,
+          "cycles": 63800028,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189156,
+          "b_writes": 40904,
+          "cycles": 63789143,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188566,
+          "b_writes": 40904,
+          "cycles": 64194673,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188635,
+          "b_writes": 40904,
+          "cycles": 64199447,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 185817,
+          "b_writes": 40904,
+          "cycles": 64193825,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 185453,
+          "b_writes": 40904,
+          "cycles": 64194382,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188725,
+          "b_writes": 40904,
+          "cycles": 63819422,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188026,
+          "b_writes": 40904,
+          "cycles": 63787452,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186731,
+          "b_writes": 40904,
+          "cycles": 63809088,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18392,
+          "b_writes": 5672,
+          "cycles": 58823046,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 38031,
+          "b_writes": 22688,
+          "cycles": 63353566,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 37829,
+          "b_writes": 22688,
+          "cycles": 63675173,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 53966460,
+          "b_stall": 38005,
+          "b_writes": 22688,
+          "cycles": 63674949,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            77967
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_calls": 15,
+      "target_cycles": 952898152,
+      "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+      "target_decode_cycles": 190703688,
+      "target_decode_runs": 3,
+      "target_prefill_cycles": 762194464,
+      "target_prefill_runs": 12,
+      "target_seconds": 5.765356533054728,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 6.676928555010818
+    },
+    "target": {
+      "compile_fallbacks": 0,
+      "cycles_are_hardware_measured": true,
+      "decode_seconds": 3.0455408489797264,
+      "decode_tokens": 9,
+      "decode_tps": 2.9551401364440903,
+      "draft_backend": null,
+      "generated_tokens": 10,
+      "prefill_seconds": 4.338505617983174,
+      "raw_runs": [
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188294,
+          "b_writes": 40904,
+          "cycles": 63799728,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187530,
+          "b_writes": 40904,
+          "cycles": 63785099,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186635,
+          "b_writes": 40904,
+          "cycles": 63775878,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 185934,
+          "b_writes": 40904,
+          "cycles": 63799443,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188083,
+          "b_writes": 40904,
+          "cycles": 64195553,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 188770,
+          "b_writes": 40904,
+          "cycles": 64198161,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 189073,
+          "b_writes": 40904,
+          "cycles": 64190436,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187587,
+          "b_writes": 40904,
+          "cycles": 64191805,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 184945,
+          "b_writes": 40904,
+          "cycles": 63817226,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 187765,
+          "b_writes": 40904,
+          "cycles": 63821349,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53549056,
+          "a_writes": 228096,
+          "b_reads": 54000252,
+          "b_stall": 186426,
+          "b_writes": 40904,
+          "cycles": 63802560,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            80459
+          ],
+          "rows": 4,
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18356,
+          "b_writes": 5672,
+          "cycles": 58818946,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18285,
+          "b_writes": 5672,
+          "cycles": 58820643,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18492,
+          "b_writes": 5672,
+          "cycles": 58817190,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18527,
+          "b_writes": 5672,
+          "cycles": 58820308,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18572,
+          "b_writes": 5672,
+          "cycles": 58828476,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18654,
+          "b_writes": 5672,
+          "cycles": 58835103,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18343,
+          "b_writes": 5672,
+          "cycles": 58827872,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18581,
+          "b_writes": 5672,
+          "cycles": 58829026,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18704,
+          "b_writes": 5672,
+          "cycles": 58828841,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        },
+        {
+          "a_reads": 53278720,
+          "a_writes": 57024,
+          "b_reads": 53383952,
+          "b_stall": 18327,
+          "b_writes": 5672,
+          "cycles": 58830111,
+          "ecc_ded": false,
+          "host_program_cache_hit": true,
+          "instructions": [
+            24843
+          ],
+          "runtime_host": true,
+          "status": 233
+        }
+      ],
+      "stop_reason": "eos",
+      "target_backend": "board",
+      "target_cycles": 1291633754,
+      "target_cycles_scope": "all target prefill and decode runs; excludes draft execution",
+      "target_decode_cycles": 529437570,
+      "target_decode_runs": 9,
+      "target_prefill_cycles": 762196184,
+      "target_prefill_runs": 12,
+      "text": "The capital of India is **New Delhi**.<|im_end|>",
+      "timing_scope": "host wall clock including compilation, target execution and transfers",
+      "tokens": [
+        764,
+        5463,
+        290,
+        5424,
+        322,
+        1472,
+        4965,
+        26112,
+        35906,
+        166101
+      ],
+      "total_seconds": 7.384047886996996
+    }
+  },
+  "runs_compatibility": "runs contains the last measured repetition; measured_runs contains every repetition",
+  "setup_seconds": 40.754802708979696,
+  "thinking": false,
+  "timestamp_utc": "2026-10-20T17:11:25.260643+00:00",
+  "timing_note": "setup and explicit warmups excluded; measured repetitions share compiled programs; wall time includes execution, transfers, host work and any remaining compilation",
+  "warmup_runs": 1,
+  "warmup_seconds": 26.181481654988602,
+  "warmups": [
+    {
+      "iteration": 0,
+      "seconds_by_mode": {
+        "hybrid": 13.095181813987438,
+        "target": 13.086294041015208
+      }
+    }
+  ]
+}

@@ -1,0 +1,334 @@
+{
+  "architecture": {
+    "ACT_BLOCKS": 128,
+    "ACT_ROWS": 16,
+    "D": 128,
+    "DRAM_BYTES": 4294967296,
+    "DSTEP": true,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": true,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "bdf": "0000:34:00.0",
+  "board_info": {
+    "D": 128,
+    "LANES": 8,
+    "MCOLS": 4,
+    "act_rows": 16,
+    "build_id": 2118297126,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "caps": {
+      "act_rows": true,
+      "args": true,
+      "chash": true,
+      "ddr": false,
+      "dstep": true,
+      "gen": true,
+      "hostcal": false,
+      "i2c": false,
+      "mx": true,
+      "pair": true,
+      "pq_window": 1024,
+      "stream": true,
+      "temp": true,
+      "trace": true,
+      "trace_depth": 16384,
+      "w4": true,
+      "waitw": true
+    },
+    "caps2": {
+      "gather": true
+    },
+    "cfg": {
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "MXU_IMPL": 2,
+      "S": 1,
+      "SEQ_WC": 1,
+      "TMEM_IMPL": 3,
+      "TMEM_WORDS": 65536,
+      "ULANES": 8,
+      "VPU_CL": 2,
+      "channel_bytes": 2147483648,
+      "channels": 2,
+      "hash": 1341988375,
+      "platform": 3
+    },
+    "core_khz": 200000,
+    "ddr_mts": null,
+    "regmap": 5,
+    "running": false,
+    "status": 104,
+    "temp_c": null
+  },
+  "checkpoint_quality_validated": false,
+  "device": "f2:0",
+  "device_lock_held": true,
+  "image_bytes": 1190656,
+  "image_matches_isa": true,
+  "oracle_backend": "ISA",
+  "passed": true,
+  "phase": "complete",
+  "precision": "openTPU W8A8, INT8 output head",
+  "profile": "/home/ubuntu/rachit/nanbeige-burst200/runtime/tools/data/nanbeige/burst200.toml",
+  "profile_sha256": "521d283c92fd99003d57ba22f8d1550bcb33aca346ed36087b51492c4a3a202b",
+  "seed": 4,
+  "spec": {
+    "bos": 151643,
+    "capture_layers": [
+      0,
+      1,
+      2,
+      3
+    ],
+    "ctx": 0,
+    "embed": "f32",
+    "eos": [
+      151645,
+      151643
+    ],
+    "eps": 1e-05,
+    "ffn": 256,
+    "formats": "",
+    "head_dim": 128,
+    "hidden": 128,
+    "layers": 2,
+    "loops": 2,
+    "mix": "",
+    "n_kv": 1,
+    "n_q": 6,
+    "nope": [],
+    "qk_norm": false,
+    "qk_smooth": false,
+    "rope_div": [],
+    "rope_scale": 1.0,
+    "rotary": 0,
+    "skip_loop_final_norm": false,
+    "theta": 70000000.0,
+    "tied": false,
+    "vocab": 128
+  },
+  "stages": [
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          1,
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "hardware_seconds": 0.056881394993979484,
+      "hardware_stats": {
+        "a_reads": 11392,
+        "a_writes": 648,
+        "b_reads": 12540,
+        "b_stall": 110,
+        "b_writes": 20,
+        "cycles": 34428,
+        "ecc_ded": false,
+        "host_program_cache_hit": false,
+        "instructions": [
+          433
+        ],
+        "runtime_host": true,
+        "status": 233
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "single_step",
+      "positions": [
+        0
+      ],
+      "program": {
+        "sha256_per_slice": [
+          "0d998246923b7ef9ab1c125cfc9dd78a4b0f1edb983af4b66cdca82ac3eac087"
+        ],
+        "words_per_slice": [
+          1904
+        ]
+      }
+    },
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "hardware_seconds": 0.0969443129724823,
+      "hardware_stats": {
+        "a_reads": 14464,
+        "a_writes": 2592,
+        "b_reads": 19180,
+        "b_stall": 26,
+        "b_writes": 80,
+        "cycles": 78461,
+        "ecc_ded": false,
+        "host_program_cache_hit": false,
+        "instructions": [
+          972
+        ],
+        "rows": 4,
+        "runtime_host": true,
+        "status": 233
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "runtime_four_rows",
+      "positions": [
+        1,
+        2,
+        3,
+        4
+      ]
+    },
+    {
+      "capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "hardware_seconds": 0.08400098496349528,
+      "hardware_stats": {
+        "a_reads": 10480,
+        "a_writes": 2592,
+        "b_reads": 15068,
+        "b_stall": 38,
+        "b_writes": 464,
+        "cycles": 85932,
+        "ecc_ded": false,
+        "instructions": [
+          1044
+        ],
+        "rows": 4,
+        "status": 233
+      },
+      "logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "name": "four_row_tiled",
+      "positions": [
+        1,
+        2,
+        3,
+        4
+      ],
+      "program": {
+        "sha256_per_slice": [
+          "23d6bafd9c15ca1d23907fc6f9fada8aeed2efafd35d1c1b437d3af631b4cf10"
+        ],
+        "words_per_slice": [
+          4312
+        ]
+      },
+      "runtime_capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "runtime_logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "sequential_capture": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          4,
+          128
+        ],
+        "unequal_words": 0
+      },
+      "sequential_logits": {
+        "finite": true,
+        "first_mismatch": null,
+        "max_abs_diff": 0.0,
+        "passed": true,
+        "shape": [
+          4,
+          128
+        ],
+        "unequal_words": 0
+      }
+    }
+  ],
+  "target_backend": "FPGA",
+  "tokens": [
+    4,
+    9,
+    23,
+    11,
+    31
+  ],
+  "utc": "2026-10-20T17:09:23.926650+00:00"
+}

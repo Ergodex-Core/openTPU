@@ -1,0 +1,41 @@
+{
+  "benchmark_environment": {
+    "MKL_NUM_THREADS": 4,
+    "OMP_NUM_THREADS": 4,
+    "OPENBLAS_NUM_THREADS": 4,
+    "OTPU_BUILD_JOBS": 4
+  },
+  "foundation_overlay_commit": "e55992e4621f1930c57c9712dd96d5f1ec7c4e1c",
+  "foundation_overlay_gzip_sha256": "aa86a2082ea74d6b8ac14f00bece3e7b94a33e8bbc1754c801e8cf59d492c1d3",
+  "machine": "x86_64",
+  "model_revisions": {
+    "Nanbeige4.2-3B-DSpark": {
+      "repo_id": "Nanbeige/Nanbeige4.2-3B-DSpark",
+      "revision": "5f12c792dabbfcdc4a0cf504e75f7216706d9590"
+    },
+    "Nanbeige4.2-3B-GPTQ-Int8": {
+      "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+      "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+    }
+  },
+  "note": "Source hashes observed on the F2 runner after the device-fusion/Markov benchmark started; older reports used earlier overlays. Documentation-only changes may differ in the final checkout.",
+  "numpy": "2.5.4",
+  "python": "3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]",
+  "runtime_archive_base": "7e42a626f714edd07867702c38c954082d51f587",
+  "source_sha256": {
+    "opentpu/llm/dspark.py": "43655a7524cdf5d9efed19d6628c51b7f6959a5fc1e5c8e826f05467c8a8b212",
+    "opentpu/llm/dspark_fpga.py": "c2243a920456399e11ee3daf0418a976864b214c28e7779a87d594209f8460e3",
+    "opentpu/llm/nanbeige.py": "343f18b0fcba8d93ca67cf16cb7a9b0f7bab3bdba7a883e8d80616c4e64d972c",
+    "opentpu/llm/nanbeige_specdec.py": "a1b75e32bf0a96d6b0448db56d6112fd50316da2e0636be01c9dcbc791bc11c4",
+    "opentpu/llm/nanbeige_weights.py": "e75ac2d468a6cd4ce7c1dbbae261f66eaa5411fa2e681db5c970f9fed9c564e8",
+    "tools/data/nanbeige/burst200.toml": "521d283c92fd99003d57ba22f8d1550bcb33aca346ed36087b51492c4a3a202b",
+    "tools/nanbeige_fpga.py": "5fedcc90422707794274e2c760d315fe353552c2e814378065841d82eb5fceff"
+  },
+  "target_device": {
+    "agfi": "agfi-0d06cb48544a02106",
+    "clock_mhz": 200,
+    "instance_type": "f2.6xlarge",
+    "profile": "burst200"
+  },
+  "transformers": "5.19.0"
+}
