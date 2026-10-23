@@ -1,0 +1,10 @@
+{
+  "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+  "source_line": 33783,
+  "source_line_sha256": "61453ee96d1a4d78048cace908bc05298cdc7426b7f7898d56f9b2a788ed7062",
+  "timestamp": "2026-10-21T15:07:45.255Z",
+  "content": [
+    "ISA  chars 279\ncard chars 279\nIDENTICAL\n['[TTFT 16.49s; prefill 15 tokens, 0.93 tok/s; decode 64 tokens, 0.52 tok/s; context 78/2048, stopped at max_new]']"
+  ],
+  "interpretation": "historical tool output; not current access or card ownership"
+}

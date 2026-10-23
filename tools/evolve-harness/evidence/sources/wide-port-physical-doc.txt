@@ -1,0 +1,23 @@
+## On the F2 card (417243f1, 2026-10-21)
+
+This was the first card run of the wide-port slice. The setup:
+
+- **Image:** one slice of PORTB 4 / row lanes / MCOLS 8 on Alex's HBM shell (8 x 512 MiB pseudo-channels), core 150 MHz. Routed WNS +0.015 ns (the QoR spread plus the legal MMCM recipe).
+- **AFI:** afi-09d849acd83ea4d85 / agfi-0001de1dd3df8e21e, on opentpu-f2's slot 0.
+- **Host:** this branch at 30100afb. Before that commit, opentpu/host/f2.py took only f2's platform 3, and the image reports f2-hbm's 5.
+- **Model:** Gemma-3-1B, int8 weights and int8 head, greedy.
+
+| check | result |
+|---|---|
+| identity | ID; CORE_KHZ 150000; BUILD_ID 0x417243f1; STATUS 0x68 (calibrated, idle); CFG_DRAM 0x1d0820 (1 slice x 8 x 512 MiB); CFG_HASH dd6b92a6 |
+| tools/fpga_inference_check.py --compare-isa | 8 tokens ("The Moon is a celestial body that"). Every step's logits are bit-exact with the ISA simulator. HF fp32 argmax matches 8/8. |
+| otpu-chat ("Why is the sky blue? Answer in one sentence.") | The text equals the ISA simulator's. Decode **63.2 device tok/s (2.37 M cycles a token)** at context 45; 22.1 tok/s wall through the chat. |
+| tools/f2_bench.py (otpu-serve: resident programs, the card's sampler) | Decode 63.2 tok/s (16-token prompt) and 60.9 (268-token prompt), client wall clock. TTFT 3.9 s and 24.2 s. |
+
+The RTL's whole model is 2,393,990 cycles a token (83.5 tok/s at 200 MHz, above). That is 62.6 tok/s at 150 MHz, so the card runs at the RTL's cycle count.
+
+Logs are on opentpu-f2:
+
+- /home/ubuntu/opt/coord-bench/card-wp-417243f1-r2.log and card-wpchat-417243f1.log
+- /home/ubuntu/opt/bench-wide-port-alexshell/build/{check,bench}-wp-417243f1.json
+

@@ -1,0 +1,45 @@
+# Nanbeige 4.2 on burst200
+
+The looped Nanbeige target and a co-resident DSpark accelerator draft run on
+burst200. Tiny hardware gates pass against ISA for both, including the cached
+target execution path. On the short prompt measured below, warmed FPGA-draft
+decoding reached **4.225 tokens/s versus 2.955 tokens/s** for the same target
+image, a **1.430×** median improvement across three repetitions with exact token
+matches. The CPU-draft variant reached a similar 4.258 tokens/s. These are short
+prompt results; a longer 60-decode-token response reached **3.650 tokens/s** with
+the FPGA draft, a **1.235×** improvement with exact matches in all repetitions.
+These two prompts are not a general throughput or model-quality benchmark. Some
+draft operations remain on the CPU; this is not a fully FPGA-resident decoding
+loop. An optional mode also executes context fusion and the Markov projection
+on the FPGA; it passed hardware checks but was about 5% slower on both prompts,
+so host fusion/Markov remains the default.
+
+## Checkpoints and arithmetic
+
+| Role | Hugging Face repository | Pinned revision |
+|---|---|---|
+| Target | `Nanbeige/Nanbeige4.2-3B-GPTQ-Int8` | `e8c6ccdb655bbcf410952686026d3fcbf4c07392` |
+| Draft | `Nanbeige/Nanbeige4.2-3B-DSpark` | `5f12c792dabbfcdc4a0cf504e75f7216706d9590` |
+
+The target checkpoint is compressed-tensors channelwise symmetric INT8
+**weight-only** quantization, with BF16 activations, embeddings and an untied
+BF16 LM head. `nanbeige_weights.py` lazily decodes the packed weights: each byte
+stores `q + 128`, so unpacking subtracts 128 rather than interpreting the byte as
+two's-complement INT8. Decompression applies the per-channel scale and rounds to
+the scale dtype. Tensor shapes, metadata and unsupported options are validated.
+
+The openTPU image builder then requantizes these values into its **W8A8 MXU
+format and INT8 LM head**. The CLI retains the original BF16 embedding values,
+expanded to FP32 on the host, and uses nonresident host-fed embeddings. Residual,
+normalization, RoPE and softmax operations use the existing openTPU FP32 kernels.
+This is not numerically identical to the published W8A16/BF16 model. An exact
+FPGA/ISA match validates the port's arithmetic, not the model-quality impact of
+this conversion.
+
+The CPU draft uses FP32 computation over its BF16 source weights and explicitly
+shares the original target embedding and LM-head tensors. It is a correctness
+reference and initial hybrid baseline, not a GPU-runtime performance equivalent.
+
+The accelerator draft in `dspark_fpga.py` instead uses **INT4 weights and INT8
+activations/KV** for the noncausal backbone and shares the target's INT8 output
+head read-only. It introduces additional draft quantization; target verification

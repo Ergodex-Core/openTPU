@@ -1,0 +1,366 @@
+{
+  "schema": 1,
+  "reviewed_utc": "2026-10-21",
+  "policy": "Every live seed disabled until frozen protocol, complete fingerprints, trusted bridge, current authorization and exclusive ownership are verified. Historical eligibility is not current availability. No cross-image score pooling.",
+  "sources": [
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L32902.json",
+      "sha256": "cc913d508af240ce51429114fd7e246ef0aed2754bba8739acbca70e4e05fcf7",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 32902
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33211.json",
+      "sha256": "08fe7d22d5fb97cd57eba8390c6f37df31861d4340f7e951787401912cb85212",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33211
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33225.json",
+      "sha256": "06c90f1cd6697758114d99d6eb3f4276da6918ca675cc3bc9951c360ad0e466d",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33225
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33277.json",
+      "sha256": "957b1cb5a959a03563179bafcbd9d2d407137ab1a2dc3e299df4c3bb16a0fb3c",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33277
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33523.json",
+      "sha256": "1c4342f9c0a2cba9a4708cbc25c5c1d07fe91822b9885540dd914c844ec8c8f0",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33523
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33770.json",
+      "sha256": "082a19b9e2a1b6db3339eba74e6b49a6f64bcb3a910f33266c5ad7aed0bc8a51",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33770
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33783.json",
+      "sha256": "a41a96fca744a950c49bb7ba7e121d1c4120553d5ae05315f3ba7012c315ff46",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33783
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L33821.json",
+      "sha256": "f47669efaf38da4330af412952599522cbcd889388eb603e8aa81bd2da90e349",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 33821
+    },
+    {
+      "snapshot": "evidence/sources/afbfd5b4-L34051.json",
+      "sha256": "a5a42c85c0e379dadd86625e805ca254e645345cb88c18a66bfc70cbd7c781a7",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-03/afbfd5b4-c677-4555-b709-f1e19b1e76df.jsonl",
+      "line": 34051
+    },
+    {
+      "snapshot": "evidence/sources/87d0de9a-L612.json",
+      "sha256": "7492299a83377cdab23f1e895427ce694cc78a7f50e418a1b6b79ca7fd66b96e",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-04/87d0de9a-46af-4df4-88b7-fc5ba86b6ce4.jsonl",
+      "line": 612
+    },
+    {
+      "snapshot": "evidence/sources/87d0de9a-L8661.json",
+      "sha256": "868b9954aea20314c9fda3c5525a616b509b38e44107fc83a1218410d29e89c9",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-04/87d0de9a-46af-4df4-88b7-fc5ba86b6ce4.jsonl",
+      "line": 8661
+    },
+    {
+      "snapshot": "evidence/sources/87d0de9a-L8680.json",
+      "sha256": "315c177ed381fee90575486bc3d8da8b5db0bef3227279fd0599c183f7078a4b",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-04/87d0de9a-46af-4df4-88b7-fc5ba86b6ce4.jsonl",
+      "line": 8680
+    },
+    {
+      "snapshot": "evidence/sources/87d0de9a-L16632.json",
+      "sha256": "49a47d4fa30c16b3d626f32c2a09ee79e37f40453d519412664bc820b7a0c51c",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-04/87d0de9a-46af-4df4-88b7-fc5ba86b6ce4.jsonl",
+      "line": 16632
+    },
+    {
+      "snapshot": "evidence/sources/wide-port-physical-doc.txt",
+      "sha256": "ff8fc956d82b2a6080522fcfbd104016711b00df0b33797fc3a0dd98bb2cfa80",
+      "source_path": "/Users/rachittibrewal/ergodex-03/openTPU-wp-alexshell/docs/wide_port.md",
+      "source_sha256": "37a2d607574dac1be225d2e2be01feb61e46aee4ad23678e9cf4118514a852bd",
+      "lines": [
+        1756,
+        1778
+      ]
+    },
+    {
+      "snapshot": "evidence/sources/p2-physical-doc.txt",
+      "sha256": "81c696e98ead7480313f7b980e5dbe4b8ac988b47eb46fda0614227f60ac0549",
+      "source_path": "/Users/rachittibrewal/ergodex-03/openTPU-p2-f2/docs/v4/p2-f2.md",
+      "source_sha256": "8295cd80eaaa1073592bebcdd9dc33e1fb487982f81fdab7ff128de6914daee6",
+      "lines": [
+        262,
+        284
+      ]
+    },
+    {
+      "snapshot": "evidence/sources/build6-s3-memory.txt",
+      "sha256": "0c9056b1b7e709e35fc9a16f1cc79987f9207323c01d0b2d78a809f23e535419",
+      "source_path": "/Users/rachittibrewal/.claude/projects/-Users-rachittibrewal-ergodex-04/memory/tpubench-gemma3-worktree.md",
+      "source_sha256": "b788f51f282c9e5bda3174e90201844fffecf8daf4de3f4aadb00a9b65e62ac4",
+      "lines": [
+        48,
+        85
+      ]
+    },
+    {
+      "snapshot": "evidence/sources/nanbeige-scope.txt",
+      "sha256": "e83782c28ecb2cbe8c5696ad3d7c0023cee88005a7378ee6feda415d43360eb6",
+      "source_path": "/Users/rachittibrewal/Documents/Codex/2026-10-20/new-chat/work/nanbeige-burst200/docs/nanbeige.md",
+      "source_sha256": "7f23c2d3ba3bbf31c082ea02601946de3d4940828592c3dba8034c09989d6e90",
+      "lines": [
+        1,
+        45
+      ]
+    },
+    {
+      "snapshot": "evidence/sources/nanbeige-provenance.json",
+      "sha256": "3a4c28698ab603664ea660691ae9170458f728d492ceeb8c32e78d5fffc5560c",
+      "source_path": "/Users/rachittibrewal/Documents/Codex/2026-10-20/new-chat/work/nanbeige-burst200/docs/data/nanbeige/provenance.json",
+      "source_sha256": "3a4c28698ab603664ea660691ae9170458f728d492ceeb8c32e78d5fffc5560c",
+      "lines": "whole file"
+    },
+    {
+      "snapshot": "evidence/sources/nanbeige-runtime.json",
+      "sha256": "94357e7695ab6eb7a4e25218e4e9a2cf2d4783c7194cd245ccf74f159e07cd12",
+      "source_path": "/Users/rachittibrewal/Documents/Codex/2026-10-20/new-chat/work/nanbeige-burst200/docs/data/nanbeige/compare-runtime-fpga.json",
+      "source_sha256": "94357e7695ab6eb7a4e25218e4e9a2cf2d4783c7194cd245ccf74f159e07cd12",
+      "lines": "whole file"
+    },
+    {
+      "snapshot": "evidence/sources/c2-kernel-results.json",
+      "sha256": "047881b54b2b36b7b484fae15dc7fa3bb2b617ee0ef4d0292bb9f9eba394f10a",
+      "source_path": "/Users/rachittibrewal/ergodex-04/c2-f2-physical-2f2c6fcb5f29/extracted/session/benchmark-00/results.json",
+      "source_sha256": "047881b54b2b36b7b484fae15dc7fa3bb2b617ee0ef4d0292bb9f9eba394f10a",
+      "lines": "whole file"
+    },
+    {
+      "snapshot": "evidence/sources/c2-kernel-provenance.json",
+      "sha256": "c7b5f7bac1951f9868ac4a60431c3feeb699b8508af73662d0b21ec275fc54cd",
+      "source_path": "/Users/rachittibrewal/ergodex-04/c2-f2-physical-2f2c6fcb5f29/extracted/session/benchmark-00/provenance.json",
+      "source_sha256": "c7b5f7bac1951f9868ac4a60431c3feeb699b8508af73662d0b21ec275fc54cd",
+      "lines": "whole file"
+    }
+  ],
+  "seeds": [
+    {
+      "id": "gemma3-1b-burst200-build6-int8",
+      "historical_stage": "PHYSICAL_MODEL_TEXT_MATCH",
+      "physical_whole_model_pass": true,
+      "track": "gemma3-1b-int8",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Board output and device counters observed; text matches available ISA prefix and S3 output. Full checkpoint manifest and fresh fixed-length protocol missing. Build6 is NOT the same AGFI as Alex burst200.",
+      "sources": [
+        "87d0de9a-L8661.json",
+        "87d0de9a-L8680.json",
+        "87d0de9a-L612.json",
+        "build6-s3-memory.txt"
+      ],
+      "agfi": "agfi-00c2d61ec51bd89aa",
+      "source_commit": "f85ac03c",
+      "clock_mhz": 200,
+      "device_tps_historical": 22.2
+    },
+    {
+      "id": "gemma3-1b-s3-build11-int8",
+      "historical_stage": "PHYSICAL_MODEL_TEXT_MATCH",
+      "physical_whole_model_pass": true,
+      "track": "gemma3-1b-int8",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "INT8 physical output equals build6. Host uneven-head fix baa9e5a5 required. Fixed timing protocol not qualified. FP4 head differs from build6 and is not merged.",
+      "sources": [
+        "87d0de9a-L16632.json",
+        "build6-s3-memory.txt"
+      ],
+      "afi": "afi-0ef6aa78ffbcbcf10",
+      "agfi": "agfi-07bbf03753aaa85c4",
+      "source_commit": "97af3c29",
+      "host_fix": "baa9e5a5",
+      "clock_mhz": 175,
+      "device_tps_historical": 48.3
+    },
+    {
+      "id": "gemma3-1b-wide-port-int8",
+      "historical_stage": "PHYSICAL_MODEL_ISA_BIT_EXACT_8",
+      "physical_whole_model_pass": true,
+      "track": "gemma3-1b-int8",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "8 golden argmax matches and zero-word ISA mismatch on physical board; fixed-length performance references/checkpoint hashes and live timing bridge still required.",
+      "sources": [
+        "afbfd5b4-L33211.json",
+        "afbfd5b4-L33277.json",
+        "wide-port-physical-doc.txt"
+      ],
+      "afi": "afi-09d849acd83ea4d85",
+      "agfi": "agfi-0001de1dd3df8e21e",
+      "source_commit": "417243f1",
+      "clock_mhz": 150,
+      "device_tps_historical": 63.2,
+      "historical_client_decode_tps": [
+        63.1955286782198,
+        60.90062227655257
+      ]
+    },
+    {
+      "id": "gemma3-1b-p2-int8",
+      "historical_stage": "PHYSICAL_MODEL_ISA_TEXT_MATCH",
+      "physical_whole_model_pass": true,
+      "track": "gemma3-1b-int8",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "P2 initial attempt failed transport; corrected 644638e6 physical run and ISA text verified. Full token/logit suite not available locally.",
+      "sources": [
+        "afbfd5b4-L32902.json",
+        "afbfd5b4-L33523.json",
+        "p2-physical-doc.txt"
+      ],
+      "afi": "afi-0540f65acf91f9158",
+      "agfi": "agfi-0a067d9af1904ef55",
+      "source_commit": "63a66c08",
+      "host_fix": "644638e6",
+      "clock_mhz": 150,
+      "device_tps_historical": 61.8
+    },
+    {
+      "id": "gemma3-1b-p4-int8",
+      "historical_stage": "PHYSICAL_MODEL_ISA_TEXT_MATCH",
+      "physical_whole_model_pass": true,
+      "track": "gemma3-1b-int8",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "64-token physical INT8 run, ISA text IDENTICAL receipt. Register BUILD_ID remains 7e42a626; use AFI/package/DCP fingerprints, not build-id alone.",
+      "sources": [
+        "afbfd5b4-L33225.json",
+        "afbfd5b4-L33770.json",
+        "afbfd5b4-L33783.json",
+        "afbfd5b4-L33821.json"
+      ],
+      "afi": "afi-0e69db695469f15de",
+      "agfi": "agfi-0eae9323162adfd62",
+      "source_commit": "866c920e",
+      "floorplan_commit": "470cf908",
+      "clock_mhz": 175,
+      "dcp_sha256": "b958d4063deb95463787a1a04dc547af41dfa90bae0cd954c0f17bd8d99cf0eb",
+      "package_sha256": "e8ffb6c21a66da76f3ca801099fcaaf739372282331193f7218733070b21f6d2",
+      "device_tps_historical": 60.3,
+      "afi_mapping_verification": "AFI supplied by parent; AGFI directly observed in raw source receipt"
+    },
+    {
+      "id": "gemma3-1b-p4-fp4",
+      "historical_stage": "PHYSICAL_THROUGHPUT_ONLY",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "85.8 device TPS but no matched FP4 reference; must not promote or compare as INT8.",
+      "sources": [
+        "afbfd5b4-L33821.json"
+      ]
+    },
+    {
+      "id": "c2",
+      "historical_stage": "PHYSICAL_KERNEL_ONLY",
+      "physical_whole_model_pass": false,
+      "track": "kernel-only",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Hardware kernel cases pass; no whole-model Gemma receipt. Excluded from model leaderboard.",
+      "sources": [
+        "c2-kernel-results.json",
+        "c2-kernel-provenance.json"
+      ],
+      "agfi": "agfi-02ff2ad9b7835dada"
+    },
+    {
+      "id": "nanbeige-burst200-loop2-hybrid",
+      "historical_stage": "PHYSICAL_HYBRID_REPACKED_EQUIVALENCE",
+      "physical_whole_model_pass": true,
+      "track": "nanbeige-loop2-repacked-hybrid",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Separate repacked-target objective, loop2; hybrid host fusion/Markov explicitly part of task. Original-checkpoint fidelity NOT established. Historical three repeats and EOS-shortened outputs do not meet fixed-length promotion protocol.",
+      "sources": [
+        "nanbeige-runtime.json",
+        "nanbeige-provenance.json",
+        "nanbeige-scope.txt"
+      ],
+      "agfi": "agfi-0d06cb48544a02106",
+      "clock_mhz": 200,
+      "loop_count": 2,
+      "original_checkpoint_fidelity": false
+    },
+    {
+      "id": "gemma3-270m-standalone",
+      "historical_stage": "PARENT_REPORTED_PHYSICAL_PASS_LOCAL_ISA_ONLY",
+      "physical_whole_model_pass": false,
+      "track": "pending-source-receipt",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Standalone physical pass reported by parent, but located source is ISA only. Require actual board receipt before enabling; combined speculation unqualified.",
+      "sources": [
+        "afbfd5b4-L34051.json"
+      ]
+    },
+    {
+      "id": "p1",
+      "historical_stage": "PHYSICAL_TIMEOUT",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Timeout; no passing model run.",
+      "sources": []
+    },
+    {
+      "id": "p3",
+      "historical_stage": "ROUTE_FAILURE",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Route failure; no physical model pass.",
+      "sources": []
+    },
+    {
+      "id": "full-hbm",
+      "historical_stage": "ESTIMATE_ONLY",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Estimates are not FPGA-stage evidence.",
+      "sources": []
+    },
+    {
+      "id": "personaplex",
+      "historical_stage": "OFFLINE_PREFLIGHT",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Offline preflight only.",
+      "sources": []
+    },
+    {
+      "id": "gemma-combined-speculation",
+      "historical_stage": "UNQUALIFIED",
+      "physical_whole_model_pass": false,
+      "track": "excluded",
+      "enabled": false,
+      "fresh_protocol_qualified": false,
+      "reason": "Standalone drafter success does not qualify combined speculative target/rollback.",
+      "sources": []
+    }
+  ]
+}
