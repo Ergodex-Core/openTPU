@@ -22,6 +22,7 @@ from .personaplex_audio_heads import AudioHeadImage, _audio_head, _checked
 from .personaplex_depth_input import DepthInputImage, DepthInputSpec
 from .personaplex_depth_layer import DepthLayerImage, DepthLayerSpec
 from .personaplex_mimi import MimiRVQImage, MimiRVQSpec
+from .personaplex_mimi_decoder import MimiDecoderImage, MimiDecoderSpec
 
 
 @dataclass(frozen=True)
@@ -70,7 +71,7 @@ class DepthChainImage:
         "heads": (0x5B7D1400, 0x5D831400), "B": (0xB0000000, 1 << 32),
     }
 
-    def __init__(self, spec, cfg, *, mimi_spec=None):
+    def __init__(self, spec, cfg, *, mimi_spec=None, decoder_spec=None):
         if cfg.S != 1 or cfg.DRAM_BYTES > 1 << 32:
             raise ValueError("resident depth chain needs one slice and unsigned32 mapped DRAM")
         self.spec, self.cfg = spec, cfg
@@ -152,9 +153,21 @@ class DepthChainImage:
                        p["base"] < span["base"] + span["bytes"] for p in self.spans):
                     raise ValueError("Mimi span overlaps a resident depth span")
             self.spans.extend(self.mimi.spans)
+        self.decoder = None
+        if decoder_spec is not None:
+            if self.mimi is None or decoder_spec.hidden != self.mimi.spec.latent:
+                raise ValueError("Mimi decoder needs a matching resident RVQ latent")
+            self.decoder = MimiDecoderImage(decoder_spec, cfg, latent_at=self.mimi.io["output"],
+                                             state_base=self.mimi.required_bytes)
+            for span in self.decoder.spans:
+                if any(span["base"] < p["base"] + p["bytes"] and
+                       p["base"] < span["base"] + span["bytes"] for p in self.spans):
+                    raise ValueError("Mimi decoder overlaps an existing resident span")
+            self.spans.extend(self.decoder.spans)
+        program_count = (4 if self.mimi else 3) + (1 + decoder_spec.layers if self.decoder else 0)
         self.program_slots = [alloc(f"program{index}", waits.area(cfg.IMEM_WORDS, cfg.SEQ_WC),
                                     "program", 4096, kind="program")
-                              for index in range(4 if self.mimi else 3)]
+                              for index in range(program_count)]
         self.required_bytes = -(-max(p["base"] + p["bytes"] for p in self.spans) // 4096) * 4096
         if self.required_bytes > min(cfg.DRAM_BYTES, 1 << 32):
             raise MemoryError("aligned resident mapping exceeds device capacity")
@@ -163,6 +176,9 @@ class DepthChainImage:
         self.weight_bytes = (source_condition.weight_bytes + source_depth.weight_bytes + source_head.weight_bytes)
         if self.mimi is not None:
             self.weight_bytes += self.mimi.weight_bytes
+        if self.decoder is not None:
+            self.weight_bytes += self.decoder.weight_bytes
+            self.kv_bytes += self.decoder.kv_bytes
 
     def compile(self):
         if self.programs is None:
@@ -175,6 +191,8 @@ class DepthChainImage:
             self.programs = [condition, depth, head]
             if self.mimi is not None:
                 self.programs.extend(self.mimi.compile())
+            if self.decoder is not None:
+                self.programs.extend(self.decoder.compile())
             for program in self.programs:
                 if program.run_args or len(program) * 8 > self.cfg.IMEM_WORDS:
                     raise CompileError("resident stage has host arguments or exceeds instruction capacity")
@@ -191,8 +209,11 @@ class DepthChainImage:
                 "program_slots": self.program_slots, "spans": self.spans,
                 "payload_sha256": {**self.payload_hashes,
                     **({"mimi_" + k: v for k, v in self.mimi.payload_hashes.items()}
-                       if self.mimi else {})},
-                "mimi": self.mimi.budget() if self.mimi else None}
+                       if self.mimi else {}),
+                    **({"decoder_" + k: v for k, v in self.decoder.payload_hashes.items()}
+                       if self.decoder else {})},
+                "mimi": self.mimi.budget() if self.mimi else None,
+                "decoder": self.decoder.budget() if self.decoder else None}
 
     def upload(self, backend, projections, embeddings, layers, head_bank):
         """Pack offline using established component builders; upload named spans only."""
@@ -218,27 +239,39 @@ class DepthChainImage:
 class DepthChainEngine:
     """ISA-only runner; model compute/feedback remain device programs, not host math."""
     def __init__(self, projections, embeddings, layers, head_bank, *, spec=None, cfg=None,
-                 backend="isa", mimi_tables=None, mimi_projections=None, mimi_spec=None):
+                 backend="isa", mimi_tables=None, mimi_projections=None, mimi_spec=None,
+                 decoder_weights=None, upsample_weight=None, decoder_spec=None, decoder_rope=None):
         if backend != "isa":
             raise ValueError("resident depth chain is software/ISA only; no physical backend is qualified")
         self.spec = spec or DepthChainSpec()
         self._closed = self._failed = self._ready = self._active = False
         self._mimi_ready = False
+        self._decoder_ready = self._decoder_consumed = False
+        self.decoder_pos = 0
         if (mimi_tables is None) != (mimi_projections is None):
             raise ValueError("Mimi tables and projections must be supplied together")
         if mimi_spec is not None and mimi_tables is None:
             raise ValueError("Mimi specification requires its offline payloads")
+        if (decoder_weights is None) != (upsample_weight is None):
+            raise ValueError("Decoder layers and upsample weight must be supplied together")
+        if decoder_weights is None and (decoder_spec is not None or decoder_rope is not None):
+            raise ValueError("Decoder specification/coefficients require offline payloads")
+        if decoder_weights is not None and mimi_tables is None:
+            raise ValueError("Decoder requires resident Mimi RVQ")
         self.poss, self.last_stats = [0], {}
         self.cfg = cfg or Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=128, ACT_ROWS=16,
                                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 32)
         self.image = DepthChainImage(self.spec, self.cfg,
-            mimi_spec=(mimi_spec or MimiRVQSpec()) if mimi_tables is not None else None)
+            mimi_spec=(mimi_spec or MimiRVQSpec()) if mimi_tables is not None else None,
+            decoder_spec=(decoder_spec or MimiDecoderSpec()) if decoder_weights is not None else None)
         self.programs = self.image.compile()  # capacity before any lazy payload reads
         self.backend = G.IsaBackend(self.cfg, [np.zeros(self.cfg.DRAM_BYTES, np.uint8)], adopt=True)
         try:
             self.image.upload(self.backend, projections, embeddings, layers, head_bank)
             if self.image.mimi is not None:
                 self.image.mimi.upload(self.backend, mimi_tables, mimi_projections)
+            if self.image.decoder is not None:
+                self.image.decoder.upload(self.backend, upsample_weight, decoder_weights, decoder_rope)
         except BaseException:
             self.close(); raise
 
@@ -254,6 +287,11 @@ class DepthChainEngine:
 
     def begin_frame(self, hidden, text_id):
         self._check()
+        if self.image.decoder is not None:
+            if self.decoder_pos >= self.image.decoder.spec.max_frames:
+                raise RuntimeError("decoder frame limit reached; reset required")
+            if self._active and not self._decoder_consumed:
+                raise RuntimeError("complete the pending decoder frame or reset before a new frame")
         value = _checked(hidden, (self.spec.hidden,), "temporal hidden")
         if isinstance(text_id, (bool, np.bool_)):
             raise ValueError("text ID must be integral")
@@ -264,6 +302,7 @@ class DepthChainEngine:
         if not -1 <= token < self.spec.text_vocab:
             raise ValueError("text ID outside vocabulary")
         self._ready = self._active = self._mimi_ready = False
+        self._decoder_ready = self._decoder_consumed = False
         try:
             self.backend.write(0, self.image.io["hidden"], value)
             self.backend.write(0, self.image.io["control"], np.array([0, token], np.float32))
@@ -297,6 +336,8 @@ class DepthChainEngine:
         self._check()
         if self.image.mimi is None:
             raise RuntimeError("Mimi RVQ was not configured")
+        if self.image.decoder is not None and self._decoder_consumed:
+            raise RuntimeError("decoder already consumed this frame; begin the next frame")
         if not self._ready or self.pos != self.spec.steps:
             raise RuntimeError("complete all depth steps before Mimi RVQ")
         self._mimi_ready = False
@@ -305,6 +346,58 @@ class DepthChainEngine:
         except BaseException:
             self._failed = True; raise
         self._mimi_ready = True
+
+    def run_decoder(self):
+        """Consume resident RVQ latent; keep overlap, two-token KV and offsets resident."""
+        self._check()
+        image = self.image.decoder
+        if image is None or not self._mimi_ready or self._decoder_consumed:
+            raise RuntimeError("decoder needs an unconsumed completed resident RVQ frame")
+        if self.decoder_pos >= image.spec.max_frames:
+            raise RuntimeError("decoder frame limit reached; reset required")
+        self._decoder_ready = False
+        try:
+            self.decoder_stats = [self.backend.run([program]) for program in self.programs[4:]]
+        except BaseException:
+            self._failed = True; raise
+        self.decoder_pos += 1
+        self._decoder_ready = self._decoder_consumed = True
+
+    def _read_decoder(self, address, width):
+        self._check()
+        if not self._decoder_ready:
+            raise RuntimeError("no completed resident Mimi decoder frame")
+        value = np.asarray(self.backend.read(0, address, width * 4), np.uint8).view(np.float32).copy()
+        if value.shape != (width,) or not np.isfinite(value).all():
+            self._failed = True
+            raise RuntimeError("invalid resident decoder output")
+        return value.reshape(2, width // 2)
+
+    def read_decoder(self):
+        image = self.image.decoder
+        if image is None:
+            raise RuntimeError("Mimi decoder was not configured")
+        return self._read_decoder(image.io["output"], 2 * image.spec.hidden)
+
+    def read_upsampled(self):
+        image = self.image.decoder
+        if image is None:
+            raise RuntimeError("Mimi decoder was not configured")
+        return self._read_decoder(image.io["upsampled"], 2 * image.spec.hidden)
+
+    def read_decoder_layer(self, layer):
+        image = self.image.decoder
+        if image is None or type(layer) is not int or not 0 <= layer < image.spec.layers:
+            raise ValueError("invalid Mimi decoder layer")
+        return self._read_decoder(image.layer_outputs[layer], 2 * image.spec.hidden)
+
+    def read_decoder_cache(self, layer):
+        self._check()
+        image = self.image.decoder
+        if image is None or type(layer) is not int or not 0 <= layer < image.spec.layers:
+            raise ValueError("invalid Mimi decoder cache layer")
+        address, size = image.cache_regions[layer]
+        return np.asarray(self.backend.read(0, address, size), np.uint8).copy()
 
     def read_mimi(self, name="output"):
         self._check()
@@ -374,9 +467,15 @@ class DepthChainEngine:
             raise RuntimeError("resident depth chain is closed")
         try:
             self.backend.write(0, self.image.io["control"], np.array([0, -1], np.float32))
+            if self.image.decoder is not None:
+                self.backend.write(0, self.image.decoder.io["state"], np.zeros(1, np.float32))
+                self.backend.write(0, self.image.decoder.io["overlap"],
+                                   np.full((2, self.image.decoder.spec.hidden), -0.0, np.float32))
         except BaseException:
             self._failed = True; raise
         self._failed = self._ready = self._active = self._mimi_ready = False
+        self._decoder_ready = self._decoder_consumed = False
+        self.decoder_pos = 0
         self.poss[0], self.last_stats = 0, {}
 
     def close(self):

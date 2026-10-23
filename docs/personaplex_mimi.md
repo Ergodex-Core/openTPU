@@ -106,14 +106,17 @@ NumPy, PyTorch, safetensors and the pinned native Moshi source remain separate
 dependencies. The checkpoint CLI requires explicit existing model/codec and
 completed baseline locations. No readiness is enabled by building this tree.
 
-## Remaining decoder and PCM path
+## Decoder progress and remaining PCM path
 
-The next native boundary upsamples a latent frame using learned channelwise
-causal transposed convolution:512 groups, stride2, kernel4, no bias. Its source
-streaming padding, overlap and trim semantics need an explicit state layout and
-ISA lowering. Then an eight-layer512-wide causal transformer uses8 heads,
-context250, RoPE, LayerNorm, layer scale0.01 and FFN2048. Persistent KV/position
-state, native parameter order, numerical precision and full budgets remain open.
+The optional [causal upsample and decoder transformer](personaplex_mimi_decoder.md)
+now consumes the resident RVQ latent without host intermediate transfers. It
+implements the learned channelwise 2× upsample and all eight decoder layers,
+including source-compatible two-token ring updates, RoPE and reset state. The
+actual-checkpoint two-frame comparison and reset replay passed in CPU/ISA on
+the exact shared profile. Accumulated RVQ-through-decoder relative L2 error is
+0.0270071; decoder-only error on identical RVQ latents is 0.0139889. These are
+numerical diagnostics, with no accepted speech quality or physical latency.
+The bounded implementation supports 128 code frames before explicit exhaustion.
 
 The mono causal SEANet decoder begins Conv1d512→1024/kernel7, followed by ELU
 and transposed-convolution stages1024→512→256→128→64. Their strides are8,6,5,4
@@ -126,7 +129,7 @@ per code frame after latent2× upsample and the8×6×5×4 stages. These are sour
 format rates, not measured FPGA throughput. Streaming boundary/PCM numerical
 acceptance is unimplemented. Temporal paged weights/fixed KV, text/hidden wiring,
 input codec, prompt/voice/delay scheduler and complete quality/latency acceptance
-also remain. No missing RTL capability has yet been demonstrated by RVQ work;
+also remain. No missing RTL capability has yet been demonstrated by these slices;
 unsupported lowering or capacity must be shown before proposing synthesis.
 
 ## Physical transport gate

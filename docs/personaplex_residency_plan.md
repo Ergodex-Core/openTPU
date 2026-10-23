@@ -2,8 +2,9 @@
 
 This is a compiler/runtime design, not a demonstrated full-model fit or a
 hardware result. Its P/B depth-only subset now has a [shared ISA implementation](personaplex_depth_chain.md)
-and two cached generated-sequence checks. A/temporal paging and codec integration
-remain unimplemented. No image change, synthesis, card access or paid resource is
+and cached generated-sequence checks. Optional resident RVQ, causal upsample and
+decoder transformer are now software-validated; temporal paging and complete
+codec/PCM integration remain unimplemented. No image change, synthesis, card access or paid resource is
 required to investigate it. Existing standalone images total5,270,028,288 bytes
 versus4,294,967,296 mapped bytes. Shared workspaces alone cannot solve residency:
 input embedding tables exceed the temporal/token free space by940,683,264 bytes.
@@ -101,10 +102,11 @@ not establish a working combined runtime or complete speech fit.
 
 The optional [Mimi RVQ latent slice](personaplex_mimi.md) now occupies unused P
 guard space beginning0x5D850000, with eight FP32 centroid tables and two INT8
-projections. Combined compiled budgets are recorded separately; A/B placement
-and the prior depth allocation remain unchanged. The remaining Mimi streaming
-convolution/transposed convolution, encoder/decoder attention and streaming
-state still need lowering and capacity checks. Prefer testing codec packets in A
+projections. Its [causal upsample and decoder transformer](personaplex_mimi_decoder.md)
+now keep overlap/KV/offset state in P and place25,616,384 decoder weight bytes at
+the start of A. Depth B is unchanged. The remaining Mimi encoder and SEANet
+convolution/transposed convolution/PCM path still need lowering and capacity
+checks. Temporal/codec A packet switching remains unimplemented. Prefer testing codec packets in A
 before temporal execution and after depth execution, when temporal weights are
 no longer live. If codec packets/scratch fit that overlay, B can retain the depth
 bank and the added per-frame traffic is encoder/decoder packet transfer rather

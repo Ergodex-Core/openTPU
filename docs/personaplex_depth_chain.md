@@ -5,8 +5,9 @@ selected temporal-to-depth projection and previous-token embedding, all six
 depth layers with independent KV, then selected audio head and greedy ID. It
 produces sixteen codebook IDs. Its optional [Mimi RVQ stage](personaplex_mimi.md)
 consumes the first eight directly from resident state and produces a512-channel
-latent. It does not implement temporal inference, prompt/delay scheduling,
-the remaining Mimi decoder or PCM speech, and is not a serving fallback.
+latent. The optional [causal upsample/decoder stage](personaplex_mimi_decoder.md)
+then produces two decoder tokens per frame. Temporal inference, prompt/delay
+scheduling, the remaining SEANet/PCM path and serving are not supplied here.
 Physical backends are refused before source payload access.
 
 ## Resident state and execution

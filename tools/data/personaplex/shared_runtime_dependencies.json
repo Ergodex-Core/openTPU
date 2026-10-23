@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible CPU/ISA qualification integration; published legacy-runtime branch alone is not qualified",
+  "purpose": "Reproducible CPU/ISA qualification through resident RVQ, causal upsample and decoder transformer; no full PCM or physical acceptance",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -118,7 +118,7 @@
     "opentpu/llm/personaplex_audio_heads.py": "166b4b4d35791d22a9bcf8170f3648a546e06175e8d1767b68bc5cd2e43ea82b",
     "opentpu/llm/personaplex_depth_input.py": "881d83f7a14b584fab8817ef9e52482bed40749f4582b46cb5c8d911ac684777",
     "opentpu/llm/personaplex_depth_layer.py": "2a4dfe7d04565e5d366ccf535e4df0ca9aad6e75e711bb1a33e9f059dae7484d",
-    "opentpu/llm/personaplex_depth_chain.py": "52b9821600d1135e97bb6c3b7b763e18411f618cc0e6634caef9897e44bd3506",
+    "opentpu/llm/personaplex_depth_chain.py": "6890746e865f6ec2162a328ae7348293cc2ba829be595915a63e21bc3f48e7a7",
     "opentpu/llm/personaplex_mimi.py": "8c6598024d62b0fb9c36abe4eff54d72393b4ac191ab35f324fc79252e87cdf7",
     "tools/personaplex_isa_check.py": "ccca343c7ed12cd5daeefdbee4271ff3325d11d4f82972e7a8d821a781836337",
     "tools/personaplex_depth_input_check.py": "70f3df0c7b36fe1d63fc6fce5f7724e2887eafd2c78c2cceb90c0f43e99bb556",
@@ -134,7 +134,13 @@
     "tools/data/personaplex/burst200.toml": "521d283c92fd99003d57ba22f8d1550bcb33aca346ed36087b51492c4a3a202b",
     "tools/data/personaplex/shared_gemma150.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
     "tools/data/personaplex/shared_gemma150_contract.json": "562118053dd58f22ca58ac2a8eb3cb14a977225830c99ca0812b122551d0af4f",
-    "tools/data/personaplex/mimi_rvq_contract.json": "5342c087a41a95fd899bf62ac92c2c2ad31e8fa09d60788eda74214df5dd4aa1"
+    "tools/data/personaplex/mimi_rvq_contract.json": "5342c087a41a95fd899bf62ac92c2c2ad31e8fa09d60788eda74214df5dd4aa1",
+    "opentpu/llm/personaplex_mimi_decoder.py": "dab0ddce7902a695f2fe8b6eb2977e210cdbdafe63b681d5bc67d432f26476d7",
+    "tests/test_personaplex_mimi_decoder.py": "71d6f340e7544b634c24525834d97d0b104bfa817c714ac670a2c7b20e130200",
+    "tests/test_personaplex_mimi_decoder_check.py": "11981d94fcd669f41f36353a5a1cdcaf6d1096c18996a6d086e29d609955eec6",
+    "tools/personaplex_mimi_decoder_check.py": "05436437658acf5b60a147fdf0245d0a6b21c8620510f06e9716b59358f38ea0",
+    "tools/personaplex_mimi_decoder_native.py": "b619d5dfa62d63ca784b9225385527e9d29ce6d3d429c2ee5059aedcddc10e85",
+    "tools/data/personaplex/mimi_decoder_contract.json": "92043bee944159b986347b35a28b01d26b1df91b24b2669ab813be91ad7a31dd"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {
@@ -161,5 +167,9 @@
   },
   "installation_policy": "Reuse existing dependencies and cached checkpoints; this builder installs/downloads nothing",
   "integration_gate": "PR#24 head91a83b6d83492f2f35af1753bfaa6dfd3e1d4c7d contains the older runtime. Use the exact pinned runtime plus this manifest and builder for software qualification. No serving enablement or physical inference claim.",
-  "hardware_gate": "Unchanged shared image, qualified adapter/transport, owner-coordinated fresh live identity/capability/idle checks and complete physical speech acceptance required; no per-model reload"
+  "hardware_gate": "Unchanged shared image, qualified adapter/transport, owner-coordinated fresh live identity/capability/idle checks and complete physical speech acceptance required; no per-model reload",
+  "native_dependency_contracts": [
+    "tools/data/personaplex/mimi_rvq_contract.json",
+    "tools/data/personaplex/mimi_decoder_contract.json"
+  ]
 }
