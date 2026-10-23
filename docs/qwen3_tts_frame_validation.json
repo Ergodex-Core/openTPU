@@ -1,0 +1,99 @@
+{
+  "base_commit_preserved": "6f029c6333656c32d3cc28b1631f8730796eb036",
+  "instance": "i-0c78de2253f66519d",
+  "region": "us-east-1",
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "remote_root": "/home/ubuntu/qwen3-tts-codec-frame-20261023-01",
+  "ssm_final_validation": "2a35f5ec-adab-4cde-9936-982a10708d51",
+  "tests": {
+    "passed": 52,
+    "seconds": 31.31,
+    "files": [
+      "tests/test_qwen3_tts.py",
+      "tests/test_qwen3_tts_talker.py",
+      "tests/test_qwen3_tts_checkpoint_acceptance.py",
+      "tests/test_qwen3_tts_stack.py",
+      "tests/test_qwen3_tts_prompt.py",
+      "tests/test_qwen3_tts_frame.py"
+    ]
+  },
+  "numerical_acceptance": {
+    "exit_code": 2,
+    "accepted": false,
+    "seconds": 292.5116267328849,
+    "summary": {
+      "fp32": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 121,
+        "complete_frame_agreement": 3,
+        "open_loop_predictor_greedy_agreement": 112,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 125,
+        "max_open_loop_predictor_logit_error": 0.3695027241196413,
+        "max_conditional_predictor_logit_error": 0.08899213849886949,
+        "max_feedback_logit_error": 0.10052762874952098,
+        "max_embedding_sum_error": 0.0,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 33,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      },
+      "bf16": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 123,
+        "complete_frame_agreement": 3,
+        "open_loop_predictor_greedy_agreement": 114,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 127,
+        "max_open_loop_predictor_logit_error": 0.3101268606284032,
+        "max_conditional_predictor_logit_error": 0.0920394813579159,
+        "max_feedback_logit_error": 0.11045365586029135,
+        "max_embedding_sum_error": 0.0018952693873161865,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 34,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      }
+    },
+    "reference_agreement": {
+      "open_loop_ids": 127,
+      "conditional_greedy": 129
+    },
+    "reset_poison_replay": {
+      "ids_equal": true,
+      "logits_bitwise_equal": true
+    }
+  },
+  "receipts": {
+    "frames-03.json": {
+      "bytes": 229919,
+      "sha256": "db07ef058bca6dfdcfb739ce55fb2690ae0f1c05947b477f85af1364e192bcfa"
+    },
+    "frames-03.prefill.json": {
+      "bytes": 23228,
+      "sha256": "aa5ed0f2e9dc8f4180b800cf8b5865a6151c65f32ee35bb79b3a32812accf47c"
+    }
+  },
+  "all_receipt_checksums_and_tested_source_checksums_verified": true,
+  "historical_legacy_receipt_sha256": "597e51b22fc05cedbadc597572ac39ccccc7217b9249d63b173ab673203c470f",
+  "historical_legacy_receipt_changed": false,
+  "development_harness_failures": [
+    {
+      "command": "6a65ac46-d2be-4143-89a6-262d6a733b77",
+      "tests_passed": 50,
+      "reason": "NumPy int64 progress JSON serialization; no numeric receipt completed"
+    },
+    {
+      "command": "8b44c041-d3d4-4ebd-90e7-ea083a62488c",
+      "tests_passed": 51,
+      "reason": "Relative runpy __file__ provenance path at final serialization; all nine generated ID sequences identical to completed final receipt"
+    }
+  ],
+  "physical_hardware_access": false,
+  "serving_interruption_seconds": 0,
+  "tts_enabled": false
+}
