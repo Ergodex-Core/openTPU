@@ -1,0 +1,406 @@
+{
+  "completed_utc": "2026-10-21T16:32:23.601714+00:00",
+  "pass": true,
+  "total_cases": 18,
+  "source_manifest": "evidence/source_manifest.json",
+  "comparison": [
+    "valid transaction cycles and payloads",
+    "grant and replay cycles",
+    "reset cycles",
+    "all DRAM bytes",
+    "all TMEM words",
+    "ISA reference"
+  ],
+  "suites": [
+    {
+      "name": "native",
+      "case_count": 9,
+      "pass": true,
+      "baseline_result": "evidence/equivalence-baseline-v2/result.json",
+      "candidate_result": "evidence/equivalence-candidate/result.json",
+      "baseline_result_sha256": "e941e3cccbbf413f71af85adf500e3d0cb07de015fd73c402724b6d3158aedc8",
+      "candidate_result_sha256": "f116d9aefd81754b50aac915f8130d29cde2dec5ca6fb40217138822bd4d58ce",
+      "config": {
+        "S": 1,
+        "D": 128,
+        "MCOLS": 8,
+        "ACT_BLOCKS": 64,
+        "TMEM_WORDS": 65536,
+        "DRAM_BYTES": 1048576,
+        "IMEM_WORDS": 65536,
+        "LANES": 8,
+        "PAIR": true,
+        "DSTEP": false,
+        "STREAM": false,
+        "ACT_ROWS": 16,
+        "PORTB": 4,
+        "T2": true,
+        "ROWLANES": true,
+        "ALINE": 64,
+        "SEQ_WC": false
+      },
+      "uarch": {
+        "WIN": 16,
+        "RPB": 128,
+        "WPB": 1,
+        "FIFO_DEPTH": 1024,
+        "TMEM_IMPL": 3,
+        "TMEM_NSB": 2,
+        "TMEM_RPL": 1,
+        "TMEM_TDP": 1,
+        "TMEM_GST": 1,
+        "TMEM_PMP": 1,
+        "MXU_E": 4,
+        "SEQ_WC": 1,
+        "T2": 1,
+        "COLL_GATHER": 1
+      },
+      "cases": [
+        {
+          "case": "rl-stall0-seed1-abort0",
+          "cycles": 1883,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "d1d38606c9bbe2daa77301e3b0179505cafcdf45b886aafe68ff00066c813a42",
+          "trace_lines": 6042,
+          "coverage": {
+            "astall": 0,
+            "bstall": 61,
+            "wstall": 781,
+            "replay": 4,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall40-seed7-abort0",
+          "cycles": 2010,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "609cef4f50c014d4ac444e0fd75914775031a6ad3ca4aa42d43378d87717f449",
+          "trace_lines": 6249,
+          "coverage": {
+            "astall": 0,
+            "bstall": 61,
+            "wstall": 802,
+            "replay": 1,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall70-seed2026-abort0",
+          "cycles": 2422,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "c5d3b85743b5baa8bc1203fe3524b9c7eb37f151283e985e5835c711b4b40a0e",
+          "trace_lines": 7373,
+          "coverage": {
+            "astall": 0,
+            "bstall": 61,
+            "wstall": 980,
+            "replay": 1,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall0-seed1-abort0",
+          "cycles": 6619,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "05e73e1b609f6e30fe7fb1b956b2b2498dcc97bf83994c3d38ddca350ae47fc7",
+          "trace_lines": 11144,
+          "coverage": {
+            "astall": 0,
+            "bstall": 0,
+            "wstall": 1022,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall40-seed7-abort0",
+          "cycles": 6619,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "846ca375f6f85ccb16f3a6f91bd15347cde6b8cbb874e22aa3c2f340f5bbb673",
+          "trace_lines": 11146,
+          "coverage": {
+            "astall": 0,
+            "bstall": 0,
+            "wstall": 1023,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall70-seed2026-abort0",
+          "cycles": 6660,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "60fb521f239da261118253ced77bd533c705fab2f84040f4da24cb2acdc87935",
+          "trace_lines": 11235,
+          "coverage": {
+            "astall": 0,
+            "bstall": 56,
+            "wstall": 1019,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort1",
+          "cycles": 2506,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "029cc5b3036190ef5faa5472c1f0b1d5de7417aab699029eca7cb86cf0f5ec57",
+          "trace_lines": 4917,
+          "coverage": {
+            "astall": 0,
+            "bstall": 81,
+            "wstall": 1016,
+            "replay": 1,
+            "abort": 1
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort2",
+          "cycles": 3102,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "40a894e38fc08fe39586711e7bdc7f52f511e6544eb4f1f04b2b32301af1e3a0",
+          "trace_lines": 8622,
+          "coverage": {
+            "astall": 0,
+            "bstall": 102,
+            "wstall": 1018,
+            "replay": 1,
+            "abort": 1
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort3",
+          "cycles": 4316,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "2f287739fb9a11e99690732c6557a524dba62248e0d65406313402014bd75be5",
+          "trace_lines": 14092,
+          "coverage": {
+            "astall": 0,
+            "bstall": 102,
+            "wstall": 1997,
+            "replay": 0,
+            "abort": 1
+          }
+        }
+      ]
+    },
+    {
+      "name": "a_throttled",
+      "case_count": 9,
+      "pass": true,
+      "baseline_result": "evidence/equivalence-baseline-a/result.json",
+      "candidate_result": "evidence/equivalence-candidate-a/result.json",
+      "baseline_result_sha256": "1f1bf2febdc24623536da47bc983ff7f42a9af93786f100bdaacf4b9c835cddd",
+      "candidate_result_sha256": "a09258c3367669618ce4b494576c82462c9cd5619468c286db0ec43f792fe2fa",
+      "config": {
+        "S": 1,
+        "D": 128,
+        "MCOLS": 8,
+        "ACT_BLOCKS": 64,
+        "TMEM_WORDS": 65536,
+        "DRAM_BYTES": 1048576,
+        "IMEM_WORDS": 65536,
+        "LANES": 8,
+        "PAIR": true,
+        "DSTEP": false,
+        "STREAM": false,
+        "ACT_ROWS": 16,
+        "PORTB": 4,
+        "T2": true,
+        "ROWLANES": true,
+        "ALINE": 64,
+        "SEQ_WC": false
+      },
+      "uarch": {
+        "WIN": 16,
+        "RPB": 128,
+        "WPB": 1,
+        "FIFO_DEPTH": 1024,
+        "TMEM_IMPL": 3,
+        "TMEM_NSB": 2,
+        "TMEM_RPL": 1,
+        "TMEM_TDP": 1,
+        "TMEM_GST": 1,
+        "TMEM_PMP": 1,
+        "MXU_E": 4,
+        "SEQ_WC": 1,
+        "T2": 1,
+        "COLL_GATHER": 1
+      },
+      "cases": [
+        {
+          "case": "rl-stall0-seed1-abort0",
+          "cycles": 2783,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "ff39e27917c23bb7b801956ef7fbcb3598bf133423352cc695eae1b87c126a9d",
+          "trace_lines": 8445,
+          "coverage": {
+            "astall": 1568,
+            "bstall": 0,
+            "wstall": 781,
+            "replay": 3,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall40-seed7-abort0",
+          "cycles": 2880,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "e43813795d46c4213b00ce9bd6aed346049a1675581abe74abf6dffdd1f1e70d",
+          "trace_lines": 8893,
+          "coverage": {
+            "astall": 1597,
+            "bstall": 18,
+            "wstall": 857,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall70-seed2026-abort0",
+          "cycles": 3011,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "1c34cd8796dd0b1b5b4470ee52886aabdb2b470d1d29873b9504dc7c4d526018",
+          "trace_lines": 9453,
+          "coverage": {
+            "astall": 1588,
+            "bstall": 60,
+            "wstall": 956,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall0-seed1-abort0",
+          "cycles": 8663,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "310c22b826cd0c72371ce6acdf977e599cfb067d43c0e07297ed355da718eceb",
+          "trace_lines": 16954,
+          "coverage": {
+            "astall": 3766,
+            "bstall": 0,
+            "wstall": 1022,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall40-seed7-abort0",
+          "cycles": 8668,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "888b45b7116189c284ccb7ec76e5cb47c49e5461f7e442f098bf9fb809ee7f60",
+          "trace_lines": 16957,
+          "coverage": {
+            "astall": 3762,
+            "bstall": 0,
+            "wstall": 1023,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "walk-stall70-seed2026-abort0",
+          "cycles": 8687,
+          "isa_exact": true,
+          "dram_sha256": "fe09aff13b227e322e3749962276c3c60f7ace092458a9a2b7adec689cc7f7db",
+          "tmem_sha256": "d2025e6487a8e40a583b519e46d9c9e55d63a148635c91e36eac89ae3c7b5880",
+          "transactions_sha256": "d717f34b5d1e00964562f1c6e01518fba7a361a4a5a1c8908854be737aba361c",
+          "trace_lines": 16986,
+          "coverage": {
+            "astall": 3780,
+            "bstall": 0,
+            "wstall": 1019,
+            "replay": 0,
+            "abort": 0
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort1",
+          "cycles": 3538,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "ffb2a8da1dae69bdc59b2c846cec6dda11dad5b5936a3b8cf6ae75711a82514e",
+          "trace_lines": 10718,
+          "coverage": {
+            "astall": 1945,
+            "bstall": 46,
+            "wstall": 961,
+            "replay": 0,
+            "abort": 1
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort2",
+          "cycles": 3578,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "4a46e168ebbc315eeb3a5db11f0252576031e5357f62d2cf4d8cd7ba1413145e",
+          "trace_lines": 10825,
+          "coverage": {
+            "astall": 1982,
+            "bstall": 32,
+            "wstall": 926,
+            "replay": 0,
+            "abort": 1
+          }
+        },
+        {
+          "case": "rl-stall70-seed42-abort3",
+          "cycles": 4869,
+          "isa_exact": true,
+          "dram_sha256": "6559c97eaef010e8c3f6c9922f9e9511b2a895cf2f36c846614948596b0d3df3",
+          "tmem_sha256": "f50818e8ac66c9999bbf24b4a8a1a22b8b3bcea3285d8eb24624ba693d1bc4ea",
+          "transactions_sha256": "475c209b810c9cccfcf55c97a3ee716de6baf06710e7855cf95d4043ecafa7be",
+          "trace_lines": 16406,
+          "coverage": {
+            "astall": 2347,
+            "bstall": 65,
+            "wstall": 1900,
+            "replay": 0,
+            "abort": 1
+          }
+        }
+      ]
+    }
+  ],
+  "physical_timing_proof": false,
+  "coverage_totals": {
+    "astall": 22335,
+    "bstall": 745,
+    "wstall": 19103,
+    "replay": 11,
+    "abort": 6
+  },
+  "candidate_rtl_commit": "df01e692f0131ce45939a0c61dd1379570ea82a2",
+  "verification_tool_sha256": "481805e0d6e4a9c9f3857bc704196d7e03b4c2b8122b1b336dff4339836bb98f"
+}
