@@ -2310,7 +2310,7 @@ class Engine:
                  pool_map: bool = True, prog_cache: bool | None = None,
                  prompt_runs: bool = False, layer_ahead=None, expert_major: bool = False,
                  snapshots: int = 0, batch_area: bool = False, tile_runs: bool | None = None,
-                 tile_rows: int | None = None):
+                 tile_rows: int | None = None, kv_full: bool = False):
         from . import prefill as PF
         self.spec, self.cap, self.block = spec, cap, block
         self.prog_cache = PC.enabled() if prog_cache is None else bool(prog_cache)
@@ -2319,6 +2319,11 @@ class Engine:
         #                                     on unless OTPU_TILE=0)
         self.batch, self.rows = batch, max(rows, batch)
         wkw = dict(wformat=wformat, head_format=head_format)
+        if kv_full:
+            from .gemma4 import Spec as GemmaSpec
+            if not isinstance(spec, GemmaSpec):
+                raise ValueError("kv_full requires a Gemma model")
+            wkw["kv_full"] = True
         if experts is not None:             # a MoE model's expert slots per layer
             wkw["experts"] = experts
         if embed_host is not None:          # the int8 embedding table on the host (default: the
