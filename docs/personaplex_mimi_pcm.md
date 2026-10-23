@@ -135,3 +135,7 @@ and end-to-end physical validation. Overlay A holds decoder and SEANet weights;
 temporal weight packets need drained retirement and switching. Concurrent
 residency and the transport floor remain unmeasured. This increment uses no
 physical card, image reload, service mutation, synthesis or new paid resources.
+
+The subsequent [precision-isolation increment](personaplex_pcm_precision.md)
+retains these historical results and adds optional FP32 kernels and waveform
+metrics; it does not turn this slice into accepted full speech.

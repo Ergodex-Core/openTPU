@@ -25,6 +25,8 @@ class MimiPCMSpec:
     n_filters: int = 64
     ratios: tuple = (8, 6, 5, 4)
     input_rows: int = 2
+    final_precision: str = "int8"
+    residual_precision: str = "int8"
 
     def __post_init__(self):
         for name in ("hidden", "n_filters", "input_rows"):
@@ -36,6 +38,10 @@ class MimiPCMSpec:
             raise ValueError("PCM needs even filters and four bounded upsampling ratios")
         if self.samples > 1 << 20:
             raise ValueError("PCM frame is too large")
+        if self.final_precision not in ("int8", "fp32"):
+            raise ValueError("final_precision must be int8 or fp32")
+        if self.residual_precision not in ("int8", "fp32"):
+            raise ValueError("residual_precision must be int8 or fp32")
 
     @property
     def samples(self):
@@ -57,17 +63,41 @@ def _conv(m):
             x = _elu(x)
             ol.store(m.activated[start:start + m.tile, :], x)
         ol.store(m.prepared[start + m.history:start + m.history + m.tile, :], x)
-    bias = ol.load(m.bias)
+    if m.precision != "fp32":
+        bias = ol.load(m.bias)
     for block in ol.range(m.rows // m.tile):
         start = block * m.tile
         window = ol.zeros((m.tile, m.padded_k))
         for tap in range(m.kernel):
             window[:, tap * m.cin:(tap + 1) * m.cin].set(
                 ol.load(m.prepared[start + tap:start + tap + m.tile, :]))
-        y = ol.dot(window, m.weight) + bias[None, :]
-        if m.skip is not None:
-            y = y + ol.load(m.skip[start:start + m.tile, :])
-        ol.store(m.output[start:start + m.tile, :], y)
+        if m.precision == "fp32" and m.cout == 1:
+            # The mono output projection is small and cancellation-sensitive.
+            # Keep its checkpoint coefficients and activations in FP32. RSUM
+            # of a product lowers to the existing VPU RDOT, without QACT/MM.
+            reduced = ol.sum(window * ol.load(m.fp_weight)[None, :], axis=1)
+            y = ol.empty((m.tile, 1))
+            y.set(reduced[:, None])
+            y.set(y + ol.load(m.bias)[None, :])
+            ol.store(m.output[start:start + m.tile, :], y)
+        elif m.precision == "fp32":
+            # Streaming a coefficient row per output channel bounds TMEM and
+            # keeps the program fixed-size. No host multiply/reduction.
+            for channel in ol.range(m.cout):
+                coefficient = ol.load(Tensor(m.fp_data + channel * (4 * m.padded_k),
+                                              (m.padded_k,), (1,)))
+                reduced = ol.sum(window * coefficient[None, :], axis=1)
+                column = ol.empty((m.tile, 1))
+                column.set(reduced[:, None])
+                column.set(column + ol.load(m.bias[channel:channel + 1])[None, :])
+                if m.skip is not None:
+                    column.set(column + ol.load(m.skip[start:start + m.tile, channel:channel + 1]))
+                ol.store(m.output[start:start + m.tile, channel:channel + 1], column)
+        else:
+            y = ol.dot(window, m.weight) + bias[None, :]
+            if m.skip is not None:
+                y = y + ol.load(m.skip[start:start + m.tile, :])
+            ol.store(m.output[start:start + m.tile, :], y)
     if m.history:
         # This load precedes the overlapping prefix store, including the
         # first K7 frame where the chunk is shorter than the six-row history.
@@ -164,6 +194,9 @@ class MimiPCMImage:
                 input=tensor(source_at, rows, cin), output=tensor(output_at, out_rows, cout),
                 skip=tensor(skip_at, rows, cout) if skip_at is not None else None,
                 elu=elu, last=last, frame=Tensor(frame_at, (1,), (1,)))
+            m.precision = (spec.final_precision if last else
+                           spec.residual_precision if subpath.startswith("block.") else "int8")
+            m.matrix_shape = (matrix_rows, padded_k)
             if elu:
                 m.activated = tensor(alloc(f"conv{index}_activated", 4 * rows * cin), rows, cin)
             bias_at = alloc(f"conv{index}_bias", 4 * cout, kind="immutable")
@@ -181,12 +214,17 @@ class MimiPCMImage:
                                     rows + m.history, cin)
                 if m.history:
                     self.reset_regions.append((m.prepared.base, 4 * m.history * cin))
-            codes_at = alloc(f"conv{index}_codes", matrix_rows * Q.row_bytes(padded_k, "int8", cfg.D),
-                             "pcm_weights", "immutable")
-            scales_at = alloc(f"conv{index}_scales", matrix_rows * Q.scale_bytes(padded_k, "int8", cfg.D),
-                              "pcm_weights", "immutable")
-            m.weight = QTensor.weight(codes_at, scales_at, matrix_rows, padded_k, "int8", cfg.D)
-            m.weight_offsets = (codes_at, scales_at)
+            if m.precision == "fp32":
+                m.fp_data = alloc(f"conv{index}_fp32", 4 * matrix_rows * padded_k,
+                                  "pcm_weights", "immutable")
+                m.fp_weight = Tensor(m.fp_data, (padded_k,), (1,)) if cout == 1 else None
+            else:
+                codes_at = alloc(f"conv{index}_codes", matrix_rows * Q.row_bytes(padded_k, "int8", cfg.D),
+                                 "pcm_weights", "immutable")
+                scales_at = alloc(f"conv{index}_scales", matrix_rows * Q.scale_bytes(padded_k, "int8", cfg.D),
+                                  "pcm_weights", "immutable")
+                m.weight = QTensor.weight(codes_at, scales_at, matrix_rows, padded_k, "int8", cfg.D)
+                m.weight_offsets = (codes_at, scales_at)
             self.ops.append(m)
             return output_at, m
 
@@ -247,7 +285,7 @@ class MimiPCMImage:
             bias = _checked(record["bias"], (m.cout,), "SEANet convolution bias")
             matrix = (value.transpose(2, 1, 0).reshape(m.kernel * m.cout, m.cin)
                       if m.kind == "transpose" else value.transpose(0, 2, 1).reshape(m.cout, -1))
-            padded = np.zeros(m.weight.shape, np.float32)
+            padded = np.zeros(m.matrix_shape, np.float32)
             padded[:, :matrix.shape[1]] = matrix
             prepared.append((m, padded, bias))
 
@@ -260,6 +298,9 @@ class MimiPCMImage:
             put(f"conv{index}_bias", m.bias.base, bias)
             if m.kind == "transpose":
                 put(f"conv{index}_raw_bias", m.raw_bias.base, np.tile(bias, m.kernel))
+            if m.precision == "fp32":
+                put(f"conv{index}_fp32", m.fp_data, matrix)
+                continue
             codes, scales = m.weight_offsets
             batch = QC.Batch()
             batch.submit(matrix, "int8", self.cfg.D,
@@ -276,4 +317,8 @@ class MimiPCMImage:
             program_words=[len(p) * 8 for p in self.compile()], spans=self.spans,
             payload_sha256=self.payload_hashes, samples_per_frame=self.spec.samples,
             pcm_format="raw mono FP32; no clipping or scaling",
-            precision="INT8 convolution weights/activations; FP32 bias, history, overlap, ELU and residual")
+            final_precision=self.spec.final_precision,
+            residual_precision=self.spec.residual_precision,
+            precision=("FP32 final mono convolution; " if self.spec.final_precision == "fp32" else "") +
+                      ("FP32 residual convolutions; " if self.spec.residual_precision == "fp32" else "") +
+                      "other convolution weights/activations INT8; bias, history, overlap, ELU and residual FP32")

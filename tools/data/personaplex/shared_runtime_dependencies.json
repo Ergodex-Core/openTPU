@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible CPU/ISA qualification through resident RVQ, causal decoder and raw SEANet PCM; no physical or full-speech acceptance",
+  "purpose": "Reproducible shared-ISA PCM qualification and optional FP32 mono-output precision diagnostics; no physical/full-speech acceptance",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -141,12 +141,16 @@
     "tools/personaplex_mimi_decoder_check.py": "05436437658acf5b60a147fdf0245d0a6b21c8620510f06e9716b59358f38ea0",
     "tools/personaplex_mimi_decoder_native.py": "b619d5dfa62d63ca784b9225385527e9d29ce6d3d429c2ee5059aedcddc10e85",
     "tools/data/personaplex/mimi_decoder_contract.json": "92043bee944159b986347b35a28b01d26b1df91b24b2669ab813be91ad7a31dd",
-    "opentpu/llm/personaplex_mimi_pcm.py": "5416e550354cc7e8a04a9cc4de883a6f0983fa8a31855fab91b186a4845c17e1",
+    "opentpu/llm/personaplex_mimi_pcm.py": "f51aab010156f159648ef40b18603c9d94ef8c10bdd181e55e092a46b556f595",
     "tools/personaplex_mimi_pcm_native.py": "62472c05ae3ce93be39df40b98cbe8e91015050dac28296cb1178989ec4d91f0",
     "tools/personaplex_mimi_pcm_check.py": "9bc51072cbd726168d30519704a6339d1a5f892dbb7ed04212b55d891a6a696e",
     "tools/data/personaplex/mimi_pcm_contract.json": "1cad0a76ebee4d38c30aeac9f037019d7c5135848cf92376fccf95e4e20de584",
     "tests/test_personaplex_mimi_pcm.py": "2b6f196a9e46c2a4529f047c9b094b89ffe4e2ddecc2ddadf5bc351591ac5e6a",
-    "tests/test_personaplex_mimi_pcm_check.py": "30df8b5b3e9bc786ea8b42e261c3806653ce623142bfcbea36f3db557ee0e8f3"
+    "tests/test_personaplex_mimi_pcm_check.py": "30df8b5b3e9bc786ea8b42e261c3806653ce623142bfcbea36f3db557ee0e8f3",
+    "tools/personaplex_pcm_metrics.py": "b13ad64661dc98146f145c35995b0f5cef23ea82a12839cf021dee8c99a42cbc",
+    "tests/test_personaplex_pcm_metrics.py": "0b027f7630ec812efc2ce2452cfff3638be9bdf9b38de0cd0a9a940ac16d12e2",
+    "tools/personaplex_pcm_precision_check.py": "051743cbd325e5a972f01f76ceee4d2265a4913f2889b7f4b7e9bc0ea33267d0",
+    "tests/test_personaplex_pcm_precision.py": "6714748fd9c7582c5b28e0daec20bb4b00b7a4af1f2ca7a8adcee99ff46e7f4d"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {
