@@ -1,0 +1,250 @@
+# C2 FPGA build evidence — 2026-10-19
+
+**No C2 FPGA execution or physical HBM performance result is available yet.**
+The first integrated build, from frozen commit
+`4f7509123fdd2cf1eba5a2c88289a3e3c2709439`, was stopped after a clock DRC failure.
+The corrected full build from frozen commit
+`7028e35e8720cb70d7b38d65010813dd23d88bcf` on **`opentpu-f2`
+(`i-0c78de2253f66519d`) only** completed routing but **failed setup timing**
+at 16:25:56 UTC (21:55:56 IST). The continuation controller halted before
+publication or FPGA loading. RTL Lens results remain simulations.
+
+## Standalone core synthesis and route
+
+Vivado 2025.2 synthesized and routed `otpu_c2_mxu` for
+`xcvu47p-fsvh2892-2-e`, D128/C4/DEPTH256/RF8, using the Xilinx DSP implementation.
+The snapshot was prepared from `29038ae2`; all six RTL source hashes also match
+the integrated build's `4f750912` source. Concurrent shell/host work was recorded
+in the snapshot's git status but was not among these six inputs.
+
+The clock target was 5 ns, with input/output max delays of 0.5 ns and min delays
+of zero, setup uncertainty 0.1 ns and hold uncertainty 0.05 ns. No false paths or
+multicycle exceptions were added.
+
+| Metric | Synthesis | Routed OOC |
+|---|---:|---:|
+| Setup slack, ns | +1.652 | +0.161 |
+| Hold slack, ns | −0.125 | **−0.130** |
+| Register-to-register hold slack, ns | −0.009 | +0.014 |
+| DSP48E2 | 564 | 564 |
+| RAMB36 / RAMB18 | 120 / 8 | 120 / 8 |
+| Logic LUT cells / FF | 11,818 / 14,521 | 10,042 / 13,287 |
+| Full timing target met | No | **No** |
+
+The LUT-cell metric excludes SRL and LUTRAM primitives; it is not total slice-LUT
+occupancy. The routed OOC stage deliberately returned failure. Its worst hold path is
+`cmd_addr[0][18]` to `command_bank_reg[0][addr][0][18]/D`: 0.012 ns data delay
+minus 0.030 ns destination clock delay, 0.050 ns uncertainty and 0.062 ns FF hold
+requirement gives −0.130 ns. The standalone port has a zero minimum input delay
+and an unset physical boundary net. These address upper bits are constant in the
+bounded-row kernel; the full image must still close every remaining actual
+driver-to-register path. The OOC result is not being relabeled as a pass.
+
+All twelve `check_timing` categories were zero, including unconstrained internal
+endpoints and missing input/output delays. All 65,568 routable nets were fully
+routed with zero routing errors. DRC and methodology reports retain DSP/RAM
+pipelining warnings, the OOC no-routable-load warning and primitive
+advisories. Positive internal slack does not qualify the integrated shell clock
+network or establish measured F2 operation.
+
+Local evidence is `build/c2-fpga/ooc-final-evidence/`. The compressed source,
+flow, manifests, logs and reports have SHA256
+`5137d2d8bcf8c13164880973447ecae347bf720e8fdeab2d585dd6d5257aa637`.
+Evidence and both checkpoints are preserved using AWS CLI at
+`s3://cg-rachit-afi-438374459156-us-east-1/opentpu/c2/2026-10-19/ooc-xdc-fixed/`.
+
+## Integrated F2 build
+
+The first isolated build ran on `i-00a83cab3c81ac10f` under systemd unit
+`otpu-c2-full-4f750912`, with an eight-CPU quota, 96 GiB memory limit, six-hour
+runtime limit and four Vivado threads. Its preserved directory is
+`/home/ubuntu/rachit/codex-c2/source-4f750912/full`. The source checkout is separate
+from existing TPU work; no FPGA slot has been changed.
+
+The kernel, eight native HBM ports, PCIS preload and OCL control synthesized with
+zero synthesis errors/critical warnings. The custom CDC constraints found 19
+crossing FIFOs and one host write counter, with core/main/HBM periods
+5.000/4.000/2.222 ns. Integrated synthesis estimated +0.387 ns setup and −0.095 ns
+hold slack; these are pre-route estimates based on the subsequently rejected
+clock setting. Shell linking additionally emits HDK constraint/context warnings
+that remain recorded and under review.
+The integrated synthesis utilization report lists 38,897 total LUTs (23,141 logic,
+6,642 LUTRAM, 9,114 SRL), 41,865 FFs, 172 RAMB36, 55 RAMB18 and 564 DSPs. This
+includes the CL's HBM/control fabric, before linking the static AWS shell.
+
+Vivado reported `AVAL-168`: the inherited MMCM multiplier `4.8` is not a legal
+0.125 increment. The build was stopped before placement; its source, reports,
+logs and four checkpoints were preserved in S3 under `full-4f750912/`.
+Commit `70bb2971` derives a legal multiplier/divider pair of 24/5, preserving
+the exact 200/400 MHz core clocks and 450 MHz HBM clock. The builder now checks
+legal clock attributes and exact frequencies before invoking Vivado.
+
+A separate read-only probe of the actual optimized checkpoint confirmed that
+all eight native write-counter Gray crossings survive optimization despite
+disabled kernel writes. Each retains 16 source and two stages of 16 destination
+registers, with a path into read issue gating. The corrected build must therefore
+constrain and validate **47** Gray groups: 38 FIFO pointer directions, eight
+native counters and one host counter. The old 39-group report is insufficient.
+The probe also established that Vivado's exception property includes
+`-datapath_only`, and that bus-skew report rows wrap across lines; qualification
+must parse these actual report forms. Probe evidence is preserved in
+`build/c2-fpga/counter-evidence/` and the S3 `full-4f750912/` prefix.
+
+A second read-only probe found 35 inherited shell methodology findings and four
+`TIMING-54` scoped-clock findings. The unchanged shell classifier passed all 35;
+the inherited DDR/100 MHz context classifier rejected this HBM/200 MHz design.
+All core and HBM clock registers are inside `WRAPPER/CL`. Across the six clock
+directions, exhaustive boundary queries found only the existing shell-reset
+entries to the three core and three HBM synchronizer CLR pins, with no top-level
+I/O paths. Vivado returns those exact false paths in cell-source queries both
+with and without `-user_ignored`; this is recorded explicitly rather than
+interpreted as a timed data crossing. The C2 checker must audit all six exported
+destination-period bounds and map the four findings to their actual constraint
+IDs. No severity or timing exception is relaxed.
+
+This probe's complete reports, exported constraints, object properties and logs
+are in `build/c2-fpga/methodology-evidence/` and S3
+`full-4f750912/methodology-evidence.tar.gz`, with SHA256
+`c7da174694ff9e07d4f6f1f929fad8481d0bf4ec3f7f90083f9bc64c96fb2125`.
+
+The corrected classifier was then executed directly in Vivado on the preserved
+checkpoint: `raw_blockers=39`, `inherited_shell=35`, `scoped_context=4`,
+`remaining_blockers=0`. This verifies methodology context, not routed timing.
+Its exact source bytes match committed `7028e35e`; verification evidence is in
+`build/c2-fpga/methodology-verification/` and the S3 archive
+`full-4f750912/methodology-verification.tar.gz`, SHA256
+`401924eb101be7954a8a5693e274c9e81f86e18f5204e085355b5987a6c5db22`.
+The combined build, route, methodology, publisher, session and host suite passed
+**213 tests** before freezing this revision.
+
+The corrected revision initially started at 14:36 UTC on `fpga-dev-f2`. At the
+user's instruction to use only `opentpu-f2`, its own unit was stopped and
+confirmed inactive at approximately 14:57 UTC. Other jobs and the FPGA image
+were untouched. No further work is assigned to `fpga-dev-f2`.
+
+A first dedicated-host launch at 14:58:24 UTC stopped before creating the output
+directory because system Python lacks NumPy. Its log and unit status are
+preserved as `failed-system-python.log` and `failed-system-python-unit.txt`.
+A **fresh full build** then started on `opentpu-f2` at 15:00:12 UTC using the
+verified `/home/ubuntu/opentpu-venv/bin/python3`, under
+`otpu-c2-full-7028e35e-r2.service`, with invocation ID
+`2a3393b4074647e3bd79ae47159f28c7`. Its separate checkout is
+`/home/ubuntu/rachit/codex-c2/source-7028e35e/src`, cloned from the verified
+dedicated-host `session-tools` checkout. Its new output directory is
+`/home/ubuntu/rachit/codex-c2/source-7028e35e/full`; no old-host checkpoints are
+reused. The launch verifies the exact instance through IMDSv2, frozen source
+revision, clean checkout, HDK/IP revisions, and available resources. It retains
+the eight-CPU quota, 96 GiB memory limit, six-hour runtime limit and four Vivado
+threads. Both compilation and eventual physical measurement use this instance.
+Local launch and stop receipts are in `build/c2-fpga/remote/` under
+`launch-dedicated-full-7028e35e-*`,
+`relaunch-dedicated-full-7028e35e-venv-*` and `stop-old-host-user-request-*`.
+
+At 15:10:20 UTC the dedicated build passed synthesis, with all 19 FIFO crossings
+and nine write-counter crossings present. It wrote the linked checkpoint at
+15:12:17 UTC and entered optimization at 15:15:49 UTC. The 12-endpoint linked
+reset check passed and the eight-port floorplan is active. No new error appeared;
+the 21 recorded HDK shell/context critical warnings remain subject to final
+qualification. Pre-route slack is +0.387 ns setup and −0.095 ns hold, which does
+not establish routed timing closure.
+The post-opt checkpoint was written at 15:19:50 UTC, and placement started at
+15:20:35 UTC with zero errors. The corrected build has advanced beyond the
+previous clock-configuration failure; routed closure remains pending.
+
+At 15:32:20 UTC, the reviewed continuation controller was started locally with
+idle-sleep prevention. Its first two live polls confirmed the exact dedicated
+build invocation is still running. It will qualify and preserve the finished
+build, publish and wait for its AFI, execute the reviewed load/benchmark/restore
+session, preserve the raw results, and validate/append/open the 30 hardware Lens
+profiles. Every later stage depends on the preceding checks; any failed or
+ambiguous operation halts continuation without automatically retrying a mutation.
+The controller passed 14 offline tests and independent review. Its SHA256 is
+`14265ee830e11513eabcb602ff324fa356968221509719fab318511faad37745`.
+Live state and evidence are in
+`build/c2-fpga/remote/continuation-7028e35e-r2/`, with launch receipt
+`build/c2-fpga/remote/continuation-7028e35e-r2.launch-receipt.json`.
+Controller execution is not evidence that any physical benchmark has completed.
+
+### Dedicated build's routed result
+
+Routing finished and a `.post_route.VIOLATED` checkpoint was retained. The full
+run took approximately **85 minutes 44 seconds**, from 15:00:12 to 16:25:56 UTC.
+The retained unit reports `Result=exit-code`, `ExecMainStatus=1`. The controller
+halted at 16:26:04 UTC; its durable state must not be reset to resume this failed
+image.
+
+| Routed gate | Result |
+|---|---:|
+| Setup WNS / TNS | **−4.024 ns / −6,933.125 ns** |
+| Setup failing endpoints, global summary | **11,841** |
+| Hold WNS / failing endpoints | +0.011 ns / 0 |
+| Bus-skew failures / unrouted nets / DRC blockers | 0 / 0 / 0 |
+| Gray groups / directional CDC witnesses | 47 / 6 |
+| Methodology blockers after existing classifications | 0 |
+
+The same-clock failures include 8,289 endpoints on the 450 MHz HBM fabric
+(worst −2.065 ns), 3,206 on the 200 MHz core (−4.024 ns), and 344 on the
+250 MHz host domain (−0.327 ns). The destination-period-bounded crossing groups
+also have setup violations: host→HBM −0.795 ns and host→core −0.162 ns. Endpoint
+counts across these tables are not additive to the global summary because the
+same endpoint can appear in more than one clock relationship.
+
+The worst core path is `u_ocl/m_araddr_reg[5]_replica_15` →
+`u_board/rd_value_reg[0]`: a same-core-clock SLR crossing followed by CSR decode,
+8.674 ns data delay, of which 8.361 ns is routing. The worst HBM path is
+`u_host/ar_sel_reg[3]` → `u_host/h_out_reg[4]`: 4.440 ns data delay, of which
+4.040 ns is routing. The host-domain worst path is `u_host/b_n_reg[0]` →
+`u_ocl/x_wdata_reg[28]/CE`. Fixing the single worst CSR path will not by itself
+qualify this image. Timing exceptions and clock frequencies remain unchanged.
+
+Local SSM receipts are `build/c2-fpga/remote/read-dedicated-timing-summary-result.json`,
+`read-dedicated-path-groups-result.json`, and `read-dedicated-clock-tables-result.json`.
+Full reports and checkpoints remain in the dedicated build directory above.
+No qualified archive, AFI, hardware session or hardware Lens profiles resulted
+from this failed build. Another full implementation will require a fresh source
+revision, output directory and continuation provenance.
+
+No AFI is published or loaded unless every qualification gate passes.
+The planned execution host remains the dedicated
+`i-0c78de2253f66519d`, with a fresh ownership/idle check and canonical device lock
+before loading; the previous image is restored afterward.
+
+## Prepared physical comparison
+
+Exact-reference fixtures cover rows/KB of 31/1, 257/9, 31/54, 31/255 and 3/9.
+Both legacy and decode will use identical physical weights and resident ACT/scale
+metadata, with three alternating repetitions. The host checks every fp32 result,
+signed integer diagnostic and per-PC read count before exporting hardware Lens
+profiles. START-to-final-commit cycles exclude preload and readback.
+
+The combined Lens viewer contains 128 profiles; its latest ten are explicitly
+synthetic native-service RTL profiles. Their memory-stall findings and physical
+measurement priorities are in [C2_NATIVE_PROFILE_ANALYSIS.md](C2_NATIVE_PROFILE_ANALYSIS.md).
+The build/benchmark contract is [F2-BENCH.md](F2-BENCH.md).
+
+The dedicated host now has the exact `7028e35e` tools in
+`/home/ubuntu/rachit/codex-c2/session-tools`, using
+`/home/ubuntu/opentpu-venv/bin/python3`. All five transferred fixtures passed
+checksums, canonical fp32/integer results and expected per-PC traffic checks
+without accessing the FPGA. The host's role could not initially read S3 objects;
+the transfer used two 900-second presigned HTTPS downloads with SHA256 checks.
+The role also lacked the runtime image-status permission. A separate inline
+policy, `OpenTpuC2FpgaImageReadUsEast1`, now allows only
+`ec2:DescribeFpgaImages` in `us-east-1`. IAM simulation verified that it does not
+grant image writes or access in another region, and a live query from the host
+passed. The existing SSM policy and trust policy were left unchanged. Local
+receipts are in `build/c2-fpga/remote/session-stage-7028e35e/retry1/` and
+`session-image-read-policy-receipt.json`.
+
+Root software preflight also passed with exact tool hashes, a clean frozen
+checkout, NumPy 2.5.4 and process-scoped Git trust for `session-tools`. The
+physical launcher is staged but has not executed. Its own retained systemd unit
+will allow one hour for the session and five minutes for cancellation/restoration.
+
+The separate inline policy `OpenTpuC2DedicatedEvidence` permits Get/Put for
+exactly the three dedicated build-evidence objects under
+`opentpu/c2/2026-10-19/full-7028e35e-opentpu-f2/`, and Put for the single planned
+`results-7028e35e-opentpu-f2/session-01.tar.gz` archive. All 20 resource/action
+simulation decisions were checked and the applied document read back exactly.
+It adds no deletion, ACL or bucket-listing access. The local receipt is
+`build/c2-fpga/remote/c2-dedicated-evidence-policy-receipt.json`.
