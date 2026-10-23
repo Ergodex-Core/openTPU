@@ -2,9 +2,10 @@
 
 This is a compiler/runtime design, not a demonstrated full-model fit or a
 hardware result. Its P/B depth-only subset now has a [shared ISA implementation](personaplex_depth_chain.md)
-and cached generated-sequence checks. Optional resident RVQ, causal upsample and
-decoder transformer are now software-validated; temporal paging and complete
-codec/PCM integration remain unimplemented. No image change, synthesis, card access or paid resource is
+and cached generated-sequence checks. Optional resident RVQ, causal upsample,
+decoder transformer and SEANet raw PCM now have software tests and budgets;
+temporal paging and full input/output integration remain unimplemented. PCM
+quality is unaccepted. No image change, synthesis, card access or paid resource is
 required to investigate it. Existing standalone images total5,270,028,288 bytes
 versus4,294,967,296 mapped bytes. Shared workspaces alone cannot solve residency:
 input embedding tables exceed the temporal/token free space by940,683,264 bytes.
@@ -104,9 +105,11 @@ The optional [Mimi RVQ latent slice](personaplex_mimi.md) now occupies unused P
 guard space beginning0x5D850000, with eight FP32 centroid tables and two INT8
 projections. Its [causal upsample and decoder transformer](personaplex_mimi_decoder.md)
 now keep overlap/KV/offset state in P and place25,616,384 decoder weight bytes at
-the start of A. Depth B is unchanged. The remaining Mimi encoder and SEANet
-convolution/transposed convolution/PCM path still need lowering and capacity
-checks. Temporal/codec A packet switching remains unimplemented. Prefer testing codec packets in A
+the start of A. The [SEANet-to-PCM stage](personaplex_mimi_pcm.md) adds 14,921,736
+matrix bytes after those weights, plus persistent convolution state in P. Depth
+B is unchanged. The input codec still needs lowering and capacity checks;
+SEANet precision and physical acceptance remain open. Temporal/codec A packet
+switching remains unimplemented. Prefer testing codec packets in A
 before temporal execution and after depth execution, when temporal weights are
 no longer live. If codec packets/scratch fit that overlay, B can retain the depth
 bank and the added per-frame traffic is encoder/decoder packet transfer rather

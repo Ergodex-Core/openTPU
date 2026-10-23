@@ -106,7 +106,7 @@ NumPy, PyTorch, safetensors and the pinned native Moshi source remain separate
 dependencies. The checkpoint CLI requires explicit existing model/codec and
 completed baseline locations. No readiness is enabled by building this tree.
 
-## Decoder progress and remaining PCM path
+## Decoder and PCM progress
 
 The optional [causal upsample and decoder transformer](personaplex_mimi_decoder.md)
 now consumes the resident RVQ latent without host intermediate transfers. It
@@ -118,16 +118,16 @@ the exact shared profile. Accumulated RVQ-through-decoder relative L2 error is
 numerical diagnostics, with no accepted speech quality or physical latency.
 The bounded implementation supports 128 code frames before explicit exhaustion.
 
-The mono causal SEANet decoder begins Conv1d512→1024/kernel7, followed by ELU
-and transposed-convolution stages1024→512→256→128→64. Their strides are8,6,5,4
-and kernels16,12,10,8. Each stage has a residual block. Final ELU and Conv1d64→1
-kernel3 produce float PCM. Causal Conv1d/ConvTranspose state, initial/final
-padding, overlap-add and reset must match the installed source exactly.
+The optional [SEANet decoder](personaplex_mimi_pcm.md) now lowers all 14
+convolutions, ELU and residuals to raw float PCM with persistent causal history
+and bias-corrected overlap. Actual-checkpoint two-frame/reset execution passed
+in CPU/ISA. Accumulated PCM relative L2 is 0.1602663; the quieter second frame is
+0.4062426. State correctness does not establish accepted waveform quality.
 
 Native configuration specifies24kHz and12.5 code frames/s, or1920 PCM samples
 per code frame after latent2× upsample and the8×6×5×4 stages. These are source
-format rates, not measured FPGA throughput. Streaming boundary/PCM numerical
-acceptance is unimplemented. Temporal paged weights/fixed KV, text/hidden wiring,
+format rates, not measured FPGA throughput. PCM numerical/audio-quality and
+physical acceptance remain open. Temporal paged weights/fixed KV, text/hidden wiring,
 input codec, prompt/voice/delay scheduler and complete quality/latency acceptance
 also remain. No missing RTL capability has yet been demonstrated by these slices;
 unsupported lowering or capacity must be shown before proposing synthesis.

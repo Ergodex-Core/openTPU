@@ -23,6 +23,7 @@ from .personaplex_depth_input import DepthInputImage, DepthInputSpec
 from .personaplex_depth_layer import DepthLayerImage, DepthLayerSpec
 from .personaplex_mimi import MimiRVQImage, MimiRVQSpec
 from .personaplex_mimi_decoder import MimiDecoderImage, MimiDecoderSpec
+from .personaplex_mimi_pcm import MimiPCMImage, MimiPCMSpec
 
 
 @dataclass(frozen=True)
@@ -71,7 +72,7 @@ class DepthChainImage:
         "heads": (0x5B7D1400, 0x5D831400), "B": (0xB0000000, 1 << 32),
     }
 
-    def __init__(self, spec, cfg, *, mimi_spec=None, decoder_spec=None):
+    def __init__(self, spec, cfg, *, mimi_spec=None, decoder_spec=None, pcm_spec=None):
         if cfg.S != 1 or cfg.DRAM_BYTES > 1 << 32:
             raise ValueError("resident depth chain needs one slice and unsigned32 mapped DRAM")
         self.spec, self.cfg = spec, cfg
@@ -164,7 +165,19 @@ class DepthChainImage:
                        p["base"] < span["base"] + span["bytes"] for p in self.spans):
                     raise ValueError("Mimi decoder overlaps an existing resident span")
             self.spans.extend(self.decoder.spans)
-        program_count = (4 if self.mimi else 3) + (1 + decoder_spec.layers if self.decoder else 0)
+        self.pcm = None
+        if pcm_spec is not None:
+            if self.decoder is None or pcm_spec.hidden != self.decoder.spec.hidden or pcm_spec.input_rows != 2:
+                raise ValueError("SEANet PCM needs a matching resident two-token decoder")
+            self.pcm = MimiPCMImage(pcm_spec, cfg, input_at=self.decoder.io["output"],
+                state_base=self.decoder.state_end, weight_base=self.decoder.weight_end)
+            for span in self.pcm.spans:
+                if any(span["base"] < p["base"] + p["bytes"] and
+                       p["base"] < span["base"] + span["bytes"] for p in self.spans):
+                    raise ValueError("SEANet PCM overlaps an existing resident span")
+            self.spans.extend(self.pcm.spans)
+        program_count = ((4 if self.mimi else 3) + (1 + decoder_spec.layers if self.decoder else 0)
+                         + (len(self.pcm.ops) if self.pcm else 0))
         self.program_slots = [alloc(f"program{index}", waits.area(cfg.IMEM_WORDS, cfg.SEQ_WC),
                                     "program", 4096, kind="program")
                               for index in range(program_count)]
@@ -179,6 +192,8 @@ class DepthChainImage:
         if self.decoder is not None:
             self.weight_bytes += self.decoder.weight_bytes
             self.kv_bytes += self.decoder.kv_bytes
+        if self.pcm is not None:
+            self.weight_bytes += self.pcm.weight_bytes
 
     def compile(self):
         if self.programs is None:
@@ -193,6 +208,8 @@ class DepthChainImage:
                 self.programs.extend(self.mimi.compile())
             if self.decoder is not None:
                 self.programs.extend(self.decoder.compile())
+            if self.pcm is not None:
+                self.programs.extend(self.pcm.compile())
             for program in self.programs:
                 if program.run_args or len(program) * 8 > self.cfg.IMEM_WORDS:
                     raise CompileError("resident stage has host arguments or exceeds instruction capacity")
@@ -211,9 +228,12 @@ class DepthChainImage:
                     **({"mimi_" + k: v for k, v in self.mimi.payload_hashes.items()}
                        if self.mimi else {}),
                     **({"decoder_" + k: v for k, v in self.decoder.payload_hashes.items()}
-                       if self.decoder else {})},
+                       if self.decoder else {}),
+                    **({"pcm_" + k: v for k, v in self.pcm.payload_hashes.items()}
+                       if self.pcm else {})},
                 "mimi": self.mimi.budget() if self.mimi else None,
-                "decoder": self.decoder.budget() if self.decoder else None}
+                "decoder": self.decoder.budget() if self.decoder else None,
+                "pcm": self.pcm.budget() if self.pcm else None}
 
     def upload(self, backend, projections, embeddings, layers, head_bank):
         """Pack offline using established component builders; upload named spans only."""
@@ -240,13 +260,15 @@ class DepthChainEngine:
     """ISA-only runner; model compute/feedback remain device programs, not host math."""
     def __init__(self, projections, embeddings, layers, head_bank, *, spec=None, cfg=None,
                  backend="isa", mimi_tables=None, mimi_projections=None, mimi_spec=None,
-                 decoder_weights=None, upsample_weight=None, decoder_spec=None, decoder_rope=None):
+                 decoder_weights=None, upsample_weight=None, decoder_spec=None, decoder_rope=None,
+                 pcm_weights=None, pcm_spec=None):
         if backend != "isa":
             raise ValueError("resident depth chain is software/ISA only; no physical backend is qualified")
         self.spec = spec or DepthChainSpec()
         self._closed = self._failed = self._ready = self._active = False
         self._mimi_ready = False
         self._decoder_ready = self._decoder_consumed = False
+        self._pcm_ready = self._pcm_consumed = False
         self.decoder_pos = 0
         if (mimi_tables is None) != (mimi_projections is None):
             raise ValueError("Mimi tables and projections must be supplied together")
@@ -258,12 +280,17 @@ class DepthChainEngine:
             raise ValueError("Decoder specification/coefficients require offline payloads")
         if decoder_weights is not None and mimi_tables is None:
             raise ValueError("Decoder requires resident Mimi RVQ")
+        if pcm_weights is None and pcm_spec is not None:
+            raise ValueError("SEANet PCM specification requires offline payloads")
+        if pcm_weights is not None and decoder_weights is None:
+            raise ValueError("SEANet PCM requires a resident Mimi decoder")
         self.poss, self.last_stats = [0], {}
         self.cfg = cfg or Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=128, ACT_ROWS=16,
                                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 32)
         self.image = DepthChainImage(self.spec, self.cfg,
             mimi_spec=(mimi_spec or MimiRVQSpec()) if mimi_tables is not None else None,
-            decoder_spec=(decoder_spec or MimiDecoderSpec()) if decoder_weights is not None else None)
+            decoder_spec=(decoder_spec or MimiDecoderSpec()) if decoder_weights is not None else None,
+            pcm_spec=(pcm_spec or MimiPCMSpec()) if pcm_weights is not None else None)
         self.programs = self.image.compile()  # capacity before any lazy payload reads
         self.backend = G.IsaBackend(self.cfg, [np.zeros(self.cfg.DRAM_BYTES, np.uint8)], adopt=True)
         try:
@@ -272,6 +299,8 @@ class DepthChainEngine:
                 self.image.mimi.upload(self.backend, mimi_tables, mimi_projections)
             if self.image.decoder is not None:
                 self.image.decoder.upload(self.backend, upsample_weight, decoder_weights, decoder_rope)
+            if self.image.pcm is not None:
+                self.image.pcm.upload(self.backend, pcm_weights)
         except BaseException:
             self.close(); raise
 
@@ -292,6 +321,8 @@ class DepthChainEngine:
                 raise RuntimeError("decoder frame limit reached; reset required")
             if self._active and not self._decoder_consumed:
                 raise RuntimeError("complete the pending decoder frame or reset before a new frame")
+        if self.image.pcm is not None and self._active and not self._pcm_consumed:
+            raise RuntimeError("complete the pending PCM frame or reset before a new frame")
         value = _checked(hidden, (self.spec.hidden,), "temporal hidden")
         if isinstance(text_id, (bool, np.bool_)):
             raise ValueError("text ID must be integral")
@@ -303,6 +334,7 @@ class DepthChainEngine:
             raise ValueError("text ID outside vocabulary")
         self._ready = self._active = self._mimi_ready = False
         self._decoder_ready = self._decoder_consumed = False
+        self._pcm_ready = self._pcm_consumed = False
         try:
             self.backend.write(0, self.image.io["hidden"], value)
             self.backend.write(0, self.image.io["control"], np.array([0, token], np.float32))
@@ -357,11 +389,50 @@ class DepthChainEngine:
             raise RuntimeError("decoder frame limit reached; reset required")
         self._decoder_ready = False
         try:
-            self.decoder_stats = [self.backend.run([program]) for program in self.programs[4:]]
+            end = 4 + len(image.compile())
+            self.decoder_stats = [self.backend.run([program]) for program in self.programs[4:end]]
         except BaseException:
             self._failed = True; raise
         self.decoder_pos += 1
         self._decoder_ready = self._decoder_consumed = True
+
+    def run_pcm(self):
+        """Generate raw float PCM from the resident decoder output, without host transfers."""
+        self._check()
+        image = self.image.pcm
+        if image is None or not self._decoder_ready or self._pcm_consumed:
+            raise RuntimeError("PCM needs an unconsumed completed resident decoder frame")
+        self._pcm_ready = False
+        try:
+            start = 4 + len(self.image.decoder.compile())
+            self.pcm_stats = [self.backend.run([program]) for program in self.programs[start:]]
+        except BaseException:
+            self._failed = True; raise
+        self._pcm_ready = self._pcm_consumed = True
+
+    def read_pcm_layer(self, layer):
+        self._check()
+        image = self.image.pcm
+        if image is None or type(layer) is not int or not 0 <= layer < len(image.layer_outputs):
+            raise ValueError("invalid SEANet stage")
+        if not self._pcm_ready:
+            raise RuntimeError("no completed resident PCM frame")
+        at, rows, cols = image.layer_outputs[layer]
+        result = np.asarray(self.backend.read(0, at, 4 * rows * cols), np.uint8).view(np.float32).copy()
+        if result.shape != (rows * cols,) or not np.isfinite(result).all():
+            self._failed = True
+            raise RuntimeError("invalid resident SEANet output")
+        return result.reshape(rows, cols)
+
+    def read_pcm(self):
+        return self.read_pcm_layer(14)[:, 0]
+
+    def read_pcm_state(self):
+        self._check()
+        if self.image.pcm is None or not self._pcm_ready:
+            raise RuntimeError("no completed resident PCM state")
+        return [np.asarray(self.backend.read(0, at, size), np.uint8).copy()
+                for at, size in self.image.pcm.reset_regions]
 
     def _read_decoder(self, address, width):
         self._check()
@@ -471,10 +542,13 @@ class DepthChainEngine:
                 self.backend.write(0, self.image.decoder.io["state"], np.zeros(1, np.float32))
                 self.backend.write(0, self.image.decoder.io["overlap"],
                                    np.full((2, self.image.decoder.spec.hidden), -0.0, np.float32))
+            if self.image.pcm is not None:
+                self.image.pcm.reset(self.backend)
         except BaseException:
             self._failed = True; raise
         self._failed = self._ready = self._active = self._mimi_ready = False
         self._decoder_ready = self._decoder_consumed = False
+        self._pcm_ready = self._pcm_consumed = False
         self.decoder_pos = 0
         self.poss[0], self.last_stats = 0, {}
 

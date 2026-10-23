@@ -6,13 +6,15 @@ depth layers with independent KV, then selected audio head and greedy ID. It
 produces sixteen codebook IDs. Its optional [Mimi RVQ stage](personaplex_mimi.md)
 consumes the first eight directly from resident state and produces a512-channel
 latent. The optional [causal upsample/decoder stage](personaplex_mimi_decoder.md)
-then produces two decoder tokens per frame. Temporal inference, prompt/delay
-scheduling, the remaining SEANet/PCM path and serving are not supplied here.
+then produces two decoder tokens per frame. The optional [SEANet stage](personaplex_mimi_pcm.md)
+now generates raw PCM with source streaming/reset checks. Temporal inference,
+prompt/delay scheduling and complete speech serving are not supplied here.
 Physical backends are refused before source payload access.
 
 ## Resident state and execution
 
-One backend owns the final sparse P/B layout. A remains unused. Immutable source
+One backend owns the final sparse P/B layout. Optional decoder/SEANet matrices
+occupy A; it is unused by the depth-only configuration. Immutable source
 weights are converted offline through the established component packers, hashed
 by named packed span and uploaded once. Temporary component packing buffers are
 local preparation data; they do not become separate execution backends. Sparse
@@ -173,8 +175,9 @@ software-only chain implementation; its temporal paging and full-model steps
 remain pending. Next validate further diagnostic frames/inputs only where they
 resolve a concrete correctness concern, then separate temporal fixed KV from
 paged A weights and connect the resident text/hidden outputs directly.
-Prompt/cache/delay scheduling and Mimi encode/decode, RVQ, codec state and PCM
-remain unimplemented/unbudgeted. Prior temporal32.9% source error and181.39ms/frame
+Resident RVQ, decoder and SEANet PCM now have bounded software implementations
+and budgets. Input codec, prompt/cache/delay scheduling and unified temporal
+execution remain. PCM precision is unaccepted. Prior temporal32.9% source error and181.39ms/frame
 are unaccepted; this component does not establish speech quality or realtime.
 
 Full speech stays disabled. Any physical qualification requires separately

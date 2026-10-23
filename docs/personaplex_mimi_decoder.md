@@ -128,10 +128,10 @@ the published legacy-runtime branch alone remains insufficient. This step uses
 no card/locks/image/service/production actions or new paid resources. Serving
 interruption is zero and full speech stays disabled.
 
-The remaining output codec is causal SEANet:512→1024 Conv1d/kernel7, ELU,
-transposed-convolution/residual stages with strides8,6,5,4 and kernels16,12,10,8,
-then ELU/mono64→1 Conv1d/kernel3. Exact convolution/overlap/trim/reset state and
-PCM quality/latency remain unimplemented. Input codec, temporal paging/fixed KV,
+The optional [SEANet stage](personaplex_mimi_pcm.md) now consumes these resident
+decoder tokens and generates raw PCM, with actual-checkpoint consecutive-frame
+and reset comparisons. Its precision error remains unaccepted and physical
+PCM quality/latency are unmeasured. Input codec, temporal paging/fixed KV,
 prompt/voice/delay scheduler and qualified common-image transport also remain.
 Physical acceptance needs coordinated ownership and exact live identity/capability
 checks; none were submitted by this software-only increment.

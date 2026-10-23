@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible CPU/ISA qualification through resident RVQ, causal upsample and decoder transformer; no full PCM or physical acceptance",
+  "purpose": "Reproducible CPU/ISA qualification through resident RVQ, causal decoder and raw SEANet PCM; no physical or full-speech acceptance",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -118,7 +118,7 @@
     "opentpu/llm/personaplex_audio_heads.py": "166b4b4d35791d22a9bcf8170f3648a546e06175e8d1767b68bc5cd2e43ea82b",
     "opentpu/llm/personaplex_depth_input.py": "881d83f7a14b584fab8817ef9e52482bed40749f4582b46cb5c8d911ac684777",
     "opentpu/llm/personaplex_depth_layer.py": "2a4dfe7d04565e5d366ccf535e4df0ca9aad6e75e711bb1a33e9f059dae7484d",
-    "opentpu/llm/personaplex_depth_chain.py": "6890746e865f6ec2162a328ae7348293cc2ba829be595915a63e21bc3f48e7a7",
+    "opentpu/llm/personaplex_depth_chain.py": "7f7310e9121c484e11b931c56f0117357d212c14db7acab35006a2f67f8deb00",
     "opentpu/llm/personaplex_mimi.py": "8c6598024d62b0fb9c36abe4eff54d72393b4ac191ab35f324fc79252e87cdf7",
     "tools/personaplex_isa_check.py": "ccca343c7ed12cd5daeefdbee4271ff3325d11d4f82972e7a8d821a781836337",
     "tools/personaplex_depth_input_check.py": "70f3df0c7b36fe1d63fc6fce5f7724e2887eafd2c78c2cceb90c0f43e99bb556",
@@ -140,7 +140,13 @@
     "tests/test_personaplex_mimi_decoder_check.py": "11981d94fcd669f41f36353a5a1cdcaf6d1096c18996a6d086e29d609955eec6",
     "tools/personaplex_mimi_decoder_check.py": "05436437658acf5b60a147fdf0245d0a6b21c8620510f06e9716b59358f38ea0",
     "tools/personaplex_mimi_decoder_native.py": "b619d5dfa62d63ca784b9225385527e9d29ce6d3d429c2ee5059aedcddc10e85",
-    "tools/data/personaplex/mimi_decoder_contract.json": "92043bee944159b986347b35a28b01d26b1df91b24b2669ab813be91ad7a31dd"
+    "tools/data/personaplex/mimi_decoder_contract.json": "92043bee944159b986347b35a28b01d26b1df91b24b2669ab813be91ad7a31dd",
+    "opentpu/llm/personaplex_mimi_pcm.py": "5416e550354cc7e8a04a9cc4de883a6f0983fa8a31855fab91b186a4845c17e1",
+    "tools/personaplex_mimi_pcm_native.py": "62472c05ae3ce93be39df40b98cbe8e91015050dac28296cb1178989ec4d91f0",
+    "tools/personaplex_mimi_pcm_check.py": "9bc51072cbd726168d30519704a6339d1a5f892dbb7ed04212b55d891a6a696e",
+    "tools/data/personaplex/mimi_pcm_contract.json": "1cad0a76ebee4d38c30aeac9f037019d7c5135848cf92376fccf95e4e20de584",
+    "tests/test_personaplex_mimi_pcm.py": "2b6f196a9e46c2a4529f047c9b094b89ffe4e2ddecc2ddadf5bc351591ac5e6a",
+    "tests/test_personaplex_mimi_pcm_check.py": "30df8b5b3e9bc786ea8b42e261c3806653ce623142bfcbea36f3db557ee0e8f3"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {
@@ -170,6 +176,7 @@
   "hardware_gate": "Unchanged shared image, qualified adapter/transport, owner-coordinated fresh live identity/capability/idle checks and complete physical speech acceptance required; no per-model reload",
   "native_dependency_contracts": [
     "tools/data/personaplex/mimi_rvq_contract.json",
-    "tools/data/personaplex/mimi_decoder_contract.json"
+    "tools/data/personaplex/mimi_decoder_contract.json",
+    "tools/data/personaplex/mimi_pcm_contract.json"
   ]
 }

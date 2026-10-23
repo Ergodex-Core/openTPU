@@ -89,13 +89,16 @@ silently use CPU/GPU serving fallback or reuse an old-image adapter.
 The optional [Mimi RVQ latent integration](personaplex_mimi.md) now consumes
 the first eight resident audio IDs on this exact software target. The optional
 [causal upsample and decoder transformer](personaplex_mimi_decoder.md) extends
-that resident path across multiple frames. The published
+that resident path across multiple frames. The optional [SEANet stage](personaplex_mimi_pcm.md)
+now generates raw PCM in software/ISA with measured, unaccepted precision error.
+The published
 legacy-runtime branch alone is not qualified: use its explicit pinned runtime
 dependency manifest and isolated builder, and verify the resulting receipt.
 
 Remaining full-model integration includes temporal fixed KV and paged A weights,
 resident temporal hidden/text connections, prompt/cache/delay scheduling, and
-the remaining input codec and SEANet/state/PCM execution. No new synthesis or missing ISA feature has been
+the remaining input codec, indefinite codec streaming, PCM quality acceptance
+and qualified physical transport. No new synthesis or missing ISA feature has been
 established by the successful software test. Any demonstrated gap needs an
 explicit design decision, not a per-model reload. Full speech stays disabled
 until complete same-image physical correctness, quality and latency acceptance.
