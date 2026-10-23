@@ -197,10 +197,13 @@ class CodecFrameISASession(StackISASession):
         for head in range(im.codebooks - 1):
             self.execute(im.predictor_parts(head + 1, head), observe)
         ids = self.read('code_ids').astype(np.int64)
-        self.execute(im.feedback_parts(self.position), observe)
+        self.execute(self.feedback_parts(), observe)
         self.position += 1
         self.frames += 1
         return ids
+
+    def feedback_parts(self):
+        return self.image.feedback_parts(self.position)
 
     def reset(self):
         super().reset()

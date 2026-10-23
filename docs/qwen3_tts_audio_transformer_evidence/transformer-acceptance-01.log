@@ -1,0 +1,143 @@
+{"case": "Hello.", "frames": 3, "max_output_error": 0.00013374520086052716}
+{"case": "Good morning.", "frames": 3, "max_output_error": 0.00013374520086052716}
+{"case": "The FPGA speaks.", "frames": 3, "max_output_error": 0.00013374520086052716}
+{"case": "repeated_generated_prefix_codes_for_cache_only", "frames": 80, "max_output_error": 0.00032112369666973024}
+{"integrated_repetition": 0, "frame": 1, "ids_equal": true, "output_error": 0.00013374520086052716}
+{"integrated_repetition": 0, "frame": 2, "ids_equal": true, "output_error": 0.00012310947624735694}
+{"integrated_repetition": 0, "frame": 3, "ids_equal": true, "output_error": 0.0001226676860099678}
+{"integrated_repetition": 1, "frame": 1, "ids_equal": true, "output_error": 0.00013374520086052716}
+{"integrated_repetition": 1, "frame": 2, "ids_equal": true, "output_error": 0.00012310947624735694}
+{"integrated_repetition": 1, "frame": 3, "ids_equal": true, "output_error": 0.0001226676860099678}
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_base_revision": "85a42df959fd071f40fd488e4cc7844c96ece83b",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "arithmetic_contract": "Pinned source weights evaluated with FP32 algebra; not bit-exact BF16 execution",
+  "decoder_checkpoint": {
+    "bytes": 682293092,
+    "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+  },
+  "transformer_parameters": 93,
+  "summary": {
+    "fp32": {
+      "input": 0.00014967739079581012,
+      "layer.0": 0.00015068872687572056,
+      "layer.1": 0.00014856215240689806,
+      "layer.2": 0.00013910089657576753,
+      "layer.3": 0.00026383586421900785,
+      "layer.4": 0.00036047240936920013,
+      "layer.5": 0.0004421881319603791,
+      "layer.6": 0.00044173838456046686,
+      "layer.7": 0.0005180433472956424,
+      "normalized": 0.0002617702345994213,
+      "output": 0.00032112369666973024
+    },
+    "fp64": {
+      "input": 0.00014970306958423903,
+      "layer.0": 0.00015072078505035862,
+      "layer.1": 0.00014855939706908409,
+      "layer.2": 0.0001385673135674518,
+      "layer.3": 0.0002630343522146661,
+      "layer.4": 0.00035941717757280174,
+      "layer.5": 0.0004410610502554206,
+      "layer.6": 0.0004394521947125207,
+      "layer.7": 0.000515351790275505,
+      "normalized": 0.00026249571579427684,
+      "output": 0.0003196909751610763
+    },
+    "conditional_fp32": {
+      "input": 0.0001224262253574926,
+      "layer.0": 0.00012126903029135031,
+      "layer.1": 0.00011693841810206283,
+      "layer.2": 0.00016728704524299334,
+      "layer.3": 0.00025944985401775563,
+      "layer.4": 0.00039916841949221515,
+      "layer.5": 0.000534906060758345,
+      "layer.6": 0.0005360151236624408,
+      "layer.7": 0.0006189266732978073,
+      "normalized": 0.00034114657282327977,
+      "output": 0.0004170524344833889
+    }
+  },
+  "component_rows": 89,
+  "component_accepted": true,
+  "source_full_sequence_vs_incremental_errors": {
+    "input": 4.3706475115574183e-07,
+    "layer.0": 6.707579283241156e-07,
+    "layer.1": 6.2615982353051e-07,
+    "layer.2": 7.023831340631811e-07,
+    "layer.3": 1.6216377967305237e-06,
+    "layer.4": 2.285986945350468e-06,
+    "layer.5": 2.873402683985827e-06,
+    "layer.6": 2.9125695228169976e-06,
+    "layer.7": 3.4774313920354004e-06,
+    "normalized": 1.6779389647723646e-06,
+    "output": 2.250050346897829e-06
+  },
+  "reset_poison_replay_bitwise": true,
+  "standalone_dram_bytes": 107370624,
+  "threshold_relative_l2": 0.035,
+  "source_mask_reference_bound": 1e-05,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "upstream_thresholds": {
+    "logit_relative_l2": 0.035,
+    "generated_greedy_agreement": 1.0
+  },
+  "waveform_produced": false,
+  "raw_waveform_scaling_validated": false,
+  "complete_utterances_validated": false,
+  "quality_validated": false,
+  "physical_hardware_access": false,
+  "upstream_custom_code_executed": false,
+  "tts_enabled": false,
+  "host": "opentpu-m8a-build",
+  "seconds": 295.8466587209841,
+  "rows_sha256": "6b41f5db2ef91bea4c6e0c3e242f3c578151cd5e94782947733f5d9992c5bfcc"
+}

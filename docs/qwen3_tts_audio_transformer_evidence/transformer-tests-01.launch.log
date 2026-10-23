@@ -1,0 +1,4 @@
+  File "/home/ubuntu/qwen3-tts-audio-transformer-20261023-01/run-transformer-tests-01.py", line 3
+    name=transformer-tests-01;request=json.loads((r/(name+.request.json)).read_text());started=time.monotonic();os.nice(19);resource.setrlimit(resource.RLIMIT_AS,(64<<30,64<<30))
+                           ^
+SyntaxError: leading zeros in decimal integer literals are not permitted; use an 0o prefix for octal integers

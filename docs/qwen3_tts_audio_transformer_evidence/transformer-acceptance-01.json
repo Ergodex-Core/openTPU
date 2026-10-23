@@ -1,0 +1,722 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_base_revision": "85a42df959fd071f40fd488e4cc7844c96ece83b",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "arithmetic_contract": "Pinned source weights evaluated with FP32 algebra; not bit-exact BF16 execution",
+  "decoder_checkpoint": {
+    "bytes": 682293092,
+    "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258"
+  },
+  "transformer_parameters": 93,
+  "summary": {
+    "fp32": {
+      "input": 0.00014967739079581012,
+      "layer.0": 0.00015068872687572056,
+      "layer.1": 0.00014856215240689806,
+      "layer.2": 0.00013910089657576753,
+      "layer.3": 0.00026383586421900785,
+      "layer.4": 0.00036047240936920013,
+      "layer.5": 0.0004421881319603791,
+      "layer.6": 0.00044173838456046686,
+      "layer.7": 0.0005180433472956424,
+      "normalized": 0.0002617702345994213,
+      "output": 0.00032112369666973024
+    },
+    "fp64": {
+      "input": 0.00014970306958423903,
+      "layer.0": 0.00015072078505035862,
+      "layer.1": 0.00014855939706908409,
+      "layer.2": 0.0001385673135674518,
+      "layer.3": 0.0002630343522146661,
+      "layer.4": 0.00035941717757280174,
+      "layer.5": 0.0004410610502554206,
+      "layer.6": 0.0004394521947125207,
+      "layer.7": 0.000515351790275505,
+      "normalized": 0.00026249571579427684,
+      "output": 0.0003196909751610763
+    },
+    "conditional_fp32": {
+      "input": 0.0001224262253574926,
+      "layer.0": 0.00012126903029135031,
+      "layer.1": 0.00011693841810206283,
+      "layer.2": 0.00016728704524299334,
+      "layer.3": 0.00025944985401775563,
+      "layer.4": 0.00039916841949221515,
+      "layer.5": 0.000534906060758345,
+      "layer.6": 0.0005360151236624408,
+      "layer.7": 0.0006189266732978073,
+      "normalized": 0.00034114657282327977,
+      "output": 0.0004170524344833889
+    }
+  },
+  "component_rows": 89,
+  "component_accepted": true,
+  "source_full_sequence_vs_incremental_errors": {
+    "input": 4.3706475115574183e-07,
+    "layer.0": 6.707579283241156e-07,
+    "layer.1": 6.2615982353051e-07,
+    "layer.2": 7.023831340631811e-07,
+    "layer.3": 1.6216377967305237e-06,
+    "layer.4": 2.285986945350468e-06,
+    "layer.5": 2.873402683985827e-06,
+    "layer.6": 2.9125695228169976e-06,
+    "layer.7": 3.4774313920354004e-06,
+    "normalized": 1.6779389647723646e-06,
+    "output": 2.250050346897829e-06
+  },
+  "source_chunk_recompute": {
+    "chunk_size": 64,
+    "left_context_size": 25,
+    "source_default_chunk_size": 300,
+    "recomputed_frames": 41,
+    "emitted_second_chunk_frames": 16,
+    "max_error": 0.0002649066474422032,
+    "rows": [
+      {
+        "relative_l2": 0.00010842192133081452,
+        "max_absolute": 5.822628736495972e-06,
+        "actual_rms": 0.014095660325704026,
+        "reference_rms": 0.01409566869707516,
+        "actual_min": -0.18516939878463745,
+        "actual_max": 0.05614624172449112
+      },
+      {
+        "relative_l2": 0.00010674391971688015,
+        "max_absolute": 5.017966032028198e-06,
+        "actual_rms": 0.014273052100109753,
+        "reference_rms": 0.014273017352616855,
+        "actual_min": -0.19875551760196686,
+        "actual_max": 0.05224992334842682
+      },
+      {
+        "relative_l2": 0.00021462251591097996,
+        "max_absolute": 2.3126602172851562e-05,
+        "actual_rms": 0.014787788400094055,
+        "reference_rms": 0.014786502543934009,
+        "actual_min": -0.10810758173465729,
+        "actual_max": 0.07197846472263336
+      },
+      {
+        "relative_l2": 0.00010755061402263226,
+        "max_absolute": 4.782341420650482e-06,
+        "actual_rms": 0.014109442202262207,
+        "reference_rms": 0.014109484072322273,
+        "actual_min": -0.18523834645748138,
+        "actual_max": 0.05618344247341156
+      },
+      {
+        "relative_l2": 0.00010281075115237342,
+        "max_absolute": 5.054287612438202e-06,
+        "actual_rms": 0.014393387375969029,
+        "reference_rms": 0.014393370084849842,
+        "actual_min": -0.2015356868505478,
+        "actual_max": 0.05256887152791023
+      },
+      {
+        "relative_l2": 0.000237888348145661,
+        "max_absolute": 1.4469027519226074e-05,
+        "actual_rms": 0.014871774877535274,
+        "reference_rms": 0.014872950896904135,
+        "actual_min": -0.10941989719867706,
+        "actual_max": 0.07240359485149384
+      },
+      {
+        "relative_l2": 0.00011073758854279997,
+        "max_absolute": 6.3516199588775635e-06,
+        "actual_rms": 0.014148205873475301,
+        "reference_rms": 0.014148066832845856,
+        "actual_min": -0.18560881912708282,
+        "actual_max": 0.05640684813261032
+      },
+      {
+        "relative_l2": 0.00010168404899594745,
+        "max_absolute": 4.824250936508179e-06,
+        "actual_rms": 0.014285964124075906,
+        "reference_rms": 0.01428602728356586,
+        "actual_min": -0.20278748869895935,
+        "actual_max": 0.05227438732981682
+      },
+      {
+        "relative_l2": 0.000192414623679409,
+        "max_absolute": 1.1247582733631134e-05,
+        "actual_rms": 0.014622863692563786,
+        "reference_rms": 0.014623610536340932,
+        "actual_min": -0.1061948835849762,
+        "actual_max": 0.07129107415676117
+      },
+      {
+        "relative_l2": 9.953710118826237e-05,
+        "max_absolute": 5.345791578292847e-06,
+        "actual_rms": 0.014196799510149028,
+        "reference_rms": 0.01419679716189027,
+        "actual_min": -0.1866675317287445,
+        "actual_max": 0.056418489664793015
+      },
+      {
+        "relative_l2": 0.0001049979033760971,
+        "max_absolute": 4.755333065986633e-06,
+        "actual_rms": 0.014340706878951618,
+        "reference_rms": 0.014340630168648082,
+        "actual_min": -0.19962085783481598,
+        "actual_max": 0.052438005805015564
+      },
+      {
+        "relative_l2": 0.0002649066474422032,
+        "max_absolute": 2.7626752853393555e-05,
+        "actual_rms": 0.014160645088305824,
+        "reference_rms": 0.014158738943374084,
+        "actual_min": -0.10027424991130829,
+        "actual_max": 0.06922071427106857
+      },
+      {
+        "relative_l2": 0.00011064472657626925,
+        "max_absolute": 4.647299647331238e-06,
+        "actual_rms": 0.014214723790760907,
+        "reference_rms": 0.014214619006814862,
+        "actual_min": -0.18687428534030914,
+        "actual_max": 0.05645860731601715
+      },
+      {
+        "relative_l2": 0.00011068263239614506,
+        "max_absolute": 5.479902029037476e-06,
+        "actual_rms": 0.014484219926323082,
+        "reference_rms": 0.014484076223854133,
+        "actual_min": -0.20283567905426025,
+        "actual_max": 0.05272985249757767
+      },
+      {
+        "relative_l2": 0.00024361438303284377,
+        "max_absolute": 1.2934207916259766e-05,
+        "actual_rms": 0.014323123067910896,
+        "reference_rms": 0.014324473797227316,
+        "actual_min": -0.10243472456932068,
+        "actual_max": 0.07008545845746994
+      },
+      {
+        "relative_l2": 0.00011044791582260172,
+        "max_absolute": 5.330890417098999e-06,
+        "actual_rms": 0.014221979368576994,
+        "reference_rms": 0.014221896521506792,
+        "actual_min": -0.18687832355499268,
+        "actual_max": 0.05656725913286209
+      }
+    ],
+    "continuous_vs_recomputed_relative_l2": 0.07193648550517304,
+    "continuous_and_chunked_equivalence_claimed": false
+  },
+  "reset_poison_replay_bitwise": true,
+  "integrated": {
+    "rows": [
+      {
+        "repetition": 0,
+        "frame": 0,
+        "decoder_position": 0,
+        "ids": [
+          1995,
+          117,
+          1114,
+          1723,
+          1443,
+          1543,
+          1751,
+          240,
+          1242,
+          329,
+          293,
+          1347,
+          747,
+          2027,
+          1900,
+          786
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.00013374520086052716,
+          "max_absolute": 8.163973689079285e-06,
+          "actual_rms": 0.015761954987090702,
+          "reference_rms": 0.01576168896027354,
+          "actual_min": -0.1340838223695755,
+          "actual_max": 0.07152476161718369
+        }
+      },
+      {
+        "repetition": 0,
+        "frame": 1,
+        "decoder_position": 1,
+        "ids": [
+          215,
+          1782,
+          519,
+          1176,
+          350,
+          1573,
+          1636,
+          145,
+          883,
+          455,
+          743,
+          1382,
+          1677,
+          344,
+          1008,
+          803
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.00012310947624735694,
+          "max_absolute": 6.778165698051453e-06,
+          "actual_rms": 0.01369794639534051,
+          "reference_rms": 0.013697847280183355,
+          "actual_min": -0.1850583255290985,
+          "actual_max": 0.05196721479296684
+        }
+      },
+      {
+        "repetition": 0,
+        "frame": 2,
+        "decoder_position": 2,
+        "ids": [
+          212,
+          1009,
+          519,
+          677,
+          1210,
+          1748,
+          1636,
+          1434,
+          1611,
+          1974,
+          743,
+          362,
+          1555,
+          781,
+          82,
+          1978
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.0001226676860099678,
+          "max_absolute": 5.8871228247880936e-06,
+          "actual_rms": 0.014404761669499845,
+          "reference_rms": 0.014404675937648524,
+          "actual_min": -0.206145241856575,
+          "actual_max": 0.04976048693060875
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 0,
+        "decoder_position": 0,
+        "ids": [
+          1995,
+          117,
+          1114,
+          1723,
+          1443,
+          1543,
+          1751,
+          240,
+          1242,
+          329,
+          293,
+          1347,
+          747,
+          2027,
+          1900,
+          786
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.00013374520086052716,
+          "max_absolute": 8.163973689079285e-06,
+          "actual_rms": 0.015761954987090702,
+          "reference_rms": 0.01576168896027354,
+          "actual_min": -0.1340838223695755,
+          "actual_max": 0.07152476161718369
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 1,
+        "decoder_position": 1,
+        "ids": [
+          215,
+          1782,
+          519,
+          1176,
+          350,
+          1573,
+          1636,
+          145,
+          883,
+          455,
+          743,
+          1382,
+          1677,
+          344,
+          1008,
+          803
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.00012310947624735694,
+          "max_absolute": 6.778165698051453e-06,
+          "actual_rms": 0.01369794639534051,
+          "reference_rms": 0.013697847280183355,
+          "actual_min": -0.1850583255290985,
+          "actual_max": 0.05196721479296684
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 2,
+        "decoder_position": 2,
+        "ids": [
+          212,
+          1009,
+          519,
+          677,
+          1210,
+          1748,
+          1636,
+          1434,
+          1611,
+          1974,
+          743,
+          362,
+          1555,
+          781,
+          82,
+          1978
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "output": {
+          "relative_l2": 0.0001226676860099678,
+          "max_absolute": 5.8871228247880936e-06,
+          "actual_rms": 0.014404761669499845,
+          "reference_rms": 0.014404675937648524,
+          "actual_min": -0.206145241856575,
+          "actual_max": 0.04976048693060875
+        }
+      }
+    ],
+    "reset_replay_bitwise": true,
+    "dram_bytes": 2781933440,
+    "accepted": true
+  },
+  "standalone_dram_bytes": 107370624,
+  "program_budgets": [
+    {
+      "position": 0,
+      "programs": 146,
+      "max_imem_words": 968,
+      "max_tmem_words": 7811,
+      "first_layer": [
+        {
+          "name": "audio.transformer.input",
+          "instructions": 13,
+          "imem_words": 104,
+          "tmem_peak_words": 3073,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.qkv",
+          "instructions": 87,
+          "imem_words": 696,
+          "tmem_peak_words": 7811,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.head.0",
+          "instructions": 16,
+          "imem_words": 128,
+          "tmem_peak_words": 388,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.finish",
+          "instructions": 121,
+          "imem_words": 968,
+          "tmem_peak_words": 5636,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.output",
+          "instructions": 21,
+          "imem_words": 168,
+          "tmem_peak_words": 3585,
+          "dram_bytes": 107370624
+        }
+      ]
+    },
+    {
+      "position": 71,
+      "programs": 146,
+      "max_imem_words": 1896,
+      "max_tmem_words": 7811,
+      "first_layer": [
+        {
+          "name": "audio.transformer.input",
+          "instructions": 13,
+          "imem_words": 104,
+          "tmem_peak_words": 3073,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.qkv",
+          "instructions": 87,
+          "imem_words": 696,
+          "tmem_peak_words": 7811,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.head.0",
+          "instructions": 237,
+          "imem_words": 1896,
+          "tmem_peak_words": 6312,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.finish",
+          "instructions": 121,
+          "imem_words": 968,
+          "tmem_peak_words": 5636,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.output",
+          "instructions": 21,
+          "imem_words": 168,
+          "tmem_peak_words": 3585,
+          "dram_bytes": 107370624
+        }
+      ]
+    },
+    {
+      "position": 72,
+      "programs": 146,
+      "max_imem_words": 1928,
+      "max_tmem_words": 7811,
+      "first_layer": [
+        {
+          "name": "audio.transformer.input",
+          "instructions": 13,
+          "imem_words": 104,
+          "tmem_peak_words": 3073,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.qkv",
+          "instructions": 87,
+          "imem_words": 696,
+          "tmem_peak_words": 7811,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.head.0",
+          "instructions": 241,
+          "imem_words": 1928,
+          "tmem_peak_words": 6312,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.finish",
+          "instructions": 121,
+          "imem_words": 968,
+          "tmem_peak_words": 5636,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.output",
+          "instructions": 21,
+          "imem_words": 168,
+          "tmem_peak_words": 3585,
+          "dram_bytes": 107370624
+        }
+      ]
+    },
+    {
+      "position": 143,
+      "programs": 146,
+      "max_imem_words": 1896,
+      "max_tmem_words": 7811,
+      "first_layer": [
+        {
+          "name": "audio.transformer.input",
+          "instructions": 13,
+          "imem_words": 104,
+          "tmem_peak_words": 3073,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.qkv",
+          "instructions": 87,
+          "imem_words": 696,
+          "tmem_peak_words": 7811,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.head.0",
+          "instructions": 237,
+          "imem_words": 1896,
+          "tmem_peak_words": 6312,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.finish",
+          "instructions": 121,
+          "imem_words": 968,
+          "tmem_peak_words": 5636,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.output",
+          "instructions": 21,
+          "imem_words": 168,
+          "tmem_peak_words": 3585,
+          "dram_bytes": 107370624
+        }
+      ]
+    },
+    {
+      "position": 7999,
+      "programs": 146,
+      "max_imem_words": 1896,
+      "max_tmem_words": 7811,
+      "first_layer": [
+        {
+          "name": "audio.transformer.input",
+          "instructions": 13,
+          "imem_words": 104,
+          "tmem_peak_words": 3073,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.qkv",
+          "instructions": 87,
+          "imem_words": 696,
+          "tmem_peak_words": 7811,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.head.0",
+          "instructions": 237,
+          "imem_words": 1896,
+          "tmem_peak_words": 6312,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.0.finish",
+          "instructions": 121,
+          "imem_words": 968,
+          "tmem_peak_words": 5636,
+          "dram_bytes": 107370624
+        },
+        {
+          "name": "audio.transformer.output",
+          "instructions": 21,
+          "imem_words": 168,
+          "tmem_peak_words": 3585,
+          "dram_bytes": 107370624
+        }
+      ]
+    }
+  ],
+  "threshold_relative_l2": 0.035,
+  "source_mask_reference_bound": 1e-05,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "upstream_thresholds": {
+    "logit_relative_l2": 0.035,
+    "generated_greedy_agreement": 1.0
+  },
+  "waveform_produced": false,
+  "raw_waveform_scaling_validated": false,
+  "complete_utterances_validated": false,
+  "quality_validated": false,
+  "physical_hardware_access": false,
+  "upstream_custom_code_executed": false,
+  "tts_enabled": false,
+  "host": "opentpu-m8a-build",
+  "code_sha256": {
+    "opentpu/kernels/tts_audio_front.py": "9d20a1a6979a69e68a31bc6afa068e6b35bab79a1a872d6e6c8cf712064a5386",
+    "opentpu/kernels/tts_audio_transformer.py": "1058cef44250b3e011021f7f3b07ffdf5b10bc4d0ca851586ff5b0eefe5cef04",
+    "opentpu/kernels/tts_frame.py": "701502ea81d3030728c8b62663518a39b9a52a9cafde5059bfac9814546eb0d3",
+    "opentpu/kernels/tts_predictor_precision.py": "1bcf76b1705940a307f85d646ee4937ca280ba74cadc4425835f4cac38aca760",
+    "opentpu/kernels/tts_projection.py": "779f2e1dec425a4705bf4afe52d5019f4c3f71bc3a3a82b881180da5e51731bf",
+    "opentpu/kernels/tts_stack.py": "f3817a8cdbbcf7bca2250c9e0864dfeae387883b8995156f85841cfc03631046",
+    "opentpu/kernels/tts_talker.py": "8144f9bcb08e3f6984fefce4afb5a37fdd8138487ac9b4c1497156b0f73e4ec1",
+    "opentpu/kernels/tts_talker_precision.py": "503f5ba05cde04c375d4eb579b286392d2e2ee15e0e6ccef8efb9c8f5ee35e57",
+    "opentpu/llm/qwen3_tts.py": "b2b5a3cb5bf8a07c5e0fe8a7fea832c7f91cdfe458e69d8d6dc6ec0bf3753b03",
+    "opentpu/llm/qwen3_tts_audio_front.py": "d17bb4d2303665dd1f4192ffd299244d9ece981bc16b8aedefd50afa56096919",
+    "opentpu/llm/qwen3_tts_audio_transformer.py": "e70a01af344338febe1ab0b132eb9657b1abeb194afb7420d7cd802a9f101c8b",
+    "opentpu/llm/qwen3_tts_frame.py": "15c2a0f0d37ce78a70d1471d0717ab255ae77ad59d1a8e470710ad6284916c96",
+    "opentpu/llm/qwen3_tts_predictor_precision.py": "b2f4de4284586b1178efc73791876b834c4f0227a6bfbb59100b0a50c1fe998b",
+    "opentpu/llm/qwen3_tts_prompt.py": "98726a6512182c70cde8289e33413693f1f1f6b5c0d91e8a4271957b5b4d6ebe",
+    "opentpu/llm/qwen3_tts_shared.py": "0c434b6ed8b5883ca8d71a3ee2cb3ffdda91a1585184731d9c6a15bb58391c66",
+    "opentpu/llm/qwen3_tts_stack.py": "924a827ecbe041162449b29000f9441e793459feb4b57d62d25f3dea6f6e16a7",
+    "opentpu/llm/qwen3_tts_talker.py": "6880a4ccc43702d64842f0fa5bc948421a1792982240f19f2c3883c0780b145d",
+    "opentpu/llm/qwen3_tts_talker_precision.py": "d565a28dccab1326662b620223d3a68a8b1d5d39bcd8830f5a2a9a7f0a04c330",
+    "tests/fixtures/qwen3_tts_06b_config.json": "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455",
+    "tests/fixtures/qwen3_tts_audio_codec_cases.json": "8c3aecd077ad62327a712175b2ec11456b272a2e03ec275f446e70f359113f6b",
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "d553b53081fcb0ff2f4bbfa325ebd53944cc590ea87c84f8dbc32913ba6abc1d",
+    "tests/fixtures/qwen3_tts_frame_contract.json": "de2289dd9b9bbdb07da38995d6887cbe2424b2ce6da39bcc06b78e481818d554",
+    "tests/fixtures/qwen3_tts_prompts.json": "4bd0b89002312738892e0bd9d4537ec9a0b4b57a3ecc7acf278dab732c81fa7b",
+    "tests/fixtures/qwen3_tts_stack_contract.json": "57034f46a018bcae9d6c557ed664292859c206fad6b45f9b06f5bf500014d9d1",
+    "tests/fixtures/qwen3_tts_talker_contract.json": "4c6516a055fb30efac8f41769e269273ecac069c0e978dbe287cf71f1766c10d",
+    "tests/qwen3_tts_audio_reference.py": "3a905ffc7c7231c64d134d1e8b38f8ed9d0f89a12ece8ca705f73bf0ed67c25b",
+    "tests/qwen3_tts_audio_transformer_reference.py": "4faa2a739d6ade8a76aec23c519d75974d10d075ace55a98003d8b4f3a99bce4",
+    "tests/test_qwen3_tts_audio_transformer.py": "877902e5e7d91cc049a0182ffd32342a9fc2f80c42474eee25439cb97615e2b1",
+    "tools/qwen3_tts_audio_checkpoint.py": "a7f52939d603e107e14e602f408dc50a101a7754232a5635de48c2c736ea089f",
+    "tools/qwen3_tts_audio_front_acceptance.py": "64385deefb8eb0354ada77dd234a1276438e330a2ecfb878a4e214ac323a4a1c",
+    "tools/qwen3_tts_audio_transformer_acceptance.py": "98bc8364ad4b031f53e5077a59e0c4e1ab28d7c1342523b84d0f9b44e5c74fe8"
+  },
+  "seconds": 295.8466587209841,
+  "rows_sha256": "6b41f5db2ef91bea4c6e0c3e242f3c578151cd5e94782947733f5d9992c5bfcc"
+}
