@@ -1,0 +1,47 @@
+{
+  "passed": true,
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "runtime_revision": "8815ac80226aa3a0d0b07d03344f61839580415e",
+  "runtime_source_sha256": {
+    "opentpu/fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+    "opentpu/isa.py": "6ff71f284c38804ed127ff0eae185a0fbdc3bee229c451db6fba96d51810543c",
+    "opentpu/quant.py": "3987525b8200904ed5f7d562c79dfa5134a28d2cc14cdc8ca82a53b2a1662021",
+    "opentpu/isasim.py": "d0fc7a987213fb2334d4e869743f940516319753a5d714d77c254ec59b413666",
+    "opentpu/__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+    "opentpu/asr/__init__.py": "f602b7d265efde8d87cb566a3a60d23d7fd65d0a776694712d829ced6119b463",
+    "opentpu/asr/phonon2.py": "659b2329337e08e66fbd7c74d2a6a7d8048a6873c6d20f842a541928533004ac",
+    "opentpu/compiler.py": "cb5141b6aa89bb2ac4868bdfeefa1140ee93a44cd0ca869f24b9c4925c7cc572",
+    "opentpu/language.py": "bfa5e568063cd6008b7cb79f0684b7b8e746599d1ce0b06c9956bcb7cc8fb684",
+    "opentpu/asr/phonon2_linear.py": "ac10f55a5b09ef4dfd4cffa75ba8d10767566f0bf9c2d2e2c93831b134b5d30c"
+  },
+  "qualification_script_sha256": "141a893b499b4a432f94997a3b9cfbd50f9d01b2919ca6d10c187cbdd068859d",
+  "checkpoint_sha256": "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c11468",
+  "record": "encoder.layers.0.self_attn.q_proj",
+  "record_sha256": "24dd57bca40b5cdbdeab79e4cb0b5ac26139d66f15acd7f938d505f3357a6e2d",
+  "shape": [
+    1024,
+    1024
+  ],
+  "rows": 4,
+  "input_sha256": "cc780b1fa675b8bf8c3fb8138fea484ecd0cf34ef7d8cb64c4073f654a39e5e0",
+  "program_sha256": "3504e0c0c0c37574a1c303684aae2dcbc615f738e36ad792ab1813ab07e78fd2",
+  "output_sha256": "a7962b16f27eb148c57f125ec23d06373ad8195d693705f0d271bf5aee5b80a6",
+  "max_abs_error_vs_quantized_reference": 1.4321785783977248e-06,
+  "relative_l2_error_vs_dense_reference": 0.007537597108553631,
+  "budget": {
+    "dram_image_bytes": 2138112,
+    "weight_bytes": 2105344,
+    "instructions": 9,
+    "instruction_words": 72,
+    "activation_rows": 4,
+    "activation_blocks": 8,
+    "weight_format": "two_disjoint_signed_int8_planes_with_fp32_row_scales",
+    "activation_format": "QACT_INT8",
+    "hardware_validated": false
+  },
+  "backend": "CPU reference + ISA simulator",
+  "numpy": "2.5.4",
+  "hardware_used": false,
+  "transcription_tested": false,
+  "revision_binding": "Every imported OpenTPU source hash was independently checked against git show at runtime_revision; all matched."
+}

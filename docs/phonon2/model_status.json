@@ -1,0 +1,74 @@
+{
+  "schema_version": 1,
+  "id": "FermionResearch/Phonon-2",
+  "revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "display_name": "Phonon-2",
+  "inferlab_id": "phonon2",
+  "task": "automatic-speech-recognition",
+  "language": "en",
+  "architecture": "FastConformer + LSTM Token Duration Transducer",
+  "parameters": 627008134,
+  "checkpoint_download_bytes": 163515201,
+  "status": "blocked",
+  "readiness": "kernel_slice_only",
+  "available": false,
+  "ready": false,
+  "execution_policy": "fpga_only",
+  "host_model_compute_allowed": false,
+  "cpu_gpu_fallback": false,
+  "hardware_validated": false,
+  "audio_to_transcript_validated": false,
+  "license": {
+    "weights": "CC-BY-4.0",
+    "code": "Apache-2.0",
+    "attribution_url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/NOTICE"
+  },
+  "input_contract": {
+    "encoding": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "max_seconds": 30,
+    "resampling": "unsupported",
+    "hotwords": "unsupported",
+    "note": "Proposed first integration envelope; endpoint remains unavailable."
+  },
+  "implemented_slice": "Offline five-value unpacking and two-plane device linear projection",
+  "error": {
+    "code": "ASR_FPGA_NOT_READY",
+    "http_status": 503
+  },
+  "blockers": [
+    {
+      "code": "audio_frontend",
+      "detail": "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."
+    },
+    {
+      "code": "subsampling",
+      "detail": "Device 8x Conv2D/depthwise subsampling and its length masks are missing."
+    },
+    {
+      "code": "conformer",
+      "detail": "Complete device FastConformer blocks, relative-position attention and convolution are missing."
+    },
+    {
+      "code": "predictor",
+      "detail": "Resident two-layer LSTM, token embedding and state commit on non-blank are missing."
+    },
+    {
+      "code": "tdt_decode",
+      "detail": "Device joint head, separate token/duration selection, blank/zero-duration control and termination are missing."
+    },
+    {
+      "code": "text_output",
+      "detail": "Device token-to-text output and timestamp conventions are not implemented or qualified."
+    },
+    {
+      "code": "numerics",
+      "detail": "INT8 activation quantization and two-plane accumulation need real-weight encoder/transcript validation."
+    },
+    {
+      "code": "hardware_evidence",
+      "detail": "No real audio-to-transcript FPGA run; a coordinated hardware window is required."
+    }
+  ]
+}

@@ -1,0 +1,17 @@
+{
+  "id": "phonon2",
+  "name": "Phonon-2",
+  "kind": "asr",
+  "capability": "transcription",
+  "size": "627M \u00b7 five-value encoder \u00b7 INT6 tables",
+  "execution": "Blocked \u00b7 device projection slice only",
+  "ready": false,
+  "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
+  "reason": "Device frontend, Conformer, LSTM predictor and TDT decoding are incomplete; audio input stays disabled.",
+  "model_id": "FermionResearch/Phonon-2",
+  "revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "execution_policy": "fpga_only",
+  "cpu_gpu_fallback": false,
+  "hardware_validated": false,
+  "error_code": "ASR_FPGA_NOT_READY"
+}

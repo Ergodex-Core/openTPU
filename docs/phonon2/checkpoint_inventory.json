@@ -1,0 +1,536 @@
+{
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "archive_sha256": "98125795b6dda72f5c6eee9ba33d19815df65dcb18b50a357bf9f73c9935309e",
+  "container_sha256": "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c11468",
+  "header_bytes": 68178,
+  "members": [
+    {
+      "name": "bps_manifest.json",
+      "size": 799,
+      "regular_file": true
+    },
+    {
+      "name": "config.json",
+      "size": 277493,
+      "regular_file": true
+    },
+    {
+      "name": "model.fermion",
+      "size": 177438361,
+      "regular_file": true
+    },
+    {
+      "name": "packed_manifest.json",
+      "size": 821,
+      "regular_file": true
+    }
+  ],
+  "records": 723,
+  "kinds": {
+    "five_value": {
+      "records": 264,
+      "elements": 603979776,
+      "bytes": 159426261
+    },
+    "fp16": {
+      "records": 424,
+      "elements": 422174,
+      "bytes": 844348
+    },
+    "int6": {
+      "records": 35,
+      "elements": 22655360,
+      "bytes": 17099566
+    }
+  },
+  "all_tensor_elements": 627057310,
+  "records_except_encoder_layers": [
+    {
+      "n": "encoder.subsampling.layers.0.weight",
+      "k": "fp16",
+      "shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "b": 4608
+    },
+    {
+      "n": "encoder.subsampling.layers.0.bias",
+      "k": "fp16",
+      "shape": [
+        256
+      ],
+      "b": 512
+    },
+    {
+      "n": "encoder.subsampling.layers.2.weight",
+      "k": "fp16",
+      "shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "b": 4608
+    },
+    {
+      "n": "encoder.subsampling.layers.2.bias",
+      "k": "fp16",
+      "shape": [
+        256
+      ],
+      "b": 512
+    },
+    {
+      "n": "encoder.subsampling.layers.3.weight",
+      "k": "int6",
+      "shape": [
+        256,
+        256,
+        1,
+        1
+      ],
+      "b": 49664
+    },
+    {
+      "n": "encoder.subsampling.layers.3.bias",
+      "k": "fp16",
+      "shape": [
+        256
+      ],
+      "b": 512
+    },
+    {
+      "n": "encoder.subsampling.layers.5.weight",
+      "k": "fp16",
+      "shape": [
+        256,
+        1,
+        3,
+        3
+      ],
+      "b": 4608
+    },
+    {
+      "n": "encoder.subsampling.layers.5.bias",
+      "k": "fp16",
+      "shape": [
+        256
+      ],
+      "b": 512
+    },
+    {
+      "n": "encoder.subsampling.layers.6.weight",
+      "k": "int6",
+      "shape": [
+        256,
+        256,
+        1,
+        1
+      ],
+      "b": 49664
+    },
+    {
+      "n": "encoder.subsampling.layers.6.bias",
+      "k": "fp16",
+      "shape": [
+        256
+      ],
+      "b": 512
+    },
+    {
+      "n": "encoder.subsampling.linear.weight",
+      "k": "int6",
+      "shape": [
+        1024,
+        4096
+      ],
+      "b": 3147776
+    },
+    {
+      "n": "encoder.subsampling.linear.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder_projector.weight",
+      "k": "int6",
+      "shape": [
+        640,
+        1024
+      ],
+      "b": 492800
+    },
+    {
+      "n": "encoder_projector.bias",
+      "k": "fp16",
+      "shape": [
+        640
+      ],
+      "b": 1280
+    },
+    {
+      "n": "decoder.embedding.weight",
+      "k": "int6",
+      "shape": [
+        8193,
+        640
+      ],
+      "b": 3949026
+    },
+    {
+      "n": "decoder.lstm.weight_ih_l0",
+      "k": "int6",
+      "shape": [
+        2560,
+        640
+      ],
+      "b": 1233920
+    },
+    {
+      "n": "decoder.lstm.weight_hh_l0",
+      "k": "int6",
+      "shape": [
+        2560,
+        640
+      ],
+      "b": 1233920
+    },
+    {
+      "n": "decoder.lstm.bias_ih_l0",
+      "k": "fp16",
+      "shape": [
+        2560
+      ],
+      "b": 5120
+    },
+    {
+      "n": "decoder.lstm.bias_hh_l0",
+      "k": "fp16",
+      "shape": [
+        2560
+      ],
+      "b": 5120
+    },
+    {
+      "n": "decoder.lstm.weight_ih_l1",
+      "k": "int6",
+      "shape": [
+        2560,
+        640
+      ],
+      "b": 1233920
+    },
+    {
+      "n": "decoder.lstm.weight_hh_l1",
+      "k": "int6",
+      "shape": [
+        2560,
+        640
+      ],
+      "b": 1233920
+    },
+    {
+      "n": "decoder.lstm.bias_ih_l1",
+      "k": "fp16",
+      "shape": [
+        2560
+      ],
+      "b": 5120
+    },
+    {
+      "n": "decoder.lstm.bias_hh_l1",
+      "k": "fp16",
+      "shape": [
+        2560
+      ],
+      "b": 5120
+    },
+    {
+      "n": "decoder.decoder_projector.weight",
+      "k": "int6",
+      "shape": [
+        640,
+        640
+      ],
+      "b": 308480
+    },
+    {
+      "n": "decoder.decoder_projector.bias",
+      "k": "fp16",
+      "shape": [
+        640
+      ],
+      "b": 1280
+    },
+    {
+      "n": "joint.head.weight",
+      "k": "int6",
+      "shape": [
+        8198,
+        640
+      ],
+      "b": 3951436
+    },
+    {
+      "n": "joint.head.bias",
+      "k": "fp16",
+      "shape": [
+        8198
+      ],
+      "b": 16396
+    }
+  ],
+  "first_layer": [
+    {
+      "n": "encoder.layers.0.feed_forward1.linear1",
+      "k": "five_value",
+      "shape": [
+        4096,
+        1024
+      ],
+      "b": 1115113
+    },
+    {
+      "n": "encoder.layers.0.feed_forward1.linear2",
+      "k": "five_value",
+      "shape": [
+        1024,
+        4096
+      ],
+      "b": 1098606
+    },
+    {
+      "n": "encoder.layers.0.self_attn.q_proj",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 279323
+    },
+    {
+      "n": "encoder.layers.0.self_attn.k_proj",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 278394
+    },
+    {
+      "n": "encoder.layers.0.self_attn.v_proj",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 277253
+    },
+    {
+      "n": "encoder.layers.0.self_attn.o_proj",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 278680
+    },
+    {
+      "n": "encoder.layers.0.self_attn.relative_k_proj",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 267540
+    },
+    {
+      "n": "encoder.layers.0.conv.pointwise_conv1",
+      "k": "five_value",
+      "shape": [
+        2048,
+        1024
+      ],
+      "b": 557176
+    },
+    {
+      "n": "encoder.layers.0.conv.pointwise_conv2",
+      "k": "five_value",
+      "shape": [
+        1024,
+        1024
+      ],
+      "b": 278120
+    },
+    {
+      "n": "encoder.layers.0.feed_forward2.linear1",
+      "k": "five_value",
+      "shape": [
+        4096,
+        1024
+      ],
+      "b": 1114967
+    },
+    {
+      "n": "encoder.layers.0.feed_forward2.linear2",
+      "k": "five_value",
+      "shape": [
+        1024,
+        4096
+      ],
+      "b": 1097770
+    },
+    {
+      "n": "encoder.layers.0.self_attn.bias_u",
+      "k": "fp16",
+      "shape": [
+        8,
+        128
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.self_attn.bias_v",
+      "k": "fp16",
+      "shape": [
+        8,
+        128
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.conv.depthwise_conv.weight",
+      "k": "int6",
+      "shape": [
+        1024,
+        1,
+        9
+      ],
+      "b": 8960
+    },
+    {
+      "n": "encoder.layers.0.conv.norm.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.conv.norm.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.conv.norm.running_mean",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.conv.norm.running_var",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.conv.norm.num_batches_tracked",
+      "k": "fp16",
+      "shape": [],
+      "b": 2
+    },
+    {
+      "n": "encoder.layers.0.norm_feed_forward1.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_feed_forward1.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_self_att.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_self_att.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_conv.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_conv.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_feed_forward2.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_feed_forward2.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_out.weight",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    },
+    {
+      "n": "encoder.layers.0.norm_out.bias",
+      "k": "fp16",
+      "shape": [
+        1024
+      ],
+      "b": 2048
+    }
+  ]
+}
