@@ -48,6 +48,11 @@ class StackReference:
                              w[p + "linear_fc2.weight"], w[p + "linear_fc2.bias"])
         x = projected if input_kind == "role" else projected + w["talker.model.codec_embedding.weight"][codec_id]
         result = {"projected": self.array(projected), "assembled": self.array(x), "layers": []}
+        return self.hidden_step(x, result)
+
+    def hidden_step(self, x, result=None):
+        s, w = self.spec, self.weights
+        result = result or {"assembled": self.array(x), "layers": []}
         frequency_dtype = torch.float64 if self.dtype == torch.float64 else torch.float32
         inv = 1.0 / s.theta ** (torch.arange(0, s.head_dim, 2).to(frequency_dtype) / s.head_dim)
         angle = len(self.keys[0]) * inv

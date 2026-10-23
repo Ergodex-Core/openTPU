@@ -1,0 +1,108 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_sha": "30100afb075374381601a6e01d9f914a58dbec91",
+  "target_sha256": "8e28c82c378a60c62288c334f2cb3752d568639ebb1f6c45552f35af87860f3b",
+  "programs": [
+    {
+      "capacity": 512,
+      "talker_position": 511,
+      "device_dram_bytes": 1981437824,
+      "free_dram_bytes": 2313529472,
+      "kv_bytes": 31629312,
+      "programs_per_frame": 143,
+      "sum_imem_words": 291928,
+      "max_part_imem_words": 3096,
+      "max_tmem_words": 15160,
+      "opcodes": {
+        "LD": 1932,
+        "VOP": 23943,
+        "ST": 318,
+        "HALT": 143,
+        "QACT": 3158,
+        "MM": 5218,
+        "QST": 1728,
+        "LI": 34,
+        "RLD": 17
+      },
+      "mm_flags": [
+        2,
+        64,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        16,
+        18,
+        32,
+        38
+      ]
+    },
+    {
+      "capacity": 32768,
+      "talker_position": 32767,
+      "device_dram_bytes": 3905443712,
+      "free_dram_bytes": 389523584,
+      "kv_bytes": 1939120128,
+      "programs_per_frame": 143,
+      "sum_imem_words": 360472,
+      "max_part_imem_words": 5544,
+      "max_tmem_words": 15160,
+      "opcodes": {
+        "LD": 2604,
+        "VOP": 28647,
+        "ST": 318,
+        "HALT": 143,
+        "QACT": 3830,
+        "MM": 6562,
+        "QST": 1728,
+        "LI": 90,
+        "RLD": 17,
+        "LOOP": 224,
+        "ADDI": 896
+      },
+      "mm_flags": [
+        2,
+        64,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        16,
+        18,
+        32,
+        38
+      ]
+    }
+  ],
+  "live_registers_read": false,
+  "physical_acceptance": false
+}
