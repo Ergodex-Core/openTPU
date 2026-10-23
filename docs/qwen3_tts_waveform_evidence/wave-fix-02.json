@@ -1,0 +1,7 @@
+{
+  "failed_job": "wave-tests-02",
+  "cause": "Tile.reshape requires rows and cols; use explicit contiguous (batch,1) Tensor view for flat sample destination",
+  "no_new_isa": true,
+  "threshold_unchanged": true,
+  "fixed_sha256": "eab929e734678c9f5912d8b188a6b257a7780b63d4c68effc9592a4af1ca15e7"
+}

@@ -1,0 +1,177 @@
+{"frame": 0, "ids_match": true, "device_ids_restored": true, "raw": {"fp32": {"relative_l2": 0.0008343822571734888, "max_absolute": 1.4217803254723549e-06, "actual_rms": 0.0005020568620563615, "reference_rms": 0.000501886486624262, "actual_min": -0.00011992770305369049, "actual_max": 0.0010508764535188675}, "fp64": {"relative_l2": 0.0008347446161648998, "max_absolute": 1.423102001514619e-06, "actual_rms": 0.0005020568620563615, "reference_rms": 0.0005018859875031381, "actual_min": -0.00011992770305369049, "actual_max": 0.0010508764535188675}}, "waveform": {"fp32": {"relative_l2": 0.0008343822571734888, "max_absolute": 1.4217803254723549e-06, "actual_rms": 0.0005020568620563615, "reference_rms": 0.000501886486624262, "actual_min": -0.00011992770305369049, "actual_max": 0.0010508764535188675}, "fp64": {"relative_l2": 0.0008347446161648998, "max_absolute": 1.423102001514619e-06, "actual_rms": 0.0005020568620563615, "reference_rms": 0.0005018859875031381, "actual_min": -0.00011992770305369049, "actual_max": 0.0010508764535188675}}, "guard_max_argument": 7.140380382537842, "sample_count": 1920, "clipped_samples": 0, "actual_rms": 0.0005020568620563615}
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_base": "7652f55231cfc8cc356fcc80fa55c0693ac9ae0e",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "arithmetic_contract": "pinned source weights evaluated with FP32 algebra; folded static SnakeBeta exp/inverse constants; bounded sin2 device approximation; not bit-exact BF16",
+  "actual_neural_code_producer": false,
+  "recorded_codec_fixture_producer": true,
+  "chunk_size": 300,
+  "left_context": 25,
+  "frames": [
+    {
+      "frame": 0,
+      "ids_match": true,
+      "device_ids_restored": true,
+      "raw": {
+        "fp32": {
+          "relative_l2": 0.0008343822571734888,
+          "max_absolute": 1.4217803254723549e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.000501886486624262,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        },
+        "fp64": {
+          "relative_l2": 0.0008347446161648998,
+          "max_absolute": 1.423102001514619e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.0005018859875031381,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        }
+      },
+      "waveform": {
+        "fp32": {
+          "relative_l2": 0.0008343822571734888,
+          "max_absolute": 1.4217803254723549e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.000501886486624262,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        },
+        "fp64": {
+          "relative_l2": 0.0008347446161648998,
+          "max_absolute": 1.423102001514619e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.0005018859875031381,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        }
+      },
+      "guard_max_argument": 7.140380382537842,
+      "sample_count": 1920,
+      "clipped_samples": 0,
+      "actual_rms": 0.0005020568620563615
+    }
+  ],
+  "max_operation_relative_l2": {
+    "fp32": 0.0013050522304888506,
+    "fp64": 0.0013050143073837109
+  },
+  "threshold_relative_l2": 0.035,
+  "component_accepted": true,
+  "reset_first_frame_bitwise": true,
+  "reset_record": {
+    "frame": 0,
+    "ids_match": true,
+    "device_ids_restored": true,
+    "raw": {
+      "fp32": {
+        "relative_l2": 0.0008343822571734888,
+        "max_absolute": 1.4217803254723549e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.000501886486624262,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      },
+      "fp64": {
+        "relative_l2": 0.0008347446161648998,
+        "max_absolute": 1.423102001514619e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.0005018859875031381,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      }
+    },
+    "waveform": {
+      "fp32": {
+        "relative_l2": 0.0008343822571734888,
+        "max_absolute": 1.4217803254723549e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.000501886486624262,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      },
+      "fp64": {
+        "relative_l2": 0.0008347446161648998,
+        "max_absolute": 1.423102001514619e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.0005018859875031381,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      }
+    },
+    "guard_max_argument": 7.140380382537842,
+    "sample_count": 1920,
+    "clipped_samples": 0,
+    "actual_rms": 0.0005020568620563615
+  },
+  "max_device_snake_argument": 7.140380382537842,
+  "snake_argument_limit": 262144.0,
+  "output_sample_rate": 24000,
+  "samples_per_codec_frame": 1920,
+  "scaling": "raw source clamp [-1,1]; no normalization or output tanh",
+  "waveform_produced_in_isa_simulation": true,
+  "waveform_produced_on_fpga": false,
+  "complete_utterance_validated": false,
+  "quality_validated": false,
+  "physical_hardware_access": false,
+  "tts_enabled": false,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "public_300_waveform_boundary_validated": false,
+  "main_native_300_frame_generation_validated": false,
+  "resident_dram_bytes": 294402304,
+  "waveform_programs_per_codec_frame": 79,
+  "source_parameter_views": 238,
+  "source_unique_tensors": 118,
+  "seconds": 74.93670478102285,
+  "rows_sha256": "0a900645d5676be8c46f5eda93afd1f5727969c61c151ac70ec71d87458521a5"
+}

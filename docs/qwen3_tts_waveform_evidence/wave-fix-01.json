@@ -1,0 +1,8 @@
+{
+  "cause": "Tensor stepped slices rejected by compiler; existing explicit strided Tensor descriptor supports the same store",
+  "file": "opentpu/kernels/tts_wave_ops.py",
+  "failed_source_sha256": "358cc2a94e572434c1c913b43a87fdaf78e8009c7faef385770acb019b4d771f",
+  "fixed_source_sha256": "29bc38d78cb560473ceb701c768cd5e9834452163f1104c87d7b5405630fc8b0",
+  "isa_or_rtl_changed": false,
+  "acceptance_thresholds_changed": false
+}

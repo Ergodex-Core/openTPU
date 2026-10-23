@@ -1,0 +1,968 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_base": "7652f55231cfc8cc356fcc80fa55c0693ac9ae0e",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "arithmetic_contract": "pinned source weights evaluated with FP32 algebra; folded static SnakeBeta exp/inverse constants; bounded sin2 device approximation; not bit-exact BF16",
+  "actual_neural_code_producer": true,
+  "recorded_codec_fixture_producer": false,
+  "chunk_size": 1,
+  "left_context": 1,
+  "frames": [
+    {
+      "frame": 0,
+      "ids_match": true,
+      "device_ids_restored": true,
+      "raw": {
+        "fp32": {
+          "relative_l2": 0.0008343822571734888,
+          "max_absolute": 1.4217803254723549e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.000501886486624262,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        },
+        "fp64": {
+          "relative_l2": 0.0008347446161648998,
+          "max_absolute": 1.423102001514619e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.0005018859875031381,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        }
+      },
+      "waveform": {
+        "fp32": {
+          "relative_l2": 0.0008343822571734888,
+          "max_absolute": 1.4217803254723549e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.000501886486624262,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        },
+        "fp64": {
+          "relative_l2": 0.0008347446161648998,
+          "max_absolute": 1.423102001514619e-06,
+          "actual_rms": 0.0005020568620563615,
+          "reference_rms": 0.0005018859875031381,
+          "actual_min": -0.00011992770305369049,
+          "actual_max": 0.0010508764535188675
+        }
+      },
+      "guard_max_argument": 7.140380382537842,
+      "sample_count": 1920,
+      "clipped_samples": 0,
+      "actual_rms": 0.0005020568620563615
+    },
+    {
+      "frame": 1,
+      "ids_match": true,
+      "device_ids_restored": true,
+      "raw": {
+        "fp32": {
+          "relative_l2": 0.0015592806001708294,
+          "max_absolute": 1.0172661859542131e-06,
+          "actual_rms": 0.00018125048391882693,
+          "reference_rms": 0.00018119185449462063,
+          "actual_min": -0.0004366745997685939,
+          "actual_max": 0.0002615129924379289
+        },
+        "fp64": {
+          "relative_l2": 0.0015593433688744671,
+          "max_absolute": 1.0166920419488168e-06,
+          "actual_rms": 0.00018125048391882693,
+          "reference_rms": 0.0001811916212475012,
+          "actual_min": -0.0004366745997685939,
+          "actual_max": 0.0002615129924379289
+        }
+      },
+      "waveform": {
+        "fp32": {
+          "relative_l2": 0.0015592806001708294,
+          "max_absolute": 1.0172661859542131e-06,
+          "actual_rms": 0.00018125048391882693,
+          "reference_rms": 0.00018119185449462063,
+          "actual_min": -0.0004366745997685939,
+          "actual_max": 0.0002615129924379289
+        },
+        "fp64": {
+          "relative_l2": 0.0015593433688744671,
+          "max_absolute": 1.0166920419488168e-06,
+          "actual_rms": 0.00018125048391882693,
+          "reference_rms": 0.0001811916212475012,
+          "actual_min": -0.0004366745997685939,
+          "actual_max": 0.0002615129924379289
+        }
+      },
+      "guard_max_argument": 5.514394760131836,
+      "sample_count": 1920,
+      "clipped_samples": 0,
+      "actual_rms": 0.00018125048391882693
+    }
+  ],
+  "max_operation_relative_l2": {
+    "fp32": 0.0015592806001708294,
+    "fp64": 0.0015593433688744671
+  },
+  "threshold_relative_l2": 0.035,
+  "component_accepted": true,
+  "reset_first_frame_bitwise": true,
+  "reset_record": {
+    "frame": 0,
+    "ids_match": true,
+    "device_ids_restored": true,
+    "raw": {
+      "fp32": {
+        "relative_l2": 0.0008343822571734888,
+        "max_absolute": 1.4217803254723549e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.000501886486624262,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      },
+      "fp64": {
+        "relative_l2": 0.0008347446161648998,
+        "max_absolute": 1.423102001514619e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.0005018859875031381,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      }
+    },
+    "waveform": {
+      "fp32": {
+        "relative_l2": 0.0008343822571734888,
+        "max_absolute": 1.4217803254723549e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.000501886486624262,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      },
+      "fp64": {
+        "relative_l2": 0.0008347446161648998,
+        "max_absolute": 1.423102001514619e-06,
+        "actual_rms": 0.0005020568620563615,
+        "reference_rms": 0.0005018859875031381,
+        "actual_min": -0.00011992770305369049,
+        "actual_max": 0.0010508764535188675
+      }
+    },
+    "guard_max_argument": 7.140380382537842,
+    "sample_count": 1920,
+    "clipped_samples": 0,
+    "actual_rms": 0.0005020568620563615
+  },
+  "source_reference_max_arguments": {
+    "fp32": [
+      {
+        "decoder.decoder.1.block.0": 7.140262603759766,
+        "decoder.decoder.1.block.2.act1": 1.7148077487945557,
+        "decoder.decoder.1.block.2.act2": 2.216437339782715,
+        "decoder.decoder.1.block.3.act1": 2.0578761100769043,
+        "decoder.decoder.1.block.3.act2": 1.8417067527770996,
+        "decoder.decoder.1.block.4.act1": 1.9334338903427124,
+        "decoder.decoder.1.block.4.act2": 1.8062080144882202,
+        "decoder.decoder.2.block.0": 2.3179378509521484,
+        "decoder.decoder.2.block.2.act1": 2.162898540496826,
+        "decoder.decoder.2.block.2.act2": 1.7566097974777222,
+        "decoder.decoder.2.block.3.act1": 1.5249319076538086,
+        "decoder.decoder.2.block.3.act2": 2.629574775695801,
+        "decoder.decoder.2.block.4.act1": 1.7029057741165161,
+        "decoder.decoder.2.block.4.act2": 1.318585753440857,
+        "decoder.decoder.3.block.0": 1.8719931840896606,
+        "decoder.decoder.3.block.2.act1": 0.8584662675857544,
+        "decoder.decoder.3.block.2.act2": 1.6795154809951782,
+        "decoder.decoder.3.block.3.act1": 1.017594814300537,
+        "decoder.decoder.3.block.3.act2": 1.1040279865264893,
+        "decoder.decoder.3.block.4.act1": 0.9140639305114746,
+        "decoder.decoder.3.block.4.act2": 1.5762908458709717,
+        "decoder.decoder.4.block.0": 1.6851584911346436,
+        "decoder.decoder.4.block.2.act1": 0.7009987235069275,
+        "decoder.decoder.4.block.2.act2": 1.135056972503662,
+        "decoder.decoder.4.block.3.act1": 0.9047279357910156,
+        "decoder.decoder.4.block.3.act2": 1.0331308841705322,
+        "decoder.decoder.4.block.4.act1": 0.706897497177124,
+        "decoder.decoder.4.block.4.act2": 0.38257473707199097,
+        "decoder.decoder.5": 0.6221733689308167
+      },
+      {
+        "decoder.decoder.1.block.0": 7.140264987945557,
+        "decoder.decoder.1.block.2.act1": 1.9024275541305542,
+        "decoder.decoder.1.block.2.act2": 2.2164359092712402,
+        "decoder.decoder.1.block.3.act1": 2.0578763484954834,
+        "decoder.decoder.1.block.3.act2": 2.062635898590088,
+        "decoder.decoder.1.block.4.act1": 2.117011070251465,
+        "decoder.decoder.1.block.4.act2": 1.8062070608139038,
+        "decoder.decoder.2.block.0": 2.3179380893707275,
+        "decoder.decoder.2.block.2.act1": 2.162898540496826,
+        "decoder.decoder.2.block.2.act2": 1.7566100358963013,
+        "decoder.decoder.2.block.3.act1": 1.5249320268630981,
+        "decoder.decoder.2.block.3.act2": 2.62957501411438,
+        "decoder.decoder.2.block.4.act1": 1.7029054164886475,
+        "decoder.decoder.2.block.4.act2": 1.5808110237121582,
+        "decoder.decoder.3.block.0": 1.8719931840896606,
+        "decoder.decoder.3.block.2.act1": 0.8584664463996887,
+        "decoder.decoder.3.block.2.act2": 1.6969398260116577,
+        "decoder.decoder.3.block.3.act1": 1.017594814300537,
+        "decoder.decoder.3.block.3.act2": 1.1040276288986206,
+        "decoder.decoder.3.block.4.act1": 0.9140639305114746,
+        "decoder.decoder.3.block.4.act2": 1.5762910842895508,
+        "decoder.decoder.4.block.0": 1.6851584911346436,
+        "decoder.decoder.4.block.2.act1": 0.700998842716217,
+        "decoder.decoder.4.block.2.act2": 1.1350573301315308,
+        "decoder.decoder.4.block.3.act1": 0.90472811460495,
+        "decoder.decoder.4.block.3.act2": 1.127220630645752,
+        "decoder.decoder.4.block.4.act1": 0.706897497177124,
+        "decoder.decoder.4.block.4.act2": 0.38257479667663574,
+        "decoder.decoder.5": 0.6221732497215271
+      }
+    ],
+    "fp64": [
+      {
+        "decoder.decoder.1.block.0": 7.140260994001944,
+        "decoder.decoder.1.block.2.act1": 1.7148076556846328,
+        "decoder.decoder.1.block.2.act2": 2.216436626639751,
+        "decoder.decoder.1.block.3.act1": 2.057876447297012,
+        "decoder.decoder.1.block.3.act2": 1.8417075253387627,
+        "decoder.decoder.1.block.4.act1": 1.9334339617365648,
+        "decoder.decoder.1.block.4.act2": 1.806208621685999,
+        "decoder.decoder.2.block.0": 2.3179380915175827,
+        "decoder.decoder.2.block.2.act1": 2.16289786217069,
+        "decoder.decoder.2.block.2.act2": 1.7566083966132853,
+        "decoder.decoder.2.block.3.act1": 1.524931752566727,
+        "decoder.decoder.2.block.3.act2": 2.6295761171576193,
+        "decoder.decoder.2.block.4.act1": 1.7029056126773376,
+        "decoder.decoder.2.block.4.act2": 1.3185843677006597,
+        "decoder.decoder.3.block.0": 1.8719927436844277,
+        "decoder.decoder.3.block.2.act1": 0.858466376602363,
+        "decoder.decoder.3.block.2.act2": 1.6795160225667112,
+        "decoder.decoder.3.block.3.act1": 1.0175953896823196,
+        "decoder.decoder.3.block.3.act2": 1.1040277210742762,
+        "decoder.decoder.3.block.4.act1": 0.9140643139987374,
+        "decoder.decoder.3.block.4.act2": 1.5762910160414114,
+        "decoder.decoder.4.block.0": 1.6851590846989932,
+        "decoder.decoder.4.block.2.act1": 0.7009985674566773,
+        "decoder.decoder.4.block.2.act2": 1.135057920889149,
+        "decoder.decoder.4.block.3.act1": 0.9047284194339992,
+        "decoder.decoder.4.block.3.act2": 1.0331308078909756,
+        "decoder.decoder.4.block.4.act1": 0.7068974338275273,
+        "decoder.decoder.4.block.4.act2": 0.3825746511337131,
+        "decoder.decoder.5": 0.6221740222362998
+      },
+      {
+        "decoder.decoder.1.block.0": 7.140260994001944,
+        "decoder.decoder.1.block.2.act1": 1.902427447190253,
+        "decoder.decoder.1.block.2.act2": 2.216436626639751,
+        "decoder.decoder.1.block.3.act1": 2.0578764472970135,
+        "decoder.decoder.1.block.3.act2": 2.062635909904297,
+        "decoder.decoder.1.block.4.act1": 2.1170117347956805,
+        "decoder.decoder.1.block.4.act2": 1.8062086216859978,
+        "decoder.decoder.2.block.0": 2.317938091517582,
+        "decoder.decoder.2.block.2.act1": 2.1628978621706887,
+        "decoder.decoder.2.block.2.act2": 1.7566083966132855,
+        "decoder.decoder.2.block.3.act1": 1.524931752566727,
+        "decoder.decoder.2.block.3.act2": 2.62957611715762,
+        "decoder.decoder.2.block.4.act1": 1.7029056126773376,
+        "decoder.decoder.2.block.4.act2": 1.5808105397656351,
+        "decoder.decoder.3.block.0": 1.8719927436844275,
+        "decoder.decoder.3.block.2.act1": 0.858466376602363,
+        "decoder.decoder.3.block.2.act2": 1.6969401502314783,
+        "decoder.decoder.3.block.3.act1": 1.0175953896823202,
+        "decoder.decoder.3.block.3.act2": 1.1040277210742768,
+        "decoder.decoder.3.block.4.act1": 0.9140643139987382,
+        "decoder.decoder.3.block.4.act2": 1.5762910160414114,
+        "decoder.decoder.4.block.0": 1.6851590846989937,
+        "decoder.decoder.4.block.2.act1": 0.7009985674566771,
+        "decoder.decoder.4.block.2.act2": 1.1350579208891491,
+        "decoder.decoder.4.block.3.act1": 0.9047284194339995,
+        "decoder.decoder.4.block.3.act2": 1.1272205888715587,
+        "decoder.decoder.4.block.4.act1": 0.7068974338275278,
+        "decoder.decoder.4.block.4.act2": 0.3825746511337131,
+        "decoder.decoder.5": 0.6221740222363001
+      }
+    ]
+  },
+  "max_device_snake_argument": 7.140380382537842,
+  "snake_argument_limit": 262144.0,
+  "output_sample_rate": 24000,
+  "samples_per_codec_frame": 1920,
+  "scaling": "raw source clamp [-1,1]; no normalization or output tanh",
+  "waveform_produced_in_isa_simulation": true,
+  "waveform_produced_on_fpga": false,
+  "complete_utterance_validated": false,
+  "quality_validated": false,
+  "physical_hardware_access": false,
+  "tts_enabled": false,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "public_300_waveform_boundary_validated": false,
+  "main_native_300_frame_generation_validated": false,
+  "resident_dram_bytes": 2968816128,
+  "waveform_programs_per_codec_frame": 79,
+  "program_budgets": [
+    {
+      "name": "wave.begin",
+      "instructions": 3,
+      "imem_words": 24,
+      "tmem_peak_words": 1,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.0.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 10240,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.0.conv",
+      "instructions": 80,
+      "imem_words": 640,
+      "tmem_peak_words": 28696,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.0",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 61449,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.1.block.1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 7680,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.transposed.decoder.decoder.1.block.1.conv",
+      "instructions": 138,
+      "imem_words": 1104,
+      "tmem_peak_words": 40720,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.2.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.1.block.2.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 7680,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.2.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 18456,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.2.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.2.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 15368,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.3.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.1.block.3.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 16896,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.3.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 18456,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.3.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.3.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 15368,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.4.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.1.block.4.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 44544,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.4.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 18456,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.1.block.4.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.1.block.4.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 15368,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.0",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 30729,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.2.block.1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 3840,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.transposed.decoder.decoder.2.block.1.conv",
+      "instructions": 93,
+      "imem_words": 744,
+      "tmem_peak_words": 20368,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.2.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.2.block.2.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 3840,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.2.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 9240,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.2.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.2.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 7688,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.3.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.2.block.3.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 8448,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.3.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 9240,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.3.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.3.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 7688,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.4.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.2.block.4.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 22272,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.4.conv1.conv",
+      "instructions": 77,
+      "imem_words": 616,
+      "tmem_peak_words": 9240,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.2.block.4.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.2.block.4.conv2.conv",
+      "instructions": 20,
+      "imem_words": 160,
+      "tmem_peak_words": 7688,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.0",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 15369,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.3.block.1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 1920,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.transposed.decoder.decoder.3.block.1.conv",
+      "instructions": 78,
+      "imem_words": 624,
+      "tmem_peak_words": 10192,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.2.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.3.block.2.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 1920,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.2.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 6176,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.2.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.2.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 3856,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.3.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.3.block.3.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 4224,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.3.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 6176,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.3.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.3.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 3856,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.4.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.3.block.4.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 11136,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.4.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 6176,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.3.block.4.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.3.block.4.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 3856,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.0",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 7689,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.4.block.1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 960,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.transposed.decoder.decoder.4.block.1.conv",
+      "instructions": 67,
+      "imem_words": 536,
+      "tmem_peak_words": 6144,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.2.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.4.block.2.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 960,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.2.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 3104,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.2.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.2.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 1936,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.3.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.4.block.3.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 2112,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.3.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 3104,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.3.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.3.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 1936,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.4.act1",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.4.block.4.conv1.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 5568,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.4.conv1.conv",
+      "instructions": 91,
+      "imem_words": 728,
+      "tmem_peak_words": 3104,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.4.block.4.act2",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.4.block.4.conv2.conv",
+      "instructions": 22,
+      "imem_words": 176,
+      "tmem_peak_words": 1936,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.snake.decoder.decoder.5",
+      "instructions": 44,
+      "imem_words": 352,
+      "tmem_peak_words": 3849,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.prepare.decoder.decoder.6.conv",
+      "instructions": 11,
+      "imem_words": 88,
+      "tmem_peak_words": 960,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.conv.decoder.decoder.6.conv",
+      "instructions": 94,
+      "imem_words": 752,
+      "tmem_peak_words": 2336,
+      "dram_bytes": 2968816128
+    },
+    {
+      "name": "wave.finish",
+      "instructions": 9,
+      "imem_words": 72,
+      "tmem_peak_words": 12,
+      "dram_bytes": 2968816128,
+      "snake_guard_address": 2824638592,
+      "snake_argument_limit": 262144.0
+    }
+  ],
+  "source_parameter_views": 238,
+  "source_unique_tensors": 118,
+  "code_sha256": {
+    "opentpu/kernels/tts_audio_chunks.py": "925f949d61d82257361b4aebf404c419c7efc5ec63d7d15d6b801cd2eadee4e6",
+    "opentpu/kernels/tts_audio_front.py": "9d20a1a6979a69e68a31bc6afa068e6b35bab79a1a872d6e6c8cf712064a5386",
+    "opentpu/kernels/tts_audio_transformer.py": "1058cef44250b3e011021f7f3b07ffdf5b10bc4d0ca851586ff5b0eefe5cef04",
+    "opentpu/kernels/tts_audio_upsample.py": "9e2473c9e61f71e0962396263b9febe3a6dd0646465a152409ae700194ef895a",
+    "opentpu/kernels/tts_frame.py": "701502ea81d3030728c8b62663518a39b9a52a9cafde5059bfac9814546eb0d3",
+    "opentpu/kernels/tts_predictor_precision.py": "1bcf76b1705940a307f85d646ee4937ca280ba74cadc4425835f4cac38aca760",
+    "opentpu/kernels/tts_projection.py": "779f2e1dec425a4705bf4afe52d5019f4c3f71bc3a3a82b881180da5e51731bf",
+    "opentpu/kernels/tts_stack.py": "f3817a8cdbbcf7bca2250c9e0864dfeae387883b8995156f85841cfc03631046",
+    "opentpu/kernels/tts_talker.py": "8144f9bcb08e3f6984fefce4afb5a37fdd8138487ac9b4c1497156b0f73e4ec1",
+    "opentpu/kernels/tts_talker_precision.py": "503f5ba05cde04c375d4eb579b286392d2e2ee15e0e6ccef8efb9c8f5ee35e57",
+    "opentpu/kernels/tts_wave_ops.py": "eab929e734678c9f5912d8b188a6b257a7780b63d4c68effc9592a4af1ca15e7",
+    "opentpu/kernels/tts_waveform.py": "6844cca49e59bfff3e303d7e1bd16a810c92592fec9834d67afce2bb00e5a7ac",
+    "opentpu/llm/qwen3_tts.py": "b2b5a3cb5bf8a07c5e0fe8a7fea832c7f91cdfe458e69d8d6dc6ec0bf3753b03",
+    "opentpu/llm/qwen3_tts_audio_chunks.py": "f2b598c974768942db112bab36d17a4e7f698adced10524c7cd932ba7eaeae27",
+    "opentpu/llm/qwen3_tts_audio_front.py": "d17bb4d2303665dd1f4192ffd299244d9ece981bc16b8aedefd50afa56096919",
+    "opentpu/llm/qwen3_tts_audio_transformer.py": "e70a01af344338febe1ab0b132eb9657b1abeb194afb7420d7cd802a9f101c8b",
+    "opentpu/llm/qwen3_tts_audio_upsample.py": "2a989c99eb52b2fcdeaede0adc33751c010eadb4ef80188a755a5fc13079cdb1",
+    "opentpu/llm/qwen3_tts_frame.py": "15c2a0f0d37ce78a70d1471d0717ab255ae77ad59d1a8e470710ad6284916c96",
+    "opentpu/llm/qwen3_tts_predictor_precision.py": "b2f4de4284586b1178efc73791876b834c4f0227a6bfbb59100b0a50c1fe998b",
+    "opentpu/llm/qwen3_tts_prompt.py": "98726a6512182c70cde8289e33413693f1f1f6b5c0d91e8a4271957b5b4d6ebe",
+    "opentpu/llm/qwen3_tts_shared.py": "0c434b6ed8b5883ca8d71a3ee2cb3ffdda91a1585184731d9c6a15bb58391c66",
+    "opentpu/llm/qwen3_tts_stack.py": "924a827ecbe041162449b29000f9441e793459feb4b57d62d25f3dea6f6e16a7",
+    "opentpu/llm/qwen3_tts_talker.py": "6880a4ccc43702d64842f0fa5bc948421a1792982240f19f2c3883c0780b145d",
+    "opentpu/llm/qwen3_tts_talker_precision.py": "d565a28dccab1326662b620223d3a68a8b1d5d39bcd8830f5a2a9a7f0a04c330",
+    "opentpu/llm/qwen3_tts_waveform.py": "eb0cf5d9443063cdbcf2a97d842227b95cab4d882381eaf6d9eb43c3e3b8bff0",
+    "tests/fixtures/qwen3_tts_06b_config.json": "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455",
+    "tests/fixtures/qwen3_tts_audio_codec_cases.json": "8c3aecd077ad62327a712175b2ec11456b272a2e03ec275f446e70f359113f6b",
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "d553b53081fcb0ff2f4bbfa325ebd53944cc590ea87c84f8dbc32913ba6abc1d",
+    "tests/fixtures/qwen3_tts_frame_contract.json": "de2289dd9b9bbdb07da38995d6887cbe2424b2ce6da39bcc06b78e481818d554",
+    "tests/fixtures/qwen3_tts_prompts.json": "4bd0b89002312738892e0bd9d4537ec9a0b4b57a3ecc7acf278dab732c81fa7b",
+    "tests/fixtures/qwen3_tts_stack_contract.json": "57034f46a018bcae9d6c557ed664292859c206fad6b45f9b06f5bf500014d9d1",
+    "tests/fixtures/qwen3_tts_talker_contract.json": "4c6516a055fb30efac8f41769e269273ecac069c0e978dbe287cf71f1766c10d",
+    "tests/qwen3_tts_audio_reference.py": "3a905ffc7c7231c64d134d1e8b38f8ed9d0f89a12ece8ca705f73bf0ed67c25b",
+    "tests/qwen3_tts_audio_transformer_reference.py": "4faa2a739d6ade8a76aec23c519d75974d10d075ace55a98003d8b4f3a99bce4",
+    "tests/qwen3_tts_audio_upsample_reference.py": "d50c8fd239dfa704b982f02476ebe18953bc5d3c6229f517da036aae0d7cf9d7",
+    "tests/qwen3_tts_exact_mx.py": "82da5f48435a08a9ec8228732d6858f051e650c1081e112aea2beab6865e26eb",
+    "tests/qwen3_tts_frame_reference.py": "9e2319b982ff55f86f55c1dcccdb429037fbec763469f438c4ac8b723816723c",
+    "tests/qwen3_tts_predictor_exact.py": "32f0424fa34947649b9296cd5a22c7401d4ea1b0b141f5ea479bee69da9b480e",
+    "tests/qwen3_tts_quant_ablation.py": "bec07f620ed551fb85d4dace481fe52b282ecb2d98c51d5e9a6a58e8f6d8f1ba",
+    "tests/qwen3_tts_stack_reference.py": "0369750271a46e274d0ea54897a3041360004dc0524ccef7fea58c3dce3a41e1",
+    "tests/qwen3_tts_talker_bf16_reference.py": "e88fc6df2828ecf0e85670c42b48f3b192c759ff74194a2b678bad94ea097de9",
+    "tests/qwen3_tts_talker_reference.py": "6b639517ecf4a614e0fe2053627f1b816838516c04dc3300c93f02e2fc8ede3a",
+    "tests/qwen3_tts_waveform_reference.py": "cafe513b725f83da5b3924abd9cb6b9a7b11ae8681ba165dffe6de201ce51073",
+    "tests/test_qwen3_tts.py": "a0674b1d3fdcfe67557e70f3a6588add854f53256476a86c68796b8e348e0b36",
+    "tests/test_qwen3_tts_audio_chunks.py": "0205dd7b10f56a53227a7762049c52a840448bbe3832c06e0ec3e9a0502334a5",
+    "tests/test_qwen3_tts_audio_front.py": "e8a08ca63dc2fe7bef6a89df021b3f71ca7c387f715206900082cb9eb15bd42c",
+    "tests/test_qwen3_tts_audio_transformer.py": "877902e5e7d91cc049a0182ffd32342a9fc2f80c42474eee25439cb97615e2b1",
+    "tests/test_qwen3_tts_audio_upsample.py": "8a7235a0bec3829a9a0e9e800c1eee06d03fa74405990a681edad7102be4fbbd",
+    "tests/test_qwen3_tts_checkpoint_acceptance.py": "43e25cb24b20d8329be97cb88e837bdc1573564dd9c8cf54b23fa7b5289c423c",
+    "tests/test_qwen3_tts_frame.py": "5f04aa0e8d08a2c601d15eccc0bed3a3d2af0faff7a3b9ec54d3491ed4d3903a",
+    "tests/test_qwen3_tts_predictor_precision.py": "b0da3b321436bdf5e0ea5a3fa76456d19347133ca5447d200df8f97b37bf6a00",
+    "tests/test_qwen3_tts_prompt.py": "019d798535324826d270bdee8ab0b9d44b39109860acd1aaed4afff63c06f05c",
+    "tests/test_qwen3_tts_stack.py": "95b57500cf8effa5bba38b45f6fd9fc20e3d99006c4c5c2395113df6d581e300",
+    "tests/test_qwen3_tts_talker.py": "9a6fadef6f752aa673b8f339288f0ade09e109694779274cd6cf1296155e9db3",
+    "tests/test_qwen3_tts_talker_precision.py": "cd8e080221402313ea9510234baa668052d6001ffe27190e3a320bcf1a48f446",
+    "tests/test_qwen3_tts_waveform.py": "7e8f4fd55240d3221a1cbccc954db634855c70e683f459234d0a3b10baeda06a",
+    "tools/qwen3_tts_audio_checkpoint.py": "a7f52939d603e107e14e602f408dc50a101a7754232a5635de48c2c736ea089f",
+    "tools/qwen3_tts_waveform_acceptance.py": "55c4e1512fa24b009c1a063d226a27fdb5b5d9f35c98c14346f2e99c00e9b5a6"
+  },
+  "seconds": 264.7951803539763,
+  "rows_sha256": "22d6d60c4ad6c3e3d901a07d7b1f948b7cd352957dcde4c0e01831c5032fbddd"
+}
