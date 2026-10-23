@@ -227,7 +227,7 @@ module otpu_f2_sys #(
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_board (
     .clk, .clk_f, .rst, .ctl_mrst(rst),
-    .calib({2{ddr_ready}}), .ded(2'b00), .temp(12'd0), .led, .i2c_lo, .i2c_pin(5'h1f),
+    .calib({2{ddr_ready}}), .ded(2'b00), .temp(12'd0), .led, .aux_idle(), .i2c_lo, .i2c_pin(5'h1f),
     .s_ctl_awaddr(c_awaddr), .s_ctl_awvalid(c_awvalid), .s_ctl_awready(c_awready),
     .s_ctl_wdata(c_wdata), .s_ctl_wstrb(c_wstrb), .s_ctl_wvalid(c_wvalid),
     .s_ctl_wready(c_wready), .s_ctl_bresp(c_bresp), .s_ctl_bvalid(c_bvalid),

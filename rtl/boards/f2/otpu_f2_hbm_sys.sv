@@ -68,6 +68,7 @@ module otpu_f2_hbm_sys #(
                                          //   SLRs; 0: wired, no floorplan)
   parameter int READ_BURST = 8,          // otpu_native_axi's read bursts (native beats) and
   parameter int READ_IDLE  = 1,          //   gather timeout,
+  parameter bit NVFP4_MAILBOX=1'b0,    // optional NV41 peripheral; legacy image unchanged by default
   parameter bit READ_WAIT  = 1'b1        //   and wait (docs/f2_hbm.md "The memory path")
 ) (
   input  logic          clk,
@@ -239,6 +240,69 @@ module otpu_f2_hbm_sys #(
   logic [NPORT-1:0][63:0]  n_wmask;
   logic [NPORT-1:0][15:0]  n_wdone;
   // the slices' channels and the host onto the SmartConnect fabric's slaves
+
+  logic legacy_idle,nv_owns,nv_outstanding;
+  logic [11:0] l_awaddr,l_araddr;
+  logic l_awvalid,l_awready,l_wvalid,l_wready,l_bvalid,l_bready;
+  logic l_arvalid,l_arready,l_rvalid,l_rready;
+  logic [31:0] l_wdata,l_rdata;
+  logic [3:0] l_wstrb;
+  logic [1:0] l_bresp,l_rresp;
+  logic [NPORT-1:0] b_cvalid,b_cready,b_cwe,b_wvalid,b_wready,b_rvalid,b_err;
+  logic [NPORT-1:0][24:0] b_caddr;
+  logic [NPORT-1:0][511:0] b_wdata,b_rdata;
+  logic [NPORT-1:0][63:0] b_wmask;
+  logic [NPORT-1:0][15:0] b_wdone;
+  logic nv_cvalid,nv_cwe,nv_wvalid;
+  logic [24:0] nv_caddr;
+  logic [511:0] nv_wdata;
+  logic [63:0] nv_wmask;
+  for(genvar p=0;p<NPORT;p++)begin:g_owner
+    assign b_err[p]=n_err[p];
+    if(p==0 && NVFP4_MAILBOX)begin:g_nv
+      otpu_nvfp4_native_owner u_owner (
+        .clk,.rst,.owns(nv_owns),
+        .b_cvalid(b_cvalid[p]),.b_cwe(b_cwe[p]),.b_caddr(b_caddr[p]),
+        .b_wvalid(b_wvalid[p]),.b_wdata(b_wdata[p]),.b_wmask(b_wmask[p]),
+        .b_cready(b_cready[p]),.b_wready(b_wready[p]),.b_rvalid(b_rvalid[p]),
+        .b_rdata(b_rdata[p]),.b_wdone(b_wdone[p]),
+        .v_cvalid(nv_cvalid),.v_cwe(nv_cwe),.v_caddr(nv_caddr),
+        .v_wvalid(nv_wvalid),.v_wdata(nv_wdata),.v_wmask(nv_wmask),
+        .n_cvalid(n_cvalid[p]),.n_cwe(n_cwe[p]),.n_caddr(n_caddr[p]),
+        .n_wvalid(n_wvalid[p]),.n_wdata(n_wdata[p]),.n_wmask(n_wmask[p]),
+        .n_cready(n_cready[p]),.n_wready(n_wready[p]),.n_rvalid(n_rvalid[p]),
+        .n_rdata(n_rdata[p]),.n_wdone(n_wdone[p]));
+    end else begin:g_legacy
+      assign n_cvalid[p]=b_cvalid[p];assign n_cwe[p]=b_cwe[p];assign n_caddr[p]=b_caddr[p];
+      assign n_wvalid[p]=b_wvalid[p];assign n_wdata[p]=b_wdata[p];assign n_wmask[p]=b_wmask[p];
+      assign b_cready[p]=n_cready[p];assign b_wready[p]=n_wready[p];
+      assign b_rvalid[p]=n_rvalid[p];assign b_rdata[p]=n_rdata[p];assign b_wdone[p]=n_wdone[p];
+    end
+  end
+  if(NVFP4_MAILBOX)begin:g_nv41
+    otpu_f2_nvfp4_ocl #(.BANK_BASE(64'd0),.BANK_LOG2(CH_LOG2)) u_nv (
+      .clk,.rst(rst_b),.legacy_idle,
+      .s_awaddr(x_awaddr),.s_awvalid(x_awvalid),.s_awready(x_awready),
+      .s_wdata(x_wdata),.s_wstrb(x_wstrb),.s_wvalid(x_wvalid),.s_wready(x_wready),
+      .s_bresp(x_bresp),.s_bvalid(x_bvalid),.s_bready(x_bready),
+      .s_araddr(x_araddr),.s_arvalid(x_arvalid),.s_arready(x_arready),
+      .s_rdata(x_rdata),.s_rresp(x_rresp),.s_rvalid(x_rvalid),.s_rready(x_rready),
+      .l_awaddr,.l_awvalid,.l_awready,.l_wdata,.l_wstrb,.l_wvalid,.l_wready,.l_bresp,.l_bvalid,.l_bready,
+      .l_araddr,.l_arvalid,.l_arready,.l_rdata,.l_rresp,.l_rvalid,.l_rready,
+      .owns_memory(nv_owns),.memory_outstanding(nv_outstanding),
+      .n_cvalid(nv_cvalid),.n_cwe(nv_cwe),.n_cready(n_cready[0]),.n_caddr(nv_caddr),
+      .n_wvalid(nv_wvalid),.n_wready(n_wready[0]),.n_wdata(nv_wdata),.n_wmask(nv_wmask),
+      .n_rvalid(n_rvalid[0]),.n_rdata(n_rdata[0]),.n_wdone(n_wdone[0]),.n_err(n_err[0]));
+  end else begin:g_no_nv41
+    assign nv_owns=0;assign nv_outstanding=0;assign nv_cvalid=0;assign nv_cwe=0;
+    assign nv_caddr=0;assign nv_wvalid=0;assign nv_wdata=0;assign nv_wmask=0;
+    assign l_awaddr=x_awaddr;assign l_awvalid=x_awvalid;assign x_awready=l_awready;
+    assign l_wdata=x_wdata;assign l_wstrb=x_wstrb;assign l_wvalid=x_wvalid;assign x_wready=l_wready;
+    assign x_bresp=l_bresp;assign x_bvalid=l_bvalid;assign l_bready=x_bready;
+    assign l_araddr=x_araddr;assign l_arvalid=x_arvalid;assign x_arready=l_arready;
+    assign x_rdata=l_rdata;assign x_rresp=l_rresp;assign x_rvalid=l_rvalid;assign l_rready=x_rready;
+  end
+
   otpu_f2_hbm_axi #(.NPORT(NPORT), .NXR(NXR), .CH_LOG2(CH_LOG2), .READ_BURST(READ_BURST),
                     .READ_IDLE(READ_IDLE), .READ_WAIT(READ_WAIT)) u_mem (
     .clk, .rst, .aclk, .arst,
@@ -271,13 +335,13 @@ module otpu_f2_hbm_sys #(
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
                .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_board (
     .clk, .clk_f, .rst(rst_b), .ctl_mrst(rst_b),
-    .calib({NPORT{hbm_rdy}}), .ded('0), .temp(12'd0), .led, .i2c_lo, .i2c_pin(5'h1f),
-    .s_ctl_awaddr(x_awaddr), .s_ctl_awvalid(x_awvalid), .s_ctl_awready(x_awready),
-    .s_ctl_wdata(x_wdata), .s_ctl_wstrb(x_wstrb), .s_ctl_wvalid(x_wvalid),
-    .s_ctl_wready(x_wready), .s_ctl_bresp(x_bresp), .s_ctl_bvalid(x_bvalid),
-    .s_ctl_bready(x_bready), .s_ctl_araddr(x_araddr), .s_ctl_arvalid(x_arvalid),
-    .s_ctl_arready(x_arready), .s_ctl_rdata(x_rdata), .s_ctl_rresp(x_rresp),
-    .s_ctl_rvalid(x_rvalid), .s_ctl_rready(x_rready),
-    .n_cvalid, .n_cready, .n_cwe, .n_caddr, .n_wvalid, .n_wready, .n_wdata, .n_wmask,
-    .n_rvalid, .n_rdata, .n_wdone, .n_err);
+    .calib({NPORT{hbm_rdy}}), .ded('0), .temp(12'd0), .led, .aux_idle(legacy_idle), .i2c_lo, .i2c_pin(5'h1f),
+    .s_ctl_awaddr(l_awaddr), .s_ctl_awvalid(l_awvalid), .s_ctl_awready(l_awready),
+    .s_ctl_wdata(l_wdata), .s_ctl_wstrb(l_wstrb), .s_ctl_wvalid(l_wvalid),
+    .s_ctl_wready(l_wready), .s_ctl_bresp(l_bresp), .s_ctl_bvalid(l_bvalid),
+    .s_ctl_bready(l_bready), .s_ctl_araddr(l_araddr), .s_ctl_arvalid(l_arvalid),
+    .s_ctl_arready(l_arready), .s_ctl_rdata(l_rdata), .s_ctl_rresp(l_rresp),
+    .s_ctl_rvalid(l_rvalid), .s_ctl_rready(l_rready),
+    .n_cvalid(b_cvalid), .n_cready(b_cready), .n_cwe(b_cwe), .n_caddr(b_caddr), .n_wvalid(b_wvalid), .n_wready(b_wready), .n_wdata(b_wdata), .n_wmask(b_wmask),
+    .n_rvalid(b_rvalid), .n_rdata(b_rdata), .n_wdone(b_wdone), .n_err(b_err));
 endmodule

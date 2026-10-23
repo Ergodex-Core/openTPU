@@ -159,6 +159,7 @@ module otpu_ctrl #(
   // core
   output logic        run,
   output logic        ld_start,
+  output wire         load_pending,
   output logic [31:0] arg [8],           // ARG0..7 -> the sequencer's R8..R15
   output logic [31:0] ld_addr,
   output logic [31:0] ld_n,
@@ -210,6 +211,7 @@ module otpu_ctrl #(
   logic        clear, snap;
   logic [LDP-1:0] ld_pend_q;               // LOAD written, loader not yet visibly busy
   wire         ld_pend = ld_start || (|ld_pend_q);
+  assign load_pending=ld_pend;
   always_ff @(posedge clk) ld_pend_q <= rst ? '0 : {ld_pend_q[LDP-2:0], ld_start};
 
   // ---- write channel: take address and data together

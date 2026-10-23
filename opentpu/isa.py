@@ -1,4 +1,8 @@
-"""openTPU instruction encoding (docs/isa.md). Every instruction is eight 32-bit words."""
+"""openTPU instruction encoding (docs/isa.md). Every instruction is eight 32-bit words.
+
+The proposed BF16-activation NVFP4 job interface lives in opentpu.mxu_job;
+it has no binary encoding yet. MM/WNV here retains its int8-activation contract.
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass, field

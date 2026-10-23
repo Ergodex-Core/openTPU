@@ -230,6 +230,7 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     params = target.rtl_params(t)
     if hbm:                             # otpu_f2_hbm_sys takes the geometry; no DIMM
         params.pop('DDR_MTS')
+        params['NVFP4_MAILBOX'] = int(t.platform.get('nvfp4_mailbox', False))
         params.update(CORE_KHZ=t.core_khz, BUILD_ID=int(build_id, 16))
         sys_rtl = ROOT / 'rtl/boards/f2/otpu_f2_hbm_sys.sv'
     else:
