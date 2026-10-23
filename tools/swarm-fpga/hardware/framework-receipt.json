@@ -1,0 +1,421 @@
+{
+  "scope": "tiny causal Transformer full inference, gradients, SGD and cached decoding",
+  "utc": "2026-10-23T07:57:04.219691+00:00",
+  "config": {
+    "vocab_size": 5,
+    "context": 6,
+    "width": 4,
+    "layers": 1,
+    "heads": 2,
+    "ff_width": 8,
+    "learning_rate": 0.05,
+    "batch_size": 1,
+    "sequence_length": 3,
+    "steps": 2,
+    "seed": 17,
+    "backend": "reference",
+    "socket": "",
+    "image": ""
+  },
+  "python": "3.12.3",
+  "numpy": "2.1.3",
+  "host_role": "layout, data preparation, comparisons, and greedy selection",
+  "tolerance": {
+    "atol": 2e-06,
+    "rtol": 0.0002
+  },
+  "checks": {
+    "initial_logits": {
+      "max_absolute_error": 3.725290298461914e-09,
+      "shape": [
+        1,
+        3,
+        5
+      ]
+    },
+    "loss0": {
+      "max_absolute_error": 0.0,
+      "shape": []
+    },
+    "step0.embedding": {
+      "max_absolute_error": 5.587935447692871e-09,
+      "shape": [
+        5,
+        4
+      ]
+    },
+    "step0.position": {
+      "max_absolute_error": 3.725290298461914e-09,
+      "shape": [
+        6,
+        4
+      ]
+    },
+    "step0.norm": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step0.head": {
+      "max_absolute_error": 1.862645149230957e-09,
+      "shape": [
+        4,
+        5
+      ]
+    },
+    "step0.layer0.norm1": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step0.layer0.qkv": {
+      "max_absolute_error": 9.313225746154785e-10,
+      "shape": [
+        4,
+        12
+      ]
+    },
+    "step0.layer0.proj": {
+      "max_absolute_error": 9.313225746154785e-10,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "step0.layer0.norm2": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step0.layer0.up": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4,
+        8
+      ]
+    },
+    "step0.layer0.gate": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4,
+        8
+      ]
+    },
+    "step0.layer0.down": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        8,
+        4
+      ]
+    },
+    "loss1": {
+      "max_absolute_error": 1.1920928955078125e-07,
+      "shape": []
+    },
+    "step1.embedding": {
+      "max_absolute_error": 3.725290298461914e-09,
+      "shape": [
+        5,
+        4
+      ]
+    },
+    "step1.position": {
+      "max_absolute_error": 7.450580596923828e-09,
+      "shape": [
+        6,
+        4
+      ]
+    },
+    "step1.norm": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step1.head": {
+      "max_absolute_error": 4.6566128730773926e-09,
+      "shape": [
+        4,
+        5
+      ]
+    },
+    "step1.layer0.norm1": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step1.layer0.qkv": {
+      "max_absolute_error": 9.313225746154785e-10,
+      "shape": [
+        4,
+        12
+      ]
+    },
+    "step1.layer0.proj": {
+      "max_absolute_error": 9.313225746154785e-10,
+      "shape": [
+        4,
+        4
+      ]
+    },
+    "step1.layer0.norm2": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4
+      ]
+    },
+    "step1.layer0.up": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4,
+        8
+      ]
+    },
+    "step1.layer0.gate": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        4,
+        8
+      ]
+    },
+    "step1.layer0.down": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        8,
+        4
+      ]
+    },
+    "trained_logits": {
+      "max_absolute_error": 1.1175870895385742e-08,
+      "shape": [
+        1,
+        3,
+        5
+      ]
+    },
+    "cached_logits": {
+      "max_absolute_error": 0.0,
+      "shape": [
+        1,
+        3,
+        5
+      ]
+    }
+  },
+  "steps": [
+    {
+      "f2": {
+        "loss": 1.645809531211853,
+        "step": 1,
+        "wall_seconds": 0.1562111460370943,
+        "tokens": 3,
+        "device": "f2"
+      },
+      "reference": {
+        "loss": 1.645809531211853,
+        "step": 1,
+        "wall_seconds": 0.0044286929769441485,
+        "tokens": 3,
+        "device": "reference"
+      }
+    },
+    {
+      "f2": {
+        "loss": 1.573632001876831,
+        "step": 2,
+        "wall_seconds": 0.13791274407412857,
+        "tokens": 3,
+        "device": "f2"
+      },
+      "reference": {
+        "loss": 1.5736318826675415,
+        "step": 2,
+        "wall_seconds": 0.002750981948338449,
+        "tokens": 3,
+        "device": "reference"
+      }
+    }
+  ],
+  "source_sha256": {
+    "__init__.py": "ec94f53a2ec3866cd2e32e75b68abeeb82aefb468400dbab9a611eeebe31edee",
+    "__main__.py": "3833300a532540941a80fe134f7eb5e26046b375f8638f824cdd681a890caa60",
+    "backend.py": "5d23e180c7b40b7f49f8b1137692a15600f693f6af5f6aab2783e8dd801a45c6",
+    "config.py": "c6f780c2845d8514f924c628b85532442b46dafad59a39188552edbbcb86e17d",
+    "graph.py": "604f9f373813ae4d56c0e3295b56a04795ab4a6325b25b721645a1ded420d898",
+    "model.py": "8bc8c5030201a250e0be88fc962d4f94b1fcfa21507da73dfa2663fc5059e460",
+    "opentpu.py": "9bf9ef0e401364f75d868532424270c4a354aec3d9e3ddef5e5a5bf07c5651bc",
+    "runtime.py": "91574e75b54e88f3a74a3474ea365bfa90ade0643258434aae5ec4933e5066ee"
+  },
+  "device": {
+    "D": 128,
+    "MCOLS": 4,
+    "LANES": 8,
+    "status": 104,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "running": false,
+    "regmap": 5,
+    "caps": {
+      "trace": true,
+      "temp": true,
+      "i2c": false,
+      "ddr": false,
+      "w4": true,
+      "pair": true,
+      "dstep": true,
+      "chash": true,
+      "act_rows": true,
+      "args": true,
+      "stream": true,
+      "hostcal": false,
+      "gen": true,
+      "waitw": true,
+      "mx": true,
+      "trace_depth": 16384,
+      "pq_window": 1024
+    },
+    "core_khz": 200000,
+    "build_id": 2118297126,
+    "temp_c": null,
+    "ddr_mts": null,
+    "act_rows": 16,
+    "cfg": {
+      "S": 1,
+      "TMEM_WORDS": 65536,
+      "IMEM_WORDS": 32768,
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "channels": 2,
+      "channel_bytes": 2147483648,
+      "MXU_IMPL": 2,
+      "TMEM_IMPL": 3,
+      "VPU_CL": 2,
+      "ULANES": 8,
+      "SEQ_WC": 1,
+      "platform": 3,
+      "hash": 1341988375
+    },
+    "caps2": {
+      "gather": true
+    }
+  },
+  "last_kernel_stats": {
+    "cycles": 490,
+    "instructions": [
+      19
+    ],
+    "b_reads": 2,
+    "b_writes": 1,
+    "a_reads": 0,
+    "a_writes": 0,
+    "b_stall": 0,
+    "status": 233,
+    "ecc_ded": false
+  },
+  "kernel_count": 634,
+  "device_cycles": 179068,
+  "numerical_operation_counts": {
+    "add": 76,
+    "mul": 214,
+    "sum": 88,
+    "div": 58,
+    "rsqrt": 18,
+    "matmul": 100,
+    "max": 8,
+    "sub": 34,
+    "exp": 8,
+    "tanh": 6,
+    "log": 2,
+    "neg": 22
+  },
+  "final_status": {
+    "D": 128,
+    "MCOLS": 4,
+    "LANES": 8,
+    "status": 104,
+    "calib": [
+      true,
+      true
+    ],
+    "calibrated": true,
+    "running": false,
+    "regmap": 5,
+    "caps": {
+      "trace": true,
+      "temp": true,
+      "i2c": false,
+      "ddr": false,
+      "w4": true,
+      "pair": true,
+      "dstep": true,
+      "chash": true,
+      "act_rows": true,
+      "args": true,
+      "stream": true,
+      "hostcal": false,
+      "gen": true,
+      "waitw": true,
+      "mx": true,
+      "trace_depth": 16384,
+      "pq_window": 1024
+    },
+    "core_khz": 200000,
+    "build_id": 2118297126,
+    "temp_c": null,
+    "ddr_mts": null,
+    "act_rows": 16,
+    "cfg": {
+      "S": 1,
+      "TMEM_WORDS": 65536,
+      "IMEM_WORDS": 32768,
+      "ACT_BLOCKS": 128,
+      "DRAM_BYTES": 4294967296,
+      "channels": 2,
+      "channel_bytes": 2147483648,
+      "MXU_IMPL": 2,
+      "TMEM_IMPL": 3,
+      "VPU_CL": 2,
+      "ULANES": 8,
+      "SEQ_WC": 1,
+      "platform": 3,
+      "hash": 1341988375
+    },
+    "caps2": {
+      "gather": true
+    }
+  },
+  "wall_seconds_including_compile_dma_reference": 0.617328064981848,
+  "hardware_image_changed": false,
+  "passed": true,
+  "image_unchanged": true,
+  "locks_released": true,
+  "archive_sha256": "4d605631dedef0d92f66967b115d922c422f1c7042e33afeec884ad809ae402c",
+  "dependency_sha256": {
+    "compiler.py": "cb5141b6aa89bb2ac4868bdfeefa1140ee93a44cd0ca869f24b9c4925c7cc572",
+    "runtime.py": "2c323697e1bd2e99bd25ba01d2c4c4bd31f5318a10cbc491cb6c3ca9577e5b89",
+    "fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+    "language.py": "bfa5e568063cd6008b7cb79f0684b7b8e746599d1ce0b06c9956bcb7cc8fb684",
+    "isa.py": "6ff71f284c38804ed127ff0eae185a0fbdc3bee229c451db6fba96d51810543c",
+    "isasim.py": "d0fc7a987213fb2334d4e869743f940516319753a5d714d77c254ec59b413666",
+    "target.py": "c911a1450ddbad1497af764c317f4049720983331540fd6e8bb8612f282998dc",
+    "host/board.py": "8cdfc1f4bb4b61540a0febdeef704ab46d002d29a385a4db052f8ac040bc77bd",
+    "host/f2.py": "21961b3bfb573114cf2a92b19046936bf894566bf9c68f5164affacec7f9b821",
+    "host/regs.py": "d93ffae5236cc9ca70589f076fc2064f37c131e9bb36707f4281080bfb89bfdf",
+    "host/runstate.py": "b80a2337702db879e8770dfcf1c69dae65fcdc6d06d3741bed20d757a9b5e5bf"
+  },
+  "preflight_utc": "2026-10-23T07:57:03.863274+00:00",
+  "postflight_utc": "2026-10-23T07:57:04.885104+00:00",
+  "agfi": "agfi-0d06cb48544a02106",
+  "publication_changes_after_hardware_run": [
+    "CLI train/generate now use the model context manager for deterministic device cleanup.",
+    "Native device selector is restricted to f2:0, matching the implemented legacy lock.",
+    "Numerical graph, compiler lowering, model, optimizer and hardware harness are unchanged."
+  ]
+}

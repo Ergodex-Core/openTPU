@@ -19,6 +19,11 @@ simulator, a kernel language and its compiler, and the host software that drives
 card. If you want to understand how an AI accelerator works, from a matmul in Python down to
 the wires, this is a good place to start.
 
+[Swarm FPGA](tools/swarm-fpga/README.md) is a small experimental training and inference
+framework built on openTPU. It includes explicit autodiff, a causal Transformer, checkpointing
+and INT8 MXU forward execution with FP32 or emulated BF16/FP16 backward precision. The original
+FP32 mode passed on burst200; the new mixed modes have ISA coverage and await a free qualified card.
+
 ## Results
 
 The design runs ten modern models with their real weights on an Inspur YPCB-00338 card

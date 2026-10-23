@@ -1,0 +1,53 @@
+{
+  "utc": "2026-10-23T10:45:05.748724+00:00",
+  "scope": "OpenTPU ISA simulation only; no physical device",
+  "test": "tests/test_review_regressions.py::test_training_export_omits_unused_nodes_and_preserves_native_results",
+  "configuration": {
+    "vocab_size": 5,
+    "context": 8,
+    "width": 4,
+    "layers": 1,
+    "heads": 2,
+    "ff_width": 8,
+    "batch": 2,
+    "sequence": 3
+  },
+  "policies": [
+    {
+      "forward": "fp32",
+      "backward": "fp32",
+      "graph_nodes_before": 312,
+      "graph_nodes_after": 274,
+      "isa_kernel_launches_before": 254,
+      "isa_kernel_launches_after": 216,
+      "all_outputs_bit_exact": true
+    },
+    {
+      "forward": "int8",
+      "backward": "fp32",
+      "graph_nodes_before": 312,
+      "graph_nodes_after": 274,
+      "isa_kernel_launches_before": 254,
+      "isa_kernel_launches_after": 216,
+      "all_outputs_bit_exact": true
+    },
+    {
+      "forward": "int8",
+      "backward": "bf16",
+      "graph_nodes_before": 312,
+      "graph_nodes_after": 274,
+      "isa_kernel_launches_before": 719,
+      "isa_kernel_launches_after": 587,
+      "all_outputs_bit_exact": true
+    },
+    {
+      "forward": "int8",
+      "backward": "fp16",
+      "graph_nodes_before": 312,
+      "graph_nodes_after": 274,
+      "isa_kernel_launches_before": 719,
+      "isa_kernel_launches_after": 587,
+      "all_outputs_bit_exact": true
+    }
+  ]
+}
