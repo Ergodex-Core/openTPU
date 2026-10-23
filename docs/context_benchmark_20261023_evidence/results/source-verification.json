@@ -1,0 +1,15 @@
+{
+  "runtime_source_manifest_matches": true,
+  "verified_runtime_python_files": 182,
+  "physical_actions_attempted": false,
+  "files": {
+    "opentpu/llm/gemma4.py": "117c86246bebdcdbdd14409b8bfa918b171db5b6c50e9ae58e1fe837a7f9705a",
+    "opentpu/llm/qwen3.py": "794f6f724202780bf836b14f969465cbedb7c07e62903f91fc21292eed898e4d",
+    "tests/test_gemma_full_kv.py": "dbc96c8fee239446576ca9dad14f111bfef9a39f8c92f834c7442063d83f66cf",
+    "tests/test_context_bench_metrics.py": "8afcc129b6299ad9b2688e4693087042474d6fc0d5ab1ac00a66d249d48dda1d",
+    "tools/context-bench/isa_smoke.py": "c48f2d6f541ecaa0694436453ac29afc873fee6d9bb43dd4d8abd9f6469bb58b",
+    "tools/context-bench/metrics.py": "53fed70d630d5bb44a6859d0a22e4610e3438f7d03d3cb6bdcc29c00f57e907b",
+    "tools/context-bench/observe_owned.py": "28332bbc00cc53481eb751c26b3dbebb44f212d833cf8e66dc3df95d971a2f20",
+    "tools/context-bench/prepare.py": "15970cb22dbeafe484b17a9a98f5dc7e84960876fabdbdface076fb14e30856a"
+  }
+}

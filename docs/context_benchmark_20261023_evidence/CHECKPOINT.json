@@ -1,0 +1,64 @@
+{
+  "status": "software_feasible_physical_measurement_pending",
+  "source_branch": "codex/benchmark-context-20261023",
+  "source_base": "8864ef65267a5d45fd72e5fdc17f4b797095a687",
+  "source_head": "f66a50a0fdae78c10ff5763eb0161a19eb53b6c7",
+  "source_checkout": "/Users/rachittibrewal/Documents/Codex/2026-10-23/task-9/runtime",
+  "builder_directory": "/home/ubuntu/inferlab-context-bench-20261023",
+  "builder_instance": "i-0ec8d33362b3100be",
+  "builder_instance_profile": "opentpu-f2-ssm",
+  "same_image_required": "agfi-0001de1dd3df8e21e",
+  "profile": "f2-hbm:p4rl8a64c150",
+  "physical_access_attempts": 0,
+  "hardware_performance_runs": 0,
+  "production_mutated": false,
+  "locks_acquired": false,
+  "image_reloaded": false,
+  "credentials_changed": false,
+  "new_license_accepted": false,
+  "new_model_download": false,
+  "pushed_or_merged": false,
+  "jobs_running": false,
+  "capacity_findings": {
+    "live_validated_total": 768,
+    "requested_input_tokens": [1024,2048,4032],
+    "generated_target": 64,
+    "aligned_minimum_totals": [1280,2304,4096],
+    "common_primary_total": 4096,
+    "optional_input_4096_total": 4352,
+    "default_ring_guard": "stateful above768; strict guard retained",
+    "candidate": "kv_full=True; full-context storage with unchanged512 attention window",
+    "compilation_blocker": null,
+    "semantic_failure_observed": false,
+    "physical_qualification": false
+  },
+  "gemma270m": {
+    "existing_builder_cache_accessible": true,
+    "cached_weight_bytes": 536223056,
+    "packed_int8_full_kv4096_bytes": 657016320,
+    "real_weight_isa_reset_replay": true,
+    "physical_acceptance": false,
+    "must_remain_separate_from_1b_screenshot_comparison": true
+  },
+  "gemma1b_packed_int8_full_kv4096_bytes": 1612115456,
+  "test_receipts": {
+    "regression-003": "58 passed,3 skipped; includes9 original new KV tests and7 original metric tests",
+    "regression-004": "one additional all17-bucket numerical test passed through4160 positions",
+    "regression-005": "16 final metric/identity/observer tests passed;7 overlap regression003",
+    "isa-smoke-001": "both real cached models INT8 greedy eight-token exact reset/replay;no physical access"
+  },
+  "screenshot": {
+    "library_file_id": "libfile_0eadc4441a84819180919299e4d875eb",
+    "materialized_and_visually_verified": true,
+    "sha256": "c912d880f40940ea17768928aa9ff22fa7ef7701f963c1ee20de45d4d03abdba",
+    "figures": "colleague-reported on-device,not independently reproduced",
+    "batch_size_user_confirmed": 1
+  },
+  "pending_actions": [
+    {"action":"exclusive FPGA ownership window","target":"current shared image/approved slot","state":"pending_not_attempted","reason":"parent coordinates;second slot still Accelsmith-owned"},
+    {"action":"owner integration and physical acceptance of extended runtime","target":"Inferlab live worker currently512/768-only","state":"pending_not_attempted","reason":"source candidate is isolated;production untouched"},
+    {"action":"measure1024/2048/4032 prompt TTFT and decodeTPS","target":"qualified same-image physical engine plus actual client trace","state":"pending_not_attempted","reason":"no approved window;complete transfer/run/cleanup/restore/reopen path lacks qualified30-second interruption bound"}
+  ],
+  "automatic_review_denials": [],
+  "uncertain_physical_outcomes": []
+}

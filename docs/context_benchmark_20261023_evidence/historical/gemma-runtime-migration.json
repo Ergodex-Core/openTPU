@@ -1,0 +1,57 @@
+{
+  "status": "passed",
+  "at": "2026-10-23T12:32:02.910963+00:00",
+  "revisions": {
+    "old": "18fb978033799f0f21258f0e6e085c0360322d96",
+    "new": "8864ef65267a5d45fd72e5fdc17f4b797095a687"
+  },
+  "matches": {
+    "cap": true,
+    "max_output": true,
+    "profile": true,
+    "architecture_hash": true,
+    "config": true,
+    "spec": true,
+    "checkpoint_identity": true,
+    "config_sha256": true,
+    "contract": true,
+    "raw_images": true,
+    "staged_images": true,
+    "programs": true,
+    "prepared_backend_registry_entries": true,
+    "tokenizations": true,
+    "budgets": true,
+    "output257_rejected": true,
+    "reset": true,
+    "python": true,
+    "numpy": true
+  },
+  "guards_passed": {
+    "old": true,
+    "new": true
+  },
+  "physical_open_attempts": 0,
+  "forward_attempts": 0,
+  "packed_image_bytes": [
+    1396966272
+  ],
+  "packed_image_sha256": [
+    "b5ffbcf8c68a1a422fa052a6db41f6c079e17a632c647031a1e8eb181f200536"
+  ],
+  "staged_image_sha256": [
+    "27cae27dfa8e0ba85c31fd2d85f447580c19e6fc9dcd21303d97f09c0aeb9a35"
+  ],
+  "program_labels": 12,
+  "tokenizer_cases": 7,
+  "packing_seconds": {
+    "old": 25.882075171917677,
+    "new": 19.165995580959134
+  },
+  "elapsed_seconds": {
+    "old": 34.08150919794571,
+    "new": 27.339465914061293
+  },
+  "hardware_timing_qualified": false,
+  "physical_acceptance": false,
+  "production_mutated": false
+}

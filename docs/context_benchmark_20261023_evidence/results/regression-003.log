@@ -1,0 +1,6 @@
+.......................ss.s..................................            [100%]
+----------------------------- 3 skipped, by reason -----------------------------
+    1  /home/ubuntu/inferlab-context-bench-20261023/models/functiongemma-270m-it: checkpoint not present
+    1  /home/ubuntu/inferlab-context-bench-20261023/models/gemma-3-1b-it: checkpoint not present
+    1  could not import 'gguf': No module named 'gguf'
+58 passed, 3 skipped in 70.68s (0:01:10)

@@ -1,0 +1,25 @@
+{
+  "evidence_kind": "colleague_reported_on_device_NOT_independently_reproduced",
+  "library_file_id": "libfile_0eadc4441a84819180919299e4d875eb",
+  "library_file_version": 0,
+  "screenshot_sha256": "c912d880f40940ea17768928aa9ff22fa7ef7701f963c1ee20de45d4d03abdba",
+  "materialized_and_visually_checked": true,
+  "batch_size": 1,
+  "batch_source": "user confirmation through parent",
+  "accelerator": "independent colleague F2 accelerator, not OpenTPU",
+  "unknown": ["output count", "exact checkpoint and quantizer", "tokenizer and template", "clock", "quality", "TTFT scope", "repetitions"],
+  "rows": [
+    {"model":"Qwen3-0.6B","weights":"int4","input_tokens":1024,"decode_tps":710.4,"ttft_s":1.05},
+    {"model":"Qwen3-0.6B","weights":"int4","input_tokens":2048,"decode_tps":587.9,"ttft_s":2.40},
+    {"model":"Qwen3-0.6B","weights":"int4","input_tokens":4032,"decode_tps":434.2,"ttft_s":5.89},
+    {"model":"Qwen3-0.6B","weights":"int8","input_tokens":1024,"decode_tps":394.1,"ttft_s":1.61},
+    {"model":"Qwen3-0.6B","weights":"int8","input_tokens":2048,"decode_tps":353.4,"ttft_s":3.51},
+    {"model":"Qwen3-0.6B","weights":"int8","input_tokens":4032,"decode_tps":291.5,"ttft_s":8.07},
+    {"model":"Gemma3-1B","weights":"int4","input_tokens":1024,"decode_tps":567.3,"ttft_s":1.33},
+    {"model":"Gemma3-1B","weights":"int4","input_tokens":2048,"decode_tps":560.9,"ttft_s":2.68},
+    {"model":"Gemma3-1B","weights":"int4","input_tokens":4032,"decode_tps":549.2,"ttft_s":5.37},
+    {"model":"Gemma3-1B","weights":"int8","input_tokens":1024,"decode_tps":266.4,"ttft_s":2.20},
+    {"model":"Gemma3-1B","weights":"int8","input_tokens":2048,"decode_tps":264.9,"ttft_s":4.43},
+    {"model":"Gemma3-1B","weights":"int8","input_tokens":4032,"decode_tps":262.3,"ttft_s":8.82}
+  ]
+}

@@ -53,8 +53,8 @@ prompt (544 prefill + one held input) had 15.86 s browser TTFT, with 15.53 s
 reported worker prefill-phase wall time. That phase includes FPGA execution and
 host orchestration; it is not an isolated cycle measurement. None of those values is extrapolated to 1K/2K/4K and no
 matched speedup ratio is calculated. See the retained
-[historical verification](../../evidence/historical/verification-v4.md) and
-[raw bounded hardware receipts](../../evidence/historical/cap768-hardware.jsonl).
+[historical verification](context_benchmark_20261023_evidence/historical/verification-v4.md) and
+[raw bounded hardware receipts](context_benchmark_20261023_evidence/historical/cap768-hardware.jsonl).
 
 ## What prevents a direct run today
 
@@ -69,7 +69,7 @@ The isolated implementation is based on Nanbeige staging revision
 `8864ef65267a5d45fd72e5fdc17f4b797095a687`, whose Gemma 768 preparation was already
 compared byte-for-byte to the serving lineage by the Inferlab owner. This task
 does not claim that historical offline migration check is physical migration
-acceptance. See the retained [migration receipt](../../evidence/historical/gemma-runtime-migration.json).
+acceptance. See the retained [migration receipt](context_benchmark_20261023_evidence/historical/gemma-runtime-migration.json).
 
 The opt-in `kv_full=True` setting retains KV at every context position and keeps
 the exact 512-token attention window. It propagates through compile-worker and
@@ -207,3 +207,7 @@ before an architectural attribution.
 An independent accelerator can be implemented as RTL on F2 using its FPGA
 resources. That is an FPGA accelerator implementation, not fabrication of a
 new silicon chip. This task starts no replacement RTL design or image change.
+
+## Publication evidence
+
+The original completed source commit is `f66a50a0fdae78c10ff5763eb0161a19eb53b6c7`. This publication adds its [unaltered text/JSON receipts](context_benchmark_20261023_evidence/README.md) and fixes the historical evidence links; runtime code is unchanged from that source. The original 182-path manifest includes 91 AppleDouble metadata paths. All 91 actual Python sources and eight changed source/test hashes match the committed source; metadata files are not imported. New preparation must generate a fresh source manifest/digest.
