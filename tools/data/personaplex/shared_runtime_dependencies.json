@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible resident raw-PCM encoder to eight-layer input transformer beside FP32 output codec; software qualification only",
+  "purpose": "Reproducible resident raw PCM encoder, eight-layer input transformer and learned downsample beside FP32 output codec; software qualification only",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -167,7 +167,13 @@
     "tools/personaplex_mimi_pcm_native.py": "62472c05ae3ce93be39df40b98cbe8e91015050dac28296cb1178989ec4d91f0",
     "tools/personaplex_output_codec_check.py": "7d761a384270d9122a3b39e0c27d34ad256c084c11efcac7803ce2e72cd541c8",
     "tools/personaplex_pcm_metrics.py": "b13ad64661dc98146f145c35995b0f5cef23ea82a12839cf021dee8c99a42cbc",
-    "tools/personaplex_pcm_precision_check.py": "623672fb943daec31252fd7424b8f91ee171822ea0cb0f634eb6e590a104e6e1"
+    "tools/personaplex_pcm_precision_check.py": "623672fb943daec31252fd7424b8f91ee171822ea0cb0f634eb6e590a104e6e1",
+    "opentpu/llm/personaplex_mimi_input_downsample.py": "e61b36861e21973c68fa33c9fc33faec798a81000d710b72aa9b5aa602d2cc04",
+    "tests/test_personaplex_mimi_input_downsample.py": "4fee1c5259cbe4365353aeb2889b003140f801cb80a95e9b93fecd730aff5811",
+    "tests/test_personaplex_mimi_input_downsample_check.py": "a05104abc31425534da7435a8d950b2ac07f3304fa76dabf282c8a2f1e57a956",
+    "tools/data/personaplex/mimi_input_downsample_contract.json": "b427a4dbb78bdc11a6c69cd438d626a64c0a20690febb2dec5fe123adea9fe66",
+    "tools/personaplex_mimi_input_downsample_check.py": "f89beb3f834046285631a329e48d0e8e80e25546ba7223337fd11b4c5cdee540",
+    "tools/personaplex_mimi_input_downsample_native.py": "a2b7ae83fb8787f701b588c3b910c99bc6a978908f350f4acaa37b1c1ab1139b"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {

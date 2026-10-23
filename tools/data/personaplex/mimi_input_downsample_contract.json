@@ -1,0 +1,44 @@
+{
+  "scope": "Original cached-checkpoint learned Mimi ConvDownsample1d only; offline CPU/ISA reference on two-row FP32 encoder-transformer outputs; no RVQ, hardware, serving, scaling or speech claim",
+  "installed_source_sha256": {
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/resample.py": "136931781a9de1e43afd19c4ffc9817e462f20b695853d415695d34f912405d9",
+    "modules/streaming.py": "9fbdd77237d53ef6d95d1a08bce3b2438d661223ad8b795edfccc1b87eb4b81b"
+  },
+  "cached_codec_header": {
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318,
+    "selected_count": 1,
+    "selected_bytes": 4194304,
+    "selected_tensors": {
+      "downsample.conv.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [512, 512, 4],
+        "data_offsets": [159660164, 163854468]
+      }
+    }
+  },
+  "device_spec": {
+    "hidden": 512,
+    "input_rows": 2,
+    "output_rows": 1
+  },
+  "native_constructor": {
+    "stride": 2,
+    "dimension": 512,
+    "causal": true,
+    "learnt": true,
+    "channel_wise": false
+  },
+  "native_semantics": {
+    "kernel": 4,
+    "stride": 2,
+    "left_padding": "replicate first incoming row twice on first streaming frame",
+    "persistent_history_rows": 2,
+    "bias": false,
+    "output": "one raw FP32 512-wide row per two-row input frame"
+  }
+}
