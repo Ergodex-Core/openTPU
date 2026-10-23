@@ -1,0 +1,410 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "argument_limit": 262144.0,
+  "intrinsic_absolute_error_bound": 2e-05,
+  "errors": {
+    "dense": {
+      "points": 16384,
+      "max_absolute_error": 4.172325134277344e-06
+    },
+    "random": {
+      "points": 16384,
+      "max_absolute_error": 4.172325134277344e-06
+    },
+    "near_zero": {
+      "points": 4096,
+      "max_absolute_error": 2.980232238769531e-07
+    },
+    "critical": {
+      "points": 108,
+      "max_absolute_error": 2.384185791015625e-07
+    }
+  },
+  "accepted": true,
+  "snake_parameter_groups": [
+    {
+      "source": "decoder.decoder.1.block.0.alpha",
+      "channels": 1536,
+      "exp_alpha_range": [
+        0.07180189341306686,
+        1.6412222385406494
+      ],
+      "inv_beta_range": [
+        0.07064880430698395,
+        4.218642711639404
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.2.act1.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.0846286490559578,
+        3.9016776084899902
+      ],
+      "inv_beta_range": [
+        0.08739016205072403,
+        3.1692488193511963
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.2.act2.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.39844170212745667,
+        2.848573923110962
+      ],
+      "inv_beta_range": [
+        0.42671045660972595,
+        2.6883959770202637
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.3.act1.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.05171060562133789,
+        2.1360464096069336
+      ],
+      "inv_beta_range": [
+        0.05382108315825462,
+        3.207834482192993
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.3.act2.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.33004266023635864,
+        3.556980609893799
+      ],
+      "inv_beta_range": [
+        0.35154035687446594,
+        2.9367260932922363
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.4.act1.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.06450408697128296,
+        1.992444396018982
+      ],
+      "inv_beta_range": [
+        0.07048516720533371,
+        4.3947601318359375
+      ]
+    },
+    {
+      "source": "decoder.decoder.1.block.4.act2.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.49014487862586975,
+        2.6138339042663574
+      ],
+      "inv_beta_range": [
+        0.49237287044525146,
+        4.903667449951172
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.0.alpha",
+      "channels": 768,
+      "exp_alpha_range": [
+        0.07332191616296768,
+        1.8910813331604004
+      ],
+      "inv_beta_range": [
+        0.07484985888004303,
+        5.767780780792236
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.2.act1.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.04540230706334114,
+        8.541081428527832
+      ],
+      "inv_beta_range": [
+        0.055189099162817,
+        3.3424015045166016
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.2.act2.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.018700653687119484,
+        3.11258602142334
+      ],
+      "inv_beta_range": [
+        0.03533158451318741,
+        2.1808114051818848
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.3.act1.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.017920831218361855,
+        2.3243024349212646
+      ],
+      "inv_beta_range": [
+        0.026721060276031494,
+        2.8847320079803467
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.3.act2.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.034572020173072815,
+        2.4587607383728027
+      ],
+      "inv_beta_range": [
+        0.04473000392317772,
+        4.12191104888916
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.4.act1.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.015738442540168762,
+        1.9507027864456177
+      ],
+      "inv_beta_range": [
+        0.027367068454623222,
+        3.750497341156006
+      ]
+    },
+    {
+      "source": "decoder.decoder.2.block.4.act2.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.08772929757833481,
+        1.8667371273040771
+      ],
+      "inv_beta_range": [
+        0.09198998659849167,
+        4.709568977355957
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.0.alpha",
+      "channels": 384,
+      "exp_alpha_range": [
+        0.043564580380916595,
+        2.1280179023742676
+      ],
+      "inv_beta_range": [
+        0.049700383096933365,
+        5.289397239685059
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.2.act1.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.027805209159851074,
+        3.7531180381774902
+      ],
+      "inv_beta_range": [
+        0.03548773378133774,
+        3.233656883239746
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.2.act2.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.04346344992518425,
+        2.174715518951416
+      ],
+      "inv_beta_range": [
+        0.056481536477804184,
+        3.7439827919006348
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.3.act1.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.029040634632110596,
+        1.7907514572143555
+      ],
+      "inv_beta_range": [
+        0.039521023631095886,
+        2.329669713973999
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.3.act2.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.020655088126659393,
+        1.925378680229187
+      ],
+      "inv_beta_range": [
+        0.03267126902937889,
+        4.503506183624268
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.4.act1.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.018504483625292778,
+        1.6569956541061401
+      ],
+      "inv_beta_range": [
+        0.026699090376496315,
+        5.374423503875732
+      ]
+    },
+    {
+      "source": "decoder.decoder.3.block.4.act2.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.019436364993453026,
+        1.8191055059432983
+      ],
+      "inv_beta_range": [
+        0.02944294549524784,
+        9.985958099365234
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.0.alpha",
+      "channels": 192,
+      "exp_alpha_range": [
+        0.013949757441878319,
+        1.3100508451461792
+      ],
+      "inv_beta_range": [
+        0.03997808322310448,
+        13.80165958404541
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.2.act1.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.06742089986801147,
+        2.364725112915039
+      ],
+      "inv_beta_range": [
+        0.07114087790250778,
+        5.1344122886657715
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.2.act2.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.14706869423389435,
+        1.8864994049072266
+      ],
+      "inv_beta_range": [
+        0.2108408510684967,
+        9.653619766235352
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.3.act1.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.06428510695695877,
+        1.636448621749878
+      ],
+      "inv_beta_range": [
+        0.07037348300218582,
+        8.235491752624512
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.3.act2.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.010675265453755856,
+        1.3487040996551514
+      ],
+      "inv_beta_range": [
+        0.04307200014591217,
+        19.356599807739258
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.4.act1.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.007775105535984039,
+        1.0688939094543457
+      ],
+      "inv_beta_range": [
+        0.008666513487696648,
+        25.208019256591797
+      ]
+    },
+    {
+      "source": "decoder.decoder.4.block.4.act2.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.007658586837351322,
+        1.4756680727005005
+      ],
+      "inv_beta_range": [
+        0.01218890119343996,
+        360.73419189453125
+      ]
+    },
+    {
+      "source": "decoder.decoder.5.alpha",
+      "channels": 96,
+      "exp_alpha_range": [
+        0.003083318704739213,
+        1.0893709659576416
+      ],
+      "inv_beta_range": [
+        0.003411326790228486,
+        284.1572570800781
+      ]
+    }
+  ],
+  "physical_hardware_access": false,
+  "waveform_validated": false,
+  "quality_validated": false,
+  "tts_enabled": false,
+  "code_sha256": {
+    "tools/qwen3_tts_snake_probe.py": "593829f54053268fc8fc65f2991d69c2bd3984334002788dd7718eebb85bdcf4",
+    "opentpu/kernels/tts_waveform.py": "6844cca49e59bfff3e303d7e1bd16a810c92592fec9834d67afce2bb00e5a7ac"
+  }
+}

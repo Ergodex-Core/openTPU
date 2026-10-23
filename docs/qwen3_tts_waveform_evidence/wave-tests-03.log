@@ -1,0 +1,24 @@
+F...                                                                     [100%]
+=================================== FAILURES ===================================
+____ test_full_waveform_causal_chunks_padding_transpose_and_source_scaling _____
+
+    def test_full_waveform_causal_chunks_padding_transpose_and_source_scaling():
+        image=tiny();raw,weights=make(image);s=WaveformChunkISASession(image,image.build(weights))
+        codes=[[(t*3+j*7)%11 for j in range(16)] for t in range(5)]
+        expected,unclamped=source(image,raw,codes);outputs=[]
+        for frame,ids in enumerate(codes):
+            actual=s.step(ids);assert actual.shape==(64,);assert error(actual,expected[frame])<.005
+            t=image.wave.desc.raw;got=s.machine.slices[0].dram[t.base.const:t.base.const+4*64].view(np.float32)
+            assert error(got,unclamped[frame])<.005
+            np.testing.assert_array_equal(actual,np.clip(got,-1,1));outputs.append(actual)
+        s.reset();np.testing.assert_array_equal(outputs,[s.step(ids) for ids in codes])
+>       assert len(image.wave.sources)==238
+E       AssertionError: assert 214 == 238
+E        +  where 214 = len({'decoder.decoder.0.conv.tap.0': {'source': 'decoder.decoder.0.conv.weight', 'shape': (64, 128, 7), 'view': 'conv_tap'...onv.tap.3': {'source': 'decoder.decoder.0.conv.weight', 'shape': (64, 128, 7), 'view': 'conv_tap', 'tap': 3, ...}, ...})
+E        +    where {'decoder.decoder.0.conv.tap.0': {'source': 'decoder.decoder.0.conv.weight', 'shape': (64, 128, 7), 'view': 'conv_tap'...onv.tap.3': {'source': 'decoder.decoder.0.conv.weight', 'shape': (64, 128, 7), 'view': 'conv_tap', 'tap': 3, ...}, ...} = <opentpu.llm.qwen3_tts_waveform.WaveformLayout object at 0x7f0143ab3680>.sources
+E        +      where <opentpu.llm.qwen3_tts_waveform.WaveformLayout object at 0x7f0143ab3680> = <opentpu.llm.qwen3_tts_waveform.WaveformChunkImage object at 0x7f0143ab3170>.wave
+
+tests/test_qwen3_tts_waveform.py:63: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_qwen3_tts_waveform.py::test_full_waveform_causal_chunks_padding_transpose_and_source_scaling
+1 failed, 3 passed in 37.13s

@@ -1,0 +1,6 @@
+{
+  "failed_job": "wave-tests-03",
+  "cause": "Tiny rate-2 fixture has 214 views; 238 belongs to native rates 8/5/4/3. All numerical/reset/guard/native resource checks passed.",
+  "threshold_unchanged": true,
+  "fixed_sha256": "7e8f4fd55240d3221a1cbccc954db634855c70e683f459234d0a3b10baeda06a"
+}

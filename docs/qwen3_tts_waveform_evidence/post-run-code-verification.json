@@ -1,0 +1,59 @@
+{
+  "receipts": {
+    "snake-probe-01": {
+      "source_hashes": 2,
+      "all_match": true,
+      "rows_match": false
+    },
+    "wave-native-01": {
+      "source_hashes": 58,
+      "all_match": true,
+      "rows_match": true
+    },
+    "wave-integrated-01": {
+      "source_hashes": 58,
+      "all_match": true,
+      "rows_match": true
+    }
+  },
+  "inherited_source_files_verified": 159,
+  "all_source_snapshot_files": 166,
+  "terminal_jobs": {
+    "snake-probe-01": {
+      "exit_code": 0,
+      "error": null,
+      "seconds": 0.5643983039772138
+    },
+    "wave-tests-01": {
+      "exit_code": 1,
+      "error": null,
+      "seconds": 2.7675572090083733
+    },
+    "wave-tests-02": {
+      "exit_code": 1,
+      "error": null,
+      "seconds": 2.918355739035178
+    },
+    "wave-tests-03": {
+      "exit_code": 1,
+      "error": null,
+      "seconds": 37.316718593006954
+    },
+    "wave-tests-04": {
+      "exit_code": 0,
+      "error": null,
+      "seconds": 37.76673381397268
+    },
+    "wave-native-01": {
+      "exit_code": 0,
+      "error": null,
+      "seconds": 75.12253275205148
+    },
+    "wave-integrated-01": {
+      "exit_code": 0,
+      "error": null,
+      "seconds": 264.95806310896296
+    }
+  },
+  "no_hardware_or_production": true
+}

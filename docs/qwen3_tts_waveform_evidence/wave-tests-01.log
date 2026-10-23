@@ -1,0 +1,215 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+____ test_full_waveform_causal_chunks_padding_transpose_and_source_scaling _____
+
+    def test_full_waveform_causal_chunks_padding_transpose_and_source_scaling():
+        image=tiny();raw,weights=make(image);s=WaveformChunkISASession(image,image.build(weights))
+        codes=[[(t*3+j*7)%11 for j in range(16)] for t in range(5)]
+        expected,unclamped=source(image,raw,codes);outputs=[]
+        for frame,ids in enumerate(codes):
+>           actual=s.step(ids);assert actual.shape==(64,);assert error(actual,expected[frame])<.005
+                   ^^^^^^^^^^^
+
+tests/test_qwen3_tts_waveform.py:58: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+opentpu/llm/qwen3_tts_audio_chunks.py:77: in step
+    return self.step_resident(observe)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:139: in step_resident
+    for name,programs,budget in self.image.chunk.parts(self.frames):
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_chunks.py:56: in parts
+    parts.extend(owner.decoder_parts(position))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:130: in decoder_parts
+    def decoder_parts(self,position):return super().decoder_parts(position)+self.wave.parts(position)
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:112: in parts
+    parts.append(o.part('wave.'+kind+'.'+name,transposed_convolution if kind=='transposed' else causal_convolution,m=m))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_front.py:126: in part
+    b=kernel.trace(self.cfg,0,args);program=b.finish()
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/compiler.py:2134: in trace
+    self.fn(**bound)
+opentpu/kernels/tts_wave_ops.py:72: in transposed_convolution
+    ol.store(m.output[start*m.rate+phase:(start+m.batch)*m.rate+phase:m.rate,:],value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Tensor(base=(1304704), shape=(8, 32), strides=(32, 1), host=None, offset=(0))
+key = (slice((0 + 8*iv4), (8 + 8*iv4), 2), slice(None, None, None))
+
+    def __getitem__(self, key) -> "Tensor":
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = key + (slice(None),) * (len(self.shape) - len(key))
+        base, off, shape, strides = Affine.of(self.base), Affine.of(self.offset), [], []
+        for k, n, st in zip(key, self.shape, self.strides):
+            if isinstance(k, slice):
+                if k.step not in (None, 1):
+>                   raise CompileError("strided slices are not supported")
+E                   opentpu.compiler.CompileError: strided slices are not supported
+
+opentpu/compiler.py:252: CompileError
+_______________ test_snake_guard_fails_closed_and_requires_reset _______________
+
+    def test_snake_guard_fails_closed_and_requires_reset():
+        image=tiny();raw,weights=make(image);s=WaveformChunkISASession(image,image.build(weights))
+        def inject(name,session):
+            if name=='wave.begin':
+                address=image.wave.desc.guard.base.const;session.machine.slices[0].dram[address:address+4]=np.array([SNAKE_ARGUMENT_LIMIT+1],np.float32).view(np.uint8)
+>       with pytest.raises(ValueError,match='qualified sine domain'):s.step([0]*16,inject)
+                                                                     ^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_qwen3_tts_waveform.py:72: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+opentpu/llm/qwen3_tts_audio_chunks.py:77: in step
+    return self.step_resident(observe)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:139: in step_resident
+    for name,programs,budget in self.image.chunk.parts(self.frames):
+                                ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_chunks.py:56: in parts
+    parts.extend(owner.decoder_parts(position))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:130: in decoder_parts
+    def decoder_parts(self,position):return super().decoder_parts(position)+self.wave.parts(position)
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:112: in parts
+    parts.append(o.part('wave.'+kind+'.'+name,transposed_convolution if kind=='transposed' else causal_convolution,m=m))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_front.py:126: in part
+    b=kernel.trace(self.cfg,0,args);program=b.finish()
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/compiler.py:2134: in trace
+    self.fn(**bound)
+opentpu/kernels/tts_wave_ops.py:72: in transposed_convolution
+    ol.store(m.output[start*m.rate+phase:(start+m.batch)*m.rate+phase:m.rate,:],value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Tensor(base=(1304704), shape=(8, 32), strides=(32, 1), host=None, offset=(0))
+key = (slice((0 + 8*iv9), (8 + 8*iv9), 2), slice(None, None, None))
+
+    def __getitem__(self, key) -> "Tensor":
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = key + (slice(None),) * (len(self.shape) - len(key))
+        base, off, shape, strides = Affine.of(self.base), Affine.of(self.offset), [], []
+        for k, n, st in zip(key, self.shape, self.strides):
+            if isinstance(k, slice):
+                if k.step not in (None, 1):
+>                   raise CompileError("strided slices are not supported")
+E                   opentpu.compiler.CompileError: strided slices are not supported
+
+opentpu/compiler.py:252: CompileError
+_ test_generated_codec_ids_feed_waveform_and_restore_after_short_chunk_replay __
+
+    def test_generated_codec_ids_feed_waveform_and_restore_after_short_chunk_replay():
+        from test_qwen3_tts_talker import make_weights
+        spec=TalkerSpec(text_vocab=17,codec_vocab=13,text_hidden=64,hidden=64,n_q=4,n_kv=2,head_dim=32,ffn=128)
+        audio=AudioFrontSpec(vocab=10,code_dim=32,rvq_hidden=64,preconv_hidden=128)
+        trans=AudioTransformerSpec(latent=128,hidden=64,heads=4,head_dim=32,ffn=128,layers=2,window=4,max_positions=32)
+        image=WaveformChunkFrameImage(spec,Config(D=32,DRAM_BYTES=64<<20),64,32,layers=3,predictor_layers=5,codebooks=16,audio_vocab=10,eos=12,pad_id=16,audio_spec=audio,transformer_spec=trans,chunk_spec=DecoderChunkSpec(1,1),waveform_spec=WaveformSpec(input_channels=128,decoder_channels=64,rates=(2,2,2,2)))
+        raw,own=make(image);weights=make_weights(image);weights.update(own);weights['talker.codec_head.weight'][12]=0
+        s=WaveformChunkFrameSession(image,image.build(weights));codes=[];outputs=[]
+        for t in [1,2,3]:s.step(t,2,input_kind='role')
+        for _ in range(3):
+>           ids=s.frame();assert ids is not None;np.testing.assert_array_equal(s.read('code_ids'),ids)
+                ^^^^^^^^^
+
+tests/test_qwen3_tts_waveform.py:87: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+opentpu/llm/qwen3_tts_frame.py:200: in frame
+    self.execute(self.feedback_parts(), observe)
+                 ^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_chunks.py:105: in feedback_parts
+    def feedback_parts(self):return self.image.feedback_parts(self.position,audio_position=self.frames)
+                                    ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_chunks.py:99: in feedback_parts
+    return self.chunk.parts(audio_position)+TalkerPrecisionFrameImage.feedback_parts(self,position)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_chunks.py:56: in parts
+    parts.extend(owner.decoder_parts(position))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:150: in decoder_parts
+    def decoder_parts(self,position):return super().decoder_parts(position)+self.wave.parts(position)
+                                                                            ^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_waveform.py:112: in parts
+    parts.append(o.part('wave.'+kind+'.'+name,transposed_convolution if kind=='transposed' else causal_convolution,m=m))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_frame.py:120: in part
+    b = kernel.trace(self.cfg, 0, args)
+        ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/compiler.py:2134: in trace
+    self.fn(**bound)
+opentpu/kernels/tts_wave_ops.py:72: in transposed_convolution
+    ol.store(m.output[start*m.rate+phase:(start+m.batch)*m.rate+phase:m.rate,:],value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Tensor(base=(2511488), shape=(8, 32), strides=(32, 1), host=None, offset=(0))
+key = (slice((0 + 8*iv14), (8 + 8*iv14), 2), slice(None, None, None))
+
+    def __getitem__(self, key) -> "Tensor":
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = key + (slice(None),) * (len(self.shape) - len(key))
+        base, off, shape, strides = Affine.of(self.base), Affine.of(self.offset), [], []
+        for k, n, st in zip(key, self.shape, self.strides):
+            if isinstance(k, slice):
+                if k.step not in (None, 1):
+>                   raise CompileError("strided slices are not supported")
+E                   opentpu.compiler.CompileError: strided slices are not supported
+
+opentpu/compiler.py:252: CompileError
+_________ test_native_waveform_resource_bounds_and_padded_contractions _________
+
+    def test_native_waveform_resource_bounds_and_padded_contractions():
+        from opentpu.llm.qwen3_tts_shared import shared_tts_config
+        cfg=shared_tts_config();image=WaveformChunkImage(cfg)
+        assert image.nbytes<512<<20
+        assert image.wave.desc.samples==1920
+        assert any(m.nin==96 and m.padded==128 for kind,_,m in image.wave.ops if kind!='snake')
+        assert any(m.nin==192 and m.padded==256 for kind,_,m in image.wave.ops if kind!='snake')
+        for position in [0,25,324]:
+>           parts=image.wave.parts(position);assert len(parts)==79
+                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_qwen3_tts_waveform.py:100: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+opentpu/llm/qwen3_tts_waveform.py:112: in parts
+    parts.append(o.part('wave.'+kind+'.'+name,transposed_convolution if kind=='transposed' else causal_convolution,m=m))
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/llm/qwen3_tts_audio_front.py:126: in part
+    b=kernel.trace(self.cfg,0,args);program=b.finish()
+      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+opentpu/compiler.py:2134: in trace
+    self.fn(**bound)
+opentpu/kernels/tts_wave_ops.py:72: in transposed_convolution
+    ol.store(m.output[start*m.rate+phase:(start+m.batch)*m.rate+phase:m.rate,:],value)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+self = Tensor(base=(213029888), shape=(32, 768), strides=(768, 1), host=None, offset=(0))
+key = (slice((0 + 32*iv19), (32 + 32*iv19), 8), slice(None, None, None))
+
+    def __getitem__(self, key) -> "Tensor":
+        if not isinstance(key, tuple):
+            key = (key,)
+        key = key + (slice(None),) * (len(self.shape) - len(key))
+        base, off, shape, strides = Affine.of(self.base), Affine.of(self.offset), [], []
+        for k, n, st in zip(key, self.shape, self.strides):
+            if isinstance(k, slice):
+                if k.step not in (None, 1):
+>                   raise CompileError("strided slices are not supported")
+E                   opentpu.compiler.CompileError: strided slices are not supported
+
+opentpu/compiler.py:252: CompileError
+=========================== short test summary info ============================
+FAILED tests/test_qwen3_tts_waveform.py::test_full_waveform_causal_chunks_padding_transpose_and_source_scaling
+FAILED tests/test_qwen3_tts_waveform.py::test_snake_guard_fails_closed_and_requires_reset
+FAILED tests/test_qwen3_tts_waveform.py::test_generated_codec_ids_feed_waveform_and_restore_after_short_chunk_replay
+FAILED tests/test_qwen3_tts_waveform.py::test_native_waveform_resource_bounds_and_padded_contractions
+4 failed in 2.58s

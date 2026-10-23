@@ -1,0 +1,17 @@
+{
+  "archive_sha256": "28153848548b8ff4fc7ee065ebebfd3d9f0cacf410425990836bb8c7cd150f49",
+  "artifact_hashes_verified": true,
+  "source_snapshot_files_verified": 166,
+  "runtime_files_verified_against_git": 95,
+  "component_files_verified": 71,
+  "receipt_source_hashes_verified": {
+    "snake-probe-01": 2,
+    "wave-native-01": 58,
+    "wave-integrated-01": 58
+  },
+  "rows_hashes_verified": true,
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "no_hardware_or_production": true
+}

@@ -1,0 +1,1 @@
+{"command": ["/home/ubuntu/otpu-venv/bin/python", "-u", "tools/qwen3_tts_snake_probe.py", "--data", "/home/ubuntu/qwen3-tts-waveform-20261023-02/data", "--output", "/home/ubuntu/qwen3-tts-waveform-20261023-02/snake-probe-01.json"], "cwd": "/home/ubuntu/qwen3-tts-waveform-20261023-02/source", "timeout": 120}
