@@ -53,10 +53,11 @@ def samplings(sampling: dict | None) -> list:
 def start(eng, sampling: dict | None = None):
     """The background process compiling eng's generate programs (its multiprocessing Process),
     or None: an engine without the device's decode loop (can_generate), without the program
-    cache (prog_cache), of more than one sequence, or no disk cache."""
+    cache (prog_cache), or no disk cache. A batched engine's loop runs in slot 0, its programs
+    those of the engine's layout (its batch in it) as any other's."""
     from opentpu import progcache as PC
     if not getattr(eng, "can_generate", False) or not getattr(eng, "prog_cache", False) \
-            or getattr(eng, "batch", 1) != 1 or PC.cache_dir() is None:
+            or PC.cache_dir() is None:
         return None
     import multiprocessing as mp
     be = eng.backend

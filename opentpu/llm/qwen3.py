@@ -42,7 +42,7 @@ from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, T
                         Words, current, k_scale_bytes, trace_fit)
 from . import formats as FM
 from . import generate as G
-from . import rope_parameters
+from . import rope_parameters, yarn_rope
 from . import snapshot as SN
 from ..isasim import Config, Machine, design_config
 from ..kernels.attention import Additive, Bucket, _attend_heads
@@ -95,7 +95,13 @@ class Spec:
     @staticmethod
     def from_hf(model_dir) -> "Spec":
         c = json.loads((Path(model_dir) / "config.json").read_text())
-        rp = rope_parameters(c, model_dir)          # (Qwen3's YaRN: not supported)
+        rp = rope_parameters(c, model_dir, ("default", "yarn"))
+        theta = rp.get("rope_theta") or c.get("rope_theta") or 10000.0
+        hd = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
+        yarn = {}
+        if rp.get("rope_type", rp.get("type")) == "yarn":   # (Ternary-Bonsai's: factor 4 of 8192)
+            div, af = yarn_rope(rp, theta, hd, c.get("max_position_embeddings", 0))
+            yarn = dict(rope_div=div, rope_scale=af)
         if c.get("use_sliding_window"):
             raise ValueError(f"{model_dir}: sliding-window attention is not supported")
         if c.get("attention_bias"):
@@ -108,10 +114,10 @@ class Spec:
                     n_q=c["num_attention_heads"], n_kv=c["num_key_value_heads"],
                     head_dim=c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"],
                     ffn=c["intermediate_size"], vocab=c["vocab_size"], eps=c["rms_norm_eps"],
-                    theta=rp.get("rope_theta") or c.get("rope_theta") or 10000.0,
-                    tied=c.get("tie_word_embeddings", True),
+                    theta=theta, tied=c.get("tie_word_embeddings", True),
                     bos=c.get("bos_token_id", 151643),
-                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c))
+                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c),
+                    **yarn)
 
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
@@ -131,9 +137,9 @@ class Spec:
     def image(self, cfg: Config, cap: int, batch: int = 1, rows: int = 1,
               wformat: str = "int8", head_format: str | None = None,
               lookup: bool = False, embed_host: bool | None = None,
-              formats: str | None = None) -> "Image":
+              formats: str | None = None, spec_rows: int = 0, base: int = 0) -> "Image":
         return Image(self, cfg, cap, batch, rows, wformat, head_format, lookup, embed_host,
-                     formats)
+                     formats, spec_rows, base)
 
 
 def finite(v: np.ndarray, name: str) -> np.ndarray:
@@ -237,6 +243,9 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma3", "gemma3_text"):
+        from .gemma3 import load_weights as gemma3_weights
+        return gemma3_weights(model_dir)
     if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
                                                                           "gemma4_text"):
         from .gemma4 import load_weights as gemma4_weights
@@ -908,7 +917,8 @@ class Image(EmbedHost):
 
     def __init__(self, spec: Spec, cfg: Config, cap: int, batch: int = 1, rows: int = 1,
                  wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
-                 embed_host: bool | None = None, formats: str | None = None):
+                 embed_host: bool | None = None, formats: str | None = None,
+                 spec_rows: int = 0, base: int = 0):
         spec.check(cfg)
         if cap % cfg.D:
             raise ValueError("KV capacity must be a multiple of D")
@@ -931,7 +941,10 @@ class Image(EmbedHost):
         self.batch, self.rows = batch, rows
         self.nq_loc, self.nkv_loc = spec.n_q // S, spec.n_kv // S
         self.h_loc, self.f_loc, self.v_loc = H // S, F_ // S, spec.vocab // S
-        b = _Bump()
+        # base: the image's first byte (a speculative decoding's draft model's image, above the
+        # target's in one DRAM: specdec.draft_engine); build() fills [base, nbytes) only
+        self.base = base
+        b = _Bump(base)
         R = rows
         rd = spec.rope_dim
         self.io = {"x": b.alloc(4 * H * R), "cos": b.alloc(2 * rd * R),
@@ -1003,6 +1016,12 @@ class Image(EmbedHost):
                                     M=cfg.MCOLS, embed_host=bool(embed_host),
                                     rows=rows, imem=cfg.IMEM_WORDS,
                                     waitc=cfg.SEQ_WC) if lookup else {}
+        if spec_rows:               # speculative decoding's loop (opentpu/llm/specdec.py)
+            if not lookup:
+                raise ValueError("spec_rows: the decode loop on the card needs lookup tables")
+            from . import specdec as SD
+            self.lookup["sd"] = SD.alloc(b, cap, self.lookup["block"], spec_rows,
+                                         cfg.IMEM_WORDS, cfg.SEQ_WC)
         self.choices = {"embed_host": self.embed_host,          # (the compile worker's
                         "formats": self.formats}                # image)
         self.nbytes = b.next
@@ -1245,6 +1264,10 @@ class RunPos:
     run_args."""
 
     tok, ring = RunVar("tok"), RunVar("ring")
+    seq = 0             # the sequence (an Engine(batch=B) image's KV slot) whose caches it runs
+    toks_src = None     # RunRows: its tokens from these DRAM words (a Tensor of R), not out[]
+    words_src = None    # RunWords: its run-time words from (a DRAM Tensor, {name: its word}),
+    #                     not the generate state's (RUN_WORDS)
 
     def __init__(self, blocks: int, block: int, lo: int, zmask: int, cap: int):
         self.blocks, self.block, self.lo = blocks, block, lo
@@ -1540,10 +1563,12 @@ class RunWords:
     def __enter__(self):
         if self.run:
             b = current()
-            n = max(RUN_WORDS.values()) + 1
-            self.st = ol.load(self.m.gen.state[0:n])
+            src, names = self.pos.words_src or (None, RUN_WORDS)
+            if src is None:
+                src = self.m.gen.state[0:max(RUN_WORDS.values()) + 1]
+            self.st = ol.load(src)
             self.at = b.stack[-1][-1]
-            b.run_words = {k: self.st.base + w for k, w in RUN_WORDS.items()}
+            b.run_words = {k: self.st.base + w for k, w in names.items()}
             self.pos.words = dict(b.run_words)          # (TMEM addresses for the kernel's RLDs)
         return self
 
@@ -1611,9 +1636,12 @@ def _inputs_rows(m, rows, tokens=None, embed: bool = True):
         s_ = ol.empty([R, m.sinr.shape[1]], dense=True)
         ol.load(m.cos_t[rows.pos:rows.pos + R, :], out=c)
         ol.load(m.sin_t[rows.pos:rows.pos + R, :], out=s_)
-        if rows.toks_at is not None:        # the tokens from out[] (docs/prefill.md)
-            k = rows.toks_at
-            tk = ol.load(m.gen.out[rows.pos + k:rows.pos + k + R])
+        if rows.toks_src is not None or rows.toks_at is not None:
+            if rows.toks_src is not None:   # (a batched slot's feed: the run's token words)
+                tk = ol.load(rows.toks_src)
+            else:                           # the tokens from out[] (docs/prefill.md)
+                k = rows.toks_at
+                tk = ol.load(m.gen.out[rows.pos + k:rows.pos + k + R])
             for r in range(R):
                 x[r:r + 1, :].set(_embed_word(m, tk[r:r + 1]))
             del tk
@@ -1865,11 +1893,13 @@ def _lm_head_rows(x, m, spec, logit_rows):
 # =============================================================================== engine
 def device_config(spec: Spec, cap: int, batch: int = 1, rows: int = 1, wformat: str = "int8",
                   head_format: str | None = None, lookup: bool = False,
-                  experts: int | None = None, embed_host: bool | None = None, **kw) -> Config:
+                  experts: int | None = None, embed_host: bool | None = None,
+                  spec_rows: int = 0, **kw) -> Config:
     """The design configuration with DRAM sized for this model (power of two MiB)."""
     probe = spec.image(design_config(DRAM_BYTES=1 << 40, **kw), cap, batch, rows, wformat,
                        head_format, **({"lookup": True} if lookup and has_lookup(spec) else {}),
                        **({"experts": experts} if experts is not None else {}),
+                       **({"spec_rows": spec_rows} if spec_rows else {}),
                        **({"embed_host": embed_host} if embed_host is not None else {}))
     size = 1 << max(20, (probe.nbytes - 1).bit_length())
     return design_config(DRAM_BYTES=size, **kw)
@@ -2228,7 +2258,7 @@ class Engine:
                  pool_map: bool = True, prog_cache: bool | None = None,
                  prompt_runs: bool = False, layer_ahead=None, expert_major: bool = False,
                  snapshots: int = 0, batch_area: bool = False, tile_runs: bool | None = None,
-                 tile_rows: int | None = None):
+                 tile_rows: int | None = None, spec_rows: int = 0, image_base: int = 0):
         from . import prefill as PF
         self.spec, self.cap, self.block = spec, cap, block
         self.prog_cache = PC.enabled() if prog_cache is None else bool(prog_cache)
@@ -2241,6 +2271,10 @@ class Engine:
             wkw["experts"] = experts
         if embed_host is not None:          # the int8 embedding table on the host (default: the
             wkw["embed_host"] = embed_host  # image's choice, a MoE's untied table there)
+        if spec_rows:                       # speculative decoding's verify rows (specdec.py)
+            wkw["spec_rows"] = spec_rows
+        if image_base:                      # a draft model's image above the target's
+            wkw["base"] = image_base        # (specdec.draft_engine)
         # an int8 embedding is dequantized on the device (the image's tables), never the host
         int8_embed = getattr(spec, "embed", "f32") == "int8"
         # (batch > 1: the tables serve every sequence; sequence 0 keeps the resident decode,

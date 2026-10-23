@@ -188,6 +188,10 @@ def main():
     ap.add_argument("--lat", type=int, default=None, help="read latency, core cycles "
                     "(default 30; with --ddr 300 ns)")
     ap.add_argument("--stall", type=int, default=0)
+    ap.add_argument("--rod", type=int, default=0,
+                    help="reads in flight per channel (+nat_rod: a bridge's outstanding-read "
+                         "limit, otpu_f2_nch ROD; 0: none). The F2 DDR image (f9e0e5bf, 100 MHz) "
+                         "decodes as --rod 32 --lat 50 --bw 62 (docs/fpga_inference.md)")
     ap.add_argument("--dram", choices=["off", "brc", "rbc"], default="off",
                     help="DDR3 bank / row timing (otpu_native_mem.sv) with the address map "
                          "BANK_ROW_COLUMN or ROW_BANK_COLUMN (LiteDRAM's; replaces --bw)")
@@ -243,7 +247,7 @@ def main():
                     help="per phase: the cycles above its roofline, split by what the MXU and "
                          "port B did (64-cycle windows)")
     a = ap.parse_args()
-    plus = list(a.plus)
+    plus = list(a.plus) + ([f"+nat_rod={a.rod}"] if a.rod else [])
     ldc = 0
     if a.ldc:
         if not a.ddr or int(a.ddr) not in rtlsim.LDC_MODELS:

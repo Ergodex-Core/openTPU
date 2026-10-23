@@ -1608,3 +1608,105 @@ About 3.5-4.5 weeks; the MoE part (1-3 and 5) 2.5-3.
 - A short-K MM (ASIC, docs/dataflow.md 7.2 item 8): a contraction over C < D rows at C / D of a
   block's cycles, small chunks ~3x cheaper on the MXU, so a tile's own rows would pay without the
   phase split.
+
+## 16. The F2's prefill: Qwen3-0.6B, Ternary-Bonsai-1.7B and -4B (2026-10-15)
+
+docs/fpga_inference.md measured otpu-serve on the F2 (200 MHz core, the DDR4 DIMM's bridge at
+~32 B a core cycle, 6.3 GB/s; f2_bench's 274-token long prompt): TTFT 9.86 s (Qwen3-0.6B int8),
+14.4 s (Bonsai-1.7B int4), 55.4 s (Bonsai-4B int4, int8 head, --slots 1). Co-simulated here: the
+f2 target (MCOLS 4, ACT_ROWS 16, LANES 8, 64K TMEM words, 4K instructions) with the memory at
+32 B a cycle (`+axi_bw=25`, 60 cycles of latency), the runs otpu-serve's route takes for that
+prompt, the models' first 2 layers (scratch harness: an Engine as otpu-serve builds it on the
+ISA simulator, its runs' programs and DRAM co-simulated at positions 0, 128 and 256).
+
+### 16.1 The routes, and where a row's cycles go
+
+- **0.6B and 1.7B (8 KV slots, BatchWorker)** fed every prompt through batch.Steps.feed: runs of
+  MCOLS = 4 rows of the rows kernel. At 0.25 chunks a cycle a 4-row run is stream-bound: 4 cycles
+  a 128-byte chunk for 4 rows, against the MXU's 1 (int8) or 2 (4-bit). The tiled prompt runs
+  were not on this path at all (only sequence 0's prompt runs, which the batched worker does not
+  use).
+- **4B (--slots 1, scheduler.Worker)** took the tiled prompt runs, T = 8 (TMEM: the [T, n_q d]
+  outputs' load back), 4 cycles a chunk both ways: at its floor.
+
+Cycles a row, 2 layers (phases as tools/perf_tiled.py's; "attention" is the looped attention):
+
+| model, run | cycles a row | projections | attention | MLP | port B (chunks a run) | stream floor |
+|---|---|---|---|---|---|---|
+| 0.6B feed, 4 rows | 299.3K | 37.7% | 11.8% | 50.3% | 279.8K | 93% of the run |
+| 0.6B tile, 16 rows | 99.5K | 39.0% | 22.4% | 38.6% | 326.1K | 82% |
+| 1.7B feed, 4 rows | 471.8K | 25.0% | 7.5% | 67.3% | 427.6K | 91% |
+| 1.7B tile, 12 rows | 235.6K | 26.9% | 9.8% | 63.4% | 455.2K | MXU busy 95% |
+| 4B tile, 8 rows | 488.4K | 25.4% | 9.7% | 64.9% | 869.0K | 89%; MXU busy 96% |
+
+Rooflines a row and layer (weights read once a run at 0.25 chunks a cycle; the MXU's 512 MACs a
+cycle): 0.6B 122.9K chunks a layer, 30.7K cycles at T >= 16 (122.9K at 4 rows); 1.7B 196.6K, 98.3K
+at T >= 8 (196.6K at 4 rows); 4B 394K, 197K at T >= 8. Whole prompts at the floor: 1.2 s, 3.8 s,
+9.7 s. After 16.2 the tiles are at 1.6x (0.6B), 1.2x and 1.24x their floors; what is left over is
+the attention's K / V streams (a packed tile of MCOLS / G rows streams its KV head's whole bucket,
+the masked block in full: 20% of the 0.6B's bytes in bucket 1) and the projections' VPU work
+between MMs.
+
+### 16.2 Tiled feed runs (566ffc21)
+
+Steps.feed runs the bucket's tile rows a run (tiled.compile_feed_tile: qwen3_tile with the slot's
+caches, its tokens from the batch area's tin + uni words, tpos from its step word; the slot's KV
+cache bit for bit the untiled feed's, tests/test_batch_steps.py, and on the real 0.6B the long
+prompt's KV bytes and 8 picks the same both ways). The 0.6B -66.8% a row (16 rows), the 1.7B
+-50.1% (12 rows; bucket 2's 12-row run 253.4K). Long prompt, device prefill at 200 MHz (estimated from the 2-layer
+runs): 0.6B 5.8 s -> 2.0 s, 1.7B 9.1 s -> 4.6 s; the runs 69 -> 18 and 69 -> 24 (34aa1e07: a bucket's
+runs from where the prompt starts, compiled on the batch compile thread when the slot is bound).
+
+### 16.3 The 4B: the host, not the device
+
+The 4B's device prefill is ~12 s (co-simulated, at its floor's 1.24x). The server's own stats
+(build/alex-inference/bench_alex200.json) give its prefill 83.4 s over three prompts, of which the
+4-token warm-up `Hi.` took ~28 s. What a cold host spends: every bucket's probe (prefill
+_probe_tile, _probe) compiled the tile at every R <= T, P and L (16 programs) and today's prompt
+runs (6, and the traces that fail TMEM), and each compiled program was made the card's words with
+its wait entries at once (SEQ_WC: waits.entries, 1.2-3.3 s a 4B tile program). Measured on the
+instance with the card's path (runs_words, SEQ_WC, no program cache): bucket 1 26.7 s, bucket 2
+36.2 s. With 16.4: 15.1 s and 7.6 s (bucket 1 is warmed when the engine starts). With a warm
+program cache (otpu-serve's default: `~/otpu-build/qcache/prog` where `~/otpu-build` exists) none
+of it recurs.
+
+### 16.4 The probes compile what runs
+
+- _probe_tile checks only the tile rows it settles on (P and L), not every R below them; a run
+  of fewer rows compiles when a prompt asks for it, and one that does not fit runs in two halves
+  (prefill._pieces; every row's bits are the same in any run). MTP's engines keep the full check
+  (their M runs), and today's prompt runs keep theirs (_probe: R_max holds every run a prompt
+  asks for, test_r_max_holds_every_run_a_prompt_asks_for; without the wait entries those
+  compiles are ~0.05 s each).
+- A bucket's probe starts at the tile rows of the bucket before (a later bucket's program is no
+  smaller), and today's runs are not probed where the tile takes more rows than they did in the
+  bucket before.
+- The card's words and wait entries are made when a program first runs (prefill._ready), not for
+  the probes' fit checks; the startup warm thread makes them for bucket 1's runs.
+- batch.Steps: a prompt's tiled feed runs (and the buckets' probes) compile on the compile thread
+  when the worker binds its slot, each program once whoever asks first (Steps._once); the warm
+  thread probes bucket 1 at startup.
+
+### 16.5 FPGA verification
+
+Not run here (the FPGA slot is not ours). On the card, with this branch's tree:
+
+```sh
+python tools/f2_bench.py --dev f2:0000:34:00.0 --json bench_tiled.json --max-tokens 128 \
+    --models qwen3-0.6b,bonsai-1.7b,bonsai-4b
+python tools/fpga_inference_check.py --model qwen3 --dev f2:0000:34:00.0 --chat --steps 8 --compare-isa
+python tools/fpga_inference_check.py --model models/Ternary-Bonsai-1.7B --dev f2:0000:34:00.0 --chat --steps 8 --wformat int4 --head-format int4 --compare-isa
+python tools/fpga_inference_check.py --model models/Ternary-Bonsai-4B --dev f2:0000:34:00.0 --chat --steps 8 --wformat int4 --head-format int8 --compare-isa
+```
+
+Expected long-prompt TTFT (cold program cache): 0.6B ~6 s (9.86), 1.7B ~9-10 s (14.4), 4B ~25 s
+(55.4); the server's `prefill_s` against the device's cycles (Engine.stats) splits host from
+device. The texts should be the same as before (the bits are).
+
+### 16.6 Next
+
+- The masked block of a packed tile in halves: a tile whose rows all lie in the block's first half
+  skips the second half's K and V^T (one MM of 128 tokens, KB 1: the same integers, the mask's -inf
+  in the rest), a 0 / 1 count a tile from the host's words: ~10% of the 0.6B's bucket-1 runs.
+- The head loop's next queries projected while a head attends (two query buffers, the loop over
+  head pairs): the projections' VPU gaps (the 0.6B's projections 46% over their stream floor).

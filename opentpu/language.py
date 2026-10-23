@@ -380,10 +380,21 @@ def kv_append(kv: KVDesc, h: int, pos, k: Tile | None, v: Tile | None) -> None:
     # V^T is stored in tiles of vt.rs tokens (KVDesc): one store per tile the rows reach
     t, r0 = pos, 0
     while r0 < v.rows:
-        r = tile_split(t, vt.rs)[1]
-        if not isinstance(r, int) and v.rows > 1:
-            raise CompileError("V^T rows at a run-time token: one row per append")
-        n = min(v.rows - r0, vt.rs - r) if isinstance(r, int) else 1
+        q, r = tile_split(t, vt.rs)
+        if isinstance(r, int):
+            n = min(v.rows - r0, vt.rs - r)
+        else:                           # a run-time token: the rows whose last one provably
+            n = v.rows - r0             # stays in its tile (a prompt run's rows in its bucket)
+            try:
+                q2, _ = tile_split(t + (n - 1), vt.rs)
+                same = (Affine.of(q2) - Affine.of(q)).is_static and \
+                    (Affine.of(q2) - Affine.of(q)).const == 0
+            except CompileError:
+                same = False
+            if not same:
+                if v.rows > 1 and r0 == 0 and n > 1:
+                    raise CompileError("V^T rows at a run-time token: one row per append")
+                n = 1
         vr = v if n == v.rows else v[r0:r0 + n, :]
         b.store_quantized(vr, kv.vt_column(h, t), vs.base + t * 4, 1, vt.rs, row_scale=True,
                           half=half)

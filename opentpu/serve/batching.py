@@ -42,12 +42,12 @@ def batches(eng) -> bool:
 class BatchWorker(SC.Worker):
     def __init__(self, eng, tok, store=None, model_key: str = "model", ram_bytes: int = 4 << 30,
                  area=False, quantum: int = SC.QUANTUM, prefill_budget: int = PREFILL_BUDGET,
-                 mixed: bool = False):
+                 mixed: bool = False, spec=None):
         if not batches(eng):
             raise ValueError("BatchWorker needs Engine(batch=B > 1, batch_area=True)")
         B = eng.batch
         super().__init__(eng, tok, store=store, model_key=model_key, max_running=B,
-                         quantum=quantum, ram_bytes=ram_bytes, area=area)
+                         quantum=quantum, ram_bytes=ram_bytes, area=area, spec=spec)
         if self.stateful:
             raise ValueError("batched slots hold KV caches only (no recurrent state)")
         self.B = B
@@ -61,8 +61,8 @@ class BatchWorker(SC.Worker):
         self.steps = BA.Steps(eng)
         self.steps.warm()
         self.prefilling: list = []                # requests being fed, oldest first
-        self.stats.update(steps=0, step_rows=0, step_runs=0, slot_copies=0, card_loops=0,
-                          step_s=0.0)
+        self.stats.update(steps=0, step_rows=0, step_runs=0, slot_copies=0, slot_moves=0,
+                          card_loops=0, step_s=0.0)
 
     # ---- the loop
     def _loop(self) -> None:
@@ -126,9 +126,32 @@ class BatchWorker(SC.Worker):
     # ---- slots
     def _save_slot(self, s: int) -> None:
         if self.slot_dirty[s] and self.slot_dev[s]:
-            self.cache.save(self.ios[s], list(self.slot_dev[s]))
+            self.cache.save(self.ios[s], list(self.slot_dev[s]), background=True)
             self.stats["saves"] += 1
         self.slot_dirty[s] = False
+
+    def _evict(self, s: int, k: int) -> None:
+        """Slot s's context is about to be overwritten past its first k tokens (by the prompt,
+        or by a longer prefix copied from another slot or restored from the store, which before
+        overwrote a shorter context unsaved). Unless the request keeps most of it (k at least
+        half), it moves on the device into a free slot that holds nothing (its pages copied by
+        LD / ST programs: no bytes cross the host's link), where a later prompt finds it as
+        another slot's prefix; else it is saved to the store (in the background where the
+        device has a staging area: PrefixCache.save). A save in line reads the context back to
+        the host (a partial page's V^T tiles whole: 7.5 MB for any short Qwen3-0.6B context)
+        on the time to first token of the request taking the slot: ~1 s at the F2 small
+        shell's BAR4."""
+        if not (self.slot_dirty[s] and self.slot_dev[s]):
+            return
+        spare = [x for x in self._free_slots() if x != s and not self.slot_dev[x]]
+        if not spare or 2 * k >= len(self.slot_dev[s]):
+            return self._save_slot(s)
+        f, n, P = spare[-1], len(self.slot_dev[s]), self.io.layout.P
+        self.ios[f].copy_from(self.ios[s], [(i, min(P, n - i * P)) for i in range(-(-n // P))])
+        self.slot_dev[f], self.slot_dirty[f] = list(self.slot_dev[s]), True
+        self.slot_used[f] = self.slot_used[s]
+        self.slot_dirty[s] = False
+        self.stats["slot_moves"] += 1
 
     def _bind(self, r: SC.Request) -> None:
         """r into a free slot, its prompt's longest prefix in place."""
@@ -145,13 +168,16 @@ class BatchWorker(SC.Worker):
         held = [sum(y // q == x // q for y in range(self.B) if self.slot_req[y] is not None)
                 for x in range(self.B)]
         s = max(free, key=lambda x: (held[x], min(common[x], limit), x == 0, -self.slot_used[x]))
+        if 0 in free and self.eng.can_generate and not self.waiting and \
+                [x for x in self.running if x.finish is None] == [r]:
+            s = 0       # alone: the card's decode loop (slot 0), the prefix copied from its slot
         own = min(common[s], limit)
         other = max((x for x in range(self.B) if x != s), key=lambda x: common[x], default=None)
         k_other = min(common[other], limit) if other is not None else 0
         m = self.cache.match(want, limit=limit)
         k = max(own, k_other, m.k)
-        if k < len(self.slot_dev[s]):             # the slot's context past k is overwritten
-            self._save_slot(s)
+        if own < len(self.slot_dev[s]):           # the slot's context past own is overwritten
+            self._evict(s, own)
         if k == own:
             self.eng.adopt(own, seq=s)
             if own:
@@ -179,21 +205,17 @@ class BatchWorker(SC.Worker):
         self.stats["prefill_tokens"] += 1
         if r._feed:
             self.prefilling.append(r)
-            q = self.steps.feed_rows()
-            p, n = k, len(r._feed)
-            head = min(n, (q - p % q) % q)
-            self.steps.prefetch_feed(s, p + n - (n - head) % q, (n - head) % q)
+            self.steps.prefetch_prompt(s, k, len(r._feed))
         r._bset = False
         self.stats["switch_s"] += time.perf_counter() - t0
 
     # ---- prefill and decode
     def _prefill_run(self, r: SC.Request) -> int:
-        """One feed run of r's prompt (up to MCOLS tokens, to the next multiple of it); the
-        tokens fed."""
+        """One feed run of r's prompt (up to MCOLS tokens, to the next multiple of it; with
+        tiled feed runs the bucket's tile rows: Steps.feed_chunk); the tokens fed."""
         t0 = time.perf_counter()
-        q = self.steps.feed_rows()
         p = self.eng.poss[r.slot]
-        part = r._feed[:q - p % q]              # (a whole run: the budget may go over by less)
+        part = r._feed[:self.steps.feed_chunk(p)]  # (a whole run: the budget may go over)
         self.steps.feed(r.slot, part)
         del r._feed[:len(part)]
         r.fed += part
@@ -357,12 +379,16 @@ class BatchWorker(SC.Worker):
         samp = self._samp(r)
         t = r.next
         r.fed.append(t)
-        got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
-                                on_token=lambda x: self._emit(r, x),
-                                stop=lambda: (r.finish is not None or r.cancelled.is_set()
-                                              or bool(self.waiting)),
-                                sampling=samp, context=list(r.fed),
-                                rng=pick.rng if samp is not None else None)
+
+        def stop() -> bool:
+            return r.finish is not None or r.cancelled.is_set() or bool(self.waiting)
+        if samp is None and self.spec is not None:      # the speculative loop (specdec.py)
+            got = self._spec_card(r, t, n, stop)
+        else:
+            got = eng.generate_card(t, n, stop_ids=sorted(r.stop_ids),
+                                    on_token=lambda x: self._emit(r, x), stop=stop,
+                                    sampling=samp, context=list(r.fed),
+                                    rng=pick.rng if samp is not None else None)
         r.fed += got[:-1]
         if not got:
             r.fed.pop()
@@ -397,6 +423,7 @@ class BatchWorker(SC.Worker):
                     self._save_slot(s)
                 except BaseException:
                     traceback.print_exc()
+            self.cache.drain()
             self.store.persist()
 
     def flush(self) -> None:

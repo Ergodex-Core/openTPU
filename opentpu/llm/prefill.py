@@ -126,9 +126,26 @@ def programs(eng, p: int, R: int, kind: str, hidden: bool = False, slot: int = 0
     choice (None: tiled)."""
     done = eng.__dict__.setdefault("_prompt_progs", {})
     what, blocks, compile = _what(eng, p, R, kind, hidden, slot, tile)
+    pre = eng.__dict__.get("_prompt_pre") or {}
+    fut = pre.get(what) if what not in done else None
+    got = None
+    if fut is not None:                                 # (compiled ahead: warm's processes)
+        try:
+            got = fut.result()
+        except Exception:                               # noqa: BLE001 (compiled here then)
+            got = None
     with _lock(eng):
         if what not in done:
-            done[what] = _prepared(eng, what, blocks, *eng.cached(what, compile))
+            if got is not None and pre.pop(what, None) is fut:
+                if got[0] is CompileError:
+                    raise CompileError(got[1])
+                names = set(got[1]) | (set(getattr(eng.image, "prompt_words", ())) if blocks
+                                       else set())
+                e = _Entry((got[0], sorted(names)))     # (warm's processes: the card's form)
+                e.ra, e.words, e.ready = None, got[0], True
+                done[what] = e
+            else:
+                done[what] = _prepared(eng, what, blocks, *eng.cached(what, compile))
     return done[what]
 
 
@@ -164,15 +181,39 @@ def _prepared(eng, what, blocks: int, progs, ra):
     # step (Program.run_seen: a register loaded from the word before the loop, no argument)
     names = {v.name for v, _ in ra or ()} | \
         {v.name for p in progs for v, _ in getattr(p, "run_seen", ())}
-    prep = getattr(eng.backend, "prepare", None)
-    if getattr(eng.backend, "runs_words", False) and len(progs) == 1:   # (Words: run_args;
-        from .qwen3 import worker_words                                 # WAITC: the entries)
-        progs = worker_words(img, progs[0], ra or getattr(progs[0], "run_args", ()))
-    elif prep is not None:
-        prep(progs)
     if blocks:                      # a run-time run: and the words its kernel reads itself
         names |= set(getattr(img, "prompt_words", ()))
-    return progs, sorted(names)
+    # the backend's form (the card: the words with their wait entries, 1-3 s of the host's a
+    # tile program on the F2) when the run first runs (_ready), not for the probes' fit checks
+    e = _Entry((progs, sorted(names)))
+    e.ra = ra
+    return e
+
+
+class _Entry(tuple):
+    """programs()' entry: (programs, the state words the run reads), the programs in the
+    backend's form once _ready made them so."""
+    ready = False
+
+
+def _ready(eng, entry: _Entry):
+    """entry's programs as the backend takes them: on the card (runs_words) assembled once
+    with their wait entries (WAITC), else prepared (assembled ahead); made at the first run."""
+    if not entry.ready:
+        with _lock(eng):
+            if not entry.ready:
+                progs, ra = entry[0], entry.ra
+                prep = getattr(eng.backend, "prepare", None)
+                if getattr(eng.backend, "runs_words", False) and len(progs) == 1:
+                    from .qwen3 import worker_words         # (Words: run_args; the entries)
+                    entry.words = worker_words(eng.image, progs[0],
+                                               ra or getattr(progs[0], "run_args", ()))
+                else:
+                    if prep is not None:
+                        prep(progs)
+                    entry.words = progs
+                entry.ready = True
+    return entry.words
 
 
 def r_max(eng, blocks: int = 1) -> int:
@@ -203,6 +244,9 @@ def tiled(eng, blocks: int) -> bool:
         return False
     if T >= _probe_top(eng, blocks):
         return True
+    prev = eng.__dict__.get("_prompt_rmax", {}).get(blocks - 1)
+    if prev is not None and T > prev[0]:    # (today's rows do not grow with the bucket: its
+        return True                         # programs do; no probe of today's runs here)
     try:
         R, covered = _fit(eng, blocks)
     except CompileError:                # (no prompt run of today's fits the bucket)
@@ -308,10 +352,17 @@ def _probe_tile(eng, blocks: int) -> int:
     while n:
         sizes.append(n)
         n = _whole_passes(n - 1, mc)
+    prev = eng.__dict__.get("_prompt_tile", {}).get(blocks - 1)
+    if prev and prev in sizes:              # (a later bucket's tile is no larger: its program
+        sizes = sizes[sizes.index(prev):]   # grows with the blocks; no trace of larger ones)
     kinds = _kinds(eng)
+    lazy = not getattr(eng.spec, "mtp", False)
     for T in sizes:
-        if all(_fits(lambda: programs(eng, p, r, k, h, tile=k != "M")) for r in range(T, 0, -1)
-               for k, h in kinds):
+        # a plain prompt's runs of fewer rows are compiled when a prompt asks for them (chunks:
+        # one that does not fit then runs in pieces): only T's programs here, not every R <= T
+        # (Ternary-Bonsai-4B on the F2: 16 tile programs a bucket, docs/tiled_prefill.md 16)
+        if all(_fits(lambda: programs(eng, p, r, k, h, tile=k != "M"))
+               for r in ([T] if lazy else range(T, 0, -1)) for k, h in kinds):
             break
     else:
         return 0
@@ -359,30 +410,132 @@ def _lock(eng):
     return eng.__dict__.setdefault("_prompt_lock", threading.RLock())
 
 
+WARM_PROCS = 4          # warm's worker processes for every bucket's tiled runs (the card)
+
+
 def warm(eng) -> None:
     """Bucket 1's prompt programs ahead, on a thread, when the engine starts: R_max, a new
     context's first (compile-time) run, and the bucket's P and L runs, MTP's (hidden rows, the
     MTP layer) on an MTP image, from the program cache or compiled, while the host waits for
     a prompt (a chat). A prompt that comes first takes the lock in turn: none is compiled
-    twice. Engines without the pipeline (the simulators' tests) warm nothing."""
+    twice. Engines without the pipeline (the simulators' tests) warm nothing.
+
+    On the card (the engine's compile worker processes: Engine._procs) with tiled runs and no
+    convolutions or MTP, every bucket's are compiled ahead, bucket 1 first, in WARM_PROCS
+    worker processes of their own at nice 10 (_warm_procs: each tile run _probe_tile can ask
+    for and each of today's runs _probe can ask for, their programs and wait entries), and the
+    thread takes each bucket's R_max and runs from them as they come. Compiled on the thread,
+    bucket 1's runs held the GIL for ~30 s (the wait entries ~0.3-0.85 s a run) against the
+    first requests' runs, and a prompt reaching bucket 2 compiled its own there (Gemma 3 1B's
+    268-token prompt: 47 s of host time before its first token on the ISA-backed driver)."""
     if not (eng.prompt_runs and eng.pipeline and supported(eng)):
         return
+    mtp = bool(getattr(eng.spec, "mtp", False))
+    nb = G.buckets(eng.cap, eng.block) if _warm_procs(eng) else 1
 
     def go():
         try:
-            R, K = r_max(eng, 1), conv_k(eng)
-            mtp = bool(getattr(eng.spec, "mtp", False))
-            todo = [(0, r_max(eng, 0), "P")] if K > 1 else []
-            todo += [(K - 1 if K > 1 else 0, r, k) for r in range(R, 0, -1)
-                     for k in (("P", "L") if r == R else ("L",))]
-            for p, r, k in todo:
-                programs(eng, p, r, k, mtp, 0)
-                if mtp:
-                    programs(eng, p, r, "M")
+            for b in range(1, nb + 1):
+                pre = eng.__dict__.get("_prompt_pre") or {}
+                for f in [f for w, f in list(pre.items()) if w[3] == b and w[0] == "prompt tile"]:
+                    try:                        # (not under the lock: a prompt's runs go on)
+                        f.result()
+                    except Exception:           # noqa: BLE001 (programs compiles it then)
+                        pass
+                R, K = r_max(eng, b), conv_k(eng)
+                p0 = max((b - 1) * eng.block, K - 1 if K > 1 else 0)
+                todo = [(0, r_max(eng, 0), "P")] if K > 1 and b == 1 else []
+                todo += [(p0, r, k) for r in range(R, 0, -1)
+                         for k in (("P", "L") if r == R else ("L",))]
+                for p, r, k in todo:
+                    _ready(eng, programs(eng, p, r, k, mtp, 0))    # (the backend's form)
+                    if mtp:
+                        _ready(eng, programs(eng, p, r, "M"))
+                for w in [w for w in list(pre) if w[3] == b]:      # (runs no prompt takes)
+                    f = pre.pop(w, None)
+                    if f is not None:
+                        f.cancel()
+            pool = eng.__dict__.pop("_prompt_pool", None)
+            if pool is not None:                # (every Future done)
+                pool.shutdown(wait=False)
         except Exception:           # (the prompt meets the same error and reports it)
             pass
     eng._prompt_warm = threading.Thread(target=go, daemon=True, name="otpu-prompt-warm")
     eng._prompt_warm.start()
+
+
+def _warm_procs(eng) -> bool:
+    """warm's worker processes: every bucket's tile runs that _probe_tile asks for (P and L
+    runs of every size up to the bucket's room), then today's runs that _probe asks for where
+    the tile takes fewer rows than today's could (Gemma 3's 12 of 16), submitted bucket by
+    bucket; their Futures in eng._prompt_pre by program cache key (programs takes them; warm
+    cancels a bucket's that no prompt takes once it has the bucket's runs). False where the
+    engine has no compile worker processes, tiling is off, or the model has convolutions or
+    MTP."""
+    if not (getattr(eng, "_procs", False) and tiling(eng) and conv_k(eng) == 1
+            and not getattr(eng.spec, "mtp", False)):
+        return False
+    import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
+
+    from .qwen3 import _whole_passes
+    img, block, mc = eng.image, eng.block, eng.image.cfg.MCOLS
+    pool = ProcessPoolExecutor(
+        WARM_PROCS, mp_context=mp.get_context("spawn"), initializer=_warm_init,
+        initargs=(eng.spec, eng.cfg, eng.cap, eng.batch, eng.rows, eng.block, eng._image_kw,
+                  eng.image.stream_fill, eng.layout if eng.prog_cache else None))
+    pre = eng.__dict__.setdefault("_prompt_pre", {})
+    eng._prompt_pool = pool
+    for b in range(1, G.buckets(eng.cap, block) + 1):
+        p = (b - 1) * block
+        room = min(img.rows, img.cfg.act_rows, img.cap - p, block - p % block)
+        if room <= 0:
+            continue
+        for r in range(_whole_passes(room, mc), 0, -1):
+            for kind in ("L", "P"):
+                what = ("prompt tile", kind, r, b, False, 0)
+                pre[what] = pool.submit(_warm_run, b, r, kind, True)
+        for r in range(_probe_top(eng, b), 0, -1):
+            for kind in ("L", "P"):
+                what = ("prompt", kind, r, b, False, 0)
+                pre[what] = pool.submit(_warm_run, b, r, kind, False)
+    return True
+
+
+_LAYOUT = None                  # warm's worker process: the engine's layout (its program cache)
+
+
+def _warm_init(spec, cfg, cap, batch, rows, block, image_kw, stream_fill, layout) -> None:
+    global _LAYOUT
+    from .qwen3 import _worker_init
+    os.nice(10)
+    _worker_init(spec, cfg, cap, batch, rows, block, image_kw, stream_fill)
+    _LAYOUT = layout
+
+
+def _warm_run(blocks: int, R: int, kind: str, tile: bool):
+    """warm's worker process: a tile run or today's prompt run (through the program cache with
+    the engine's), as programs takes it on the card: (its words with their run_args and wait
+    entries, the names of the state words it reads), or (CompileError, the message) where it
+    does not fit."""
+    from .qwen3 import _WORKER, worker_words
+    image, block = _WORKER
+    what = ("prompt tile" if tile else "prompt", kind, R, blocks, False, 0)
+
+    def compile():
+        if tile:
+            return TL.compile_tile_run(image, blocks, R, kind, block)
+        return image.compile_prompt_run(blocks, R, kind, block)
+    try:
+        progs, ra = PC.get(_LAYOUT, what, compile) if _LAYOUT is not None else compile()
+    except CompileError as e:
+        return CompileError, str(e)
+    if not G.fits(image, progs):
+        return CompileError, (f"prompt run {what}: {max(map(len, progs))} instructions, "
+                              f"IMEM {image.cfg.IMEM_WORDS // 8}")
+    names = {v.name for v, _ in ra or ()} | \
+        {v.name for p in progs for v, _ in getattr(p, "run_seen", ())}
+    return worker_words(image, progs[0], ra or getattr(progs[0], "run_args", ())), sorted(names)
 
 
 def write_tokens(eng, p0: int, tokens) -> None:
@@ -405,7 +558,7 @@ def words(eng, names, p: int, R: int) -> dict:
 def run(eng, entry, p: int, R: int, tokens=()) -> dict:
     """One run at position p (programs' entry): the state words it reads written first, and
     on an image whose prompt runs read host rows (prompt_host_rows) the run's tokens' rows."""
-    progs, names = entry
+    progs, names = _ready(eng, entry), entry[1]
     if getattr(eng.image, "prompt_host_rows", False):
         eng._write_host_rows(tokens)
     if names:
@@ -449,13 +602,23 @@ def chunks(eng, tokens, head: bool = True):
         return
     write_tokens(eng, p0, tokens)
     for p, R, kind in split(p0, P, lambda b: r_max(eng, b), eng.block, conv_k(eng)):
-        kind = kind if head else "P"
-        progs = programs(eng, p, R, kind)
-        if kind == "L":
-            eng._prefetch(P)            # the first decode step's, while the device runs
-        eng.stats.append(run(eng, progs, p, R, tokens[p - p0:p - p0 + R]))
-        eng.poss[0] = p + R
-        yield tokens[p - p0:p - p0 + R], logits(eng, R) if kind == "L" else None
+        for q, n, k in _pieces(eng, p, R, kind if head else "P"):
+            if k == "L":
+                eng._prefetch(P)        # the first decode step's, while the device runs
+            eng.stats.append(run(eng, programs(eng, q, n, k), q, n, tokens[q - p0:q - p0 + n]))
+            eng.poss[0] = q + n
+            yield tokens[q - p0:q - p0 + n], logits(eng, n) if k == "L" else None
+
+
+def _pieces(eng, p: int, R: int, kind: str) -> list:
+    """A run of R rows at p as runs whose programs fit (the bucket's probe checks its tile
+    rows' only: _probe_tile): itself, or where its program does not fit TMEM, ACT RAM or IMEM
+    two halves (the last keeps the kind), each the same way. Every row's bits are the same
+    whatever its run (docs/tiled_prefill.md 11)."""
+    if R == 1 or _fits(lambda: programs(eng, p, R, kind)):
+        return [(p, R, kind)]
+    h = -(-R // 2)
+    return _pieces(eng, p, h, "P") + _pieces(eng, p + h, R - h, kind)
 
 
 def mtp(dec, tokens, st, pick=None, on_run=None, follow: int | None = None):

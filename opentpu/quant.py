@@ -861,3 +861,16 @@ def import_nvfp4(codes: np.ndarray, e4m3_scales: np.ndarray, tensor_scale: float
                              e4=e4.reshape(N, K // D, NVG).astype(np.uint8))
 
 
+
+
+def dequantize_q4_0(data: np.ndarray) -> np.ndarray:
+    """GGUF Q4_0 bytes [..., blocks * 18] to fp32 [..., blocks * 32]. Each block is
+    a little-endian fp16 scale and 16 bytes: low nibbles are elements 0..15, high
+    nibbles 16..31, biased by 8. Signed scales and code -8 are valid Q4_0 values."""
+    raw = np.asarray(data)
+    if raw.dtype != np.uint8 or raw.ndim < 1 or raw.shape[-1] % 18:
+        raise ValueError("Q4_0 requires uint8 rows with a multiple of 18 bytes")
+    b = raw.reshape(*raw.shape[:-1], -1, 18)
+    d = np.ascontiguousarray(b[..., :2]).view("<f2")[..., 0].astype(np.float32)
+    q = np.concatenate((b[..., 2:] & 15, b[..., 2:] >> 4), axis=-1).astype(np.int8) - 8
+    return (q.astype(np.float32) * d[..., None]).reshape(*raw.shape[:-1], -1)

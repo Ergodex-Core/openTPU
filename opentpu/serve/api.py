@@ -39,6 +39,8 @@ from . import store as ST
 IMAGE_BYTES = 32 << 20      # an image_url's file at most
 FETCH_S = 20.0              # an http(s) image's fetch timeout (--image-fetch)
 MAX_SLICES = 36             # a request's max_slices at most
+# the program cache's disk where progcache has none (OTPU_PROG_CACHE unset, no ~/otpu-build)
+PROG_CACHE = Path.home() / ".cache" / "otpu" / "prog"
 
 
 WARM_CAP = 300.0         # /health's 503 "warming" at most this long (s; the card host's HDD
@@ -783,6 +785,10 @@ def load(a):
     path = model_dir(a.model)
     tokenizer = CH.load_tokenizer(path)
     spec = load_spec(path)
+    if getattr(a, "embed", None):           # the embedding rows' format (int8: a tied int8
+        from dataclasses import replace     # head's rows, no fp32 table)
+        spec = replace(spec, embed=a.embed)
+    spec_rows = a.spec_k + 1 if getattr(a, "spec_k", 0) else 0
     wformat = FM.auto(spec, a.wformat)
     streams = STR.streams(spec)
     formats = None
@@ -800,6 +806,9 @@ def load(a):
         from ..isasim import board_config
         cfg = sim_config(spec, a.cap, board_config(PAIR=True, DSTEP=True, STREAM=True),
                          lookup=True, wformat=wformat, head_format=a.head_format)
+    if cfg is not None and getattr(a, "spec_draft", None) and a.backend == "isa":
+        from dataclasses import replace     # the slice's 4 GiB: the draft's image at its top
+        cfg = replace(cfg, DRAM_BYTES=1 << 32)
     t0 = time.perf_counter()
     if streams:
         from ..isasim import board_config
@@ -821,11 +830,23 @@ def load(a):
             from ..llm.qwen3 import PREFILL_ROWS, device_config
             c = device_config(spec, a.cap, batch=B, rows=PREFILL_ROWS, lookup=True,
                               wformat=wformat, head_format=a.head_format, S=1)
-            cfg = replace(c, DRAM_BYTES=2 * c.DRAM_BYTES)
+            cfg = replace(c, DRAM_BYTES=2 * c.DRAM_BYTES if not getattr(a, "spec_draft", None)
+                          else 1 << 32)
+        prompt_runs, rows = not a.no_prompt_runs, {}
+        if B > 1 and prompt_runs:
+            # the batched worker feeds every prompt with batched steps (batch.Steps.feed), never
+            # with the prompt runs: no prompt programs (prefill.warm's thread compiled bucket 1's
+            # 32 tiled runs and their wait entries, ~30 s holding the GIL against the first
+            # requests' runs), the image's rows as the prompt runs would make them
+            from ..llm import prefill as PF
+            from ..llm.qwen3 import PREFILL_ROWS
+            prompt_runs = False
+            if PF.tile_flag(None) and cfg.S == 1 and cfg.act_rows > max(PREFILL_ROWS, B):
+                rows = {"rows": cfg.act_rows}
         eng = Engine(spec, load_weights(path), cap=a.cap, cfg=cfg, backend=backend,
                      wformat=wformat, head_format=a.head_format, resident=True,
-                     prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                     batch=B, batch_area=B > 1)
+                     prog_cache=not a.no_prog_cache, prompt_runs=prompt_runs,
+                     batch=B, batch_area=B > 1, spec_rows=spec_rows, **rows)
     weights = CH.weights_label(eng.image, wformat)
     print(f"weights: {weights}; loaded in {time.perf_counter() - t0:.1f} s", flush=True)
     tok = tokenizer()
@@ -873,7 +894,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="otpu-serve", description=__doc__.split("\n")[0])
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
-    ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim"])
+    ap.add_argument("--backend", default="isa",
+                    choices=["isa", "board", "board-isa", "board-sim"])
     ap.add_argument("--dev", default="/dev/xdma0")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
@@ -924,6 +946,19 @@ def main(argv=None):
     ap.add_argument("--mtp-from", metavar="DIR",
                     help="with --mtp: the MTP drafter's checkpoint when the model has none "
                          "(MiniCPM-V 4.7: its base Qwen3.5-35B-A3B's)")
+    ap.add_argument("--spec-k", type=int, default=0, metavar="K",
+                    help="speculative decoding of the greedy requests, its loop on the card "
+                         "(docs/specdec.md): up to K drafts an iteration verified in one run of "
+                         "K + 1 rows; drafts by prompt lookup, or --spec-draft's (0: off)")
+    ap.add_argument("--spec-draft", metavar="MODEL",
+                    help="with --spec-k: a draft model (same tokenizer) on the card beside the "
+                         "model, e.g. models/Qwen3-0.6B")
+    ap.add_argument("--spec-draft-wformat", default="int4", choices=["int8", "int4", "fp4"])
+    ap.add_argument("--spec-draft-head-format", default="int4",
+                    choices=["int8", "int4", "fp4"])
+    ap.add_argument("--embed", choices=["f32", "int8"],
+                    help="the embedding rows: fp32 (the default), or int8 (a tied int8 "
+                         "head's rows: no fp32 table, room for a draft model)")
     ap.add_argument("--experts", type=int, default=0)
     ap.add_argument("--max-slices", type=int,
                     help="images (MiniCPM-V): an image's slices at most besides its thumbnail, "
@@ -936,27 +971,55 @@ def main(argv=None):
                     help="a streamed MoE: /health says 503 'warming' while its expert pool is "
                          "read into the page cache, at most this many seconds (0: never)")
     a = ap.parse_args(argv)
+    if not a.no_prog_cache:
+        from .. import progcache as PC
+        if PC.cache_dir() is None:
+            # a host without ~/otpu-build (the F2 instance): the programs and their wait entries
+            # on disk all the same, so a server's compiles (its generate loop's buckets, its
+            # prompt runs) are done once per tree, not once per start (gen_warm needs it)
+            os.environ["OTPU_PROG_CACHE"] = str(PROG_CACHE)
     return busy_exits(_main)(a)
 
 
 def _main(a):
+    if a.spec_k and a.mtp:
+        raise SystemExit("otpu-serve: --spec-k and --mtp are two drafters: one of them")
     eng, tok, spec, path, defaults, weights = load(a)
+    sd = None
+    if a.spec_k:                            # speculative decoding (opentpu/llm/specdec.py)
+        from ..llm.specdec import SpecDecoder, draft_engine
+        dr = None
+        if a.spec_draft:
+            t1 = time.perf_counter()
+            dr = draft_engine(eng, a.spec_draft, wformat=a.spec_draft_wformat,
+                              head_format=a.spec_draft_head_format,
+                              prog_cache=not a.no_prog_cache)
+            print(f"draft model {a.spec_draft} ({a.spec_draft_wformat}, head "
+                  f"{a.spec_draft_head_format}) at {dr.image.base / 2**20:.0f} MiB, loaded in "
+                  f"{time.perf_counter() - t1:.1f} s", flush=True)
+        sd = SpecDecoder(eng, draft=dr)
+        t1 = time.perf_counter()
+        sd.warm()
+        print(f"speculative decoding: K {a.spec_k}, "
+              f"{'draft model' if dr is not None else 'prompt lookup'}; its programs in "
+              f"{time.perf_counter() - t1:.1f} s", flush=True)
     from ..host import gen_warm as GW       # the decode loop's bucket programs ahead, in the
     eng.gen_warm = None if a.mtp else GW.start(eng, defaults)   # background (gen_warm.py; the
     #                                         MTP loop's: compiled at their first use)
     mk = ST.model_key(str(Path(path).resolve()), type(eng.image).__module__, eng.image.wformat,
                       eng.image.head_format, getattr(eng.image, "formats", None), eng.cap,
                       eng.block, eng.cfg.S, eng.cfg.D, eng.cfg.MCOLS, eng.cfg.PAIR,
-                      *(("mtp", str(a.mtp_from)) if a.mtp else ()))
+                      *(("mtp", str(a.mtp_from)) if a.mtp else ()),
+                      *(("embed", a.embed) if a.embed else ()))
     store = ST.BlobStore(int(a.kv_ram_gb * 2**30), int(a.kv_disk_gb * 2**30),
                          a.kv_dir + f"/{mk}" if a.kv_disk_gb > 0 else None)
     from .batching import BatchWorker, batches
     if batches(eng):
         w = BatchWorker(eng, tok, store=store, model_key=mk, quantum=a.quantum,
-                        prefill_budget=a.chunked_prefill_size, mixed=a.mixed).start()
+                        prefill_budget=a.chunked_prefill_size, mixed=a.mixed, spec=sd).start()
     else:
         w = SC.Worker(eng, tok, store=store, model_key=mk, max_running=a.max_running,
-                      quantum=a.quantum, mtp=a.mtp).start()
+                      quantum=a.quantum, mtp=a.mtp, spec=sd).start()
     name = a.served_model_name or Path(path).name
     srv = Server(w, tok, spec, name, defaults, think=a.think, reasoning=a.reasoning_parser,
                  aliases=(a.model,), api_key=a.api_key, max_queue=a.max_queue,

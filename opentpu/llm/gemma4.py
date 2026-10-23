@@ -139,6 +139,11 @@ class Spec:
     k_rows: bool = False    # sliding K rows at their own stride, not the RoPE row's (Image.ks):
                             # 26B-A4B's 8 KV heads x 25 layers, 414 -> 146 MB at 1152 slots
 
+    norm_offset: float = 0.0  # Gemma 3: RMSNorm's checkpoint weights are offsets from one
+    v_norm: bool = True       # Gemma 3 leaves V unnormalized
+    attn_scale: float = 1.0   # Gemma 3: query_pre_attn_scalar ** -0.5
+    layer_scale: bool = True  # Gemma 3 has no layer_scalar
+
     @property
     def layers(self) -> int:
         return len(self.kinds)
@@ -353,6 +358,8 @@ class Weights(dict):
     def rows(self, k, idx) -> np.ndarray:
         """Rows idx (a list) of tensor k, fp32, without loading the rest."""
         f, name = self._files[k]
+        if isinstance(idx, range) and idx.step == 1:
+            return _Rows(f, name)[slice(idx.start, idx.stop)]
         return _Rows(f, name)[list(idx)]
 
 
@@ -390,6 +397,11 @@ def rope_tables(spec: Spec, pos: int, kind: str) -> tuple[np.ndarray, np.ndarray
     """cos, sin (fp32) of a position: [head_dim / 2] (sliding) or [global_rot] (global)."""
     ang = pos * rope_freqs(spec, kind)
     return np.cos(ang).astype(np.float32), np.sin(ang).astype(np.float32)
+
+
+def _gain(spec, w):
+    """A norm's effective gain (Gemma 3 stores its offset from one)."""
+    return w if not spec.norm_offset else np.asarray(w) + np.float32(spec.norm_offset)
 
 
 def _norm(v, g, eps):
@@ -478,36 +490,37 @@ def reference_logits(spec: Spec, W, tokens) -> np.ndarray:
         G = spec.n_q // nkv
         cos = np.stack([c for c, _ in tab[kind]])[:, None, :]
         sin = np.stack([s for _, s in tab[kind]])[:, None, :]
-        h = _norm(x, W[p + "input_layernorm.weight"], spec.eps)
+        h = _norm(x, _gain(spec, W[p + "input_layernorm.weight"]), spec.eps)
         q = (h @ W[a + "q_proj.weight"].T).reshape(T, spec.n_q, d)
-        q = _rot(_norm(q, W[a + "q_norm.weight"], spec.eps), cos, sin, d // 2)
+        q = _rot(_norm(q, _gain(spec, W[a + "q_norm.weight"]), spec.eps), cos, sin, d // 2)
         if spec.kv_src[i] == i:
             k = (h @ W[a + "k_proj.weight"].T).reshape(T, nkv, d)
             v = k if spec.kv_same(i) else (h @ W[a + "v_proj.weight"].T).reshape(T, nkv, d)
-            kv[i] = (_rot(_norm(k, W[a + "k_norm.weight"], spec.eps), cos, sin, d // 2),
-                     _norm(v, None, spec.eps))
+            kv[i] = (_rot(_norm(k, _gain(spec, W[a + "k_norm.weight"]), spec.eps), cos, sin, d // 2),
+                     _norm(v, None, spec.eps) if spec.v_norm else v)
         k, v = kv[spec.kv_src[i]]
         o = np.zeros((T, spec.n_q, d), f32)
         for hq in range(spec.n_q):
-            s = q[:, hq] @ k[:, hq // G].T + masks[kind]
+            s = (q[:, hq] @ k[:, hq // G].T) * spec.attn_scale + masks[kind]
             s = np.exp(s - s.max(axis=1, keepdims=True))
             o[:, hq] = (s / s.sum(axis=1, keepdims=True)) @ v[:, hq // G]
         att = o.reshape(T, -1) @ W[a + "o_proj.weight"].T
-        x = x + _norm(att, W[p + "post_attention_layernorm.weight"], spec.eps)
-        h = _norm(x, W[p + "pre_feedforward_layernorm.weight"], spec.eps)
+        x = x + _norm(att, _gain(spec, W[p + "post_attention_layernorm.weight"]), spec.eps)
+        h = _norm(x, _gain(spec, W[p + "pre_feedforward_layernorm.weight"]), spec.eps)
         m = (_gelu(h @ W[p + "mlp.gate_proj.weight"].T) * (h @ W[p + "mlp.up_proj.weight"].T)) \
             @ W[p + "mlp.down_proj.weight"].T
         if spec.experts:                        # the MoE beside the MLP, on the same residual
             m = _norm(m, W[p + "post_feedforward_layernorm_1.weight"], spec.eps) + \
                 _norm(_moe(spec, W, p, x), W[p + "post_feedforward_layernorm_2.weight"],
                       spec.eps)
-        x = x + _norm(m, W[p + "post_feedforward_layernorm.weight"], spec.eps)
+        x = x + _norm(m, _gain(spec, W[p + "post_feedforward_layernorm.weight"]), spec.eps)
         if pli is not None:
             g = _gelu(x @ W[p + "per_layer_input_gate.weight"].T) * pli[:, i]
             y = g @ W[p + "per_layer_projection.weight"].T
-            x = x + _norm(y, W[p + "post_per_layer_input_norm.weight"], spec.eps)
-        x = x * W[p + "layer_scalar"]
-    x = _norm(x, W["model.norm.weight"], spec.eps)
+            x = x + _norm(y, _gain(spec, W[p + "post_per_layer_input_norm.weight"]), spec.eps)
+        if spec.layer_scale:
+            x = x * W[p + "layer_scalar"]
+    x = _norm(x, _gain(spec, W["model.norm.weight"]), spec.eps)
     head = E if spec.tied else W["lm_head.weight"]
     return x @ head.T
 
@@ -571,15 +584,15 @@ def emulated_logits(spec: Spec, W, tokens, D: int = 128, wformat: str = "int8",
             G = spec.n_q // nkv
             fa, fg, fd, fp = lf[i]
             c, s_ = rope_tables(spec, pos, kind)
-            h = _fake_q(_norm(x, W[p + "input_layernorm.weight"], spec.eps), D)
+            h = _fake_q(_norm(x, _gain(spec, W[p + "input_layernorm.weight"]), spec.eps), D)
             q = (w(a + "q_proj.weight", fa) @ h).reshape(spec.n_q, d)
-            q = _rot(_norm(q, W[a + "q_norm.weight"], spec.eps), c, s_, d // 2)
+            q = _rot(_norm(q, _gain(spec, W[a + "q_norm.weight"]), spec.eps), c, s_, d // 2)
             if spec.kv_src[i] == i:
                 k = (w(a + "k_proj.weight", fa) @ h).reshape(nkv, d)
                 v = k if spec.kv_same(i) else (w(a + "v_proj.weight", fa) @ h).reshape(nkv, d)
-                k = _rot(_norm(k, W[a + "k_norm.weight"], spec.eps), c, s_, d // 2)
+                k = _rot(_norm(k, _gain(spec, W[a + "k_norm.weight"]), spec.eps), c, s_, d // 2)
                 K.setdefault(i, []).append(_fake_k(k, D))
-                V.setdefault(i, []).append(_v_parts(_norm(v, None, spec.eps)))
+                V.setdefault(i, []).append(_v_parts(_norm(v, None, spec.eps) if spec.v_norm else v))
             src = spec.kv_src[i]
             lo = max(0, pos + 1 - spec.window) if kind == SLIDE else 0
             Kh = np.stack([a_ for a_, _ in K[src][lo:]], 1)
@@ -588,11 +601,11 @@ def emulated_logits(spec: Spec, W, tokens, D: int = 128, wformat: str = "int8",
             o = np.zeros((spec.n_q, d))
             for hq in range(spec.n_q):
                 sc = _qk(_fake_q(q[hq], D), Kh[hq // G], None if dK is None else dK[hq // G], D)
-                pp = np.exp(sc - sc.max())
+                pp = np.exp((sc - sc.max()) * spec.attn_scale)
                 o[hq] = _pv(pp, Vq[hq // G], Vs[hq // G], D, start=lo) / pp.sum()
             att = w(a + "o_proj.weight", fa) @ _fake_q(o.reshape(-1), D)
-            x = x + _norm(att, W[p + "post_attention_layernorm.weight"], spec.eps)
-            h = _fake_q(_norm(x, W[p + "pre_feedforward_layernorm.weight"], spec.eps), D)
+            x = x + _norm(att, _gain(spec, W[p + "post_attention_layernorm.weight"]), spec.eps)
+            h = _fake_q(_norm(x, _gain(spec, W[p + "pre_feedforward_layernorm.weight"]), spec.eps), D)
             fp_ = _ffn_pad(spec.ffn[i], fd, D)
             wd = w(p + "mlp.down_proj.weight", fd, fp_)
             u = _gelu(w(p + "mlp.gate_proj.weight", fg) @ h) * \
@@ -626,13 +639,14 @@ def emulated_logits(spec: Spec, W, tokens, D: int = 128, wformat: str = "int8",
                     y += we * (ed @ _fake_q(np.pad(u, (0, xf.F - len(u))), D, xf.C))
                 m = _norm(m, W[p + "post_feedforward_layernorm_1.weight"], spec.eps) + \
                     _norm(y, W[p + "post_feedforward_layernorm_2.weight"], spec.eps)
-            x = x + _norm(m, W[p + "post_feedforward_layernorm.weight"], spec.eps)
+            x = x + _norm(m, _gain(spec, W[p + "post_feedforward_layernorm.weight"]), spec.eps)
             if P:
                 g = _gelu(w(p + "per_layer_input_gate.weight", fp) @ _fake_q(x, D)) * pli[i]
                 y = w(p + "per_layer_projection.weight", fp) @ _fake_q(g, D)
-                x = x + _norm(y, W[p + "post_per_layer_input_norm.weight"], spec.eps)
-            x = x * np.asarray(W[p + "layer_scalar"], f64)
-        out.append(w(head, hf) @ _fake_q(_norm(x, W["model.norm.weight"], spec.eps), D))
+                x = x + _norm(y, _gain(spec, W[p + "post_per_layer_input_norm.weight"]), spec.eps)
+            if spec.layer_scale:
+                x = x * np.asarray(W[p + "layer_scalar"], f64)
+        out.append(w(head, hf) @ _fake_q(_norm(x, _gain(spec, W["model.norm.weight"]), spec.eps), D))
     return np.array(out)
 
 
@@ -1006,7 +1020,7 @@ class Image:
             return F.ftz(np.asarray(a, np.float32))
 
         tasks = []          # (DRAM addresses, (kind, tensor, selection, scale, format, ...))
-        put(self.io["gf"], f32(W["model.norm.weight"]))
+        put(self.io["gf"], f32(_gain(spec, W["model.norm.weight"])))
         if P:
             put(self.io["g_pln"], f32(W["model.per_layer_projection_norm.weight"]
                                       * np.float32(2 ** -0.5)))
@@ -1024,9 +1038,9 @@ class Image:
             k = self._key(i)
             o, base = self.bofs[k], self._off(i).static()
             for n, hf in norms.items():
-                put(base + o[n], f32(W[p + hf + ".weight"]))
-            put(base + o["ls"], f32(W[p + "layer_scalar"]).reshape(1))
-            put(base + o["qn"], f32(W[a + "q_norm.weight"]))
+                put(base + o[n], f32(_gain(spec, W[p + hf + ".weight"])))
+            put(base + o["ls"], f32(W[p + "layer_scalar"] if spec.layer_scale else 1.0).reshape(1))
+            put(base + o["qn"], f32(_gain(spec, W[a + "q_norm.weight"])))
             if spec.experts:        # the router: proj x scale / sqrt(H) (int8), j * E
                 put(base + o["g_post"], np.ones(H, np.float32))
                 put(base + o["gbase"], np.float32([i * spec.experts]))
@@ -1037,7 +1051,7 @@ class Image:
                    "wu": p + "mlp.up_proj", "wpg": p + "per_layer_input_gate",
                    "wpp": p + "per_layer_projection", "wk": a + "k_proj", "wv": a + "v_proj"}
             if k[1]:
-                put(base + o["kn"], f32(W[a + "k_norm.weight"]))
+                put(base + o["kn"], f32(_gain(spec, W[a + "k_norm.weight"])))
             for n, (r, _, f) in o["mats"].items():     # gate / up: rows padded with zeros
                 sel = ("pad", r) if n in ("wg", "wu") and r != spec.ffn[i] else None
                 tasks.append((tuple(base + x for x in o[n]),
@@ -1452,9 +1466,9 @@ JOB_GB = 1.5            # a job worker's peak (E2B: 1.3-1.4 GiB, a PLE chunk's r
 _JOB_W = None           # the worker process's Weights
 
 
-def _job_init(model_dir) -> None:
+def _job_init(model_dir, cls=Weights) -> None:
     global _JOB_W
-    _JOB_W = Weights(model_dir)
+    _JOB_W = cls(model_dir)
 
 
 def _job_matrix(W, name, sel, scale) -> np.ndarray:
@@ -1462,8 +1476,7 @@ def _job_matrix(W, name, sel, scale) -> np.ndarray:
         a = W[name]
     elif sel[0] == "rowrange":
         if isinstance(W, Weights):
-            f, n = W._files[name]
-            a = _Rows(f, n)[sel[1]:sel[2]]
+            a = W.rows(name, range(sel[1], sel[2]))
         else:
             a = np.asarray(W[name], np.float32)[sel[1]:sel[2]]
     elif sel[0] == "rows":
@@ -1518,7 +1531,7 @@ def _run_tasks(W, jobs: list, n: int | None = None):
         for j in jobs:
             yield _job(W, j)
         return
-    with QC.pool(n, initializer=_job_init, initargs=(str(W.model_dir),)) as pool:
+    with QC.pool(n, initializer=_job_init, initargs=(str(W.model_dir), type(W))) as pool:
         for out, counts in pool.map(_worker_job, jobs):
             for k, v in counts.items():
                 QC.stats[k] += v
@@ -1624,7 +1637,8 @@ def _attention(x, lw, m, pos, ropes, block: int):
         for r in range(R):
             c, s_ = cos_sin(r)
             kr = _rope(rmsnorm(k[r, :].reshape(nkv, d), kn, eps), c, s_)
-            vr = rmsnorm(v[r, :].reshape(nkv, d), None, eps)
+            vr = (rmsnorm(v[r, :].reshape(nkv, d), None, eps) if spec.v_norm else
+                  v[r, :].reshape(nkv, d))
             slot = _slot(m, lw.kind, pos[r] if isinstance(pos, list) else pos)
             for j in range(nkv):
                 ol.kv_append(kv, j, slot, kr[j:j + 1, :], vr[j:j + 1, :])
@@ -1651,7 +1665,7 @@ def _attention(x, lw, m, pos, ropes, block: int):
         o[r, (j * G + g0) * d:(j * G + g1) * d].reshape(g1 - g0, d).set(acc / l[:, None])
 
     _attend_heads([Qs[r][j * G + g0:j * G + g1, :] for r, j, g0, g1, _ in ent], kv,
-                  [j for _, j, _, _, _ in ent], [e[4] for e in ent], block, ol.LOG2E,
+                  [j for _, j, _, _, _ in ent], [e[4] for e in ent], block, ol.LOG2E * spec.attn_scale,
                   depth=ATTN_DEPTH, emit=emit)
     del Qs
     y = ol.dot(o, lw.wo)                                    # [R, H]
@@ -1661,10 +1675,13 @@ def _attention(x, lw, m, pos, ropes, block: int):
 
 def _add_norm(x, y, g, eps, scale=None):
     """x += norm(y) in place, then x *= scale (a [1] tile) if given. Rows of more than an
-    eighth of TMEM (4 prefill rows of E4B's hidden 2560) a row at a time, so the temporaries
-    are one row's; smaller ones as one tile (fewer instructions)."""
-    rows = [slice(0, x.rows)] if x.rows * x.cols <= ol.tmem_words() // 8 else \
-        [slice(r, r + 1) for r in range(x.rows)]
+    eighth of TMEM (4 prefill rows of E4B's hidden 2560) in groups of as many rows as a
+    sixteenth holds (at least one: E4B's a row at a time), so the temporaries are a group's;
+    smaller ones as one tile (fewer instructions). Each row's arithmetic is the same either
+    way."""
+    W = ol.tmem_words()
+    n = x.rows if x.rows * x.cols <= W // 8 else max(1, (W // 16) // x.cols)
+    rows = [slice(r, min(x.rows, r + n)) for r in range(0, x.rows, n)]
     for sl in rows:
         if scale is None:
             x[sl, :].set(x[sl, :] + rmsnorm(y[sl, :], g, eps))
@@ -1702,7 +1719,8 @@ def _mlp(x, lw, spec, m=None):
         del acc
     else:
         y = dense()
-    _add_norm(x, y, ol.load(lw.g_ffn), spec.eps, None if spec.ple_dim else ol.load(lw.ls))
+    _add_norm(x, y, ol.load(lw.g_ffn), spec.eps,
+              None if spec.ple_dim or not spec.layer_scale else ol.load(lw.ls))
 
 
 def _em_mlp(x, lw, spec, m, row):
@@ -1722,7 +1740,8 @@ def _em_end(x, lw, spec, m, row):
                         (x.rows, spec.hidden), (m.moe_dev.em_rec // 4, 1)))
     y = sh + rmsnorm(acc, ol.load(lw.g_f2), spec.eps)
     del acc, sh
-    _add_norm(x, y, ol.load(lw.g_ffn), spec.eps, None if spec.ple_dim else ol.load(lw.ls))
+    _add_norm(x, y, ol.load(lw.g_ffn), spec.eps,
+              None if spec.ple_dim or not spec.layer_scale else ol.load(lw.ls))
 
 
 def _ple(x, lw, spec):

@@ -21,10 +21,10 @@ torch = pytest.importorskip("torch")
 CAP = 512
 
 
-def _engines():
+def _engines(**kw):
     W, spec, cfg1 = _model("qwen3")
     cfg = device_config(spec, CAP, batch=4, rows=PREFILL_ROWS, lookup=True, S=1)
-    cfg = dataclasses.replace(cfg, DRAM_BYTES=2 * cfg.DRAM_BYTES)
+    cfg = dataclasses.replace(cfg, DRAM_BYTES=2 * cfg.DRAM_BYTES, **kw)
     eng = Engine(spec, W, cap=CAP, cfg=cfg, batch=4, resident=True, prompt_runs=True,
                  batch_area=True)
 
@@ -325,6 +325,68 @@ def test_mixed_runs_feed_a_prompt_beside_decoding_rows():
         e = single()
         lg, want = e.prefill(p), []
         for _ in range(len(got[s])):
+            want.append(int(np.argmax(lg)))
+            lg = e.step(want[-1])
+        assert got[s] == want, s
+
+
+def _kv_bytes(eng, s, n):
+    """Slot s's KV cache bytes of its first n positions (every page's regions)."""
+    from opentpu.serve import kvio as KV
+    L = KV.Layout(eng.image, eng.cfg.S, seq=s)
+    out = []
+    for i, m in L.split(n):
+        for a, k in L.regions(i, m):
+            out.append(eng.backend.read(0, a, k))
+    return np.concatenate(out)
+
+
+def test_tiled_feed_runs_are_the_untiled_ones():
+    """With tiled prompt runs on, a slot's feed takes tiled feed runs (tiled.compile_feed_tile:
+    the bucket's tile rows a run, the slot's caches, the tokens and position from the batch
+    area's io block): its KV cache is the untiled feed runs' bit for bit (slot 1 from an
+    unaligned start across an attention block, slot 3 a short prompt), and the greedy picks
+    after them each sequence's decode. Sequence 0's generate area (out[], the state words) is
+    not written."""
+    eng, single, spec = _engines(MCOLS=4, ACT_ROWS=16)      # (the card's and the F2's)
+    blk = eng.block
+    st = BA.Steps(eng)
+    assert st.tile_rows(0) > st.feed_rows(), st.tile_rows(0)
+    ps = {1: _prompts(8, [blk + 23])[0], 3: _prompts(9, [11])[0]}
+    g = eng.image.lookup["gen"]
+    gen0 = eng.backend.read(0, g["out"], 4 * eng.cap).copy()
+    for s, p in ps.items():
+        eng.prefill(p[:3], seq=s)
+        st.set_sampling(s, None)
+        st.feed(s, p[3:-1])
+        assert eng.poss[s] == len(p) - 1
+    assert st.timing.get("tiled", 0) >= 3, st.timing
+    assert (eng.backend.read(0, g["out"], 4 * eng.cap) == gen0).all()
+    # the same feeds untiled (tile_runs False: today's feed runs of MCOLS tokens)
+    W2, spec2, _ = _model("qwen3")
+    ref = Engine(spec2, W2, cap=CAP, cfg=eng.cfg, batch=4, resident=True, prompt_runs=True,
+                 batch_area=True, tile_runs=False)
+    rst = BA.Steps(ref)
+    assert rst.tile_rows(0) == 0
+    for s, p in ps.items():
+        ref.prefill(p[:3], seq=s)
+        rst.set_sampling(s, None)
+        rst.feed(s, p[3:-1])
+    for s, p in ps.items():
+        a, b = _kv_bytes(eng, s, len(p) - 1), _kv_bytes(ref, s, len(p) - 1)
+        assert (a == b).all(), (s, int((a != b).sum()))
+    got = {s: [] for s in ps}
+    nxt = {s: p[-1] for s, p in ps.items()}
+    for _ in range(3):
+        rows = [(s, eng.poss[s]) for s in ps]
+        out = st.run(rows, [nxt[s] for s, _ in rows])
+        for (s, _), t in zip(rows, out):
+            got[s].append(t)
+            nxt[s] = t
+    for s, p in ps.items():
+        e = single()
+        lg, want = e.prefill(p), []
+        for _ in range(3):
             want.append(int(np.argmax(lg)))
             lg = e.step(want[-1])
         assert got[s] == want, s
