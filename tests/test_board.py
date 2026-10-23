@@ -565,13 +565,16 @@ def _collective_program(s: int) -> list:
             I.halt()]
 
 
-@pytest.mark.parametrize("nreg,seed", [(0b1010, 5), (0, 9)])
-def test_bar_and_gather_across_slrs_on_board_model(have_verilator, nreg, seed):
+@pytest.mark.parametrize("nreg,seed,pipe,wf", [(0b1010, 5, 0, 8), (0, 9, 0, 8), (0b1010, 5, 16, 8),
+                                               (0, 9, 2, 2)])
+def test_bar_and_gather_across_slrs_on_board_model(have_verilator, nreg, seed, pipe, wf):
     """The BCU1525's board (S = 2, the board's SLR crossings, the collective through
     otpu_coll_hub and a port per slice; nreg: the channels' crossings, as the board's 1 and 3,
     or none) runs BARs back to back, a BAR with one slice far behind the other (each in turn),
     BARs right after and right before GATHERs and GATHERs back to back, under two memory stall
     patterns (seed): the results and both slices' instruction counts are the ISA simulator's.
+    pipe / wf: the pipelined collective (otpu_board COLL_PIPE: otpu_coll_pu, the hub and the
+    ports with that many reads in flight; COLL_F the writes a port holds), 2 / 2 the tightest.
     (One run per simulation: each flush of the board model starts it from reset.)"""
     from opentpu import isa as I
     from opentpu.isasim import Machine
@@ -588,7 +591,7 @@ def test_bar_and_gather_across_slrs_on_board_model(have_verilator, nreg, seed):
         drams.append(d)
     m = Machine(cfg, progs, drams).run()
     b = Board(SimTransport(ch_bytes=cfg.DRAM_BYTES // 2, stall=20, seed=seed, target="bcu1525",
-                           params={"NREG": nreg}))
+                           params={"NREG": nreg, "COLL_PIPE": pipe, "COLL_F": wf}))
     assert b.slices == 2
     for s, (x, y) in enumerate(ins):
         b.write(_CDATA, x.view(np.uint8), s)
@@ -607,12 +610,14 @@ def test_bar_and_gather_across_slrs_on_board_model(have_verilator, nreg, seed):
             assert np.array_equal(got, m.slices[s].dram[_COUT + o:_COUT + o + 4 * n]), (s, hex(o))
 
 
-def test_collective_reads_held_behind_dma_reads_on_board_model(have_verilator):
+@pytest.mark.parametrize("pipe", [0, 16])
+def test_collective_reads_held_behind_dma_reads_on_board_model(have_verilator, pipe):
     """test_rtl's held collective on the BCU1525's board (S = 2: the collective through
     otpu_coll_hub and a port per slice) with release r2's TMEM (the collective the DMA's guest):
     each port asks its held read from its second cycle (TMEM's input stage, otpu_coll_port hq)
     and holds it while the guest rule blocks it (an ST beside the GATHERs); the results and the
-    instruction counts are the ISA simulator's."""
+    instruction counts are the ISA simulator's. pipe 16: the pipelined collective (COLL_PIPE),
+    each port's reads queued behind the one it presents from its head register."""
     from opentpu import isa as I
     from opentpu.isasim import Machine
     from test_rtl import R2_TMEM, held_collective_program
@@ -628,7 +633,7 @@ def test_collective_reads_held_behind_dma_reads_on_board_model(have_verilator):
         drams.append(d)
     m = Machine(cfg, progs, drams).run()
     b = Board(SimTransport(ch_bytes=cfg.DRAM_BYTES // 2, stall=20, seed=3, target="bcu1525",
-                           params=dict(R2_TMEM)))
+                           params=dict(R2_TMEM, COLL_PIPE=pipe)))
     assert b.slices == 2
     for s, x in enumerate(xs):
         b.write(0, x.view(np.uint8), s)

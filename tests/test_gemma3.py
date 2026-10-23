@@ -224,6 +224,28 @@ def test_three_slices_generate_on_the_card(tiny_h384, sampled):
     assert runs[1] == runs[0] and len(set(runs[1][1])) > 3
 
 
+@pytest.mark.parametrize("sampled", [False, True])
+def test_four_slices_generate_on_the_card(tiny, sampled):
+    """The generate loop at S = 4 (P4 on the F2, targets/f2-burst200-s4*.toml: the even split,
+    every slice's head chunks the same size): the card's own loop (HALT CHAIN, the (max, id)
+    combine over the slices' gathers) gives the one-slice loop's tokens, greedy and sampled,
+    as the S = 3 test above does for the uneven split."""
+    from opentpu.llm import generate as GEN
+    m, W, spec = tiny
+    toks = [int(t) for t in np.random.default_rng(7).integers(0, 1000, 20)]
+    samp = GEN.Sampling(0.8, 5, 0.9, 1.1) if sampled else None
+    runs = []
+    for S in (1, 4):
+        eng = Engine(spec, W, cap=1024, cfg=_cfg(S), resident=True)
+        assert eng.can_generate
+        t0 = int(np.argmax(eng.prefill(toks)))
+        kw = dict(sampling=samp, context=toks + [t0], rng=np.random.default_rng(3)) \
+            if sampled else {}
+        runs.append((t0, eng.generate_card(t0, 12, stop_ids=[], **kw)))
+    # (greedy on this tiny random model cycles through three tokens: the loop is not stuck)
+    assert runs[1] == runs[0] and len(set(runs[1][1])) > 2
+
+
 def test_slices_the_model_does_not_split_over():
     """Spec.check: S in (1, 2, 3, 4) and the hidden / MLP widths divisible by S (the heads,
     the K / V rows and the vocabulary split unevenly: split_rows, split_ranges)."""

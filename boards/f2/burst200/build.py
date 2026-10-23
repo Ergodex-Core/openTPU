@@ -53,6 +53,9 @@ ROUTE_DIRECTIVES = ['Explore', 'AggressiveExplore', 'NoTimingRelaxation', 'MoreG
                     'RuntimeOptimized', 'Quick', 'Default']
 INCREMENTAL_DIRECTIVES = ['RuntimeOptimized', 'TimingClosure', 'Quick']
 STRATEGY = dict(place='Explore', phys='AggressiveExplore', route='Explore')    # the flow's own
+# place_design -net_delay_weight (Vivado 2025.2: the estimated delay of high-fanout and long nets
+# made more pessimistic; its form of the older ExtraNetDelay_high directive); low is Vivado's default
+NET_DELAY_WEIGHTS = ['low', 'medium', 'high']
 
 
 def plan(target_path: Path) -> dict:
@@ -167,12 +170,14 @@ def netlist_parent(run: Path, pl: dict, hdk: Path, version: str) -> dict:
                 parent_inputs_sha256=sha256(run / 'inputs.sha256.json'), checked=checked)
 
 
-def strategy_tcl(strategy: dict, incremental_directive: str) -> str:
+def strategy_tcl(strategy: dict, incremental_directive: str, net_delay_weight: str = '') -> str:
     """implement/strategy.tcl: the directives implement.tcl runs (the full flow's place,
-    phys_opt and route; the incremental flow's read_checkpoint -incremental)."""
+    phys_opt and route; the incremental flow's read_checkpoint -incremental), and place_design's
+    -net_delay_weight when one is chosen."""
     return ('# build.py: the implementation directives implement.tcl runs\n'
             f"set place_directive {strategy['place']}\nset phys_directive {strategy['phys']}\n"
-            f"set route_directive {strategy['route']}\nset incremental_directive {incremental_directive}\n")
+            f"set route_directive {strategy['route']}\nset incremental_directive {incremental_directive}\n"
+            + (f"set place_net_delay_weight {net_delay_weight}\n" if net_delay_weight else ''))
 
 
 def main():
@@ -188,6 +193,8 @@ def main():
                          "under boards/f2/burst200/constraints")
     ap.add_argument('--place-directive', choices=PLACE_DIRECTIVES,
                     help=f"place_design's directive (default {STRATEGY['place']})")
+    ap.add_argument('--place-net-delay-weight', choices=NET_DELAY_WEIGHTS,
+                    help="place_design's -net_delay_weight (Vivado's default: low)")
     ap.add_argument('--phys-directive', choices=PHYS_DIRECTIVES,
                     help=f"the post-placement phys_opt_design's directive (default {STRATEGY['phys']})")
     ap.add_argument('--route-directive', choices=ROUTE_DIRECTIVES,
@@ -232,7 +239,9 @@ def main():
             print('Implementation: incremental from', a.incremental_from.resolve(),
                   f'({incremental_directive})')
         else:
-            print('Implementation:', f"place_design {strategy['place']}, phys_opt_design "
+            print('Implementation:', f"place_design {strategy['place']}"
+                  + (f" -net_delay_weight {a.place_net_delay_weight}" if a.place_net_delay_weight else '')
+                  + f", phys_opt_design "
                   f"{strategy['phys']}, route_design {strategy['route']}")
         print('\n'.join(f'{i + 1}. {stage}' for i, stage in enumerate(stages)))
         return
@@ -272,7 +281,8 @@ def main():
                 continue                    # the target's floorplan alone, as floorplan.tcl
             shutil.copy2(p, dirs[stage] / p.name)
         shutil.copy2(pl['floorplan'], dirs[stage] / 'floorplan.tcl')
-    (dirs['implement'] / 'strategy.tcl').write_text(strategy_tcl(strategy, incremental_directive))
+    (dirs['implement'] / 'strategy.tcl').write_text(
+        strategy_tcl(strategy, incremental_directive, a.place_net_delay_weight or ''))
     if a.incremental_from:
         ref = a.incremental_from.resolve()
         (dirs['implement'] / 'incremental_reference.txt').write_text(f'{ref}\n')

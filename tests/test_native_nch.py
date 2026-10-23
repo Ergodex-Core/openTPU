@@ -37,13 +37,14 @@ def test_native_nch2_matches_two_channel(have_verilator, tmp_path, chash):
 
 @pytest.mark.parametrize("nch,chash,high,wdq", [(2, 1, 0, 0), (4, 1, 0, 0), (8, 1, 0, 0), (8, 0, 0, 0),
                                                  (16, 1, 0, 0), (16, 1, 1, 0), (8, 1, 1, 0),
-                                                 (8, 1, 0, 1)])
+                                                 (8, 1, 0, 1), (2, 1, 0, 1)])
 def test_native_nch_map_and_order(have_verilator, nch, chash, high, wdq):
     """NCH channels: reads of unwritten beats find init(logical beat) where the host's map puts
     it, port B reads see port B's writes, port A's runs and reuse return the right beats, and
     every written byte lands where the map says. high: port B's region above 4 GiB (a slice of
     16 x 512 MiB holds 8 GiB: the word address's bits 31:30 in the chunk index). wdq: the
-    write-done compare a register (the F2 HBM board's), wr_idle a cycle later, never earlier."""
+    write-done compare a register (the F2 HBM board's, and the burst200 fabric's two channels a
+    slice at f2-burst200-s4-175p), wr_idle a cycle later, never earlier."""
     exe = rtlsim.build("tb_native_nch", [rtlsim.RTL / "mem/otpu_native_dram.sv",
                                          rtlsim.TB / "tb_native_nch.sv"],
                        {"NCH": nch, "CHASH": chash, "HIGH": high, "WDQ": wdq})

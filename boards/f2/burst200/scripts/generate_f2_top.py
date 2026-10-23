@@ -7,7 +7,8 @@ and one f2_mem SmartConnect block design (3 SI x 2 MI) onto two HBM AXI ports (t
 hbm_ports: window j = 2 s + c of slice s's channel c at HBM address j x 2 GiB on port
 hbm_ports[j]); one cl_mem_hbm_wrapper covering the highest port used. With one slice the output
 is the checked-in rtl/boards/f2/burst200/cl_opentpu.sv byte for byte (tests/test_f2_burst200_s3.py).
-With more, one slice per SLR (slice s in SLR s; the control block, the collective hub and the
+With more, one slice per SLR (slice s in SLR s; four slices: the target's slice_slr, slices 2 and
+3 both in SLR2, targets/f2-burst200-s4.toml; the control block, the collective hub and the
 OCL converter in SLR1 with the shell's OCL; every SmartConnect and the HBM wrapper in SLR0 at the
 HBM's ports): slice s's native AXI reaches its SmartConnect through one axi_register_slice per
 SLR hop (f2_native_pipe), the PCIS enters in SLR1 (f2_pcis_pipe), fans out through a
@@ -37,6 +38,31 @@ def geometry(T):
     return S,NCH,ports,max(ports)+1
 
 
+def slice_slrs(T):
+    """The SLR of each slice of a multi-slice top: the target's [platform] slice_slr, else slice
+    s in SLR s (S <= 3). Slice s's native masters take one register slice per SLR hop down to
+    SLR0 (its SLR's number of them) and the reset of its SLR. Four slices put two in one SLR
+    (targets/f2-burst200-s4.toml: [0, 1, 2, 2], docs/v4/p4-status.md)."""
+    S=T.arch['S']
+    slrs=list(T.platform.get('slice_slr',range(S)))
+    if len(slrs)!=S or not all(r in (0,1,2) for r in slrs):
+        raise SystemExit(f'slice_slr: an SLR 0..2 for each of the {S} slices')
+    return slrs
+
+
+def host_xbar_slr(T):
+    """The SLR of the host crossbar of a multi-slice top: the target's [platform] host_xbar_slr.
+    1 (the default, S = 3's): beside the shell's PCIS in SLR1, then a register slice per slice
+    down to SLR0, so S 512-bit host channels cross SLR1 -> SLR0. 0: in SLR0 beside the
+    SmartConnects behind one register slice at the crossing's SLR0 end (u_pcis_hop), so one
+    channel crosses: the four-slice placement had ~14.4K of the ~17.3K SLLs the CL can use at the
+    SLR0 / SLR1 boundary (columns X0-X5) taken, ~5.1K of them the host's four channels."""
+    v=T.platform.get('host_xbar_slr',1)
+    if v not in (0,1):
+        raise SystemExit('host_xbar_slr: 0 or 1')
+    return v
+
+
 def main():
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument('--target',type=Path,default=ROOT/'targets/f2-burst200.toml')
@@ -53,6 +79,7 @@ def main():
 def generate(T,hdk:Path)->str:
     S,NCH,ports,NPORTS=geometry(T)
     multi=S>1
+    slrs=slice_slrs(T)                         # slice s's SLR (multi)
     NW=NCH*S                                   # windows (channels) in all
     board=(ROOT/'rtl/shell/otpu_board.sv').read_text()
     allowed=set(re.findall(r'parameter\s+(?:int|bit|logic\s*\[[^]]+\])\s+(\w+)',board))
@@ -79,16 +106,16 @@ def generate(T,hdk:Path)->str:
     for name,clk,src,out in [('main','clk_main_a0','rst_main_n','rst_main_n_sync'),('core','core_clk','rst_main_n && core_locked && hbm_locked','core_rst_n'),('hbm','hbm_clk','rst_main_n && hbm_locked','hbm_rst_n')]:
         inst('xpm_cdc_async_rst','u_rst_'+name,dict(src_arst=src,dest_clk=clk,dest_arst=out),dict(DEST_SYNC_FF=4,RST_ACTIVE_HIGH=0))
     line('always_ff @(posedge core_clk) core_rst <= !core_rst_n;')
-    # the SLR of each piece (multi): slice s in SLR s; core_rst_n above is SLR1's (the control
-    # block's, with the OCL); SLR0 and SLR2 get their own synchronizer and a 4-stage pipe in
-    # each clock they use (the HDK's cl_dram_hbm_dma: CDC_ASYNC_RST_N_SLR*, SLR*_PIPE_RST_N),
-    # never one reset net across SLRs
+    # the SLR of each piece (multi): slice s in SLR slrs[s] (slice_slrs: s, or the target's
+    # slice_slr); core_rst_n above is SLR1's (the control block's, with the OCL); SLR0 and SLR2
+    # get their own synchronizer and a 4-stage pipe in each clock they use (the HDK's
+    # cl_dram_hbm_dma: CDC_ASYNC_RST_N_SLR*, SLR*_PIPE_RST_N), never one reset net across SLRs
     def core_rst_n(slr):return 'core_rst_n' if slr==1 else f'core_rst_n_slr{slr}'
     def core_rst(slr):return 'core_rst' if slr==1 else f'core_rst_slr{slr}'
     def main_rst_n(slr):return 'rst_main_n_sync' if slr==1 else f'rst_main_n_slr{slr}'
     if multi:
         line('// per-SLR resets: a synchronizer and a 4-stage pipe in each SLR (no reset net across SLRs)')
-        for slr in range(S):
+        for slr in sorted(set(slrs)|{0}):     # SLR0 always: the SmartConnects' core side
             if slr==1:continue
             decl(f'core_rst_n_slr{slr}_s');decl(f'core_rst_n_slr{slr}');decl(f'core_rst_slr{slr}')
             inst('xpm_cdc_async_rst',f'u_rst_core_slr{slr}',dict(src_arst='rst_main_n && core_locked && hbm_locked',dest_clk='core_clk',dest_arst=f'core_rst_n_slr{slr}_s'),dict(DEST_SYNC_FF=4,RST_ACTIVE_HIGH=0))
@@ -119,7 +146,7 @@ def generate(T,hdk:Path)->str:
     axi={'awaddr':34,'awvalid':1,'awready':1,'wdata':512,'wstrb':64,'wvalid':1,'wready':1,'bvalid':1,'bresp':2,'bready':1,'araddr':34,'arlen':8,'arvalid':1,'arready':1,'rdata':512,'rvalid':1,'rlast':1,'rresp':2,'rready':1}
     for ch in range(NW):
         for k,w in axi.items():decl(f'n{ch}_'+k,w)
-        c=dict(clk='core_clk',rst=core_rst(ch//NCH if multi else 1))
+        c=dict(clk='core_clk',rst=core_rst(slrs[ch//NCH] if multi else 1))
         for k in native:c['n_'+k]=f'n_{k}[{ch}]'
         for k in axi:c['m_'+k]=f'n{ch}_'+k
         inst('otpu_native_axi','u_native'+str(ch),c,dict(BASE_ADDR=f"34'h{ch*0x80000000:x}"))
@@ -194,11 +221,17 @@ def generate(T,hdk:Path)->str:
             line(f"assign h_awid[{port}] = 6'd0;")
         inst('f2_mem_wrapper','u_mem',c)
     else:
-        # the host's fan-out: the PCIS pipe (SLR1) into the f2_host crossbar (SLR1, master port
-        # s = slice s's 4 GiB at HBM address 4 s GiB), then one register slice per slice in SLR0
-        # (every slice's SmartConnect is there), f2_pcis_pipe again
-        c=dict(host_clk='clk_main_a0',aresetn='rst_main_n_sync')
-        for k in allaxi:c['S_PCIS_'+k]='pcis_'+k
+        # the host's fan-out: the PCIS pipe (SLR1) into the f2_host crossbar (master port s =
+        # slice s's 4 GiB at HBM address 4 s GiB), then one register slice per slice in SLR0
+        # (every slice's SmartConnect is there), f2_pcis_pipe again. The crossbar in SLR1
+        # (host_xbar_slr 1), or in SLR0 behind one more f2_pcis_pipe at the crossing (0)
+        xin={k:'pcis_'+k for k in allaxi}
+        xrst='rst_main_n_sync'
+        if host_xbar_slr(T)==0:
+            xin=register_slice('f2_pcis_pipe','u_pcis_hop','clk_main_a0',main_rst_n(0),xin,host_width,'ph')
+            xrst=main_rst_n(0)
+        c=dict(host_clk='clk_main_a0',aresetn=xrst)
+        for k in allaxi:c['S_PCIS_'+k]=xin[k]
         ids=('arid','awid','rid','bid')
         for sl in range(S):
             # SmartConnect's generated downstream ports omit IDs (one ordered thread), as the
@@ -217,7 +250,7 @@ def generate(T,hdk:Path)->str:
             masters=[]
             for ch in range(NCH*sl,NCH*sl+NCH):
                 m=native_master(ch)
-                for hop in range(sl-1,-1,-1):
+                for hop in range(slrs[sl]-1,-1,-1):
                     m=register_slice('f2_native_pipe',f'u_npipe{ch}_slr{hop}','core_clk',core_rst_n(hop),m,native_width,f'np{ch}_slr{hop}')
                 masters.append(m)
             c=dict(core_clk='core_clk',host_clk='clk_main_a0',hbm_clk='hbm_clk',aresetn=core_rst_n(0))

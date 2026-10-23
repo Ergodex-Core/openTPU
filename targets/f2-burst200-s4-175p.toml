@@ -1,0 +1,79 @@
+# P4 on F2, the pipelined collective (docs/v4/p4-status.md "The pipelined collective"): the
+# f2-burst200-s4-175 image (470cf908, on the card at 60.3 device tok/s int8) with the collective's
+# reads in flight across the SLR crossings. 470cf908's hub has one read in flight, so a GATHER beat
+# of 8 words costs the read's round trip through the crossings and the slice's port (~9 cycles),
+# 11.3% of the card's Gemma token (hwlens); otpu_coll_pu and the hub and ports at COLL_PIPE 16
+# keep up to 16 reads in flight, one a cycle. COLL_F: the writes a slice's port holds. WDQ: the
+# adapters' write-done compare a register (core margin; the F2 HBM board's option). Everything
+# else is f2-burst200-s4-175's (S = 4, slices 0 | 1 | 2 and 3 in SLR0 | SLR1 | SLR2, the host
+# crossbar in SLR0, the core at 175 MHz), with its closing floorplan, floorplan_s4_tmem.tcl (a box
+# per slice for its pumped TMEM, DMA and collective port); the top is the s4 generator's with the
+# collective's two parameters (rtl/boards/f2/burst200-s4-175p).
+
+[target]
+name = "f2-burst200-s4-175p"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2 VU47P: Small Shell, HBM, four openTPU m4 slices on eight HBM ports (burst200 fabric), 175 MHz core, the pipelined collective"
+[arch]
+S = 4
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: its two 2 GiB windows
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = false
+[uarch]
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+COLL_PIPE = 16                  # the collective's reads in flight across the crossings (otpu_board)
+COLL_F = 8                      # the writes a slice's collective port holds
+WDQ = true                      # the adapters' write-done compare a register (otpu_native_dram: the
+                                #   866c920e route's -0.059 ns core path, iss_w -> the slice's ic_base CE)
+[tech]
+family = "xilinxus"
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+[platform]
+board = "f2"
+rtl_board = "f2-burst200-s4-175p" # the top: rtl/boards/f2/burst200-s4-175p (boards/f2/burst200/build.py)
+core_mhz = 175.0                # 5.714 ns: the S = 3 image closed here (build 11 run2, +0.010 ns);
+                                #   exact from the shell's 250 MHz (MMCM 250 x 28 / 5 = 1400 MHz, / 8 and / 4)
+mem = "hbm"
+mem_ctrl = "amd_hbm"
+hostcal = false
+channels_per_slice = 2
+channel_bytes = 2147483648
+hbm_ports = [0, 4, 8, 12, 16, 20, 26, 28]   # window j (slice j // 2, channel j % 2) on this HBM AXI port
+slice_slr = [0, 1, 2, 2]            # slice s in this SLR (generate_f2_top.slice_slrs)
+host_xbar_slr = 0                   # the 1 x 4 host crossbar in SLR0 behind one register slice: one host
+                                    #   channel crosses SLR1 -> SLR0, not four (the first placement took ~14.4K
+                                    #   of the ~17.3K SLLs the CL can use there; generate_f2_top.host_xbar_slr)
+floorplan = "floorplan_s4_tmem.tcl" # floorplan_s4.tcl and a box per slice for its pumped TMEM (470cf908's)
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 8
