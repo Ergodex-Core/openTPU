@@ -1,0 +1,96 @@
+{
+  "audited_utc_date": "2026-10-23",
+  "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "source_package_version": "0.1.1",
+  "source_license": "Apache-2.0",
+  "model_license": "Apache-2.0",
+  "method": "Read-only official configs/source and HTTP-range safetensors headers; zero tensor payload downloaded; upstream Python not imported or executed.",
+  "sources": [
+    {
+      "path": "config.json",
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/raw/85e237c12c027371202489a0ec509ded67b5e4b5/config.json",
+      "sha256": "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455"
+    },
+    {
+      "path": "speech_tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/raw/85e237c12c027371202489a0ec509ded67b5e4b5/speech_tokenizer/config.json",
+      "sha256": "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167"
+    },
+    {
+      "path": "tokenizer_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/raw/85e237c12c027371202489a0ec509ded67b5e4b5/tokenizer_config.json",
+      "sha256": "dc3c31c3bdaedd5016382bb3cbe07323026775ad51f5a4fb564505992ae4a670"
+    },
+    {
+      "path": "generate_config.json",
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/raw/85e237c12c027371202489a0ec509ded67b5e4b5/generation_config.json",
+      "sha256": "f1b90b4513f3b34c62851049e2492d7b4c5940daf1276f89c82b8ef04127f3aa"
+    },
+    {
+      "path": "qwen_tts/core/models/modeling_qwen3_tts.py",
+      "url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py",
+      "sha256": "25c42656bcf810f06ef6bc1839bd7083f3c8cfedac3a147c4060b4262b1c96a0"
+    },
+    {
+      "path": "qwen_tts/inference/qwen3_tts_model.py",
+      "url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/inference/qwen3_tts_model.py",
+      "sha256": "e1da450732857c1f5fe3e36ebab85db2f6dc6a48caaff6973f463384e30275e4"
+    },
+    {
+      "path": "qwen_tts/cli/demo.py",
+      "url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/cli/demo.py",
+      "sha256": "ea28e0930753e05cbdd53ab7bd90b7be81ab859549902771db15f0b3abfcd5eb"
+    },
+    {
+      "path": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+      "url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+      "sha256": "844e8dd8c0182ef9c6463c874631c22ef3c5a4fd1899dd657016164cc5379628"
+    },
+    {
+      "path": "examples/test_model_12hz_custom_voice.py",
+      "url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/examples/test_model_12hz_custom_voice.py",
+      "sha256": "70a6933d26f1bf951c30fb2c62030915c64c927c31eab1cf9a3a301abb8fb5b5"
+    }
+  ],
+  "safetensors": {
+    "model.safetensors": {
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/resolve/85e237c12c027371202489a0ec509ded67b5e4b5/model.safetensors",
+      "header_sha256": "b125649e98d52f4ac605666a212eee68c6f4f5faf9b9a5e7b930565b578f96a1",
+      "header_bytes": 49224,
+      "tensor_bytes": 1811577344,
+      "file_bytes": 1811626576,
+      "parameters_by_dtype": {
+        "BF16": 905788672
+      },
+      "parameters_by_prefix": {
+        "talker.code_predictor": 141570304,
+        "talker.codec_head": 3145728,
+        "talker.model": 754778112,
+        "talker.text_projection": 6294528
+      }
+    },
+    "speech_tokenizer/model.safetensors": {
+      "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/resolve/85e237c12c027371202489a0ec509ded67b5e4b5/speech_tokenizer/model.safetensors",
+      "header_sha256": "2ba4e8dcbacb8aca087f1f8cfd8b7a2ab144d32486e635afaf2b3f6918b8cb65",
+      "header_bytes": 63320,
+      "tensor_bytes": 682229764,
+      "file_bytes": 682293092,
+      "parameters_by_dtype": {
+        "F32": 170557441
+      },
+      "parameters_by_prefix": {
+        "decoder.decoder": 52370113,
+        "decoder.pre_conv": 1573888,
+        "decoder.pre_transformer": 30427136,
+        "decoder.quantizer": 8945664,
+        "decoder.upsample": 21006336,
+        "encoder.downsample": 1048576,
+        "encoder.encoder": 12628256,
+        "encoder.encoder_transformer": 25190400,
+        "encoder.quantizer": 17367072
+      }
+    }
+  }
+}
