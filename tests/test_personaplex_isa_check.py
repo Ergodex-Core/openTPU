@@ -1,4 +1,4 @@
-"""Bounded ISA-check input guards; no checkpoint, simulator or device required."""
+"""Bounded ISA-check guards and CPU ISA replay; no checkpoint or device required."""
 import importlib.util
 import os
 from pathlib import Path
@@ -89,3 +89,57 @@ def test_cache_cannot_manage_embedding_input_or_ancestors(isa_check, monkeypatch
     assert embeddings.read_bytes() == b"input payload must not be opened"
     assert sentinel.read_bytes() == b"unrelated capture artifact"
     assert os.environ["OTPU_IMAGE_CACHE"] == "preserve-existing-cache-setting"
+
+
+def test_progress_layers_preserves_four_frame_image_isa_replay_and_metrics(isa_check, monkeypatch):
+    import numpy as np
+
+    from opentpu.isasim import Config
+    from tools.personaplex_verilator import reference, synthetic_model
+
+    monkeypatch.setenv("OTPU_BUILD_JOBS", "1")
+    monkeypatch.setenv("OTPU_IMAGE_CACHE", "0")
+    spec = isa_check.Spec(hidden=64, layers=2, n_heads=2, ffn=128, context=4)
+    cfg = Config(S=1, D=32, MCOLS=4, ACT_ROWS=8, ACT_BLOCKS=32,
+                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 22)
+    weights, norm, inputs = synthetic_model(spec, frames=4)
+    assert np.unique(inputs, axis=0).shape[0] == 4
+    expected = reference(spec, weights, norm, inputs)
+    assert expected.shape == (4, spec.hidden) and expected.dtype == np.float64
+    events = []
+
+    def emit(stage, **details):
+        events.append((stage, details))
+
+    layers = isa_check.ProgressLayers(weights, emit)
+    # Both constructors execute the real Image.build and quantization path.
+    with isa_check.Engine(spec, weights, norm, cfg=cfg, backend="isa", cap=4) as plain, \
+            isa_check.Engine(spec, layers, norm, cfg=cfg, backend="isa", cap=4) as wrapped:
+        assert layers.next_index == spec.layers
+        assert events == [
+            ("converting_layer", {"layer_index": index, "layer_number": index + 1,
+                                  "completed_layers": index, "total_layers": spec.layers})
+            for index in range(spec.layers)]
+        np.testing.assert_array_equal(
+            wrapped.backend.read(0, 0, wrapped.image.nbytes),
+            plain.backend.read(0, 0, plain.image.nbytes))
+        plain_outputs = np.stack([plain.step(row) for row in inputs])
+        outputs = np.stack([wrapped.step(row) for row in inputs])
+        np.testing.assert_array_equal(outputs.view(np.uint32), plain_outputs.view(np.uint32))
+        assert plain.pos == wrapped.pos == 4
+        wrapped.reset()
+        assert wrapped.pos == 0
+        replay = np.stack([wrapped.step(row) for row in inputs])
+        np.testing.assert_array_equal(replay.view(np.uint32), outputs.view(np.uint32))
+        assert wrapped.pos == 4 and layers.next_index == spec.layers
+        assert len(events) == spec.layers  # Execution/reset must not reread lazy weights.
+
+    comparisons = [(outputs, expected), *zip(outputs, expected)]
+    for actual, baseline in comparisons:
+        metrics = isa_check.precision_metrics(actual, baseline)
+        assert all(value is not None and np.isfinite(value) for value in metrics.values())
+        assert metrics["reference_l2_norm"] > 0
+        assert metrics["relative_l2"] >= 0
+        assert -1 <= metrics["cosine_similarity"] <= 1
+    assert isa_check.precision_metrics(outputs, expected) == isa_check.precision_metrics(
+        plain_outputs, expected)

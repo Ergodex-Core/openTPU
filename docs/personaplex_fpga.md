@@ -92,6 +92,49 @@ with empty KV. The finite `[1, 4096]` output is stored on the instance in
 or hardware timing is validated by this reference. The reproducible tool is
 `tools/personaplex_reference.py`; inputs must be 1–4 consecutive initial frames.
 
+For a reproducible multi-frame input, `tools/personaplex_capture_voice.py`
+extracts the first 1–4 stored embeddings from an existing local voice `.pt`
+using `torch.load(weights_only=True, map_location="cpu")`. This follows the
+upstream voice-prompt replay order. It saves FP32 `[frames,4096]` data and an
+`input.json` sidecar with the source voice hash, shape/dtype, frame indices,
+output hash, and position-zero/empty-KV contract. A new output directory is
+required; non-finite values or FP32 overflow fail before output creation.
+It does not load the LM, Mimi or another checkpoint.
+
+Run the following on the existing EC2 environment from the source checkout,
+after checking current jobs and at least 40 GiB of free memory and disk. Use
+new output directories under an isolated validation root. Keep the process at
+nice 19 and pinned to one available CPU (including its build workers), so it
+does not compete with higher-priority wide-port work. These commands do not
+access FPGA hardware or require the device reservation to be released:
+
+```bash
+nice -n 19 taskset -c "${PERSONAPLEX_CPU:?select an idle permitted CPU}" \
+  python tools/personaplex_capture_voice.py --voice-file /path/to/voices/NATF2.pt \
+  --frames 4 --output-dir /path/to/validation/capture
+nice -n 19 taskset -c "$PERSONAPLEX_CPU" \
+  python tools/personaplex_reference.py --model-dir /path/to/existing/model \
+  --embeddings /path/to/validation/capture/input_embeddings.npy \
+  --output-dir /path/to/validation/reference
+nice -n 19 taskset -c "$PERSONAPLEX_CPU" \
+  python tools/personaplex_isa_check.py --model-dir /path/to/existing/model \
+  --embeddings /path/to/validation/capture/input_embeddings.npy \
+  --reference-dir /path/to/validation/reference \
+  --output-dir /path/to/validation/isa \
+  --cache-dir /path/to/validation/quant-cache --cap 1024
+```
+
+Before retrying an interrupted run, inspect its receipt, progress log and live
+processes; do not overwrite results or start duplicate jobs. The ISA checker
+binds its input/output arrays to the completed reference by SHA-256, converts
+all 32 temporal layers to openTPU INT4 weights with INT8 activations/KV, reports
+aggregate and per-frame precision differences, and requires bit-exact output
+after resetting and replaying the same frames. Numerical differences are
+measurements, not an inferred quality acceptance threshold. Its CPU wall time
+is not FPGA milliseconds/frame or end-to-end audio latency. Voice conditioning,
+text/audio token generation, the depth transformer and Mimi still need separate
+streaming integration and quality validation.
+
 All actual checkpoint headers were read without tensor payloads and validated
 locally against the installed NVIDIA model's genuine meta-device schema:
 **all 32 temporal layers and all 282 host tensors passed**. Temporal data has
