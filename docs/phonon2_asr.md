@@ -1,14 +1,16 @@
 # Phonon-2: FPGA-only ASR readiness
 
-Status: **blocked; the complete learned subsampler and 24-layer encoder are
-qualified in the shared-profile ISA simulator**. The latest
-[encoder report](phonon2_encoder.md) binds the evidence to the shared Gemma
-profile, with real-speech comparisons, masks/reset and an explicit program/weight
-residency scheme. The previous [subsampler report](phonon2_subsampler.md) and
+Status: **blocked; the learned subsampler, 24-layer encoder and LSTM/TDT/text
+path are qualified in the shared-profile ISA simulator**. The latest
+[TDT report](phonon2_tdt.md) includes real-checkpoint state/trace/text parity,
+the explicit source policy, reset and a reproducible common-runtime manifest.
+The [encoder report](phonon2_encoder.md) binds its evidence to the shared Gemma
+profile and documents the program/weight residency scheme. The previous
+[subsampler report](phonon2_subsampler.md) and
 [Conformer/front-end report](phonon2_conformer.md)
 contains the new golden vectors, policies, full-width block budgets and real-weight
 receipt. The original projection receipt below retains its historical compiler binding.
-There is no audio-to-transcript engine, FPGA transcript, latency result, or WER
+There is no production audio-to-transcript engine, FPGA transcript, latency result, or WER
 result from this integration. No FPGA locks, image loads, registers, or running
 inference jobs were touched. No synthesis was started.
 
@@ -164,19 +166,20 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 | Waveform frontend | No FFT/STFT/mel ASR kernels. FP32 add/mul/reductions/log2/rsqrt can express the math, but fixed-coefficient transforms, permutations, masks and normalization need lowering and validation. No native FFT or PCM16 conversion opcode. |
 | Learned subsampling | The complete Conv2D/depthwise/pointwise/projection path and handoff through all 24 layers are shared-profile ISA-qualified with real speech. Device waveform frontend and physical runtime integration remain missing. |
 | FastConformer | All 24 layers with tiled full-context attention, device mask handoff, one-slot residency and reset are shared-profile ISA-qualified. Physical loading/execution and larger-context numerical coverage remain gated. |
-| LSTM predictor | No resident two-layer Phonon LSTM, embedding lookup or cache commit policy. Affines and sigmoid/tanh can use existing units; state/gate layout and gating must be compiled. |
-| TDT and text output | ARGMAX, RLD, LOOP and HALT CHAIN exist; token/duration split, blank masking, zero-duration bounds, state updates, UTF-8 token assembly and termination are not compiled. |
+| LSTM predictor | INT6 embedding, both layers and Transformers cache behavior are shared-profile ISA-qualified with real weights. Physical state/cache residency remains unverified. |
+| TDT and text output | Autonomous token/duration selection, blank/EOS/watchdog behavior and device-selected UTF-8 segments pass real-speech trace/text parity and reset. Physical loader/output I/O integration remains unverified. |
 | Five-value storage | No native trit/nonuniform-five-level MXU format is required: two disjoint INT8 planes preserve the exact stored levels on the shared image, at greater storage/bandwidth cost. |
 
 No new image has yet been shown necessary for correctness. Frontend qualification
 semantics and vectors are available in the follow-up reports. The learned
 subsampler and tiled 24-layer graph are now qualified with real checkpoint
 weights on `f2-hbm:p4rl8a64c150`; see the encoder report for precise scope.
-Next implement the bounded device waveform frontend and test its handoff into
-the subsampler. Resolve the documented TDT runtime disagreement, then add
-INT6 export and resident LSTM/joint/TDT control and test blank/zero-duration/limit
-cases. Compare features, encoder outputs,
-decoder states and tokens against the selected reference. Only if an existing
+The TDT follow-up explicitly chooses the pinned Transformers cache, duration,
+EOS and tokenizer rules, with an incomplete-result watchdog instead of the
+Fermion CUDA ten-symbol forced advance. Next implement the bounded device
+waveform frontend and its handoff into the subsampler, then integrate the
+physical shared-image loader and validate complete features, encoder outputs,
+decoder states, tokens and transcripts against the selected reference. Only if an existing
 instruction cannot implement a required operation or measured budgets fail,
 report the exact shared-image capability gap. Model-specific image changes are
 outside the user's shared-image requirement; no synthesis is authorized here.

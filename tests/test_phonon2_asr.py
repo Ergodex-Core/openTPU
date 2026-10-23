@@ -128,7 +128,7 @@ def test_status_never_claims_audio_inference_or_uses_a_fallback(monkeypatch):
     import builtins
     status = model_status()
     assert status["id"] == MODEL_ID and status["revision"] == MODEL_REVISION
-    assert status["status"] == "blocked" and status["readiness"] == "learned_encoder_isa_only"
+    assert status["status"] == "blocked" and status["readiness"] == "learned_encoder_tdt_isa_only"
     assert status["shared_image"]["profile"] == "f2-hbm:p4rl8a64c150"
     assert status["shared_image"]["hardware_identity_verified"] is False
     assert status["qualification"]["conformer_blocks"] == 24
