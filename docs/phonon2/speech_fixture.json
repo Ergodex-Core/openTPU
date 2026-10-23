@@ -1,0 +1,18 @@
+{
+  "source_url": "https://download.pytorch.org/torchaudio/tutorial-assets/ctc-decoding/1688-142285-0007.wav",
+  "source_documentation": "https://docs.pytorch.org/audio/2.2.0/tutorials/asr_inference_with_cuda_ctc_decoder_tutorial.html",
+  "source_sha256": "67dfc27041e572bea27936e75eedc542ccf6f3af5cc251a0ab4e1e947d787fc8",
+  "source_bytes": 451898,
+  "corpus": "LibriSpeech test-other",
+  "utterance": "1688-142285-0007",
+  "license": "CC-BY-4.0",
+  "license_url": "https://www.openslr.org/12",
+  "attribution": "LibriSpeech, prepared by Vassil Panayotov with the assistance of Daniel Povey; derived from LibriVox audiobooks. Sample distributed by PyTorch torchaudio tutorial.",
+  "changes": "Decoded mono 16kHz float32 WAVE, rounded x*32768 to nearest-even and clipped to PCM16; cropped samples [16000,24960).",
+  "source_samples": 112960,
+  "crop_start_sample": 16000,
+  "crop_samples": 8960,
+  "pcm_encoding": "pcm_s16le",
+  "pcm_sha256": "7f84e087aa28b5a33212af26a4273b4902761b2543afadc32c3236bf51ca3f74",
+  "qualification_only": true
+}

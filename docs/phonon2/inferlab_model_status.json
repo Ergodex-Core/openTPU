@@ -4,7 +4,7 @@
   "kind": "asr",
   "capability": "transcription",
   "size": "627M \u00b7 five-value encoder \u00b7 INT6 tables",
-  "execution": "Blocked \u00b7 device projection slice only",
+  "execution": "Blocked \u00b7 ASR integration incomplete",
   "ready": false,
   "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
   "reason": "Device frontend, Conformer, LSTM predictor and TDT decoding are incomplete; audio input stays disabled.",

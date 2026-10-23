@@ -14,12 +14,12 @@ CONTAINER_SHA256 = "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c1
 
 BLOCKERS = (
     ("audio_frontend", "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."),
-    ("subsampling", "Device 8x Conv2D/depthwise subsampling and its length masks are missing."),
+    ("subsampling", "The complete learned 8x subsampler is ISA-qualified with real speech features; resident graph and device waveform-frontend handoff are not integrated."),
     ("conformer", "One complete full-width block is ISA-qualified for 1..8 stored frames; the full-length 24-block encoder and device graph integration remain missing."),
     ("predictor", "Resident two-layer LSTM, token embedding and state commit on non-blank are missing."),
     ("tdt_decode", "Device joint head, separate token/duration selection, blank/zero-duration control and termination are missing."),
     ("text_output", "Device token-to-text output and timestamp conventions are not implemented or qualified."),
-    ("numerics", "A real-weight block is qualified on synthetic activations; frontend numerical parity, full-encoder and transcript validation remain missing."),
+    ("numerics", "The learned subsampler and one block are tested on speech-derived features; device frontend parity, full-encoder and transcript validation remain missing."),
     ("hardware_evidence", "No real audio-to-transcript FPGA run; a coordinated hardware window is required."),
 )
 
@@ -52,10 +52,15 @@ def model_status() -> dict:
                            "channels": 1, "min_samples": 320, "max_seconds": 30,
                            "resampling": "unsupported", "hotwords": "unsupported",
                            "note": "Proposed first integration envelope; endpoint remains unavailable."},
-        "implemented_slice": "Five-value projections and one complete bounded Conformer block on the existing ISA; offline audited frontend golden vectors",
+        "implemented_slice": "Five-value projections, the complete learned 8x subsampler and one bounded Conformer block on the existing ISA; offline frontend golden vectors",
         "qualification": {"conformer_blocks": 1, "max_stored_encoder_frames": 8,
                           "frontend_device_implemented": False, "tdt_device_implemented": False,
                           "evidence": "docs/phonon2/conformer_validation.json",
+                          "subsampler_isa_implemented": True,
+                          "subsampler_max_stored_mel_frames": 3001,
+                          "subsampler_max_stored_encoder_frames": 376,
+                          "real_speech_feature_vectors_tested": True,
+                          "subsampler_evidence": "docs/phonon2/subsampler_validation.json",
                           "frontend_policy": "docs/phonon2/semantic_policy.json"},
         "error": {"code": "ASR_FPGA_NOT_READY", "http_status": 503},
         "blockers": [{"code": code, "detail": detail} for code, detail in BLOCKERS],
@@ -67,7 +72,7 @@ def inferlab_model_status() -> dict:
     return {
         "id": "phonon2", "name": "Phonon-2", "kind": "asr", "capability": "transcription",
         "size": "627M · five-value encoder · INT6 tables",
-        "execution": "Blocked · device projection slice only", "ready": False,
+        "execution": "Blocked · ASR integration incomplete", "ready": False,
         "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
         "reason": "Device frontend, Conformer, LSTM predictor and TDT decoding are incomplete; audio input stays disabled.",
         "model_id": MODEL_ID, "revision": MODEL_REVISION,

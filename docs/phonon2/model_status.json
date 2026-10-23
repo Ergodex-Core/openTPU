@@ -33,13 +33,18 @@
     "hotwords": "unsupported",
     "note": "Proposed first integration envelope; endpoint remains unavailable."
   },
-  "implemented_slice": "Five-value projections and one complete bounded Conformer block on the existing ISA; offline audited frontend golden vectors",
+  "implemented_slice": "Five-value projections, the complete learned 8x subsampler and one bounded Conformer block on the existing ISA; offline frontend golden vectors",
   "qualification": {
     "conformer_blocks": 1,
     "max_stored_encoder_frames": 8,
     "frontend_device_implemented": false,
     "tdt_device_implemented": false,
     "evidence": "docs/phonon2/conformer_validation.json",
+    "subsampler_isa_implemented": true,
+    "subsampler_max_stored_mel_frames": 3001,
+    "subsampler_max_stored_encoder_frames": 376,
+    "real_speech_feature_vectors_tested": true,
+    "subsampler_evidence": "docs/phonon2/subsampler_validation.json",
     "frontend_policy": "docs/phonon2/semantic_policy.json"
   },
   "error": {
@@ -53,7 +58,7 @@
     },
     {
       "code": "subsampling",
-      "detail": "Device 8x Conv2D/depthwise subsampling and its length masks are missing."
+      "detail": "The complete learned 8x subsampler is ISA-qualified with real speech features; resident graph and device waveform-frontend handoff are not integrated."
     },
     {
       "code": "conformer",
@@ -73,7 +78,7 @@
     },
     {
       "code": "numerics",
-      "detail": "A real-weight block is qualified on synthetic activations; frontend numerical parity, full-encoder and transcript validation remain missing."
+      "detail": "The learned subsampler and one block are tested on speech-derived features; device frontend parity, full-encoder and transcript validation remain missing."
     },
     {
       "code": "hardware_evidence",
