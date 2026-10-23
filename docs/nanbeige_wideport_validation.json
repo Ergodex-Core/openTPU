@@ -1,0 +1,77 @@
+{
+  "runtime_base": "18fb978033799f0f21258f0e6e085c0360322d96",
+  "baseline_strict_commit": "16205f3fd1a94043b9076039cd8a1139a699eef6",
+  "model": {
+    "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+    "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+  },
+  "tests": {
+    "passed": 105,
+    "ssm_command_id": "736bceeb-88f2-4a72-a57f-b477c79d7121",
+    "physical_open_attempts": 0,
+    "pytest_seconds": 41.66,
+    "driver_seconds": 41.71900354500394
+  },
+  "checkpoint_status": "complete",
+  "checkpoint_command_id": "23f66fe1-f249-4a60-984d-48f7640e4bb9",
+  "physical_status": "not_attempted_pending_coordinated_idle_window",
+  "prior_driver_failure": {
+    "ssm_command_id": "700b0d1a-9bf4-4f2a-bc36-8d91773ab82b",
+    "seconds": 0.139,
+    "stage": "before_model_construction",
+    "reason": "Tuple identity compared to JSON-decoded list. Corrected JSON normalization preserves complete equality check."
+  },
+  "source_files": {
+    "opentpu/llm/qwen3.py": "8f73fb0375a87df3b602b708f89ce597258fd289dfc0e4a6eb54bfca7c6c499b",
+    "opentpu/llm/nanbeige.py": "72c0e688e2aeb5a3ffffdc02310334b59fc541964aec2c454a803220321e1e06",
+    "opentpu/llm/nanbeige_weights.py": "e75ac2d468a6cd4ce7c1dbbae261f66eaa5411fa2e681db5c970f9fed9c564e8",
+    "opentpu/llm/nanbeige_strict.py": "3cc21e774c060aa11b3fc71ca6d803d5c62400c13ce56a7dc707bdb2bdaab136",
+    "tools/nanbeige_board.py": "7061d80c42e8c03801e8698eb42b124da48a781a771718da8192482d56ffa66a",
+    "tools/nanbeige_strict.py": "b25d531cd4f05799b9c966d486f4d2785f69db1850572567e73f7c8cdcf97a97",
+    "tools/data/nanbeige/burst200.toml": "5d861a41e190fcb32fed2ec054dde8977df0f68de574096a44c85f2d98c66574",
+    "tests/test_nanbeige.py": "91a04a391e788ebb255fd813f6a1dc7a670c6c09d09494fa6a31f38b2ca5a176",
+    "tests/test_nanbeige_weights.py": "85aa4ea88a2366e847a80a87a3a9e16884732566b973fc0340a7903c0ef6df7a",
+    "tests/test_nanbeige_strict.py": "1b8dfda8cca6f4dcac9406303ae00149317502795ccca7b7ef2e0f9bf842983b",
+    "tests/test_nanbeige_board.py": "462105167b16c9960901c460bf322ffaa545c69637732f1dc9d9bfd93535e5f2",
+    "tests/test_nanbeige_wideport.py": "aa5caffc57acb7197ff1596039bc032c7a29d130998951ecaf53a8a1b540b159",
+    "opentpu/llm/__init__.py": "02fe88850feec71809853fa2a41daa7fc656b1cf8169a264a635c148a282066f",
+    "tools/data/nanbeige/target-config.json": "856a7f4e2039bca3cb2163ed5322bb63b51c09fb60dc8b88b5a927b944c669c0"
+  },
+  "implementation_commit": "99bdc679c7d187b8d7990b0eed59650e2821dbcf",
+  "checkpoint_ssm_seconds": 607.602,
+  "checkpoint_source_hash": "44c0d31b817340744a1a5e027eee295c",
+  "checkpoint_backend_calls": 40,
+  "checkpoint_physical_open_attempts": 0,
+  "checkpoint_cases": [
+    {
+      "name": "raw",
+      "tokens": [
+        90956,
+        13
+      ],
+      "text": ".\u201d\u00a0\n",
+      "exact_tokens_match": true,
+      "seconds": 36.9656545369653
+    },
+    {
+      "name": "chat",
+      "tokens": [
+        17782,
+        152518
+      ],
+      "text": "Hello!",
+      "exact_tokens_match": true,
+      "seconds": 425.8015556290047
+    },
+    {
+      "name": "raw_reset_replay",
+      "tokens": [
+        90956,
+        13
+      ],
+      "text": ".\u201d\u00a0\n",
+      "exact_tokens_match": true,
+      "seconds": 35.60269019298721
+    }
+  ]
+}
