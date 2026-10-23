@@ -1,0 +1,13 @@
+{
+  "archive_sha256": "28c56a20354daf9a264fd085c399075100699ec277776c839665e1ce5b40928b",
+  "artifact_hashes_verified": true,
+  "source_files_verified": 150,
+  "runtime_files_verified_against_git": 86,
+  "component_files_verified": 64,
+  "acceptance_source_hashes_verified": 38,
+  "rows_hash_verified": true,
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "note": "Run against pinned runtime 30100afb, not older compiler files in component-only checkout"
+}
