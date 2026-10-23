@@ -1,0 +1,30 @@
+{
+  "status": "blocked_not_run",
+  "requested_action": "bounded physical mixed-precision Transformer validation",
+  "target": "existing burst200 F2 slot0",
+  "observed_utc": "2026-10-23T08:58:53.566822+00:00",
+  "reason": [
+    "canonical and legacy device locks held by a resident worker with PCI BAR handles",
+    "loaded FPGA image differs from previously qualified burst200 image"
+  ],
+  "expected_agfi": "agfi-0d06cb48544a02106",
+  "observed_agfi": "agfi-0001de1dd3df8e21e",
+  "physical_test_started": false,
+  "hardware_written": false,
+  "owner_stopped": false,
+  "image_reloaded": false,
+  "approval_denied": false,
+  "action_pending": false,
+  "outcome_uncertain": false,
+  "completed": [
+    "fresh read-only lock, process, device-handle, image and service preflight"
+  ],
+  "required_before_retry": [
+    "normal exclusive device ownership becomes available",
+    "loaded image is qualified for this test without displacing the current owner"
+  ],
+  "precision_scope": {
+    "forward": "INT8 QST/QACT/MM intended",
+    "backward": "BF16/FP16 rounding emulated on FPGA FP32 instructions; FP32 RDOT accumulation and storage; not native16-bit"
+  }
+}

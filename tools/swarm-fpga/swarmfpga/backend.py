@@ -1,21 +1,8 @@
-"""Reference execution and a strict, optional F2 worker integration boundary.
-
-Wire protocol: one UTF-8 JSON line per Unix-socket connection. Requests contain
-``protocol`` and ``op`` (``hello`` or ``run``). Replies must contain ``ok: true``.
-Hello replies also contain ``protocol``, ``device: f2``, ``dtypes`` and ``ops``.
-Run requests contain ``program`` and ``feeds``; replies contain ``outputs``.
-Wire tensors are {dtype, shape, data}, with flat, row-major data. The external
-worker owns FPGA execution; this module provides no native OpenTPU lowering.
-"""
-
-import json
-import socket
-
+"""Explicit CPU reference execution; F2 uses the native OpenTPU backend."""
 import numpy as np
 
-PROTOCOL = "swarmfpga.tensor.v1"
 DTYPES = {"float32": np.dtype("float32"), "int64": np.dtype("int64")}
-OPS = frozenset("input const add sub mul div neg matmul sum max reshape transpose "
+OPS = frozenset("input const add sub mul div neg matmul matmul_int8 sum max reshape transpose "
                 "exp log rsqrt tanh broadcast_to gather scatter_add concat slice slice_grad".split())
 
 
@@ -37,6 +24,8 @@ def _array(value, dtype, shape):
 def _validate(program):
     nodes = {}
     for node in program["nodes"]:
+        if node["attrs"].get("compute_dtype", "fp32") not in ("fp32", "bf16", "fp16"):
+            raise ValueError("unsupported compute dtype")
         if node["id"] in nodes or node["op"] not in OPS:
             raise ValueError("Duplicate node ID or unsupported operation")
         if any(i not in nodes for i in node["inputs"]):
@@ -59,16 +48,6 @@ def _inputs(program, feeds):
     return result
 
 
-def _dtypes(program):
-    result = {}
-    preserves_integer = {"add", "sub", "mul", "neg", "matmul", "sum", "max", "reshape",
-                         "transpose", "broadcast_to", "gather", "concat", "slice"}
-    for node in program["nodes"]:
-        integer = node["op"] in preserves_integer and all(result[i] == "int64" for i in node["inputs"])
-        result[node["id"]] = node["attrs"].get("dtype", "int64" if integer else "float32")
-    return result
-
-
 def _slice(attrs, rank):
     index = [slice(None)] * rank
     index[attrs["axis"]] = slice(attrs["start"], attrs["stop"])
@@ -88,6 +67,36 @@ def _scatter(grad, indices, attrs):
     return result
 
 
+def _round(value, dtype):
+    if dtype not in ("fp32", "bf16", "fp16"):
+        raise ValueError("unsupported compute dtype")
+    x = np.asarray(value)
+    if dtype == "fp32" or x.dtype.kind != "f":
+        return x
+    limit = 2.0 ** 110 if dtype == "bf16" else 65504.0
+    if not np.isfinite(x).all() or np.any(np.abs(x) > limit):
+        raise FloatingPointError(f"{dtype} emulation range exceeded")
+    if dtype == "fp16":
+        return x.astype(np.float16).astype(np.float32)
+    x = np.where(np.abs(x) < np.finfo(np.float32).tiny, 0, x).astype(np.float32)
+    bits = x.view(np.uint32)
+    return ((bits + 0x7fff + ((bits >> 16) & 1)) & np.uint32(0xffff0000)).view(np.float32)
+
+
+def _int8(x, w):
+    from opentpu.quant import fake_act, fake_w
+    batch = np.broadcast_shapes(x.shape[:-2], w.shape[:-2])
+    left = np.broadcast_to(x, batch + x.shape[-2:])
+    right = np.broadcast_to(w, batch + w.shape[-2:])
+    result = np.empty(batch + (x.shape[-2], w.shape[-1]), np.float32)
+    pad = (-x.shape[-1]) % 128
+    for index in np.ndindex(batch):
+        a = np.pad(left[index], ((0, 0), (0, pad)))
+        b = np.pad(right[index].T, ((0, 0), (0, pad)))
+        result[index] = fake_act(a, D=128) @ fake_w(b, "int8", D=128).T
+    return result
+
+
 class ReferenceBackend:
     """Explicit CPU correctness backend. Never selected as an F2 fallback."""
 
@@ -98,12 +107,13 @@ class ReferenceBackend:
         feeds = _inputs(program, feeds)
         values = {}
         simple = {"add": np.add, "sub": np.subtract, "mul": np.multiply,
-                  "div": np.divide, "neg": np.negative, "matmul": np.matmul,
+                  "div": np.divide, "neg": np.negative, "matmul": np.matmul, "matmul_int8": _int8,
                   "exp": np.exp, "log": np.log, "rsqrt": lambda x: 1 / np.sqrt(x), "tanh": np.tanh}
         with np.errstate(over="raise", invalid="raise", divide="raise", under="ignore"):
             for node in program["nodes"]:
                 op, attrs = node["op"], node["attrs"]
-                args = [values[i] for i in node["inputs"]]
+                dtype = attrs.get("compute_dtype", "fp32")
+                args = [_round(values[i], dtype) for i in node["inputs"]]
                 if op == "input":
                     value = feeds[attrs["name"]]
                 elif op == "const":
@@ -131,71 +141,6 @@ class ReferenceBackend:
                 elif op == "slice_grad":
                     value = np.zeros(attrs["target_shape"], dtype=np.float32)
                     value[_slice(attrs, value.ndim)] = args[0]
+                value = _round(value, dtype)
                 values[node["id"]] = _array(value, "int64" if np.asarray(value).dtype.kind in "iu" else "float32", node["shape"])
         return {name: values[i] for name, i in program["outputs"].items()}
-
-
-class F2Backend:
-    """Submit the entire numerical graph to an explicitly configured F2 worker.
-
-    This is a transport contract, not an implemented FPGA kernel library. Missing
-    workers or capabilities raise errors. No host-side model or optimizer runs.
-    The simple v1 protocol transfers supplied feeds per call; it is not a
-    persistent device-buffer or zero-copy API. Message size is explicitly bounded.
-    """
-
-    device = "f2"
-
-    def __init__(self, socket_path, timeout=30, max_bytes=16 * 1024 * 1024):
-        self.socket_path, self.timeout, self.max_bytes = socket_path, timeout, max_bytes
-        hello = self._rpc({"op": "hello"})
-        if hello.get("protocol") != PROTOCOL or hello.get("device") != "f2":
-            raise ValueError("Worker must identify as an F2 worker with the exact protocol")
-        if not set(DTYPES).issubset(hello.get("dtypes", [])):
-            raise ValueError("Worker must support float32 and int64 tensors")
-        self.ops = set(hello.get("ops", []))
-
-    def _rpc(self, request):
-        wire = json.dumps({"protocol": PROTOCOL, **request}, allow_nan=False, separators=(",", ":")).encode() + b"\n"
-        if len(wire) > self.max_bytes:
-            raise ValueError("F2 request exceeds configured message-size limit")
-        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as stream:
-            stream.settimeout(self.timeout)
-            stream.connect(self.socket_path)
-            stream.sendall(wire)
-            data = bytearray()
-            while b"\n" not in data:
-                chunk = stream.recv(min(65536, self.max_bytes + 1 - len(data)))
-                if not chunk:
-                    raise ConnectionError("F2 worker closed without a complete reply")
-                data.extend(chunk)
-                if len(data) > self.max_bytes:
-                    raise ValueError("F2 reply exceeds configured message-size limit")
-        response = json.loads(data.split(b"\n", 1)[0])
-        if not isinstance(response, dict) or response.get("ok") is not True:
-            raise RuntimeError(f"F2 worker error: {response}")
-        return response
-
-    def run(self, program, feeds):
-        nodes = _validate(program)
-        dtypes = _dtypes(program)
-        missing = {node["op"] for node in program["nodes"]} - self.ops
-        if missing:
-            raise ValueError(f"F2 worker lacks operations: {sorted(missing)}")
-        inputs = _inputs(program, feeds)
-        if sum(a.nbytes for a in inputs.values()) > self.max_bytes:
-            raise ValueError("F2 tensors exceed configured message-size limit before encoding")
-        encoded = {name: {"dtype": str(a.dtype), "shape": list(a.shape), "data": a.reshape(-1).tolist()}
-                   for name, a in inputs.items()}
-        outputs = self._rpc({"op": "run", "program": program, "feeds": encoded}).get("outputs", {})
-        if set(outputs) != set(program["outputs"]):
-            raise ValueError("F2 worker returned incorrect output names")
-        result = {}
-        for name, spec in outputs.items():
-            if spec["dtype"] != dtypes[program["outputs"][name]]:
-                raise ValueError("F2 worker returned an incorrect output dtype")
-            if tuple(spec["shape"]) != tuple(nodes[program["outputs"][name]]["shape"]):
-                raise ValueError("F2 worker returned an incorrect output shape")
-            value = np.asarray(spec["data"]).reshape(spec["shape"])
-            result[name] = _array(value, spec["dtype"], spec["shape"])
-        return result

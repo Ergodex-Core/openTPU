@@ -226,6 +226,21 @@ class FrameworkTest(unittest.TestCase):
             expected = np.concatenate([expected, logits[:, -1].argmax(-1)[:, None]], axis=1)
         np.testing.assert_array_equal(model.generate(prompt, max_new_tokens=3), expected)
 
+    def test_legacy_fp32_checkpoint_with_empty_socket_still_loads(self):
+        model = self.make_model()
+        with tempfile.TemporaryDirectory() as directory:
+            path = Path(directory) / "state.npz"
+            model.save(path)
+            with np.load(path, allow_pickle=False) as archive:
+                values = {name: archive[name].copy() for name in archive.files}
+            metadata = json.loads(str(values["metadata"]))
+            metadata["config"].pop("forward_dtype")
+            metadata["config"].pop("backward_dtype")
+            metadata["config"]["socket"] = ""
+            np.savez(path, **{**values, "metadata": np.array(json.dumps(metadata))})
+            restored = SwarmModel.load(path)
+            np.testing.assert_array_equal(restored.logits(self.tokens)[0], model.logits(self.tokens)[0])
+
     def test_tokens_are_validated_without_silent_coercion(self):
         model = self.make_model()
         for tokens in [self.tokens.astype(np.float32), np.array([[5]]),
@@ -255,10 +270,14 @@ class FrameworkTest(unittest.TestCase):
                 with self.assertRaises((ValueError, TypeError)):
                     Config.from_dict(config)
 
-    def test_f2_missing_worker_never_uses_reference_fallback(self):
+    def test_f2_unavailable_device_never_uses_reference_fallback(self):
+        import sys
+        from types import SimpleNamespace
+        from unittest.mock import Mock
         config = configuration()
-        with tempfile.TemporaryDirectory(prefix="swarm-no-worker-") as directory:
-            config["backend"] = {"type": "f2", "socket": str(Path(directory) / "missing.sock")}
+        config["backend"] = {"type": "f2", "image": "burst200"}
+        unavailable = SimpleNamespace(OpenTPUBackend=Mock(side_effect=OSError("device unavailable")))
+        with patch.dict(sys.modules, {"swarmfpga.opentpu": unavailable}):
             with patch.object(ReferenceBackend, "run", side_effect=AssertionError("CPU fallback")):
                 with self.assertRaises(OSError):
                     model = SwarmModel(Config.from_dict(config))
@@ -266,7 +285,7 @@ class FrameworkTest(unittest.TestCase):
 
     def test_f2_cannot_be_overridden_with_reference_backend(self):
         config = configuration()
-        config["backend"] = {"type": "f2", "socket": "/unused-worker.sock"}
+        config["backend"] = {"type": "f2", "image": "burst200"}
         with self.assertRaises(ValueError):
             SwarmModel(Config.from_dict(config), backend=ReferenceBackend())
 
@@ -276,7 +295,6 @@ class FrameworkTest(unittest.TestCase):
         selected = Config.from_dict(config)
         self.assertEqual(selected.backend, "f2")
         self.assertEqual(selected.image, "burst200")
-        self.assertEqual(selected.socket, "")
         invalid_selectors = [
             {"type": "f2"},
             {"type": "f2", "image": ""},

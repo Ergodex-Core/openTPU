@@ -21,7 +21,8 @@ the wires, this is a good place to start.
 
 [Swarm FPGA](tools/swarm-fpga/README.md) is a small experimental training and inference
 framework built on openTPU. It includes explicit autodiff, a causal Transformer, checkpointing
-and a native FP32 F2 backend, with tests against the ISA simulator and a physical burst200 image.
+and INT8 MXU forward execution with FP32 or emulated BF16/FP16 backward precision. The original
+FP32 mode passed on burst200; the new mixed modes have ISA coverage and await a free qualified card.
 
 ## Results
 

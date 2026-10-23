@@ -18,8 +18,9 @@ class Config:
     sequence_length: int = 8
     steps: int = 100
     seed: int = 7
+    forward_dtype: str = "fp32"
+    backward_dtype: str = "fp32"
     backend: str = "reference"
-    socket: str = ""
     image: str = ""
 
     def __post_init__(self):
@@ -33,20 +34,20 @@ class Config:
             raise ValueError("width must divide by heads; sequence_length must fit context")
         if type(self.learning_rate) not in (int, float) or not math.isfinite(self.learning_rate) or self.learning_rate <= 0:
             raise ValueError("learning_rate must be finite and positive")
-        if self.backend not in ("reference", "f2") or not isinstance(self.socket, str):
-            raise ValueError("backend must be reference or f2 with a string socket")
-        if self.image not in ("", "burst200") or (self.socket and self.image):
-            raise ValueError("select either a socket or the burst200 native image")
-        if self.backend == "reference" and (self.socket or self.image):
+        if self.forward_dtype not in ("fp32", "int8") or self.backward_dtype not in ("fp32", "bf16", "fp16"):
+            raise ValueError("unsupported forward/backward precision")
+        if self.backend not in ("reference", "f2") or self.image not in ("", "burst200"):
+            raise ValueError("backend must be reference or f2 with the burst200 image")
+        if self.backend == "reference" and self.image:
             raise ValueError("reference backend cannot use an FPGA selector")
-        if self.backend == "f2" and not (self.socket or self.image):
-            raise ValueError("f2 requires an explicit worker socket or native image")
+        if self.backend == "f2" and not self.image:
+            raise ValueError("f2 requires an explicit native image")
 
     @classmethod
     def from_dict(cls, data):
         allowed = {"model": {"type", "vocab_size", "context", "width", "layers", "heads", "ff_width"},
-                   "trainer": {"learning_rate", "batch_size", "sequence_length", "steps", "seed"},
-                   "backend": {"type", "socket", "image"}}
+                   "trainer": {"learning_rate", "batch_size", "sequence_length", "steps", "seed", "forward_dtype", "backward_dtype"},
+                   "backend": {"type", "image"}}
         features = {"input_features": [{"name": "tokens", "type": "token_ids"}],
                     "output_features": [{"name": "next_token", "type": "token_ids"}]}
         if not isinstance(data, dict) or set(data) - (set(allowed) | set(features)):

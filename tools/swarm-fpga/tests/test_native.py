@@ -108,8 +108,11 @@ def test_native_gather_repeated_indices_accumulate(axis, shape, indices):
          "ids": np.array(indices, np.int64)})
 
 
-def test_native_full_decoder_logits_cache_and_sgd_match_reference():
-    base = configuration()
+@pytest.mark.parametrize("forward,backward", [
+    ("fp32", "fp32"), ("int8", "fp32"), ("int8", "bf16"), ("int8", "fp16"),
+])
+def test_native_full_decoder_logits_cache_and_sgd_match_reference(forward, backward):
+    base = configuration(forward_dtype=forward, backward_dtype=backward)
     native_config = {**base, "backend": {"type": "f2", "image": "burst200"}}
     native = SwarmModel(Config.from_dict(native_config), backend=ISABackend())
     reference = SwarmModel(Config.from_dict(base))
@@ -129,6 +132,10 @@ def test_native_full_decoder_logits_cache_and_sgd_match_reference():
         np.testing.assert_allclose(native.weights[name], value, atol=3e-5, rtol=5e-4,
                                    err_msg=f"updated parameter {name}")
     assert native.backend.board.launches > 100
+    if forward == "int8":
+        assert all(native.backend.instruction_counts[op] > 0 for op in ("MM", "QST", "QACT"))
+    if backward != "fp32":
+        assert native.backend.op_counts[f"round_{backward}"] > 0
 
 
 def test_native_launch_enforces_bounded_kernel_size():

@@ -1,0 +1,36 @@
+{
+  "passed": true,
+  "utc": "2026-10-23T08:54:56.117597+00:00",
+  "scope": "FP32 arithmetic-model emulation; exhaustive significands in selected exponent bins; no FPGA",
+  "comparisons": {
+    "bf16": 50331648,
+    "fp16": 100646914
+  },
+  "total_comparisons": 150978562,
+  "exponent_fields": {
+    "bf16": [
+      1,
+      127,
+      236
+    ],
+    "fp16": [
+      102,
+      112,
+      113,
+      127,
+      141,
+      142
+    ]
+  },
+  "mantissas_per_exponent": 8388608,
+  "signs": [
+    1,
+    -1
+  ],
+  "bf16_absolute_bound": 1.298074214633707e+33,
+  "fp16_absolute_bound": 65504,
+  "semantics": "RNE values; BF16 flushes FP32 subnormals; zero signs may canonicalize",
+  "numpy": "2.5.4",
+  "elapsed_seconds": 2.3174565830122447,
+  "reproduce": "PYTHONPATH=../.. python hardware/check_rounding.py --exhaustive --output rounding.json"
+}

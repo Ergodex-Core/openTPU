@@ -32,9 +32,13 @@ def build(c, batch, length, cached=0, training=False):
     dim = c.width // c.heads
     def norm(x, weight):
         return x * ((x * x).mean(-1, True) + 1e-5).rsqrt() * weight
+    def linear(x, weight):
+        y = x @ weight
+        g.nodes[y.id]["op"] = "matmul_int8" if c.forward_dtype == "int8" else "matmul"
+        return y
     for i in range(c.layers):
         prefix = f"layer{i}."
-        qkv = norm(x, p[prefix + "norm1"]) @ p[prefix + "qkv"]
+        qkv = linear(norm(x, p[prefix + "norm1"]), p[prefix + "qkv"])
         q, k, v = [qkv.slice(2, j * c.width, (j + 1) * c.width)
                    .reshape(batch, length, c.heads, dim).transpose(0, 2, 1, 3) for j in range(3)]
         if cached:
@@ -45,18 +49,21 @@ def build(c, batch, length, cached=0, training=False):
         scores = (q @ k.transpose(0, 1, 3, 2)) / (dim ** 0.5) + g.const(mask)
         e = (scores - scores.max(-1, True)).exp()
         attention = (e / e.sum(-1, True)) @ v
-        x = x + attention.transpose(0, 2, 1, 3).reshape(batch, length, c.width) @ p[prefix + "proj"]
+        x = x + linear(attention.transpose(0, 2, 1, 3).reshape(batch, length, c.width), p[prefix + "proj"])
         h = norm(x, p[prefix + "norm2"])
-        gate = h @ p[prefix + "gate"]
+        gate = linear(h, p[prefix + "gate"])
         # tanh form of sigmoid avoids overflow for large negative gate values.
-        x = x + ((h @ p[prefix + "up"]) * gate * (1 + (gate * 0.5).tanh()) * 0.5) @ p[prefix + "down"]
+        x = x + linear(linear(h, p[prefix + "up"]) * gate * (1 + (gate * 0.5).tanh()) * 0.5, p[prefix + "down"])
         outputs.update({f"cache{i}.k": k, f"cache{i}.v": v})
-    logits = norm(x, p["norm"]) @ p["head"]
+    logits = linear(norm(x, p["norm"]), p["head"])
     if training:
         labels = g.input("labels", (batch, length, c.vocab_size))
         shifted = logits - logits.max(-1, True)
         loss = -(labels * (shifted - shifted.exp().sum(-1, True).log())).sum() / (batch * length)
-        grads = g.grad(loss, p)
+        start = len(g.nodes)
+        grads = g.grad(loss, p)  # INT8 uses the original-operand matmul surrogate gradient.
+        for node in g.nodes[start:]:
+            node["attrs"]["compute_dtype"] = c.backward_dtype
         outputs = {"loss": loss, **{name: value - c.learning_rate * grads[name] for name, value in p.items()}}
     else:
         outputs["logits"] = logits

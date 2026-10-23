@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "swarmfpga"
 version = "0.1.0"
-description = "Minimal explicit decoder training and inference with an F2 integration contract"
+description = "Minimal mixed-precision decoder training and inference on OpenTPU"
 requires-python = ">=3.10"
 dependencies = ["numpy>=1.24", "PyYAML>=6"]
 

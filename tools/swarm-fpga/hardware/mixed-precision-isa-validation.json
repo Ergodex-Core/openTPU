@@ -1,0 +1,36 @@
+{
+  "utc": "2026-10-23T09:09:04.636278+00:00",
+  "scope": "local reference and OpenTPU ISA simulation, no physical mixed-precision run",
+  "tests_passed": 98,
+  "subtests_passed": 42,
+  "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=../.. python -m pytest -q -p no:cacheprovider",
+  "framework_physical_lines": 928,
+  "source_sha256": {
+    "__init__.py": "ec94f53a2ec3866cd2e32e75b68abeeb82aefb468400dbab9a611eeebe31edee",
+    "__main__.py": "e107c7e8ee70c15c7f975f77eb51f09631488ea74c85f004fe2a6ebefd184ebe",
+    "backend.py": "c645478a75e9c880cd304146362b8516b086f1868638586da39f34f230d8f506",
+    "config.py": "82a13d7a2572d701e204cf1c31cd8fef4d645ca9a00fd27f90b7b2c2e879e76e",
+    "graph.py": "368b87c8894906ad65afb1d3dae7936662b8575ea700a54d2f6c9f001ae852bb",
+    "model.py": "a6699dc182dd2c023274432720200b2ffef26ecffb99beea6835cb962284b036",
+    "opentpu.py": "03a36804355b83386cfc54e807968728809c9929b0a66eb6596b7654b2774e20",
+    "runtime.py": "e0aeb7301f9204ab1e913871edaac0a649177f0f62479f1cf2653bf1bff71d68"
+  },
+  "policies_tested": [
+    "fp32/fp32",
+    "int8/fp32",
+    "int8/bf16",
+    "int8/fp16"
+  ],
+  "native_16bit_arithmetic": false,
+  "backward_16bit_implementation": "bounded round-to-nearest-even emulated using FP32 VPU arithmetic and storage",
+  "native_instruction_proof": [
+    "QST",
+    "QACT",
+    "MM"
+  ],
+  "cli_reference_smoke": [
+    "int8/bf16 training",
+    "checkpoint reload and cached generation"
+  ],
+  "physical_status": "blocked_not_run; see mixed-precision-hardware-status.json"
+}

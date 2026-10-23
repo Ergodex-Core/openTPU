@@ -1,4 +1,20 @@
-# Physical burst200 correctness test
+# burst200 correctness evidence
+
+## Mixed precision: ISA verified, physical run blocked
+
+[`mixed_precision_smoke.py`](mixed_precision_smoke.py) is the bounded physical test for INT8 learned projections with BF16/FP16-rounded backward computation. Both reduced modes use FP32 VPU arithmetic and storage; neither claims native 16-bit acceleration. The harness checks three SGD steps per mode, every updated parameter, cached decoding, actual QST/QACT/MM counts and a separate 4×128×32 matmul comparison.
+
+The new physical run **did not start**. A fresh check at 2026-10-23 08:58 UTC found both device locks held by a resident worker and a different loaded image. No owner was displaced and no image was loaded. See [`mixed-precision-hardware-status.json`](mixed-precision-hardware-status.json) for the exact blocked target and image identities. This is an ownership/image blocker, not an approval denial or an uncertain execution.
+
+Current local coverage includes 98 tests and 42 subtests, with full-decoder ISA parity for four validated precision policies. The [validation manifest](mixed-precision-isa-validation.json) records commands and source hashes. [`check_rounding.py`](check_rounding.py) separately checks the two-pass FP32 rounding model; its [receipt](rounding-emulation-verification.json) records 150,978,562 comparisons over selected exponent bins. These are simulator/arithmetic-model results, not physical measurements.
+
+When slot 0 is available with a qualified image, run from `tools/swarm-fpga`:
+
+```sh
+OTPU_LOCK_WAIT=0 PYTHONPATH=.:../.. python hardware/mixed_precision_smoke.py > mixed-receipt.json
+```
+
+## Historical FP32 physical run
 
 [`framework_smoke.py`](framework_smoke.py) checks the complete tiny Transformer on an already-loaded F2 image. [`framework-receipt.json`](framework-receipt.json) records the numerical comparisons, source and dependency hashes, operation counts, device identity and timings from 2026-10-23 at 07:56 UTC. Infrastructure identifiers, remote paths and unrelated process metadata have been omitted from the public receipt.
 
@@ -20,7 +36,7 @@ The test used vocabulary 5, context 6, width 4, one layer, two heads, feedforwar
 
 The image stayed unchanged; final hardware was healthy and idle, and device locks were released. No services were stopped or images reloaded. These timings describe a tiny correctness test, not model-serving throughput or useful language quality. Intermediate tensors currently cross PCIe for each numerical operation.
 
-The receipt is historical evidence for the source hashes it contains. Publication adds CLI context-manager cleanup and rejects native slots other than `f2:0`; those changes have local regression coverage. Model math, autodiff, numerical lowering and the hardware harness are unchanged. The current F2 branch is covered by the local ISA tests; no new physical run is claimed for the publication cleanup.
+The receipt is historical evidence for the original FP32 source hashes it contains. The package has since added lifecycle cleanup and mixed-precision numerical paths, covered by local tests. The historical receipt must not be attributed to the current mixed-precision code. No new physical run is claimed for those changes.
 
 To reproduce on a suitably configured F2 host, from `tools/swarm-fpga`, with the matching OpenTPU branch and dependencies available:
 

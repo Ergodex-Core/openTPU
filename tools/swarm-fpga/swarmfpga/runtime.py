@@ -7,7 +7,7 @@ import tempfile
 import time
 import uuid
 import numpy as np
-from .backend import F2Backend, ReferenceBackend
+from .backend import ReferenceBackend
 from .config import Config
 from .model import build, initialize, shapes
 
@@ -19,8 +19,7 @@ class SwarmModel:
         if backend is None and self.config.backend == "f2" and self.config.image:
             from .opentpu import OpenTPUBackend
             backend = OpenTPUBackend(image=self.config.image)
-        self.backend = backend if backend is not None else (ReferenceBackend() if self.config.backend == "reference"
-                                                           else F2Backend(self.config.socket))
+        self.backend = backend if backend is not None else ReferenceBackend()
         if self.backend.device != self.config.backend:
             raise ValueError("backend must match the explicitly selected device")
         self.weights = initialize(self.config)
@@ -126,7 +125,10 @@ class SwarmModel:
             meta = json.loads(str(archive["metadata"]))
             if meta.get("format") != 1 or any(type(meta.get(k)) is not int or meta[k] < 0 for k in ("step", "cursor")):
                 raise ValueError("invalid checkpoint metadata")
-            config, weights = Config(**meta["config"]), {}
+            saved = dict(meta["config"])
+            if saved.pop("socket", ""):
+                raise ValueError("socket execution is no longer supported")
+            config, weights = Config(**saved), {}
             expected = shapes(config)
             if set(archive.files) != set(expected) | {"metadata"}:
                 raise ValueError("checkpoint parameter names differ")

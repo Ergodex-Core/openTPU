@@ -16,6 +16,8 @@ trainer:
   sequence_length: 3
   steps: 2
   seed: 17
+  forward_dtype: int8
+  backward_dtype: bf16
 backend:
   type: f2
   image: burst200

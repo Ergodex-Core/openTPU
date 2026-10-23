@@ -76,7 +76,7 @@ class Graph:
             elif op == "mul": parts = [g * xs[1], g * x]
             elif op == "div": parts = [g / xs[1], -g * x / (xs[1] * xs[1])]
             elif op == "neg": parts = [-g]
-            elif op == "matmul":
+            elif op in ("matmul", "matmul_int8"):
                 parts = [g @ xs[1].swapaxes(-1, -2), x.swapaxes(-1, -2) @ g]
             elif op == "reshape": parts = [g.reshape(x.shape)]
             elif op == "transpose": parts = [g.transpose(tuple(a["axes"].index(i) for i in range(len(x.shape))))]
