@@ -7,6 +7,7 @@ embeddings, and serve requires the NVIDIA/personaplex version of moshi.
 from __future__ import annotations
 
 import argparse
+import copy
 from contextlib import nullcontext
 from dataclasses import replace
 import importlib.util
@@ -113,6 +114,7 @@ class TimedEngine:
         self.engine = engine
         self.backend_name = backend
         self.seconds = []
+        self.runs = []
 
     def __getattr__(self, name):
         return getattr(self.engine, name)
@@ -120,12 +122,24 @@ class TimedEngine:
     def step(self, embedding):
         started = time.perf_counter()
         result = self.engine.step(embedding)
-        self.seconds.append(time.perf_counter() - started)
+        elapsed = time.perf_counter() - started
+        stats = copy.deepcopy(self.engine.last_stats)
+        run = {"engine_stats": stats, "host_round_trip_seconds": elapsed}
+        info = getattr(getattr(self.engine, "backend", None), "info", {})
+        core_khz = info.get("core_khz") if isinstance(info, dict) else None
+        cycles = stats.get("cycles")
+        if (self.backend_name == "board" and type(core_khz) in (int, float)
+                and np.isfinite(core_khz) and core_khz > 0
+                and type(cycles) is int and cycles >= 0):
+            run.update(device_ms=cycles / core_khz, device_core_khz=core_khz)
+        self.seconds.append(elapsed)
+        self.runs.append(run)
         return result
 
     def reset(self):
         self.engine.reset()
         self.seconds.clear()
+        self.runs.clear()
 
     def report(self):
         durations = np.asarray(self.seconds, dtype=np.float64)
@@ -136,6 +150,12 @@ class TimedEngine:
             "frames_measured": len(self.seconds),
             "temporal_mean_ms": float(durations.mean() * 1000) if len(durations) else None,
             "temporal_p95_ms": float(np.percentile(durations, 95) * 1000) if len(durations) else None,
+            "timing_scope": "temporal_mean_ms and temporal_p95_ms measure host round-trip wall time "
+                            "around Engine.step, including input/output transfers and submission/wait.",
+            "device_timing_scope": "Per-frame device_ms is raw core cycles / probed backend core_khz; "
+                                   "it excludes host transfers and is absent for ISA execution.",
+            "device_time_measured": any("device_ms" in run for run in self.runs),
+            "runs": copy.deepcopy(self.runs),
             "audio_frame_budget_ms": 80,
             "end_to_end_real_time_validated": False,
         }
@@ -329,6 +349,15 @@ def main():
     args = parser.parse_args()
     if args.cap < 1 or args.threads < 1 or not 1 <= args.port <= 65535:
         parser.error("cap/threads must be positive and port must be 1..65535")
+    if args.mode == "benchmark" and args.output is not None:
+        # Preserve np.save's filename suffix convention while checking before
+        # backend construction; exclusive creation below also closes the race.
+        if not str(args.output).endswith(".npy"):
+            args.output = Path(str(args.output) + ".npy")
+        if args.output.exists() or args.output.is_symlink():
+            raise FileExistsError(f"Benchmark output must be new: {args.output}")
+        if not args.output.parent.is_dir():
+            raise FileNotFoundError(f"Benchmark output parent must exist: {args.output.parent}")
     from opentpu.target import config
     from opentpu.llm.personaplex_temporal import Engine, Spec
     weights = None
@@ -378,7 +407,8 @@ def main():
         else:
             outputs = np.stack([engine.step(row) for row in inputs])
             if args.output:
-                np.save(args.output, outputs, allow_pickle=False)
+                with args.output.open("xb") as handle:
+                    np.save(handle, outputs, allow_pickle=False)
             print(json.dumps(engine.report(), indent=2))
     finally:
         if session is not None:

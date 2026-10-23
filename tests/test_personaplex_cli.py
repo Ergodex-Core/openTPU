@@ -394,3 +394,123 @@ def test_backend_configuration_cannot_change_after_qualification(cli, burst200_p
     finally:
         session.close()
     assert not fixture.events["writes"] and not fixture.events["uploads"]
+
+
+def test_timed_engine_preserves_ordered_counters_and_reset(cli, monkeypatch):
+    class Engine:
+        backend = SimpleNamespace(info={"core_khz": 200000})
+        last_stats = {}
+        pos = 0
+
+        def step(self, value):
+            self.last_stats = {"frame": self.pos, "cycles": (self.pos + 1) * 200000,
+                               "instructions": [self.pos + 7], "wall_seconds": 0.25}
+            self.pos += 1
+            return value
+
+        def reset(self):
+            self.pos = 0
+            self.last_stats = {}
+
+    clock = iter([10., 12., 20., 23.])
+    monkeypatch.setattr(cli.time, "perf_counter", lambda: next(clock))
+    raw = Engine()
+    timed = cli.TimedEngine(raw, "board")
+    assert timed.step("first") == "first"
+    assert timed.step("second") == "second"
+    raw.last_stats["instructions"][0] = 999
+    report = timed.report()
+    assert [run["engine_stats"]["frame"] for run in report["runs"]] == [0, 1]
+    assert [run["engine_stats"]["cycles"] for run in report["runs"]] == [200000, 400000]
+    assert [run["engine_stats"]["instructions"] for run in report["runs"]] == [[7], [8]]
+    assert [run["host_round_trip_seconds"] for run in report["runs"]] == [2., 3.]
+    assert [run["device_ms"] for run in report["runs"]] == [1., 2.]
+    assert report["temporal_mean_ms"] == 2500. and report["device_time_measured"]
+    assert "host round-trip" in report["timing_scope"]
+    assert "excludes host transfers" in report["device_timing_scope"]
+    timed.reset()
+    assert raw.pos == 0 and timed.report()["runs"] == []
+    assert timed.report()["frames_measured"] == 0
+    assert timed.report()["temporal_mean_ms"] is None
+    assert not timed.report()["device_time_measured"]
+
+
+@pytest.mark.parametrize("backend,core_khz", [("isa", 200000), ("board", None), ("board", 0),
+                                              ("board", -1), ("board", True), ("board", float("nan"))])
+def test_device_timing_requires_board_and_positive_probed_clock(cli, backend, core_khz):
+    engine = SimpleNamespace(backend=SimpleNamespace(info={"core_khz": core_khz}),
+                             last_stats={"cycles": 200000, "core_khz": 200000},
+                             step=lambda value: value)
+    timed = cli.TimedEngine(engine, backend)
+    timed.step(np.zeros(4))
+    report = timed.report()
+    assert not report["device_time_measured"]
+    assert "device_ms" not in report["runs"][0]
+    assert report["runs"][0]["engine_stats"]["cycles"] == 200000
+
+
+@pytest.mark.parametrize("condition", ["existing", "existing_without_suffix", "missing_parent"])
+@pytest.mark.parametrize("backend", ["board", "isa"])
+def test_bad_output_is_rejected_before_backend_and_preserved(cli, monkeypatch, tmp_path,
+                                                           condition, backend):
+    from opentpu.llm import personaplex_temporal, personaplex_weights
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("Invalid output must fail before model/backend construction")
+
+    monkeypatch.setattr(personaplex_weights, "MLXWeights", forbidden)
+    monkeypatch.setattr(personaplex_temporal, "Engine", forbidden)
+    monkeypatch.setattr(cli, "BoardSession", forbidden)
+    requested = tmp_path / ("hidden" if condition == "existing_without_suffix" else "hidden.npy")
+    actual = tmp_path / "hidden.npy"
+    if condition == "missing_parent":
+        requested = tmp_path / "missing" / "hidden.npy"
+        error = FileNotFoundError
+    else:
+        actual.write_bytes(b"preserved evidence")
+        error = FileExistsError
+    monkeypatch.setattr(sys, "argv", ["personaplex_fpga.py", "benchmark", "--backend", backend,
+                                     "--model-dir", str(tmp_path), "--embeddings", str(tmp_path / "unused.npy"),
+                                     "--output", str(requested)])
+    with pytest.raises(error, match="Benchmark output"):
+        cli.main()
+    if condition == "missing_parent":
+        assert not requested.parent.exists()
+    else:
+        assert actual.read_bytes() == b"preserved evidence"
+
+
+def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path):
+    from opentpu import target
+    from opentpu.llm import personaplex_temporal, personaplex_weights
+
+    output = tmp_path / "hidden.npy"
+    spec = SimpleNamespace(hidden=4, context=4)
+    monkeypatch.setattr(personaplex_weights, "MLXWeights",
+                        lambda path: SimpleNamespace(spec=spec, layers=[], final_norm=[]))
+    monkeypatch.setattr(target, "config", lambda profile: object())
+    monkeypatch.setattr(cli, "inspect_layout", lambda *args: {"fits": True})
+    closed = []
+
+    class Engine:
+        last_stats = {"frame": 0, "instructions": [1]}
+
+        def __init__(self, *args, **kwargs):
+            pass
+
+        def step(self, value):
+            output.write_bytes(b"another writer's evidence")
+            return value
+
+        def close(self):
+            closed.append(True)
+
+    monkeypatch.setattr(personaplex_temporal, "Engine", Engine)
+    inputs = tmp_path / "inputs.npy"
+    np.save(inputs, np.ones((1, 4), np.float32))
+    monkeypatch.setattr(sys, "argv", ["personaplex_fpga.py", "benchmark", "--backend", "isa",
+                                     "--model-dir", str(tmp_path), "--embeddings", str(inputs),
+                                     "--output", str(output), "--cap", "4"])
+    with pytest.raises(FileExistsError):
+        cli.main()
+    assert output.read_bytes() == b"another writer's evidence" and closed == [True]
