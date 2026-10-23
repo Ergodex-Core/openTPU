@@ -10,7 +10,7 @@
   "parameters": 627008134,
   "checkpoint_download_bytes": 163515201,
   "status": "blocked",
-  "readiness": "kernel_slice_only",
+  "readiness": "learned_encoder_isa_only",
   "available": false,
   "ready": false,
   "execution_policy": "fpga_only",
@@ -33,13 +33,27 @@
     "hotwords": "unsupported",
     "note": "Proposed first integration envelope; endpoint remains unavailable."
   },
-  "implemented_slice": "Five-value projections, the complete learned 8x subsampler and one bounded Conformer block on the existing ISA; offline frontend golden vectors",
+  "implemented_slice": "Complete learned 8x subsampler and 24 whole-context Conformer layers on the shared-profile ISA; device-only residual QACT and one weight slot; offline waveform oracle",
+  "shared_image": {
+    "profile": "f2-hbm:p4rl8a64c150",
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "declared_cfg_hash": "dd6b92a6",
+    "hardware_identity_verified": false,
+    "per_model_image_reload": false,
+    "maximum_serving_interruption_seconds": 30,
+    "runtime_source_revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+    "manifest": "docs/phonon2/shared_profile.json"
+  },
   "qualification": {
-    "conformer_blocks": 1,
-    "max_stored_encoder_frames": 8,
+    "conformer_blocks": 24,
+    "max_stored_encoder_frames": 376,
+    "max_real_checkpoint_tested_encoder_frames": 89,
+    "longer_context_status": "compile/resource qualification only",
     "frontend_device_implemented": false,
     "tdt_device_implemented": false,
-    "evidence": "docs/phonon2/conformer_validation.json",
+    "evidence": "docs/phonon2/encoder_validation.json",
+    "activation_passes": 2,
+    "encoder_reset_bitwise_passed": true,
     "subsampler_isa_implemented": true,
     "subsampler_max_stored_mel_frames": 3001,
     "subsampler_max_stored_encoder_frames": 376,
@@ -58,11 +72,11 @@
     },
     {
       "code": "subsampling",
-      "detail": "The complete learned 8x subsampler is ISA-qualified with real speech features; resident graph and device waveform-frontend handoff are not integrated."
+      "detail": "The complete learned 8x subsampler is shared-profile ISA-qualified; its device waveform-frontend and physical runtime handoff are not integrated."
     },
     {
-      "code": "conformer",
-      "detail": "One complete full-width block is ISA-qualified for 1..8 stored frames; the full-length 24-block encoder and device graph integration remain missing."
+      "code": "encoder_integration",
+      "detail": "All 24 whole-context Conformer layers and one-slot residency are shared-profile ISA-qualified with real checkpoint weights; physical program/wait loading and execution remain unverified."
     },
     {
       "code": "predictor",
@@ -78,7 +92,7 @@
     },
     {
       "code": "numerics",
-      "detail": "The learned subsampler and one block are tested on speech-derived features; device frontend parity, full-encoder and transcript validation remain missing."
+      "detail": "Learned subsampler plus 24 layers pass real-speech CPU/ISA comparisons with two-pass device QACT; device frontend parity, larger-context numerical coverage and transcript/WER acceptance remain missing."
     },
     {
       "code": "hardware_evidence",

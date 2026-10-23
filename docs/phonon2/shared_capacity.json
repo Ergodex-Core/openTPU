@@ -1,0 +1,277 @@
+{
+  "scope": "Compile-only maximum 30 second context on exact shared profile; synthetic values with official tensor shapes, not numerical or hardware acceptance",
+  "profile": "f2-hbm:p4rl8a64c150",
+  "declared_cfg_hash": "dd6b92a6",
+  "subsampler": {
+    "dram_image_bytes": 180715008,
+    "weight_bytes_aligned": 4368384,
+    "phases": [
+      {
+        "name": "reset_scratch",
+        "instructions": 8,
+        "instruction_words": 64,
+        "tmem_peak_live_words": 512
+      },
+      {
+        "name": "pad_input",
+        "instructions": 10,
+        "instruction_words": 80,
+        "tmem_peak_live_words": 128
+      },
+      {
+        "name": "conv0_mask_relu",
+        "instructions": 37,
+        "instruction_words": 296,
+        "tmem_peak_live_words": 3081
+      },
+      {
+        "name": "depthwise2_mask",
+        "instructions": 45,
+        "instruction_words": 360,
+        "tmem_peak_live_words": 3328
+      },
+      {
+        "name": "pointwise3_mask_relu_residual",
+        "instructions": 27,
+        "instruction_words": 216,
+        "tmem_peak_live_words": 2316
+      },
+      {
+        "name": "depthwise5_mask",
+        "instructions": 45,
+        "instruction_words": 360,
+        "tmem_peak_live_words": 3328
+      },
+      {
+        "name": "pointwise6_mask_relu_residual",
+        "instructions": 27,
+        "instruction_words": 216,
+        "tmem_peak_live_words": 2316
+      },
+      {
+        "name": "flatten_channel_then_frequency",
+        "instructions": 26,
+        "instruction_words": 208,
+        "tmem_peak_live_words": 8192
+      },
+      {
+        "name": "project_with_unmasked_bias_residual",
+        "instructions": 49,
+        "instruction_words": 392,
+        "tmem_peak_live_words": 27656
+      }
+    ],
+    "max_instruction_words": 392,
+    "max_tmem_live_words": 27656,
+    "stored_lengths": [
+      3001,
+      1501,
+      751,
+      376
+    ],
+    "valid_lengths": [
+      3000,
+      1500,
+      750,
+      375
+    ],
+    "max_act_blocks": 32,
+    "hardware_validated": false,
+    "audio_to_transcript_validated": false,
+    "activation_passes": 2,
+    "constant_ranges": [
+      [
+        0,
+        4368384
+      ],
+      [
+        180698624,
+        180715008
+      ]
+    ]
+  },
+  "layer_slot": {
+    "dram_image_bytes": 77369600,
+    "immutable_prefix_bytes": 53673984,
+    "weight_bytes": 50581504,
+    "phase_count": 27,
+    "max_instruction_words": 1824,
+    "max_tmem_live_words": 38924,
+    "phases": [
+      {
+        "name": "reset_layer_scratch",
+        "instructions": 8,
+        "instruction_words": 64,
+        "tmem_peak_live_words": 512
+      },
+      {
+        "name": "ff1",
+        "instructions": 89,
+        "instruction_words": 712,
+        "tmem_peak_live_words": 38924
+      },
+      {
+        "name": "qkv",
+        "instructions": 77,
+        "instruction_words": 616,
+        "tmem_peak_live_words": 8200
+      },
+      {
+        "name": "relative_keys",
+        "instructions": 40,
+        "instruction_words": 320,
+        "tmem_peak_live_words": 8200
+      },
+      {
+        "name": "scores_0",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_0",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_1",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_1",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_2",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_2",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_3",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_3",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_4",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_4",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_5",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_5",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_6",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_6",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "scores_7",
+        "instructions": 228,
+        "instruction_words": 1824,
+        "tmem_peak_live_words": 4800
+      },
+      {
+        "name": "values_7",
+        "instructions": 146,
+        "instruction_words": 1168,
+        "tmem_peak_live_words": 9360
+      },
+      {
+        "name": "attention_residual",
+        "instructions": 24,
+        "instruction_words": 192,
+        "tmem_peak_live_words": 8200
+      },
+      {
+        "name": "glu",
+        "instructions": 52,
+        "instruction_words": 416,
+        "tmem_peak_live_words": 10248
+      },
+      {
+        "name": "pad_convolution",
+        "instructions": 7,
+        "instruction_words": 56,
+        "tmem_peak_live_words": 1024
+      },
+      {
+        "name": "depthwise_bn_silu",
+        "instructions": 58,
+        "instruction_words": 464,
+        "tmem_peak_live_words": 5120
+      },
+      {
+        "name": "convolution_residual",
+        "instructions": 24,
+        "instruction_words": 192,
+        "tmem_peak_live_words": 8200
+      },
+      {
+        "name": "ff2",
+        "instructions": 89,
+        "instruction_words": 712,
+        "tmem_peak_live_words": 38924
+      },
+      {
+        "name": "final_norm",
+        "instructions": 27,
+        "instruction_words": 216,
+        "tmem_peak_live_words": 5636
+      }
+    ],
+    "frames": 376,
+    "valid_frames": 375,
+    "activation_passes": 2,
+    "attention": "whole context, FP32 tiled RDOT",
+    "hardware_validated": false
+  },
+  "program_area_bytes": 163840,
+  "program_slot_address": 4294803456,
+  "largest_program_wait_payload_bytes": 9120,
+  "max_graph_bytes": 180715008,
+  "dynamic_activation_host_compute": false,
+  "hardware_used": false,
+  "model_ready": false
+}

@@ -7,11 +7,13 @@
   "execution": "Blocked \u00b7 ASR integration incomplete",
   "ready": false,
   "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
-  "reason": "Device frontend, Conformer, LSTM predictor and TDT decoding are incomplete; audio input stays disabled.",
+  "reason": "Shared-profile learned encoder passes CPU/ISA checks; device waveform frontend, LSTM/TDT decoder and physical ASR acceptance remain incomplete.",
   "model_id": "FermionResearch/Phonon-2",
   "revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
   "execution_policy": "fpga_only",
   "cpu_gpu_fallback": false,
+  "shared_image_profile": "f2-hbm:p4rl8a64c150",
+  "image_reload_required": false,
   "hardware_validated": false,
   "error_code": "ASR_FPGA_NOT_READY"
 }
