@@ -1,0 +1,56 @@
+{
+  "archive_sha256": "e84f9949f2828478878209e7fbf5b1b9bcf553eb62c7c9a334f8c13438aed762",
+  "artifact_hashes_verified": true,
+  "acceptance_start_manifest_entries": 44,
+  "auxiliary_metadata_entries": {
+    "tests/._qwen3_tts_audio_transformer_reference.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-transformer-source-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._qwen3_tts_audio_upsample_reference.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-upsample-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._test_qwen3_tts_audio_chunks.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "resident-chunks-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._test_qwen3_tts_audio_transformer.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-transformer-source-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._test_qwen3_tts_audio_upsample.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-upsample-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    }
+  },
+  "source_tree_component_files_verified": 64,
+  "source_tree_runtime_files_verified": 95,
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "rows_hash_verified": true,
+  "overall_main_gate_passed": false,
+  "supplemental_code_hashes_verified": 2,
+  "source_and_fixture_hashes_verified": 39
+}

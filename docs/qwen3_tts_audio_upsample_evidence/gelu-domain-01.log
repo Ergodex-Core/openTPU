@@ -1,0 +1,55 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "dense_grid_range": [
+    -40,
+    32
+  ],
+  "dense_grid_points": 8192,
+  "additional_values": [
+    -10000,
+    10000,
+    0.0,
+    -0.0
+  ],
+  "observed_checkpoint_input_range": [
+    -37.96326446533203,
+    24.534238815307617
+  ],
+  "max_absolute_error": 4.76837158203125e-07,
+  "bound": 2e-06,
+  "accepted": true,
+  "physical_hardware_access": false,
+  "exhaustive_float32_proof": false,
+  "code_sha256": {
+    "tools/qwen3_tts_gelu_domain_acceptance.py": "7b0f0bcbd84b796ac603f424725612b579c29f7cdd389620d37b62d2b0bf30bc",
+    "opentpu/kernels/tts_audio_upsample.py": "9e2473c9e61f71e0962396263b9febe3a6dd0646465a152409ae700194ef895a"
+  }
+}

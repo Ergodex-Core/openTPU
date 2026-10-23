@@ -1,0 +1,206 @@
+{"case": "Hello.", "frame": 1, "max_feature_error": 0.0002146933848474013}
+{"case": "Hello.", "frame": 2, "max_feature_error": 0.00021901331226450524}
+{"case": "Hello.", "frame": 3, "max_feature_error": 0.00021901331226450524}
+{"case": "Good morning.", "frame": 1, "max_feature_error": 0.00021901331226450524}
+{"case": "Good morning.", "frame": 2, "max_feature_error": 0.00021901331226450524}
+{"case": "Good morning.", "frame": 3, "max_feature_error": 0.00021901331226450524}
+{"case": "The FPGA speaks.", "frame": 1, "max_feature_error": 0.00021901331226450524}
+{"case": "The FPGA speaks.", "frame": 2, "max_feature_error": 0.00021901331226450524}
+{"case": "The FPGA speaks.", "frame": 3, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 1, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 2, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 3, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 4, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 5, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 6, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 7, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 8, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 9, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 10, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 11, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 12, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 13, "max_feature_error": 0.00021901331226450524}
+{"case": "recorded_code_short_chunks_diagnostic", "frame": 14, "max_feature_error": 0.00021901331226450524}
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "stable_component_ancestor": "e0d68fea470e68f424df0888d38083a7d34f504d",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "arithmetic_contract": "source weights evaluated with FP32 algebra and explicitly tested erf-GELU approximation; not bit-exact BF16",
+  "summary": {
+    "fp32": {
+      "0.up": 0.00012871001615215866,
+      "0.depthwise": 3.134169481981966e-05,
+      "0.normalized": 0.00016321913979867842,
+      "0.hidden": 5.98181042649459e-05,
+      "0.activation": 0.00014044137193643965,
+      "0.projected": 0.0001871604997581491,
+      "0.output": 0.0001964330745116324,
+      "1.up": 0.0002023237658403653,
+      "1.depthwise": 7.102580252450729e-05,
+      "1.normalized": 0.00021901331226450524,
+      "1.hidden": 0.0002145988106973454,
+      "1.activation": 0.0002146933848474013,
+      "1.projected": 0.000207581647562002,
+      "1.output": 0.00021162766625818538
+    },
+    "fp64": {
+      "0.up": 0.0001286654357068024,
+      "0.depthwise": 3.133512710432753e-05,
+      "0.normalized": 0.00016311040057785922,
+      "0.hidden": 5.978546620075733e-05,
+      "0.activation": 0.00013977410052212478,
+      "0.projected": 0.0001872053242399667,
+      "0.output": 0.0001965048157917773,
+      "1.up": 0.00020239210871034896,
+      "1.depthwise": 7.112266002616557e-05,
+      "1.normalized": 0.0002189865868246937,
+      "1.hidden": 0.00021463729570706097,
+      "1.activation": 0.00021431397218900857,
+      "1.projected": 0.00020717868231454468,
+      "1.output": 0.00021134282029309208
+    }
+  },
+  "component_accepted": true,
+  "threshold_relative_l2": 0.035,
+  "recorded_prefix_frames": 9,
+  "short_chunk_diagnostic_frames": 14,
+  "reset_replays": [
+    {
+      "case": "Hello.",
+      "frames": 3,
+      "bitwise": true
+    },
+    {
+      "case": "Good morning.",
+      "frames": 3,
+      "bitwise": true
+    },
+    {
+      "case": "The FPGA speaks.",
+      "frames": 3,
+      "bitwise": true
+    },
+    {
+      "case": "recorded_code_short_chunks_diagnostic",
+      "frames": 7,
+      "bitwise": true
+    }
+  ],
+  "gelu_approximation": {
+    "grid_points": 4096,
+    "grid_range": [
+      -16,
+      16
+    ],
+    "extra_tails": [
+      -10000,
+      10000
+    ],
+    "max_absolute_error": 4.76837158203125e-07,
+    "bound": 2e-06,
+    "accepted": true
+  },
+  "observed_model_gelu_input_range": [
+    -37.96326446533203,
+    24.534238815307617
+  ],
+  "model_budgets": [
+    {
+      "case": "Hello.",
+      "dram_bytes": 150077312,
+      "chunk_size": 300,
+      "left_context": 25
+    },
+    {
+      "case": "Good morning.",
+      "dram_bytes": 150077312,
+      "chunk_size": 300,
+      "left_context": 25
+    },
+    {
+      "case": "The FPGA speaks.",
+      "dram_bytes": 150077312,
+      "chunk_size": 300,
+      "left_context": 25
+    },
+    {
+      "case": "recorded_code_short_chunks_diagnostic",
+      "dram_bytes": 150075904,
+      "chunk_size": 5,
+      "left_context": 3
+    }
+  ],
+  "standalone_public_dram_bytes": 150077312,
+  "combined_public_dram_bytes": 2824640128,
+  "upsample_parameter_views": 24,
+  "upsample_unique_source_tensors": 22,
+  "upsample_programs_per_decoded_frame": 9,
+  "output_shape_per_codec_frame": [
+    4,
+    1024
+  ],
+  "output_is_waveform": false,
+  "public_300_boundary_with_upsampling_validated": false,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "upstream_thresholds": {
+    "logit_relative_l2": 0.035,
+    "generated_greedy_agreement": 1.0
+  },
+  "waveform_produced": false,
+  "raw_scaling_validated": false,
+  "complete_utterances_validated": false,
+  "quality_validated": false,
+  "physical_hardware_access": false,
+  "upstream_custom_code_executed": false,
+  "tts_enabled": false,
+  "host": "opentpu-m8a-build",
+  "seconds": 204.52881750802044,
+  "rows_sha256": "3241b5d435d81328c15d31095419e713fe837125b127b5c8441a67f4e704aea5"
+}

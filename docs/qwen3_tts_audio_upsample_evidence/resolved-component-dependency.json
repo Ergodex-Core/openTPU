@@ -1,0 +1,12 @@
+{
+  "resident_chunk_commit": "308412218ab449c5b645ee736de6186ba4b751c2",
+  "stable_ancestor": "e0d68fea470e68f424df0888d38083a7d34f504d",
+  "builder_source_matches_chunk_commit": true,
+  "code_sha256": {
+    "opentpu/kernels/tts_audio_chunks.py": "925f949d61d82257361b4aebf404c419c7efc5ec63d7d15d6b801cd2eadee4e6",
+    "opentpu/llm/qwen3_tts_audio_chunks.py": "f2b598c974768942db112bab36d17a4e7f698adced10524c7cd932ba7eaeae27",
+    "tests/test_qwen3_tts_audio_chunks.py": "0205dd7b10f56a53227a7762049c52a840448bbe3832c06e0ec3e9a0502334a5",
+    "tools/qwen3_tts_audio_chunks_acceptance.py": "b307f89abb9d9afd4768aa6b15a20e5c107119653665866dee494776a886046f"
+  },
+  "note": "Original runtime-provenance records the pending state at preparation. Completed chunk acceptance and this immutable Git parent now resolve that dependency without changing tested source."
+}
