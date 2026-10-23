@@ -736,7 +736,10 @@ proc snapshot {name} {
       dict set pin_props $property [get_property $property $pin]
     }
     set nets [get_nets -quiet -segments -of_objects $pin]
-    if {[llength $nets]>16 || ([llength $nets] && [llength [get_ports -quiet -of_objects $nets]])} {error "Physical carry net boundary differs"}
+    # Hierarchical segment aliases are capture capacity, not logical fanout.
+    # Retain every name for exact BEFORE/AFTER comparison within existing byte bounds.
+    if {[llength $nets]>4096} {error "Physical carry net segment bound"}
+    if {[llength $nets] && [llength [get_ports -quiet -of_objects $nets]]} {error "Physical carry net boundary differs"}
     set drivers {};set successors {}
     if {$direction eq "IN"} {
       set expected [dict exists $expected_empty $pin_name]

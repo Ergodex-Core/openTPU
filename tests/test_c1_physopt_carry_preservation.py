@@ -93,6 +93,73 @@ def test_all349_preserved_with_placement_movement(tmp_path):
     assert 'placement_movement_permitted 1 route_qualified 0 hardware_actions 0' in raw
 
 
+def segment_aliases(count=873, width=0):
+    # The actual placed DI[3] observation has873 aliases and no top-level ports.
+    # A single connected pin is enough to exercise complete alias preservation;
+    # all aliases refer to one coherent shared net with the same driver and loads.
+    return r'''
+set segment_pin $target/DI\[0\]
+set segment_base [dict get $pins $segment_pin NET]
+set segment_nets {}
+for {set i 0} {$i<@COUNT@} {incr i} {
+  set alias [format {alias_%04d_%s} $i [string repeat x @WIDTH@]]
+  dict set nets $alias [dict get $nets $segment_base]
+  lappend segment_nets $alias
+}
+rename get_nets original_get_nets
+proc get_nets {args} {
+  set at [lsearch -exact $args -of_objects]
+  if {[lsearch -exact $args -segments]>=0 && [lindex $args [expr {$at+1}]] eq [list $::segment_pin]} {return $::segment_nets}
+  return [original_get_nets {*}$args]
+}
+'''.replace('@COUNT@', str(count)).replace('@WIDTH@', str(width))
+
+
+def test_all873_segment_names_are_preserved_with_the_full_carry_baseline(tmp_path):
+    result = execute(tmp_path, before_mutation=segment_aliases())
+    assert result.returncode == 0, result.stderr
+    raw = (tmp_path / 'physopt_carry_preservation.tcldata').read_text()
+    assert raw.count('\nbefore ') == raw.count('\nafter ') == 349
+    assert 'exact_empty_input_witness_match 1' in raw
+    assert raw.count('alias_0872_') == 2
+    assert '\ncomplete ' in raw
+
+
+@pytest.mark.parametrize(('mutation', 'error'), [
+    ('set old [lindex $segment_nets end];set changed changed_alias;dict set nets $changed [dict get $nets $old];set segment_nets [lreplace $segment_nets end end $changed]', 'changed carry topology'),
+    ('set segment_nets [lrange $segment_nets 0 end-1]', 'changed carry topology'),
+    ('dict lappend nets [lindex $segment_nets 0] WRAPPER/CL/GND/G', 'driver cardinality differs'),
+    ('rename get_ports original_get_ports;proc get_ports {args} {return external_port}', 'net boundary differs'),
+])
+def test_large_segment_capture_still_rejects_changed_connectivity(tmp_path, mutation, error):
+    result = execute(tmp_path, before_mutation=segment_aliases(), mutation=mutation)
+    assert result.returncode != 0
+    assert error in result.stderr, result.stderr
+    raw = (tmp_path / 'physopt_carry_preservation.tcldata').read_text()
+    assert '\nbaseline_complete ' in raw and '\ncomplete ' not in raw
+
+
+@pytest.mark.parametrize(('count', 'width', 'error'), [
+    (4097, 0, 'net segment bound'),
+    (873, 1300, 'record bound'),
+])
+def test_segment_capture_keeps_finite_count_and_record_bounds(tmp_path, count, width, error):
+    result = execute(tmp_path, before_mutation=segment_aliases(count, width))
+    assert result.returncode != 0
+    assert error in result.stderr, result.stderr
+    assert '\ncomplete ' not in (tmp_path / 'physopt_carry_preservation.tcldata').read_text()
+
+
+def test_large_capture_keeps_total_output_byte_bound(tmp_path):
+    result = execute(tmp_path, before_mutation=segment_aliases(),
+                     mutation='for {set i 0} {$i<34} {incr i} {::c1_physopt_carry::emit bounded_extra [string repeat x 1048000]}')
+    assert result.returncode != 0
+    assert 'output bound' in result.stderr, result.stderr
+    raw = tmp_path / 'physopt_carry_preservation.tcldata'
+    assert raw.stat().st_size <= 33554432
+    assert '\ncomplete ' not in raw.read_text()
+
+
 @pytest.mark.parametrize('mutation', [
     'dict unset cells $target',
     'dict set cells $target REF_NAME LUT6',
