@@ -124,11 +124,13 @@ module otpu_slice
   output cmd_t                    coll_cmd,
   input  logic                    coll_ack,
   input  logic [LANES-1:0]        coll_ren,
+  input  logic                    coll_rany,
   input  logic [LANES-1:0][31:0]  coll_raddr,
   output logic [LANES-1:0][31:0]  coll_rdata,
   input  logic [LANES-1:0]        coll_wen,
   input  logic [LANES-1:0][31:0]  coll_waddr,
   input  logic [LANES-1:0][31:0]  coll_wdata,
+  input  logic [LANES-1:0]        coll_wbanks,
   output logic                    coll_gnt_local,
   input  logic                    coll_gnt,
   // status
@@ -384,6 +386,7 @@ module otpu_slice
   logic [NRP-1:0]                  tm_bx, tm_bs, tm_sv, tm_pre;   // TMEM_IMPL 3 (below)
   logic [NRP-1:0]                  tm_lost, tm_frz;               // TMEM_IMPL 3, TMEM_RPL
   logic [NRP-1:0][LANES-1:0]       rq_t;
+  logic [NRP-1:0]                  rq_any;
   logic [NRP-1:0][LANES-1:0][31:0] r_addr, r_data;
   logic [NWP-1:0][LANES-1:0]       wq_en, w_en;
   logic [NWP-1:0][LANES-1:0][31:0] w_addr, w_data;
@@ -409,6 +412,7 @@ module otpu_slice
   assign coll_rdata = r_data[P_COLL];
   // the units' TMEM requests
   logic [LANES-1:0]        dma_ren, dma_wen, va_ren, vb_ren, v_wen;
+  logic [LANES-1:0]        dma_wbanks, v_wbanks;
   logic                    v_ren;   // the VPU's lanes take their read data this cycle
   logic [LANES-1:0][31:0]  dma_raddr, dma_waddr, dma_wdata, va_raddr, vb_raddr, v_waddr, v_wdata;
   logic [ULANES-1:0]       mxu_ren, mxu_wen, q_ren, q_ren2;
@@ -491,7 +495,7 @@ module otpu_slice
     .b_req(dma_breq), .b_gnt(b_rdy_i), .b_we(dma_bwe), .b_wmask(dma_bwmask), .b_wdata(dma_bwdata),
     .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i), .wr_idle(wr_idle_i),
     .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rdata(r_data[P_DMA]),
-    .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata),
+    .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata), .t_wbanks(dma_wbanks),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
@@ -528,7 +532,8 @@ module otpu_slice
     .gnt(gnt[G_VPU]), .ren(v_ren), .rhold(tm_lost[P_VA] || tm_lost[P_VB]),
     .ta_en(va_ren), .ta_addr(va_raddr), .ta_data(r_data[P_VA]),
     .tb_en(vb_ren), .tb_addr(vb_raddr), .tb_data(r_data[P_VB]),
-    .tw_en(v_wen), .tw_addr(v_waddr), .tw_data(v_wdata), .pf_u(v_u), .pf_frz(v_frz),
+    .tw_en(v_wen), .tw_addr(v_waddr), .tw_data(v_wdata), .tw_banks(v_wbanks),
+    .pf_u(v_u), .pf_frz(v_frz),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
@@ -634,32 +639,60 @@ module otpu_slice
   logic [NG-1:0][NG-1:0]    acf;
   logic [NG-1:0]            aok;
   always_comb begin
-    logic [NWP-1:0] wp;
-    for (int g = 0; g < NG; g++) begin
-      wp = grp_wports(g);
-      amk[g] = '0;
-      for (int p = 0; p < NWP; p++)
-        if (wp[p])
-          for (int l = 0; l < LANES; l++)
-            if (wq_en[p][l]) amk[g][w_addr[p][l][BW-1:0]] = 1'b1;
-    end
+    // DMA, VPU and the board's collective port register these alongside the
+    // requests they describe. No request-address decode precedes their conflicts.
+    amk = '0;
+    amk[G_DMA] = dma_wbanks;
+    amk[G_VPU] = v_wbanks;
+    amk[G_COLL] = coll_wbanks;
+    // MXU drain / ACC / RMAX still share a combinational write-port select.
+    for (int l = 0; l < LANES; l++)
+      if (wq_en[W_MXU][l]) amk[G_MXU][w_addr[W_MXU][l][BW-1:0]] = 1'b1;
     acf = '0;
     for (int g = 0; g < NG; g++)
       for (int h = 0; h < g; h++) acf[g][h] = (amk[g] & amk[h]) != '0;
   end
+`ifndef SYNTHESIS
+  // Check the complete group masks against the original arbiter decode, including
+  // empty, stalled, reset and bypass transitions. These are active in Verilator
+  // without --assert (procedural $fatal checks).
+  always @(posedge clk)
+    if (!srst) begin
+      logic [NG-1:0][LANES-1:0] ref_mask;
+      logic [NWP-1:0] wp;
+      ref_mask = '0;
+      for (int g = 0; g < NG; g++) begin
+        wp = grp_wports(g);
+        for (int p = 0; p < NWP; p++)
+          if (wp[p])
+            for (int l = 0; l < LANES; l++)
+              if (wq_en[p][l]) ref_mask[g][w_addr[p][l][BW-1:0]] = 1'b1;
+      end
+      if (amk !== ref_mask) $fatal(1, "otpu_slice: write bank masks differ from requests");
+    end
+`endif
   // the guests on the DMA's TMEM copy read only when no port before them there asks (from the
   // requests: the copy's block RAM address does not wait for the grants)
   // (TMEM_IMPL 1: no guests, the banked arbiter counts every copy's banks)
   localparam bit GUESTS = TMEM_IMPL == 0 || (TMEM_IMPL == 3 && TMEM_GST);
   wire q3_blk = GUESTS && (|rq_en[P_Q3]) && (|rq_en[P_DMA]);
-  wire coll_blk = GUESTS && (|rq_en[P_COLL]) && ((|rq_en[P_DMA]) || (|rq_en[P_Q3]));
+  // RLD is itself a registered one-lane request; the external port supplies its
+  // registered reduction. The group needs only this OR, not an 8-lane reduction
+  // after the collective's enable and RLD lane mux.
+  wire coll_any = coll_rany || rl_pq;
+  wire coll_blk = GUESTS && coll_any && ((|rq_en[P_DMA]) || (|rq_en[P_Q3]));
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!srst && coll_any !== (|rq_en[P_COLL]))
+      $fatal(1, "otpu_slice: collective/RLD read presence differs from requests");
+`endif
   // TMEM_RPL: a group whose port replays a lost read is held (tm_frz, a register); the
   // collective, which is not replayed, reads only where its request does not lose (tm_bx)
   logic [NG-1:0] rpl_hold, rpl_frz;
   always_comb
     for (int g = 0; g < NG; g++) begin
       rpl_frz[g] = TMEM_RPL && g != G_VPU && g != G_COLL && (tm_frz & grp_rports(g)) != '0;
-      rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && |rq_en[P_COLL]);
+      rpl_hold[g] = rpl_frz[g] || (TMEM_RPL && g == G_COLL && tm_bx[P_COLL] && coll_any);
     end
   always_comb begin
     for (int g = 0; g < NG; g++) begin
@@ -720,8 +753,11 @@ module otpu_slice
       for (int g = 0; g < NG; g++)
         if ((g == G_VPU) ? !v_ren : rpl_frz[g]) off = off | grp_rports(g);
     if (TMEM_IMPL == 3 && TMEM_RPL && coll_blk) off[P_COLL] = 1'b1;
-    for (int p = 0; p < NRP; p++)
+    for (int p = 0; p < NRP; p++) begin
       rq_t[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? '0 : rq_en[p];
+      rq_any[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? 1'b0 :
+                   ((p == P_COLL) ? coll_any : (|rq_en[p]));
+    end
   end
   logic [NG-1:0] gs3;
   always_comb begin
@@ -733,7 +769,7 @@ module otpu_slice
     logic [NRP-1:0] rp, ask;
     logic           rd_ok, self;
     tm_pre = '0;
-    for (int p = 0; p < NRP; p++) ask[p] = |rq_t[p];
+    ask = rq_any;
     for (int g = 0; g < NG; g++) begin
       rp = grp_rports(g);
       rd_ok = (tm_bx & rp & ask) == '0;
@@ -967,14 +1003,29 @@ module otpu_slice
     if (sys_rst) b_req <= 1'b0;
     else if (b_rdy_i) b_req <= b_req_c;
     if (b_rdy_i && b_req_c) begin
-      b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
+      b_tag <= b_tag_c; b_we <= b_we_c;
       b_addr <= b_addr_c; b_par <= b_par_c;
     end
+    // Payload may change while the register is empty. Take it whenever the
+    // register can accept a request, so the DMA/MXU request priority chain does
+    // not drive every payload CE. A parked request still holds all its bits.
+    if (b_rdy_i) begin b_wmask <= b_wmask_c; b_wdata <= b_wdata_c; end
     b_rvalid_i <= !sys_rst && b_rvalid;
     if (b_rvalid) begin
       b_rtag_i <= b_rtag; b_rdata_i <= b_rdata;
     end
   end : pb_reg
+`ifndef SYNTHESIS
+  // The old, request-qualified registers must agree whenever a payload is valid,
+  // including every cycle of a stalled write.
+  logic [D/4-1:0] b_wmask_ref;
+  logic [D*8-1:0] b_wdata_ref;
+  always_ff @(posedge clk)
+    if (b_rdy_i && b_req_c) begin b_wmask_ref <= b_wmask_c; b_wdata_ref <= b_wdata_c; end
+  always @(posedge clk)
+    if (!sys_rst && b_req && (b_wmask !== b_wmask_ref || b_wdata !== b_wdata_ref))
+      $fatal(1, "otpu_slice: valid port-B payload differs from request-qualified register");
+`endif
 
   // ---- port A's register (docs/asic.md "The ports"): the MXU's scale reads (a_req, a_addr) leave
   // the slice from flip-flops, so the MXU's issue (the DMA's request -> port B's grant -> the

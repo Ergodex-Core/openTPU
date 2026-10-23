@@ -407,15 +407,25 @@ module otpu_coll_port #(
   output logic                    pop,
   // the slice's collective port (otpu_slice coll_*)
   output logic [LANES-1:0]        coll_ren,
+  output logic                    coll_rany,
   output logic [LANES-1:0][31:0]  coll_raddr,
   input  logic [LANES-1:0][31:0]  coll_rdata,
   output logic [LANES-1:0]        coll_wen,
   output logic [LANES-1:0][31:0]  coll_waddr,
   output logic [LANES-1:0][31:0]  coll_wdata,
+  output logic [LANES-1:0]        coll_wbanks,
   input  logic                    gnt_local,
   output logic                    gnt
 );
   localparam int PW = $clog2(F);         // F a power of two: the pointers wrap
+  localparam int BW = $clog2(LANES);
+  function automatic logic [LANES-1:0] banks(
+    input logic [LANES-1:0] en, input logic [LANES-1:0][31:0] addr);
+    logic [LANES-1:0] b;
+    b = '0;
+    for (int l = 0; l < LANES; l++) if (en[l]) b[addr[l][BW-1:0]] = 1'b1;
+    return b;
+  endfunction
   // hq: hv's second cycle. The held read is asked from it (TMEM's input stage, release r2,
   // docs/tmem_nocopy.md 7: every unit's read goes to TMEM a cycle after it forms, the writes a
   // cycle after their grant), and held there until granted, with no replay
@@ -423,18 +433,24 @@ module otpu_coll_port #(
   logic [LANES-1:0]       hm;
   logic [LANES-1:0][31:0] ha;
   logic [LANES-1:0]       fm [F];
+  logic [LANES-1:0]       fb [F];
   logic [LANES-1:0][31:0] fa [F];
   logic [LANES-1:0][31:0] fd [F];
   logic [PW-1:0]          wp, rp;
   logic [PW:0]            n;
   wire                    wtake = n != '0 && gnt_local;
+  // Present the head from flip-flops, not the F:1 FIFO mux. Look ahead on a pop;
+  // bypass the incoming write when it becomes the head on this very edge.
+  // In particular a simultaneous pop/push at n == 1 must not read the old RAM slot.
+  logic [LANES-1:0]       head_m;
+  logic [LANES-1:0][31:0] head_a, head_d;
+  wire [PW-1:0]          rp_next = rp + 1'b1;
 
   assign gnt = gnt_local;
-  assign coll_ren = (hv && hq) ? hm : '0;
   assign coll_raddr = ha;
-  assign coll_wen = n != '0 ? fm[rp] : '0;
-  assign coll_waddr = fa[rp];
-  assign coll_wdata = fd[rp];
+  assign coll_wen = head_m;
+  assign coll_waddr = head_a;
+  assign coll_wdata = head_d;
 
   always_ff @(posedge clk) begin
     if (got) dd <= coll_rdata;          // fresh the cycle after the granted read
@@ -444,6 +460,7 @@ module otpu_coll_port #(
     end
     if (wv) begin
       fm[wp] <= wm;
+      fb[wp] <= banks(wm, wa);
       fa[wp] <= wa;
       fd[wp] <= wd;
     end
@@ -456,7 +473,23 @@ module otpu_coll_port #(
       wp <= '0;
       rp <= '0;
       n <= '0;
+      head_m <= '0;
+      coll_wbanks <= '0;
+      coll_ren <= '0;
+      coll_rany <= 1'b0;
     end else begin
+      // hq's next value implies hv's next value, even when rv sets hv.
+      // Register the old (hv && hq) ? hm : 0 presentation without moving it.
+      coll_ren <= (hv && !(hq && gnt_local)) ? (rv ? rm : hm) : '0;
+      coll_rany <= hv && !(hq && gnt_local) && |(rv ? rm : hm);
+      if (wv && (n == 0 || (n == 1 && wtake))) begin
+        head_m <= wm; head_a <= wa; head_d <= wd;
+        coll_wbanks <= banks(wm, wa);
+      end else if (wtake) begin
+        head_m <= (n > 1) ? fm[rp_next] : '0;
+        head_a <= fa[rp_next]; head_d <= fd[rp_next];
+        coll_wbanks <= (n > 1) ? fb[rp_next] : '0;
+      end
       got <= hv && hq && gnt_local;
       dv <= got;
       pop <= wtake;
@@ -469,6 +502,17 @@ module otpu_coll_port #(
     end
   end
 `ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst) begin
+      if (coll_ren !== ((hv && hq) ? hm : '0) || coll_rany !== (|coll_ren))
+        $fatal(1, "otpu_coll_port: registered read request differs from held read");
+      if (coll_wbanks !== banks(coll_wen, coll_waddr))
+        $fatal(1, "otpu_coll_port: registered write banks differ from request");
+      if (head_m !== ((n != 0) ? fm[rp] : '0))
+        $fatal(1, "otpu_coll_port: registered head enables differ from FIFO");
+      if (n != 0 && (head_a !== fa[rp] || head_d !== fd[rp]))
+        $fatal(1, "otpu_coll_port: registered head payload differs from FIFO");
+    end
   always @(posedge clk)
     if (!rst && ((rv && hv) || (wv && n == (PW+1)'(F) && !wtake)))
       $fatal(1, "otpu_coll_port: a read while one is held (%0d) or a write into a full FIFO", hv);

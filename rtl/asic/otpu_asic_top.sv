@@ -112,6 +112,12 @@ module otpu_asic_top
   logic [0:0][LANES-1:0][31:0]   coll_raddr, coll_rdata;
   logic [LANES-1:0]              coll_wen;
   logic [LANES-1:0][31:0]        coll_waddr, coll_wdata;
+  logic [LANES-1:0]              coll_wbanks;
+  always_comb begin
+    coll_wbanks = '0;
+    for (int l = 0; l < LANES; l++)
+      if (coll_wen[l]) coll_wbanks[coll_waddr[l][$clog2(LANES)-1:0]] = 1'b1;
+  end
 
   otpu_slice #(.SID(0), .S(1), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS),
                .ACT_ROWS(ACT_ROWS), .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS),
@@ -130,7 +136,9 @@ module otpu_asic_top
     .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
     .coll_req, .coll_cmd(coll_cmd[0]), .coll_ack,
     .coll_ren(coll_ren[0]), .coll_raddr(coll_raddr[0]), .coll_rdata(coll_rdata[0]),
-    .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl), .coll_gnt(coll_gl),
+    .coll_rany(|coll_ren[0]),
+    .coll_wen, .coll_waddr, .coll_wdata, .coll_wbanks,
+    .coll_gnt_local(coll_gl), .coll_gnt(coll_gl),
     .halted, .error(s_error), .wait_to, .a_inval, .icount, .pf(), .dump(1'b0));
 
   if (COLL_GATHER) begin : g_coll

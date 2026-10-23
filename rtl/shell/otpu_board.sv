@@ -270,9 +270,20 @@ module otpu_board #(
 
   // ---- hardware trace
   if (TRACE_DEPTH != 0) begin : g_trace
+    // Passive trace state resets one cycle after the board. The control registers
+    // hold tr_en/run low during system reset, before any program can produce an
+    // event. This local source removes the top reset's long route to the trace
+    // counters and queue; RUN resets and trace CLEAR keep their existing timing.
+    (* max_fanout = 64 *) logic rst_local;
+    always_ff @(posedge clk) rst_local <= rst;
     otpu_trace #(.DEPTH(TRACE_DEPTH), .QD(TRACE_QD), .WIN(WIN)) u_trace (
-      .clk, .rst, .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
+      .clk, .rst(rst_local), .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
       .rdata(tr_rdata), .count(tr_count), .drop(tr_drop), .busy(tr_busy));
+`ifndef SYNTHESIS
+    always @(posedge clk)
+      if (!rst && rst_local && tr_en && run)
+        $fatal(1, "otpu_board: trace enabled before local reset released");
+`endif
   end else begin : g_no_trace
     assign tr_rdata = '0;
     assign tr_count = '0;
@@ -315,6 +326,8 @@ module otpu_board #(
   logic [S-1:0]                  sc_req, sc_ack, sc_gl, sc_gnt;
   cmd_t                          sc_cmd [S];
   logic [S-1:0][LANES-1:0]       sc_ren, sc_wen;
+  logic [S-1:0][LANES-1:0]       sc_wbanks;
+  logic [S-1:0]                 sc_rany;
   logic [S-1:0][LANES-1:0][31:0] sc_raddr, sc_rdata, sc_waddr, sc_wdata;
 
   otpu_slice #(.SID(0), .S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS),
@@ -333,7 +346,9 @@ module otpu_board #(
     .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
     .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
     .coll_ren(sc_ren[0]), .coll_raddr(sc_raddr[0]), .coll_rdata(sc_rdata[0]),
+    .coll_rany(sc_rany[0]),
     .coll_wen(sc_wen[0]), .coll_waddr(sc_waddr[0]), .coll_wdata(sc_wdata[0]),
+    .coll_wbanks(sc_wbanks[0]),
     .coll_gnt_local(sc_gl[0]), .coll_gnt(sc_gnt[0]),
     .halted(q_halted[0]), .error(q_error[0]), .wait_to(q_wait_to[0]), .a_inval,
     .icount(q_icount[0]), .pf, .dump(1'b0));
@@ -417,7 +432,9 @@ module otpu_board #(
       .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
       .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
       .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
+      .coll_rany(sc_rany[s]),
       .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
+      .coll_wbanks(sc_wbanks[s]),
       .coll_gnt_local(sc_gl[s]), .coll_gnt(sc_gnt[s]),
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
@@ -472,11 +489,19 @@ module otpu_board #(
     assign coll_cmds = sc_cmd;
     assign sc_ack = coll_ack;
     assign sc_ren = coll_ren;
+    assign sc_rany[0] = |coll_ren[0];
     assign sc_raddr = coll_raddr;
     assign coll_rdata = sc_rdata;
     assign sc_wen[0] = coll_wen;
     assign sc_waddr[0] = coll_waddr;
     assign sc_wdata[0] = coll_wdata;
+    // The one-slice collective is directly wired; only the multi-slice port has
+    // a FIFO head alongside which its mask can be registered.
+    always_comb begin
+      sc_wbanks[0] = '0;
+      for (int l = 0; l < LANES; l++)
+        if (coll_wen[l]) sc_wbanks[0][coll_waddr[l][$clog2(LANES)-1:0]] = 1'b1;
+    end
     assign coll_gnt = &sc_gl;           // every slice's TMEM grant
     assign sc_gnt = coll_gnt;
   end else begin : g_xs
@@ -537,7 +562,9 @@ module otpu_board #(
         .clk, .rst(x_rst[s]), .rv(p_rv), .rm(p_rm), .ra(p_ra), .wv(p_wv), .wm(p_wm), .wa(p_wa),
         .wd(p_wd), .dv(p_dv), .dd(p_dd), .pop(p_pop),
         .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
+        .coll_rany(sc_rany[s]),
         .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
+        .coll_wbanks(sc_wbanks[s]),
         .gnt_local(sc_gl[s]), .gnt(sc_gnt[s]));
 
       // the slice's channels' beats this cycle (DRAM_RD / DRAM_WR), counted on its side
