@@ -3,6 +3,8 @@
 This file has NOT been run on hardware. It does not stop workers or load images.
 Usage on the existing EC2 host: python this_file.py --window <coordinator-label>
 """
+raise SystemExit("The legacy 300-second harness is disallowed by the user's 30-second total-outage limit.")
+
 from pathlib import Path
 from datetime import datetime, timezone
 import argparse
