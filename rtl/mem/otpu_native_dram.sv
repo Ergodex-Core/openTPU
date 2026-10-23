@@ -422,6 +422,8 @@ module otpu_native_dram #(
   // wh_r, wp_r; see their process); the next slot's beat and bucket; the bucket of slot qw_f
   logic [24:0]  wadr_r [NCH], wadr_n [NCH];
   logic [HW-1:0] wh_r [NCH], wh_n [NCH], wh_f [NCH];
+  logic [NH-1:0] wh_f_sel [NCH];              // the write head's decoded hazard bucket
+  logic [NCH-1:0] wh_ready;                   // whole beat, or its fill has returned
   logic [NCH-1:0]   wp_r;
 `ifndef SYNTHESIS
   logic [24:0]  wadr_o [NCH];
@@ -503,7 +505,46 @@ module otpu_native_dram #(
     assign wadr_o[c] = wam[qw_r[c]];                // (the registers' reference)
     assign wh_o[c] = whm[qw_r[c]];
 `endif
-    assign wh_f[c] = whm[qw_f[c]];
+    // Read the post-edge write head. whm writes its speculative tail even
+    // without a push, including during reset, so forward that write whenever
+    // it aliases the next head. This also covers empty -> nonempty and a pop
+    // of the last entry; a full queue does not write whm at all.
+    wire [WW-1:0] wf_next = rst ? '0 : qw_f[c] + WW'(h_dec[c]);
+    wire [WW-1:0] wf_tail = WW'(qw_f[c] + qw_n[c]);
+    wire [HW-1:0] wf_hash = !qw_n[c][WW] && wf_next == wf_tail ?
+                            whash(gb[c].m) : whm[wf_next];
+    always_ff @(posedge clk) begin
+      logic part_next, got_next;
+      part_next = wpart[c][wf_next];
+      got_next = wgot[c][wf_next];
+      // Unlike whm, wpart/wgot hold during reset. Their speculative tail
+      // update clears got; a fill response later in the process overrides it.
+      // Forward both writes to the next head, including a concurrent pop.
+      if (!rst) begin
+        if (!qw_n[c][WW] && wf_next == wf_tail) begin
+          part_next = !(&gb[c].strb);
+          got_next = 1'b0;
+        end
+        if (n_rvalid[c] && tgh[c].slot == wf_next)
+          case (tgh[c].k)
+            K_B, K_A: ;
+            default: got_next = 1'b1;
+          endcase
+      end
+      wh_f[c] <= wf_hash;
+      wh_f_sel[c] <= NH'(1) << wf_hash;
+      wh_ready[c] <= !part_next || got_next;
+    end
+`ifndef SYNTHESIS
+    always @(posedge clk) if (!rst && rst_seen) begin
+      if (wh_f[c] !== whm[qw_f[c]])
+        $fatal(1, "otpu_native_dram: channel %0d write-head bucket differs from RAM", c);
+      if (wh_f_sel[c] !== (NH'(1) << whm[qw_f[c]]))
+        $fatal(1, "otpu_native_dram: channel %0d write-head decode differs from RAM", c);
+      if (wh_ready[c] !== (!wpart[c][qw_f[c]] || wgot[c][qw_f[c]]))
+        $fatal(1, "otpu_native_dram: channel %0d write-head readiness differs from slot", c);
+    end
+`endif
     for (genvar k = 0; k < RBP; k++) begin : g_rb
       localparam int PB = 512 / RBP;
       logic [PB-1:0] rbm [RD];
@@ -546,7 +587,7 @@ module otpu_native_dram #(
       e_a = (qa_n[c] != 0) && (ha[c].we || a_iss[c] != 0 || ra_res[c] <= (AW_ + 1)'(AD - APF));
       e_wr = (qw_rn[c] != 0) && wp_r[c] && !w_blk[c];
       // an SW write once its slot is past the read point and, if partial, has its fill data
-      e_ww = (qw_n[c] != qw_rn[c]) && (!wpart[c][qw_f[c]] || wgot[c][qw_f[c]]) && !w_hold[c];
+      e_ww = (qw_n[c] != qw_rn[c]) && wh_ready[c] && !w_hold[c];
       e_b = (qb_n[c] != 0) && (hb[c].we || rb_res[c] < (RW + 1)'(RD));
       sv[c] = hv[c] || e_a || e_wr || e_ww || e_b;
       src[c] = hv[c] ? hsrc[c] : e_a ? S_A : e_wr ? S_WR : e_ww ? S_WW : S_B;
@@ -774,7 +815,7 @@ module otpu_native_dram #(
         end
         // ---- hazard buckets: slot qw_r passes the read point, slot qw_f's write goes out
         for (int k = 0; k < NH; k++)
-          if (h_ik[c][k] || h_dk[c][k]) wnz[c][k] <= h_iv[c][k] || whb[c][wh_f[c]] != (WW + 1)'(1);
+          if (h_ik[c][k] || h_dk[c][k]) wnz[c][k] <= h_iv[c][k] || whb[c][k] != (WW + 1)'(1);
         qb_n[c] <= (QW + 1)'(updn(16'(qb_n[c]), qb_push[c], popb));
         qw_n[c] <= (WW + 1)'(updn(16'(qw_n[c]), qw_push[c], popw));
         qw_rn[c] <= (WW + 1)'(updn(16'(qw_rn[c]), qw_push[c], h_inc[c]));
@@ -852,7 +893,7 @@ module otpu_native_dram #(
       h_dec[c] = src[c] == S_WW && wiss[c];
       for (int k = 0; k < NH; k++) begin
         h_ik[c][k] = h_inc[c] && wh_r[c] == HW'(k) && !(h_dec[c] && wh_f[c] == wh_r[c]);
-        h_dk[c][k] = h_dec[c] && wh_f[c] == HW'(k) && !(h_inc[c] && wh_f[c] == wh_r[c]);
+        h_dk[c][k] = h_dec[c] && wh_f_sel[c][k] && !(h_inc[c] && wh_f[c] == wh_r[c]);
         h_iv[c][k] = h_inc[c] && wh_r[c] == HW'(k);
       end
     end
@@ -907,10 +948,30 @@ module otpu_native_dram #(
     for (int c = 0; c < NCH; c++)
       for (int k = 0; k < NH; k++)
         if (h_ik[c][k] || h_dk[c][k])
-          whb[c][k] <= !h_iv[c][k] ? whb[c][wh_f[c]] - 1'b1 :
-                       w_blk[c] ? whb[c][wh_r[c]] + 1'b1 : (WW + 1)'(1);
+          // An enabled decrement has k == wh_f, an increment k == wh_r.
+          // Use the bucket's own counter, avoiding two wide read multiplexers
+          // between the write-head decode and every bucket's D input.
+          whb[c][k] <= !h_iv[c][k] ? whb[c][k] - 1'b1 :
+                       w_blk[c] ? whb[c][k] + 1'b1 : (WW + 1)'(1);
 `ifndef SYNTHESIS
   initial w_blk = '0;
+  always @(posedge clk) if (!rst && rst_seen)
+    for (int c = 0; c < NCH; c++)
+      for (int k = 0; k < NH; k++) begin
+        if (h_dk[c][k] !== (h_dec[c] && wh_f[c] == HW'(k) &&
+                            !(h_inc[c] && wh_f[c] == wh_r[c])))
+          $fatal(1, "otpu_native_dram: channel %0d bucket %0d decrement decode differs", c, k);
+        if (h_ik[c][k] || h_dk[c][k]) begin
+          if ((!h_iv[c][k] ? whb[c][k] - 1'b1 :
+                w_blk[c] ? whb[c][k] + 1'b1 : (WW + 1)'(1)) !==
+              (!h_iv[c][k] ? whb[c][wh_f[c]] - 1'b1 :
+                w_blk[c] ? whb[c][wh_r[c]] + 1'b1 : (WW + 1)'(1)))
+            $fatal(1, "otpu_native_dram: channel %0d bucket %0d local count differs", c, k);
+          if ((h_iv[c][k] || whb[c][k] != (WW + 1)'(1)) !==
+              (h_iv[c][k] || whb[c][wh_f[c]] != (WW + 1)'(1)))
+            $fatal(1, "otpu_native_dram: channel %0d bucket %0d local live bit differs", c, k);
+        end
+      end
   always @(posedge clk) if (!rst)
     for (int c = 0; c < NCH; c++)
       if (w_blk[c] != wnz[c][wh_r[c]])

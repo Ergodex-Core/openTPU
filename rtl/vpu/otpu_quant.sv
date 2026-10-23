@@ -133,7 +133,8 @@ module otpu_quant
   parameter int LANES = 8,
   parameter int GR    = 1024,               // group maxes of a row (QACT 4*KB, QST KB; not ROW)
   parameter int XD    = 1024,               // row buffer chunks (QACT rows <= XD*LANES); 0: none
-  parameter int SID   = 0
+  parameter int SID   = 0,
+  parameter int RBNK = LANES, RNSB = 1, RSBP = $clog2(RBNK)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -151,6 +152,7 @@ module otpu_quant
   input  logic [LANES-1:0][31:0]  t_rdata2,
   output logic                    t_ren3,     // RSCALE: the row factor (one word)
   output logic [31:0]             t_raddr3,
+  output logic [RBNK-1:0][RNSB-1:0] t_rbanks, t_rbanks2, t_rbanks3,
   input  logic [31:0]             t_rdata3,
   // ACT RAM write
   output logic [LANES-1:0]        act_we,
@@ -279,12 +281,40 @@ module otpu_quant
   logic [LANES-1:0][31:0] t_raddr_c, t_raddr2_c;
   logic                   t_ren3_c;
   logic [31:0]            t_raddr3_c;
+  function automatic logic [RBNK-1:0][RNSB-1:0] read_banks(
+    input logic [LANES-1:0] re, input logic [LANES-1:0][31:0] addr);
+    logic [RBNK-1:0][RNSB-1:0] v;
+    v = '0;
+    for (int l = 0; l < LANES; l++)
+      if (re[l]) v[addr[l] % RBNK][(addr[l] >> RSBP) % RNSB] = 1'b1;
+    return v;
+  endfunction
+  function automatic logic [RBNK-1:0][RNSB-1:0] read_bank3(
+    input logic re, input logic [31:0] addr);
+    logic [RBNK-1:0][RNSB-1:0] v;
+    v = '0;
+    if (re) v[addr % RBNK][(addr >> RSBP) % RNSB] = 1'b1;
+    return v;
+  endfunction
   always_ff @(posedge clk)
-    if (rst) begin t_ren <= '0; t_ren2 <= '0; t_ren3 <= 1'b0; end
+    if (rst) begin
+      t_ren <= '0; t_ren2 <= '0; t_ren3 <= 1'b0;
+      t_rbanks <= '0; t_rbanks2 <= '0; t_rbanks3 <= '0;
+    end
     else if (en) begin
       t_ren <= t_ren_c; t_ren2 <= t_ren2_c; t_ren3 <= t_ren3_c;
       t_raddr <= t_raddr_c; t_raddr2 <= t_raddr2_c; t_raddr3 <= t_raddr3_c;
+      t_rbanks <= read_banks(t_ren_c, t_raddr_c);
+      t_rbanks2 <= read_banks(t_ren2_c, t_raddr2_c);
+      t_rbanks3 <= read_bank3(t_ren3_c, t_raddr3_c);
     end
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!rst && rem_rst && (t_rbanks !== read_banks(t_ren, t_raddr) ||
+                 t_rbanks2 !== read_banks(t_ren2, t_raddr2) ||
+                 t_rbanks3 !== read_bank3(t_ren3, t_raddr3)))
+      $fatal(1, "otpu_quant: registered read banks differ from requests");
+`endif
   // (the addresses follow the position alone: a lane's counts only while its enable is up)
   always_comb begin
     t_ren_c = '0; t_ren2_c = '0; t_ren3_c = 1'b0;

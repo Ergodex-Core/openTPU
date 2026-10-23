@@ -387,10 +387,18 @@ module otpu_slice
   logic [NRP-1:0]                  tm_lost, tm_frz;               // TMEM_IMPL 3, TMEM_RPL
   logic [NRP-1:0][LANES-1:0]       rq_t;
   logic [NRP-1:0]                  rq_any;
+  logic [NRP-1:0]                  rq_off;
   logic [NRP-1:0][LANES-1:0][31:0] r_addr, r_data;
   logic [NWP-1:0][LANES-1:0]       wq_en, w_en;
   logic [NWP-1:0][LANES-1:0][31:0] w_addr, w_data;
   logic [NWP-1:0]                  w_gnt;   // each write port's grant (the DMA always writes)
+  // Unhashed requests decoded beside their existing request registers. Other
+  // geometries retain TMEM's original decode (including SBH's address hash).
+  localparam logic [NRP-1:0] RDEC = (TMEM_IMPL == 3 && TMEM_SBH == 0) ?
+    ((NRP'(1) << P_DMA) | (NRP'(1) << P_Q) | (NRP'(1) << P_Q2) |
+     (NRP'(1) << P_Q3) | (NRP'(1) << P_COLL)) : '0;
+  logic [NRP-1:0][LANES-1:0][TMEM_NSB-1:0] r_dec;
+  logic [LANES-1:0][TMEM_NSB-1:0] dma_rbanks, q_rbanks, q_rbanks2, q_rbanks3, rl_rbanks;
   // the MXU's ports keep the crossbar (its drain writes scattered rows); the others are rotators.
   // The quantizer's row-factor port (one word) and the collective's read port, rarely busy,
   // share the DMA's copy (ST reads): 6 copies of the memory instead of 8.
@@ -406,13 +414,14 @@ module otpu_slice
               .PRANK((TMEM_IMPL == 3) ? PRANK3 : PRANK), .NSB(TMEM_NSB), .SBP(TMEM_SBP),
               .GRP(RGRP), .SBH(TMEM_SBH), .RPL(TMEM_RPL), .RPLM(~(NRP'(1) << P_COLL)),
               .TOPP(P_DMA), .TDP(TMEM_TDP), .SIDE(TM_SIDE), .GST(TMEM_GST),
-              .PMP(TMEM_PMP), .IQ(1'b1)) u_tmem (
-    .clk, .clk_f, .r_en, .r_req(rq_t), .r_addr, .r_data, .w_en, .w_req(wq_en), .w_gnt, .w_addr,
+              .PMP(TMEM_PMP), .IQ(1'b1), .RDEC(RDEC)) u_tmem (
+    .clk, .clk_f, .r_en, .r_req(rq_t), .r_addr, .r_dec, .r_data, .w_en, .w_req(wq_en), .w_gnt, .w_addr,
     .w_data, .blk_x(tm_bx), .blk_s(tm_bs), .lost(tm_lost), .frz(tm_frz), .dump);
   assign coll_rdata = r_data[P_COLL];
   // the units' TMEM requests
   logic [LANES-1:0]        dma_ren, dma_wen, va_ren, vb_ren, v_wen;
   logic [LANES-1:0]        dma_wbanks, v_wbanks;
+  logic [LANES-1:0]        mxu_wbanks;
   logic                    v_ren;   // the VPU's lanes take their read data this cycle
   logic [LANES-1:0][31:0]  dma_raddr, dma_waddr, dma_wdata, va_raddr, vb_raddr, v_waddr, v_wdata;
   logic [ULANES-1:0]       mxu_ren, mxu_wen, q_ren, q_ren2;
@@ -489,18 +498,18 @@ module otpu_slice
   logic [31:0] ss_in_d [LANES], ss_fd [LANES], ss_y_d [LANES];
   logic [31:0] ss_o_d;
 
-  otpu_dma #(.D(D), .LANES(LANES), .HAS_DSTEP(HAS_SS)) u_dma (
+  otpu_dma #(.D(D), .LANES(LANES), .HAS_DSTEP(HAS_SS), .RNSB(TMEM_NSB), .RSBP(TMEM_SBP)) u_dma (
     .clk, .rst(rst_dma), .start(ustart[U_DMA]), .cmd(ucmd[U_DMA]), .rdy(r_dma), .done(d_dma),
     .err(dma_err), .ww_held(a_inval),
     .b_req(dma_breq), .b_gnt(b_rdy_i), .b_we(dma_bwe), .b_wmask(dma_bwmask), .b_wdata(dma_bwdata),
     .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i), .wr_idle(wr_idle_i),
-    .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rdata(r_data[P_DMA]),
+    .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rbanks(dma_rbanks), .t_rdata(r_data[P_DMA]),
     .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata), .t_wbanks(dma_wbanks),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .SID(SID), .WBANKS(LANES)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_bcause(mxu_bcause),
@@ -510,18 +519,21 @@ module otpu_slice
     .b_req(mxu_breq), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt), .b_rvalid(b_rvalid_i && !b_rtag_i),
     .b_rdata(b_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
-    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
+    .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_wbanks(mxu_wbanks),
+    .t_gnt(gnt[G_MXU]));
 
   // the quantizer's group maxes of a row (MX offsets; not ROW mode): a QACT's 4 KB (KB <=
   // ACT_BLOCKS: the ACT RAM's bound) and a QST's KB (its row in TMEM: KB <= TMEM_WORDS / D), so
   // every QACT and QST the ISA's bounds allow fits (the card: 512)
   localparam int QG = (4 * ACT_BLOCKS > TMEM_WORDS / D) ? 4 * ACT_BLOCKS : TMEM_WORDS / D;
   localparam int Q_GR = (QG <= 8) ? 8 : (1 << $clog2(QG));
-  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .SID(SID)) u_quant (
+  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .SID(SID),
+               .RBNK(LANES), .RNSB(TMEM_NSB), .RSBP(TMEM_SBP)) u_quant (
     .clk, .rst(rst_q), .start(ustart[U_Q]), .cmd(ucmd[U_Q]), .rdy(r_q), .done(d_q), .gnt(gnt[G_Q]),
     .t_ren(q_ren), .t_raddr(q_raddr), .t_rdata(r_data[P_Q][ULANES-1:0]),
     .t_ren2(q_ren2), .t_raddr2(q_raddr2), .t_rdata2(r_data[P_Q2][ULANES-1:0]),
     .t_ren3(q3_en), .t_raddr3(q3_addr), .t_rdata3(r_data[P_Q3][0]),
+    .t_rbanks(q_rbanks), .t_rbanks2(q_rbanks2), .t_rbanks3(q_rbanks3),
     .act_we, .act_row, .act_idx, .act_data, .act_dup, .act_off, .asc_we, .asc_row, .asc_blk, .asc_data,
     .a_want(q_awant), .wr_idle(wr_idle_i),
     .a_req(q_areq), .a_we(q_awe), .a_addr(q_aaddr), .a_wdata(q_awdata), .a_be(q_abe),
@@ -556,6 +568,22 @@ module otpu_slice
   logic [31:0] rl_a, rl_w, rl_m, rl_x, rl_pl;
   logic [15:0] rl_ph;
   wire         rl_busy = rl_pend || rl_got || rl_cv || rl_c1 || rl_c2 || rl_v;
+  function automatic logic [LANES-1:0][TMEM_NSB-1:0] rld_banks(
+    input logic re, input logic [31:0] addr);
+    logic [LANES-1:0][TMEM_NSB-1:0] v;
+    v = '0;
+    if (re) v[addr % LANES][(addr >> TMEM_SBP) % TMEM_NSB] = 1'b1;
+    return v;
+  endfunction
+  always_ff @(posedge clk)
+    if (srst) rl_rbanks <= '0;
+    else rl_rbanks <= rld_banks(rl_pend && !(rl_pq && r_en[P_COLL][0]),
+                                rl_start ? ucmd[U_COLL].w1 : rl_a);
+`ifndef SYNTHESIS
+  always @(posedge clk)
+    if (!srst && rl_rbanks !== rld_banks(rl_pq, rl_a))
+      $fatal(1, "otpu_slice: RLD read banks differ from request");
+`endif
   always_ff @(posedge clk) begin
     if (srst) begin
       rl_pend <= 1'b0; rl_pq <= 1'b0; rl_got <= 1'b0; rl_cv <= 1'b0; rl_c1 <= 1'b0; rl_c2 <= 1'b0;
@@ -605,6 +633,28 @@ module otpu_slice
   assign urdy  = {!coll_req && !rl_busy, r_vpu, r_q, r_mxu, r_dma};
   assign udone = {coll_ack || rl_v, d_vpu, d_q, d_mxu, d_dma};
 
+  always_comb begin
+    r_dec = '0;
+    r_dec[P_DMA] = dma_rbanks;
+    r_dec[P_Q] = q_rbanks; r_dec[P_Q2] = q_rbanks2; r_dec[P_Q3] = q_rbanks3;
+    r_dec[P_COLL] = rl_rbanks;
+    // This port is a rotator: every enabled lane's word is lane zero's
+    // address plus l, even if external collective lanes overlap an RLD
+    // overriding lane zero. Match that original routing, not an independent
+    // decode of the external lanes' addresses in that case.
+    for (int l = 0; l < LANES; l++) begin
+      logic [31:0] a;
+      a = r_addr[P_COLL][0] + 32'(l);
+      if (coll_ren[l] && (l != 0 || !rl_pq))
+        r_dec[P_COLL][a % LANES][(a >> TMEM_SBP) % TMEM_NSB] = 1'b1;
+    end
+    // The slice masks whole ports for replays, VPU hold, and guest priority.
+    // Apply those CURRENT-cycle masks here too; no new grant/hold stage.
+    // Empty requests already have an empty decoded vector; do not put the
+    // original lane-enable reduction back on the predecoded bank path.
+    for (int p = 0; p < NRP; p++) if (rq_off[p]) r_dec[p] = '0;
+  end
+
   // ---- TMEM bank arbiter: all-or-nothing grants in priority order
   function automatic logic [NRP-1:0] grp_rports(input int g);
     case (g)
@@ -645,9 +695,9 @@ module otpu_slice
     amk[G_DMA] = dma_wbanks;
     amk[G_VPU] = v_wbanks;
     amk[G_COLL] = coll_wbanks;
-    // MXU drain / ACC / RMAX still share a combinational write-port select.
-    for (int l = 0; l < LANES; l++)
-      if (wq_en[W_MXU][l]) amk[G_MXU][w_addr[W_MXU][l][BW-1:0]] = 1'b1;
+    // MXU direct-drain decode is registered with its metadata; RW/RMAX apply
+    // their original per-lane override priority inside the unit.
+    amk[G_MXU] = mxu_wbanks;
     acf = '0;
     for (int g = 0; g < NG; g++)
       for (int h = 0; h < g; h++) acf[g][h] = (amk[g] & amk[h]) != '0;
@@ -754,8 +804,9 @@ module otpu_slice
         if ((g == G_VPU) ? !v_ren : rpl_frz[g]) off = off | grp_rports(g);
     if (TMEM_IMPL == 3 && TMEM_RPL && coll_blk) off[P_COLL] = 1'b1;
     for (int p = 0; p < NRP; p++) begin
-      rq_t[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? '0 : rq_en[p];
-      rq_any[p] = ((TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p]) ? 1'b0 :
+      rq_off[p] = (TMEM_IMPL == 3 && !TMEM_RPL && tm_sv[p]) || off[p];
+      rq_t[p] = rq_off[p] ? '0 : rq_en[p];
+      rq_any[p] = rq_off[p] ? 1'b0 :
                    ((p == P_COLL) ? coll_any : (|rq_en[p]));
     end
   end
