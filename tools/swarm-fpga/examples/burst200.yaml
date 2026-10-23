@@ -1,0 +1,21 @@
+input_features:
+  - {name: tokens, type: token_ids}
+output_features:
+  - {name: next_token, type: token_ids}
+model:
+  type: causal_lm
+  vocab_size: 5
+  context: 6
+  width: 4
+  layers: 1
+  heads: 2
+  ff_width: 8
+trainer:
+  learning_rate: 0.05
+  batch_size: 1
+  sequence_length: 3
+  steps: 2
+  seed: 17
+backend:
+  type: f2
+  image: burst200
