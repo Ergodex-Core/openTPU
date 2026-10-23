@@ -19,6 +19,10 @@ simulator, a kernel language and its compiler, and the host software that drives
 card. If you want to understand how an AI accelerator works, from a matmul in Python down to
 the wires, this is a good place to start.
 
+For TPU architecture, rooflines, training, inference, and sharding, see the
+[JAX Scaling Book reading guide](docs/learning/jax-scaling-book.md). It connects the book to
+OpenTPU, separates TPU examples from FPGA measurements, and provides a pinned local download.
+
 ## Results
 
 The design runs ten modern models with their real weights on an Inspur YPCB-00338 card

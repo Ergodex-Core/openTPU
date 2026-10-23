@@ -1,0 +1,614 @@
+{
+  "repository": "https://github.com/jax-ml/scaling-book",
+  "website": "https://jax-ml.github.io/scaling-book/",
+  "commit": "173fb0851d7e654872f0327aff2e17607cf24106",
+  "commit_date": "2026-10-19T19:44:10Z",
+  "review_date": "2026-10-23",
+  "selection": "Exact chapter sources, upstream README/LICENSE, and referenced PNG/GIF assets for local study. No public redistribution clearance for all third-party figures.",
+  "chapters": [
+    {
+      "path": "index.md",
+      "title": "How to Scale Your Model"
+    },
+    {
+      "path": "roofline.md",
+      "title": "All About Rooflines"
+    },
+    {
+      "path": "tpus.md",
+      "title": "How to Think About TPUs"
+    },
+    {
+      "path": "sharding.md",
+      "title": "Sharded Matrices and How to Multiply Them"
+    },
+    {
+      "path": "transformers.md",
+      "title": "All the Transformer Math You Need to Know"
+    },
+    {
+      "path": "training.md",
+      "title": "How to Parallelize a Transformer for Training"
+    },
+    {
+      "path": "applied-training.md",
+      "title": "Training LLaMA 3 on TPUs"
+    },
+    {
+      "path": "inference.md",
+      "title": "All About Transformer Inference"
+    },
+    {
+      "path": "applied-inference.md",
+      "title": "Serving LLaMA 3-70B on TPUs"
+    },
+    {
+      "path": "profiling.md",
+      "title": "How to Profile TPU Programs"
+    },
+    {
+      "path": "jax-stuff.md",
+      "title": "Programming TPUs in JAX"
+    },
+    {
+      "path": "conclusion.md",
+      "title": "Conclusions and Further Reading"
+    },
+    {
+      "path": "gpus.md",
+      "title": "How to Think About GPUs"
+    }
+  ],
+  "files": [
+    {
+      "path": "LICENSE",
+      "bytes": 1116,
+      "sha256": "2567a694c350d7bd2e509ae31062341ff74d59f4f5b1b3dc49ca32dd79570ebb"
+    },
+    {
+      "path": "README.md",
+      "bytes": 3255,
+      "sha256": "04c9cda2a8be896db8b1eb4f52305d1dc5cc659d5c6f765868f24ed03d589b7a"
+    },
+    {
+      "path": "applied-inference.md",
+      "bytes": 27448,
+      "sha256": "6d97969789eaf1fff3e32066db862341be6da2da39bd4c4389bed85bd292a365"
+    },
+    {
+      "path": "applied-training.md",
+      "bytes": 14524,
+      "sha256": "998ff0d45f8a23f65fb848a2c9cb71dfbb8dd4b77ccff565afedc756782010d4"
+    },
+    {
+      "path": "assets/gpu/all-gather.gif",
+      "bytes": 723727,
+      "sha256": "fa84e515440ad5b8698fc1b3fea760015715333e407b7dd72e9a6839dd883748"
+    },
+    {
+      "path": "assets/gpu/all-to-all-approx.png",
+      "bytes": 92884,
+      "sha256": "7268f1780f8e04e57605a8f3c719b2e46aba70328598331349625852ecc03ec9"
+    },
+    {
+      "path": "assets/gpu/b200-node.png",
+      "bytes": 170483,
+      "sha256": "6c121a380c599d17afe259baea87c9991b260550d02eaa061c57c73510839bd1"
+    },
+    {
+      "path": "assets/gpu/blackwell-sm.png",
+      "bytes": 267147,
+      "sha256": "35a593e7c9e81884366a68f2a755906b21b798d06f21698a0b30201e6e4f7fdc"
+    },
+    {
+      "path": "assets/gpu/gb200-superpod.png",
+      "bytes": 595343,
+      "sha256": "4e244b3c92088771820212f125821acf104d628a4a27d9983f67d7ed81b3e5c3"
+    },
+    {
+      "path": "assets/gpu/gpu-all-gather-bw.png",
+      "bytes": 300902,
+      "sha256": "f4bcf47bd92aa3eb83200eca10e15ee8949147839e5b01d2ce98548d1893db1b"
+    },
+    {
+      "path": "assets/gpu/gpu-all-reduce-bw.png",
+      "bytes": 304999,
+      "sha256": "8cd612d839ce9c26e916a4e4526caec3af1593ea710383c57f2ced156027b0ef"
+    },
+    {
+      "path": "assets/gpu/gpu-diagram.png",
+      "bytes": 257088,
+      "sha256": "af5df0b0b45057528ad25cae61409214d3a22716da9c04e288b8e95c272b1fd9"
+    },
+    {
+      "path": "assets/gpu/h100-superpod.png",
+      "bytes": 1514744,
+      "sha256": "c873b18bf3c122c2419a270837e8f1df4ec770fa93ee17f7422b4fb1a1319806"
+    },
+    {
+      "path": "assets/gpu/megatron-hparams.png",
+      "bytes": 263882,
+      "sha256": "c0aafa8a17c78a5c50c99b197360e499d54bed9d190206e2a327550cfc880876"
+    },
+    {
+      "path": "assets/gpu/nvlink-nodes.png",
+      "bytes": 778560,
+      "sha256": "beae2d3cceb847b8c355160fe4d13a8e86355f688b598b489176bf584dd69d7e"
+    },
+    {
+      "path": "assets/gpu/nvlink4.png",
+      "bytes": 1583297,
+      "sha256": "1c3ac034349996ae9b62f9bd6dd4ad27289542c9d03079b304d9427871a715b6"
+    },
+    {
+      "path": "assets/gpu/pipeline-bubble.png",
+      "bytes": 12645,
+      "sha256": "3c909d42ee8772ef29354390030a9b13521dea8f28deadb617fb5160928fff81"
+    },
+    {
+      "path": "assets/gpu/pipeline-transfer.png",
+      "bytes": 19611,
+      "sha256": "91b3f04a5289cc87de2125b7b80d88a66f57ca79828d633818ddeb73d0d0781b"
+    },
+    {
+      "path": "assets/gpu/sharded-all-gather-cost.png",
+      "bytes": 62013,
+      "sha256": "2da636190eeba41b6138602667fa5caa5f478ec6952a204dfb6cf0892373eb07"
+    },
+    {
+      "path": "assets/gpu/sharp-algorithm.png",
+      "bytes": 163805,
+      "sha256": "e11f00a5b6522d6b190d544a7e8b1e984b6d62e7d42e47e3e6cf618bb5f7f2a9"
+    },
+    {
+      "path": "assets/gpu/sharp-all-reduce-cost.png",
+      "bytes": 239402,
+      "sha256": "5b46702f5ecf5140b43199d6d7c889307d050a47430a290453448b26a1d87bb7"
+    },
+    {
+      "path": "assets/gpu/superpod-diagram.png",
+      "bytes": 278972,
+      "sha256": "2817ab222ef378b67aa1fd909f8821032a9a58ee90b040060ec2f815c555c560"
+    },
+    {
+      "path": "assets/gpu/tpu-all-gather-bw.png",
+      "bytes": 325427,
+      "sha256": "d5f859602b8061c01d3b79dfd070eb99cfbd3ac94f37a40cbe38031705ec018c"
+    },
+    {
+      "path": "assets/gpu/tpu-all-reduce-bw.png",
+      "bytes": 314249,
+      "sha256": "5307e9728b622f651fec1765d2e06de4ffa1d01e3c738c79af241fe7a9ba7df4"
+    },
+    {
+      "path": "assets/gpu/warp-divergence.png",
+      "bytes": 77253,
+      "sha256": "dfc1adbad18a19ec5b069913231f6a157ef699bbbf28a1da5358377a6d63439d"
+    },
+    {
+      "path": "assets/img/2d-weight-stationary.png",
+      "bytes": 446658,
+      "sha256": "8c7006062d18814686467b75ebeb77a3acf866ef80a41529ae0811a8ab48ea12"
+    },
+    {
+      "path": "assets/img/ag_matmul.gif",
+      "bytes": 1003893,
+      "sha256": "ce3bd54abe85a2a81e056712f86e3504afcb46eb42b1b13d9d86bcdcf509d420"
+    },
+    {
+      "path": "assets/img/all-collectives.png",
+      "bytes": 69940,
+      "sha256": "94e61191538c81c83d09ddbb9bf56e3e7c4823b7843f9b5b317307453be092d3"
+    },
+    {
+      "path": "assets/img/all-gather-bandwidth.png",
+      "bytes": 256115,
+      "sha256": "220045033df402cc1737f513f90c6256770bce4471b95d9e63b81a0225706855"
+    },
+    {
+      "path": "assets/img/all-gather.gif",
+      "bytes": 775581,
+      "sha256": "b4a6cb99cefba34b069584668637c89cf537397242a7542d9a484e66212239f9"
+    },
+    {
+      "path": "assets/img/all-reduce-profile.png",
+      "bytes": 115143,
+      "sha256": "5068ff72f6e56bcdd68e1e1bd676467f19aa6f414295e2aca083f9e727335170"
+    },
+    {
+      "path": "assets/img/all-to-all.gif",
+      "bytes": 904576,
+      "sha256": "2463b7fdf237f67402fc78a9bca387b94d208f3b7fc502e60da4b0fdb7b344df"
+    },
+    {
+      "path": "assets/img/attn-xprof.png",
+      "bytes": 441063,
+      "sha256": "649526818488093d83100cf4edf27e3f5081f3d5d52497913716431f9bf96395"
+    },
+    {
+      "path": "assets/img/batch-scaling-latency.png",
+      "bytes": 106484,
+      "sha256": "41122908289a38ced6f6501554420ef516bf19392d0076400f45c25c539f4bf9"
+    },
+    {
+      "path": "assets/img/batch-scaling-throughput.png",
+      "bytes": 104648,
+      "sha256": "b457366c455fe12b1c74ecd87de6de8bf13bcc254f87fb031dd74cfedb72c480"
+    },
+    {
+      "path": "assets/img/batched-prefill.png",
+      "bytes": 119662,
+      "sha256": "67c3ea76a4d4ed4fb9ad04d8aac69e5aeece2da0b58505d2a092c293ed20e783"
+    },
+    {
+      "path": "assets/img/cached-inference.png",
+      "bytes": 232960,
+      "sha256": "4cbd6d5d8ddf21d9f894873fcd5521a96bd79da432bde939b5758efc52172a46"
+    },
+    {
+      "path": "assets/img/challenge-problem.png",
+      "bytes": 160882,
+      "sha256": "01761d7fc5762fbcfb6cb121cad0b726e196ec9f3ae0a23c2923248921315d31"
+    },
+    {
+      "path": "assets/img/continuous-batching.gif",
+      "bytes": 7369900,
+      "sha256": "32c42f6d97626b86d40f58fb43d394d7cb5327739ba9406e533429207388dce0"
+    },
+    {
+      "path": "assets/img/cores.png",
+      "bytes": 103647,
+      "sha256": "387e0362b63c995177de1c6c6e352695b0b61a65b58aed9c99902c3c122305db"
+    },
+    {
+      "path": "assets/img/data-parallelism.png",
+      "bytes": 201995,
+      "sha256": "122992e2d35318a355d826e7d69b082fa37c2afa471bcc07cc9709ee909e2c92"
+    },
+    {
+      "path": "assets/img/deepseek-pipeline.png",
+      "bytes": 124144,
+      "sha256": "1452f5f769b992c8713ab744acefc140dacddd9533ba21f6a81683e9228f31aa"
+    },
+    {
+      "path": "assets/img/disaggregation.png",
+      "bytes": 209044,
+      "sha256": "3a60663de3e3ff16d902ba780f688f8fd18672db483f00cb94ce4b1a1ff48156"
+    },
+    {
+      "path": "assets/img/dragon.png",
+      "bytes": 1799487,
+      "sha256": "ac653e2f7e90ad5ad8de56c903c668fe717194dbe8c6c672f2b12c2816c92dde"
+    },
+    {
+      "path": "assets/img/esta-figure.png",
+      "bytes": 234592,
+      "sha256": "f7e4df0d6d68dc4b26f8962862fea9b85f6c07f4bf97442fd3841562de5b5766"
+    },
+    {
+      "path": "assets/img/flash-algo.png",
+      "bytes": 666663,
+      "sha256": "3e9d35f2a629bbecfaba6662d7daba2bb2f5b48180b5c910ad53c2efaf5683ba"
+    },
+    {
+      "path": "assets/img/fsdp.png",
+      "bytes": 176332,
+      "sha256": "a93683fa106229924ec4033fd4882122d7a4c76316c4c0a63a465b814bbaff29"
+    },
+    {
+      "path": "assets/img/gmqa.png",
+      "bytes": 108941,
+      "sha256": "51c624a45fec6e8a097f66e5ecb780c9cb39619113c0631eb63b27a8cdbc664a"
+    },
+    {
+      "path": "assets/img/graph-viewer.png",
+      "bytes": 508355,
+      "sha256": "729c506ba7632aa7ee5c4e141803443d527deaf879fb86683cae840b2282b9ed"
+    },
+    {
+      "path": "assets/img/ici-wraparound.png",
+      "bytes": 198696,
+      "sha256": "3ed7837cb4b15f6b73fcd09aa571285e6db16b7857385d45606a492559863b0c"
+    },
+    {
+      "path": "assets/img/interleaving.png",
+      "bytes": 116853,
+      "sha256": "7776b70cd27268ff781b1d0dcd9bfa8986da59494d3f0a62688afc8fb558222e"
+    },
+    {
+      "path": "assets/img/kv-sharing.png",
+      "bytes": 135629,
+      "sha256": "d1ad1035b65fbfddf9c2c9ca10bd2144c8be8379eab3f3bcbfcd0e6c73c45b51"
+    },
+    {
+      "path": "assets/img/latency-cost.png",
+      "bytes": 245825,
+      "sha256": "cd033ca5a9809ea67955d3ff7503390a335018b04a19855b320c9bf0ede4b1d9"
+    },
+    {
+      "path": "assets/img/llama-json.png",
+      "bytes": 331222,
+      "sha256": "f10abd7cf161b43f8955da1233ac7ec32aebf426fc03252cee7dcbed6063cadf"
+    },
+    {
+      "path": "assets/img/math-comms-time.png",
+      "bytes": 226971,
+      "sha256": "33aa054f318a8cb0357d29c64a27051102e3508504a17ffe6632c1a162c188b7"
+    },
+    {
+      "path": "assets/img/matmul-flops.gif",
+      "bytes": 3327061,
+      "sha256": "c85c579e3a3f539fe7042c29dc19b0b5eba6a4519b28853320a2ef8da86bf97f"
+    },
+    {
+      "path": "assets/img/memory-viewer.png",
+      "bytes": 90045,
+      "sha256": "49426138fc26edc6b21da5acbac6954a3266933f371e10ac953af2f84be31a61"
+    },
+    {
+      "path": "assets/img/mixed-fsdp-comms-2.png",
+      "bytes": 137876,
+      "sha256": "66aeceec349aedc72c7d0fac823432ebe07c5b3d8f9230c4dc12ec4ea34a9856"
+    },
+    {
+      "path": "assets/img/mixed-fsdp-model-parallelism.png",
+      "bytes": 123854,
+      "sha256": "b8adfe48d4e4def44023c60904c3abeb404ed3f6c6e0209c509fd90214a98875"
+    },
+    {
+      "path": "assets/img/model-parallelism.png",
+      "bytes": 228458,
+      "sha256": "c44760501542aa20b2f19cec42a9b645758cbfde008f4e6eeecf9d8469d7131c"
+    },
+    {
+      "path": "assets/img/moe.png",
+      "bytes": 177441,
+      "sha256": "5d5dda192a1dbc82646c385b0df035a13e9df658701fb114ea95fa7e661620c7"
+    },
+    {
+      "path": "assets/img/more-subslices.png",
+      "bytes": 79481,
+      "sha256": "c84fd5cefdb85d6f2508c7ba2d136285e75f8eb3adaecb0472b3d66708b61d83"
+    },
+    {
+      "path": "assets/img/naive-inference.png",
+      "bytes": 202129,
+      "sha256": "1c69218012e775ba06664660ba9fc978302614a7cfccedb6106e851eef8f49d2"
+    },
+    {
+      "path": "assets/img/not-overlapped.png",
+      "bytes": 84007,
+      "sha256": "31342e66c67465d3e5fbc51fc144409402cdab6f3c494770898e38c1332b767b"
+    },
+    {
+      "path": "assets/img/overlapped.png",
+      "bytes": 330938,
+      "sha256": "28576f6e46cec918e923fb037f921e268f31f7194ce2929d6ec951c0dec69617"
+    },
+    {
+      "path": "assets/img/paged-attention.png",
+      "bytes": 137465,
+      "sha256": "74bfc914fc908aa1585976dbf3fecf4d1f7712e829788385983a412d5dd8dbab"
+    },
+    {
+      "path": "assets/img/pcie.png",
+      "bytes": 91724,
+      "sha256": "54174659b51ee877ca2313adcb39e60614b710a23ddd8ba1f8afda1bf37088c9"
+    },
+    {
+      "path": "assets/img/pointwise-product.gif",
+      "bytes": 7157009,
+      "sha256": "d6ce25a158cdead84fb9d7711209e74727cd59f39c4a8e82d4b5a51c06d358c3"
+    },
+    {
+      "path": "assets/img/prefix-caching-trie.png",
+      "bytes": 17011,
+      "sha256": "96e489277f56510a27b8b4d3d333dc844d9a863d66365a859cb187dd35322f82"
+    },
+    {
+      "path": "assets/img/reduce-scatter-xprof.png",
+      "bytes": 269191,
+      "sha256": "673597403d1a91c23a9e5477335a021fec7b12903266874a1800d2f3d2e082ee"
+    },
+    {
+      "path": "assets/img/reduce-scatter.gif",
+      "bytes": 1481794,
+      "sha256": "acbf35a60e2e43d6813ee7499066887fcd099c9adc23ce607edccb1d44f7461f"
+    },
+    {
+      "path": "assets/img/roofline-improved.png",
+      "bytes": 325475,
+      "sha256": "1e4b0e2321c6ad087fb9e33dfe18891659f120bedb619d4ffa4bfb41261937d4"
+    },
+    {
+      "path": "assets/img/roofline-plot-q3.png",
+      "bytes": 361090,
+      "sha256": "f5d0962eb67508045c55b369f023cc958a47297ae6516386a30165a66180038a"
+    },
+    {
+      "path": "assets/img/sharding-colored1.png",
+      "bytes": 94825,
+      "sha256": "0919650c210d93f5cb012ab4613f6a4b64cdf8acd078569a28f6aafee240c434"
+    },
+    {
+      "path": "assets/img/sharding-colored2.png",
+      "bytes": 64135,
+      "sha256": "8962d183618c7dd060701d64c2fc9a84c92d3dc41148e2d57a7aed7a6e7fe92e"
+    },
+    {
+      "path": "assets/img/sharding-colored3.png",
+      "bytes": 55362,
+      "sha256": "baba3fbb95830e5f866f284774066d4cd973fc9fa9a5a2b3920ed625b43bdcc9"
+    },
+    {
+      "path": "assets/img/sharding-colored4.png",
+      "bytes": 36359,
+      "sha256": "6f4832ede0a3290e90b25e395a26207a552717e1daf8b6315f09e08aae8975ee"
+    },
+    {
+      "path": "assets/img/sharding-colored5.png",
+      "bytes": 454661,
+      "sha256": "213e37ca5aefef5b5b8176ac7a46676d967e27a7dba9cdfb45de40ccadcd9c01"
+    },
+    {
+      "path": "assets/img/sharding-colored6.png",
+      "bytes": 93836,
+      "sha256": "a43112301646fbb3f9504aad5c3dd50b263379a7ceec30f887544eadffae0e5e"
+    },
+    {
+      "path": "assets/img/sharding-example.png",
+      "bytes": 72025,
+      "sha256": "d71e7f62deada1d8610fb620a3f2c7d46ecef85793341fe3756dace01bbf770a"
+    },
+    {
+      "path": "assets/img/spec-sampling1.png",
+      "bytes": 108048,
+      "sha256": "d3b13f463848dbc5972d529780ce65629c620f47e19e5de65804a400c0ee755e"
+    },
+    {
+      "path": "assets/img/spec-sampling2.png",
+      "bytes": 164235,
+      "sha256": "57e4789b90cf6ca878d6a4e4f46726e32cb4686b88f4643291504cf98bc797e0"
+    },
+    {
+      "path": "assets/img/spec-sampling3.png",
+      "bytes": 266380,
+      "sha256": "e39f17bf12acd1dacb421403fab8ff170d21f68bdd7b30b67a025b269e275625"
+    },
+    {
+      "path": "assets/img/subslices.png",
+      "bytes": 76072,
+      "sha256": "477417e7fbb8e65b0ed7f01a0d93ffd898e8e2dccd545134c32e2cdda217c253"
+    },
+    {
+      "path": "assets/img/systolic-array-bad.gif",
+      "bytes": 300710,
+      "sha256": "99668be6db7b3deb1a5a876ebbcc5f6c9a19f98028c53956a334d5d07f130cf7"
+    },
+    {
+      "path": "assets/img/systolic-array-pipelining.png",
+      "bytes": 83000,
+      "sha256": "4fda12269eb522e7b57135c69ca8ea4c6d2097e396c21c4fc2d0ecf6964a6692"
+    },
+    {
+      "path": "assets/img/systolic-array.gif",
+      "bytes": 1013818,
+      "sha256": "3e682587919ed9958e348062d56e0a04cfa31ed30c34d2767d89a9b457588f16"
+    },
+    {
+      "path": "assets/img/systolic-array2.gif",
+      "bytes": 1397631,
+      "sha256": "fbe1aec6623d07041c154644fb750fecbdc70834c0efa0d3a23af2fe3e64420e"
+    },
+    {
+      "path": "assets/img/tiling.png",
+      "bytes": 278270,
+      "sha256": "64ece3797f5868bafa636f0b1a8e42879cffe106a763b2cc235bb998d2556023"
+    },
+    {
+      "path": "assets/img/tiling2.png",
+      "bytes": 209749,
+      "sha256": "40492ced735823d96fa4a34e114acea217b954b281e9a23287e519f370c74028"
+    },
+    {
+      "path": "assets/img/tpu-bandwidth.png",
+      "bytes": 137586,
+      "sha256": "036145e83b5b13aad96f9defe3e161e8d488409d85c7365b6eb1df2e5ffcafb5"
+    },
+    {
+      "path": "assets/img/tpu-chip.png",
+      "bytes": 206869,
+      "sha256": "3c8878d42e9b43a0c22517f36a30bd14d1810044fa4dd0c83cb71a289d27f6dc"
+    },
+    {
+      "path": "assets/img/tpu-rack.png",
+      "bytes": 710989,
+      "sha256": "dfbd753ef07d86e07b8b5b69d914a22e808dfd61d6d18e1104f20f2416cadbd9"
+    },
+    {
+      "path": "assets/img/trace-viewer.png",
+      "bytes": 639382,
+      "sha256": "2db10a4279cc08f36bb9ca074fd2d1107d3bc0ea9080611e117e091147a05a0a"
+    },
+    {
+      "path": "assets/img/transformer-diagram.png",
+      "bytes": 91550,
+      "sha256": "bf82777555b58ffa2eb0e60c438f139197198050eed1abbd9eb2b6b544fb09f9"
+    },
+    {
+      "path": "assets/img/transformer-ffw.png",
+      "bytes": 288460,
+      "sha256": "297e3579abbac82f788ef757cc885108d4f58d6afdcb2761e8d19de7121e9b46"
+    },
+    {
+      "path": "assets/img/transformer-layer.png",
+      "bytes": 129985,
+      "sha256": "76a2096e3544bcf402b4719d975f200c8195a707cf6b605788819b0f6c3f1c84"
+    },
+    {
+      "path": "assets/img/transformer-xprof.png",
+      "bytes": 533988,
+      "sha256": "c11764dd8210ebc51188fe76384969c0735a4e9d132e7fe6e713db89beef479a"
+    },
+    {
+      "path": "assets/img/xprof-overview.png",
+      "bytes": 346047,
+      "sha256": "947781bd59c1df097454766baab18748878bcabc5b0ee1c53844ec3b52480a5a"
+    },
+    {
+      "path": "conclusion.md",
+      "bytes": 8259,
+      "sha256": "63cdd0894922e8f172fca66f877867014e04a72b2e6f4c30d443ac1b1ff050e0"
+    },
+    {
+      "path": "gpus.md",
+      "bytes": 93820,
+      "sha256": "9e66ec05d0775a5e919f1082f1c294f0e20a8945891582648cce4fe0d3cac0bb"
+    },
+    {
+      "path": "index.md",
+      "bytes": 15225,
+      "sha256": "13abb5388afd4eeb804697a93c2ca207b0290d0abb302f0319fe17a6136c22ed"
+    },
+    {
+      "path": "inference.md",
+      "bytes": 71886,
+      "sha256": "86778b0126c0c161b8b8774c2ad516da39826d37b0b278c78e4c52da9c54cf31"
+    },
+    {
+      "path": "jax-stuff.md",
+      "bytes": 28817,
+      "sha256": "0510e50f85f21243dd8095e73fc59aeb7bc8984cad8e5c07eed1cb53237976cb"
+    },
+    {
+      "path": "profiling.md",
+      "bytes": 19855,
+      "sha256": "b2a17d8311f20c1662f5289c3fdc1ceb0547dda596986119a4903f8afb7b28ee"
+    },
+    {
+      "path": "roofline.md",
+      "bytes": 23207,
+      "sha256": "aeb33bc64b70552a631f8102a59cca6dbae2dd08675bdfeaa9b7c8e8502e4492"
+    },
+    {
+      "path": "sharding.md",
+      "bytes": 65406,
+      "sha256": "6dc631f134787bd9b3dd5f098e62cda6e0d2722f31594fed8fab85e60b7b3292"
+    },
+    {
+      "path": "tpus.md",
+      "bytes": 38960,
+      "sha256": "b37d4fea33101744fbbf421c168733329f1b3e7ecd91ad1cdd47223d4f872437"
+    },
+    {
+      "path": "training.md",
+      "bytes": 61184,
+      "sha256": "ec6440d0809457c3b7eda30b916c2f1d09035f274b9570b4aafc087200097058"
+    },
+    {
+      "path": "transformers.md",
+      "bytes": 32373,
+      "sha256": "9d0aa9c021b53b7c1fe58581a7a8d0d7bc8f1377f6013bf7caed4221b15a7d6d"
+    }
+  ]
+}
