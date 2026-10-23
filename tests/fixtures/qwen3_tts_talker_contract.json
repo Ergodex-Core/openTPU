@@ -1,0 +1,132 @@
+{
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_file_sha256": "25c42656bcf810f06ef6bc1839bd7083f3c8cfedac3a147c4060b4262b1c96a0",
+  "source_url": "https://github.com/QwenLM/Qwen3-TTS/blob/022e286b98fbec7e1e916cb940cdf532cd9f488e/qwen_tts/core/models/modeling_qwen3_tts.py",
+  "source_nodes_sha256": {
+    "Qwen3TTSTalkerRotaryEmbedding": "5e4df1407b7a632f0cbe114cefe3befce14d0655956cdf04cca177803ee385bd",
+    "Qwen3TTSRMSNorm": "603a3a0f319d20d0b16c6bd1ead0bea01434220950f9960ceee9128580b6139f",
+    "eager_attention_forward": "e50a63a6df9969a28785a426bef17eca83d3f8f70af57fd72a7d1531492c0819",
+    "apply_multimodal_rotary_pos_emb": "9e686757ce5bdf5c0ae72ee8f46a17bc963e9ea97861151ddb511913da90b22e",
+    "Qwen3TTSTalkerAttention": "320ebe3b86b1aea22d9e73f1b6a1ad1afef0309fc23a957422597f2783a2f0bf",
+    "Qwen3TTSTalkerResizeMLP": "6484a7f8db8b7b5c7ad2a2e89211e586ce98e32d80597a9dd7b1b6a86a9a6d32",
+    "Qwen3TTSTalkerTextMLP": "6f4d8ab0d9d3078bc1e5b07d7874ff09f7943bd646b9c88e35a984e4bdc7b62a",
+    "Qwen3TTSTalkerDecoderLayer": "0c53acd0a595ad13f03d9cb2450896af871caba1e8d6decf292c9fd96ce232ac"
+  },
+  "source_not_executed": true,
+  "tensors": {
+    "talker.model.codec_embedding.weight": {
+      "shape": [
+        3072,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.input_layernorm.weight": {
+      "shape": [
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.mlp.down_proj.weight": {
+      "shape": [
+        1024,
+        3072
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.mlp.gate_proj.weight": {
+      "shape": [
+        3072,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.mlp.up_proj.weight": {
+      "shape": [
+        3072,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.post_attention_layernorm.weight": {
+      "shape": [
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.k_norm.weight": {
+      "shape": [
+        128
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.k_proj.weight": {
+      "shape": [
+        1024,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.o_proj.weight": {
+      "shape": [
+        1024,
+        2048
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.q_norm.weight": {
+      "shape": [
+        128
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.q_proj.weight": {
+      "shape": [
+        2048,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.layers.0.self_attn.v_proj.weight": {
+      "shape": [
+        1024,
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.model.text_embedding.weight": {
+      "shape": [
+        151936,
+        2048
+      ],
+      "dtype": "BF16"
+    },
+    "talker.text_projection.linear_fc1.bias": {
+      "shape": [
+        2048
+      ],
+      "dtype": "BF16"
+    },
+    "talker.text_projection.linear_fc1.weight": {
+      "shape": [
+        2048,
+        2048
+      ],
+      "dtype": "BF16"
+    },
+    "talker.text_projection.linear_fc2.bias": {
+      "shape": [
+        1024
+      ],
+      "dtype": "BF16"
+    },
+    "talker.text_projection.linear_fc2.weight": {
+      "shape": [
+        1024,
+        2048
+      ],
+      "dtype": "BF16"
+    }
+  }
+}

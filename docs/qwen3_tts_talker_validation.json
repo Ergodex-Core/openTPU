@@ -1,0 +1,420 @@
+{
+  "milestone": "resident text/codec embeddings + reused projection + complete talker layer 0",
+  "parent_sha": "cb98d4f3119c91d5b894c37102e7ec3f49fb4696",
+  "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "backend": "ISA diagnostic only; native shape compile uses f2.toml",
+  "host": "existing EC2 i-0c78de2253f66519d",
+  "source_directory": "/home/ubuntu/qwen3-tts-audit-20261023-02/source",
+  "test_ssm_command_id": "d79d69b7-1c34-4705-afe6-86a4e4ed0fcf",
+  "command": "python -m pytest tests/test_qwen3_tts.py tests/test_qwen3_tts_talker.py -q -o junit_family=legacy --junitxml=/home/ubuntu/qwen3-tts-audit-20261023-02/pytest-04.xml",
+  "result": "32 passed in 3.84s",
+  "exit_code": 0,
+  "python": "3.12.3",
+  "numpy": "2.5.4",
+  "pytest": "9.1.1",
+  "test_source_sha256": {
+    "opentpu/llm/qwen3_tts_talker.py": "6880a4ccc43702d64842f0fa5bc948421a1792982240f19f2c3883c0780b145d",
+    "opentpu/kernels/tts_talker.py": "8144f9bcb08e3f6984fefce4afb5a37fdd8138487ac9b4c1497156b0f73e4ec1",
+    "tests/test_qwen3_tts_talker.py": "9a6fadef6f752aa673b8f339288f0ade09e109694779274cd6cf1296155e9db3",
+    "tests/qwen3_tts_talker_reference.py": "6b639517ecf4a614e0fe2053627f1b816838516c04dc3300c93f02e2fc8ede3a",
+    "tests/fixtures/qwen3_tts_talker_contract.json": "4c6516a055fb30efac8f41769e269273ecac069c0e978dbe287cf71f1766c10d"
+  },
+  "unchanged_projection_source_sha256": {
+    "opentpu/llm/qwen3_tts.py": "b2b5a3cb5bf8a07c5e0fe8a7fea832c7f91cdfe458e69d8d6dc6ec0bf3753b03",
+    "opentpu/kernels/tts_projection.py": "779f2e1dec425a4705bf4afe52d5019f4c3f71bc3a3a82b881180da5e51731bf",
+    "tests/test_qwen3_tts.py": "a0674b1d3fdcfe67557e70f3a6588add854f53256476a86c68796b8e348e0b36",
+    "tests/fixtures/qwen3_tts_06b_config.json": "81aca2b6fac304944d8acf345272d8a9a727d5fc2e2e66b222ab4729340c7455"
+  },
+  "tested_compiler_base_sha": "e55992e4621f1930c57c9712dd96d5f1ec7c4e1c",
+  "local_base_sha": "bbee9039ac65fa54bd3f9b29ceb4007e070a5d75",
+  "base_delta": "Publisher deployment logging fix and regression only; no compiler/runtime changes",
+  "budget_ssm_command_id": "33423d1c-942d-4a55-8619-e0fa1ec8e312",
+  "native_compile": {
+    "target": "f2.toml compile only; shared card not queried",
+    "limits": {
+      "dram_bytes": 4294967296,
+      "imem_words": 32768,
+      "tmem_words": 65536
+    },
+    "layouts": [
+      {
+        "capacity": 256,
+        "dram_bytes": 1280214144,
+        "programs": [
+          {
+            "position": 0,
+            "instructions": 341,
+            "imem_words": 2728,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1280214144,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 218,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "ee3e10cbe68bcd1759fa41372000d6c40485bcf7ecdef5c0680a5a670de1bcdc"
+          },
+          {
+            "position": 255,
+            "instructions": 325,
+            "imem_words": 2600,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1280214144,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 202,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "92f28f675d38ae029569c357d7a0217d79ae5732efccb2915ba105db3beeb078"
+          }
+        ],
+        "regions_bytes": {
+          "ids": 8,
+          "text_scratch": 8192,
+          "projected": 4096,
+          "assembled": 4096,
+          "attention_residual": 4096,
+          "output": 4096,
+          "text_embedding": 1244659712,
+          "codec_embedding": 12582912,
+          "fc1.data": 4194304,
+          "fc1.scales": 40960,
+          "bias1": 8192,
+          "fc2.data": 2097152,
+          "fc2.scales": 20480,
+          "bias2": 4096,
+          "input_norm": 4096,
+          "post_norm": 4096,
+          "q_norm": 512,
+          "k_norm": 512,
+          "wq.data": 2097152,
+          "wq.scales": 24576,
+          "wk.data": 1048576,
+          "wk.scales": 12288,
+          "wv.data": 1048576,
+          "wv.scales": 12288,
+          "wo.data": 2097152,
+          "wo.scales": 20480,
+          "gate.data": 3145728,
+          "gate.scales": 36864,
+          "up.data": 3145728,
+          "up.scales": 36864,
+          "down.data": 3145728,
+          "down.scales": 28672,
+          "cosine": 65536,
+          "sine": 65536,
+          "kv": 540672
+        },
+        "alignment_bytes": 120
+      },
+      {
+        "capacity": 2048,
+        "dram_bytes": 1284916352,
+        "programs": [
+          {
+            "position": 0,
+            "instructions": 341,
+            "imem_words": 2728,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1284916352,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 218,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "4add3f7ed3f126b088d51845780b4713bfb2be6422678b4ee6f8852d39ced310"
+          },
+          {
+            "position": 255,
+            "instructions": 325,
+            "imem_words": 2600,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1284916352,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 202,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "87ec433af0bfaa21d76d8b491d62e38de308745f1ec10cb0693e0f1517634722"
+          },
+          {
+            "position": 256,
+            "instructions": 429,
+            "imem_words": 3432,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1284916352,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 29,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 37,
+              "MM": 62,
+              "VOP": 274,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "69cfa7b105ed91b069a069392204da74f3c0b839b4cfbb1d507616bfb6b4837a"
+          },
+          {
+            "position": 2047,
+            "instructions": 718,
+            "imem_words": 5744,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1284916352,
+            "opcode_histogram": {
+              "LI": 4,
+              "LD": 53,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 61,
+              "MM": 110,
+              "VOP": 426,
+              "QST": 16,
+              "LOOP": 8,
+              "ADDI": 32,
+              "HALT": 1
+            },
+            "program_sha256": "5abd5dbb60745d46117006bf4988b8281746b4cd72dbb3cf9542717b40638c84"
+          }
+        ],
+        "regions_bytes": {
+          "ids": 8,
+          "text_scratch": 8192,
+          "projected": 4096,
+          "assembled": 4096,
+          "attention_residual": 4096,
+          "output": 4096,
+          "text_embedding": 1244659712,
+          "codec_embedding": 12582912,
+          "fc1.data": 4194304,
+          "fc1.scales": 40960,
+          "bias1": 8192,
+          "fc2.data": 2097152,
+          "fc2.scales": 20480,
+          "bias2": 4096,
+          "input_norm": 4096,
+          "post_norm": 4096,
+          "q_norm": 512,
+          "k_norm": 512,
+          "wq.data": 2097152,
+          "wq.scales": 24576,
+          "wk.data": 1048576,
+          "wk.scales": 12288,
+          "wv.data": 1048576,
+          "wv.scales": 12288,
+          "wo.data": 2097152,
+          "wo.scales": 20480,
+          "gate.data": 3145728,
+          "gate.scales": 36864,
+          "up.data": 3145728,
+          "up.scales": 36864,
+          "down.data": 3145728,
+          "down.scales": 28672,
+          "cosine": 524288,
+          "sine": 524288,
+          "kv": 4325376
+        },
+        "alignment_bytes": 120
+      },
+      {
+        "capacity": 32768,
+        "dram_bytes": 1365525632,
+        "programs": [
+          {
+            "position": 0,
+            "instructions": 341,
+            "imem_words": 2728,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1365525632,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 218,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "6571f90429f7145deec8ed1de62e154fcea2e58b9020be2314ee50dcea6b6bf6"
+          },
+          {
+            "position": 255,
+            "instructions": 325,
+            "imem_words": 2600,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1365525632,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 21,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 29,
+              "MM": 46,
+              "VOP": 202,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "9fed736c7c25452b9827e8d7e12144188c3dda4e9589da23b99e303a3fa67200"
+          },
+          {
+            "position": 256,
+            "instructions": 429,
+            "imem_words": 3432,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1365525632,
+            "opcode_histogram": {
+              "LI": 3,
+              "LD": 29,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 37,
+              "MM": 62,
+              "VOP": 274,
+              "QST": 16,
+              "HALT": 1
+            },
+            "program_sha256": "91edff8c1ec4baf6fb12503f18c650c58998ad596878f22c001095e9389f483a"
+          },
+          {
+            "position": 32767,
+            "instructions": 718,
+            "imem_words": 5744,
+            "tmem_peak_words": 15162,
+            "dram_bytes": 1365525632,
+            "opcode_histogram": {
+              "LI": 4,
+              "LD": 53,
+              "RLD": 2,
+              "ST": 5,
+              "QACT": 61,
+              "MM": 110,
+              "VOP": 426,
+              "QST": 16,
+              "LOOP": 8,
+              "ADDI": 32,
+              "HALT": 1
+            },
+            "program_sha256": "e5808049faa562147d0cfb2964de54a95783ab0a26001315e09c273f41d606f9"
+          }
+        ],
+        "regions_bytes": {
+          "ids": 8,
+          "text_scratch": 8192,
+          "projected": 4096,
+          "assembled": 4096,
+          "attention_residual": 4096,
+          "output": 4096,
+          "text_embedding": 1244659712,
+          "codec_embedding": 12582912,
+          "fc1.data": 4194304,
+          "fc1.scales": 40960,
+          "bias1": 8192,
+          "fc2.data": 2097152,
+          "fc2.scales": 20480,
+          "bias2": 4096,
+          "input_norm": 4096,
+          "post_norm": 4096,
+          "q_norm": 512,
+          "k_norm": 512,
+          "wq.data": 2097152,
+          "wq.scales": 24576,
+          "wk.data": 1048576,
+          "wk.scales": 12288,
+          "wv.data": 1048576,
+          "wv.scales": 12288,
+          "wo.data": 2097152,
+          "wo.scales": 20480,
+          "gate.data": 3145728,
+          "gate.scales": 36864,
+          "up.data": 3145728,
+          "up.scales": 36864,
+          "down.data": 3145728,
+          "down.scales": 28672,
+          "cosine": 8388608,
+          "sine": 8388608,
+          "kv": 69206016
+        },
+        "alignment_bytes": 120
+      }
+    ],
+    "source_derived_reference": [
+      {
+        "test": "test_full_slice_matches_source_derived_reference[32]",
+        "max_relative_l2": {
+          "projected": 0.008611722763374963,
+          "assembled": 0.002669259241347937,
+          "attention_residual": 0.010017105451513051,
+          "output": 0.012076548296946904
+        }
+      },
+      {
+        "test": "test_full_slice_matches_source_derived_reference[128]",
+        "max_relative_l2": {
+          "projected": 0.009671471141099819,
+          "assembled": 0.002698334888820802,
+          "attention_residual": 0.00990029838125252,
+          "output": 0.011011485733014706
+        }
+      },
+      {
+        "test": "test_native_layer_widths_with_small_synthetic_vocabularies",
+        "max_relative_l2": {
+          "projected": 0.012205588640921103,
+          "assembled": 0.003459891262766295,
+          "attention_residual": 0.010796117757088218,
+          "output": 0.011774904309413246
+        }
+      },
+      {
+        "test": "test_attention_hardware_loop_with_independent_resident_cache",
+        "max_relative_l2": {
+          "output": 0.005083562254448348
+        }
+      }
+    ],
+    "native_parameter_elements": 336336128,
+    "native_layer_parameter_elements": 15730944
+  },
+  "hardware_access": false,
+  "rtl_simulation": false,
+  "synthesis": false,
+  "tensor_payload_downloaded": false,
+  "upstream_code_executed": false,
+  "real_checkpoint_values": false,
+  "full_model_validated": false,
+  "host_learned_math_in_device_program_path": false,
+  "request_dependent_host_input": "Two token IDs (8 bytes) and sequential position/program selection",
+  "offline_host_work": "Supplied-array weight packing and fixed RoPE table construction",
+  "pending": "Coordinated hardware validation window; full CustomVoice generation and audio decoder remain blocked",
+  "denied_actions": [],
+  "metrics_ssm_command_id": "54de60db-e1ac-48fd-a85c-4e343fae7632"
+}
