@@ -1,0 +1,19 @@
+{
+  "archive_sha256": "bd3926b03ae7fe6bf055a74009d2f6f8b7868e6d3693eaec6a7c868aed4e778a",
+  "artifact_hashes_verified": true,
+  "acceptance_start_source_hashes_verified": 31,
+  "source_tree_component_files_verified": 54,
+  "source_tree_runtime_files_verified": 95,
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "rows_hash_verified": true,
+  "component_accepted": true,
+  "integrated_accepted": true,
+  "overall_main_gate_passed": false,
+  "artifact_path_aliases": {
+    "run-transformer-tests-01.py": "run-transformer-tests-01.py.txt"
+  },
+  "historical_main_failed_receipt_unchanged": true
+}
