@@ -1,0 +1,788 @@
+{
+  "model_id": "FermionResearch/Phonon-2",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "passed": true,
+  "backend": "CPU ISA simulator + independent NumPy and own native PyTorch CPU audit equations",
+  "hardware_used": false,
+  "audio_to_transcript_validated": false,
+  "frontend_device_implemented": false,
+  "frontend_role": "Offline golden preparation only; fixture features supplied to the learned device subsampler",
+  "numpy": "2.5.4",
+  "torch": "2.14.1+cpu",
+  "elapsed_seconds": 78.54519470105879,
+  "source_sha256": {
+    "opentpu/asr/phonon2_int6.py": "bfc71951135d067aad0af6ef7eee124871a150f88f99e748c14a3fbf46b5d9ea",
+    "opentpu/asr/phonon2_subsampler.py": "7c86ef974ce17dbd7e2f7e6cc0fc701776f13e4ceb6c65ce495a391ba51cc086",
+    "tools/phonon2_subsample_reference.py": "9daef2ead5e85345521e11b17cc799c3ad07ec0fa76b9c66804ae990c6f611f4",
+    "tools/phonon2_qualify_subsampler.py": "776e482fe1d010c18d537d71cfe3f328031e302d86f3ac01f7ce4bad52eb118c",
+    "opentpu/asr/phonon2_conformer.py": "56134b41ed8a803f108310d36857540a5534b4400b932bd7535e8f5ff12d8bff",
+    "opentpu/asr/phonon2_linear.py": "ac10f55a5b09ef4dfd4cffa75ba8d10767566f0bf9c2d2e2c93831b134b5d30c",
+    "tools/phonon2_reference.py": "f566f419afb9d734b534d1287c88d749fc8814955a8b30f15a6d7807647db349",
+    "tools/phonon2_torch_audit.py": "d186c3d87ea030af43b0dd36fef2ba3eb626374a250cbcb81b4f1474713d5ade"
+  },
+  "runtime_source_sha256": {
+    "__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+    "compiler.py": "cb5141b6aa89bb2ac4868bdfeefa1140ee93a44cd0ca869f24b9c4925c7cc572",
+    "isasim.py": "d0fc7a987213fb2334d4e869743f940516319753a5d714d77c254ec59b413666",
+    "isa.py": "6ff71f284c38804ed127ff0eae185a0fbdc3bee229c451db6fba96d51810543c",
+    "language.py": "bfa5e568063cd6008b7cb79f0684b7b8e746599d1ce0b06c9956bcb7cc8fb684",
+    "fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+    "quant.py": "3987525b8200904ed5f7d562c79dfa5134a28d2cc14cdc8ca82a53b2a1662021",
+    "kernels/__init__.py": "b94e2b05a22069885ef32ee1ba2e6d6f637ad9bd665904f1f83dfe0f96c5befe",
+    "kernels/lib.py": "b5a1f136c6d1ac9169539c97d6b55b9f95d6340065cddcf43307324ee77d9502",
+    "kernels/vit.py": "ab5e5d69a630a75fe295c0d5b2e545f12f08d0bb3bb80bfdb4250e4498a643fd",
+    "kernels/attention.py": "69cff970c5f60a81d26f98f7bcb9f37d93e53ee6d83979b1b64b9393fa62a827",
+    "kernels/pieces.py": "d63689701da5283f0d3352802e648769773b6800498cad3d932f035d6ebf2312",
+    "kernels/mlp.py": "2485d838221c828c6780b104d8a3d29d4eae2f197e20ba9045bad8840d466dbb"
+  },
+  "checkpoint_record_sha256": {
+    "encoder.subsampling.layers.0.weight": "97cb2f918efcccd6413e5649bcb0c0ce6b1a49087706d39c0c6d69491413833e",
+    "encoder.subsampling.layers.0.bias": "7a3a2d1d63f76f1e26a9506b21aab9de58e844e596b7ace619a645a4e97e6df9",
+    "encoder.subsampling.layers.2.weight": "2b452b170f4be242d50c5db16f2a0e182c712915d974fcc0d296c92215df5eb7",
+    "encoder.subsampling.layers.2.bias": "6be936c7b22517670bbffaa16a7666bc583276ac7d469029326cc11a0ddf3b55",
+    "encoder.subsampling.layers.3.weight": "107c3a9757df5495b88cf0da87f1d93800610fab28ebdc509f38b0686f481947",
+    "encoder.subsampling.layers.3.bias": "0d3d045d730db55e0958104310fc18923ea56d635bfd541b9d6ba4ff56152090",
+    "encoder.subsampling.layers.5.weight": "5301b9fc35b62b65ad5c3041556cdff87a987010a0dafa93a35827ed9c1467c9",
+    "encoder.subsampling.layers.5.bias": "79598a1500b91db1f18c80079f4c1390e93168d25cc3b567f309557a0876cc2b",
+    "encoder.subsampling.layers.6.weight": "b8cc023a3321b284b819c3ff2c250ac5ac7fafa729affb4773db507912ee726f",
+    "encoder.subsampling.layers.6.bias": "7e3cf7ec86f71a0557bc527b8c11fd5c1f0c2ee4478302dace787f23b2473b07",
+    "encoder.subsampling.linear.weight": "b2003d9ecfba1b8f4bfa9841ae351d85fba3e0483730bd466efa951349f7d3a0",
+    "encoder.subsampling.linear.bias": "70cb56bcebe08388e9707e18710752ab1c4f42b8157d755b240e20580c2c6d48"
+  },
+  "speech_pcm_sha256": "7f84e087aa28b5a33212af26a4273b4902761b2543afadc32c3236bf51ca3f74",
+  "full_wave_sha256": "67dfc27041e572bea27936e75eedc542ccf6f3af5cc251a0ab4e1e947d787fc8",
+  "cases": [
+    {
+      "name": "tiny_odd",
+      "passed": true,
+      "input_sha256": "45d0f669a0f8dbd5c7831227f5de003da809cf4d1241168ba5d5f04b5a2beb59",
+      "output_sha256": "dcde88869130f6a31b443d30a73d572e0be686ab2913984af8b4c7f36cfcb661",
+      "stage_errors_vs_quantized_numpy": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "depthwise2": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 6.79272654846695e-08
+        },
+        "depthwise5": {
+          "max_abs_error": 1.1444091796875e-05,
+          "relative_l2_error": 2.543388953224775e-07
+        },
+        "flat": {
+          "max_abs_error": 3.0517578125e-05,
+          "relative_l2_error": 3.233961772225517e-07
+        },
+        "output": {
+          "max_abs_error": 0.00146484375,
+          "relative_l2_error": 2.6127436742839345e-07
+        },
+        "conv0": {
+          "max_abs_error": 7.152557373046875e-07,
+          "relative_l2_error": 6.577582128036483e-08
+        },
+        "pointwise3": {
+          "max_abs_error": 1.1444091796875e-05,
+          "relative_l2_error": 2.5389238478224427e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 3.0517578125e-05,
+          "relative_l2_error": 3.233961772225517e-07
+        }
+      },
+      "final_vs_dense_numpy": {
+        "max_abs_error": 25.434951782226562,
+        "relative_l2_error": 0.02158602880103321
+      },
+      "dense_numpy_vs_torch": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "conv0": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 5.6318292737776254e-08
+        },
+        "depthwise2": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 6.459487518671507e-08
+        },
+        "pointwise3": {
+          "max_abs_error": 1.33514404296875e-05,
+          "relative_l2_error": 2.882261561491642e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 1.52587890625e-05,
+          "relative_l2_error": 3.134822709845061e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 8.392333984375e-05,
+          "relative_l2_error": 5.480082923384789e-07
+        },
+        "flat": {
+          "max_abs_error": 8.392333984375e-05,
+          "relative_l2_error": 5.480082923384789e-07
+        },
+        "output": {
+          "max_abs_error": 0.00146484375,
+          "relative_l2_error": 4.1294922593291176e-07
+        }
+      },
+      "mask_passed": true,
+      "padded_linear_bias_preserved": true,
+      "budget": {
+        "dram_image_bytes": 4872320,
+        "weight_bytes_aligned": 4368384,
+        "phases": [
+          {
+            "name": "reset_scratch",
+            "instructions": 8,
+            "instruction_words": 64,
+            "tmem_peak_live_words": 512
+          },
+          {
+            "name": "pad_input",
+            "instructions": 10,
+            "instruction_words": 80,
+            "tmem_peak_live_words": 128
+          },
+          {
+            "name": "conv0_mask_relu",
+            "instructions": 37,
+            "instruction_words": 296,
+            "tmem_peak_live_words": 3081
+          },
+          {
+            "name": "depthwise2_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise3_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "depthwise5_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise6_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "flatten_channel_then_frequency",
+            "instructions": 26,
+            "instruction_words": 208,
+            "tmem_peak_live_words": 8192
+          },
+          {
+            "name": "project_with_unmasked_bias",
+            "instructions": 7,
+            "instruction_words": 56,
+            "tmem_peak_live_words": 6145
+          }
+        ],
+        "max_instruction_words": 360,
+        "max_tmem_live_words": 8192,
+        "stored_lengths": [
+          3,
+          2,
+          1,
+          1
+        ],
+        "valid_lengths": [
+          2,
+          1,
+          1,
+          1
+        ],
+        "max_act_blocks": 32,
+        "hardware_validated": false,
+        "audio_to_transcript_validated": false
+      }
+    },
+    {
+      "name": "stride_boundary",
+      "passed": true,
+      "input_sha256": "85d8ec32927c1182988f71a94148c06efd5a95873e7e3334a1e382e5ef089d8c",
+      "output_sha256": "97e6a62c3c56702ea2e4b280423524d3e91538907307a274be068afa2035d543",
+      "stage_errors_vs_quantized_numpy": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "depthwise2": {
+          "max_abs_error": 1.9073486328125e-06,
+          "relative_l2_error": 7.411064575594884e-08
+        },
+        "depthwise5": {
+          "max_abs_error": 2.6702880859375e-05,
+          "relative_l2_error": 3.0156519633675956e-07
+        },
+        "flat": {
+          "max_abs_error": 4.57763671875e-05,
+          "relative_l2_error": 3.95426395552877e-07
+        },
+        "output": {
+          "max_abs_error": 0.002197265625,
+          "relative_l2_error": 6.660090579214788e-07
+        },
+        "conv0": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 7.406520910957178e-08
+        },
+        "pointwise3": {
+          "max_abs_error": 2.09808349609375e-05,
+          "relative_l2_error": 2.707394502996322e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 4.57763671875e-05,
+          "relative_l2_error": 3.954263955528771e-07
+        }
+      },
+      "final_vs_dense_numpy": {
+        "max_abs_error": 17.72393798828125,
+        "relative_l2_error": 0.0181683177988512
+      },
+      "dense_numpy_vs_torch": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "conv0": {
+          "max_abs_error": 7.152557373046875e-07,
+          "relative_l2_error": 5.8954408482590924e-08
+        },
+        "depthwise2": {
+          "max_abs_error": 1.430511474609375e-06,
+          "relative_l2_error": 6.727767437762843e-08
+        },
+        "pointwise3": {
+          "max_abs_error": 1.71661376953125e-05,
+          "relative_l2_error": 2.763892895254088e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 1.9073486328125e-05,
+          "relative_l2_error": 2.69629151898361e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 3.24249267578125e-05,
+          "relative_l2_error": 5.123168753183571e-07
+        },
+        "flat": {
+          "max_abs_error": 3.24249267578125e-05,
+          "relative_l2_error": 5.123168753183571e-07
+        },
+        "output": {
+          "max_abs_error": 0.001220703125,
+          "relative_l2_error": 3.762886841700794e-07
+        }
+      },
+      "mask_passed": true,
+      "padded_linear_bias_preserved": true,
+      "budget": {
+        "dram_image_bytes": 5271680,
+        "weight_bytes_aligned": 4368384,
+        "phases": [
+          {
+            "name": "reset_scratch",
+            "instructions": 8,
+            "instruction_words": 64,
+            "tmem_peak_live_words": 512
+          },
+          {
+            "name": "pad_input",
+            "instructions": 10,
+            "instruction_words": 80,
+            "tmem_peak_live_words": 128
+          },
+          {
+            "name": "conv0_mask_relu",
+            "instructions": 37,
+            "instruction_words": 296,
+            "tmem_peak_live_words": 3081
+          },
+          {
+            "name": "depthwise2_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise3_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "depthwise5_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise6_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "flatten_channel_then_frequency",
+            "instructions": 26,
+            "instruction_words": 208,
+            "tmem_peak_live_words": 8192
+          },
+          {
+            "name": "project_with_unmasked_bias",
+            "instructions": 7,
+            "instruction_words": 56,
+            "tmem_peak_live_words": 11268
+          }
+        ],
+        "max_instruction_words": 360,
+        "max_tmem_live_words": 11268,
+        "stored_lengths": [
+          9,
+          5,
+          3,
+          2
+        ],
+        "valid_lengths": [
+          8,
+          4,
+          2,
+          1
+        ],
+        "max_act_blocks": 32,
+        "hardware_validated": false,
+        "audio_to_transcript_validated": false
+      }
+    },
+    {
+      "name": "speech_1688_crop",
+      "passed": true,
+      "input_sha256": "99f92150deaa8896d7f631cfd705f4067ce4913dddfa9521a3286e85b6e5ef94",
+      "output_sha256": "af16cfc88e6e6bde19a9a38edfec60933938159cc434d4e15868a396462b99b6",
+      "stage_errors_vs_quantized_numpy": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "depthwise2": {
+          "max_abs_error": 1.430511474609375e-06,
+          "relative_l2_error": 1.240869221444671e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 8.58306884765625e-06,
+          "relative_l2_error": 2.349700518692881e-07
+        },
+        "flat": {
+          "max_abs_error": 4.57763671875e-05,
+          "relative_l2_error": 2.965281043570949e-07
+        },
+        "output": {
+          "max_abs_error": 0.001953125,
+          "relative_l2_error": 2.538347472049994e-07
+        },
+        "conv0": {
+          "max_abs_error": 7.152557373046875e-07,
+          "relative_l2_error": 1.0354661744406545e-07
+        },
+        "pointwise3": {
+          "max_abs_error": 1.33514404296875e-05,
+          "relative_l2_error": 2.3072216047190248e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 4.57763671875e-05,
+          "relative_l2_error": 2.9652810435709493e-07
+        }
+      },
+      "final_vs_dense_numpy": {
+        "max_abs_error": 22.03094482421875,
+        "relative_l2_error": 0.013240242225012137
+      },
+      "dense_numpy_vs_torch": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "conv0": {
+          "max_abs_error": 6.109476089477539e-07,
+          "relative_l2_error": 9.088532970296527e-08
+        },
+        "depthwise2": {
+          "max_abs_error": 1.0728836059570312e-06,
+          "relative_l2_error": 1.0966405882523856e-07
+        },
+        "pointwise3": {
+          "max_abs_error": 2.09808349609375e-05,
+          "relative_l2_error": 2.524944790659394e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 1.0371208190917969e-05,
+          "relative_l2_error": 2.64939124201333e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 5.340576171875e-05,
+          "relative_l2_error": 4.2482535012482136e-07
+        },
+        "flat": {
+          "max_abs_error": 5.340576171875e-05,
+          "relative_l2_error": 4.2482535012482126e-07
+        },
+        "output": {
+          "max_abs_error": 0.00146484375,
+          "relative_l2_error": 3.320633829519445e-07
+        }
+      },
+      "mask_passed": true,
+      "padded_linear_bias_preserved": true,
+      "budget": {
+        "dram_image_bytes": 8086016,
+        "weight_bytes_aligned": 4368384,
+        "phases": [
+          {
+            "name": "reset_scratch",
+            "instructions": 7,
+            "instruction_words": 56,
+            "tmem_peak_live_words": 512
+          },
+          {
+            "name": "pad_input",
+            "instructions": 10,
+            "instruction_words": 80,
+            "tmem_peak_live_words": 128
+          },
+          {
+            "name": "conv0_mask_relu",
+            "instructions": 37,
+            "instruction_words": 296,
+            "tmem_peak_live_words": 3081
+          },
+          {
+            "name": "depthwise2_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise3_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "depthwise5_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise6_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "flatten_channel_then_frequency",
+            "instructions": 26,
+            "instruction_words": 208,
+            "tmem_peak_live_words": 8192
+          },
+          {
+            "name": "project_with_unmasked_bias",
+            "instructions": 14,
+            "instruction_words": 112,
+            "tmem_peak_live_words": 21512
+          }
+        ],
+        "max_instruction_words": 360,
+        "max_tmem_live_words": 21512,
+        "stored_lengths": [
+          57,
+          29,
+          15,
+          8
+        ],
+        "valid_lengths": [
+          56,
+          28,
+          14,
+          7
+        ],
+        "max_act_blocks": 32,
+        "hardware_validated": false,
+        "audio_to_transcript_validated": false
+      }
+    },
+    {
+      "name": "speech_1688_full_utterance",
+      "passed": true,
+      "input_sha256": "d16b27cd42908241d82f601c7e13463dfd6c5a95531a550adef7421c53a5961f",
+      "output_sha256": "0ff8820dc291b7b7da4828a08dd18965fac2f06b4ee3b287fe037541d4c61601",
+      "stage_errors_vs_quantized_numpy": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "depthwise2": {
+          "max_abs_error": 1.9073486328125e-06,
+          "relative_l2_error": 1.3100781392467992e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 0.015645265579223633,
+          "relative_l2_error": 2.926108805181439e-05
+        },
+        "flat": {
+          "max_abs_error": 0.3335132598876953,
+          "relative_l2_error": 0.00018559080465940973
+        },
+        "output": {
+          "max_abs_error": 2.245311737060547,
+          "relative_l2_error": 0.00024880747367866067
+        },
+        "conv0": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 1.0814343070323434e-07
+        },
+        "pointwise3": {
+          "max_abs_error": 0.023477882146835327,
+          "relative_l2_error": 2.6943847346898247e-05
+        },
+        "pointwise6": {
+          "max_abs_error": 0.3335132598876953,
+          "relative_l2_error": 0.00018559080465940987
+        }
+      },
+      "final_vs_dense_numpy": {
+        "max_abs_error": 47.5386962890625,
+        "relative_l2_error": 0.01519888136261725
+      },
+      "dense_numpy_vs_torch": {
+        "input": {
+          "max_abs_error": 0.0,
+          "relative_l2_error": 0.0
+        },
+        "conv0": {
+          "max_abs_error": 9.5367431640625e-07,
+          "relative_l2_error": 1.0402402456591931e-07
+        },
+        "depthwise2": {
+          "max_abs_error": 1.9073486328125e-06,
+          "relative_l2_error": 1.2103560013277335e-07
+        },
+        "pointwise3": {
+          "max_abs_error": 2.288818359375e-05,
+          "relative_l2_error": 2.4626428519384287e-07
+        },
+        "depthwise5": {
+          "max_abs_error": 1.52587890625e-05,
+          "relative_l2_error": 2.6473611042627547e-07
+        },
+        "pointwise6": {
+          "max_abs_error": 0.0001068115234375,
+          "relative_l2_error": 4.1256864685165744e-07
+        },
+        "flat": {
+          "max_abs_error": 0.0001068115234375,
+          "relative_l2_error": 4.1256864685165717e-07
+        },
+        "output": {
+          "max_abs_error": 0.00244140625,
+          "relative_l2_error": 3.4600113382825114e-07
+        }
+      },
+      "mask_passed": true,
+      "padded_linear_bias_preserved": true,
+      "budget": {
+        "dram_image_bytes": 46149248,
+        "weight_bytes_aligned": 4368384,
+        "phases": [
+          {
+            "name": "reset_scratch",
+            "instructions": 8,
+            "instruction_words": 64,
+            "tmem_peak_live_words": 512
+          },
+          {
+            "name": "pad_input",
+            "instructions": 10,
+            "instruction_words": 80,
+            "tmem_peak_live_words": 128
+          },
+          {
+            "name": "conv0_mask_relu",
+            "instructions": 37,
+            "instruction_words": 296,
+            "tmem_peak_live_words": 3081
+          },
+          {
+            "name": "depthwise2_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise3_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "depthwise5_mask",
+            "instructions": 45,
+            "instruction_words": 360,
+            "tmem_peak_live_words": 3328
+          },
+          {
+            "name": "pointwise6_mask_relu",
+            "instructions": 22,
+            "instruction_words": 176,
+            "tmem_peak_live_words": 4368
+          },
+          {
+            "name": "flatten_channel_then_frequency",
+            "instructions": 26,
+            "instruction_words": 208,
+            "tmem_peak_live_words": 8192
+          },
+          {
+            "name": "project_with_unmasked_bias",
+            "instructions": 19,
+            "instruction_words": 152,
+            "tmem_peak_live_words": 21512
+          }
+        ],
+        "max_instruction_words": 360,
+        "max_tmem_live_words": 21512,
+        "stored_lengths": [
+          707,
+          354,
+          177,
+          89
+        ],
+        "valid_lengths": [
+          706,
+          353,
+          177,
+          89
+        ],
+        "max_act_blocks": 32,
+        "hardware_validated": false,
+        "audio_to_transcript_validated": false
+      }
+    }
+  ],
+  "reset_passed": true,
+  "device_handoff_and_first_block": {
+    "passed": true,
+    "copy_passed": true,
+    "copy_instructions": 7,
+    "first_block_weights_sha256": {
+      "encoder.layers.0.feed_forward1.linear1": "cebb51f50d41d3f8f851cb3802a7987e147e86337ed8be36bb4e075c25e13d02",
+      "encoder.layers.0.feed_forward1.linear2": "352e0807355fde86e45d64dc18a1cf2462072b5398c228a791eddbf5d5d30d51",
+      "encoder.layers.0.self_attn.q_proj": "24dd57bca40b5cdbdeab79e4cb0b5ac26139d66f15acd7f938d505f3357a6e2d",
+      "encoder.layers.0.self_attn.k_proj": "ed6e923e3025a1a58b021d87eafdfc6140b7b7149223342d973712a4f1c6d8ea",
+      "encoder.layers.0.self_attn.v_proj": "1dbe333b5925b3322661071891ccfcfd675bdad8a88ed7a5417517b7da51f01e",
+      "encoder.layers.0.self_attn.o_proj": "1e660260e28920d34c187d8b61c0ae9674b906c35ab07351b855e4da9c722afe",
+      "encoder.layers.0.self_attn.relative_k_proj": "93f7bf2f1cb962c181d29b74d0c5a05a5bd81ea7f2cead42ca8132c4100d7839",
+      "encoder.layers.0.conv.pointwise_conv1": "82c3c1502ef7a531761a84a0f24f49431c5e0ec2bc4bf53b6a55142065f2ed75",
+      "encoder.layers.0.conv.pointwise_conv2": "d3dfd115b1eb4cd442fc5e10541cf665306e5bc24f997363facfc093ecbd1266",
+      "encoder.layers.0.feed_forward2.linear1": "136c9a70eef0d18fd700d20fe2e57bee448d844f71a044dfba9dfd898e9c0cb8",
+      "encoder.layers.0.feed_forward2.linear2": "403b8beeff9bb07e9f0563a2795f01a4aaa78097d6deb6be3f63d5d357f5a0ab",
+      "encoder.layers.0.self_attn.bias_u": "ed3ba6833222eb52e3335747be4f194f8d787da3864bf376c118bb6770fad395",
+      "encoder.layers.0.self_attn.bias_v": "b06b008359b05e238aa252e262dba73bf09fdbe99a1067c48a3340c6b322168d",
+      "encoder.layers.0.conv.depthwise_conv.weight": "ea552bcfb1beefcdb17e992d7a52e33a67671525c55149aeb9a31ba1af3bfdd1",
+      "encoder.layers.0.conv.norm.weight": "e861019c65d7eb90d336b98b42aa3041e14406dde01e9e06fc2680030b932fa2",
+      "encoder.layers.0.conv.norm.bias": "342610187c6429c799592ff24a7cc705fd3768cb7729e62504b14c0ae9609955",
+      "encoder.layers.0.conv.norm.running_mean": "7a3e8f3f7be2aec8c29f65f06099c6bd055488976a704ca5b89ecf6d075c40d4",
+      "encoder.layers.0.conv.norm.running_var": "c63d9ca92bbd2accea7833fa639f703353873032e24b91310b74a82718b30c32",
+      "encoder.layers.0.norm_feed_forward1.weight": "98b2779740469fc3bb16c4d7f5ed922d58c121a8730974e13e2ee3d05d3fab77",
+      "encoder.layers.0.norm_feed_forward1.bias": "912ce3f2b3a7e28f274094e423681271dad7b1294f1d6b1c6d408cd76c5892ac",
+      "encoder.layers.0.norm_self_att.weight": "9606cf4c08f21794bcfe09fc04b9b2c0c17eb016c3c53cf89baff3b94cc95247",
+      "encoder.layers.0.norm_self_att.bias": "64dc3b7255984f6fbfb32545c7edab8ed4533297a65a8a16296bb1482a111b0f",
+      "encoder.layers.0.norm_conv.weight": "92760e263d05cd9dd355ebf0b051e71fba6a78baa8202b0563a80825b0337a10",
+      "encoder.layers.0.norm_conv.bias": "6b00490e306f2828a8cbbe00220a42cbd7c2863c466dc733c90b029578eb563a",
+      "encoder.layers.0.norm_feed_forward2.weight": "dacbf5a6e634cbcb63e9c34bd2fcac2d894b3da11520d16bb98ee7df903e58c7",
+      "encoder.layers.0.norm_feed_forward2.bias": "079b86d32f0230d2a4506ac0e0f0c6ecb92ed200c29300597f800ae39a913ede",
+      "encoder.layers.0.norm_out.weight": "91e85d8de64faa3f0ef4ac060c28fe0cd03e13f4bc3d982a8ede6f06959092d2",
+      "encoder.layers.0.norm_out.bias": "7a34ad6dd7a14ed9515e49c8b2fd6ffaffc4976a500faae764cde018724b6af4"
+    },
+    "final_vs_quantized_numpy": {
+      "max_abs_error": 0.15824174880981445,
+      "relative_l2_error": 0.0024504757176130564
+    },
+    "final_vs_dense_torch": {
+      "max_abs_error": 0.6003923416137695,
+      "relative_l2_error": 0.013937088267201208
+    },
+    "host_activation_transform_or_reupload": false
+  },
+  "golden_sha256": "7f0846797eb3888d38fb530192365d7d12c5ae765eca14a39fff54cb70d2d193",
+  "golden_bytes": 165265,
+  "acceptance": {
+    "per_stage_relative_l2_vs_quantized": 0.001,
+    "subsampler_final_relative_l2_vs_dense": 0.03,
+    "dense_numpy_vs_torch_relative_l2": 2e-05,
+    "chain_relative_l2_vs_quantized": 0.005,
+    "chain_relative_l2_vs_dense": 0.08,
+    "scope": "Numerical slice qualification only; no WER or FPGA-performance conclusion"
+  },
+  "runtime_revision": "8815ac80226aa3a0d0b07d03344f61839580415e",
+  "runtime_note": "Hash-verified published source closure; new stage and existing unchanged block/audit files in separate overlay.",
+  "revision_binding": "Every recorded runtime hash matched git show at runtime_revision. Every new and retained implementation/audit file matched this worktree; retained Conformer/projection sources and receipts are unchanged.",
+  "compact_golden": {
+    "filename": "subsampler_speech_golden.npz",
+    "bytes": 53899,
+    "sha256": "1082f3a2a444a29beccd251257db477ebf39b1b8966ff5b66d7be71d58ddf5d2",
+    "valid_output_frames": 7,
+    "expected_output_valid_only": true,
+    "parent_golden_sha256": "7f0846797eb3888d38fb530192365d7d12c5ae765eca14a39fff54cb70d2d193",
+    "note": "Compact export of offline speech features and valid dense-reference activations only; no raw checkpoint tensors.",
+    "model_id": "FermionResearch/Phonon-2",
+    "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+    "speech_fixture": "speech_fixture.json",
+    "validation": "subsampler_validation.json",
+    "runtime_revision": "8815ac80226aa3a0d0b07d03344f61839580415e",
+    "golden_role": "Offline CPU native-PyTorch reference activations and features; no serving fallback",
+    "input_license": "CC-BY-4.0",
+    "model_weight_license": "CC-BY-4.0",
+    "model_attribution_url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/NOTICE"
+  },
+  "local_tests": {
+    "command": "python -B -m pytest -q tests/test_phonon2_subsampler.py tests/test_phonon2_conformer.py tests/test_phonon2_asr.py tests/test_kernels.py tests/test_autodecode.py",
+    "result": "133 passed, 1 skipped",
+    "elapsed_seconds": 6.58,
+    "new_subsampler_tests": 34,
+    "skip": "test_autodecode module requires unavailable transformers; no dependency installed"
+  },
+  "maximum_length_compile_test": {
+    "scope": "Compile only; synthetic immutable weights with exact official shapes; no 30-second execution or hardware claim",
+    "stored_lengths": [
+      3001,
+      1501,
+      751,
+      376
+    ],
+    "valid_lengths": [
+      3000,
+      1500,
+      750,
+      375
+    ],
+    "dram_image_bytes": 180698624,
+    "weight_bytes_aligned": 4368384,
+    "max_tmem_live_words": 21512,
+    "max_instruction_words": 360,
+    "phases": 9,
+    "max_act_blocks": 32
+  }
+}

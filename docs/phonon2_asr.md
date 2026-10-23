@@ -1,7 +1,9 @@
 # Phonon-2: FPGA-only ASR readiness
 
-Status: **blocked; projection and one bounded complete Conformer block are
-qualified in the ISA simulator**. The follow-up [Conformer/front-end report](phonon2_conformer.md)
+Status: **blocked; projection, the complete learned subsampler and one bounded
+Conformer block are qualified in the ISA simulator**. The latest
+[subsampler report](phonon2_subsampler.md) includes real-speech, reset and
+device-handoff results. The earlier [Conformer/front-end report](phonon2_conformer.md)
 contains the new golden vectors, policies, full-width block budgets and real-weight
 receipt. The original projection receipt below retains its historical compiler binding.
 There is no audio-to-transcript engine, FPGA transcript, latency result, or WER
@@ -158,7 +160,7 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 | Missing integration | Existing-ISA possibility / exact gap |
 |---|---|
 | Waveform frontend | No FFT/STFT/mel ASR kernels. FP32 add/mul/reductions/log2/rsqrt can express the math, but fixed-coefficient transforms, permutations, masks and normalization need lowering and validation. No native FFT or PCM16 conversion opcode. |
-| Learned subsampling | Phonon Conv2D subsampling, layouts and masks remain unimplemented. The separate Conformer kernel9 depthwise/GLU path is now ISA-qualified. |
+| Learned subsampling | The complete Conv2D/depthwise/pointwise/projection path, masks, layout and reset are ISA-qualified with real speech. Device waveform frontend and resident graph handoff remain missing. |
 | FastConformer | One full-width, complete 1..8-frame block is ISA-qualified with real weights; tiled full-context attention, all 24 blocks and device mask handoff are not integrated. |
 | LSTM predictor | No resident two-layer Phonon LSTM, embedding lookup or cache commit policy. Affines and sigmoid/tanh can use existing units; state/gate layout and gating must be compiled. |
 | TDT and text output | ARGMAX, RLD, LOOP and HALT CHAIN exist; token/duration split, blank masking, zero-duration bounds, state updates, UTF-8 token assembly and termination are not compiled. |
@@ -166,8 +168,9 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 
 No new image has yet been shown necessary for correctness. Frontend qualification
 semantics and vectors, and one complete Conformer block, are now available in the
-follow-up report. Next implement the bounded device frontend and learned subsampler,
-then test the block on their output. Resolve the documented TDT runtime disagreement,
+follow-up reports. The learned subsampler and short handoff into that block are
+also qualified. Next implement the bounded device waveform frontend and test its
+handoff into the subsampler. Resolve the documented TDT runtime disagreement,
 then add
 INT6 export and resident LSTM/joint/TDT control, test blank/zero-duration/limit
 cases, and assemble the tiled 24-layer graph. Compare features, encoder outputs,

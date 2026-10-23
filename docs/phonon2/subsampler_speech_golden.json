@@ -1,0 +1,18 @@
+{
+  "filename": "subsampler_speech_golden.npz",
+  "bytes": 53899,
+  "sha256": "1082f3a2a444a29beccd251257db477ebf39b1b8966ff5b66d7be71d58ddf5d2",
+  "valid_output_frames": 7,
+  "expected_output_valid_only": true,
+  "parent_golden_sha256": "7f0846797eb3888d38fb530192365d7d12c5ae765eca14a39fff54cb70d2d193",
+  "note": "Compact export of offline speech features and valid dense-reference activations only; no raw checkpoint tensors.",
+  "model_id": "FermionResearch/Phonon-2",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "speech_fixture": "speech_fixture.json",
+  "validation": "subsampler_validation.json",
+  "runtime_revision": "8815ac80226aa3a0d0b07d03344f61839580415e",
+  "golden_role": "Offline CPU native-PyTorch reference activations and features; no serving fallback",
+  "input_license": "CC-BY-4.0",
+  "model_weight_license": "CC-BY-4.0",
+  "model_attribution_url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/NOTICE"
+}
