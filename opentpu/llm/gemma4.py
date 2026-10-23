@@ -257,10 +257,10 @@ class Spec:
               wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
               ple_format: str | None = None, ple_host: bool | None = None,
               formats: str | None = None, experts: int | None = None,
-              prefill_rows: int | None = None) -> "Image":
+              prefill_rows: int | None = None, gemma_prompt_lookup: bool = False) -> "Image":
         return Image(self, cfg, cap, batch, rows, wformat, head_format, lookup, ple_format,
                      ple_host=ple_host, formats=formats, experts=experts,
-                     prefill_rows=prefill_rows)
+                     prefill_rows=prefill_rows, gemma_prompt_lookup=gemma_prompt_lookup)
 
     def truncated(self, layers) -> "Spec":
         """A model of some of the checkpoint's layers (in order): each shared layer attends to
@@ -801,7 +801,8 @@ class Image:
                  wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
                  ple_format: str | None = None, block: int = ATTN_BLOCK,
                  ple_host: bool | None = None, formats: str | None = None,
-                 experts: int | None = None, prefill_rows: int | None = None):
+                 experts: int | None = None, prefill_rows: int | None = None,
+                 gemma_prompt_lookup: bool = False):
         spec.check(cfg)
         if batch != 1:
             raise ValueError("Gemma 4 runs one sequence: batch=1")
@@ -849,6 +850,12 @@ class Image:
         # Engine's compile worker)
         self.choices = dict(formats=formats, ple_format=ple_format, ple_host=self.ple_host,
                             head_format=self.head_format)
+        if gemma_prompt_lookup:
+            from .gemma3 import Spec as Gemma3Spec
+            if type(spec) is not Gemma3Spec or not lookup or rows < 2 or spec.experts or spec.ple_dim:
+                raise ValueError("prompt lookup requires a dense Gemma 3 image with device inputs "
+                                 "and at least two rows")
+            self.choices["gemma_prompt_lookup"] = True
         rb = lambda k, f: Q.row_bytes(k, f, D)                          # noqa: E731
         self.v_loc = spec.vocab
         self.ring = min(cap, spec.window + RING_BLOCKS * block)         # sliding cache slots
@@ -986,6 +993,9 @@ class Image:
             if not spec.experts or (self.prefill_rows and layer_tile_flag(None)):
                 self.lookup.update(amask=b.alloc(amask_bytes(block, cfg.MCOLS, 2)),
                                    amask_M=cfg.MCOLS)
+            if gemma_prompt_lookup:
+                from .gemma_specdec import alloc
+                self.lookup["gemma_sd"] = alloc(b, cap, block, cfg.IMEM_WORDS, cfg.SEQ_WC)
         self.offload = None
         if mo:                      # path (a)'s words and expert slots (docs/offload.md)
             self.fmt = MO.ExpertFormat(H, mo.ffn, D, self.efmt)

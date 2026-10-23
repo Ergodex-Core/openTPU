@@ -12,11 +12,26 @@ rename opt_design otpu_hdk_opt_design
 proc opt_design {args} {
   rename opt_design {}
   rename otpu_hdk_opt_design opt_design
+  set otpu_hbm [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
+  if {$otpu_hbm} {
+    source [file join [file dirname $::constraints_dir] scripts otpu_tmem_mode.tcl]
+    set ::otpu_tmem_pmp [otpu_expected_tmem_pmp [file dirname [file dirname $::constraints_dir]]]
+  }
   read_xdc -unmanaged ${::constraints_dir}/cl_pnr_user.tcl
   # the pumped TMEM's multicycles again, on the linked design (read after synthesis too, where
   # they check the netlist; the ones in the out-of-context checkpoint did not survive the link:
   # round 4 placed the TMEM's read requests at the fast period). The file fails closed.
   read_xdc -unmanaged ${::constraints_dir}/otpu_clk2x.tcl
+  if {$otpu_hbm} {
+    if {$::otpu_tmem_pmp == 1} {
+      if {![llength [get_cells -quiet -hierarchical -filter {
+        ORIG_REF_NAME == otpu_pump_bank || REF_NAME == otpu_pump_bank}]]} {
+        error "openTPU pumped TMEM timing constraints were not applied after shell linking"
+      }
+    } else {
+      otpu_assert_core_tmem
+    }
+  }
   # Vivado's QoR suggestions from an earlier routed run of this netlist (build.py
   # --qor-suggestions: report_qor_suggestions / write_qor_suggestions there), pinned by digest;
   # opt_design and place_design apply the automatic ones in their stages

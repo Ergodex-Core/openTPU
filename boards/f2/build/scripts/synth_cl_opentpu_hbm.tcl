@@ -40,13 +40,19 @@ set otpu_constraint_criticals [get_msg_config -count -severity {CRITICAL WARNING
 set otpu_constraint_warnings [get_msg_config -count -severity WARNING]
 read_xdc -unmanaged ${constraints_dir}/cl_timing_user.tcl
 read_xdc -unmanaged ${constraints_dir}/otpu_clk2x.tcl
+source ${CL_DIR}/build/scripts/otpu_tmem_mode.tcl
+set otpu_tmem_pmp [otpu_expected_tmem_pmp $CL_DIR]
 if {[get_msg_config -count -severity {CRITICAL WARNING}] > $otpu_constraint_criticals ||
     [get_msg_config -count -severity WARNING] > $otpu_constraint_warnings} {
   error "openTPU timing constraints produced a warning"
 }
-if {![llength $c2x_pb] || ![info exists c2x_ip] || ![llength $c2x_ip] ||
-    ![info exists c2x_qp] || ![llength $c2x_qp]} {
-  error "openTPU pumped TMEM timing constraints were not applied"
+if {$otpu_tmem_pmp == 1} {
+  if {![llength $c2x_pb] || ![info exists c2x_ip] || ![llength $c2x_ip] ||
+      ![info exists c2x_qp] || ![llength $c2x_qp]} {
+    error "openTPU pumped TMEM timing constraints were not applied"
+  }
+} else {
+  otpu_assert_core_tmem
 }
 report_utilization -file ${reports_dir}/${CL}.${TAG}.synth_utilization.rpt
 report_utilization -hierarchical -hierarchical_depth 4 -file ${reports_dir}/${CL}.${TAG}.synth_utilization_hier.rpt

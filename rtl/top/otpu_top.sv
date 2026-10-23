@@ -111,7 +111,8 @@ module otpu_top
       logic [NCH-1:0][511:0] wdata, rdata;
       logic [NCH-1:0][63:0] wmask;
       logic [NCH-1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .PORTB(PORTB), .ALINE(ALINE),
+      // Keep the RTL performance model's credit depth equal to otpu_board NRD.
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH == 8 ? 128 : (NCH > 2 ? 64 : 128)), .PORTB(PORTB), .ALINE(ALINE),
                          .APR(RL != 0 ? 16 : 1)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
@@ -144,6 +145,47 @@ module otpu_top
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
       end
+`ifndef SYNTHESIS
+      string af_name;
+      integer af_fd = 0;
+      int af_cyc = 0, af_limit = 32768;
+      initial begin
+        if ($value$plusargs("adapter_feedback=%s", af_name)) begin
+          if (S != 1 || AXI != 1 || NAXI) $fatal(1, "adapter feedback requires direct S1 native model");
+          af_fd = $fopen(af_name, "w");
+          if (af_fd == 0) $fatal(1, "cannot open adapter feedback trace");
+        end
+        void'($value$plusargs("adapter_feedback_limit=%d", af_limit));
+        if (af_limit < 1 || af_limit > 131072) $fatal(1, "bad adapter feedback limit");
+      end
+      always @(posedge clk) if (af_fd != 0) begin
+        if (af_cyc == 0)
+          $fwrite(af_fd, "{\"kind\":\"config\",\"schema\":1,\"channels\":%0d,\"portb\":%0d,\"aline\":%0d,\"qd\":%0d,\"rd\":%0d,\"ad\":%0d,\"apf\":%0d,\"apr\":%0d}\n",
+                  NCH, PORTB, ALINE, u_adapt.QD, u_adapt.RD, u_adapt.AD, u_adapt.APF, u_adapt.APR);
+        if (af_cyc >= af_limit) begin
+          $fwrite(af_fd, "{\"kind\":\"truncated\",\"cycles\":%0d}\n", af_cyc);
+          $fclose(af_fd); af_fd = 0;
+        end else begin
+          $fwrite(af_fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"rst\":%0d,\"a_flush\":%0d,\"a_req\":%0d,\"a_addr\":%0d,\"a_ready\":%0d,\"a_rvalid\":%0d,",
+                  af_cyc, sys_rst, rst || ld_start || a_inval, a_req, a_addr, a_rdy, a_rvalid);
+          $fwrite(af_fd, "\"b_req\":%0d,\"b_tag\":%0d,\"b_we\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"b_ready\":%0d,\"b_rvalid\":%0d,\"b_rtag\":%0d,\"b_rcm\":%0d,\"b_rlast\":%0d,\"sw_req\":%0d,\"wr_idle\":%0d,\"rd_idle\":%0d,\"write_invalidate\":%0d,\"a_cache_valid\":%0d,\"a_run_valid\":%0d",
+                  b_req, b_tag, b_we, b_addr, b_n, b_rdy, b_rvalid, b_rtag, b_rcm, b_rlast, sw_req,
+                  wr_idle, rd_idle, $unsigned(u_adapt.wk_v), $unsigned(u_adapt.al_v), $unsigned(u_adapt.pv));
+          if (b_req && b_we)
+            $fwrite(af_fd, ",\"b_wmask\":\"%08h\",\"b_wdata\":\"%0256h\"", b_wmask, b_wdata);
+          if (a_rvalid)
+            $fwrite(af_fd, ",\"a_rdata\":\"%0128h\"", a_rdata);
+          if (b_rvalid)
+            $fwrite(af_fd, ",\"b_rdata\":\"%01024h\"", b_rdata);
+          $fwrite(af_fd, "}\n");
+          af_cyc++;
+          if (dump) begin
+            $fwrite(af_fd, "{\"kind\":\"end\",\"cycles\":%0d}\n", af_cyc);
+            $fclose(af_fd); af_fd = 0;
+          end
+        end
+      end
+`endif
       // the adapter's counters (rtlsim: A runs and fill reads, the partial writes by source)
       always @(posedge clk) if (dump)
         for (int c = 0; c < NCH; c++) begin

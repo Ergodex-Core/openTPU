@@ -266,8 +266,11 @@ def test_route_qualification_never_marks_a_failed_design_passed(tmp_path, fault)
     script = ROOT / 'boards/f2/build/scripts/validate_route.tcl'
     # Classifiers have their own property/query rejection tests. At this seam,
     # exercise the route gate with a remaining blocker or classification error.
-    scripts = tmp_path / 'scripts'
-    scripts.mkdir()
+    scripts = tmp_path / 'cl/build/scripts'
+    scripts.mkdir(parents=True)
+    (tmp_path / 'cl/design').mkdir()
+    (tmp_path / 'cl/design/opentpu_params.vh').write_text(".TMEM_PMP(32'h1)\n")
+    shutil.copy2(script.parent / 'otpu_tmem_mode.tcl', scripts / 'otpu_tmem_mode.tcl')
     for name in ('check_rule_severity.tcl', 'inspect_ddr_init.tcl'):
         shutil.copy2(script.parent / name, scripts / name)
     # (the classifier names the CL it found: the gate requires it to be the design's)
@@ -492,13 +495,15 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
         flow.check_hdk(tmp_path, t, shell=False)
 
 
-@pytest.mark.parametrize('name,S,nch,dram_log2,portb,khz',
-                         [('f2-hbm', 1, 8, 32, 1, 200000), ('f2-hbm:s2', 2, 8, 32, 1, 200000),
-                          ('f2-hbm16', 1, 16, 33, 1, 200000),
-                          ('f2-hbm:p2', 1, 8, 32, 2, 200000), ('f2-hbm16:p4', 1, 16, 33, 4, 200000),
-                          ('f2-hbm:p4rl8a64c150', 1, 8, 32, 4, 150000)])
+@pytest.mark.parametrize('name,S,nch,dram_log2,portb,khz,pmp',
+                         [('f2-hbm', 1, 8, 32, 1, 200000, 1), ('f2-hbm:s2', 2, 8, 32, 1, 200000, 1),
+                          ('f2-hbm16', 1, 16, 33, 1, 200000, 1),
+                          ('f2-hbm:p2', 1, 8, 32, 2, 200000, 1),
+                          ('f2-hbm16:p4', 1, 16, 33, 4, 200000, 1),
+                          ('f2-hbm:p4rl8a64c150', 1, 8, 32, 4, 150000, 1),
+                          ('f2-hbm:p4rl8a64tdp', 1, 8, 32, 4, 200000, 0)])
 def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2,
-                                                              portb, khz):
+                                                              portb, khz, pmp):
     """An HBM target (docs/f2_hbm.md): the HBM top in cl_opentpu's place, its synthesis script
     and CDC constraints in the DDR ones' places, the HDK's wrapper copied in, the geometry the
     target's (S x NCH ports of 512 MiB), the programs' architecture the f2 target's with T2 (the
@@ -510,8 +515,16 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
     wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
     t = T.load(name)
-    assert flow.is_hbm(t) and t.core_khz == khz and t.uarch['TMEM_PMP'] == 1
-    if S == 1 and khz == 200000:        # f2's programs and T2 (docs/ternary.md)
+    assert flow.is_hbm(t) and t.core_khz == khz and t.uarch['TMEM_PMP'] == pmp
+    if name == 'f2-hbm:p4rl8a64tdp':
+        pumped = T.load('f2-hbm:p4rl8a64')
+        assert T.config(t) == T.config(pumped)
+        assert T.rtl_params(t)['ARCH_HASH'] == T.rtl_params(pumped)['ARCH_HASH']
+        assert {k: v for k, v in T.rtl_params(t).items() if k != 'TMEM_PMP'} == \
+            {k: v for k, v in T.rtl_params(pumped).items() if k != 'TMEM_PMP'}
+        assert {k: v for k, v in t.uarch.items() if k != 'TMEM_PMP'} == \
+            {k: v for k, v in pumped.uarch.items() if k != 'TMEM_PMP'}
+    elif S == 1 and khz == 200000:      # f2's programs and T2 (docs/ternary.md)
         assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True, PORTB=portb)
         assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
         if portb > 1:                   # in the hash only when wide (docs/wide_port.md)
@@ -521,7 +534,7 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     d = cl / 'design'
     assert not (d / 'cl_opentpu.sv').exists() and (d / 'cl_opentpu_hbm.sv').is_file()
     assert (d / 'cl_mem_hbm_wrapper.sv').read_text() == wrapper.read_text()
-    # the core MMCM from clk_main_a0 (250 MHz): the core clock and the pumped TMEM's at 2x
+    # The MMCM geometry stays fixed: PMP0 leaves its 2x output unused by TMEM.
     div, mult, d0, d1 = {200000: (5, 24.0, 6.0, 3), 150000: (5, 24.0, 8.0, 4)}[khz]
     assert 250000 * mult / div / d0 == khz and d0 == 2 * d1 and 800 <= 250 * mult / div <= 1600
     assert (d / 'opentpu_geometry.vh').read_text() == (
@@ -545,9 +558,10 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
     assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
         (S, nch, 29, dram_log2)
-    assert params['CORE_KHZ'] == khz and 'CH_BYTES' not in params and 'DDR_MTS' not in params
+    assert params['CORE_KHZ'] == khz and params['TMEM_PMP'] == pmp
+    assert 'CH_BYTES' not in params and 'DDR_MTS' not in params
     vh = (d / 'opentpu_params.vh').read_text()
-    assert f".NCH(32'h{nch:x})" in vh and ".TMEM_PMP(32'h1)" in vh
+    assert f".NCH(32'h{nch:x})" in vh and f".TMEM_PMP(32'h{pmp:x})" in vh
     assert params['PORTB'] == portb and f".PORTB(32'h{portb:x})" in vh
     srcs = (d / 'sources.tcl').read_text()
     assert 'rtl/boards/f2/otpu_f2_hbm_sys.sv' in srcs and 'otpu_f2_sys.sv' not in srcs
@@ -585,6 +599,82 @@ def test_hbm_snapshot_refuses_32_ports(tmp_path):
     (shell / 'build/scripts/build_all.tcl').write_text('#\n')
     with pytest.raises(RuntimeError, match='S x NCH <= 31'):
         flow.prepare(tmp_path / 'run', shell, T.load('f2-hbm:s4'), '01234567', tmp_path / 'w.sv')
+
+
+def test_hbm_snapshot_refuses_unsupported_tmem_pump(tmp_path):
+    t = T.load('f2-hbm:p4rl8a64tdp')
+    t = dataclasses.replace(t, uarch={**t.uarch, 'TMEM_PMP': 2})
+    with pytest.raises(RuntimeError, match='TMEM_PMP 0 or 1'):
+        flow.prepare(tmp_path / 'run', tmp_path / 'shell', t, '01234567')
+
+
+@pytest.mark.parametrize('header,expected', [
+    (".TMEM_PMP(32'h0)\n", 'PMP=0'),
+    (".TMEM_PMP(32'h1)\n", 'PMP=1'),
+    (".TMEM_PMP(32'h2)\n", 'must contain exactly one'),
+    (".TMEM_PMP(32'h0), .TMEM_PMP(32'h1)\n", 'must contain exactly one'),
+    ('', 'must contain exactly one'),
+])
+def test_tmem_mode_reads_exactly_one_frozen_parameter(tmp_path, header, expected):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    design = tmp_path / 'design'
+    design.mkdir()
+    (design / 'opentpu_params.vh').write_text(header)
+    script = ROOT / 'boards/f2/build/scripts/otpu_tmem_mode.tcl'
+    harness = (f'source {{{script}}}\n'
+               f'if {{[catch {{otpu_expected_tmem_pmp {{{tmp_path}}}}} result]}} {{'
+               'puts stderr $result; exit 1}\nputs "PMP=$result"\n')
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert expected in result.stdout + result.stderr
+    assert (result.returncode == 0) == expected.startswith('PMP=')
+
+
+@pytest.mark.parametrize('fault,expected', [
+    ('none', 'OTPU_TMEM_PMP0_CHECK'),
+    ('pump', 'pumped cells remain'),
+    ('fast', 'sequential cells still use the fast clock'),
+    ('no_ram', 'no TMEM block RAMs found'),
+    ('bad_clock', 'not exclusively on core'),
+])
+def test_core_tmem_check_rejects_pumped_cells_and_fast_endpoints(fault, expected):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/scripts/otpu_tmem_mode.tcl'
+    harness = r'''
+proc get_cells {args} {
+  set query [join $args]
+  if {[string match *otpu_pump_bank* $query] || [string match *g_pmp*u_pb* $query]} {
+    return [expr {$::fault eq "pump" ? "pump" : ""}]
+  }
+  if {[string match *u_tmem/* $query]} {
+    return [expr {$::fault eq "no_ram" ? "" : "BRAM"}]
+  }
+  return {}
+}
+proc get_pins {args} {
+  set query [join $args]
+  if {[string match *CLKOUT0* $query]} {return MMCM/CLKOUT0}
+  if {[string match *CLKOUT1* $query]} {return MMCM/CLKOUT1}
+  if {[string match *BRAM* $query]} {return {BRAM/CLKA BRAM/CLKB}}
+  return {}
+}
+proc get_clocks {args} {
+  set pin [lindex $args end]
+  if {$pin eq "MMCM/CLKOUT1"} {return fast}
+  if {$pin eq "BRAM/CLKB" && $::fault eq "bad_clock"} {return fast}
+  return core
+}
+proc all_registers {args} {return [expr {$::fault eq "fast" ? "fast_ff" : ""}]}
+proc get_property {prop obj} {return $obj}
+'''
+    harness = (f'set fault {fault}\nsource {{{script}}}\n' + harness +
+               'if {[catch {otpu_assert_core_tmem} result]} {puts stderr $result; exit 1}\n')
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert expected in result.stdout + result.stderr
+    assert (result.returncode == 0) == (fault == 'none')
 
 
 def test_ddr_snapshot_leaves_the_hbm_files_out(tmp_path):
@@ -667,7 +757,7 @@ proc get_nets {args} { set out {}; foreach p [lindex $args end] { lappend out ne
 '''
 
 
-@pytest.mark.parametrize('fault', ['none', 'missing'])
+@pytest.mark.parametrize('fault', ['none', 'missing', 'core'])
 def test_hbm_floorplan_pblocks_are_one_slr_each_and_fail_closed(fault):
     tclsh = shutil.which('tclsh')
     if not tclsh:
@@ -680,7 +770,7 @@ foreach r $removed { puts "REMOVED [lindex $r 0] [lindex $r 1]" }
 foreach c $cells { puts "CELL [lindex $c 0] [lindex $c 1]" }
 foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
 '''
-    harness = (f'set fault {fault}\n' + FLOORPLAN_HARNESS +
+    harness = (f'set fault {fault}\nset ::otpu_tmem_pmp {0 if fault == "core" else 1}\n' + FLOORPLAN_HARNESS +
                f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
     result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
     if fault == 'missing':
@@ -725,7 +815,8 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     # (and the host chain's first register slice: the shell's PCIS SLR, the spec's crossing rule)
     assert sorted(pcis) == ['WRAPPER/CL/u_hrs512', 'WRAPPER/CL/u_sys/u_mem/u_pcis', 'WRAPPER/CL/u_sys/u_ocl']
     # the core and pump clock nets in one delay group (round 8)
-    assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
+    group = 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump'
+    assert (group in out) == (fault != 'core')
     assert all(c.startswith(('WRAPPER/CL/u_sys/', 'WRAPPER/CL/u_sc', 'WRAPPER/CL/g_ch', 'WRAPPER/CL/u_h'))
                for pb in cells.values() for c in pb)
     # each channel's SmartConnect and 450 MHz register slice beside its port, the host's chain
@@ -770,6 +861,20 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
 # wrapper reads cl_pnr_user.tcl, then otpu_clk2x.tcl (the pumped TMEM's multicycles, on the
 # linked design), unmanaged inside the HDK's opt_design call, once, and fails if the HDK's
 # sequence never reached it
+def linked_tcl_constraints(tmp_path, *, hbm=False):
+    """A DDR or frozen HBM CL layout for the linked implementation harness."""
+    cl = tmp_path / 'cl'
+    cons = cl / 'build/constraints'
+    cons.mkdir(parents=True)
+    if hbm:
+        (cl / 'build/scripts').mkdir()
+        (cl / 'design').mkdir()
+        (cl / 'design/opentpu_params.vh').write_text(".TMEM_PMP(32'h1)\n")
+        shutil.copy2(ROOT / 'boards/f2/build/scripts/otpu_tmem_mode.tcl',
+                     cl / 'build/scripts/otpu_tmem_mode.tcl')
+    return cons
+
+
 @pytest.mark.parametrize('fault', ['none', 'no_opt', 'bad_tcl'])
 def test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design(tmp_path, fault):
     tclsh = shutil.which('tclsh')
@@ -781,8 +886,7 @@ def test_link_wrapper_reads_the_placement_tcl_unmanaged_before_opt_design(tmp_pa
     if fault != 'no_opt':
         hdk_steps += 'opt_design -directive Explore\nplace_design\n'
     (hdk / 'build_level_1_cl.tcl').write_text(hdk_steps)
-    cons = tmp_path / 'constraints'
-    cons.mkdir()
+    cons = linked_tcl_constraints(tmp_path)
     (cons / 'small_shell_cl_pnr_user.xdc').write_text('# managed\n')
     (cons / 'cl_pnr_user.tcl').write_text('error "bad tcl"\n' if fault == 'bad_tcl' else
                                           'puts "PNR_TCL_RAN"\n')
@@ -803,6 +907,7 @@ proc read_xdc {{args}} {{
   if {{[lindex $args 0] eq "-unmanaged"}} {{ source [lindex $args 1] }}
 }}
 proc opt_design {{args}} {{ lappend ::log "opt_design $args" }}
+proc get_cells {{args}} {{ return {{}} }}
 proc place_design {{args}} {{ lappend ::log "place_design" }}
 proc close_project {{}} {{ error "stop" }}
 if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
@@ -829,6 +934,74 @@ foreach l $log {{ puts "LOG $l" }}
 
 
 
+@pytest.mark.parametrize('mode,expected', [
+    ('pmp1', 'PNR_TCL_RAN'),
+    ('pmp0', 'OTPU_TMEM_PMP0_CHECK'),
+    ('missing_header', 'missing frozen parameter header'),
+    ('missing_pump', 'pumped TMEM timing constraints were not applied'),
+])
+def test_link_wrapper_checks_tmem_mode_only_for_hbm(tmp_path, mode, expected):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    (hdk / 'build_level_1_cl.tcl').write_text('opt_design\n')
+    cons = linked_tcl_constraints(tmp_path, hbm=True)
+    header = tmp_path / 'cl/design/opentpu_params.vh'
+    if mode == 'missing_header':
+        header.unlink()
+    elif mode == 'pmp0':
+        header.write_text(".TMEM_PMP(32'h0)\n")
+    (cons / 'cl_pnr_user.tcl').write_text('puts "PNR_TCL_RAN"\n')
+    (cons / 'otpu_clk2x.tcl').write_text('puts "PUMP_XDC_RAN"\n')
+    script = ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'
+    harness = f'''
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set mode {mode}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{source [lindex $args end]}}
+proc opt_design {{args}} {{}}
+proc close_project {{}} {{error "stop"}}
+proc get_cells {{args}} {{
+  set query [join $args]
+  if {{[lindex $args end] eq "WRAPPER/CL/u_sc"}} {{return WRAPPER/CL/u_sc}}
+  if {{[string match *otpu_pump_bank* $query]}} {{
+    return [expr {{$::mode eq "missing_pump" || $::mode eq "pmp0" ? "" : "pump"}}]
+  }}
+  if {{[string match *g_pmp*u_pb* $query]}} {{return {{}}}}
+  if {{[string match *u_tmem/* $query]}} {{return BRAM}}
+  return {{}}
+}}
+proc get_pins {{args}} {{
+  set query [join $args]
+  if {{[string match *CLKOUT0* $query]}} {{return MMCM/CLKOUT0}}
+  if {{[string match *CLKOUT1* $query]}} {{return MMCM/CLKOUT1}}
+  if {{[string match *BRAM* $query]}} {{return {{BRAM/CLKA BRAM/CLKB}}}}
+  return {{}}
+}}
+proc get_clocks {{args}} {{return [expr {{[lindex $args end] eq "MMCM/CLKOUT1" ? "fast" : "core"}}]}}
+proc all_registers {{args}} {{return {{}}}}
+proc get_property {{prop obj}} {{return $obj}}
+if {{[catch {{source {{{script}}}}} result]}} {{puts "STOPPED $result"}}
+'''
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    assert result.returncode == 0, result.stderr
+    assert expected in result.stdout
+    if mode in ('pmp1', 'pmp0'):
+        assert 'PUMP_XDC_RAN' in result.stdout
+        assert 'STOPPED openTPU: implementation produced no routed checkpoint' in result.stdout
+    else:
+        assert 'STOPPED' in result.stdout
+
+
 # build_level_1_cl.tcl with an incremental reference (build.py --incremental-from): the pinned
 # reference read once, immediately before the HDK's place_design (after its post_opt checkpoint),
 # its reuse reported; a wrong digest, an unknown directive or an HDK sequence that never places
@@ -844,8 +1017,7 @@ def test_incremental_reference_is_read_once_right_before_place_design(tmp_path, 
     if fault != 'no_place':
         steps += 'place_design -directive SSI_SpreadLogic_high -no_bufg_opt\nphys_opt_design\nroute_design\n'
     (hdk / 'build_level_1_cl.tcl').write_text(steps)
-    cons = tmp_path / 'constraints'
-    cons.mkdir()
+    cons = linked_tcl_constraints(tmp_path)
     (cons / 'cl_pnr_user.tcl').write_text('')
     (cons / 'otpu_clk2x.tcl').write_text('')
     ref = tmp_path / 'ref.dcp'
@@ -874,6 +1046,7 @@ proc set_param {{args}} {{}}
 proc create_project {{args}} {{}}
 proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
 proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc get_cells {{args}} {{ return {{}} }}
 proc write_checkpoint {{args}} {{ lappend ::log "write_checkpoint $args" }}
 proc read_checkpoint {{args}} {{ lappend ::log "read_checkpoint $args" }}
 proc report_incremental_reuse {{args}} {{ lappend ::log "report_incremental_reuse" }}
@@ -965,8 +1138,7 @@ def test_qor_suggestions_are_read_once_before_opt_design(tmp_path, fault):
     hdk = tmp_path / 'hdk/build/scripts'
     hdk.mkdir(parents=True)
     (hdk / 'build_level_1_cl.tcl').write_text('opt_design -directive Explore\nplace_design\n')
-    cons = tmp_path / 'constraints'
-    cons.mkdir()
+    cons = linked_tcl_constraints(tmp_path)
     (cons / 'cl_pnr_user.tcl').write_text('')
     (cons / 'otpu_clk2x.tcl').write_text('')
     rqs = tmp_path / 'ref.rqs'
@@ -996,6 +1168,7 @@ proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
 proc read_qor_suggestions {{args}} {{ lappend ::log "read_qor_suggestions $args" }}
 proc get_qor_suggestions {{args}} {{ return {{RQS_TIMING-3-1 RQS_NETLIST-26-1}} }}
 proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc get_cells {{args}} {{ return {{}} }}
 proc place_design {{args}} {{ lappend ::log "place_design" }}
 proc close_project {{}} {{ error "stop" }}
 if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{

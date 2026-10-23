@@ -18,6 +18,7 @@ flow = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(flow)
 
 RECOVERY_SCRIPTS = ('opt_route.tcl', 'validate_route.tcl',
+                    'otpu_tmem_mode.tcl',
                     'check_rule_severity.tcl', 'inspect_ddr_init.tcl',
                     'classify_methodology.tcl', 'check_shell_baseline.tcl',
                     'shell_baseline_2025_2.tcl', 'check_scoped_clocks.tcl')

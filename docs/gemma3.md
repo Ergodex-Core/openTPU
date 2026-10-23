@@ -112,6 +112,33 @@ also diverged from ISA argmax at two of these three positions (cosines 0.99877,
 are therefore not established for these int4 configurations; the architecture /
 transport integration is usable, but int4 needs further numerical work.
 
+## Experimental device prompt lookup
+
+`Engine(..., resident=True, rows=2, gemma_prompt_lookup=True)` reserves a
+separate history and two chain programs per attention bucket. Wrap that engine
+with `opentpu.llm.gemma_specdec.GemmaPromptLookupDecoder` and call
+`generate_from_unfed_prompt(prompt_ids, n, stop_ids=...)` on a fresh engine.
+The final prompt token is fed by the device loop, which also selects the first
+output. The host loads the prompt and receives accepted token IDs; it does not
+draft tokens or select logits.
+
+The greedy-only proposal is the continuation of the latest earlier occurrence
+of the current token. One two-row run verifies that proposal with the target
+model. It publishes its second output only if the draft matches the first
+target pick, the first pick is not a stop ID, and two outputs remain. Drafts
+stay in private history rather than the streaming output buffer. A single-row
+program handles misses, the final bucket position, and a one-token budget.
+It also handles a proposed stop ID: verification could not produce a second
+output whether that proposal matches or fails. This rule does not use measured
+acceptance rates or prompt-specific thresholds.
+Host stop requests take effect after the current one- or two-output iteration.
+
+This path has separate ISA numerical/control tests. Instruction-memory fit is
+checked before execution; `tools/gemma_specdec_compile_check.py` can check the
+exact configuration without reading weights. ISA equivalence and compiler fit
+do not establish RTL timing, on-card correctness, acceptance rate, or throughput.
+The existing Gemma1B hardware measurements did not use this experimental path.
+
 To reproduce that function-call comparison, save this as `time-tools.json`:
 
 ```json

@@ -547,6 +547,17 @@ and, on the card, on the device (the CYCLES of the steps at the bitstream's CORE
 the line drops the model, then the prefill device rate and Mcycles/token, then the prefill; the
 context stays. On the ISA backend the numbers are wall time only.
 
+For a direct `Engine.generate_card` call, pass `phase_trace=events.append` to collect an opt-in
+list of event dictionaries. Engine events bound chain/program preparation, input/state and output
+marker writes, run dispatch and return. The board backend adds IMEM reload choice, run start,
+output readback polls (raw token IDs, including EOS), host HALT request, observed HALTED and
+WR_IDLE, and final generated-step, cycle and instruction counts. `host_s` is
+`time.perf_counter()` on the host;
+`halt_observed` and `write_idle_observed` record when the host saw those status bits. A token's
+`output_readback` time is **not** its device emission time. `run_index` separates bucket runs;
+the callback must not raise. No events are collected by default, and the serving API does not
+enable this callback implicitly.
+
 Enter sends, Esc stops the reply (what was generated stays in the history and the KV cache),
 Ctrl-S shows or hides a side panel with the detail, Ctrl-C or Ctrl-D quits. Typing `/` opens
 the commands (up / down, Tab completes, Enter runs): `/help`, `/continue` (a reply cut at

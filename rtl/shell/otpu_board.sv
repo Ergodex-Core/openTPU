@@ -128,7 +128,10 @@ module otpu_board #(
   localparam int XR = 2;              // register stages each way across an SLR (S > 1)
   // the native adapter's B read beats in flight per channel: 128 on two channels; on more, each
   // carries 2 / NCH of a stream (and the F2 HBM bridges hold 64 reads a channel)
-  localparam int NRD = (NCH > 2) ? 64 : 128;
+  // Eight-channel wide-port experiment: retain twice as many read beats in
+  // flight through the SLR/SmartConnect path. RD must remain a power of two.
+  // Other channel counts keep their existing resource/credit tradeoff.
+  localparam int NRD = (NCH == 8) ? 128 : (NCH > 2 ? 64 : 128);
   initial if (NCH < 2 || NCH != (1 << $clog2(NCH)) || DRAM_LOG2 > (NCH > 2 ? 34 : 32) ||
               DRAM_LOG2 > CH_LOG2 + $clog2(NCH))
     $fatal(1, "otpu_board: NCH a power of two >= 2, DRAM_LOG2 <= 32 (34 at NCH > 2) and <= CH_LOG2 + log2(NCH)");

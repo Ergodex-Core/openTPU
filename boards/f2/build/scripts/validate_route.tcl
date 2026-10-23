@@ -16,6 +16,11 @@ report_methodology -file ${prefix}_methodology.rpt
 # the DDR CL: the methodology classifier finds the CL on its own and must agree
 set otpu_hbm [expr {[llength [get_cells -quiet WRAPPER/CL/u_sc]] == 1}]
 set otpu_cl [expr {$otpu_hbm ? "hbm" : "ddr"}]
+if {$otpu_hbm} {
+  source ${scripts_dir}/otpu_tmem_mode.tcl
+  set otpu_tmem_pmp [otpu_expected_tmem_pmp [file dirname [file dirname $scripts_dir]]]
+  if {$otpu_tmem_pmp == 0} { otpu_assert_core_tmem }
+}
 source ${scripts_dir}/check_rule_severity.tcl
 source ${scripts_dir}/classify_methodology.tcl
 set severity_audit [open ${prefix}_rule_severities.rpt w]

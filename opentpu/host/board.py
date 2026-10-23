@@ -1259,7 +1259,8 @@ class Board:
                     if low else f"the card did not start the run (STATUS {st:#x}, RUN clear)")
             self._ded0 = bool(st & R.ST_ECC_DED)
 
-    def wait(self, timeout: float = RUN_TIMEOUT, expect: float = 0.0) -> dict:
+    def wait(self, timeout: float = RUN_TIMEOUT, expect: float = 0.0,
+             on_phase=None) -> dict:
         """Wait for the started program to halt; returns the counters (run's second half).
         expect counts from the start (the host's work in between is taken off). A run that does
         not halt in `timeout` seconds is cut short (stop) before the TimeoutError; one this
@@ -1279,6 +1280,10 @@ class Board:
             raise
         self.t_seen = time.perf_counter()           # HALTED seen (BoardBackend's run time)
         self.seen_exact = getattr(t, "poll_exact", False)   # else an upper bound
+        if on_phase is not None:
+            on_phase({"event": "halt_observed", "host_s": self.t_seen,
+                      "poll_exact": bool(self.seen_exact), "status": int(st0)})
+        idle_seen = self.t_seen if on_phase is not None and st0 & R.ST_WR_IDLE else None
         # HALTED rises once the last store has left the core, not when the DRAM has it
         # (WR_IDLE: the memory adapter's writes all answered); the host reads the results
         # next, and a read may pass writes in flight: wait for WR_IDLE, read back to back for
@@ -1287,15 +1292,23 @@ class Board:
         if not getattr(t, "batched", False) and not st0 & R.ST_WR_IDLE:
             while not st0 & R.ST_WR_IDLE and time.perf_counter() - self.t_seen < WR_SETTLE:
                 st0 = t.reg_read(R_STATUS)
+                if on_phase is not None and st0 & R.ST_WR_IDLE:
+                    idle_seen = time.perf_counter()
             if not st0 & R.ST_WR_IDLE:
                 try:
                     st0 = t.poll(R_STATUS, R.ST_WR_IDLE, R.ST_WR_IDLE, QUIET_WAIT)
+                    if on_phase is not None:
+                        idle_seen = time.perf_counter()
                 except TimeoutError:
                     self.abort()
                     raise RuntimeError(f"the run halted, but its DRAM writes had not all landed "
                                        f"{QUIET_WAIT:g} s later (STATUS WR_IDLE clear): its "
                                        "results are not all there; reload the bitstream") \
                         from None
+        if on_phase is not None:
+            on_phase({"event": "write_idle_observed" if st0 & R.ST_WR_IDLE else
+                      "write_idle_unobserved", "host_s": idle_seen or time.perf_counter(),
+                      "status": int(st0), "batched": bool(getattr(t, "batched", False))})
         self.in_run = False
         if traced:                      # the last cycles' events still drain into the buffer
             t.poll(R.R_TRACE_CTRL, R.TR_BUSY, 0, timeout)
@@ -2060,7 +2073,7 @@ class BoardBackend:
     chains = generates
 
     def run_generate(self, programs, out: int, n: int, on_token=None, stop=None,
-                     state: int | None = None):
+                     state: int | None = None, *, phase_trace=None):
         """Start a generate program and hand over its tokens as they land in out[] (up to n
         fp32 ids from byte address `out`, OUT_MARK until written) while the card runs; stop()
         true writes the state block's stop word (at `state`): the card halts after the token in
@@ -2076,7 +2089,17 @@ class BoardBackend:
         served only up to the n-th token, the run waited on its request until RUN_TIMEOUT)."""
         from opentpu.llm import generate as G
         b, t = self.board, self.board.t
+        def record(event: str, **data) -> None:
+            if phase_trace is not None:
+                phase_trace({"source": "board", "event": event,
+                             "host_s": time.perf_counter(), **data})
+
+        res = self._resident
+        reload_imem = (res is None or res[0] is not programs or
+                       not getattr(t, "keeps_state", True))
+        record("start_begin", imem_reload=reload_imem, requested=n)
         self.start(programs)
+        record("run_started", imem_reload=reload_imem, board_start_s=b._t_run)
         got, k, asked = [], 0, False
         gap = self._expects.get(("gen", self._key), 0.0) or 0.002   # seconds per token
         t_tok = time.perf_counter()
@@ -2085,12 +2108,21 @@ class BoardBackend:
             nonlocal k, t_tok
             a = out + 4 * k
             m = min(n - k, (64 - a % 64) // 4 + 16)            # to the next beat's end
+            read_begin = time.perf_counter() if phase_trace is not None else None
             w = b.read(a, 4 * m).view(np.uint32)
+            read_end = time.perf_counter() if phase_trace is not None else None
             new = w[:int(np.argmax(w == G.OUT_MARK))] if (w == G.OUT_MARK).any() else w
+            if phase_trace is not None:
+                record("output_readback", read_begin_s=read_begin, read_end_s=read_end,
+                       address=a, requested_words=m, offset=k,
+                       token_ids=[int(x) for x in new.view(np.float32)],
+                       after_wait=not b.in_run)
             for x in new.view(np.float32):
                 got.append(int(x))
                 if on_token is not None:
                     on_token(int(x))
+            if phase_trace is not None and len(new):
+                record("output_callbacks_done", offset=k, count=len(new))
             k += len(new)
             if len(new):
                 t_tok = time.perf_counter()
@@ -2114,8 +2146,10 @@ class BoardBackend:
                                        f"the generate run did not halt in {RUN_TIMEOUT:.0f} s "
                                        f"after its last token, served all along")
                 if stop is not None and not asked and state is not None and stop():
+                    record("halt_request_begin", state=state)
                     b.write(state + 4 * G.S_HALT, np.ones(1, np.float32))
                     asked = True
+                    record("halt_request_done", state=state)
                 if served:
                     continue
                 if host is not None:            # the card's MoE layers wait for the hook
@@ -2125,7 +2159,13 @@ class BoardBackend:
                 # wake up a little before the next token is due, then every 50 us
                 due = t_tok + gap - time.perf_counter()
                 time.sleep(min(max(due * 0.5, 5e-5), 1e-3))
-            st = b.wait(expect=0.0)
+            record("wait_begin", readback_count=k)
+            if phase_trace is not None:
+                st = b.wait(expect=0.0, on_phase=lambda event: phase_trace({
+                    "source": "board", **event}))
+            else:
+                st = b.wait(expect=0.0)
+            record("wait_done", readback_count=k)
         except BaseException:
             self._running = None
             if b.in_run and state is not None and not asked:
@@ -2139,6 +2179,11 @@ class BoardBackend:
         while k < n and take():                            # the last tokens, after HALTED
             pass
         khz = self.info["core_khz"]
+        record("run_complete", token_ids=list(got), generated_steps=len(got),
+               cycles=int(st["cycles"]), core_khz=khz,
+               device_s=st["cycles"] / (khz * 1e3) if khz else None,
+               instructions=[int(x) for x in st.get("instructions", [])],
+               status=int(st.get("status", 0)), halted_by_host=asked)
         if got and khz:
             self._expects[("gen", self._key)] = st["cycles"] / (khz * 1e3) / len(got)
         self.last = (programs, st)

@@ -69,6 +69,9 @@ module otpu_native_mem #(
     else mem_hi[i - H] = v;
   endtask
   int stall = 0;
+  // Opt-in portable timing schedule for independent model validation. Legacy
+  // $urandom behavior is unchanged unless +nat_deterministic=1 is selected.
+  int deterministic = 0, schedule_seed = 0;
   int bw = 100;
   int lat = LAT;
   int cqd = 16, wqd = 16;                // command / write-data FIFO entries
@@ -96,8 +99,24 @@ module otpu_native_mem #(
     m = u * (NCH / 2) + ((32'(c / 2) ^ f) & 32'(NCH / 2 - 1));
     return int'(m * 2 + (32'(c % 2) ^ 32'(CHASH && ^m)));
   endfunction
-  function automatic bit rnd_stall();
+  function automatic logic [31:0] schedule_draw(input int c, input int kind);
+    logic [31:0] x;
+    x = 32'(schedule_seed) ^ (32'(cyc) * 32'h9e3779b9) ^
+        (32'(c) * 32'h85ebca6b) ^ (32'(kind) * 32'hc2b2ae35);
+    x ^= x >> 16;
+    x *= 32'h7feb352d;
+    x ^= x >> 15;
+    x *= 32'h846ca68b;
+    x ^= x >> 16;
+    return x;
+  endfunction
+  function automatic bit rnd_stall(input int c, input int kind);
+    if (deterministic != 0) return (schedule_draw(c, kind) % 100) < stall;
     return ($urandom % 100) < stall;
+  endfunction
+  function automatic int response_jitter(input int c, input int kind);
+    if (deterministic != 0) return int'(schedule_draw(c, kind) % 8);
+    return int'($urandom % 8);
   endfunction
 
   // the controller's per-channel state: the data bus's next free tick, the last direction, the
@@ -181,8 +200,8 @@ module otpu_native_mem #(
     int cr = 0;                          // bandwidth credit (100 = one command)
     longint rlast = 0, wlast = 0;        // the last read's data time, write's count time
     always_ff @(posedge clk) begin
-      crr <= !rnd_stall();
-      wrr <= !rnd_stall();
+      crr <= !rnd_stall(c, 0);
+      wrr <= !rnd_stall(c, 1);
     end
     assign n_cready[c] = crr && cq[c].size() < cqd;
     assign n_wready[c] = wrr && wq_d[c].size() < wqd;
@@ -227,7 +246,7 @@ module otpu_native_mem #(
               t = dram_slot(c, cq[c][0].m, 1'b1, t);
             end
             if (s != '1) n_rmw[c]++;
-            t = t + wdl + ($urandom % 8);
+            t = t + wdl + response_jitter(c, 3);
             if (t < wlast) t = wlast;
             wlast = t;
             wd[c].push_back(t);
@@ -236,7 +255,7 @@ module otpu_native_mem #(
           end else begin
             logic [511:0] d;
             for (int k = 0; k < 16; k++) d[32 * k +: 32] = rdw(b + k);
-            t = (dram != 0 ? dram_slot(c, cq[c][0].m, 1'b0, cyc) : cyc) + lat + ($urandom % 8);
+            t = (dram != 0 ? dram_slot(c, cq[c][0].m, 1'b0, cyc) : cyc) + lat + response_jitter(c, 2);
             if (t < rlast) t = rlast;
             rlast = t;
             rq[c].push_back('{t, d});
@@ -245,14 +264,14 @@ module otpu_native_mem #(
           void'(cq[c].pop_front());
         end
         // next cycle's read data (no backpressure) and write count
-        if (rq[c].size() != 0 && rq[c][0].t <= cyc && !rnd_stall()) begin
+        if (rq[c].size() != 0 && rq[c][0].t <= cyc && !rnd_stall(c, 4)) begin
           rv <= 1'b1;
           rd <= rq[c][0].d;
           void'(rq[c].pop_front());
         end else begin
           rv <= 1'b0;
         end
-        if (!rnd_stall()) begin
+        if (!rnd_stall(c, 5)) begin
           logic [15:0] n;
           n = wdone;
           while (wd[c].size() != 0 && wd[c][0] <= cyc) begin
@@ -269,6 +288,8 @@ module otpu_native_mem #(
   integer fd, nread;
   logic [31:0] chm [WORDS / NCH];
   initial begin
+    void'($value$plusargs("nat_deterministic=%d", deterministic));
+    void'($value$plusargs("axi_seed=%d", schedule_seed));
     void'($value$plusargs("axi_stall=%d", stall));
     void'($value$plusargs("axi_bw=%d", bw));
     void'($value$plusargs("axi_lat=%d", lat));
@@ -289,6 +310,8 @@ module otpu_native_mem #(
     void'($value$plusargs("nat_wq=%d", wqd));
     void'($value$plusargs("nat_wdl=%d", wdl));
     void'($value$plusargs("nat_ahead=%d", ahead));
+    if (deterministic != 0 && deterministic != 1) $fatal(1, "bad nat_deterministic");
+    if (deterministic != 0 && dram != 0) $fatal(1, "deterministic timing requires axi_dram=0");
     for (int c = 0; c < NCH; c++) begin n_rd[c] = 0; n_wr[c] = 0; n_miss[c] = 0; n_rmw[c] = 0; end
     begin
       int seed;
@@ -327,6 +350,49 @@ module otpu_native_mem #(
           end
           for (int j = 0; j < WORDS / NCH; j++) wrw(lbeat(j / 16, c) * 16 + j % 16, chm[j]);
         end
+      end
+    end
+  end
+
+  // Pre-edge native boundary oracle. All request inputs are recorded separately
+  // from response outputs; independent checkers must never feed outputs back.
+  string feedback_name;
+  integer feedback_fd = 0;
+  int feedback_limit = 32768, feedback_cycles = 0;
+  bit feedback_payload = 0;
+  initial begin
+    feedback_payload = $test$plusargs("nat_feedback_payload=1");
+    if ($value$plusargs("nat_feedback=%s", feedback_name)) begin
+      feedback_fd = $fopen(feedback_name, "w");
+      if (feedback_fd == 0) $fatal(1, "cannot open native feedback trace");
+    end
+    void'($value$plusargs("nat_feedback_limit=%d", feedback_limit));
+    if (feedback_limit < 1 || feedback_limit > 131072) $fatal(1, "bad native trace limit");
+  end
+  always @(posedge clk) if (feedback_fd != 0) begin
+    if (feedback_cycles == 0)
+      $fwrite(feedback_fd, "{\"kind\":\"config\",\"schema\":1,\"channels\":%0d,\"seed\":%0d,\"stall\":%0d,\"lat\":%0d,\"bw\":%0d,\"cqd\":%0d,\"wqd\":%0d,\"wdl\":%0d,\"dram\":%0d,\"deterministic\":%0d,\"words\":%0d,\"chash\":%0d}\n",
+              NCH, schedule_seed, stall, lat, bw, cqd, wqd, wdl, dram, deterministic, WORDS, CHASH);
+    if (feedback_cycles >= feedback_limit) begin
+      $fwrite(feedback_fd, "{\"kind\":\"truncated\",\"cycles\":%0d}\n", feedback_cycles);
+      $fclose(feedback_fd); feedback_fd = 0;
+    end else begin
+      $fwrite(feedback_fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"rst\":%0d,\"channels\":[", cyc, rst);
+      for (int c = 0; c < NCH; c++) begin
+        if (c != 0) $fwrite(feedback_fd, ",");
+        $fwrite(feedback_fd, "{\"cv\":%0d,\"we\":%0d,\"addr\":%0d,\"wv\":%0d,\"cr\":%0d,\"wr\":%0d,\"rv\":%0d,\"wdone\":%0d",
+                n_cvalid[c], n_cwe[c], n_caddr[c], n_wvalid[c], n_cready[c], n_wready[c], n_rvalid[c], n_wdone[c]);
+        if (feedback_payload && n_rvalid[c])
+          $fwrite(feedback_fd, ",\"rdata\":\"%0128h\"", n_rdata[c]);
+        if (feedback_payload && n_wvalid[c])
+          $fwrite(feedback_fd, ",\"wdata\":\"%0128h\",\"wmask\":\"%016h\"", n_wdata[c], n_wmask[c]);
+        $fwrite(feedback_fd, "}");
+      end
+      $fwrite(feedback_fd, "]}\n");
+      feedback_cycles++;
+      if (dump) begin
+        $fwrite(feedback_fd, "{\"kind\":\"end\",\"cycles\":%0d}\n", feedback_cycles);
+        $fclose(feedback_fd); feedback_fd = 0;
       end
     end
   end

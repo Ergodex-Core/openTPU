@@ -990,11 +990,16 @@ module otpu_slice
   // (tests/test_target.py). One cycle more each way costs nothing measurable (co-simulated:
   // within +-0.07% at m4 on decode, a tiled prompt run and a MoE step, signs mixed)
   assign b_rdy_i   = !b_req || b_rdy;
+  // A free request register may load payload before valid. The memory consumes
+  // it only with b_req. This removes go_iss from the 1,089-bit payload enable;
+  // 417243f1's routed qb_n -> b_wdata/CE path used 5.698 ns of wire at 150 MHz.
+  // Keep payload and valid held together while a valid request is stalled.
+  (* max_fanout = 128 *) wire b_ld = !b_req || b_rdy;
   assign rd_idle_i = rd_idle && !a_req && !(b_req && !b_we) && !b_rvalid_i;
   always_ff @(posedge clk) begin : pb_reg
     if (sys_rst) b_req <= 1'b0;
     else if (b_rdy_i) b_req <= b_req_c;
-    if (b_rdy_i && b_req_c) begin
+    if (b_ld) begin
       b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
       b_addr <= b_addr_c; b_par <= b_par_c; b_n <= b_n_c;
     end
@@ -1021,7 +1026,8 @@ module otpu_slice
   always_ff @(posedge clk) begin : pa_reg
     if (sys_rst) a_req <= 1'b0;
     else if (a_rdy_i) a_req <= mxu_areq;
-    if (a_rdy_i && mxu_areq) a_addr <= mxu_aaddr;
+    // As on port B, valid qualifies consumption, not loading a free payload.
+    if (a_rdy_i) a_addr <= mxu_aaddr;
   end : pa_reg
 
   // a unit's DRAM request waiting for its port, a cycle late (pf: the board's B_STALL and
@@ -1185,6 +1191,144 @@ module otpu_slice
   end
   /* verilator lint_on BLKSEQ */
   final if (tt_fd != 0) $fclose(tt_fd);
+
+  // Opt-in bounded pre-core-edge feedback trace for the wide-port timing model.
+  // This block has no synthesized logic and is silent without +tmfeedback.
+  if (TMEM_IMPL == 3 && TMEM_RPL && ARB_MASK && LANES == 8 && ULANES == 8 && HAS_SS) begin : g_feedback_trace
+    integer fd = 0, limit = 32768, cyc = 0;
+    bit seen_run = 0;
+    wire [MCOLS-1:0] acc_first;
+    for (genvar j = 0; j < MCOLS; j++) begin : g_acc_first
+      assign acc_first[j] = u_mxu.g_col_end[j].fst;
+    end
+    initial begin
+      string fn;
+      if ($value$plusargs("tmfeedback=%s", fn)) begin
+        if ($value$plusargs("tmfeedback_limit=%d", limit)) begin end
+        if (limit < 1 || limit > 131072) $fatal(1, "tmfeedback limit must be 1..131072");
+        if (S > 1) fn = $sformatf("%s.%0d", fn, SID);
+        fd = $fopen(fn, "w");
+        if (fd == 0) $fatal(1, "cannot open tmfeedback %s", fn);
+        $fdisplay(fd, "{\"kind\":\"config\",\"schema\":1,\"pmp\":%0d,\"side_mask\":%0d,\"words\":%0d,\"lanes\":8,\"vpu_se\":1,\"limit\":%0d}",
+                  TMEM_PMP, $unsigned(TM_SIDE), TMEM_WORDS, limit);
+      end
+    end
+    task automatic reads(input bit raw);
+      bit first;
+      $fwrite(fd, "[");
+      for (int p = 0; p < NRP; p++) begin
+        if (p) $fwrite(fd, ",");
+        $fwrite(fd, "["); first = 1;
+        for (int l = 0; l < LANES; l++) if (raw ? rq_en[p][l] : rq_t[p][l]) begin
+          if (!first) $fwrite(fd, ","); first = 0;
+          $fwrite(fd, "%0d", $unsigned(r_addr[p][l]));
+        end
+        $fwrite(fd, "]");
+      end
+      $fwrite(fd, "]");
+    endtask
+    /* verilator lint_off BLKSEQ */
+    always @(posedge clk) if (fd != 0) begin
+      bit first;
+      $fwrite(fd, "{\"kind\":\"cycle\",\"cycle\":%0d,\"srst\":%0d,\"sys_rst\":%0d,\"halted\":%0d,\"reads\":", cyc, srst, sys_rst, halted);
+      reads(0); $fwrite(fd, ",\"raw_reads\":"); reads(1);
+      $fwrite(fd, ",\"taken\":[");
+      for (int p = 0; p < NRP; p++) begin
+        if (p) $fwrite(fd, ","); $fwrite(fd, "%0d", |r_en[p]);
+      end
+      $fwrite(fd, "],\"raw_writes\":[");
+      for (int p = 0; p < NWP; p++) begin
+        if (p) $fwrite(fd, ","); $fwrite(fd, "["); first = 1;
+        for (int l = 0; l < LANES; l++) if (wq_en[p][l]) begin
+          if (!first) $fwrite(fd, ","); first = 0;
+          $fwrite(fd, "%0d", $unsigned(w_addr[p][l]));
+        end
+        $fwrite(fd, "]");
+      end
+      $fwrite(fd, "],\"issued_writes\":["); first = 1;
+      for (int p = 0; p < NWP; p++) for (int l = 0; l < LANES; l++) if (w_en[p][l]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "%0d", $unsigned(w_addr[p][l]));
+      end
+      $fwrite(fd, "],\"writes\":["); first = 1;
+      for (int b = 0; b < LANES; b++) if (u_tmem.pw_v[b][0]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "%0d", $unsigned(u_tmem.pw_a[b][0]) * LANES + b);
+      end
+      $fwrite(fd, "],\"lost\":%0d,\"frozen\":%0d,\"blocked\":%0d,\"self_blocked\":%0d,\"write_conflict\":%0d,\"read_blockers\":%0d,\"gnt\":%0d,\"rpl_hold\":%0d,\"rpl_frz\":%0d,",
+              $unsigned(tm_lost), $unsigned(tm_frz), $unsigned(tm_bx), $unsigned(tm_bs),
+              $unsigned(u_tmem.g_one.wm), $unsigned(u_tmem.g_one.hm), $unsigned(gnt), $unsigned(rpl_hold), $unsigned(rpl_frz));
+      $fwrite(fd, "\"vpu\":{\"rst\":%0d,\"en\":%0d,\"ren\":%0d,\"rhold\":%0d,\"wn\":%0d,\"en_r\":%0d,\"en_q\":%0d,\"en_h\":%0d,\"ren_r\":%0d,\"push\":%0d,\"pop\":%0d,\"done\":%0d,\"dpend\":%0d,\"done_i\":%0d,\"cw\":%0d,\"head_done\":%0d,\"red_thr\":%0d,\"ss_act_d\":%0d,\"ss_pe\":%0d,\"gnt\":%0d,\"cw_words\":[",
+              rst_vpu, u_vpu.en, v_ren, tm_lost[P_VA] || tm_lost[P_VB], u_vpu.g_wbuf.wn,
+              u_vpu.g_wbuf.en_r, u_vpu.g_wbuf.en_q, u_vpu.g_wbuf.en_h, u_vpu.g_wbuf.ren_r,
+              u_vpu.g_wbuf.push, u_vpu.g_wbuf.pop, d_vpu, u_vpu.dpend, u_vpu.done_i,
+              |u_vpu.cw_en, u_vpu.g_wbuf.hd.dn, u_vpu.red_thr, u_vpu.ss_act_d, ss_pe, gnt[G_VPU]);
+      first = 1;
+      for (int l = 0; l < LANES; l++) if (u_vpu.cw_en[l]) begin
+        if (!first) $fwrite(fd, ","); first = 0; $fwrite(fd, "%0d", $unsigned(u_vpu.cw_addr[l]));
+      end
+      $fwrite(fd, "],\"head_words\":["); first = 1;
+      for (int l = 0; l < LANES; l++) if (v_wen[l]) begin
+        if (!first) $fwrite(fd, ","); first = 0; $fwrite(fd, "%0d", $unsigned(v_waddr[l]));
+      end
+      $fwrite(fd, "]},\"mxu\":{\"rst\":%0d,\"rf_n\":%0d,\"rf_nz\":%0d,\"rows_live\":%0d,\"rows_p\":%0d,\"rl_nz\":%0d,\"rf_push\":%0d,\"pop\":%0d,\"first_row\":%0d,\"pn\":%0d,\"cl_ld\":%0d,\"c_done\":%0d,\"drain_go\":%0d,\"t_gnt\":%0d,\"d_fin\":%0d,\"d_pop\":%0d,\"c_asc\":%0d,\"al_st\":%0d,\"f_count\":%0d,\"s_count\":%0d,\"fpop\":%0d,\"b_push\":%0d,\"r_cpl\":%0d,\"c_unit\":%0d,\"q_n\":%0d,\"rf_capacity\":%0d,\"compute\":%0d,\"more\":%0d,\"f_av\":%0d,\"s_av\":%0d,\"row_in\":%0d},",
+              rst_mxu, u_mxu.rf_n, u_mxu.rf_nz, u_mxu.rows_live, u_mxu.rows_p, u_mxu.rl_nz,
+              u_mxu.rf_push, u_mxu.pop, u_mxu.ck == 0, u_mxu.pn, u_mxu.cl_ld, u_mxu.c_done,
+              u_mxu.drain_go, gnt[G_MXU], u_mxu.d_fin, u_mxu.d_pop, u_mxu.c_asc, u_mxu.al_st,
+              u_mxu.f_count, u_mxu.s_count, u_mxu.fpop, u_mxu.b_push, u_mxu.r_cpl, u_mxu.c_unit,
+              u_mxu.q_n, u_mxu.RF, mxu_pop, u_mxu.more, u_mxu.f_av, u_mxu.s_av, u_mxu.row_in);
+      $fwrite(fd, "\"issue\":{\"a_req\":%0d,\"a_addr\":%0d,\"b_req\":%0d,\"b_addr\":%0d,\"b_n\":%0d,\"a_gnt\":%0d,\"b_gnt\":%0d,\"a_rvalid\":%0d,\"b_rvalid\":%0d,\"b_rlast\":%0d,\"i_ini\":%0d,\"i_act\":%0d,\"need_a\":%0d,\"need_b\":%0d,\"want\":%0d,\"tag_ent\":%0d,\"tag_cpl\":%0d,\"rv1\":%0d,\"tg_n\":%0d,\"occ\":%0d},",
+              mxu_areq, mxu_aaddr, mxu_breq, mxu_baddr, mxu_bn, mxu_agnt, mxu_bgnt,
+              a_rvalid, b_rvalid_i && !b_rtag_i, b_rlast_i, u_mxu.i_ini, u_mxu.i_act,
+              u_mxu.need_a, u_mxu.need_b, u_mxu.want_iss, u_mxu.a_tag.ent, u_mxu.a_tag.cpl,
+              u_mxu.rv1, u_mxu.tg_n, u_mxu.occ);
+      $fwrite(fd, "\"memory_sources\":{\"dma_req\":%0d,\"dma_we\":%0d,\"dma_addr\":%0d,\"loader_busy\":%0d,\"loader_req\":%0d,\"loader_addr\":%0d},",
+              dma_breq, dma_bwe, dma_baddr, ld_busy, ld_req, ld_a);
+      $fwrite(fd, "\"input_loading\":{\"boot_start\":%0d,\"boot_addr\":%0d,\"boot_n\":%0d,\"dma_rst\":%0d,\"dma_busy\":%0d,\"dma_rdy\":%0d,\"loader_im_we\":%0d,\"loader_im_row\":%0d,\"loader_sc_we\":%0d,\"loader_sc_row\":%0d,\"loader_sc_data\":\"%064h\",\"loader_im_data\":\"%0256h\",\"dma_writes\":[",
+              ld_start, ld_addr, ld_n, rst_dma, u_dma.busy, r_dma,
+              im_we, im_row, sc_we, sc_row, sc_data, b_rdata_i[1023:0]);
+      first = 1;
+      for (int l = 0; l < LANES; l++) if (dma_wen[l]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "[%0d,%0d]", $unsigned(dma_waddr[l]), $unsigned(dma_wdata[l]));
+      end
+      $fwrite(fd, "],\"issued_dma_writes\":["); first = 1;
+      for (int l = 0; l < LANES; l++) if (w_en[W_DMA][l]) begin
+        if (!first) $fwrite(fd, ","); first = 0;
+        $fwrite(fd, "[%0d,%0d]", $unsigned(w_addr[W_DMA][l]), $unsigned(w_data[W_DMA][l]));
+      end
+      $fwrite(fd, "]},");
+      // Direct pre-edge dispatch fields; urel and sq_ev.g_slot are paired
+      // registered release outputs. Avoid mixing evq D/E with current starts.
+      $fwrite(fd, "\"ownership\":{\"fifo_depth\":%0d,\"f_head\":%0d,\"f_tail\":%0d,\"s_head\":%0d,\"s_tail\":%0d,\"rf_q\":%0d,\"rf_t\":%0d,\"rf_hs\":%0d,\"m0p_v\":%0d,\"m0p_first\":%0d,\"m0p_last\":%0d,\"m0_v\":%0d,\"m0_first\":%0d,\"m0_last\":%0d,\"acc_first\":%0d,\"tl_v\":%0d,\"c_act\":%0d,\"c_left\":%0d,\"h_go\":%0d,\"n_go\":%0d,\"pipe_busy\":%0d,\"c_drained\":%0d},",
+              u_mxu.DEPTH, u_mxu.f_head, u_mxu.f_tail, u_mxu.s_head, u_mxu.s_tail,
+              u_mxu.rf_q, u_mxu.rf_t, u_mxu.rf_hs, u_mxu.m0p.v, u_mxu.m0p.first, u_mxu.m0p.last,
+              u_mxu.m0.v, u_mxu.m0.first, u_mxu.m0.last, $unsigned(acc_first), u_mxu.tl_v,
+              u_mxu.c_act, u_mxu.c_left, u_mxu.h.go, u_mxu.n.go,
+              u_mxu.ln_n != 0 || u_mxu.rmw_n != 0 || u_mxu.rA.v || u_mxu.r0.v ||
+              u_mxu.r1.v || u_mxu.rx.v || u_mxu.rw.v || u_mxu.lo.v, u_mxu.c_drained);
+      $fwrite(fd, "\"seq\":{\"dispatch\":%0d,\"slot\":%0d,\"pc\":%0d,\"op\":%0d,\"mxu_start_slot\":%0d,\"release\":%0d,\"release_slot\":%0d,\"end_mask\":%0d},",
+              !srst && u_seq.c_go, u_seq.free_slot, u_seq.c_pc, u_seq.c_cmd.op,
+              u_seq.ucs[U_MXU], urel, sq_ev.g_slot, $unsigned(u_seq.fin));
+      $fdisplay(fd, "\"dram\":{\"a_ready\":%0d,\"b_ready\":%0d,\"write_ready\":%0d,\"q_want\":%0d},\"coll_gnt\":%0d,\"start\":%0d,\"done\":%0d,\"icount\":%0d}",
+                a_rdy_i, b_rdy_i, sw_rdy_i, q_awant, coll_gnt, $unsigned(ustart), $unsigned(udone), sq_icount);
+      cyc = cyc + 1;
+      if (!srst && !sys_rst && !halted) seen_run = 1;
+      if (seen_run && !srst && !sys_rst && halted) begin
+        $fdisplay(fd, "{\"kind\":\"end\",\"cycles\":%0d}", cyc); $fclose(fd); fd = 0;
+      end else if (cyc >= limit) begin
+        $fdisplay(fd, "{\"kind\":\"truncated\",\"cycles\":%0d}", cyc); $fclose(fd); fd = 0;
+      end
+    end
+    /* verilator lint_on BLKSEQ */
+    final if (fd != 0) $fclose(fd);
+  end else begin : g_no_feedback_trace
+    initial begin
+      string unused;
+      if ($value$plusargs("tmfeedback=%s", unused))
+        $fatal(1, "tmfeedback requires eight-lane IMPL3/RPL board WBUF and SE");
+    end
+  end
 `endif
 
   logic [31:0] win;                  // cycles per window
