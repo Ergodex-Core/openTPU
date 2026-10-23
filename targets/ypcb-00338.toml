@@ -23,6 +23,7 @@ TMEM_WORDS = 65536              # m4: 64K (64 RAMB36 at TMEM_IMPL 3). m8: 128K, 
 IMEM_WORDS = 32768
 DRAM_BYTES = 4294967296         # per slice
 LANES = 8
+CPC = 1                         # chunks per cycle on DRAM port B and into the MXU (2: the wide port)
 PAIR = true
 DSTEP = true
 STREAM = true

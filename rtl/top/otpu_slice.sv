@@ -41,8 +41,10 @@ module otpu_slice
   parameter int ACT_ROWS   = MCOLS,   // ACT RAM rows (> MCOLS: the MXU replays chunks)
   parameter int TMEM_WORDS = 1 << 16,
   parameter int IMEM_WORDS = 1 << 16,
-  parameter int FIFO_DEPTH = 128,
+  parameter int FIFO_DEPTH = 128,     // MXU chunk FIFO entries (of CPC chunks)
   parameter int LANES      = 8,
+  parameter int CPC        = 1,       // chunks per cycle: port B's chunks a request, the MXU's
+                                      //   column groups and ACT RAM copies (otpu_mxu CPC)
   parameter int WIN        = 32,
   parameter int RPB        = 4,       // TMEM reads per bank per cycle
   parameter int WPB        = 2,       // TMEM writes per bank per cycle
@@ -105,6 +107,7 @@ module otpu_slice
   output logic [3:0]    a_be,
   output logic          sw_req,     // scalar (QST) writes: one byte-enabled word per cycle
   output logic [31:0]   sw_addr,
+  output logic          sw_par,     // ^sw_addr[31:5] (the memory's channel hash, from a flip-flop)
   output logic [31:0]   sw_wdata,
   output logic [3:0]    sw_be,
   input  logic          a_rvalid,
@@ -116,9 +119,10 @@ module otpu_slice
   output logic [D*8-1:0] b_wdata,
   output logic [31:0]   b_addr,
   output logic          b_par,      // ^b_addr[31:5] (the memory's channel hash; see the port mux)
+  output logic          b_wide,     // CPC 2: the read is a pair of chunks (the MXU's; otpu_mxu)
   input  logic          b_rvalid,
   input  logic          b_rtag,
-  input  logic [D*8-1:0] b_rdata,
+  input  logic [CPC*D*8-1:0] b_rdata,   // (a narrow read's chunk in the low D bytes)
   // collective
   output logic                    coll_req,
   output cmd_t                    coll_cmd,
@@ -148,7 +152,7 @@ module otpu_slice
   // rd_idle_i, wr_idle_i) and its input register (b_rvalid_i, b_rtag_i, b_rdata_i); see "port B's
   // registers"
   logic b_rdy_i, rd_idle_i, b_rvalid_i, b_rtag_i;
-  logic [D*8-1:0] b_rdata_i;
+  logic [CPC*D*8-1:0] b_rdata_i;
   // port A's ready as the MXU sees it: through its output register (see "port A's register")
   logic a_rdy_i;
   // the stream engine (docs/stream.md): the DMA moves a stream (DSTEP, STREAM) through SE in
@@ -245,7 +249,7 @@ module otpu_slice
     .clk, .rst(srst), .ucmd(ucmd_s), .ustart(ustart_s), .urel, .urdy(urdy_s), .udone(udone_s),
     .halted(sq_halted), .error(sq_err),
     .icount(sq_icount), .ev(sq_ev), .rinit, .rl_v, .rl_val, .ch_req(sq_ch), .ch_addr(sq_cha),
-    .ch_n(sq_chn), .im_we, .im_row, .im_data(b_rdata_i),
+    .ch_n(sq_chn), .im_we, .im_row, .im_data(b_rdata_i[D*8-1:0]),
     .sc_we, .sc_row, .sc_data);
 
   // The units' handshake. In simulation, +tm_sdly=N starts every DMA, QUANT, VPU and collective
@@ -423,18 +427,23 @@ module otpu_slice
   logic [31:0]            act_idx;
   logic [63:0]            asc_data;     // {da3, da2, da1, da0, Sa}
   logic [15:0]            asc_blk, act_rblk, act_rblk2;
-  logic [MCOLS-1:0]       act_rhi;
+  logic [CPC*MCOLS-1:0]   act_rhi;
   logic [7:0]             act_rgrp;
-  logic [MCOLS-1:0]       act_ren;       // per column (otpu_mxu: the MM's columns)
+  logic [CPC*MCOLS-1:0]   act_ren;       // per column (otpu_mxu: the MM's columns)
   logic                   mxu_pop;       // the MXU consumes a block this cycle (its ACT read)
-  logic [MCOLS*D*8-1:0]   act_rdata;
-  logic [MCOLS*64-1:0]    act_rscale;
-  otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES)) u_act (
-    .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
-    .w_off(act_off), .swe(asc_we),
-    .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren), .r_use(mxu_pop), .r_blk(act_rblk),
-    .r_blk2(act_rblk2), .r_hi(act_rhi), .r_grp(act_rgrp),
-    .r_data(act_rdata), .r_scale(act_rscale));
+  logic [CPC*MCOLS*D*8-1:0] act_rdata;
+  logic [CPC*MCOLS*64-1:0]  act_rscale;
+  // CPC copies of the ACT RAM, written alike: the MXU's column group g reads copy g (CPC 2:
+  // group 1 reads the pair's odd block, act_rblk2, as PAIR's high rows do)
+  for (genvar g = 0; g < CPC; g++) begin : g_act
+    otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES)) u_act (
+      .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
+      .w_off(act_off), .swe(asc_we),
+      .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren[g*MCOLS +: MCOLS]),
+      .r_use(mxu_pop), .r_blk(act_rblk), .r_blk2(act_rblk2), .r_hi(act_rhi[g*MCOLS +: MCOLS]),
+      .r_grp(act_rgrp),
+      .r_data(act_rdata[g*MCOLS*D*8 +: MCOLS*D*8]), .r_scale(act_rscale[g*MCOLS*64 +: MCOLS*64]));
+  end
 
   // ---- units
   logic [NG-1:0] gnt;
@@ -444,7 +453,7 @@ module otpu_slice
   logic mxu_areq, q_areq, q_awant, q_awe, mxu_agnt, mxu_bgnt;
   logic [31:0] mxu_aaddr, q_aaddr, q_awdata;
   logic [3:0] q_abe;
-  logic dma_breq, dma_bwe, mxu_breq;
+  logic dma_breq, dma_bwe, mxu_breq, mxu_bwide;
   logic [D/4-1:0] dma_bwmask;
   logic [D*8-1:0] dma_bwdata;
   logic [31:0] dma_baddr, mxu_baddr;
@@ -488,20 +497,22 @@ module otpu_slice
     .clk, .rst(rst_dma), .start(ustart[U_DMA]), .cmd(ucmd[U_DMA]), .rdy(r_dma), .done(d_dma),
     .err(dma_err), .ww_held(a_inval),
     .b_req(dma_breq), .b_gnt(b_rdy_i), .b_we(dma_bwe), .b_wmask(dma_bwmask), .b_wdata(dma_bwdata),
-    .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i), .wr_idle(wr_idle_i),
+    .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i[D*8-1:0]),
+    .wr_idle(wr_idle_i),
     .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rdata(r_data[P_DMA]),
     .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .CPC(CPC), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
     .act_blk(act_rblk), .act_blk2(act_rblk2), .act_hi(act_rhi), .act_grp(act_rgrp), .act_ren, .act_data(act_rdata), .act_scale(act_rscale),
     .a_req(mxu_areq), .a_addr(mxu_aaddr), .a_gnt(mxu_agnt), .a_rvalid, .a_rdata,
-    .b_req(mxu_breq), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt), .b_rvalid(b_rvalid_i && !b_rtag_i),
+    .b_req(mxu_breq), .b_wide(mxu_bwide), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt),
+    .b_rvalid(b_rvalid_i && !b_rtag_i),
     .b_rdata(b_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
     .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
@@ -906,6 +917,7 @@ module otpu_slice
     else if (sw_rdy_i) sw_v <= sw_req_c;
     if (sw_rdy_i && sw_req_c) begin
       sw_addr <= q_aaddr; sw_wdata <= q_awdata; sw_be <= q_abe;
+      sw_par <= ^q_aaddr[31:5];       // (the adapter's channel hash: off its SW queue path)
     end
   end : sw_reg
 `ifndef SYNTHESIS
@@ -917,7 +929,7 @@ module otpu_slice
 
   // ---- DRAM ports: the MXU's port A reads, and port B's requests (b_*_c), into their output
   // registers (below)
-  logic           b_req_c, b_tag_c, b_we_c, b_par_c;
+  logic           b_req_c, b_tag_c, b_we_c, b_par_c, b_wide_c;
   logic [D/4-1:0] b_wmask_c;
   logic [D*8-1:0] b_wdata_c;
   logic [31:0]    b_addr_c;
@@ -933,6 +945,7 @@ module otpu_slice
     b_wmask_c = dma_bwmask;
     b_wdata_c = dma_bwdata;
     b_addr_c  = dma_breq ? dma_baddr : mxu_baddr;
+    b_wide_c  = !dma_breq && mxu_bwide;             // the DMA and the loader read one chunk
     // the address's parity from each source's own address (their registers), muxed with it:
     // the parity of the muxed address ran on from the DMA's request and the MXU's grant into
     // every write of otpu_native_dram's queues (DMA occ -> qbm, 11 levels, the 959b425 build's
@@ -940,6 +953,7 @@ module otpu_slice
     b_par_c   = dma_breq ? ^dma_baddr[31:5] : ^mxu_baddr[31:5];
     if (ld_busy) begin                // the units are held in reset
       b_req_c = ld_req; b_tag_c = 1'b1; b_we_c = 1'b0; b_addr_c = ld_a; b_par_c = ^ld_a[31:5];
+      b_wide_c = 1'b0;
     end
   end
 
@@ -966,7 +980,7 @@ module otpu_slice
     else if (b_rdy_i) b_req <= b_req_c;
     if (b_rdy_i && b_req_c) begin
       b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
-      b_addr <= b_addr_c; b_par <= b_par_c;
+      b_addr <= b_addr_c; b_par <= b_par_c; b_wide <= b_wide_c;
     end
     b_rvalid_i <= !sys_rst && b_rvalid;
     if (b_rvalid) begin

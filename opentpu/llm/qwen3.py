@@ -237,9 +237,9 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
-    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
-                                                                          "gemma4_text"):
-        from .gemma4 import load_weights as gemma4_weights
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in (
+            "gemma4", "gemma4_text", "gemma3", "gemma3_text"):
+        from .gemma4 import load_weights as gemma4_weights     # (Gemma 3: on Gemma 4's code)
         return gemma4_weights(model_dir)
     return Weights(model_dir, mtp)
 

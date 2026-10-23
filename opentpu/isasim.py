@@ -25,6 +25,10 @@ class Config:
     DRAM_BYTES: int = 1 << 20
     IMEM_WORDS: int = 1 << 16   # 8 words per instruction
     LANES: int = 8           # VPU lanes == TMEM banks (timing only; results do not depend on it)
+    CPC: int = 1             # chunks per cycle: D-byte chunks DRAM port B delivers and the MXU
+    #                          consumes a cycle (2: docs/v4/proposal-1-wide-port.md, an int8 MM
+    #                          takes two chunks an advance). Results do not depend on it: it sets
+    #                          the RTL's width and the analytic timing (opentpu.profile)
     PAIR: bool = False       # MM PAIR / QACT DUP: 4-bit MMs of M <= MCOLS/2 rows at full rate
     DSTEP: bool = False      # the DMA runs DSTEP (Gated DeltaNet head steps on DRAM state)
     STREAM: bool = False     # the stream engine runs STREAM's hardware subset (docs/stream.md)
@@ -56,7 +60,8 @@ def board_config(**kw) -> Config:
     environment selects the MXU column count (default the target's: 4, as make -C
     boards/ypcb-00338 bit builds; 2: bit MCOLS=2), OTPU_LANES the VPU lanes / TMEM banks (default
     the target's 8; bit LANES=16; timing only, the programs do not change), OTPU_ACT_ROWS the ACT
-    RAM rows (default MCOLS; more: the MXU replays each weight chunk for MCOLS rows at a time).
+    RAM rows (default MCOLS; more: the MXU replays each weight chunk for MCOLS rows at a time),
+    OTPU_CPC the chunks per cycle (default the target's: 1; 2: the wide port, timing only).
     The optional features stay off unless the environment turns them on, as before targets (the
     target states the hardware's truth: opentpu.target.config): OTPU_PAIR=1 column reuse (MM
     PAIR / QACT DUP), OTPU_DSTEP=1 the DMA's DSTEP, OTPU_STREAM=1 the stream engine,
@@ -68,6 +73,7 @@ def board_config(**kw) -> Config:
     base = dict(S=a["S"], D=a["D"], MCOLS=int(env.get("OTPU_MCOLS", a["MCOLS"])),
                 ACT_BLOCKS=a["ACT_BLOCKS"], LANES=int(env.get("OTPU_LANES", a["LANES"])),
                 ACT_ROWS=int(env.get("OTPU_ACT_ROWS", a["ACT_ROWS"])),
+                CPC=int(env.get("OTPU_CPC", a["CPC"])),
                 TMEM_WORDS=a["TMEM_WORDS"], IMEM_WORDS=a["IMEM_WORDS"],
                 DRAM_BYTES=a["DRAM_BYTES"],
                 PAIR=bool(int(env.get("OTPU_PAIR", 0))),

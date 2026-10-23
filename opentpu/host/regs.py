@@ -75,13 +75,19 @@ CAPS2_SINCE, R_CAPS2 = 5, 0x5C
 # on a GATHER, and the host refuses to load a program with one (Board.load_program). Every
 # bitstream before version 5 has GATHER.
 CAP2_GATHER = 1
+# CAPS2 [3:1]: CPC, the D-byte chunks a cycle DRAM port B and the MXU take (Config.CPC, in
+# CFG_HASH; docs/v4/p1-status.md), with CFG_DRAM's 2 CPC channels a slice (opentpu/host/board.py
+# beat_at); 0: one, every bitstream before (the field the wide-port line names PORTB)
+CAP2_CPC_SHIFT, CAP2_CPC_MASK = 1, 7
 
 
 def caps2(v: int | None) -> dict:
-    """CAPS2's value -> its capabilities; None (a register map before 5): all present."""
+    """CAPS2's value -> its capabilities; None (a register map before 5): all present (and one
+    chunk a cycle)."""
     if v is None:
-        return {"gather": True}
-    return {"gather": bool(v & CAP2_GATHER)}
+        return {"gather": True, "cpc": 1}
+    return {"gather": bool(v & CAP2_GATHER),
+            "cpc": (v >> CAP2_CPC_SHIFT & CAP2_CPC_MASK) or 1}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)

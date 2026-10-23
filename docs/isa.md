@@ -192,7 +192,9 @@ flash-attention correction step, done in the MXU epilogue), bits 5:4 `WF`, the s
 weights' format ("Weight formats"), bit6 `PAIR` (4-bit weights at full rate, "Column reuse"),
 bit7 `RSC` (row scales only: each scale row is the one word `Sw[n]`, every `dw = 0` and `m = 1`;
 not with `WF = 3`). The streamed rows are D-byte aligned (`sa` and `rs` are multiples of D):
-the MXU streams whole D-byte DRAM chunks. `N >= 1`, `KB >= 1` and `0 < M <= ACT_ROWS`; RMAX,
+the MXU streams whole D-byte DRAM chunks (a CPC 2 machine, docs/targets.md: an int8 row's
+chunks two an advance, `ceil(KB/2)` advances a row, the odd chunk of an odd KB alone; timing
+only, the results are the same integers). `N >= 1`, `KB >= 1` and `0 < M <= ACT_ROWS`; RMAX,
 ASCALE and PAIR need `M <= MCOLS` (PAIR: `2*M <= MCOLS`), and an MM with `M > MCOLS` needs its
 streamed row to fit the MXU's chunk FIFO (`KB` chunks for int8, `ceil(KB/2)` for 4-bit; the
 board: 1024; a replayed row stays in the FIFO until its last group).

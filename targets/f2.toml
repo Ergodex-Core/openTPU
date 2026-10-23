@@ -1,0 +1,77 @@
+# openTPU v4 candidate P1 "wide port" on an AWS EC2 F2 instance (docs/v4/proposal-1-wide-port.md,
+# docs/v4/p1-status.md, docs/v4/p1-status.md section 6): Virtex UltraScale+ VU47P with 16 GB of HBM2e in 32
+# pseudo-channels. One slice as the card's (D 128, 4 MX columns, 8 lanes), DRAM port B two
+# 128-byte chunks a cycle (CPC = 2) into an MXU of two column groups in lock step. The F2 build
+# is Alex's burst200 fabric (boards/f2/burst200, the one that decoded on the card) with the slice's
+# four native channels (2 CPC) each on an otpu_native_axi adapter and its own HBM AXI port, two
+# per f2_mem SmartConnect (rtl/boards/f2/burst200-p1, generated); the simulators run it on the
+# native memory model behind otpu_native_dram at CPC 2, or behind the F2 path (OTPU_F2MEM=1).
+
+[target]
+name = "f2"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2: xcvu47p, HBM2e (32 PCs); 1 slice, port B 256 B/cycle (CPC 2)"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # 32-bit DRAM addresses per slice: 128 MiB of each pseudo-channel
+LANES = 8
+CPC = 2                         # chunks per cycle on DRAM port B and into the MXU (the wide port)
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true                   # as the card (WAITC; needs WIN <= 16)
+
+[uarch]
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3                   # the card's one pumped copy (targets/ypcb-00338.toml)
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 512                # chunk FIFO entries of CPC chunks: 1024 chunks, 128 KiB as the card
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 200.0                # the burst200 fabric's clock (Alex's build and build 6 closed it)
+mem = "hbm"
+mem_ctrl = "hbm"
+hostcal = false
+# the burst200 fabric (boards/f2/burst200/build.py, docs/v4/f2-burst200.md): the slice's native
+# channels (otpu_native_dram at CPC 2: 2 CPC of them), each channel j in its own 2 GiB HBM window
+# at j x 2 GiB on HBM AXI port hbm_ports[j] through an otpu_native_axi adapter; windows 2g and
+# 2g + 1 share the f2_mem SmartConnect g (3 SI x 2 MI, with the host); the host's PCIS reaches
+# both through the f2_host crossbar (CFG_DRAM: 4 channels of 1 GiB, the slice's 4 GiB)
+channels_per_slice = 4
+channel_bytes = 1073741824      # 4 GiB / 4 channels, at the start of each 2 GiB window
+beat_bytes = 64
+hbm_ports = [0, 4, 8, 12]       # four HBM memory channels (ports 2k and 2k + 1 share one)
+rtl_board = "f2-burst200-p1"    # the CL top: rtl/boards/f2/burst200-p1/cl_opentpu.sv (generated)
+floorplan = "floorplan_p1.tcl"
+build_id = 0x50310002           # BUILD_ID / cl_sh_status1 ("P1", CPC 2)
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 8

@@ -1,5 +1,6 @@
 """Running real LLMs on openTPU: Qwen3 (qwen3.py), LFM2 (lfm2.py), Qwen3.5 (qwen35.py), Gemma 4
-(gemma4.py) and the Llama-likes SmolLM3 and Phi-3 / Phi-4-mini (llama.py, on Qwen3's code)."""
+(gemma4.py), Gemma 3 (gemma3.py, on Gemma 4's code) and the Llama-likes SmolLM3 and Phi-3 /
+Phi-4-mini (llama.py, on Qwen3's code)."""
 from __future__ import annotations
 
 import json
@@ -14,7 +15,8 @@ ROOT = Path(__file__).resolve().parents[2]
 MODELS = {"qwen3": "Qwen3-0.6B", "lfm2": "LFM2.5-230M", "qwen35": "Qwen3.5-0.8B",
           "lfm2-2.6b": "LFM2-2.6B", "smollm3": "SmolLM3-3B", "phi4-mini": "Phi-4-mini-instruct",
           "qwen35-2b": "Qwen3.5-2B", "qwen35-4b": "Qwen3.5-4B", "gemma4": "gemma-4-E2B-it",
-          "gemma4-e4b": "gemma-4-E4B-it", "lfm2-8b": "LFM2.5-8B-A1B",
+          "gemma4-e4b": "gemma-4-E4B-it", "gemma3": "gemma-3-1b-it",
+          "lfm2-8b": "LFM2.5-8B-A1B",
           "qwen35-35b": "Qwen3.5-35B-A3B", "gemma4-26b": "gemma-4-26B-A4B-it",
           "minicpmv-35b": "MiniCPM-V-4.7-35B-A3B"}
 
@@ -49,10 +51,14 @@ def load_spec(path):
         from .minicpmv import Spec
     elif t in ("gemma4", "gemma4_text"):
         from .gemma4 import Spec
+    elif t in ("gemma3", "gemma3_text"):    # (gemma4's Spec, read by gemma3.py)
+        from .gemma3 import spec_from_hf
+        return spec_from_hf(path)
     else:
         from .llama import MODEL_TYPES, spec_from_hf
         if t in MODEL_TYPES:
             return spec_from_hf(path)
         raise ValueError(f"{path}: model type {t!r} is not supported (qwen3, lfm2, qwen3_5 and "
-                         f"their MoE variants, gemma4, minicpmv4_7, {', '.join(MODEL_TYPES)})")
+                         f"their MoE variants, gemma4, gemma3, minicpmv4_7, "
+                         f"{', '.join(MODEL_TYPES)})")
     return Spec.from_hf(path)

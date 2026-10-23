@@ -23,7 +23,7 @@ at E 4, 64K TMEM words) and m8 (8 at E 8, 128K words).
 
 | Section | What | Who depends on it |
 |---|---|---|
-| `[arch]` | the `opentpu.isasim.Config` fields: S, D, MCOLS, ACT_BLOCKS, ACT_ROWS, TMEM / IMEM words, DRAM bytes per slice, LANES, PAIR / DSTEP / STREAM, SEQ_WC (EXPERIMENTAL: the sequencer's wait entries, which the host loads with every program; docs/isa.md "Wait counts") | the compiler and the programs. Two targets with the same arch run the same programs |
+| `[arch]` | the `opentpu.isasim.Config` fields: S, D, MCOLS, ACT_BLOCKS, ACT_ROWS, TMEM / IMEM words, DRAM bytes per slice, LANES, CPC (chunks per cycle: the D-byte chunks DRAM port B delivers and the MXU consumes a cycle, 1 or 2; `docs/v4/proposal-1-wide-port.md`), PAIR / DSTEP / STREAM, SEQ_WC (EXPERIMENTAL: the sequencer's wait entries, which the host loads with every program; docs/isa.md "Wait counts") | the compiler and the programs. Two targets with the same arch run the same programs |
 | `[uarch]` | timing-only RTL parameters: MXU_IMPL, MXU_E (optional), VPU_CL, ULANES, TMEM_IMPL, RPB / WPB, WIN, FIFO_DEPTH, the trace buffer | the RTL, the co-simulation |
 | `[tech]` | the cell family (`rtl/tech/<family>`: generic, xilinx7, xilinxus, asic), the part or the PDK | the RTL file list |
 | `[platform]` | the board: memory type and rate, channels per slice, bytes a slice addresses per channel, the host link, the core clock | the board flow, the host runtime |
@@ -32,6 +32,18 @@ Every `[arch]` field is stated: the file is the hardware's truth. `board_config(
 simulators and tests use, takes the target's sizes but keeps its optional features (PAIR,
 DSTEP, STREAM, SEQ_WC) off unless `OTPU_PAIR` / `OTPU_DSTEP` / `OTPU_STREAM` / `OTPU_SEQ_WC`
 turn them on, as it did before targets; `opentpu.target.config(name)` is the full truth.
+
+`CPC` (chunks per cycle, 1 or 2) is an arch key like LANES: the programs do not change with it
+(an int8 MM's rows are streamed two chunks an advance at CPC 2, an odd KB's last advance a half
+pair; 4-bit MMs one chunk an advance at any CPC), but the RTL's width (`otpu_mxu` / `otpu_slice`
+/ `otpu_top` CPC, the chunk FIFO's entries of CPC chunks: `FIFO_DEPTH` counts entries) and the
+analytic timing (`opentpu.profile._describe`, Lens) follow it, and the image's streamed rows
+need no new alignment. `OTPU_CPC=2` sets it in `board_config()` as `OTPU_MCOLS` does; it is in
+the arch hash only above 1, so every one-chunk build's CFG_HASH stays. `targets/f2.toml` is the
+CPC 2 target (docs/v4/p1-status.md): the simulators run it on the native memory model behind
+`otpu_native_dram` at 2 x CPC channels (chunk m on channel pair m mod CPC: a wide port-B read
+is one beat on each of four channels, 256 B a cycle); its HBM adapter and board shell are later
+milestones, so it has no `rtl/boards/f2` yet.
 
 ## What is derived
 

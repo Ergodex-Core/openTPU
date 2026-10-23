@@ -9,6 +9,7 @@
     otpu-chat --prompt "Why is the sky blue?" # one-shot
     otpu-chat --think                         # Qwen3 thinking mode
     otpu-chat --model gemma4                  # Gemma 4 E2B, its instruct checkpoint
+    otpu-chat --model gemma3                  # Gemma 3 1B (gemma-3-1b-it)
                                               # (gemma-4-E2B-it; --think: thinking mode too)
     otpu-chat --model qwen35-2b --mtp         # Qwen3.5 with its MTP drafter (docs/mtp.md)
     otpu-chat --model phi4-mini --wformat fp4 # the weights' format (default auto: the model's
@@ -927,22 +928,27 @@ def load_tokenizer(path):
     return get
 
 
-def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
+def make_backend(name: str, spec, cap: int, dev: str | None, model: str | None = None,
                  lookup: bool = False, wformat: str = "int8", head_format: str | None = None):
     """(backend, configuration) for Engine (lookup: room for the resident decode's tables;
     the weight formats size the board model's DRAM where an int8 image would not fit)."""
     if name == "isa":
         return "isa", None
     if name == "board":
-        from opentpu.host.board import (Board, BoardBackend, XdmaTransport,   # the PCIe driver
-                                        device_config)
-        tr = XdmaTransport(dev)
-        cfg = device_config(Board(tr, lock=False).info())     # MCOLS / LANES of the bitstream
-        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
+        from opentpu.host.board import Board, BoardBackend, device_config, open_transport
+        tr = open_transport(dev)            # an XDMA prefix, or f2:<slot> / f2:<BDF> (AWS F2)
+        try:
+            cfg = device_config(Board(tr, lock=False).info())  # MCOLS / LANES / CPC of the bitstream
+        except BaseException:
+            if hasattr(tr, "close"):
+                tr.close()
+            raise
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "board-sim":
         from opentpu.host.board import BoardBackend, SimTransport, sim_config
         cfg = sim_config(spec, cap, lookup=lookup, wformat=wformat, head_format=head_format)
-        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
+        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // (2 * getattr(cfg, "CPC", 1)))   # 2 CPC channels
         return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
     if name == "rtl":
         from opentpu.llm.rtl_backend import RtlBackend
@@ -1004,7 +1010,8 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
     ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
-    ap.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix (--backend board)")
+    ap.add_argument("--dev", default=None,
+                    help="board device (default: OTPU_DEVICE or /dev/xdma0; f2:0 for F2 slot 0)")
     ap.add_argument("--clock-mhz", type=float,
                     help="core clock, to turn device cycles into tokens/s (default: the "
                          "bitstream's CORE_KHZ, or 100 on a register map 1 bitstream)")

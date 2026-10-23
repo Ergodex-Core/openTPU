@@ -4,7 +4,13 @@
 // and latency (sim/verilator/otpu_native_mem.sv; requires D = 128); the dump prints the
 // adapter's counters. AXI = 2: the same adapter in front of the card's channels as they are
 // (sim/verilator/otpu_ldc_mem.sv: per channel the bridge otpu_mem_ch and LiteDRAM's own
-// controller, generated with the production core's settings, in the controller clock).
+// controller, generated with the production core's settings, in the controller clock). AXI = 3:
+// the same adapter in front of the AWS F2 burst200 fabric's memory path as it is on the card: per
+// channel otpu_native_axi (rtl/boards/f2/burst200: the native port as an AXI4 master, 16-beat read
+// bursts, single-beat writes, its direction barrier) at its 2 GiB window, an AXI slave model of the
+// SmartConnect / HBM side (sim/verilator/otpu_axi_native.sv: outstanding limits, stalls, write
+// responses after the write is performed) and the native memory model behind it; a channel's
+// protocol error (otpu_native_axi n_err) stops the simulation.
 module otpu_top
   import otpu_pkg::*;
 #(
@@ -17,8 +23,9 @@ module otpu_top
   parameter int IMEM_WORDS = 1 << 16,
   parameter int DRAM_WORDS = 1 << 18,
   parameter int DRAM_LAT   = 8,
-  parameter int FIFO_DEPTH = 128,
+  parameter int FIFO_DEPTH = 128,     // MXU chunk FIFO entries (of CPC chunks)
   parameter int LANES      = 8,
+  parameter int CPC        = 1,       // chunks per cycle on port B and into the MXU (otpu_mxu)
   parameter int WIN        = 32,
   parameter int RPB        = 4,
   parameter int WPB        = 2,
@@ -28,7 +35,7 @@ module otpu_top
   parameter int QUANT_XD   = 1024,    // quantizer row buffer chunks (0: two passes over TMEM; otpu_quant XD)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1,
   parameter int ULANES     = LANES,   // TMEM lanes of the MXU and the quantizer
-  parameter int AXI        = 0,       // memory path: see the top
+  parameter int AXI        = 0,       // memory path: see the top (3: the F2 path)
   parameter int TMEM_IMPL  = 0,       // TMEM: 0 a copy per read port, 1 banked (otpu_slice)
   parameter bit TMEM_RQ    = 1'b0,    // TMEM_IMPL 1: request-priority bank addresses (otpu_slice)
   parameter int TMEM_NCP   = 3,       // TMEM_IMPL 1: copies (otpu_slice)
@@ -70,14 +77,14 @@ module otpu_top
   wire coll_gnt = &coll_gl;
 
   for (genvar s = 0; s < S; s++) begin : g_slice
-    logic          a_req, a_we, a_rvalid, b_req, b_tag, b_we, b_par, b_rvalid, b_rtag;
+    logic          a_req, a_we, a_rvalid, b_req, b_tag, b_we, b_par, b_wide, b_rvalid, b_rtag;
     logic [D/4-1:0] b_wmask;
     logic [D*8-1:0] b_wdata;
     logic [31:0]   a_addr, a_wdata, b_addr;
     logic [255:0]  a_rdata;
     logic [3:0]    a_be;
-    logic [D*8-1:0] b_rdata;
-    logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, a_inval;
+    logic [CPC*D*8-1:0] b_rdata;
+    logic          a_rdy, b_rdy, wr_idle, rd_idle, sw_req, sw_rdy, sw_par, a_inval;
     logic [31:0]   sw_addr, sw_wdata;
     logic [3:0]    sw_be;
 
@@ -86,24 +93,27 @@ module otpu_top
       assign sw_rdy = 1'b1;
       assign b_rdy = 1'b1;
       assign wr_idle = 1'b1;
-      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .LAT(DRAM_LAT), .SID(s)) u_dram (
+      otpu_dram #(.WORDS(DRAM_WORDS), .D(D), .CPC(CPC), .LAT(DRAM_LAT), .SID(s)) u_dram (
         .clk, .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
         .sw_req, .sw_addr, .sw_wdata, .sw_be,
-        .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_rvalid, .b_rtag, .b_rdata, .rd_idle,
-        .dump);
+        .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_wide, .b_rvalid, .b_rtag, .b_rdata,
+        .rd_idle, .dump);
     end else begin : g_native
-      logic [1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
-      logic [1:0][24:0] caddr;
-      logic [1:0][511:0] wdata, rdata;
-      logic [1:0][63:0] wmask;
-      logic [1:0][15:0] wdone;
-      otpu_native_dram #(.D(D)) u_adapt (
+      // the native channels: two a chunk of a pair (otpu_native_dram at CPC)
+      localparam int NCH = 2 * CPC;
+      logic [NCH-1:0] cvalid, cready, cwe, wvalid, wready, rvalid;
+      logic [NCH-1:0][24:0] caddr;
+      logic [NCH-1:0][511:0] wdata, rdata;
+      logic [NCH-1:0][63:0] wmask;
+      logic [NCH-1:0][15:0] wdone;
+      initial if (AXI == 2 && CPC != 1) $fatal(1, "otpu_top: the LDC channels are CPC 1's");
+      otpu_native_dram #(.D(D), .CPC(CPC)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
-        .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-        .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-        .b_rdata, .wr_idle, .rd_idle,
+        .sw_rdy, .sw_req, .sw_addr, .sw_par, .sw_wdata, .sw_be,
+        .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid,
+        .b_rtag, .b_rdata, .wr_idle, .rd_idle,
         .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
         .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
         .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone));
@@ -113,8 +123,49 @@ module otpu_top
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
+      end else if (AXI == 3) begin : g_f2
+        // per channel: otpu_native_axi (as cl_opentpu's u_native<c>, BASE_ADDR c x 2 GiB), the
+        // AXI side's model, the channel of the native memory model
+        logic [NCH-1:0] mcv, mcr, mcwe, mwv, mwr, mrv, nerr;
+        logic [NCH-1:0][24:0] mca;
+        logic [NCH-1:0][511:0] mwd, mrd;
+        logic [NCH-1:0][63:0] mwm;
+        logic [NCH-1:0][15:0] mwdone;
+        for (genvar c = 0; c < NCH; c++) begin : g_ch
+          logic [33:0] awaddr, araddr;
+          logic [7:0] arlen;
+          logic [511:0] wd, rd;
+          logic [63:0] ws;
+          logic [1:0] bresp, rresp;
+          logic awv, awr, wv, wr, bv, br, arv, arr, rv, rl, rr;
+          otpu_native_axi #(.BASE_ADDR(34'(c) << 31)) u_naxi (
+            .clk, .rst(sys_rst),
+            .n_cvalid(cvalid[c]), .n_cready(cready[c]), .n_cwe(cwe[c]), .n_caddr(caddr[c]),
+            .n_wvalid(wvalid[c]), .n_wready(wready[c]), .n_wdata(wdata[c]), .n_wmask(wmask[c]),
+            .n_rvalid(rvalid[c]), .n_rdata(rdata[c]), .n_wdone(wdone[c]), .n_err(nerr[c]),
+            .m_awaddr(awaddr), .m_awvalid(awv), .m_awready(awr), .m_wdata(wd), .m_wstrb(ws),
+            .m_wvalid(wv), .m_wready(wr), .m_bvalid(bv), .m_bresp(bresp), .m_bready(br),
+            .m_araddr(araddr), .m_arlen(arlen), .m_arvalid(arv), .m_arready(arr),
+            .m_rdata(rd), .m_rvalid(rv), .m_rlast(rl), .m_rresp(rresp), .m_rready(rr));
+          otpu_axi_native #(.WIN(c)) u_axm (
+            .clk, .rst(sys_rst),
+            .s_awaddr(awaddr), .s_awvalid(awv), .s_awready(awr), .s_wdata(wd), .s_wstrb(ws),
+            .s_wvalid(wv), .s_wready(wr), .s_bvalid(bv), .s_bresp(bresp), .s_bready(br),
+            .s_araddr(araddr), .s_arlen(arlen), .s_arvalid(arv), .s_arready(arr),
+            .s_rdata(rd), .s_rvalid(rv), .s_rlast(rl), .s_rresp(rresp), .s_rready(rr),
+            .n_cvalid(mcv[c]), .n_cready(mcr[c]), .n_cwe(mcwe[c]), .n_caddr(mca[c]),
+            .n_wvalid(mwv[c]), .n_wready(mwr[c]), .n_wdata(mwd[c]), .n_wmask(mwm[c]),
+            .n_rvalid(mrv[c]), .n_rdata(mrd[c]), .n_wdone(mwdone[c]));
+        end
+        always @(posedge clk)
+          if (!sys_rst && |nerr) $fatal(1, "otpu_top: slice %0d's F2 path broke its contract (otpu_native_axi n_err %b)", s, nerr);
+        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .CPC(CPC)) u_mem (
+          .clk, .rst(sys_rst), .run_rst(rst),
+          .n_cvalid(mcv), .n_cready(mcr), .n_cwe(mcwe), .n_caddr(mca),
+          .n_wvalid(mwv), .n_wready(mwr), .n_wdata(mwd), .n_wmask(mwm),
+          .n_rvalid(mrv), .n_rdata(mrd), .n_wdone(mwdone), .dump);
       end else begin : g_model
-        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s)) u_mem (
+        otpu_native_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .CPC(CPC)) u_mem (
           .clk, .rst(sys_rst), .run_rst(rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
@@ -122,7 +173,7 @@ module otpu_top
       end
       // the adapter's counters (rtlsim: A runs and fill reads, the partial writes by source)
       always @(posedge clk) if (dump)
-        for (int c = 0; c < 2; c++) begin
+        for (int c = 0; c < NCH; c++) begin
           $write("NATIVE ch%0d a_runs=%0d a_rd=%0d b_rd=%0d sw_rd=%0d ", c, u_adapt.st_arun[c],
                  u_adapt.st_ard[c], u_adapt.st_brd[c], u_adapt.st_srd[c]);
           $display("b_wr=%0d a_wr=%0d sw_wr=%0d part_b=%0d part_a=%0d part_sw=%0d",
@@ -133,7 +184,7 @@ module otpu_top
 
     otpu_slice #(.SID(s), .S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS),
                  .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS),
-                 .FIFO_DEPTH(FIFO_DEPTH), .LANES(LANES), .WIN(WIN), .RPB(RPB),
+                 .FIFO_DEPTH(FIFO_DEPTH), .LANES(LANES), .CPC(CPC), .WIN(WIN), .RPB(RPB),
                  .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES),
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
@@ -143,8 +194,9 @@ module otpu_top
       .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy(ldb[s]),
       .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
-      .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
+      .sw_req, .sw_addr, .sw_par, .sw_wdata, .sw_be,
+      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_wide, .b_rvalid, .b_rtag,
+      .b_rdata,
       .coll_req(coll_req[s]), .coll_cmd(coll_cmd[s]), .coll_ack,
       .coll_ren(coll_ren[s]), .coll_raddr(coll_raddr[s]), .coll_rdata(coll_rdata[s]),
       .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl[s]), .coll_gnt,

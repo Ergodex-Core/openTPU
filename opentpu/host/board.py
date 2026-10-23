@@ -10,11 +10,13 @@ The card exposes, through the XDMA bridge:
 
 The accelerator addresses one logical DRAM interleaved over the channels in 64-byte beats:
 logical beat b of chunk m = b // 2 lives at BASE[c] + m * 64 on channel c = b % 2, or, on a
-bitstream with CAPS.chash, c = (b % 2) ^ parity(m) (rtl/mem/otpu_native_dram.sv). This driver
-applies the same map, so the host works with logical addresses only. On a multi-slice bitstream
-(CFG_SLICES S > 1: the BCU1525's two) each slice has a logical DRAM of its own on its two
-channels, slice s's channel c being the card's channel 2s + c (Board.write / read take the
-slice).
+bitstream with CAPS.chash, c = (b % 2) ^ parity(m) (rtl/mem/otpu_native_dram.sv). On a wide-port
+bitstream (CAPS2 CPC 2, docs/v4/p1-status.md: CFG_DRAM's 2 CPC channels a slice) the chunks
+rotate over the CPC channel pairs: chunk m on pair p = m % CPC, its beat b on the pair's channel
+2p + b (with CHASH b ^ parity(m)), at channel beat m // CPC (beat_at). This driver applies the
+same map, so the host works with logical addresses only. On a multi-slice bitstream (CFG_SLICES
+S > 1: the BCU1525's two) each slice has a logical DRAM of its own on its NCH channels, slice s's
+channel c being the card's channel NCH s + c (Board.write / read take the slice).
 
 BoardBackend implements the Engine backend interface (write / read / run, plus prepare and
 attach), so `Engine(..., cfg=device_config(board.info()), backend=BoardBackend)` runs Qwen3,
@@ -141,33 +143,41 @@ def hash_swap(addr: int, v: np.ndarray) -> None:
     v[p] = v[p][:, ::-1]
 
 
-def beat_at(addr: int, chash: bool = False) -> tuple[int, int]:
-    """(channel, channel offset) of the logical byte `addr`: beat b = addr // BEAT % 2 of chunk
-    m = addr // (2 * BEAT) on channel b, or b ^ parity(m) with CHASH."""
+def beat_at(addr: int, chash: bool = False, nch: int = 2) -> tuple[int, int]:
+    """(channel, channel offset) of the logical byte `addr` on a slice of nch = 2 CPC channels:
+    beat b = addr // BEAT % 2 of chunk m = addr // (2 * BEAT) (b ^ parity(m) with CHASH) on pair
+    p = m % (nch / 2), channel 2p + b, at channel beat m // (nch / 2) (otpu_native_dram's chan_of /
+    cbeat_of: no pair hash, so a wide read's two chunks are on different pairs)."""
     m, c = addr // (2 * BEAT), addr // BEAT % 2
     if chash:
         c ^= m.bit_count() & 1
-    return c, m * BEAT + addr % BEAT
+    pairs = nch // 2
+    return 2 * (m % pairs) + c, m // pairs * BEAT + addr % BEAT
 
 
-def split(addr: int, data: np.ndarray, chash: bool = False) -> list[tuple[int, int, np.ndarray]]:
+def split(addr: int, data: np.ndarray, chash: bool = False,
+          nch: int = 2) -> list[tuple[int, int, np.ndarray]]:
     """Logical bytes at `addr` -> [(channel, channel offset, bytes)], beat-aligned pieces
     merged into one contiguous run per channel. `addr` and len(data) must be multiples of
-    2 * BEAT (the caller widens unaligned ranges)."""
-    assert addr % (2 * BEAT) == 0 and len(data) % (2 * BEAT) == 0
+    nch * BEAT, a group of nch / 2 chunks: one beat on every channel (the caller widens
+    unaligned ranges)."""
+    assert addr % (nch * BEAT) == 0 and len(data) % (nch * BEAT) == 0
     v = data.reshape(-1, 2, BEAT)
     if chash:
         v = v.copy()
         hash_swap(addr, v)
-    off = addr // 2
-    return [(c, off, np.ascontiguousarray(v[:, c, :]).reshape(-1)) for c in (0, 1)]
+    off = addr // nch
+    g = v.reshape(-1, nch // 2, 2, BEAT)            # [group, pair, half, bytes]
+    return [(c, off, np.ascontiguousarray(g[:, c // 2, c % 2, :]).reshape(-1))
+            for c in range(nch)]
 
 
 def join(parts: list[np.ndarray], addr: int = 0, chash: bool = False) -> np.ndarray:
-    """Inverse of split: the two channels' contiguous runs (from logical `addr`) -> logical
-    bytes."""
-    a, b = (p.reshape(-1, BEAT) for p in parts)
-    v = np.stack([a, b], axis=1)
+    """Inverse of split: the channels' contiguous runs (from logical `addr`; as many channels as
+    parts) -> logical bytes."""
+    nch = len(parts)
+    rows = [p.reshape(-1, BEAT) for p in parts]
+    v = np.stack(rows, axis=1).reshape(-1, 2, BEAT)  # channel 2p + b: chunk p of a group, half b
     if chash:
         hash_swap(addr, v)
     return v.reshape(-1)
@@ -440,8 +450,11 @@ class XdmaTransport:
 
 class SimTransport:
     """The Verilator model of the board (sim/verilator/tb_board.sv): the memory lives here as
-    the channels' physical images (two per slice of `target`'s build), register operations are
-    queued and replayed by the testbench when a result is needed (a flush).
+    the channels' physical images (2 CPC per slice of `target`'s build: two, or four at CPC 2),
+    register operations are queued and replayed by the testbench when a result is needed (a
+    flush). native: the channels behind the adapters ("ld" the LiteDRAM build's, True the
+    native memory model alone, "f2" the AWS F2 burst200 fabric's path in front of it: tb_board
+    MEM_NATIVE 3; default rtlsim.MEMORY's NATIVE, or "f2" under OTPU_F2MEM=1).
 
     Every flush is a fresh simulation: DRAM persists (through the channel image files), but the
     control registers, IMEM and TMEM start from reset. The Board protocol is built for that --
@@ -466,7 +479,10 @@ class SimTransport:
         # channels each), CFG_PLATFORM and CFG_HASH
         self.target = load(target) if isinstance(target, str) else (target or current())
         self.slices = self.target.arch["S"]
-        self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices)]
+        from opentpu.isasim import board_config  # the "bitstream"'s chunks a cycle (OTPU_CPC)
+        self.cpc = int(getattr(board_config(), "CPC", 1) or 1)
+        self.nch = 2 * self.cpc                 # channels a slice (Board.nch before info())
+        self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(self.nch * self.slices)]
         self.stall, self.seed = stall, seed
         self.params = params or {}
         self.native = native                    # the channels (rtlsim.MEMORY["NATIVE"]):
@@ -536,22 +552,31 @@ class SimTransport:
         srcs = [rtlsim.RTL / s for s in rtlsim.RTL_SOURCES if not s.endswith("otpu_top.sv")]
         shell = root / "rtl/shell"                  # the FPGA boards' shell (docs/targets.md)
         srcs += [shell / "otpu_ctrl.sv", shell / "otpu_trace.sv", shell / "otpu_board.sv"]
-        native = rtlsim.MEMORY["NATIVE"] if self.native is None else self.native
+        native = self.native
+        if native is None:
+            native = "f2" if rtlsim.MEMORY.get("F2") else rtlsim.MEMORY["NATIVE"]
+        if native == "ld" and self.cpc != 1:
+            native = True                           # (the LiteDRAM channels are CPC 1's)
         srcs += [rtlsim.TB / "otpu_native_mem.sv", shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv",
                  shell / "otpu_axi_split2.sv",      # otpu_native_reg (tb_board NREG)
                  rtlsim.TB / "otpu_chmem.sv", rtlsim.TB / "otpu_ldn_model.sv"]
+        if native == "f2":
+            srcs += rtlsim.F2_SOURCES
         srcs += [rtlsim.TB / "tb_board.sv"]
         from opentpu.isasim import board_config
         cfg = board_config()                        # OTPU_MCOLS / OTPU_LANES: the "bitstream"
         # VPU_CL and ULANES as the bitstream builds them (make bit: VPU_CL 2, ULANES 8)
-        p = {"S": self.slices, "WORDS": 2 * len(self.ch[0]) // 4, "MCOLS": cfg.MCOLS,
-             "LANES": cfg.LANES,
+        p = {"S": self.slices, "WORDS": self.nch * len(self.ch[0]) // 4, "MCOLS": cfg.MCOLS,
+             "LANES": cfg.LANES, "CPC": self.cpc,
+             # the chunk FIFO as the target builds it at two chunks a cycle (512 entries of 2:
+             # 128 KiB as the card's); one chunk a cycle keeps the board's 1024
+             **({"FIFO_DEPTH": self.target.uarch["FIFO_DEPTH"]} if self.cpc > 1 else {}),
              "ACT_ROWS": cfg.act_rows, "TMEM_WORDS": cfg.TMEM_WORDS,      # (release r2: 128K)
              "VPU_CL": rtlsim.UARCH.get("VPU_CL", 2), "ULANES": rtlsim.UARCH.get("ULANES", 8),
              "MXU_IMPL": rtlsim.UARCH.get("MXU_IMPL", 2),
              # the MXU's epilogue lanes as the target builds them (OTPU_MXU_E overrides)
              "MXU_E": rtlsim.UARCH.get("MXU_E", self.target.uarch.get("MXU_E", 0)),
-             "MEM_NATIVE": 2 if native == "ld" else 1}
+             "MEM_NATIVE": 3 if native == "f2" else 2 if native == "ld" else 1}
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -571,17 +596,19 @@ class SimTransport:
         from opentpu.target import arch_hash, build_config
         t = self.target
         p.setdefault("PLATFORM", t.platform_id)
-        p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(build_config(
+        p.setdefault("ARCH_HASH", "32'h%08x" % arch_hash(replace(build_config(
             t, MCOLS=p["MCOLS"], LANES=p["LANES"], ACT_ROWS=p["ACT_ROWS"],
-            TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0))))
+            TMEM_WORDS=p["TMEM_WORDS"], DSTEP=p.get("DSTEP", 1), SEQ_WC=p.get("SEQ_WC", 0)),
+            CPC=p["CPC"])))
         exe = rtlsim.build("tb_board", srcs, p)
         with simtmp.tempdir("otpu_board_") as d:
             for c in range(len(self.ch)):
                 self.ch[c].view("<u4").astype(">u4").tofile(d / f"ch{c}.bin")
             (d / "host.txt").write_text("\n".join(self.script) + "\n")
             self.script, self.nreads = [], 0
+            f2 = [f"+f2_stall={self.stall}", f"+f2_rgap={self.stall}"] if native == "f2" else []
             r = rtlsim.run_sim([str(exe), f"+dir={d}", f"+axi_stall={self.stall}",
-                                f"+axi_seed={self.seed}", *self.plusargs])
+                                f"+axi_seed={self.seed}", *f2, *self.plusargs])
             out = self.out = r.stdout + r.stderr
             if "DONE" not in out:
                 raise RuntimeError(f"board simulation failed:\n{out[-3000:]}")
@@ -598,6 +625,16 @@ class SimTransport:
 
 
 # ------------------------------------------------------------------------------ the board
+def open_transport(dev: str | None = None, dma: bool = True):
+    """Open OTPU_DEVICE (default /dev/xdma0), or an explicit XDMA prefix / f2:slot / f2:BDF (an
+    AWS F2 image: opentpu/host/f2.py)."""
+    dev = os.environ.get("OTPU_DEVICE", "/dev/xdma0") if dev is None else dev
+    if dev.startswith("f2:"):
+        from .f2 import F2Transport
+        return F2Transport(dev, dma=dma)
+    return XdmaTransport(dev) if dma else XdmaTransport(dev, dma=False)
+
+
 def _lock(t) -> DeviceLock | None:
     """The device lock, shared by every Board on the same transport object (a transport is one
     open of the device); a second transport on the same device, in this process or another,
@@ -656,11 +693,13 @@ class Board:
     the trace buffer."""
 
     def __init__(self, transport=None, check: bool = True, lock: bool = True,
-                 calibrate: bool = True):
+                 calibrate: bool = True, own_transport: bool | None = None):
         """check: the card must answer as openTPU; calibrate: then calibrate its DDR3 if the
         bitstream wants the host to (LiteDRAM, CAPS bit27: memcal.ensure; once per
-        configuration, as the STATUS calibration bits say)."""
-        self.t = transport or XdmaTransport()
+        configuration, as the STATUS calibration bits say). own_transport: close the transport
+        with the Board (default: only the one it opened itself, open_transport)."""
+        self._owns_transport = transport is None if own_transport is None else own_transport
+        self.t = open_transport(dma=lock) if transport is None else transport
         self.lock = _lock(self.t) if lock else None
         self._info = None
         self._trace = None              # (depth, keep_first) of a started traced run
@@ -690,6 +729,9 @@ class Board:
         if self._pool is not None:
             self._pool.shutdown()
             self._pool = None
+        if getattr(self, "_owns_transport", False) and hasattr(self.t, "close"):
+            self.t.close()
+            self._owns_transport = False
         if self.lock is not None:
             self.lock.release()
             self.t._otpu_lock = None
@@ -811,8 +853,9 @@ class Board:
                 d["act_rows"] = self.t.reg_read(R.R_ACT_ROWS)
         if d["regmap"] >= R.CFG_SINCE:
             d["cfg"] = R.cfg(self.t.reg_read_many(list(R.CFG_REGS)))
-            if hasattr(self.t, "bases"):            # the DMA's channel addresses
-                self.t.bases = channel_map(d)
+            if hasattr(self.t, "bases") and not getattr(self.t, "fixed_bases", False):
+                self.t.bases = channel_map(d)       # the DMA's channel addresses (an F2
+                                                    # transport has its windows: f2.py)
             from opentpu.target import by_platform  # the sensor: XADC, or UltraScale+'s SYSMON
             t = by_platform(d["cfg"]["platform"])
             if t is not None and t.family != "xilinx7" and d["temp_c"] is not None:
@@ -858,6 +901,15 @@ class Board:
         """The bitstream hashes the channel interleave (CAPS bit7)."""
         c = (self._info or self.info())["caps"]
         return bool(c and c.get("chash"))
+
+    @property
+    def nch(self) -> int:
+        """Memory channels per slice (CFG_DRAM: 2 CPC; 2 before register map 4). The board
+        model's transport knows them (as `slices`)."""
+        if self._info is None and getattr(self.t, "batched", False):
+            return getattr(self.t, "nch", 2)
+        c = (self._info or self.info())["cfg"]
+        return c["channels"] if c else 2
 
     @property
     def gather(self) -> bool:
@@ -912,9 +964,10 @@ class Board:
         data = np.ascontiguousarray(data).view(np.uint8).reshape(-1)
         if len(data) == 0:
             return
+        g = self.nch * BEAT                             # a group: a beat on every channel
         end = addr + len(data)
-        a0 = -(-addr // (2 * BEAT)) * (2 * BEAT)        # the whole chunks inside
-        a1 = end // (2 * BEAT) * (2 * BEAT)
+        a0 = -(-addr // g) * g                          # the whole groups inside
+        a1 = end // g * g
         if a1 <= a0:
             a0 = a1 = end                               # (none: beats only)
         self._beats(addr, data[:a0 - addr], s)
@@ -923,42 +976,40 @@ class Board:
         self._beats(a1, data[a1 - addr:], s)
 
     def _beats(self, addr: int, data: np.ndarray, s: int = 0) -> None:
-        """Bytes of at most a chunk's worth (a write's edges), beat by beat to their channels."""
+        """Bytes of at most a group's worth (a write's edges), beat by beat to their channels."""
         x, end = addr, addr + len(data)
+        nch = self.nch
         while x < end:
             k = min(end, (x // BEAT + 1) * BEAT) - x
-            c, off = beat_at(x, self.chash)
-            self.t.mem_write(2 * s + c, off, data[x - addr:x - addr + k])
+            c, off = beat_at(x, self.chash, nch)
+            self.t.mem_write(nch * s + c, off, data[x - addr:x - addr + k])
             x += k
 
     def _chunks(self, a0: int, data: np.ndarray, s: int = 0) -> None:
-        """Whole chunks from a0 (chunk aligned) to slice s's two channels."""
-        j = 2 * s                                       # its first channel
-        if self.chash:                                  # channel order (a copy)
-            data = data.copy()
-            hash_swap(a0, data.reshape(-1, 2, BEAT))
+        """Whole groups from a0 (group aligned) to slice s's channels."""
+        nch = self.nch
+        j = nch * s                                     # its first channel
         lim = getattr(self.t, "run_h2c", 0) if self.in_run else 0
         if lim:                                         # a run is in flight (RUN_H2C)
-            for c, off, part in split(a0, data):
+            for c, off, part in split(a0, data, self.chash, nch):
                 for i in range(0, len(part), lim):
                     self.t.mem_write(j + c, off + i, part[i:i + lim])
             return
         if not (getattr(self.t, "threaded", False) and len(data) > PIPE):
-            for c, off, part in split(a0, data):
+            for c, off, part in split(a0, data, self.chash, nch):
                 self.t.mem_write(j + c, off, part)
             return
         # pieces of PIPE bytes: the worker DMAs piece i while this thread splits piece i + 1
-        # into the other pair of buffers (placed for full DMA speed, see DMA_PLACE)
-        h = PIPE // 2
-        slots = [[placed(h, self._base(j + c) + a0 // 2) for c in (0, 1)] for _ in range(2)]
+        # into the other set of buffers (placed for full DMA speed, see DMA_PLACE)
+        h = PIPE // nch
+        slots = [[placed(h, self._base(j + c) + a0 // nch) for c in range(nch)] for _ in range(2)]
         ex, prev = self._worker(), None
         for i, pos in enumerate(range(0, len(data), PIPE)):
-            v = data[pos:pos + PIPE].reshape(-1, 2, BEAT)
             parts = []
-            for c in (0, 1):
-                buf = slots[i % 2][c][:len(v) * BEAT]
-                np.copyto(buf.reshape(-1, BEAT), v[:, c, :])
-                parts.append((j + c, a0 // 2 + i * h, buf))
+            for c, off, part in split(a0 + pos, data[pos:pos + PIPE], self.chash, nch):
+                buf = slots[i % 2][c][:len(part)]
+                np.copyto(buf, part)
+                parts.append((j + c, off, buf))
             if prev is not None:
                 prev.result()
             prev = ex.submit(lambda ps: [self.t.mem_write(*p) for p in ps], parts)
@@ -984,7 +1035,7 @@ class Board:
         z = placed(64 << 20, 0)             # zeros, placed: no bounce copies
         for ch in range(nch):
             for off in range(0, size, len(z)):
-                self.t.mem_write(ch, off, z)
+                self.t.mem_write(ch, off, z[:min(len(z), size - off)])
         # the ECC counters (STATUS ECC_DED) from here on: a read of a beat not yet written (an
         # earlier run's, a tool's) counted its random check bits as uncorrectable
         from opentpu.host import ddr4, memcal
@@ -995,37 +1046,37 @@ class Board:
 
     def read(self, addr: int, n: int, s: int = 0) -> np.ndarray:
         """n logical bytes from slice s's DRAM at addr."""
-        j = 2 * s                                       # its first channel
-        a0 = addr // (2 * BEAT) * (2 * BEAT)
-        a1 = -(-(addr + n) // (2 * BEAT)) * (2 * BEAT)
-        half = (a1 - a0) // 2
-        out = np.empty((half // BEAT, 2, BEAT), np.uint8)
-        if not (getattr(self.t, "threaded", False) and 2 * half > PIPE):
-            for c in (0, 1):                            # each channel's run, interleaved
-                out[:, c, :] = self.t.mem_read(j + c, a0 // 2, half).reshape(-1, BEAT)
+        nch = self.nch
+        j = nch * s                                     # its first channel
+        g = nch * BEAT                                  # a group: a beat on every channel
+        a0 = addr // g * g
+        a1 = -(-(addr + n) // g) * g
+        per = (a1 - a0) // nch                          # bytes per channel
+        if not (getattr(self.t, "threaded", False) and a1 - a0 > PIPE):
+            parts = [self.t.mem_read(j + c, a0 // nch, per) for c in range(nch)]
+            flat = join(parts, a0, self.chash)
         else:
-            # pieces of PIPE / 2 bytes per channel: the worker reads piece i + 1 into one pair of
-            # buffers while this thread interleaves piece i from the other pair
-            h = PIPE // 2
-            slots = [[placed(h, self._base(j + c) + a0 // 2) for c in (0, 1)] for _ in range(2)]
+            # pieces of PIPE / nch bytes per channel: the worker reads piece i + 1 into one set of
+            # buffers while this thread interleaves piece i from the other set
+            h = PIPE // nch
+            slots = [[placed(h, self._base(j + c) + a0 // nch) for c in range(nch)]
+                     for _ in range(2)]
 
             def get(i: int):
-                k = min(h, half - i * h)
-                return [self.t.mem_read(j + c, a0 // 2 + i * h, k, slots[i % 2][c][:k])
-                        for c in (0, 1)]
+                k = min(h, per - i * h)
+                return [self.t.mem_read(j + c, a0 // nch + i * h, k, slots[i % 2][c][:k])
+                        for c in range(nch)]
 
-            npieces = -(-half // h)
+            npieces = -(-per // h)
+            flat = np.empty(a1 - a0, np.uint8)
             ex = self._worker()
             fut = ex.submit(get, 0)
             for i in range(npieces):
                 nxt = ex.submit(get, i + 1) if i + 1 < npieces else None
-                rows = slice(i * h // BEAT, (i * h + h) // BEAT)
-                for c, part in enumerate(fut.result()):
-                    out[rows, c, :] = part.reshape(-1, BEAT)
+                parts = fut.result()
+                flat[i * h * nch:i * h * nch + len(parts[0]) * nch] = \
+                    join(parts, a0 + i * h * nch, self.chash)
                 fut = nxt
-        if self.chash:                                  # channel order -> logical
-            hash_swap(a0, out)
-        flat = out.reshape(-1)
         return flat if (a0, a1) == (addr, addr + n) else flat[addr - a0:addr - a0 + n].copy()
 
     # ------------------------------------------------------------------ programs
@@ -1298,10 +1349,11 @@ def device_config(info: dict, **kw):
     (DRAM_BYTES). A bitstream without the MX numerics (CAPS bit29) or whose CFG_HASH is not
     this host's hash of what its registers report is refused (check_numerics, check_hash)."""
     from opentpu.isasim import board_config
-    for k in ("MCOLS", "LANES"):
+    cpc = (info.get("caps2") or {}).get("cpc", 1)    # CAPS2 [3:1] (1 before: one chunk a cycle)
+    for k, have in (("MCOLS", info["MCOLS"]), ("LANES", info["LANES"]), ("CPC", cpc)):
         env = os.environ.get(f"OTPU_{k}")
-        if env is not None and int(env) != info[k]:
-            raise ConfigMismatch(f"the bitstream was built with {k}={info[k]} but OTPU_{k}={env}"
+        if env is not None and int(env) != have:
+            raise ConfigMismatch(f"the bitstream was built with {k}={have} but OTPU_{k}={env}"
                                  f": unset OTPU_{k} (the host follows the bitstream) or load "
                                  f"a {k}={env} bitstream")
     caps = info.get("caps") or {}
@@ -1317,7 +1369,7 @@ def device_config(info: dict, **kw):
                                  f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
     dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep,
-           "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
+           "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0, "CPC": cpc}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
         dev.update(D=info["D"], SEQ_WC=bool(c.get("SEQ_WC")),
@@ -1384,7 +1436,8 @@ def check_hash(info: dict, cfg=None) -> None:
         cfg = board_config(D=info["D"], MCOLS=info["MCOLS"], LANES=info["LANES"],
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
-                           ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
+                           ACT_ROWS=rows if rows > info["MCOLS"] else 0,
+                           CPC=(info.get("caps2") or {}).get("cpc", 1), **sizes)
     if arch_hash(cfg) != c["hash"]:
         raise ConfigMismatch(f"the bitstream's CFG_HASH {c['hash']:08x} is not the hash of the "
                              f"configuration its registers report ({arch_hash(cfg):08x}): the "
@@ -1485,19 +1538,21 @@ class BoardBackend:
     /tmp/otpu/<dev>.json (runstate.RunnerStatus) until close() or exit."""
 
     def __init__(self, cfg, images: list, transport=None, model: str | None = None,
-                 status: bool = True):
+                 status: bool = True, own_transport: bool | None = None):
         from opentpu import isa as I
         self.I = I
         self.cfg = cfg
-        self.board = Board(transport)
+        self.board = Board(transport, own_transport=own_transport)
         self.board.scrub()
         info = self.info = self.board.info()
         try:
             check_fits(cfg, info)
             c = info.get("cfg")
-            if c and c["channels"] != 2:
+            cpc = getattr(cfg, "CPC", 1)
+            if c and c["channels"] != 2 * cpc:
                 raise ConfigMismatch(f"the bitstream's slices have {c['channels']} memory "
-                                     "channels each: this driver interleaves two")
+                                     f"channels each: this driver interleaves {2 * cpc} (two a "
+                                     f"chunk of the CPC {cpc} configuration's)")
             # its sequencer takes wait entries (EXPERIMENTAL): each program loads with its own
             # (check_fits: the configuration has their room; Board.waitc: the window)
             self.waitc = self.board.waitc

@@ -239,7 +239,13 @@ MEMORY = {"AXI": os.environ.get("OTPU_AXI", "0") == "1",
           "BW": int(os.environ.get("OTPU_BW", "100")),        # percent of a beat/cycle/channel
           "LAT": int(os.environ.get("OTPU_LAT", "20")),
           "LDC": int(os.environ.get("OTPU_LDC", "0")),
-          "LDC_MHZ": float(os.environ.get("OTPU_LDC_MHZ", "0"))}
+          "LDC_MHZ": float(os.environ.get("OTPU_LDC_MHZ", "0")),
+          "F2": os.environ.get("OTPU_F2MEM", "0") == "1"}
+# F2 (OTPU_F2MEM=1, or a run's axi=3): the AWS F2 burst200 fabric's memory path behind the adapter
+# (otpu_top AXI 3): per channel otpu_native_axi, an AXI model of the SmartConnect / HBM side
+# (sim/verilator/otpu_axi_native.sv, its AR / AW / W readiness withheld and its R / B bubbles at the
+# run's stall percent) and the native memory model with the stall, bandwidth and latency above.
+F2_SOURCES = [RTL / "boards/f2/burst200/otpu_native_axi.sv", TB / "otpu_axi_native.sv"]
 # LDC: the channels behind the adapter are the card's instead of otpu_native_mem's model -- per
 # channel the board's bridge (otpu_mem_ch) and LiteDRAM's own controller, generated with the
 # production core's settings (tools/litedram/gen_ldc.py; sim/verilator/otpu_ldc_mem.sv holds the
@@ -263,7 +269,7 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "ACT_ROWS": cfg.act_rows,
          "TMEM_WORDS": cfg.TMEM_WORDS, "IMEM_WORDS": cfg.IMEM_WORDS,
          "DRAM_WORDS": (dram_bytes or cfg.DRAM_BYTES) // 4, "DRAM_LAT": dram_lat,
-         "LANES": cfg.LANES,
+         "LANES": cfg.LANES, "CPC": int(getattr(cfg, "CPC", 1) or 1),
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
@@ -280,14 +286,19 @@ def gathers(S: int, uarch: dict | None = None) -> bool:
     return S > 1 or bool(int({**UARCH, **(uarch or {})}.get("COLL_GATHER", 1)))
 
 
-def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool = False,
+def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | int = False,
               dram_bytes: int | None = None, ldc: int | None = None) -> Path:
+    """axi: False the behavioural DRAM, True the native memory model (or the LDC), 3 the F2
+    path (F2_SOURCES in front of the native memory model)."""
     ldc = (MEMORY["LDC"] if ldc is None else ldc) if axi else 0
+    f2 = axi == 3 and not ldc
     shell = RTL / "shell"
     mem = ([shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv", TB / LDC_MODELS[ldc],
-            TB / "otpu_ldc_mem.sv"] if ldc else [TB / "otpu_native_mem.sv"] if axi else [])
+            TB / "otpu_ldc_mem.sv"] if ldc else
+           [TB / "otpu_native_mem.sv"] + (F2_SOURCES if f2 else []) if axi else [])
     return build("tb_top", [RTL / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
-                 top_params(cfg, dram_lat, uarch, 2 if ldc else axi, dram_bytes))
+                 top_params(cfg, dram_lat, uarch, 2 if ldc else 3 if f2 else bool(axi),
+                            dram_bytes))
 
 
 def run(cfg, programs: list, images: list, *args, keep: Path | None = None, **kw):
@@ -308,8 +319,10 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         plusargs: list | None = None, args=None, ldc: int | None = None,
         pokes: dict | None = None, again: list | None = None, reload: bool = False,
         error_ok: bool = False):
-    """Run the RTL; returns (drams as uint8 arrays, tmems as uint32 arrays, stats). args: the
-    run's arguments (R8..R15 at the start, as isasim.Machine). ldc: MEMORY's LDC for this run
+    """Run the RTL; returns (drams as uint8 arrays, tmems as uint32 arrays, stats): the DRAM
+    returned covers the images given (the whole DRAM when the images are whole DRAMs), the
+    rest of it zero. args: the run's arguments (R8..R15 at the start, as isasim.Machine). ldc:
+    MEMORY's LDC for this run
     (the core at MEMORY's LDC_MHZ unless `plusargs` set +ldc_ratio: ldc_plusargs). pokes:
     {slice: [(cycle, DRAM byte address, uint32 word)]}, the host's writes during the run (the
     behavioural DRAM, or the native memory model: not the LDC). again: more runs of the same
@@ -323,7 +336,8 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
     from . import isa as I
     run_args = args
     axi = MEMORY["AXI"] if axi is None else axi
-    axi = axi and cfg.D == 128
+    f2 = axi == 3 or (bool(axi) and MEMORY["F2"])     # the F2 path (otpu_top AXI 3)
+    axi = bool(axi) and cfg.D == 128
     boot = MEMORY["BOOT"] if boot is None else boot
     stall = MEMORY["STALL"] if stall is None else stall
     seed = MEMORY["SEED"] if seed is None else seed
@@ -372,7 +386,8 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
     grow = boot and at + 4 * max(len(p) for p in progs) > cfg.DRAM_BYTES
     if grow:
         at = cfg.DRAM_BYTES
-    exe = build_top(cfg, 20 if axi else dram_lat, uarch, axi,
+    f2 = f2 and axi and not ldc
+    exe = build_top(cfg, 20 if axi else dram_lat, uarch, 3 if f2 else axi,
                     2 * cfg.DRAM_BYTES if grow else None, ldc)
     for s in range(cfg.S):
         img = imgs[s]
@@ -397,6 +412,10 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         (tmp / f"pokeb_{s}.txt").write_text("".join(
             f"{r:x} {ad // 4:x} {v & 0xFFFFFFFF:x}\n" for r, ad, v in pk))
     args = [str(exe), f"+dir={tmp}", f"+max_cycles={max_cycles}"] + (["+trace"] if trace else [])
+    # the dump covers the images given (with the boot program after them): a caller that gives
+    # a model's image rather than the whole DRAM gets a dump of that extent (a 1 GiB image in a
+    # 4 GiB DRAM: a quarter of the file), and the result's length is the image's
+    args += [f"+dump_words={max(len(i) for i in imgs) // 4}"]
     args += list(plusargs or [])
     # e.g. OTPU_SIM_PLUSARGS=+hz_rh=1,+hz_log=/path (docs/seq_vpu.md) or +tm_nsb=8,+tm_sbp=3
     # (docs/tmem_nocopy.md; commas or spaces); %n is this process's simulation count (0, 1,
@@ -415,6 +434,8 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         args += [f"+axi_stall={stall}", f"+axi_seed={seed}",
                  f"+axi_bw={MEMORY['BW'] if bw is None else bw}",
                  f"+axi_lat={MEMORY['LAT'] if lat is None else lat}"]
+    if f2:                             # the AXI side's readiness and response bubbles
+        args += [f"+f2_stall={stall}", f"+f2_rgap={stall}"]
     if ldc:                            # the first of a plusarg wins: the caller's
         args += ldc_plusargs(ldc, MEMORY["LDC_MHZ"])
     if boot:

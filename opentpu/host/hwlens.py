@@ -189,7 +189,7 @@ def run_steps(eng, tokens: list[int], pos0: int, n: int, keep: str, prompt_len: 
 def record_card(a) -> list:
     from opentpu.llm import load_spec
     from opentpu.llm.qwen3 import Engine, load_weights
-    from .board import Board, BoardBackend, XdmaTransport, device_config
+    from .board import Board, BoardBackend, device_config, open_transport
     model = Path(a.model)
     spec = load_spec(model)
     if a.prompt_ids:
@@ -203,7 +203,7 @@ def record_card(a) -> list:
         ids = list(ids["input_ids"] if hasattr(ids, "keys") else ids)
     pos0 = len(ids) - 1 if a.pos is None else a.pos
     cap = max(256, -(-(pos0 + a.tokens + 1) // 128) * 128)
-    tr = XdmaTransport(a.dev)
+    tr = open_transport(a.dev)                  # an XDMA prefix, or f2:<slot> / f2:<BDF>
     cfg = device_config(Board(tr, lock=False).info())
     eng = Engine(spec, load_weights(model), cap=cap, cfg=cfg, pipeline="thread",  # programs
                  backend=lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model.name),
@@ -233,7 +233,7 @@ def record_sim(a) -> list:
         pos0 = 3 if a.pos is None else a.pos
         cap = max(256, -(-(pos0 + a.tokens + 1) // 128) * 128)
         cfg = sim_config(spec, cap)
-        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
+        tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // (2 * getattr(cfg, "CPC", 1)))   # 2 CPC channels
         eng = Engine(spec, W, cap=cap, cfg=cfg, pipeline="thread",
                      backend=lambda c, imgs: BoardBackend(c, imgs, transport=tr))
         ids = [int(t) for t in np.random.default_rng(1).integers(0, spec.vocab, pos0 + 1)]
@@ -278,7 +278,9 @@ def main(argv=None) -> int:
     r = sub.add_parser("record", help="run Qwen3 steps on the card (or a workload on the board "
                        "model) with the trace buffer on; write a profile file")
     r.add_argument("-o", "--out", required=True)
-    r.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix")
+    r.add_argument("--dev", default=None,
+                   help="the device: an XDMA prefix (default OTPU_DEVICE or /dev/xdma0), or "
+                        "f2:<slot> / f2:<BDF> for an AWS F2 image (opentpu.host.f2)")
     r.add_argument("--sim", action="store_true", help="the Verilator board model")
     r.add_argument("--model", default=str(ROOT / "models" / "Qwen3-0.6B"))
     r.add_argument("--prompt", default="What is the capital of France?")

@@ -52,7 +52,7 @@ from pathlib import Path
 from . import isa as I
 from . import rtlsim
 from . import target as T
-from .profile import UNITS, OPNAMES, Profile, _describe
+from .profile import UNITS, OPNAMES, Profile, _describe, cpc_of
 
 FORMAT, VERSION = "openTPU-profile", 1
 CLOCK_MHZ = T.current().platform["core_mhz"]    # the core clock of the target (OTPU_TARGET)
@@ -176,7 +176,7 @@ def _config(cfg, uarch: dict | None) -> dict:
     ua = dict(rtlsim.UARCH)
     ua.update(uarch or {})
     lanes = cfg.LANES
-    return {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes,
+    return {"S": cfg.S, "D": cfg.D, "MCOLS": cfg.MCOLS, "LANES": lanes, "CPC": cpc_of(cfg),
             "CL": lanes // 4 if lanes >= 8 else 1, "ACT_BLOCKS": cfg.ACT_BLOCKS,
             "TMEM_WORDS": cfg.TMEM_WORDS, "DRAM_BYTES": cfg.DRAM_BYTES,
             "IMEM_WORDS": cfg.IMEM_WORDS, "FIFO_DEPTH": 128, "NRP": 8, "NWP": 4, **ua}
@@ -218,25 +218,65 @@ def to_data(p: Profile, uarch: dict | None = None, kind: str = "rtl") -> dict:
                        "buckets": p.buckets[s] if getattr(p, "buckets", None) else {}})
     macs = p.macs()
     bytes_b = sum(x["portb"] for x in rl["per_slice"]) * cfg.D
+    C = cpc_of(cfg)
     return {
         "kind": kind, "name": p.name, "cycles": p.cycles, "clock_mhz": CLOCK_MHZ,
         "config": _config(cfg, uarch),
-        "roofline": {"bound": rl["bound"], "efficiency": rl["efficiency"],
+        "roofline": {"bound": rl["bound"], "dram": rl["dram"], "efficiency": rl["efficiency"],
                      "per_slice": rl["per_slice"]},
         "macs": macs, "bytes": bytes_b,
-        "peak_macs": cfg.D * cfg.MCOLS * cfg.S, "peak_bytes": cfg.D * cfg.S,
+        "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
         "units": UNITS, "slices": slices, "instrs": instrs,
         "programs": _programs(p.programs, cfg, src), "sources": src.list,
         "notes": notes(p), "mxu_gaps": {k: v for k, v in p.mxu_gaps(0).items() if k != "blame"},
     }
 
 
-def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None) -> dict:
+def parse_candidate(text: str | None) -> dict | None:
+    """A candidate architecture for isa_data's analytic timing: "C=4,LANES=16,MHZ=200" ->
+    {"C": 4, "LANES": 16, "MHZ": 200.0}. C: chunks streamed and consumed per cycle (the port
+    and MXU C times wider; MM work / C, the DRAM bound / C); LANES: VPU / quantizer lanes (the
+    VOP, QACT, QST, GATHER, LD and ST work at that width); MHZ: the core clock the times are
+    at. None for None or ""."""
+    if not text:
+        return None
+    out = {}
+    for item in text.replace(" ", "").split(","):
+        k, _, v = item.partition("=")
+        if k not in CANDIDATE_KEYS or not v:
+            raise ValueError(f"candidate {item!r}: C=<chunks/cycle>,LANES=<n>,MHZ=<f>"
+                             f"[,{','.join(k + '=' for k in CANDIDATE_KEYS[3:])}]")
+        out[k] = v if k == "MEM" else float(v) if k == "MHZ" else int(v)
+    return out
+
+
+# the keys a candidate takes: the three the timing uses, then the floorplan's (shown, not
+# timed): TMEM_WORDS, FIFO_DEPTH (chunks per lane), WIN (dispatch window), S (slices), MEM
+# ("hbm": the memory blocks drawn as HBM pseudo-channel groups), PCS (pseudo-channels)
+CANDIDATE_KEYS = ("C", "LANES", "MHZ", "TMEM_WORDS", "FIFO_DEPTH", "WIN", "S", "MEM", "PCS")
+
+
+def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None,
+             args=None, candidate: dict | None = None) -> dict:
     """An ISA-simulator run: the executed instruction stream (with loops unrolled) and an
     analytic timing -- every instruction issued back to back for its nominal work, no overlap
-    (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run."""
+    (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run. args:
+    the run's arguments (R8..R15: a resident decode program's position and token).
+    candidate (parse_candidate): the same instruction stream timed on a wider machine, C
+    chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
+    model for comparing architecture candidates (docs/v4/), not a measurement. A candidate's
+    C streams flat pairs (an int8 MM ceil(N x KB / C) cycles: the proposal's milestone 4);
+    a Config's CPC (no candidate C) times the RTL's half pairs (N x ceil(KB / CPC); the same
+    code, opentpu.profile._describe, with flat off), the only difference between
+    `--candidate C=2` and a CPC 2 Config."""
+    from dataclasses import replace
+
     from .isasim import Machine
-    m = Machine(cfg, programs, [None if i is None else i.copy() for i in images])
+    cand = dict(candidate or {})
+    flat = "C" in cand
+    C = int(cand.get("C", cpc_of(cfg)))
+    dcfg = replace(cfg, CPC=C, LANES=int(cand.get("LANES", cfg.LANES)))
+    m = Machine(cfg, programs, [None if i is None else i.copy() for i in images], args)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
         orig = sl.execute
@@ -256,7 +296,7 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             ins = programs[s][pc]
             if ins.op not in unit_of:
                 continue
-            nm, det, work, pb, pa = _describe(ins, cfg)
+            nm, det, work, pb, pa = _describe(ins, dcfg, flat)   # C chunks a cycle into the MXU
             work = max(1, work)
             instrs.append([s, idx, pc, unit_of[ins.op], nm, det, t, t, -1, t, t + work,
                            src.id(ins), {}, work, pb, pa])
@@ -264,8 +304,10 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             b += pb
             a += pa
         cycles = max(cycles, t)
-        per.append({"portb": b, "porta": a, "bound": max(a, b)})
+        per.append({"portb": b, "porta": a, "dram": -(-b // C),
+                    "bound": max(-(-a // C), -(-b // C))})
     bound = max((x["bound"] for x in per), default=0)
+    dram = max((x["dram"] for x in per), default=0)
     busy = []
     for s in range(cfg.S):
         u = {n: 0 for n in UNITS}
@@ -273,21 +315,39 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             if r[0] == s:
                 u[UNITS[r[3]]] += r[10] - r[9]
         busy.append(u)
+    notes = [{"level": "info", "text":
+              "ISA simulator run: analytic timing (each instruction back to back for its "
+              "nominal work, no overlap between units). The roofline fraction is a lower "
+              "bound on what the RTL achieves; record with the RTL for real timing."}]
+    config = _config(cfg, uarch)
+    config["CPC"] = C
+    if cand:
+        config.update(C=C, LANES=dcfg.LANES, CL=dcfg.LANES // 4 if dcfg.LANES >= 8 else 1)
+        config.update({k: v for k, v in cand.items() if k in CANDIDATE_KEYS[3:]})
+        notes.append({"level": "warn", "text":
+                      f"Candidate architecture model: {C} chunk(s) of {cfg.D} B a cycle "
+                      f"through the port and the MXU{' (flat pairs)' if flat else ''}, "
+                      f"{dcfg.LANES} vector lanes, at {cand.get('MHZ', CLOCK_MHZ):g} MHz. "
+                      f"The same instruction stream as the measured run, re-timed; not a "
+                      f"measurement."})
+    elif C > 1:
+        notes.append({"level": "info", "text":
+                      f"CPC {C}: {C} chunks of {cfg.D} B a cycle through the port and the MXU; "
+                      f"an int8 MM N x ceil(KB / {C}) cycles (an odd KB's last advance a half "
+                      f"pair), 4-bit MMs one chunk an advance."})
     return {
-        "kind": "isa", "name": name, "cycles": cycles, "clock_mhz": CLOCK_MHZ,
-        "config": _config(cfg, uarch),
-        "roofline": {"bound": bound, "efficiency": bound / cycles if cycles else 0,
+        "kind": "isa", "name": name, "cycles": cycles,
+        "clock_mhz": float(cand.get("MHZ", CLOCK_MHZ)),
+        "config": config,
+        "roofline": {"bound": bound, "dram": dram, "efficiency": bound / cycles if cycles else 0,
                      "per_slice": per},
         "macs": 0, "bytes": sum(x["portb"] for x in per) * cfg.D,
-        "peak_macs": cfg.D * cfg.MCOLS * cfg.S, "peak_bytes": cfg.D * cfg.S,
+        "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
         "units": UNITS,
         "slices": [{"ports": {}, "busy": busy[s], "lose": {}, "buckets": {}}
                    for s in range(cfg.S)],
         "instrs": instrs, "programs": _programs(programs, cfg, src), "sources": src.list,
-        "notes": [{"level": "info", "text":
-                   "ISA simulator run: analytic timing (each instruction back to back for its "
-                   "nominal work, no overlap between units). The roofline fraction is a lower "
-                   "bound on what the RTL achieves; record with the RTL for real timing."}],
+        "notes": notes,
         "mxu_gaps": {},
     }
 
@@ -441,14 +501,23 @@ def _tiny_qwen():
 
 class _Capture:
     """Engine backend: ISA simulator for every token but the last, which runs on the RTL with
-    tracing; keeps (programs, trace, stats)."""
+    tracing; keeps (programs, trace, stats). With `isa` the traced run stays on the ISA
+    simulator: keeps (programs, args, the DRAM before it) for isa_data (analytic timing).
+    Takes the run's arguments (a resident decode program's)."""
 
-    def __init__(self, cfg, images, uarch, run_kw):
+    args = True
+
+    def __init__(self, cfg, images, uarch, run_kw, isa: bool = False, check: bool = False):
         from .llm.qwen3 import IsaBackend
-        self.cfg, self.uarch, self.run_kw = cfg, uarch, run_kw
+        self.cfg, self.uarch, self.run_kw, self.isa_mode = cfg, uarch, run_kw, isa
+        # the images' extent: the RTL is given (and dumps) that much of the DRAM, not the whole
+        self.extent = [len(i) for i in images]
         self.isa = IsaBackend(cfg, images)
         self.traced = False
         self.last = None
+        # check: the traced run on the ISA simulator too (on a copy of the DRAM before it), the
+        # RTL's DRAM compared with it byte for byte: self.check = (bytes compared, bytes differing)
+        self.check_mode, self.check = check, None
 
     def write(self, s, addr, data):
         self.isa.write(s, addr, data)
@@ -456,17 +525,133 @@ class _Capture:
     def read(self, s, addr, n):
         return self.isa.read(s, addr, n)
 
-    def run(self, programs):
+    def run(self, programs, args=None):
         if not self.traced:
-            return self.isa.run(programs)
-        n = [len(sl.dram) for sl in self.isa.machine.slices]
-        drams, _, st = rtlsim.run(self.cfg, programs, [sl.dram for sl in self.isa.machine.slices],
-                                  max_cycles=1 << 40, trace=True, uarch=self.uarch,
+            return self.isa.run(programs, args)
+        if self.isa_mode:
+            self.last = (programs, args, [sl.dram.copy() for sl in self.isa.machine.slices])
+            return self.isa.run(programs, args)
+        import numpy as np
+        from .llm.qwen3 import IsaBackend
+        n = self.extent
+        ref = None
+        if self.check_mode:
+            ref = IsaBackend(self.cfg, [sl.dram[:k].copy()
+                                        for sl, k in zip(self.isa.machine.slices, n)])
+            ref.run(programs, args)
+        drams, _, st = rtlsim.run(self.cfg, programs,
+                                  [sl.dram[:k] for sl, k in zip(self.isa.machine.slices, n)],
+                                  max_cycles=1 << 40, trace=True, uarch=self.uarch, args=args,
                                   **self.run_kw)
+        if ref is not None:
+            self.check = (sum(n), sum(int(np.count_nonzero(d[:k] != sl.dram[:k]))
+                                      for sl, d, k in zip(ref.machine.slices, drams, n)))
+            del ref
         for sl, d, k in zip(self.isa.machine.slices, drams, n):
-            sl.dram[:] = d[:k]
+            sl.dram[:k] = d[:k]
         self.last = (programs, st)
         return st
+
+
+def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
+                prompt: str, resident: bool = True, wformat: str = "auto",
+                head_format: str | None = None, candidate: dict | None = None,
+                mhz: float | None = None, check: bool = False) -> dict:
+    """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
+    on its real weights: the prompt (a user turn of the chat template; plain text without
+    one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
+    the step at `pos` (default: the prompt's last token, whose step picks the first new token)
+    runs traced on the RTL (board model of the card's configuration where the model takes one
+    slice, as Gemma 3 / Gemma 4, or with --board), or on the ISA simulator with analytic
+    timing (`isa`). resident: the resident decode program (the token's rows gathered on the
+    device), as otpu-chat runs. check: the traced step on the ISA simulator too, the RTL's
+    DRAM (the logits, the caches) compared with it byte for byte; the result in the profile's
+    name and notes (and the next token is the RTL's)."""
+    import numpy as np
+    from .host.board import sim_config
+    from .isasim import board_config, design_config
+    from .llm import formats as FM
+    from .llm import load_spec, model_dir
+    from .llm.qwen3 import Engine, device_config, load_weights
+    from .profile import parse
+    path = model_dir(model)
+    spec = load_spec(path)
+    wformat = FM.auto(spec, wformat)
+    try:
+        spec.check(design_config())
+        maps = True
+    except ValueError:
+        maps = False                            # one slice: the card's configuration
+    board = board or not maps
+    uarch = dict(rtlsim.BOARD_UARCH) if board else uarch
+    import transformers
+    tok = transformers.AutoTokenizer.from_pretrained(path)
+    if getattr(tok, "chat_template", None):
+        ids = tok.apply_chat_template([{"role": "user", "content": prompt}],
+                                      add_generation_prompt=True, tokenize=True)
+        ids = list(ids["input_ids"] if hasattr(ids, "keys") else ids)
+    else:
+        ids = list(tok(prompt).input_ids)
+    if pos is None:
+        pos = len(ids) - 1
+    if pos < len(ids) - 1:
+        raise SystemExit(f"--pos {pos}: the prompt ends at position {len(ids) - 1}")
+    cap = max(256, -(-(pos + 2) // 256) * 256)
+    if board:
+        cfg = sim_config(spec, cap, board_config(PAIR=True, DSTEP=True, STREAM=True),
+                         lookup=resident, wformat=wformat, head_format=head_format)
+    else:
+        cfg = device_config(spec, cap, lookup=resident, wformat=wformat,
+                            head_format=head_format)
+    holder = {}
+
+    def mk(c, images):
+        holder["b"] = _Capture(c, images, uarch, run_kw, isa=isa, check=check and not isa)
+        return holder["b"]
+    eng = Engine(spec, load_weights(path), cap=cap, cfg=cfg, backend=mk, wformat=wformat,
+                 head_format=head_format, resident=resident)
+    logits = eng.prefill(ids[:-1]) if len(ids) > 1 else None
+    t = ids[-1]
+    for _ in range(pos - (len(ids) - 1)):           # greedy decode up to the traced step
+        logits = eng.step(t)
+        t = int(np.argmax(logits))
+    holder["b"].traced = True
+    logits = eng.step(t)
+    nxt = int(np.argmax(logits))
+    cand = dict(candidate or {})
+    if mhz:
+        cand["MHZ"] = mhz
+    tag = ""
+    if candidate:
+        tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
+                                        for k, v in cand.items()) + "]"
+    name = (f"{path.name} token at pos {pos}" + (" (board config)" if board else "") +
+            (" [ISA]" if isa else "") + tag +
+            f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
+    if isa:
+        programs, args, drams = holder["b"].last
+        return isa_data(name, cfg, programs, drams, uarch, args, cand or None)
+    if candidate:
+        raise SystemExit("--candidate is an ISA model: add --isa")
+    programs, st = holder["b"].last
+    chk = holder["b"].check
+    if chk is not None:
+        name += " [bit-exact with the ISA simulator]" if chk[1] == 0 else \
+                f" [DIFFERS from the ISA simulator: {chk[1]} of {chk[0]} bytes]"
+    p = parse(st["trace"], cfg, programs, name)
+    p.cycles = st["cycles"]
+    d = _mem(to_data(p, uarch), cfg, run_kw.get("axi"))
+    if chk is not None:
+        d["check"] = {"bytes": chk[0], "differ": chk[1], "next_token": nxt}
+        d["notes"].insert(0, {"level": "good" if chk[1] == 0 else "bad", "text":
+                              f"The traced step's DRAM ({chk[0]} bytes: the logits and the "
+                              f"caches) {'equals' if chk[1] == 0 else 'differs from'} the ISA "
+                              f"simulator's{'' if chk[1] == 0 else f' in {chk[1]} bytes'}; "
+                              f"next token {nxt} ({tok.decode([nxt])!r})."})
+    if mhz:                     # the same cycles at another clock (an F2 build's 200 MHz)
+        d["clock_mhz"] = float(mhz)
+        d["name"] += f" at {mhz:g} MHz"
+    return d
 
 
 def _qwen(real: bool, pos: int, board: bool, run_kw: dict, uarch):
@@ -558,12 +743,20 @@ WORKLOAD_HELP = {
     "layer": "full attention layer at position 1023",
     "qwen-tiny": "one decode token of a small random Qwen3 (use --pos)",
     "qwen": "one decode token of the real Qwen3-0.6B (models/Qwen3-0.6B; minutes)",
+    "model": "one decode token of --model NAME|DIR after --prompt (--model-pos; minutes)",
 }
+DEFAULT_PROMPT = "Why is the sky blue?"
 
 
 def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
-           bucket: int = 64, axi: bool | None = None, stall: int | None = None) -> dict:
-    """Run one workload and return its profile dict."""
+           bucket: int = 64, axi: bool | None = None, stall: int | None = None,
+           model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
+           resident: bool = True, wformat: str = "auto", head_format: str | None = None,
+           candidate: str | None = None, mhz: float | None = None, check: bool = False) -> dict:
+    """Run one workload and return its profile dict; `workload` "model" with `model` a
+    checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
+    re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `check` compares
+    the RTL's step with the ISA simulator's."""
     from .profile import profile
     uarch = dict(rtlsim.BOARD_UARCH) if board else None
     run_kw = {"plusargs": [f"+bucket={bucket}"]}
@@ -571,6 +764,11 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         run_kw["axi"] = axi
     if stall is not None:
         run_kw["stall"] = stall
+    if workload == "model":
+        if model is None:
+            raise SystemExit("workload model: --model NAME|DIR")
+        return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
+                           wformat, head_format, parse_candidate(candidate), mhz, check)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -792,7 +990,8 @@ def render_summary(d: dict, s: int = 0) -> str:
     eff = rl.get("efficiency") or 0.0
     bound = rl.get("bound") or 0
     mhz = m["clock_mhz"] or CLOCK_MHZ
-    cfg_bits = " ".join(f"{k}={cfg[k]}" for k in ("S", "D", "MCOLS", "LANES") if k in cfg)
+    cfg_bits = " ".join(f"{k}={cfg[k]}" for k in ("S", "D", "MCOLS", "LANES", "CPC")
+                        if k in cfg and (k != "CPC" or cfg[k] != 1))
     lines = [
         f"{m['name']}  [{m['kind']}]  slice {s}  {cfg_bits}",
         f"  {_fmt_n(m['cycles'])} cycles   {_time_at(m['cycles'], mhz)} at {mhz:g} MHz   "
@@ -800,6 +999,10 @@ def render_summary(d: dict, s: int = 0) -> str:
         f"  Roofline {_bar(eff)} {_pct(eff)} of DRAM-bound minimum "
         f"(bound {_fmt_n(bound)} cycles)",
     ]
+    dram = rl.get("dram")
+    if dram and dram != bound:          # the port-B bound alone (CPC 2: the MXU's half pairs above it)
+        lines.append(f"  DRAM port B bound {_fmt_n(dram)} cycles ({_pct(dram / cyc)} of the run); "
+                     f"the roofline above is the MXU's advances")
     if m["macs"]:
         lines.append(f"  MACs/cycle {m['macs'] / cyc:.0f}  (peak {m['peak_macs']})")
     ports = _slice(d, s).get("ports") or {}
@@ -899,6 +1102,22 @@ def main(argv=None) -> None:
     r.add_argument("--axi", action="store_true", help="the board's AXI memory path (D=128)")
     r.add_argument("--stall", type=int, help="AXI model stall percent")
     r.add_argument("--pos", type=int, default=8, help="qwen workloads: token position")
+    r.add_argument("--model", help="workload model: a MODELS name (models/<dir>) or a "
+                   "checkpoint directory")
+    r.add_argument("--prompt", default=DEFAULT_PROMPT, help="workload model: the prompt")
+    r.add_argument("--model-pos", type=int, help="workload model: the traced step's position "
+                   "(default: the prompt's last token)")
+    r.add_argument("--per-position", action="store_true",
+                   help="workload model: per-position programs instead of the resident decode")
+    r.add_argument("--wformat", default="auto", help="workload model: the weights' format")
+    r.add_argument("--head-format", help="workload model: the LM head's format")
+    r.add_argument("--candidate", metavar="C=n,LANES=n,MHZ=f",
+                   help="workload model with --isa: re-time the token on a candidate machine "
+                        "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
+    r.add_argument("--mhz", type=float, help="workload model: the clock the times are at")
+    r.add_argument("--check", action="store_true",
+                   help="workload model on the RTL: run the traced step on the ISA simulator "
+                        "too and compare the DRAM (logits, caches) byte for byte")
     r.add_argument("--bucket", type=int, default=64, help="cycles per counter bucket")
     r.add_argument("--open", action="store_true", help="open the app afterwards")
     o = sub.add_parser("open", help="open a profile file in the app")
@@ -925,7 +1144,10 @@ def main(argv=None) -> None:
         profs = []
         for w in a.workloads:
             d = record(w, board=a.board, isa=a.isa, pos=a.pos, bucket=a.bucket,
-                       axi=True if a.axi else None, stall=a.stall)
+                       axi=True if a.axi else None, stall=a.stall, model=a.model,
+                       prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
+                       wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
+                       mhz=a.mhz, check=a.check)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)
