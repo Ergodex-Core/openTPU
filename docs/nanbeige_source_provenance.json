@@ -1,0 +1,35 @@
+{
+  "git_base": "e55992e4621f1930c57c9712dd96d5f1ec7c4e1c",
+  "source_instance": "i-0c78de2253f66519d",
+  "source_root": "/home/ubuntu/rachit/nanbeige-burst200/runtime",
+  "audit_command_id": "e92aa245-a271-4d52-979c-f54b84f5ed4e",
+  "core_changed": [
+    "opentpu/llm/__init__.py"
+  ],
+  "core_missing": [],
+  "archive_sha256": "3a378753fb10be1cabe97bb0dd9beea6e5437762c8a48e5bb93daaed35fad06a",
+  "files": {
+    "BASE_REVISION": "5cf25d41b807467337f5454ec4885ea6bf1d1a077c47535cf61adb397fa9e5c5",
+    "opentpu/llm/__init__.py": "8f4742929be07e30a7351081cc9ef35c31fc635483fed3f01a4c2851bdb92722",
+    "opentpu/llm/dspark.py": "43655a7524cdf5d9efed19d6628c51b7f6959a5fc1e5c8e826f05467c8a8b212",
+    "opentpu/llm/dspark_fpga.py": "c2243a920456399e11ee3daf0418a976864b214c28e7779a87d594209f8460e3",
+    "opentpu/llm/nanbeige.py": "343f18b0fcba8d93ca67cf16cb7a9b0f7bab3bdba7a883e8d80616c4e64d972c",
+    "opentpu/llm/nanbeige_specdec.py": "a1b75e32bf0a96d6b0448db56d6112fd50316da2e0636be01c9dcbc791bc11c4",
+    "opentpu/llm/nanbeige_weights.py": "e75ac2d468a6cd4ce7c1dbbae261f66eaa5411fa2e681db5c970f9fed9c564e8",
+    "tests/test_dspark.py": "0aa880ceb3e2cc84f9e9415c858f67a0c0e6f5b3127b8fd508db50d567798cb1",
+    "tests/test_dspark_fpga.py": "993a092a9411c45547d6b8a9a74d368082fd5bb8fa466ff6ae72d57458ccc136",
+    "tests/test_nanbeige.py": "91a04a391e788ebb255fd813f6a1dc7a670c6c09d09494fa6a31f38b2ca5a176",
+    "tests/test_nanbeige_cli.py": "0b18e51018462b2c9b1e1aeecd3002af955b8fd951d482e4ea0d18140605b075",
+    "tests/test_nanbeige_hwcheck.py": "a4a30f5a1bf14bd32adb8460c78c624f2511dec993cee30c430ffc76cbed180d",
+    "tests/test_nanbeige_specdec.py": "a421842423f781aa37db04379ec26b400217a13969938ba90dce2b3877eb1463",
+    "tests/test_nanbeige_weights.py": "85aa4ea88a2366e847a80a87a3a9e16884732566b973fc0340a7903c0ef6df7a",
+    "tools/data/nanbeige/burst200.toml": "521d283c92fd99003d57ba22f8d1550bcb33aca346ed36087b51492c4a3a202b",
+    "tools/data/nanbeige/draft-config.json": "524c8950a6c6fa6db480b7510ed87b1cb3aa52f344c64448d338ccb8e0594fd6",
+    "tools/data/nanbeige/draft-tensors.json": "43a8135822a228be8aaaef787478073d307ae9e82844767a7ca85b11faa81110",
+    "tools/data/nanbeige/target-config.json": "856a7f4e2039bca3cb2163ed5322bb63b51c09fb60dc8b88b5a927b944c669c0",
+    "tools/nanbeige_draft_hwcheck.py": "4bb45c6fdf9eab3ce111b13cb1020fa0d7ffd856ea5875a4eb1cd9ac9b6fdb6d",
+    "tools/nanbeige_fixture.py": "75f583ca2d17b4d1ac58d2988837313d8a308d4782b0624ce1cff2d5832f7a8b",
+    "tools/nanbeige_fpga.py": "3ed248903a161e2da2793b63d0ceb62a044a160a127a06eec14ee04f6819b024",
+    "tools/nanbeige_hwcheck.py": "2324bd7708401fd68fd23f71f877b5daefa2eac12290f4c93deacad2f6267d11"
+  }
+}
