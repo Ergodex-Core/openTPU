@@ -1,0 +1,157 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "hardware_used": false,
+  "started_utc": "2026-10-23T08:58:47.908185+00:00",
+  "input": {
+    "id": "checkpoint-003",
+    "prompt_tokens": [
+      166100,
+      15050
+    ],
+    "max_new_tokens": 2
+  },
+  "input_mode": "raw BOS plus Hi; no chat template in bounded ISA gate",
+  "chat_prompt_length": 36,
+  "prompt_tokens": [
+    166100,
+    15050
+  ],
+  "source_files": {
+    "opentpu/llm/nanbeige_strict.py": "9fc8d192a595bb0458933565a5a95fb9d8c2d3985221e92abc7250c3fe44bebd",
+    "tools/nanbeige_strict.py": "ebe89fe4237ae56488b20c5a2b6867bcba09c4180e50a06ee203a27f8eb4bc09",
+    "tests/test_nanbeige_strict.py": "ff3f02e06dd045843918e0eedca1862abf230a050a2cc2f742ac144283606ad7"
+  },
+  "source_hash": "d6fe00f7818d8b61d680c89e38a52707",
+  "source_hash_algorithm": "blake2b-128",
+  "checkpoint_identity": [
+    [
+      "config.json",
+      1959,
+      1792509092039850313,
+      ""
+    ],
+    [
+      "model-00001-of-00002.safetensors",
+      4171576104,
+      1792509110073210143,
+      "b2d9ef0c923222e4309aa4065de0cd43"
+    ],
+    [
+      "model-00002-of-00002.safetensors",
+      1020788864,
+      1792509095987929074,
+      "1b8f0a2bfd4d617423a028849cd72513"
+    ]
+  ],
+  "model_revisions": {
+    "Nanbeige4.2-3B-GPTQ-Int8": {
+      "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+      "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+    },
+    "Nanbeige4.2-3B-DSpark": {
+      "repo_id": "Nanbeige/Nanbeige4.2-3B-DSpark",
+      "revision": "5f12c792dabbfcdc4a0cf504e75f7216706d9590"
+    }
+  },
+  "physical_open_attempts": 0,
+  "headroom_bytes": 263718076416,
+  "affinity": [
+    23
+  ],
+  "python": "3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]",
+  "numpy": "2.5.4",
+  "embedding_sample": {
+    "rows": 259,
+    "relative_l2": 0.008639311540849017,
+    "cosine": 0.9999626835162664,
+    "max_abs_error": 0.0009025514591485262,
+    "full_model_quality": false
+  },
+  "setup_seconds": 102.17081520694774,
+  "layout": {
+    "embedding_format": "int8",
+    "image_bytes": 4239187072,
+    "required_bytes": 4239351808,
+    "dram_bytes": 4294967296,
+    "fits_dram": true,
+    "cap": 128,
+    "rows": 1,
+    "host_embedding": false,
+    "logical_layers": 44,
+    "physical_layers": 22,
+    "programs": [
+      {
+        "bucket": 1,
+        "prefill_words": [
+          9568
+        ],
+        "generate_words": [
+          [
+            9696
+          ],
+          [
+            840
+          ]
+        ],
+        "split_generate": true
+      }
+    ],
+    "fits_imem": true
+  },
+  "result": {
+    "tokens": [
+      90956,
+      13
+    ],
+    "stop_reason": "length",
+    "generated_tokens": 2,
+    "prefill_seconds": 12.357315819943324,
+    "generation_seconds": 25.300028127036057,
+    "total_seconds": 37.65734394697938,
+    "prefill_runs": 1,
+    "generation_runs": 1,
+    "raw_runs": [
+      {
+        "instructions": [
+          24275
+        ],
+        "rows": 1,
+        "strict_stage": "prefill"
+      },
+      {
+        "instructions": [
+          49363
+        ]
+      }
+    ],
+    "ok": true,
+    "event": "result",
+    "id": "checkpoint-003",
+    "prompt_tokens": [
+      166100,
+      15050
+    ],
+    "text": ".\u201d\u00a0\n",
+    "execution_backend": "isa_validation",
+    "hardware_executed": false,
+    "fpga_only": false,
+    "strict_model_path": true,
+    "greedy_selection": "device",
+    "cycles_are_hardware_measured": false,
+    "device_cycles": null
+  },
+  "read_calls": [
+    [
+      4230576520,
+      8
+    ]
+  ],
+  "finished_utc": "2026-10-23T09:01:07.854589+00:00",
+  "precision": {
+    "target_execution": "openTPU MX W8A8, INT8 head, INT8 device embedding gather; FP32 residual/norm/RoPE/softmax",
+    "source_equivalent": false,
+    "embedding_change": "source BF16 embeddings are additionally quantized to MX INT8 during image preparation",
+    "checkpoint_quality_validated": false
+  }
+}

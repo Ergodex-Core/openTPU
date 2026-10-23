@@ -1,0 +1,32 @@
+{
+  "arch_hash": 3714814630,
+  "layout": {
+    "embedding_format": "int8",
+    "image_bytes": 4247624448,
+    "required_bytes": 4247789568,
+    "dram_bytes": 4294967296,
+    "fits_dram": true,
+    "cap": 128,
+    "rows": 1,
+    "host_embedding": false,
+    "logical_layers": 44,
+    "physical_layers": 22,
+    "head_storage": "row_lanes_only",
+    "programs": [
+      {
+        "bucket": 1,
+        "prefill_words": [
+          7136
+        ],
+        "generate_words": [
+          [
+            7576
+          ]
+        ],
+        "split_generate": false
+      }
+    ],
+    "fits_imem": true
+  },
+  "hardware_used": false
+}

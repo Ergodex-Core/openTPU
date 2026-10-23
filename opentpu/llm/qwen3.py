@@ -487,7 +487,8 @@ def put_head(img, W, qb, put, put_q, rows) -> None:
                     put(0, img.head_rlq[1], Q.rl_scales(sc, img.head_format, spec.hidden, rl, D,
                                                         rl_line(img.cfg))))))
     else:
-        put_q(img.head, rows(head, img.v_loc), img.head_format)
+        if img.head is not None:
+            put_q(img.head, rows(head, img.v_loc), img.head_format)
         if rl:                  # (one slice: the groups beside the rows the gather reads)
             put_q(img.head_rlq, rows(head, img.v_loc), img.head_format, rl)
 
@@ -1048,11 +1049,13 @@ class Image(EmbedHost):
             b.next = base + reps * us
         head = cap * d + cap * k_scale_bytes(d, D) + d * cap + 4 * cap   # k, k scales, v^T, v's
         self.kv_bytes = spec.layers * self.nkv_loc * head         # per sequence
-        self.head = (b.alloc(self.v_loc * Q.row_bytes(H, self.head_format, D)),
-                     b.alloc(self.v_loc * Q.scale_bytes(H, self.head_format, D)))
-        # row lanes: the head the LM-head MMs stream, in groups (the standard rows above stay
-        # for the embedding gather: a group's row is not affine in its index, docs/row_lanes.md)
         self.head_rl = rl_lanes_of(cfg, self.head_format)
+        # An untied model may opt into compact storage: its head MMs use head_rlq
+        # exclusively. Other models keep their existing layout, including tied models'
+        # standard rows for embedding gather (row indices cannot address lane groups).
+        self.head = (b.alloc(self.v_loc * Q.row_bytes(H, self.head_format, D)),
+                     b.alloc(self.v_loc * Q.scale_bytes(H, self.head_format, D))) \
+            if not self.head_rl or spec.tied or not getattr(spec, "compact_head", False) else None
         self.head_rlq = rl_alloc(b, self.v_loc, H, self.head_format, D, self.head_rl,
                                  rl_line(cfg)) if self.head_rl else None
         # the int8 embedding rows of the resident decode are the tied int8 head's (S = 1)

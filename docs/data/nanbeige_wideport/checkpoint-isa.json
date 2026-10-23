@@ -1,0 +1,552 @@
+{
+  "status": "complete",
+  "stage": "complete",
+  "hardware_used": false,
+  "started_utc": "2026-10-23T10:03:27.426042+00:00",
+  "runtime_base": "18fb978033799f0f21258f0e6e085c0360322d96",
+  "model": {
+    "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+    "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+  },
+  "checkpoint_identity": [
+    [
+      "config.json",
+      1959,
+      1792509092039850313,
+      ""
+    ],
+    [
+      "model-00001-of-00002.safetensors",
+      4171576104,
+      1792509110073210143,
+      "b2d9ef0c923222e4309aa4065de0cd43"
+    ],
+    [
+      "model-00002-of-00002.safetensors",
+      1020788864,
+      1792509095987929074,
+      "1b8f0a2bfd4d617423a028849cd72513"
+    ]
+  ],
+  "source_files": {
+    "opentpu/llm/qwen3.py": "8f73fb0375a87df3b602b708f89ce597258fd289dfc0e4a6eb54bfca7c6c499b",
+    "opentpu/llm/nanbeige.py": "72c0e688e2aeb5a3ffffdc02310334b59fc541964aec2c454a803220321e1e06",
+    "opentpu/llm/nanbeige_weights.py": "e75ac2d468a6cd4ce7c1dbbae261f66eaa5411fa2e681db5c970f9fed9c564e8",
+    "opentpu/llm/nanbeige_strict.py": "3cc21e774c060aa11b3fc71ca6d803d5c62400c13ce56a7dc707bdb2bdaab136",
+    "tools/nanbeige_board.py": "7061d80c42e8c03801e8698eb42b124da48a781a771718da8192482d56ffa66a",
+    "tools/nanbeige_strict.py": "b25d531cd4f05799b9c966d486f4d2785f69db1850572567e73f7c8cdcf97a97",
+    "tools/data/nanbeige/burst200.toml": "5d861a41e190fcb32fed2ec054dde8977df0f68de574096a44c85f2d98c66574",
+    "tests/test_nanbeige.py": "91a04a391e788ebb255fd813f6a1dc7a670c6c09d09494fa6a31f38b2ca5a176",
+    "tests/test_nanbeige_weights.py": "85aa4ea88a2366e847a80a87a3a9e16884732566b973fc0340a7903c0ef6df7a",
+    "tests/test_nanbeige_strict.py": "1b8dfda8cca6f4dcac9406303ae00149317502795ccca7b7ef2e0f9bf842983b",
+    "tests/test_nanbeige_board.py": "462105167b16c9960901c460bf322ffaa545c69637732f1dc9d9bfd93535e5f2",
+    "tests/test_nanbeige_wideport.py": "aa5caffc57acb7197ff1596039bc032c7a29d130998951ecaf53a8a1b540b159",
+    "opentpu/llm/__init__.py": "02fe88850feec71809853fa2a41daa7fc656b1cf8169a264a635c148a282066f",
+    "tools/data/nanbeige/target-config.json": "856a7f4e2039bca3cb2163ed5322bb63b51c09fb60dc8b88b5a927b944c669c0"
+  },
+  "source_hash": "44c0d31b817340744a1a5e027eee295c",
+  "source_hash_algorithm": "blake2b-128",
+  "profile_contract": {
+    "arch_hash": 3714814630,
+    "core_khz": 150000,
+    "platform": 5,
+    "channels": 8,
+    "channel_bytes": 536870912,
+    "build_id": 1098007537,
+    "image": "agfi-0001de1dd3df8e21e"
+  },
+  "arch_hash": 3714814630,
+  "baseline": {
+    "strict_commit": "16205f3fd1a94043b9076039cd8a1139a699eef6",
+    "source_reference": "FP64 oracle with source weights; not official BF16 rounding",
+    "raw_tokens": [
+      90956,
+      13
+    ],
+    "chat_tokens": [
+      17782,
+      152518
+    ]
+  },
+  "physical_open_attempts": 0,
+  "cases": [
+    {
+      "name": "raw",
+      "result": {
+        "tokens": [
+          90956,
+          13
+        ],
+        "stop_reason": "length",
+        "generated_tokens": 2,
+        "prefill_seconds": 12.089670129935257,
+        "generation_seconds": 24.875984407030046,
+        "total_seconds": 36.9656545369653,
+        "prefill_runs": 1,
+        "generation_runs": 1,
+        "raw_runs": [
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              34498
+            ]
+          }
+        ],
+        "ok": true,
+        "event": "result",
+        "id": null,
+        "prompt_tokens": [
+          166100,
+          15050
+        ],
+        "text": ".\u201d\u00a0\n",
+        "execution_backend": "isa_validation",
+        "hardware_executed": false,
+        "fpga_only": false,
+        "strict_model_path": true,
+        "greedy_selection": "device",
+        "cycles_are_hardware_measured": false,
+        "device_cycles": null
+      },
+      "expected_tokens": [
+        90956,
+        13
+      ],
+      "exact_tokens_match": true
+    },
+    {
+      "name": "chat",
+      "result": {
+        "tokens": [
+          17782,
+          152518
+        ],
+        "stop_reason": "length",
+        "generated_tokens": 2,
+        "prefill_seconds": 401.1758578240406,
+        "generation_seconds": 24.625697804964148,
+        "total_seconds": 425.8015556290047,
+        "prefill_runs": 35,
+        "generation_runs": 1,
+        "raw_runs": [
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              34498
+            ]
+          }
+        ],
+        "ok": true,
+        "event": "result",
+        "id": null,
+        "prompt_tokens": [
+          166100,
+          8481,
+          13,
+          18215,
+          19433,
+          154675,
+          152372,
+          21863,
+          152672,
+          57437,
+          162001,
+          46372,
+          152590,
+          5004,
+          15825,
+          152435,
+          3237,
+          3942,
+          152389,
+          166101,
+          13,
+          166100,
+          2714,
+          13,
+          25389,
+          166101,
+          13,
+          166100,
+          66354,
+          13,
+          166103,
+          13,
+          13,
+          166104,
+          13,
+          13
+        ],
+        "text": "Hello!",
+        "execution_backend": "isa_validation",
+        "hardware_executed": false,
+        "fpga_only": false,
+        "strict_model_path": true,
+        "greedy_selection": "device",
+        "cycles_are_hardware_measured": false,
+        "device_cycles": null
+      },
+      "expected_tokens": [
+        17782,
+        152518
+      ],
+      "exact_tokens_match": true
+    },
+    {
+      "name": "raw_reset_replay",
+      "result": {
+        "tokens": [
+          90956,
+          13
+        ],
+        "stop_reason": "length",
+        "generated_tokens": 2,
+        "prefill_seconds": 11.467165131005459,
+        "generation_seconds": 24.135525061981753,
+        "total_seconds": 35.60269019298721,
+        "prefill_runs": 1,
+        "generation_runs": 1,
+        "raw_runs": [
+          {
+            "instructions": [
+              17923
+            ],
+            "rows": 1,
+            "strict_stage": "prefill"
+          },
+          {
+            "instructions": [
+              34498
+            ]
+          }
+        ],
+        "ok": true,
+        "event": "result",
+        "id": null,
+        "prompt_tokens": [
+          166100,
+          15050
+        ],
+        "text": ".\u201d\u00a0\n",
+        "execution_backend": "isa_validation",
+        "hardware_executed": false,
+        "fpga_only": false,
+        "strict_model_path": true,
+        "greedy_selection": "device",
+        "cycles_are_hardware_measured": false,
+        "device_cycles": null
+      },
+      "expected_tokens": [
+        90956,
+        13
+      ],
+      "exact_tokens_match": true
+    }
+  ],
+  "completed_backend_calls": 40,
+  "affinity": [
+    21
+  ],
+  "updated_utc": "2026-10-23T10:13:30.299508+00:00",
+  "setup_seconds": 103.75066466396675,
+  "layout": {
+    "embedding_format": "int8",
+    "image_bytes": 4247624448,
+    "required_bytes": 4247789568,
+    "dram_bytes": 4294967296,
+    "fits_dram": true,
+    "cap": 128,
+    "rows": 1,
+    "host_embedding": false,
+    "logical_layers": 44,
+    "physical_layers": 22,
+    "head_storage": "row_lanes_only",
+    "programs": [
+      {
+        "bucket": 1,
+        "prefill_words": [
+          7136
+        ],
+        "generate_words": [
+          [
+            7576
+          ]
+        ],
+        "split_generate": false
+      }
+    ],
+    "fits_imem": true
+  },
+  "active_case": "raw_reset_replay",
+  "read_calls": [
+    [
+      4239013896,
+      8
+    ],
+    [
+      4239014032,
+      8
+    ],
+    [
+      4239013896,
+      8
+    ]
+  ],
+  "precision": {
+    "target_execution": "openTPU MX W8A8, INT8 head, INT8 device embedding gather; FP32 residual/norm/RoPE/softmax",
+    "source_equivalent": false,
+    "embedding_change": "source BF16 embeddings are additionally quantized to MX INT8 during image preparation",
+    "checkpoint_quality_validated": false
+  },
+  "finished_utc": "2026-10-23T10:13:30.299498+00:00"
+}
