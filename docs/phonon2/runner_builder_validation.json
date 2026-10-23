@@ -1,0 +1,27 @@
+{
+  "host": "opentpu-m8a-build",
+  "instance_id": "i-0ec8d33362b3100be",
+  "source_bundle_sha256": "1c55d9842cee8326990dfca387e386e47b722eae9e5f728ec8f3d111375c016d",
+  "source_directory": "/home/ubuntu/phonon2-runner-software-1c55d9842cee/source",
+  "result_code": 0,
+  "elapsed_seconds": 0.8561854690196924,
+  "python": "3.12.3 (main, Nov  6 2025, 13:44:16) [GCC 13.3.0]",
+  "numpy": "2.5.4",
+  "pytest": "9.1.1",
+  "hardware_used": false,
+  "ready": false,
+  "source_sha256": {
+    "opentpu/asr/phonon2_runner.py": "fd8454ceefb2cd92b568947ef9b6265a36777a06d5de163367fb97b34d5537d8",
+    "tools/phonon2_prepare_runner.py": "d7c1367159454761726791f1f00ad55f78cb356f5e9b2a51c83201184ba193ca",
+    "tools/phonon2_run_shared_prepare.py": "c7219f7c5c688737d32d157ffa33496bafb5bba3ffcd9d57f072669af3e82704",
+    "tools/phonon2_runner_runtime.py": "541588d1453d068af92a3e4b80ccec2addd5a4b896edf6e844ab009dfb7d241d"
+  },
+  "tests_passed": 33,
+  "tests_failed": 0,
+  "tests_skipped": 0,
+  "combined_host_runtime_bootstrap": {
+    "accepted": true,
+    "scope": "Exporter intercepted after source verification and before any model/device action",
+    "source_sha256": "c7219f7c5c688737d32d157ffa33496bafb5bba3ffcd9d57f072669af3e82704"
+  }
+}

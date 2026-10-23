@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "id": "phonon2",
+  "model_id": "FermionResearch/Phonon-2",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "status": "blocked",
+  "available": false,
+  "ready": false,
+  "execution_policy": "fpga_only",
+  "host_model_compute_allowed": false,
+  "cpu_gpu_fallback": false,
+  "physical_runner_implemented": true,
+  "physical_runner_validated": false,
+  "physical_audio_to_transcript_validated": false,
+  "public_adapter": "Existing ASRNotReady/HTTP503 remains unchanged; no production route installed",
+  "shared_target": {
+    "profile": "f2-hbm:p4rl8a64c150",
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "cfg_hash": "dd6b92a6",
+    "image_reload_supported": false,
+    "hardware_identity_verified": false
+  },
+  "runtime": {
+    "revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+    "binding": "runner_source_binding.json",
+    "common_files": 17,
+    "host_files": 9,
+    "source_prepare": "python -B -m tools.phonon2_runner_runtime --prepare-from-git EXISTING_CHECKOUT --destination NEW_DIRECTORY"
+  },
+  "contract_document": "../phonon2_runner_contract.md",
+  "runner": "opentpu.asr.phonon2_runner.Runner",
+  "transport": "opentpu.asr.phonon2_runner.BoardTransport",
+  "input": {
+    "encoding": "pcm_s16le",
+    "sample_rate_hz": 16000,
+    "channels": 1,
+    "min_samples": 320,
+    "max_samples": 480000,
+    "exact_prepared_sample_count_required": true,
+    "dither": 0,
+    "resampling": false,
+    "compressed_audio": false
+  },
+  "output": {
+    "kind": "device-selected UTF-8 segments and lengths",
+    "host_role": "bounded byte coalescing and UTF-8 I/O",
+    "partial_results_on_error": false
+  },
+  "scheduling": {
+    "approval_required": "Separate parent approval, not granted by this implementation",
+    "spare_card_only": true,
+    "exclusive_lease_required": true,
+    "max_serving_interruption_seconds": 30,
+    "serving_interruption_bound_verified": false,
+    "current_warm_card_supported": false
+  },
+  "gates": [
+    "Approved idle spare-card window and exclusive ownership",
+    "Live image/config/capability/health and initialized-DRAM evidence",
+    "Physical PCM-to-text, masks/reset/cancellation and error acceptance",
+    "Measured transfer/dispatch/model/cancellation/recovery timing",
+    "Wider context/WER coverage and deployment-owner integration"
+  ],
+  "preserved_base": "b91e839fc5a95e48acda0473f00d313b7859f094"
+}
