@@ -1,0 +1,33 @@
+{
+  "path": "opentpu/asr/phonon2_waveform.py",
+  "qualified_source_sha256": "da77289a61987d54a08505be6b7c292493a363b9547fdb53fe57734242aaffc2",
+  "delivered_source_sha256": "eda3c8a59385ff0255ac6c95081f817e02e89da4e3bc9a463739750d213626a6",
+  "identical_ast_sha256": "ac9c388591ec01c1d9b7bf483ea99504399e96381db84f0b7883531b49cd545f",
+  "change": "Comments only: correct ISA zero special-case explanation and add PyTorch attribution. No executable AST change.",
+  "contexts": {
+    "320": {
+      "program_sha256": "7371766468800a9f545683d4f3d98bad777a7e8e36730013ae200dde4720727c",
+      "image_sha256": "a48ac0e67e83f4a34dfdbb9414ab8683e9a973148a7e15798fdccd91ae24c5f6",
+      "input_at": 1251840,
+      "output_at": 1265024
+    },
+    "5280": {
+      "program_sha256": "8e0ca95923d7b2d7e29dc1067c63110e8675e4878ea0fb919e6bcb7708c2e166",
+      "image_sha256": "23289d0fa43494ab6c8465ed0a3da45657dae8cb2f71d1a54039c55d4fda9e03",
+      "input_at": 1251840,
+      "output_at": 1394304
+    },
+    "112960": {
+      "program_sha256": "4c2855703b0b1ccb9a4c3e0c6e89b2733a9e5aa519bf3a6eaae827f42052a09b",
+      "image_sha256": "b9fb8918019d5fb31ad7ff7ce5d69b2fac70060b6dd525e8f4d88cfc6fefaa84",
+      "input_at": 1251840,
+      "output_at": 4196480
+    },
+    "480000": {
+      "program_sha256": "eacc446474d55813ecc91aa67eaa51683398e7ee31f4779469f4fac79d29785f",
+      "image_sha256": "2f01e5ecdc96c836b936583d3093b7586adb58ceddfccb2ff56c9e39743058aa",
+      "input_at": 1251840,
+      "output_at": 13748608
+    }
+  }
+}

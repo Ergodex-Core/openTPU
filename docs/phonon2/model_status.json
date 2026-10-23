@@ -10,7 +10,7 @@
   "parameters": 627008134,
   "checkpoint_download_bytes": 163515201,
   "status": "blocked",
-  "readiness": "learned_encoder_tdt_isa_only",
+  "readiness": "complete_graph_isa_only",
   "available": false,
   "ready": false,
   "execution_policy": "fpga_only",
@@ -21,6 +21,7 @@
   "license": {
     "weights": "CC-BY-4.0",
     "code": "Apache-2.0",
+    "frontend_reduction": "PyTorch BSD license; docs/phonon2/TORCH-LICENSE.txt",
     "attribution_url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/NOTICE"
   },
   "input_contract": {
@@ -33,7 +34,7 @@
     "hotwords": "unsupported",
     "note": "Proposed first integration envelope; endpoint remains unavailable."
   },
-  "implemented_slice": "Learned 8x subsampler, all 24 Conformer layers, LSTM predictor and autonomous TDT/UTF-8 selection on the shared-profile ISA; waveform frontend remains offline oracle",
+  "implemented_slice": "Complete raw PCM16 to UTF-8 graph on shared-profile ISA: signal frontend, learned subsampler, all 24 Conformer layers, LSTM/TDT and text selection",
   "shared_image": {
     "profile": "f2-hbm:p4rl8a64c150",
     "agfi": "agfi-0001de1dd3df8e21e",
@@ -49,8 +50,13 @@
     "max_stored_encoder_frames": 376,
     "max_real_checkpoint_tested_encoder_frames": 89,
     "longer_context_status": "compile/resource qualification only",
-    "frontend_device_implemented": false,
+    "frontend_device_implemented": true,
     "tdt_device_implemented": true,
+    "audio_to_transcript_isa_validated": true,
+    "waveform_evidence": "docs/phonon2/waveform_validation.json",
+    "waveform_runtime_dependency": "docs/phonon2/waveform_runtime_dependency.json",
+    "max_real_audio_tested_samples": 112960,
+    "waveform_reset_bitwise_passed": true,
     "predictor_isa_implemented": true,
     "text_isa_implemented": true,
     "tdt_evidence": "docs/phonon2/tdt_validation.json",
@@ -77,11 +83,11 @@
   "blockers": [
     {
       "code": "audio_frontend",
-      "detail": "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."
+      "detail": "PCM conversion through normalization is shared-profile ISA-qualified and chained to the model; physical PCM ingress and DSP execution remain unverified."
     },
     {
       "code": "subsampling",
-      "detail": "The complete learned 8x subsampler is shared-profile ISA-qualified; its device waveform-frontend and physical runtime handoff are not integrated."
+      "detail": "The complete learned 8x subsampler and device waveform handoff pass ISA tests; physical runtime integration remains unverified."
     },
     {
       "code": "encoder_integration",
@@ -101,7 +107,7 @@
     },
     {
       "code": "numerics",
-      "detail": "Learned encoder and TDT/text path pass real-speech CPU/ISA comparisons; device waveform parity, larger-context coverage, physical transcript and WER acceptance remain missing."
+      "detail": "Complete raw-PCM-to-text ISA traces match pinned and native CPU references on speech, silence boundaries and reset; larger-context numerical, physical transcript and WER acceptance remain missing."
     },
     {
       "code": "hardware_evidence",

@@ -1,7 +1,7 @@
 """Phonon-2's strict FPGA-only serving contract.
 
 This module does not load a model, import a remote runtime, or open a device.
-The learned encoder and TDT path have CPU/ISA evidence; audio-to-transcript remains gated.
+The complete PCM-to-text graph has CPU/ISA evidence; physical ASR remains gated.
 """
 from __future__ import annotations
 
@@ -13,13 +13,13 @@ ARCHIVE_SHA256 = "98125795b6dda72f5c6eee9ba33d19815df65dcb18b50a357bf9f73c993530
 CONTAINER_SHA256 = "4b6bfa3a12cc3c4e0a54f2ab3ec4ca7a842b09e5c7ecfc8e7ca0ac6cc8c11468"
 
 BLOCKERS = (
-    ("audio_frontend", "Device PCM conversion, preemphasis, STFT, mel, log and masked normalization are missing."),
-    ("subsampling", "The complete learned 8x subsampler is shared-profile ISA-qualified; its device waveform-frontend and physical runtime handoff are not integrated."),
+    ("audio_frontend", "PCM conversion through normalization is shared-profile ISA-qualified and chained to the model; physical PCM ingress and DSP execution remain unverified."),
+    ("subsampling", "The complete learned 8x subsampler and device waveform handoff pass ISA tests; physical runtime integration remains unverified."),
     ("encoder_integration", "All 24 whole-context Conformer layers and one-slot residency are shared-profile ISA-qualified with real checkpoint weights; physical program/wait loading and execution remain unverified."),
     ("predictor_integration", "INT6 embedding, both LSTM layers and the Transformers cache policy are shared-profile ISA-qualified; physical state/cache acceptance remains gated."),
     ("tdt_decode", "Joint head, token/duration selection, EOS and zero-duration/watchdog behavior pass real-checkpoint ISA tests; physical runtime integration remains unverified."),
     ("text_output", "Device-selected UTF-8 segments and byte lengths match the pinned text policy; physical output I/O/API integration remains unqualified."),
-    ("numerics", "Learned encoder and TDT/text path pass real-speech CPU/ISA comparisons; device waveform parity, larger-context coverage, physical transcript and WER acceptance remain missing."),
+    ("numerics", "Complete raw-PCM-to-text ISA traces match pinned and native CPU references on speech, silence boundaries and reset; larger-context numerical, physical transcript and WER acceptance remain missing."),
     ("hardware_evidence", "No real audio-to-transcript FPGA run; a coordinated hardware window is required."),
 )
 
@@ -38,7 +38,7 @@ def model_status() -> dict:
         "parameters": 627008134,
         "checkpoint_download_bytes": 163515201,
         "status": "blocked",
-        "readiness": "learned_encoder_tdt_isa_only",
+        "readiness": "complete_graph_isa_only",
         "available": False,
         "ready": False,
         "execution_policy": "fpga_only",
@@ -47,12 +47,13 @@ def model_status() -> dict:
         "hardware_validated": False,
         "audio_to_transcript_validated": False,
         "license": {"weights": "CC-BY-4.0", "code": "Apache-2.0",
+                    "frontend_reduction": "PyTorch BSD license; docs/phonon2/TORCH-LICENSE.txt",
                     "attribution_url": f"https://huggingface.co/{MODEL_ID}/blob/{MODEL_REVISION}/NOTICE"},
         "input_contract": {"encoding": "pcm_s16le", "sample_rate_hz": 16000,
                            "channels": 1, "min_samples": 320, "max_seconds": 30,
                            "resampling": "unsupported", "hotwords": "unsupported",
                            "note": "Proposed first integration envelope; endpoint remains unavailable."},
-        "implemented_slice": "Learned 8x subsampler, all 24 Conformer layers, LSTM predictor and autonomous TDT/UTF-8 selection on the shared-profile ISA; waveform frontend remains offline oracle",
+        "implemented_slice": "Complete raw PCM16 to UTF-8 graph on shared-profile ISA: signal frontend, learned subsampler, all 24 Conformer layers, LSTM/TDT and text selection",
         "shared_image": {"profile": "f2-hbm:p4rl8a64c150", "agfi": "agfi-0001de1dd3df8e21e",
                          "declared_cfg_hash": "dd6b92a6", "hardware_identity_verified": False,
                          "per_model_image_reload": False, "maximum_serving_interruption_seconds": 30,
@@ -61,7 +62,12 @@ def model_status() -> dict:
         "qualification": {"conformer_blocks": 24, "max_stored_encoder_frames": 376,
                           "max_real_checkpoint_tested_encoder_frames": 89,
                           "longer_context_status": "compile/resource qualification only",
-                          "frontend_device_implemented": False, "tdt_device_implemented": True,
+                          "frontend_device_implemented": True, "tdt_device_implemented": True,
+                          "audio_to_transcript_isa_validated": True,
+                          "waveform_evidence": "docs/phonon2/waveform_validation.json",
+                          "waveform_runtime_dependency": "docs/phonon2/waveform_runtime_dependency.json",
+                          "max_real_audio_tested_samples": 112960,
+                          "waveform_reset_bitwise_passed": True,
                           "predictor_isa_implemented": True, "text_isa_implemented": True,
                           "tdt_evidence": "docs/phonon2/tdt_validation.json",
                           "tdt_semantic_policy": "docs/phonon2/tdt_semantic_policy.json",
@@ -88,9 +94,9 @@ def inferlab_model_status() -> dict:
     return {
         "id": "phonon2", "name": "Phonon-2", "kind": "asr", "capability": "transcription",
         "size": "627M · five-value encoder · INT6 tables",
-        "execution": "Blocked · ASR integration incomplete", "ready": False,
-        "description": "English ASR; full FPGA audio-to-transcript inference is not implemented.",
-        "reason": "Shared-profile learned encoder and LSTM/TDT/text path pass CPU/ISA checks; device waveform frontend and physical audio-to-transcript acceptance remain incomplete.",
+        "execution": "Blocked · physical ASR acceptance pending", "ready": False,
+        "description": "English ASR; complete device graph passes CPU/ISA qualification, with physical inference unavailable.",
+        "reason": "Raw PCM-to-text traces pass speech, boundary and reset ISA tests; physical shared-image execution and serving integration remain unverified.",
         "model_id": MODEL_ID, "revision": MODEL_REVISION,
         "execution_policy": "fpga_only", "cpu_gpu_fallback": False,
         "shared_image_profile": "f2-hbm:p4rl8a64c150", "image_reload_required": False,

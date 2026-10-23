@@ -1,0 +1,45 @@
+{
+  "preserved_commit": "09f3ee763bb24a0c46de74c2e2c1469aa4221110",
+  "runtime_manifest": {
+    "revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+    "files": {
+      "opentpu/__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+      "opentpu/compiler.py": "d490923a7c44c2de7d4131a44029667c172d94fdbc57103783c1d75f1caa6533",
+      "opentpu/isasim.py": "14d6b84e2330e366c17ac6ea1d55ff4e82922fb9a6db2027f764a4dd9601ebe6",
+      "opentpu/isa.py": "a5af8a04945ef5cb9bc0d6929dee509cefaa8cebc8dee79ca1c5ea9668e9487d",
+      "opentpu/quant.py": "337a4c297ddcf4c25c2ccda546b96d73faabfe221b0cfee4418a1523d1df6aed",
+      "opentpu/fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+      "opentpu/language.py": "81a5a192ae69fad247be7307e3fb888d9d613d16cc52898cc9a872360f8a0d92",
+      "opentpu/target.py": "e65273a8da53d832fbbcfda1afd0bcaafe40f9035adb8c010f84f68728dfeb2f",
+      "opentpu/waits.py": "ad33168a68a53ce966bee76c8168416010937ff2719513ab391c5c996144baa3",
+      "opentpu/kernels/__init__.py": "b94e2b05a22069885ef32ee1ba2e6d6f637ad9bd665904f1f83dfe0f96c5befe",
+      "opentpu/kernels/lib.py": "b5a1f136c6d1ac9169539c97d6b55b9f95d6340065cddcf43307324ee77d9502",
+      "opentpu/kernels/vit.py": "ab5e5d69a630a75fe295c0d5b2e545f12f08d0bb3bb80bfdb4250e4498a643fd",
+      "opentpu/kernels/attention.py": "69cff970c5f60a81d26f98f7bcb9f37d93e53ee6d83979b1b64b9393fa62a827",
+      "opentpu/kernels/pieces.py": "d63689701da5283f0d3352802e648769773b6800498cad3d932f035d6ebf2312",
+      "opentpu/kernels/mlp.py": "104152447f22deef5ad5954878ed97c274c58cdae6365265ce3855d219feb32d",
+      "targets/f2-hbm.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
+      "opentpu/kernels/hadamard.py": "54b642310305fda10787ed67c24d60a570e8bf44200aa5fa60c7f06877ab2d3f"
+    }
+  },
+  "preserved_source_sha256": {
+    "opentpu/asr/phonon2_encoder.py": "9efe5de6a77435c98c4fd727a5ffac9760e402e86ba5a59dfa767a8e63b5ec84",
+    "opentpu/asr/phonon2_precision.py": "8862408bf79db97c5a3249d56826ab0ba7bb9ee7596fecab97f1792831c3fea6",
+    "opentpu/asr/phonon2_precise_subsampler.py": "c6b0e61da10ade718f89977f5793c348bc7ec84c324db48796f761f40025f2c1",
+    "tools/phonon2_encoder_reference.py": "4c72f4e35cafbe3471d2d796e6f9767b4c5aa2617b0c1daf6ec7380dc1d8dab2",
+    "tools/phonon2_qualify_encoder.py": "90aaf8634ce65d9e540e8aeecaa8911ab52fce700767705181a0b4674b16dfeb",
+    "opentpu/asr/phonon2_conformer.py": "56134b41ed8a803f108310d36857540a5534b4400b932bd7535e8f5ff12d8bff",
+    "opentpu/asr/phonon2_subsampler.py": "7c86ef974ce17dbd7e2f7e6cc0fc701776f13e4ceb6c65ce495a391ba51cc086",
+    "opentpu/asr/phonon2_linear.py": "ac10f55a5b09ef4dfd4cffa75ba8d10767566f0bf9c2d2e2c93831b134b5d30c",
+    "opentpu/asr/phonon2_int6.py": "bfc71951135d067aad0af6ef7eee124871a150f88f99e748c14a3fbf46b5d9ea",
+    "tools/phonon2_subsample_reference.py": "9daef2ead5e85345521e11b17cc799c3ad07ec0fa76b9c66804ae990c6f611f4",
+    "tools/phonon2_torch_audit.py": "d186c3d87ea030af43b0dd36fef2ba3eb626374a250cbcb81b4f1474713d5ade",
+    "opentpu/asr/phonon2_tdt.py": "66a65abf1c70f13e98a50b2be2a18dc0d5bcaebc8cd7299a60076edb5bc0f21f",
+    "tools/phonon2_tdt_reference.py": "3801c6a49a6a635c474a56b74f5aff2d44624d21e742c308b32cceee752cffef",
+    "tools/phonon2_qualify_tdt.py": "2bb3dc1c62873b78992fb54ecbf68976f98c137cd93b2817d3c6fc0993a91c6d",
+    "tools/phonon2_program_device.py": "5370774ad96708c4d66a9015eb8310c9a7ae59cfe9d3fc9965236a313b7b061f",
+    "docs/phonon2/token_text_vocabulary.json": "6a134f91e10e12d95d1abd5a8cf7f8b8d621b17a226401fe303d10263e87f682",
+    "docs/phonon2/tdt_semantic_policy.json": "0420b768e256baf50e413912a1c42a6b1efcfb6128cbeb6159e49903b4fc4420",
+    "docs/phonon2/encoder_handoff_binding.json": "ef0acc559b9dfe9cf841768d8d8ff62ccb3876c30cc833c31a40c314f2cdc4b2"
+  }
+}

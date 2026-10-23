@@ -1,0 +1,208 @@
+"""PCM16-to-mel device programs on the pinned shared-profile ISA.
+
+Raw PCM bytes are transported unchanged. Byte extraction, signed conversion,
+preemphasis, spectral power, mel/log, statistics and masks are device work.
+Static coefficient preparation is independent of audio, like weight export.
+"""
+# ordered_sum adapts PyTorch's BSD-licensed reduction algorithm.
+# Source and full attribution: docs/phonon2/TORCH-LICENSE.txt and
+# docs/phonon2/waveform_runtime_dependency.json.
+from dataclasses import dataclass
+import math
+import numpy as np
+
+from .. import language as ol
+from ..compiler import Affine, QTensor, Tensor, current
+from .phonon2_encoder import clear
+
+
+@ol.jit
+def pcm16(raw, basis, wave, blocks: int):
+    for block in ol.range(blocks):
+        weight = QTensor(raw.base + block * 128, None, (1,128),128,0,128)
+        for group in ol.range(8):
+            q = ol.quantize(ol.load(basis[group*16:group*16+16,:]))
+            signed = ol.dot(q,weight).reshape(8,2)
+            low, high = signed[:,:1], signed[:,1:2]
+            compare = ol.zeros((8,2))
+            compare[:,:1].set(low)
+            negative = current().argmax(compare)[:,1:2]  # first-index tie at low==0
+            value = ol.empty((8,1))
+            value.set((high*256.0+low+negative*256.0)*(1.0/32768))
+            at = 1+block*64+group*8
+            ol.store(wave[at:at+8],value.reshape(1,8)[0,:])
+
+
+@ol.jit
+def preemphasis(wave, padded, samples: int):
+    full,tail=divmod(samples,256)
+    for block in ol.range(full):
+        i=block*256
+        value=ol.load(wave[1+i:1+i+256])-0.97*ol.load(wave[i:i+256])
+        ol.store(padded[256+i:256+i+256],value)
+    if tail:
+        i=full*256
+        ol.store(padded[256+i:256+i+tail],ol.load(wave[1+i:1+i+tail])-0.97*ol.load(wave[i:i+tail]))
+
+
+@ol.jit
+def spectrum(padded,hann,cosine,sine,power,frames: int):
+    window=ol.load(hann)
+    for frame in ol.range(frames):
+        x=ol.load(padded[frame*160:frame*160+512])*window
+        def bins(start,count):
+            real=ol.load(cosine[start:start+count,:])@x
+            imag=ol.load(sine[start:start+count,:])@x
+            # Preserve the source's sqrt(real^2+imag^2)^2 graph. The ISA uses
+            # rsqrt(0)=0 and recip(0)=0, so their composition also gives sqrt(0)=0.
+            magnitude=ol.recip(ol.rsqrt(real*real+imag*imag))
+            ol.store(power[frame,start:start+count],magnitude*magnitude)
+        for block in ol.range(8):bins(block*32,32)
+        bins(256,1)
+
+
+@ol.jit
+def mel_log(power,mel,log_mel,transposed,frames: int):
+    bank=ol.load(mel)
+    for frame in ol.range(frames-1):
+        value=ol.log2(bank@ol.load(power[frame,:])+2**-24)*ol.LN2
+        ol.store(log_mel[frame,:],value)
+        ol.store(transposed[:,frame:frame+1],value.column())
+    value=ol.log2(bank@ol.load(power[frames-1,:])+2**-24)*ol.LN2
+    ol.store(log_mel[frames-1,:],value)  # masked statistics input remains zero
+
+
+def ordered_sum(row, count):
+    """FP32 Torch ARM64 contiguous-sum order used by the retained goldens.
+
+    Vec4, ILP4 and a 16-group cascade (count<=3001), PyTorch 5c488690.
+    This is an arithmetic lowering, never a silence-specific substitution.
+    """
+    groups=count//16
+    partial=[ol.zeros((4,)) for _ in range(4)]
+    cascade=[ol.zeros((4,)) for _ in range(4)]
+    full,tail=divmod(groups,16)
+    def consume(group):
+        for k in range(4):partial[k].set(partial[k]+ol.load(row[group*16+k*4:group*16+k*4+4]))
+    if full:
+        for block in ol.range(full):
+            for j in ol.range(16):consume(block*16+j)
+            for k in range(4):
+                cascade[k].set(cascade[k]+partial[k]);partial[k].set(0.0)
+    if tail:
+        for j in ol.range(tail):consume(full*16+j)
+    for k in range(4):partial[k].set(partial[k]+cascade[k])
+    vector=count//4
+    i=groups*4
+    for j in range(i,vector):partial[0].set(partial[0]+ol.load(row[j*4:j*4+4]))
+    for k in range(1,4):partial[0].set(partial[0]+partial[k])
+    total=ol.zeros((1,))
+    for k in range(vector*4,count):total.set(total+ol.load(row[k:k+1]))
+    for k in range(4):total.set(total+partial[0][k:k+1])
+    return total
+
+
+def divide_count(value, count):
+    # Correct reciprocal-multiply using an exact split product with the <=3000
+    # integer divisor. This prevents one mean ulp becoming ~0.16 after the
+    # source's std+1e-5 normalization of an almost constant feature.
+    quotient=value*(1.0/count)
+    split=quotient*4097.0
+    high=split-(split-quotient)
+    low=quotient-high
+    residual=(value-high*float(count))-low*float(count)
+    return quotient+residual*(1.0/count)
+
+
+@ol.jit
+def move_rows(x,out,rows: int,reverse: bool):
+    """Device memmove for statically known overlapping handoff buffers."""
+    for i in ol.range(rows):
+        row=Affine.of(rows-1)-Affine.of(i) if reverse else i
+        ol.store(out[row,:],ol.load(x[row,:]))
+
+
+@ol.jit
+def normalize(transposed,squared,features,stats,frames: int,valid: int):
+    for channel in ol.range(128):
+        mean=divide_count(ordered_sum(transposed[channel,:],frames),valid)
+        x=ol.load(transposed[channel,:valid])
+        centered=x-mean
+        ol.store(squared[channel,:valid],centered*centered)
+        variance=divide_count(ordered_sum(squared[channel,:],frames),valid-1)
+        std=ol.recip(ol.rsqrt(variance))
+        norm=centered/(std+1e-5)
+        ol.store(features[:valid,channel:channel+1],norm.column())
+        # The final invalid row stays zero from reset, matching output * mask.
+        values=ol.empty((2,));values[:1].set(mean);values[1:2].set(variance)
+        ol.store(stats[channel,:],values)
+
+
+@dataclass(frozen=True)
+class WaveformPlan:
+    cfg: object
+    programs: tuple
+    phase_budgets: tuple
+    image: np.ndarray
+    input_at: int
+    output_at: int
+    samples: int
+    frames: int
+    valid: int
+    raw_padded_bytes: int
+    checkpoints: dict
+
+    def budget(self):
+        return {'dram_image_bytes':int(self.image.size),'immutable_prefix_bytes':self.input_at,
+                'samples':self.samples,'stored_frames':self.frames,'valid_frames':self.valid,
+                'raw_padded_bytes':self.raw_padded_bytes,'phases':list(self.phase_budgets),
+                'max_instruction_words':max(x['instruction_words'] for x in self.phase_budgets),
+                'max_tmem_live_words':max(x['tmem_peak_live_words'] for x in self.phase_budgets),
+                'spectral_algorithm':'FP32 direct 512-point DFT, tiled 32 bins; no native FFT opcode',
+                'dither':0.0,'hardware_validated':False,'model_ready':False}
+
+
+def compile_waveform(samples,cfg,coefficients,*,sample_rate_hz=16000,channels=1,dither=0.0):
+    if type(samples) is not int or not 320<=samples<=480000 or sample_rate_hz!=16000 or channels!=1 or dither!=0.0:
+        raise ValueError('require 320..480000 mono PCM16 samples at 16kHz; pinned dither=0')
+    if cfg.S!=1 or cfg.D!=128 or cfg.act_rows<16:
+        raise ValueError('waveform lowering requires one slice, D128, 16 ACT rows')
+    expected={'hann':(512,),'cosine':(257,512),'sine':(257,512),'mel':(128,257)}
+    if set(coefficients)!=set(expected):raise ValueError('static coefficient keys differ')
+    for name,dims in expected.items():
+        if coefficients[name].shape!=dims or not np.isfinite(coefficients[name]).all():raise ValueError('bad coefficient '+name)
+    frames,valid=samples//160+1,samples//160
+    blocks=math.ceil(samples/64);chunks=[];cursor=0
+    def alloc(size,data=None):
+        nonlocal cursor
+        at=cursor;cursor+=(size+127)//128*128
+        if cursor>cfg.DRAM_BYTES:raise ValueError('frontend exceeds DRAM')
+        if data is not None:chunks.append((at,np.ascontiguousarray(data).view(np.uint8).ravel()))
+        return at
+    def tensor(dims,data=None):
+        return Tensor(alloc(4*math.prod(dims),None if data is None else np.asarray(data,dtype='<f4')),dims,
+                      (dims[1],1) if len(dims)==2 else (1,))
+    coef={n:tensor(dims,coefficients[n]) for n,dims in expected.items()}
+    basis=tensor((128,128),np.eye(128,dtype=np.float32))
+    raw=Tensor(alloc(blocks*128),(blocks*32,),(1,))
+    reset_at=cursor
+    wave=tensor((blocks*64+1,));padded=tensor((samples+512,));power=tensor((frames,257))
+    logs=tensor((frames,128));transposed=tensor((128,frames));squared=tensor((128,frames));features=tensor((frames,128));stats=tensor((128,2))
+    scratch=Tensor(reset_at,((cursor-reset_at)//4,),(1,))
+    programs=[];budgets=[]
+    def phase(name,kernel,**kw):
+        b=kernel.trace(cfg,0,kw);p=b.finish()
+        if len(p)*8>cfg.IMEM_WORDS:raise ValueError(name+' exceeds IMEM')
+        programs.append(p);budgets.append({'name':name,'instruction_words':len(p)*8,'tmem_peak_live_words':b.tmem_peak})
+    phase('reset_frontend',clear,scratch=scratch,words=scratch.shape[0])
+    phase('pcm16_exact_bytes',pcm16,raw=raw,basis=basis,wave=wave,blocks=blocks)
+    phase('preemphasis_and_center_padding',preemphasis,wave=wave,padded=padded,samples=samples)
+    phase('stft_direct_dft_power',spectrum,padded=padded,hann=coef['hann'],cosine=coef['cosine'],sine=coef['sine'],power=power,frames=frames)
+    phase('slaney_mel_log',mel_log,power=power,mel=coef['mel'],log_mel=logs,transposed=transposed,frames=frames)
+    phase('valid_unbiased_normalization',normalize,transposed=transposed,squared=squared,features=features,stats=stats,frames=frames,valid=valid)
+    image=np.zeros(cursor,np.uint8)
+    for at,value in chunks:image[at:at+len(value)]=value
+    image.flags.writeable=False
+    named={'wave':wave,'padded_preemphasis':padded,'power':power,'log_mel':logs,'transposed':transposed,'features':features,'statistics':stats}
+    return WaveformPlan(cfg,tuple(programs),tuple(budgets),image,raw.base,features.base,samples,frames,valid,blocks*128,
+                        {n:{'offset':t.base,'shape':t.shape} for n,t in named.items()})
