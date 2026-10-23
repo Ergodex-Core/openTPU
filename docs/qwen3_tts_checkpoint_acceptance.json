@@ -1,0 +1,1271 @@
+{
+  "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "license": "Apache-2.0",
+  "checkpoint_manifest": {
+    "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+    "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+    "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+    "license": "Apache-2.0",
+    "url": "https://huggingface.co/Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice/resolve/85e237c12c027371202489a0ec509ded67b5e4b5/model.safetensors",
+    "file_bytes": 1811626576,
+    "file_sha256": "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
+    "header_bytes": 49224,
+    "header_sha256": "b125649e98d52f4ac605666a212eee68c6f4f5faf9b9a5e7b930565b578f96a1",
+    "metadata_sha256": "d83a2c21996b42c230418a42641abca1aa6dae2e4e70d20bd62aaeba0845a105",
+    "verified_lfs_sha256": true,
+    "checkpoint_path": "/home/ubuntu/qwen3-tts-checkpoint-20261023-01/model.safetensors",
+    "weight_file_only": true,
+    "upstream_code_executed": false,
+    "hardware_access": false,
+    "materialized_utc": "2026-10-23T10:48:24Z"
+  },
+  "checkpoint_manifest_sha256": "04dee822bff9b72df105c82570619f6396e092bb4b303fd5847f735eaa757f40",
+  "parameter_tensors": 17,
+  "parameter_elements": 336336128,
+  "input_semantics": "Deterministic aligned row probes, not a complete CustomVoice prompt",
+  "sequence_seed": 2306,
+  "positions": 260,
+  "cache_capacity": 512,
+  "full_embedding_tables_resident": true,
+  "dram_bytes": 1280885888,
+  "reference_fp64": "Independent source-derived FP64 algebra on exact decoded BF16 tensors",
+  "reference_bf16": "Locally reviewed eager BF16 CPU algebra; no upstream model import",
+  "metrics_fp64": {
+    "projected": {
+      "samples": 260,
+      "mean_relative_l2": 0.005814609721128826,
+      "p95_relative_l2": 0.007252405303903507,
+      "max_relative_l2": 0.00785315939383529,
+      "worst_position": 151,
+      "min_cosine": 0.9999691736679301,
+      "max_absolute": 0.005032657844150079,
+      "samples_above_0_035": 0
+    },
+    "assembled": {
+      "samples": 260,
+      "mean_relative_l2": 0.005581031873172882,
+      "p95_relative_l2": 0.007060565731669389,
+      "max_relative_l2": 0.0078502162151111,
+      "worst_position": 151,
+      "min_cosine": 0.9999691966204415,
+      "max_absolute": 0.005032657844150079,
+      "samples_above_0_035": 0
+    },
+    "attention_residual": {
+      "samples": 260,
+      "mean_relative_l2": 0.01587862955710651,
+      "p95_relative_l2": 0.01878909054389132,
+      "max_relative_l2": 0.02321803027081216,
+      "worst_position": 70,
+      "min_cosine": 0.9997357040565107,
+      "max_absolute": 0.011019664524582085,
+      "samples_above_0_035": 0
+    },
+    "output": {
+      "samples": 260,
+      "mean_relative_l2": 0.01521079990649769,
+      "p95_relative_l2": 0.021008217637988564,
+      "max_relative_l2": 0.025820005466628625,
+      "worst_position": 20,
+      "min_cosine": 0.999666775905029,
+      "max_absolute": 0.05298666803867169,
+      "samples_above_0_035": 0
+    }
+  },
+  "metrics_bf16_eager": {
+    "projected": {
+      "samples": 260,
+      "mean_relative_l2": 0.00605986527742173,
+      "p95_relative_l2": 0.007415423740711054,
+      "max_relative_l2": 0.008062270869961552,
+      "worst_position": 122,
+      "min_cosine": 0.999967578561301,
+      "max_absolute": 0.005042672157287598,
+      "samples_above_0_035": 0
+    },
+    "assembled": {
+      "samples": 260,
+      "mean_relative_l2": 0.0060481064257334695,
+      "p95_relative_l2": 0.007431641400585976,
+      "max_relative_l2": 0.00801576150771594,
+      "worst_position": 151,
+      "min_cosine": 0.9999678747443467,
+      "max_absolute": 0.008900642395019531,
+      "samples_above_0_035": 0
+    },
+    "attention_residual": {
+      "samples": 260,
+      "mean_relative_l2": 0.016798058813192535,
+      "p95_relative_l2": 0.019951980436882344,
+      "max_relative_l2": 0.026162656127481202,
+      "worst_position": 70,
+      "min_cosine": 0.9996638440935439,
+      "max_absolute": 0.021860599517822266,
+      "samples_above_0_035": 0
+    },
+    "output": {
+      "samples": 260,
+      "mean_relative_l2": 0.015978406565450378,
+      "p95_relative_l2": 0.021722188648374177,
+      "max_relative_l2": 0.028676437980528324,
+      "worst_position": 20,
+      "min_cosine": 0.9995922714058085,
+      "max_absolute": 0.05609631538391113,
+      "samples_above_0_035": 0
+    }
+  },
+  "bf16_eager_vs_fp64": {
+    "projected": {
+      "samples": 260,
+      "mean_relative_l2": 0.0016955917427701917,
+      "p95_relative_l2": 0.002117071244713156,
+      "max_relative_l2": 0.0027192817871982728,
+      "worst_position": 95,
+      "min_cosine": 0.9999973350279823,
+      "max_absolute": 0.003910090829223778,
+      "samples_above_0_035": 0
+    },
+    "assembled": {
+      "samples": 260,
+      "mean_relative_l2": 0.0022220120448161232,
+      "p95_relative_l2": 0.0027784882900050716,
+      "max_relative_l2": 0.0037200958046563126,
+      "worst_position": 101,
+      "min_cosine": 0.9999946702510899,
+      "max_absolute": 0.009338371870810214,
+      "samples_above_0_035": 0
+    },
+    "attention_residual": {
+      "samples": 260,
+      "mean_relative_l2": 0.0055435642232778415,
+      "p95_relative_l2": 0.007641323155840459,
+      "max_relative_l2": 0.011117482823384262,
+      "worst_position": 234,
+      "min_cosine": 0.9999420414270541,
+      "max_absolute": 0.020140244236687366,
+      "samples_above_0_035": 0
+    },
+    "output": {
+      "samples": 260,
+      "mean_relative_l2": 0.005237464149825382,
+      "p95_relative_l2": 0.007273204712249651,
+      "max_relative_l2": 0.012636377340508893,
+      "worst_position": 100,
+      "min_cosine": 0.9999363403428072,
+      "max_absolute": 0.033582389320840456,
+      "samples_above_0_035": 0
+    }
+  },
+  "inherited_diagnostic_threshold": 0.035,
+  "threshold_is_speech_acceptance": false,
+  "future_cache_bitwise_mismatch_positions": [],
+  "cache_ablation_at_last_position": {
+    "relative_l2": 0.5821622423012675,
+    "max_absolute": 1.4731769561767578,
+    "rms_error": 0.06461288638745617,
+    "reference_rms": 0.11098776542436634,
+    "cosine": 0.8178706517361858
+  },
+  "reset": {
+    "cleared_kv_bytes": 1081344,
+    "positions": 8,
+    "bitwise_mismatch_positions": [],
+    "max_output_relative_l2_vs_fp64": 0.021630956084780516,
+    "scope": "Host-cleared layer-0 KV, position restarted at zero; no production reset API claim"
+  },
+  "greedy": {
+    "logits_computed": false,
+    "parity_established": false,
+    "reason": "One layer has no codec logits; remaining 27 layers/final norm/head and generation loop are absent. Hidden error cannot establish greedy parity."
+  },
+  "max_measured_imem_words": 3432,
+  "max_measured_tmem_words": 15162,
+  "seconds": 64.91097884008195,
+  "python": "3.12.3",
+  "numpy": "2.5.4",
+  "upstream_code_executed": false,
+  "hardware_access": false,
+  "synthesis": false,
+  "tts_enabled": false,
+  "selected_positions": [
+    {
+      "position": 0,
+      "ids": [
+        151672,
+        2149
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.0020473061451620803,
+          "max_absolute": 0.0003840324530230265,
+          "rms_error": 0.0001035364658827248,
+          "reference_rms": 0.050572048605133306,
+          "cosine": 0.9999979245517467
+        },
+        "assembled": {
+          "relative_l2": 0.001718346817382893,
+          "max_absolute": 0.00038403245302302824,
+          "rms_error": 0.00010353651328548907,
+          "reference_rms": 0.06025356013006681,
+          "cosine": 0.9999985381871325
+        },
+        "attention_residual": {
+          "relative_l2": 0.00993263114354335,
+          "max_absolute": 0.004055311970057041,
+          "rms_error": 0.0009601977673175051,
+          "reference_rms": 0.09667103846312426,
+          "cosine": 0.9999510149785378
+        },
+        "output": {
+          "relative_l2": 0.018115110929310507,
+          "max_absolute": 0.01225318601727543,
+          "rms_error": 0.0020606069507951253,
+          "reference_rms": 0.11375072219188202,
+          "cosine": 0.9998369505986088
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.0028500158772310096,
+          "max_absolute": 0.003007173538208008,
+          "rms_error": 0.00014389248476748498,
+          "reference_rms": 0.05048830987821956,
+          "cosine": 0.999997669586088
+        },
+        "assembled": {
+          "relative_l2": 0.003639954739294189,
+          "max_absolute": 0.005936861038208008,
+          "rms_error": 0.00021871591041966356,
+          "reference_rms": 0.06008753572086284,
+          "cosine": 0.999997682268756
+        },
+        "attention_residual": {
+          "relative_l2": 0.010381020206390673,
+          "max_absolute": 0.0039634108543396,
+          "rms_error": 0.0010048826618416745,
+          "reference_rms": 0.09679999093182165,
+          "cosine": 0.9999484460584629
+        },
+        "output": {
+          "relative_l2": 0.0184539284145938,
+          "max_absolute": 0.00781606137752533,
+          "rms_error": 0.002103784607127564,
+          "reference_rms": 0.11400199241392102,
+          "cosine": 0.9998299975764163
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0017283669727811764,
+          "max_absolute": 0.002687545827645632,
+          "rms_error": 8.740705855499676e-05,
+          "reference_rms": 0.050572048605133306,
+          "cosine": 0.999999877057108
+        },
+        "assembled": {
+          "relative_l2": 0.0030151736936786166,
+          "max_absolute": 0.005617233327645632,
+          "rms_error": 0.00018167494945466013,
+          "reference_rms": 0.06025356013006681,
+          "cosine": 0.9999992484876503
+        },
+        "attention_residual": {
+          "relative_l2": 0.003517745870671205,
+          "max_absolute": 0.002825369952210721,
+          "rms_error": 0.0003400641463671526,
+          "reference_rms": 0.09667103846312426,
+          "cosine": 0.9999947094747823
+        },
+        "output": {
+          "relative_l2": 0.006492226562254479,
+          "max_absolute": 0.007319722666776274,
+          "rms_error": 0.0007384954600897666,
+          "reference_rms": 0.11375072219188202,
+          "cosine": 0.999981406310763
+        }
+      }
+    },
+    {
+      "position": 1,
+      "ids": [
+        151671,
+        3061
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.0012239806514697832,
+          "max_absolute": 0.00021698317062063266,
+          "rms_error": 5.86350376192913e-05,
+          "reference_rms": 0.04790519976674554,
+          "cosine": 0.9999992591692538
+        },
+        "assembled": {
+          "relative_l2": 0.00020424710884099715,
+          "max_absolute": 0.00021698317062063266,
+          "rms_error": 5.8635094987253716e-05,
+          "reference_rms": 0.28707919206288557,
+          "cosine": 0.9999999791418281
+        },
+        "attention_residual": {
+          "relative_l2": 0.005363226300249074,
+          "max_absolute": 0.010534798909458243,
+          "rms_error": 0.001567753793530822,
+          "reference_rms": 0.2923154283939154,
+          "cosine": 0.9999856505673592
+        },
+        "output": {
+          "relative_l2": 0.0051632091441609325,
+          "max_absolute": 0.014966031458840234,
+          "rms_error": 0.0017292983018516593,
+          "reference_rms": 0.33492702959889215,
+          "cosine": 0.999987099388842
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.0014093702521593443,
+          "max_absolute": 0.0008702278137207031,
+          "rms_error": 6.756674039043395e-05,
+          "reference_rms": 0.04794108594736737,
+          "cosine": 0.9999991991965119
+        },
+        "assembled": {
+          "relative_l2": 0.0012149708961485138,
+          "max_absolute": 0.006976127624511719,
+          "rms_error": 0.00034845820041937874,
+          "reference_rms": 0.28680374280898363,
+          "cosine": 0.9999997240669941
+        },
+        "attention_residual": {
+          "relative_l2": 0.005595771967149326,
+          "max_absolute": 0.012877464294433594,
+          "rms_error": 0.0016348275545779174,
+          "reference_rms": 0.2921540699255394,
+          "cosine": 0.9999846711316381
+        },
+        "output": {
+          "relative_l2": 0.005582176831225935,
+          "max_absolute": 0.01871776580810547,
+          "rms_error": 0.001867554431400267,
+          "reference_rms": 0.33455665914297494,
+          "cosine": 0.9999864897151252
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0008478962004573986,
+          "max_absolute": 0.0010408834880599738,
+          "rms_error": 4.0618636864376194e-05,
+          "reference_rms": 0.04790519976674554,
+          "cosine": 0.9999999211766533
+        },
+        "assembled": {
+          "relative_l2": 0.0011995299774684638,
+          "max_absolute": 0.0069549359384391,
+          "rms_error": 0.0003443600967868579,
+          "reference_rms": 0.28707919206288557,
+          "cosine": 0.9999997406243754
+        },
+        "attention_residual": {
+          "relative_l2": 0.002098819620319578,
+          "max_absolute": 0.014498441517709182,
+          "rms_error": 0.0006135173564352722,
+          "reference_rms": 0.2923154283939154,
+          "cosine": 0.9999979486984443
+        },
+        "output": {
+          "relative_l2": 0.0019013050677839087,
+          "max_absolute": 0.015616844866567448,
+          "rms_error": 0.0006367984587141847,
+          "reference_rms": 0.33492702959889215,
+          "cosine": 0.9999988026191438
+        }
+      }
+    },
+    {
+      "position": 6,
+      "ids": [
+        151935,
+        3071
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.0027415686683369593,
+          "max_absolute": 0.00039677665696924436,
+          "rms_error": 0.00011201140293388269,
+          "reference_rms": 0.040856683338823314,
+          "cosine": 0.9999962877915973
+        },
+        "assembled": {
+          "relative_l2": 0.0027425193625395545,
+          "max_absolute": 0.00039677665696924436,
+          "rms_error": 0.0001120114035526467,
+          "reference_rms": 0.0408425205971654,
+          "cosine": 0.9999962854577591
+        },
+        "attention_residual": {
+          "relative_l2": 0.01604212981893373,
+          "max_absolute": 0.00197760004316494,
+          "rms_error": 0.0005877824828690208,
+          "reference_rms": 0.03663992808332035,
+          "cosine": 0.9998721703810421
+        },
+        "output": {
+          "relative_l2": 0.012592185673209643,
+          "max_absolute": 0.0057924200471442255,
+          "rms_error": 0.0010374857831990688,
+          "reference_rms": 0.08239123930695844,
+          "cosine": 0.9999221377917252
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.002839656767104893,
+          "max_absolute": 0.0006860494613647461,
+          "rms_error": 0.00011599228885411319,
+          "reference_rms": 0.040847291897312815,
+          "cosine": 0.9999961102864566
+        },
+        "assembled": {
+          "relative_l2": 0.0028542229520619185,
+          "max_absolute": 0.00047686323523521423,
+          "rms_error": 0.00011656373010399052,
+          "reference_rms": 0.04083904168025267,
+          "cosine": 0.9999960025031392
+        },
+        "attention_residual": {
+          "relative_l2": 0.01725712963394691,
+          "max_absolute": 0.002643585205078125,
+          "rms_error": 0.0006319406406079641,
+          "reference_rms": 0.036619104915620426,
+          "cosine": 0.9998513423644446
+        },
+        "output": {
+          "relative_l2": 0.013726875886736255,
+          "max_absolute": 0.007189035415649414,
+          "rms_error": 0.0011261560105012179,
+          "reference_rms": 0.08204022676342392,
+          "cosine": 0.9999091553624385
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0007908063598393707,
+          "max_absolute": 0.00047466960644937384,
+          "rms_error": 3.2309725026284735e-05,
+          "reference_rms": 0.040856683338823314,
+          "cosine": 0.9999997136653416
+        },
+        "assembled": {
+          "relative_l2": 0.0008000406946651414,
+          "max_absolute": 0.00027249065137124884,
+          "rms_error": 3.267567855043156e-05,
+          "reference_rms": 0.0408425205971654,
+          "cosine": 0.9999996835682042
+        },
+        "attention_residual": {
+          "relative_l2": 0.005592260472476881,
+          "max_absolute": 0.001600271837074868,
+          "rms_error": 0.00020490002153474802,
+          "reference_rms": 0.03663992808332035,
+          "cosine": 0.9999845160048044
+        },
+        "output": {
+          "relative_l2": 0.0062961773702712555,
+          "max_absolute": 0.010791727130438744,
+          "rms_error": 0.0005187498564330752,
+          "reference_rms": 0.08239123930695844,
+          "cosine": 0.9999892082362994
+        }
+      }
+    },
+    {
+      "position": 16,
+      "ids": [
+        151671,
+        2878
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.0012239806514697832,
+          "max_absolute": 0.00021698317062063266,
+          "rms_error": 5.86350376192913e-05,
+          "reference_rms": 0.04790519976674554,
+          "cosine": 0.9999992591692538
+        },
+        "assembled": {
+          "relative_l2": 0.0001991985173761375,
+          "max_absolute": 0.00021698317062063266,
+          "rms_error": 5.863498760978642e-05,
+          "reference_rms": 0.2943545382873943,
+          "cosine": 0.9999999801604711
+        },
+        "attention_residual": {
+          "relative_l2": 0.0034880620572247346,
+          "max_absolute": 0.00441973304422949,
+          "rms_error": 0.0010375952762884273,
+          "reference_rms": 0.2974704174598277,
+          "cosine": 0.9999939655758574
+        },
+        "output": {
+          "relative_l2": 0.004085764132106468,
+          "max_absolute": 0.020772942895672664,
+          "rms_error": 0.0013901798320583823,
+          "reference_rms": 0.3402496539470225,
+          "cosine": 0.9999928032370244
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.0014093702521593443,
+          "max_absolute": 0.0008702278137207031,
+          "rms_error": 6.756674039043395e-05,
+          "reference_rms": 0.04794108594736737,
+          "cosine": 0.9999991991965119
+        },
+        "assembled": {
+          "relative_l2": 0.0011511807345518474,
+          "max_absolute": 0.006976127624511719,
+          "rms_error": 0.00033853065195964233,
+          "reference_rms": 0.2940725481228903,
+          "cosine": 0.9999997963698788
+        },
+        "attention_residual": {
+          "relative_l2": 0.0036999014630624367,
+          "max_absolute": 0.007701396942138672,
+          "rms_error": 0.001100279479943281,
+          "reference_rms": 0.2973807521437534,
+          "cosine": 0.9999933443962286
+        },
+        "output": {
+          "relative_l2": 0.006040965069153551,
+          "max_absolute": 0.04871845245361328,
+          "rms_error": 0.002049864532529107,
+          "reference_rms": 0.33932732751529227,
+          "cosine": 0.9999907456721226
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0008478962004573986,
+          "max_absolute": 0.0010408834880599738,
+          "rms_error": 4.0618636864376194e-05,
+          "reference_rms": 0.04790519976674554,
+          "cosine": 0.9999999211766533
+        },
+        "assembled": {
+          "relative_l2": 0.0011332453950607055,
+          "max_absolute": 0.0069549359384391,
+          "rms_error": 0.0003335759250294096,
+          "reference_rms": 0.2943545382873943,
+          "cosine": 0.9999998165788936
+        },
+        "attention_residual": {
+          "relative_l2": 0.001025879127031615,
+          "max_absolute": 0.004306867734756636,
+          "rms_error": 0.0003051686921814181,
+          "reference_rms": 0.2974704174598277,
+          "cosine": 0.9999995190698582
+        },
+        "output": {
+          "relative_l2": 0.003051617828890382,
+          "max_absolute": 0.027945509557940618,
+          "rms_error": 0.0010383119102585169,
+          "reference_rms": 0.3402496539470225,
+          "cosine": 0.9999990151851574
+        }
+      }
+    },
+    {
+      "position": 127,
+      "ids": [
+        85024,
+        326
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.005905537425609672,
+          "max_absolute": 0.0015570770563960445,
+          "rms_error": 0.0002967746153316295,
+          "reference_rms": 0.05025361689262197,
+          "cosine": 0.9999825971442945
+        },
+        "assembled": {
+          "relative_l2": 0.005661724309792164,
+          "max_absolute": 0.0015570770563960445,
+          "rms_error": 0.00029677461362218516,
+          "reference_rms": 0.0524177083488333,
+          "cosine": 0.9999840224129422
+        },
+        "attention_residual": {
+          "relative_l2": 0.017274330072877545,
+          "max_absolute": 0.006237231426902912,
+          "rms_error": 0.0011031563435731108,
+          "reference_rms": 0.06386102030695699,
+          "cosine": 0.9998512424730128
+        },
+        "output": {
+          "relative_l2": 0.013064523737085616,
+          "max_absolute": 0.006666328280701142,
+          "rms_error": 0.0015385561008925388,
+          "reference_rms": 0.11776595395705976,
+          "cosine": 0.9999154114000697
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.006142922547028311,
+          "max_absolute": 0.0016363859176635742,
+          "rms_error": 0.00030865600978853184,
+          "reference_rms": 0.05024579219834811,
+          "cosine": 0.9999812209691531
+        },
+        "assembled": {
+          "relative_l2": 0.006026779659705607,
+          "max_absolute": 0.0018465220928192139,
+          "rms_error": 0.00031593567542439045,
+          "reference_rms": 0.05242197214155712,
+          "cosine": 0.999981866965176
+        },
+        "attention_residual": {
+          "relative_l2": 0.017828383145901024,
+          "max_absolute": 0.007715106010437012,
+          "rms_error": 0.0011375988170568994,
+          "reference_rms": 0.06380829981873304,
+          "cosine": 0.9998426625875285
+        },
+        "output": {
+          "relative_l2": 0.013326180618465027,
+          "max_absolute": 0.007697582244873047,
+          "rms_error": 0.0015673410195128597,
+          "reference_rms": 0.11761367074232208,
+          "cosine": 0.9999112048080182
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0018038860281705672,
+          "max_absolute": 0.0005591686438481958,
+          "rms_error": 9.065179737763717e-05,
+          "reference_rms": 0.05025361689262197,
+          "cosine": 0.9999983848679997
+        },
+        "assembled": {
+          "relative_l2": 0.0024264021373499598,
+          "max_absolute": 0.0014746959875981958,
+          "rms_error": 0.00012718643957259593,
+          "reference_rms": 0.0524177083488333,
+          "cosine": 0.9999970598338042
+        },
+        "attention_residual": {
+          "relative_l2": 0.005208599429467336,
+          "max_absolute": 0.0035528030663445342,
+          "rms_error": 0.0003326264739360182,
+          "reference_rms": 0.06386102030695699,
+          "cosine": 0.9999867650866018
+        },
+        "output": {
+          "relative_l2": 0.004108081513771619,
+          "max_absolute": 0.006116134498179715,
+          "rms_error": 0.0004837921384026768,
+          "reference_rms": 0.11776595395705976,
+          "cosine": 0.9999923880445754
+        }
+      }
+    },
+    {
+      "position": 128,
+      "ids": [
+        28955,
+        1905
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.006673444797905283,
+          "max_absolute": 0.0019140986180204156,
+          "rms_error": 0.0003278116712029753,
+          "reference_rms": 0.04912180757168645,
+          "cosine": 0.9999777448603038
+        },
+        "assembled": {
+          "relative_l2": 0.006406410276645417,
+          "max_absolute": 0.0019140911674398187,
+          "rms_error": 0.00032781168398076147,
+          "reference_rms": 0.05116932413395372,
+          "cosine": 0.999979488793052
+        },
+        "attention_residual": {
+          "relative_l2": 0.015127715680860845,
+          "max_absolute": 0.00376633742579513,
+          "rms_error": 0.0009109683403768915,
+          "reference_rms": 0.06021849958017274,
+          "cosine": 0.9998863279380901
+        },
+        "output": {
+          "relative_l2": 0.014701038819357545,
+          "max_absolute": 0.006233240857492599,
+          "rms_error": 0.001494363289770269,
+          "reference_rms": 0.10165018323756625,
+          "cosine": 0.9998946317006656
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.006909747002323317,
+          "max_absolute": 0.001966334879398346,
+          "rms_error": 0.00033933705187702903,
+          "reference_rms": 0.04910990977859698,
+          "cosine": 0.9999761310656855
+        },
+        "assembled": {
+          "relative_l2": 0.006890884417350244,
+          "max_absolute": 0.002443850040435791,
+          "rms_error": 0.0003526792368265855,
+          "reference_rms": 0.05118054744012112,
+          "cosine": 0.9999763216069055
+        },
+        "attention_residual": {
+          "relative_l2": 0.015980179988222883,
+          "max_absolute": 0.0038129761815071106,
+          "rms_error": 0.0009634265597690524,
+          "reference_rms": 0.06028884283400319,
+          "cosine": 0.9998723117697946
+        },
+        "output": {
+          "relative_l2": 0.015293681260989895,
+          "max_absolute": 0.006501220166683197,
+          "rms_error": 0.0015556008383200732,
+          "reference_rms": 0.10171526474060869,
+          "cosine": 0.9998844757745639
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0016099835106511689,
+          "max_absolute": 0.0005133132856726119,
+          "rms_error": 7.908530020379491e-05,
+          "reference_rms": 0.04912180757168645,
+          "cosine": 0.9999987330025107
+        },
+        "assembled": {
+          "relative_l2": 0.0024389335285230204,
+          "max_absolute": 0.0013500318497299268,
+          "rms_error": 0.00012479858026216188,
+          "reference_rms": 0.05116932413395372,
+          "cosine": 0.9999970505028288
+        },
+        "attention_residual": {
+          "relative_l2": 0.005847048837286101,
+          "max_absolute": 0.0012825071922457076,
+          "rms_error": 0.0003521005079533626,
+          "reference_rms": 0.06021849958017274,
+          "cosine": 0.9999836074267389
+        },
+        "output": {
+          "relative_l2": 0.005182425736262062,
+          "max_absolute": 0.0027417786368154617,
+          "rms_error": 0.0005267945257061178,
+          "reference_rms": 0.10165018323756625,
+          "cosine": 0.9999867846527296
+        }
+      }
+    },
+    {
+      "position": 254,
+      "ids": [
+        131250,
+        962
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.004223872898576454,
+          "max_absolute": 0.000977696118443172,
+          "rms_error": 0.0001772821888039347,
+          "reference_rms": 0.04197147808677743,
+          "cosine": 0.9999910953637643
+        },
+        "assembled": {
+          "relative_l2": 0.00400043808189911,
+          "max_absolute": 0.000977696118443172,
+          "rms_error": 0.00017728218823062368,
+          "reference_rms": 0.04431569358185472,
+          "cosine": 0.9999920029908248
+        },
+        "attention_residual": {
+          "relative_l2": 0.014970092056854418,
+          "max_absolute": 0.0029926022903052907,
+          "rms_error": 0.0007258312250845617,
+          "reference_rms": 0.0484854216211865,
+          "cosine": 0.9998880043984159
+        },
+        "output": {
+          "relative_l2": 0.012723567126030141,
+          "max_absolute": 0.014184000185041068,
+          "rms_error": 0.0012261018925416166,
+          "reference_rms": 0.09636463425679041,
+          "cosine": 0.9999272412821828
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.004317688811679642,
+          "max_absolute": 0.0008242279291152954,
+          "rms_error": 0.0001812139780447924,
+          "reference_rms": 0.04197013401118586,
+          "cosine": 0.9999906894265098
+        },
+        "assembled": {
+          "relative_l2": 0.004320155564121317,
+          "max_absolute": 0.0008406788110733032,
+          "rms_error": 0.00019150248150259376,
+          "reference_rms": 0.04432768187632237,
+          "cosine": 0.9999907353845231
+        },
+        "attention_residual": {
+          "relative_l2": 0.015695244084883937,
+          "max_absolute": 0.003146916627883911,
+          "rms_error": 0.0007606698686308833,
+          "reference_rms": 0.048464991338585374,
+          "cosine": 0.9998768251896509
+        },
+        "output": {
+          "relative_l2": 0.012431604598019851,
+          "max_absolute": 0.005249714478850365,
+          "rms_error": 0.0011916078321740297,
+          "reference_rms": 0.09585309947549596,
+          "cosine": 0.9999235330664459
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0011049459051591507,
+          "max_absolute": 0.0006015597780095749,
+          "rms_error": 4.637621284546175e-05,
+          "reference_rms": 0.04197147808677743,
+          "cosine": 0.9999993900404939
+        },
+        "assembled": {
+          "relative_l2": 0.0015439517857392291,
+          "max_absolute": 0.0006230210400485214,
+          "rms_error": 6.84212942419771e-05,
+          "reference_rms": 0.04431569358185472,
+          "cosine": 0.9999988450095045
+        },
+        "attention_residual": {
+          "relative_l2": 0.005868161855377402,
+          "max_absolute": 0.001625152529868279,
+          "rms_error": 0.0002845203016993374,
+          "reference_rms": 0.0484854216211865,
+          "cosine": 0.9999828638937545
+        },
+        "output": {
+          "relative_l2": 0.007244617072929953,
+          "max_absolute": 0.01805091111948931,
+          "rms_error": 0.0006981248745633944,
+          "reference_rms": 0.09636463425679041,
+          "cosine": 0.9999877820612252
+        }
+      }
+    },
+    {
+      "position": 255,
+      "ids": [
+        66090,
+        1236
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.006477457259820749,
+          "max_absolute": 0.0019223056132487981,
+          "rms_error": 0.0003442108392122581,
+          "reference_rms": 0.05313980863252866,
+          "cosine": 0.9999793941578676
+        },
+        "assembled": {
+          "relative_l2": 0.006312792978435506,
+          "max_absolute": 0.0019223056132487981,
+          "rms_error": 0.0003442108086473516,
+          "reference_rms": 0.05452591425430477,
+          "cosine": 0.9999804408032287
+        },
+        "attention_residual": {
+          "relative_l2": 0.01578268760789277,
+          "max_absolute": 0.007908721522935647,
+          "rms_error": 0.0009280583065186319,
+          "reference_rms": 0.05880229841554482,
+          "cosine": 0.9998755588105479
+        },
+        "output": {
+          "relative_l2": 0.01308249134196417,
+          "max_absolute": 0.004785801110575555,
+          "rms_error": 0.0012491692109604052,
+          "reference_rms": 0.0954840464486681,
+          "cosine": 0.9999144430557201
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.006748798177152626,
+          "max_absolute": 0.0034341812133789062,
+          "rms_error": 0.0003587564560490058,
+          "reference_rms": 0.05315856936773417,
+          "cosine": 0.9999779647352633
+        },
+        "assembled": {
+          "relative_l2": 0.006926665674433384,
+          "max_absolute": 0.004685401916503906,
+          "rms_error": 0.00037800788353835053,
+          "reference_rms": 0.05457284952175382,
+          "cosine": 0.999977477044433
+        },
+        "attention_residual": {
+          "relative_l2": 0.016924824034543085,
+          "max_absolute": 0.009498685598373413,
+          "rms_error": 0.0009960489839461913,
+          "reference_rms": 0.05885136423949127,
+          "cosine": 0.999857598380361
+        },
+        "output": {
+          "relative_l2": 0.014042189884397274,
+          "max_absolute": 0.00488513708114624,
+          "rms_error": 0.0013428382847976387,
+          "reference_rms": 0.09562883680199405,
+          "cosine": 0.9999028730171517
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.00175606606460616,
+          "max_absolute": 0.0015118756001301081,
+          "rms_error": 9.331701461924905e-05,
+          "reference_rms": 0.05313980863252866,
+          "cosine": 0.9999985209584856
+        },
+        "assembled": {
+          "relative_l2": 0.0026157666604488196,
+          "max_absolute": 0.002763096303255108,
+          "rms_error": 0.0001426270686369015,
+          "reference_rms": 0.05452591425430477,
+          "cosine": 0.9999969519843088
+        },
+        "attention_residual": {
+          "relative_l2": 0.004397799408727308,
+          "max_absolute": 0.0025076701575445504,
+          "rms_error": 0.00025860071320368973,
+          "reference_rms": 0.05880229841554482,
+          "cosine": 0.9999906855808312
+        },
+        "output": {
+          "relative_l2": 0.004358764707024443,
+          "max_absolute": 0.005575506140554687,
+          "rms_error": 0.0004161924917443371,
+          "reference_rms": 0.0954840464486681,
+          "cosine": 0.9999916629354961
+        }
+      }
+    },
+    {
+      "position": 256,
+      "ids": [
+        38500,
+        2835
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.006600990513920722,
+          "max_absolute": 0.0018953736437481439,
+          "rms_error": 0.0003474620779453957,
+          "reference_rms": 0.05263786960648384,
+          "cosine": 0.9999783793973986
+        },
+        "assembled": {
+          "relative_l2": 0.00660014468599068,
+          "max_absolute": 0.0018953736437481439,
+          "rms_error": 0.0003474620763902732,
+          "reference_rms": 0.052644615068483044,
+          "cosine": 0.9999783851321626
+        },
+        "attention_residual": {
+          "relative_l2": 0.017514646980188276,
+          "max_absolute": 0.009190649961557329,
+          "rms_error": 0.0011041133894635975,
+          "reference_rms": 0.06303943155191867,
+          "cosine": 0.999846658428972
+        },
+        "output": {
+          "relative_l2": 0.01694896476122805,
+          "max_absolute": 0.030488890996500206,
+          "rms_error": 0.0018521104114696076,
+          "reference_rms": 0.10927572495203017,
+          "cosine": 0.9998833101008173
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.007075930193128708,
+          "max_absolute": 0.0035071969032287598,
+          "rms_error": 0.00037251486354546664,
+          "reference_rms": 0.05264535592892201,
+          "cosine": 0.9999752212314025
+        },
+        "assembled": {
+          "relative_l2": 0.007117864451377138,
+          "max_absolute": 0.003370612859725952,
+          "rms_error": 0.00037463552401621053,
+          "reference_rms": 0.05263313548261339,
+          "cosine": 0.9999747307390779
+        },
+        "attention_residual": {
+          "relative_l2": 0.01847522994989403,
+          "max_absolute": 0.010113537311553955,
+          "rms_error": 0.0011633341764797393,
+          "reference_rms": 0.06296723665333388,
+          "cosine": 0.9998296726575913
+        },
+        "output": {
+          "relative_l2": 0.016213215745779365,
+          "max_absolute": 0.02329564094543457,
+          "rms_error": 0.0017742820120460678,
+          "reference_rms": 0.10943430593082376,
+          "cosine": 0.9998858444070228
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0019671903904978946,
+          "max_absolute": 0.0017331531288375945,
+          "rms_error": 0.00010354871126615618,
+          "reference_rms": 0.05263786960648384,
+          "cosine": 0.9999980754684056
+        },
+        "assembled": {
+          "relative_l2": 0.0024157403131097824,
+          "max_absolute": 0.0014752392159778083,
+          "rms_error": 0.0001271757188890812,
+          "reference_rms": 0.052644615068483044,
+          "cosine": 0.9999971052428169
+        },
+        "attention_residual": {
+          "relative_l2": 0.004588767718188604,
+          "max_absolute": 0.0012684260521254043,
+          "rms_error": 0.00028927330847840443,
+          "reference_rms": 0.06303943155191867,
+          "cosine": 0.9999901160664232
+        },
+        "output": {
+          "relative_l2": 0.004358865120405947,
+          "max_absolute": 0.007193250051065636,
+          "rms_error": 0.00047631814600047813,
+          "reference_rms": 0.10927572495203017,
+          "cosine": 0.9999915653790976
+        }
+      }
+    },
+    {
+      "position": 257,
+      "ids": [
+        121072,
+        630
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.006299709974826362,
+          "max_absolute": 0.0013255403379358877,
+          "rms_error": 0.00028738449111474616,
+          "reference_rms": 0.04561868598128081,
+          "cosine": 0.9999804630929582
+        },
+        "assembled": {
+          "relative_l2": 0.006028015310823427,
+          "max_absolute": 0.0013255403379358877,
+          "rms_error": 0.000287384463321703,
+          "reference_rms": 0.047674806466682026,
+          "cosine": 0.9999821253690788
+        },
+        "attention_residual": {
+          "relative_l2": 0.016330558559107235,
+          "max_absolute": 0.0053419900125362685,
+          "rms_error": 0.0009138587866607733,
+          "reference_rms": 0.05596004468268063,
+          "cosine": 0.9998667494059382
+        },
+        "output": {
+          "relative_l2": 0.013594851255130373,
+          "max_absolute": 0.01397502791686378,
+          "rms_error": 0.0015117278484197585,
+          "reference_rms": 0.11119855745749836,
+          "cosine": 0.9999123493775133
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.006525430124043084,
+          "max_absolute": 0.0014564990997314453,
+          "rms_error": 0.0002977883349918667,
+          "reference_rms": 0.045635050767712515,
+          "cosine": 0.9999787997562307
+        },
+        "assembled": {
+          "relative_l2": 0.006374039581195492,
+          "max_absolute": 0.0013954639434814453,
+          "rms_error": 0.0003038670077572088,
+          "reference_rms": 0.0476725950453255,
+          "cosine": 0.9999800180147924
+        },
+        "attention_residual": {
+          "relative_l2": 0.017157018662400526,
+          "max_absolute": 0.005430281162261963,
+          "rms_error": 0.0009596240967355487,
+          "reference_rms": 0.055931867629109566,
+          "cosine": 0.9998528097058925
+        },
+        "output": {
+          "relative_l2": 0.014440409736799331,
+          "max_absolute": 0.017678022384643555,
+          "rms_error": 0.001606542535927101,
+          "reference_rms": 0.11125325148032716,
+          "cosine": 0.9999020916981924
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0016298919886207155,
+          "max_absolute": 0.000689268390194675,
+          "rms_error": 7.435353081229371e-05,
+          "reference_rms": 0.04561868598128081,
+          "cosine": 0.9999987365228689
+        },
+        "assembled": {
+          "relative_l2": 0.002085620856810182,
+          "max_absolute": 0.0008391192692743243,
+          "rms_error": 9.943157071130099e-05,
+          "reference_rms": 0.047674806466682026,
+          "cosine": 0.9999978260677908
+        },
+        "attention_residual": {
+          "relative_l2": 0.004913947332577618,
+          "max_absolute": 0.001380580603015713,
+          "rms_error": 0.00027498471229938287,
+          "reference_rms": 0.05596004468268063,
+          "cosine": 0.9999880473090382
+        },
+        "output": {
+          "relative_l2": 0.003988535827465873,
+          "max_absolute": 0.0037029944677797744,
+          "rms_error": 0.0004435194303817547,
+          "reference_rms": 0.11119855745749836,
+          "cosine": 0.9999921706046251
+        }
+      }
+    },
+    {
+      "position": 259,
+      "ids": [
+        17243,
+        2486
+      ],
+      "fp64": {
+        "projected": {
+          "relative_l2": 0.005932629766103077,
+          "max_absolute": 0.0014973534074979034,
+          "rms_error": 0.000293809123693683,
+          "reference_rms": 0.04952426415894064,
+          "cosine": 0.9999824598756752
+        },
+        "assembled": {
+          "relative_l2": 0.005929866637687806,
+          "max_absolute": 0.0014973534074979034,
+          "rms_error": 0.00029380912582427853,
+          "reference_rms": 0.049547341243215824,
+          "cosine": 0.9999824759980753
+        },
+        "attention_residual": {
+          "relative_l2": 0.017131132385636412,
+          "max_absolute": 0.0031186082173807195,
+          "rms_error": 0.0010053092279654213,
+          "reference_rms": 0.05868317431300235,
+          "cosine": 0.9998540561542238
+        },
+        "output": {
+          "relative_l2": 0.014722431277773531,
+          "max_absolute": 0.01180840932935423,
+          "rms_error": 0.0016400751371240733,
+          "reference_rms": 0.11139974819241279,
+          "cosine": 0.999898086590295
+        }
+      },
+      "bf16_eager": {
+        "projected": {
+          "relative_l2": 0.006010205296146465,
+          "max_absolute": 0.0013692229986190796,
+          "rms_error": 0.0002974527616180933,
+          "reference_rms": 0.04949128140577988,
+          "cosine": 0.9999824460700518
+        },
+        "assembled": {
+          "relative_l2": 0.006288379016758697,
+          "max_absolute": 0.0017785429954528809,
+          "rms_error": 0.0003112226048658079,
+          "reference_rms": 0.049491705896923734,
+          "cosine": 0.9999813021123779
+        },
+        "attention_residual": {
+          "relative_l2": 0.018384277556726607,
+          "max_absolute": 0.006541550159454346,
+          "rms_error": 0.0010790696677645127,
+          "reference_rms": 0.058695244587932856,
+          "cosine": 0.9998315837974978
+        },
+        "output": {
+          "relative_l2": 0.015892374656031414,
+          "max_absolute": 0.01810479164123535,
+          "rms_error": 0.0017734313579314948,
+          "reference_rms": 0.11159007991662521,
+          "cosine": 0.9998876767857118
+        }
+      },
+      "bf16_vs_fp64": {
+        "projected": {
+          "relative_l2": 0.0017446466097089351,
+          "max_absolute": 0.0014780958327000882,
+          "rms_error": 8.640233956322551e-05,
+          "reference_rms": 0.04952426415894064,
+          "cosine": 0.9999986990101848
+        },
+        "assembled": {
+          "relative_l2": 0.0026630641690582975,
+          "max_absolute": 0.002790351692075088,
+          "rms_error": 0.00013194774913691246,
+          "reference_rms": 0.049547341243215824,
+          "cosine": 0.9999970811884737
+        },
+        "attention_residual": {
+          "relative_l2": 0.005388428239547457,
+          "max_absolute": 0.004018469233261435,
+          "rms_error": 0.0003162100736544678,
+          "reference_rms": 0.05868317431300235,
+          "cosine": 0.9999855065548959
+        },
+        "output": {
+          "relative_l2": 0.004221775795988662,
+          "max_absolute": 0.006296382311881121,
+          "rms_error": 0.00047030476059796,
+          "reference_rms": 0.11139974819241279,
+          "cosine": 0.999992560581872
+        }
+      }
+    }
+  ],
+  "code_sha256": {
+    "tools/qwen3_tts_checkpoint_acceptance.py": "798da5f4cbb9da810b5d520b0f9542ef652739a5023d50c255d45cc41df2e8e8",
+    "tests/qwen3_tts_talker_reference.py": "6b639517ecf4a614e0fe2053627f1b816838516c04dc3300c93f02e2fc8ede3a",
+    "tests/qwen3_tts_talker_bf16_reference.py": "e88fc6df2828ecf0e85670c42b48f3b192c759ff74194a2b678bad94ea097de9",
+    "opentpu/llm/qwen3_tts_talker.py": "6880a4ccc43702d64842f0fa5bc948421a1792982240f19f2c3883c0780b145d",
+    "opentpu/kernels/tts_talker.py": "8144f9bcb08e3f6984fefce4afb5a37fdd8138487ac9b4c1497156b0f73e4ec1"
+  },
+  "torch": "2.14.1+cpu",
+  "diagnostic_numerical_threshold_passed": true,
+  "positions_file_sha256": "47bb495c1b6ba3d44f7270f70812886ac682cf0e338c4fecf4ea387b80d6913f"
+}
