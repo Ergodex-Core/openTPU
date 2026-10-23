@@ -61,6 +61,12 @@ class ExactMX:
         projected = F.add(self.linear(self.silu(a), p + "linear_fc2.weight"), w[p + "linear_fc2.bias"])
         x = projected if input_kind == "role" else F.add(projected, w["talker.model.codec_embedding.weight"][codec_id])
         result = {"projected": projected.reshape(-1), "assembled": x.reshape(-1), "layers": []}
+        return self.hidden_step(x, result)
+
+    def hidden_step(self, x, result=None):
+        s, w, d = self.spec, self.weights, self.spec.head_dim
+        x = np.asarray(x, np.float32).reshape(1, -1)
+        result = result or {"assembled": x.reshape(-1).copy(), "layers": []}
         position = len(self.keys[0])
         inv = np.float32(1) / np.power(np.float32(s.theta), np.arange(0, d, 2, dtype=np.float32) / d)
         angle = np.float32(position) * inv

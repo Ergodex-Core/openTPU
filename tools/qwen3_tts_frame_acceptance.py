@@ -12,6 +12,7 @@ sys.path[:0] = [str(ROOT), str(ROOT / 'tests')]
 from opentpu.llm.qwen3_tts_shared import shared_tts_config, profile_metadata
 from opentpu.llm.qwen3_tts_talker import TalkerSpec
 from opentpu.llm.qwen3_tts_frame import CodecFrameImage, CodecFrameISASession, check_predictor_config
+from opentpu.llm.qwen3_tts_predictor_precision import PredictorPrecisionImage
 from opentpu.llm.qwen3_tts_prompt import custom_voice_prefill
 from tools.qwen3_tts_checkpoint_acceptance import BF16Checkpoint, metrics, sha256
 from tools.qwen3_tts_stack_acceptance import selection
@@ -20,7 +21,8 @@ from qwen3_tts_frame_reference import FrameReference
 
 def source_hashes():
     paths = [Path(__file__).resolve(), ROOT/'opentpu/llm/qwen3_tts_frame.py', ROOT/'opentpu/kernels/tts_frame.py',
-             ROOT/'tests/qwen3_tts_frame_reference.py', ROOT/'tests/qwen3_tts_stack_reference.py']
+             ROOT/'tests/qwen3_tts_frame_reference.py', ROOT/'tests/qwen3_tts_stack_reference.py',
+             ROOT/'opentpu/llm/qwen3_tts_predictor_precision.py', ROOT/'opentpu/kernels/tts_predictor_precision.py']
     return {str(p.relative_to(ROOT)):sha256(p) for p in paths}
 
 
@@ -31,7 +33,8 @@ def run(a):
     fixture = json.loads((ROOT / 'tests/fixtures/qwen3_tts_prompts.json').read_text())
     check_predictor_config(config)
     reader = BF16Checkpoint(a.checkpoint, json.loads(a.manifest.read_text()))
-    image = CodecFrameImage(TalkerSpec.from_config(config), shared_tts_config())
+    image_type = PredictorPrecisionImage if a.predictor_precision else CodecFrameImage
+    image = image_type(TalkerSpec.from_config(config), shared_tts_config())
     weights = {k: reader.tensor(k, shape) for k, (_, _, shape) in image.parameters.items()}
     packed = image.build(weights, max_bytes=2 << 30)
     session = CodecFrameISASession(image, packed)
@@ -139,7 +142,9 @@ def run(a):
                   runtime_revision='30100afb075374381601a6e01d9f914a58dbec91',
                   input_contract='Official non_streaming CustomVoice prompt; generated codec frames, no waveform/audio-quality claim',
                   generation=dict(do_sample=False, subtalker_dosample=False, repetition_penalty=1.0, min_new_tokens=2),
-                  precision='INT8 matrices/activations/KV; FP32 embeddings, reductions, residuals, norms, RoPE',
+                  precision=('Talker INT8; predictor residual-corrected INT8 matrices/activations and FP32 KV/attention; FP32 embeddings/norms/residuals/RoPE'
+                             if a.predictor_precision else 'INT8 matrices/activations/KV; FP32 embeddings, reductions, residuals, norms, RoPE'),
+                  predictor_precision_experiment=a.predictor_precision,
                   summary=summary, frames=frames, reset_poison_replay=replay, accepted=accepted,
                   thresholds=dict(logit_relative_l2=max_error, generated_greedy_agreement=1.0),
                   device_dram_bytes=image.nbytes, seconds=time.monotonic() - started,
@@ -159,6 +164,7 @@ if __name__ == '__main__':
     p.add_argument('--manifest', type=Path, required=True)
     p.add_argument('--output', type=Path, required=True)
     p.add_argument('--frames', type=int, default=3)
+    p.add_argument('--predictor-precision', action='store_true')
     args = p.parse_args()
     if not 2 <= args.frames <= 4:
         p.error('bounded multi-frame validation requires 2..4 frames')
