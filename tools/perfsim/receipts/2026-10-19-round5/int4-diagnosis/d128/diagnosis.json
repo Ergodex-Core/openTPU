@@ -1,0 +1,36 @@
+{
+  "D": 128,
+  "diagnosis": "lossy int4 quantization exceeds the original float-model suitability gate; no simulator/packing/RTL arithmetic divergence in these programs",
+  "dropped_groups": 0,
+  "first_representation_divergence": {
+    "expected": "lossy int4 representation; original float reference intentionally retained",
+    "original_float": 0.0012643238296732306,
+    "packed_dequantized": 0.0,
+    "stage": "compiled weight quantization before execution",
+    "weight_index": [
+      0,
+      0
+    ]
+  },
+  "independent_activation_matches_ISA": true,
+  "independent_packed_arithmetic_bit_exact_ISA": true,
+  "independent_packed_arithmetic_bit_exact_RTL": true,
+  "original_float_gate_passed": false,
+  "original_float_relative_l2": 0.07946628603309096,
+  "scope": "two seeded operator cases only; does not establish full-model int4 quality",
+  "stages": {
+    "activation_and_weight_dequantized_dot": {
+      "relative_l2_vs_original_float": 0.07946627796077588,
+      "relative_l2_vs_rtl": 4.471411733409408e-08
+    },
+    "independent_integer_window_and_f32_epilogue": {
+      "relative_l2_vs_original_float": 0.07946628603309096,
+      "relative_l2_vs_rtl": 0.0
+    },
+    "weight_only_dequantized_dot": {
+      "relative_l2_vs_original_float": 0.0792152832311216,
+      "relative_l2_vs_rtl": 0.003188528383657105
+    }
+  },
+  "weight_relative_l2": 0.0915435154407698
+}

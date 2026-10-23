@@ -1,0 +1,41 @@
+{
+  "binary_sha256": "3d9f8c05c5f0b41b3c2aaee4c7a90c08a18108bca8089639e5bc79805bab47b0",
+  "build_receipt_sha256": "fdc0e748ac0338bc738dec00694cbcea3239adba34bfd80cdb56158c143dda66",
+  "command": [
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/build/verilator/tb_top_3a5911cfe166/Vtb_top",
+    "+dir=/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/build/perfsim/gated-compute-rtl",
+    "+max_cycles=2000000",
+    "+trace"
+  ],
+  "cycles": 107,
+  "label": "measured-verilator",
+  "memory_conditions_match": true,
+  "parameters": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 4,
+    "AXI": 0,
+    "D": 32,
+    "DRAM_LAT": 8,
+    "DRAM_WORDS": 262144,
+    "FIFO_DEPTH": 1024,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "MXU_IMPL": 2,
+    "RPB": 32,
+    "S": 1,
+    "TMEM_WORDS": 8192,
+    "WIN": 16,
+    "WPB": 1
+  },
+  "predicted_cycles": 77,
+  "prediction_label": "opentpu-perfsim-estimate",
+  "rtl_bit_exact_vs_isa": true,
+  "schema_version": 1,
+  "simulator_bit_exact_vs_isa": true,
+  "source_freshness": "binary built locally during this implementation; reused with parameter check, no fresh complete RTL fingerprint",
+  "timing_error_percent": -28.037383177570096,
+  "timing_gate_passed": false,
+  "timing_gate_percent": 5.0,
+  "timing_status": "same program, idle external memory"
+}

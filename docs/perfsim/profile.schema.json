@@ -1,0 +1,178 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenTPU performance simulation profile",
+  "type": "object",
+  "required": [
+    "schema_version",
+    "name",
+    "memory"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": 1
+    },
+    "name": {
+      "type": "string"
+    },
+    "description": {
+      "type": "string"
+    },
+    "architecture": {
+      "type": "object",
+      "properties": {
+        "core_period_ps": {
+          "type": "integer",
+          "default": 5000
+        },
+        "window": {
+          "type": "integer",
+          "default": 16
+        },
+        "mxu_queue": {
+          "type": "integer",
+          "default": 2
+        },
+        "mxu_fifo_chunks": {
+          "type": "integer",
+          "default": 1024
+        },
+        "mxu_result_rows": {
+          "type": "integer",
+          "default": 32
+        },
+        "mxu_chain": {
+          "type": "integer",
+          "default": 16
+        },
+        "mxu_epilogue_lanes": {
+          "type": "integer",
+          "default": 0
+        },
+        "vpu_slots": {
+          "type": "integer",
+          "default": 10
+        },
+        "vpu_composite_lanes": {
+          "type": "integer",
+          "default": 0
+        },
+        "result_queue": {
+          "type": "integer",
+          "default": 128
+        },
+        "tmem_read_ports_per_bank": {
+          "type": "integer",
+          "default": 32
+        },
+        "tmem_write_ports_per_bank": {
+          "type": "integer",
+          "default": 1
+        },
+        "quant_row_buffer_chunks": {
+          "type": "integer",
+          "default": 1024
+        },
+        "issue_period": {
+          "type": "integer",
+          "default": 1
+        },
+        "dispatch_latency": {
+          "type": "integer",
+          "default": 1
+        },
+        "tmem_read_latency": {
+          "type": "integer",
+          "default": 2
+        },
+        "max_cycles": {
+          "type": "integer",
+          "default": 10000000
+        },
+        "dma_buffer_chunks": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 128
+        },
+        "dma_store_run": {
+          "type": "integer",
+          "minimum": 1,
+          "default": 32
+        },
+        "tmem_impl": {
+          "type": "integer",
+          "const": 0,
+          "description": "Pinned replicated TMEM baseline; pumped/banked variants are rejected."
+        }
+      },
+      "additionalProperties": false
+    },
+    "memory": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "string",
+          "default": "simple",
+          "enum": [
+            "simple",
+            "ramulator",
+            "rtl_fixed"
+          ]
+        },
+        "controller_period_ps": {
+          "type": "integer",
+          "default": 1000
+        },
+        "memory_period_ps": {
+          "type": "integer",
+          "default": 1000
+        },
+        "transaction_bytes": {
+          "type": "integer",
+          "default": 16
+        },
+        "outstanding": {
+          "type": "integer",
+          "default": 64
+        },
+        "ingress_per_controller_tick": {
+          "type": "integer",
+          "default": 1
+        },
+        "simple_latency_ticks": {
+          "type": "integer",
+          "default": 20
+        },
+        "simple_channels": {
+          "type": "integer",
+          "default": 8
+        },
+        "simple_queue_per_channel": {
+          "type": "integer",
+          "default": 32
+        },
+        "bridge": {
+          "type": "string",
+          "default": ""
+        },
+        "ramulator_config": {
+          "type": "string",
+          "default": ""
+        },
+        "rmw": {
+          "type": "boolean",
+          "default": true
+        },
+        "record_trace": {
+          "type": "boolean",
+          "default": false
+        },
+        "native_ports": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 1000,
+    "memory": 1000
+  },
+  "model_host_wall_seconds": 0.6469421660003718,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.6653205698404625e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.6653205698404625e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 80257,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 344,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 521,
+      "pc": 1,
+      "start": 343
+    },
+    {
+      "dispatch": 7,
+      "end": 555,
+      "pc": 2,
+      "start": 520
+    },
+    {
+      "dispatch": 8,
+      "end": 80088,
+      "pc": 3,
+      "start": 554
+    },
+    {
+      "dispatch": 9,
+      "end": 80255,
+      "pc": 4,
+      "start": 80088
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 80257,
+  "rtl_host_wall_seconds": 1.885032999998657,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 344,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 521,
+      "id": 1,
+      "pc": 1,
+      "start": 343
+    },
+    {
+      "dispatch": 7,
+      "end": 555,
+      "id": 2,
+      "pc": 2,
+      "start": 520
+    },
+    {
+      "dispatch": 8,
+      "end": 80088,
+      "id": 3,
+      "pc": 3,
+      "start": 554
+    },
+    {
+      "dispatch": 9,
+      "end": 80255,
+      "id": 4,
+      "pc": 4,
+      "start": 80088
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

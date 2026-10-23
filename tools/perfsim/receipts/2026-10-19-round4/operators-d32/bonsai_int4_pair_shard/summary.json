@@ -1,0 +1,90 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.99833668220134,
+        "passed": false,
+        "relative_l2": 0.057727200854166834
+      },
+      "rtl": {
+        "cosine": 0.99833668220134,
+        "passed": false,
+        "relative_l2": 0.057727200854166834
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 2945,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 274,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 840,
+      "pc": 1,
+      "start": 275
+    },
+    {
+      "dispatch": 7,
+      "end": 2917,
+      "pc": 2,
+      "start": 8
+    },
+    {
+      "dispatch": 8,
+      "end": 2943,
+      "pc": 3,
+      "start": 2918
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 2945,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 274,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 840,
+      "id": 1,
+      "pc": 1,
+      "start": 275
+    },
+    {
+      "dispatch": 7,
+      "end": 2917,
+      "id": 2,
+      "pc": 2,
+      "start": 8
+    },
+    {
+      "dispatch": 8,
+      "end": 2943,
+      "id": 3,
+      "pc": 3,
+      "start": 2918
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

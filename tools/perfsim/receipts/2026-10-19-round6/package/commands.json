@@ -1,0 +1,37 @@
+[
+  [
+    "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/hybrid_example.py",
+    "--out",
+    "/private/tmp/opentpu-r6-packaged-baseline/bundles",
+    "--waitc",
+    "--chunk-prefill",
+    "--stream"
+  ],
+  [
+    "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/compare_persistent.py",
+    "--bundles",
+    "/private/tmp/opentpu-r6-packaged-baseline/bundles",
+    "--profile",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/native-hbm2-200mhz.json",
+    "--bridge",
+    "/private/tmp/opentpu-bridge-v5-final/libopentpu_ramulator.dylib",
+    "--executable",
+    "/private/tmp/opentpu-rtl-hybrid-persistent/obj/Vtb_perfsim",
+    "--out",
+    "/private/tmp/opentpu-r6-packaged-baseline/rtl-check"
+  ],
+  [
+    "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/sequence.py",
+    "--bundles",
+    "/private/tmp/opentpu-r6-packaged-baseline/bundles",
+    "--profile",
+    "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/native-hbm2-200mhz.json",
+    "--bridge",
+    "/private/tmp/opentpu-bridge-v5-final/libopentpu_ramulator.dylib",
+    "--out",
+    "/private/tmp/opentpu-r6-packaged-baseline/metrics"
+  ]
+]

@@ -1,0 +1,30 @@
+[
+  {
+    "name": "e2-dstep",
+    "relative_summary": "e2-dstep/summary.json"
+  },
+  {
+    "name": "e2-stream",
+    "relative_summary": "e2-stream/summary.json"
+  },
+  {
+    "name": "e4-dstep",
+    "relative_summary": "e4-dstep/summary.json"
+  },
+  {
+    "name": "e4-stream",
+    "relative_summary": "e4-stream/summary.json"
+  },
+  {
+    "name": "epilogue-e2",
+    "relative_summary": "epilogue-e2/summary.json"
+  },
+  {
+    "name": "epilogue-e4",
+    "relative_summary": "epilogue-e4/summary.json"
+  },
+  {
+    "name": "packaging-smoke-e2-stream",
+    "relative_summary": "package/rtl-check/summary.json"
+  }
+]

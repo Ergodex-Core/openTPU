@@ -1,0 +1,533 @@
+{
+  "backend": "ramulator",
+  "statistics": {
+    "peak_outstanding": 8,
+    "logical_read_bytes": 224,
+    "read_transactions": 14,
+    "read_bytes": 224,
+    "logical_write_bytes": 128,
+    "write_transactions": 8,
+    "write_bytes": 128
+  },
+  "transactions": [
+    {
+      "event": "accept",
+      "id": 0,
+      "time_ps": 496000,
+      "owner": 0,
+      "address": 0,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 1,
+      "time_ps": 497000,
+      "owner": 0,
+      "address": 16,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 2,
+      "time_ps": 501000,
+      "owner": 0,
+      "address": 32,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 3,
+      "time_ps": 502000,
+      "owner": 0,
+      "address": 48,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 4,
+      "time_ps": 506000,
+      "owner": 0,
+      "address": 64,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 5,
+      "time_ps": 507000,
+      "owner": 0,
+      "address": 80,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 6,
+      "time_ps": 511000,
+      "owner": 0,
+      "address": 96,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 7,
+      "time_ps": 512000,
+      "owner": 0,
+      "address": 112,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 0,
+      "time_ps": 515000,
+      "owner": 0,
+      "address": 0,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 1,
+      "time_ps": 516000,
+      "owner": 0,
+      "address": 16,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 8,
+      "time_ps": 516000,
+      "owner": 0,
+      "address": 128,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 9,
+      "time_ps": 517000,
+      "owner": 0,
+      "address": 144,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 2,
+      "time_ps": 520000,
+      "owner": 0,
+      "address": 32,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 3,
+      "time_ps": 521000,
+      "owner": 0,
+      "address": 48,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 10,
+      "time_ps": 521000,
+      "owner": 0,
+      "address": 160,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 11,
+      "time_ps": 522000,
+      "owner": 0,
+      "address": 176,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 4,
+      "time_ps": 525000,
+      "owner": 0,
+      "address": 64,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 5,
+      "time_ps": 526000,
+      "owner": 0,
+      "address": 80,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 12,
+      "time_ps": 526000,
+      "owner": 0,
+      "address": 192,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 13,
+      "time_ps": 527000,
+      "owner": 0,
+      "address": 208,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 8,
+      "time_ps": 528000,
+      "owner": 0,
+      "address": 128,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 9,
+      "time_ps": 529000,
+      "owner": 0,
+      "address": 144,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 6,
+      "time_ps": 530000,
+      "owner": 0,
+      "address": 96,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 7,
+      "time_ps": 531000,
+      "owner": 0,
+      "address": 112,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 10,
+      "time_ps": 533000,
+      "owner": 0,
+      "address": 160,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 11,
+      "time_ps": 534000,
+      "owner": 0,
+      "address": 176,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 12,
+      "time_ps": 538000,
+      "owner": 0,
+      "address": 192,
+      "write": false
+    },
+    {
+      "event": "complete",
+      "id": 13,
+      "time_ps": 539000,
+      "owner": 0,
+      "address": 208,
+      "write": false
+    },
+    {
+      "event": "accept",
+      "id": 14,
+      "time_ps": 631000,
+      "owner": 0,
+      "address": 512,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 15,
+      "time_ps": 632000,
+      "owner": 0,
+      "address": 528,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 16,
+      "time_ps": 636000,
+      "owner": 0,
+      "address": 544,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 17,
+      "time_ps": 637000,
+      "owner": 0,
+      "address": 560,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 14,
+      "time_ps": 638000,
+      "owner": 0,
+      "address": 512,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 15,
+      "time_ps": 639000,
+      "owner": 0,
+      "address": 528,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 18,
+      "time_ps": 641000,
+      "owner": 0,
+      "address": 576,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 19,
+      "time_ps": 642000,
+      "owner": 0,
+      "address": 592,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 16,
+      "time_ps": 643000,
+      "owner": 0,
+      "address": 544,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 17,
+      "time_ps": 644000,
+      "owner": 0,
+      "address": 560,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 20,
+      "time_ps": 646000,
+      "owner": 0,
+      "address": 608,
+      "write": true
+    },
+    {
+      "event": "accept",
+      "id": 21,
+      "time_ps": 647000,
+      "owner": 0,
+      "address": 624,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 18,
+      "time_ps": 648000,
+      "owner": 0,
+      "address": 576,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 19,
+      "time_ps": 649000,
+      "owner": 0,
+      "address": 592,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 20,
+      "time_ps": 653000,
+      "owner": 0,
+      "address": 608,
+      "write": true
+    },
+    {
+      "event": "complete",
+      "id": 21,
+      "time_ps": 654000,
+      "owner": 0,
+      "address": 624,
+      "write": true
+    }
+  ],
+  "ports": [
+    {
+      "cycle": 99,
+      "event": "port_accept",
+      "port": "B",
+      "id": 0,
+      "address": 0,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 100,
+      "event": "port_accept",
+      "port": "B",
+      "id": 1,
+      "address": 32,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 101,
+      "event": "port_accept",
+      "port": "B",
+      "id": 2,
+      "address": 64,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 102,
+      "event": "port_accept",
+      "port": "B",
+      "id": 3,
+      "address": 96,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 103,
+      "event": "port_accept",
+      "port": "B",
+      "id": 4,
+      "address": 128,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 104,
+      "event": "port_accept",
+      "port": "B",
+      "id": 5,
+      "address": 160,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 104,
+      "event": "port_complete",
+      "port": "B",
+      "id": 0
+    },
+    {
+      "cycle": 105,
+      "event": "port_accept",
+      "port": "B",
+      "id": 6,
+      "address": 192,
+      "size": 32,
+      "write": false
+    },
+    {
+      "cycle": 105,
+      "event": "port_complete",
+      "port": "B",
+      "id": 1
+    },
+    {
+      "cycle": 106,
+      "event": "port_complete",
+      "port": "B",
+      "id": 2
+    },
+    {
+      "cycle": 107,
+      "event": "port_complete",
+      "port": "B",
+      "id": 3
+    },
+    {
+      "cycle": 108,
+      "event": "port_complete",
+      "port": "B",
+      "id": 4
+    },
+    {
+      "cycle": 109,
+      "event": "port_complete",
+      "port": "B",
+      "id": 5
+    },
+    {
+      "cycle": 110,
+      "event": "port_complete",
+      "port": "B",
+      "id": 6
+    },
+    {
+      "cycle": 126,
+      "event": "port_accept",
+      "port": "B",
+      "id": 7,
+      "address": 512,
+      "size": 32,
+      "write": true
+    },
+    {
+      "cycle": 127,
+      "event": "port_accept",
+      "port": "B",
+      "id": 8,
+      "address": 544,
+      "size": 32,
+      "write": true
+    },
+    {
+      "cycle": 128,
+      "event": "port_accept",
+      "port": "B",
+      "id": 9,
+      "address": 576,
+      "size": 32,
+      "write": true
+    },
+    {
+      "cycle": 128,
+      "event": "port_complete",
+      "port": "B",
+      "id": 7
+    },
+    {
+      "cycle": 129,
+      "event": "port_accept",
+      "port": "B",
+      "id": 10,
+      "address": 608,
+      "size": 32,
+      "write": true
+    },
+    {
+      "cycle": 129,
+      "event": "port_complete",
+      "port": "B",
+      "id": 8
+    },
+    {
+      "cycle": 130,
+      "event": "port_complete",
+      "port": "B",
+      "id": 9
+    },
+    {
+      "cycle": 131,
+      "event": "port_complete",
+      "port": "B",
+      "id": 10
+    }
+  ]
+}

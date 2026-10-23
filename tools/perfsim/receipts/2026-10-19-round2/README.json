@@ -1,0 +1,13 @@
+{
+  "status": "partial validation; exact compiled-model trace gate failed",
+  "exact_cycles_and_traces": 76,
+  "case_count": 79,
+  "numeric_passed": true,
+  "original_failure_preserved": "../2026-10-19/rtl-compute",
+  "rtl_source_revision": "3c542bd9cb98f11499729ea52703788f4588e4d2",
+  "rtl_source_freshness": "cached executable, parameters and binary/build receipt hashes checked; no claim of a fresh RTL build",
+  "reproduction": "python tools/perfsim/examples.py --out build/perfsim/bundles; python tools/perfsim/timing_suite.py --executable /path/to/Vtb_top --config-bundle build/perfsim/bundles/compute --out /tmp/new-timing --memory rtl_fixed --compiled",
+  "kernel_initial_image": "np.arange(1024,dtype=np.float32).view(np.uint8), zero-padded by Machine; compiled images from examples.py",
+  "ramulator_build": "python tools/perfsim/build_ramulator.py --source /tmp/opentpu-ramulator-v2 --build /tmp/opentpu-bridge-v2 --jobs 4",
+  "ramulator_build_note": "Offline pinned checkouts, nonsynced /tmp source and build. Both clean build and repeat incremental build succeeded; library hash in dependency-build.json. No system install."
+}

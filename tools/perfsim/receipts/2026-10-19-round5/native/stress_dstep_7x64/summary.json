@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 1000,
+    "memory": 1000
+  },
+  "model_host_wall_seconds": 0.007997167005669326,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.619802018270932e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999993,
+        "passed": true,
+        "relative_l2": 3.619802018270932e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 721,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 104,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 138,
+      "pc": 1,
+      "start": 103
+    },
+    {
+      "dispatch": 7,
+      "end": 172,
+      "pc": 2,
+      "start": 137
+    },
+    {
+      "dispatch": 8,
+      "end": 689,
+      "pc": 3,
+      "start": 171
+    },
+    {
+      "dispatch": 9,
+      "end": 719,
+      "pc": 4,
+      "start": 689
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 721,
+  "rtl_host_wall_seconds": 0.12088666702038608,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 104,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 138,
+      "id": 1,
+      "pc": 1,
+      "start": 103
+    },
+    {
+      "dispatch": 7,
+      "end": 172,
+      "id": 2,
+      "pc": 2,
+      "start": 137
+    },
+    {
+      "dispatch": 8,
+      "end": 689,
+      "id": 3,
+      "pc": 3,
+      "start": 171
+    },
+    {
+      "dispatch": 9,
+      "end": 719,
+      "id": 4,
+      "pc": 4,
+      "start": 689
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

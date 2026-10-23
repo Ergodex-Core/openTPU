@@ -1,0 +1,20 @@
+[
+  "dstep_1x64",
+  "dstep_1x64_zero",
+  "stream_1x64",
+  "dstep_7x64",
+  "dstep_7x64_zero",
+  "stream_7x64",
+  "dstep_3x192",
+  "dstep_3x192_zero",
+  "stream_3x192",
+  "dstep_32x256",
+  "dstep_32x256_zero",
+  "stream_32x256",
+  "dstep_128x128",
+  "dstep_128x128_zero",
+  "stream_128x128",
+  "dstep_256x256",
+  "dstep_256x256_zero",
+  "stream_256x256"
+]

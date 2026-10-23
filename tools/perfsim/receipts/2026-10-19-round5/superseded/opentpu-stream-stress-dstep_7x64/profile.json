@@ -1,0 +1,19 @@
+{
+  "architecture": {
+    "core_period_ps": 1000
+  },
+  "description": "Shared native A/B/SW port controller profile for independent RTL and simulator comparison; core clock is assumed, not achieved Fmax.",
+  "memory": {
+    "backend": "ramulator",
+    "bridge": "/private/tmp/opentpu-bridge-v5-native/libopentpu_ramulator.dylib",
+    "controller_period_ps": 1000,
+    "memory_period_ps": 1000,
+    "native_ports": true,
+    "outstanding": 8,
+    "ramulator_config": "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/hbm2.yaml",
+    "record_trace": true,
+    "transaction_bytes": 16
+  },
+  "name": "native-hbm2-stress-1ghz",
+  "schema_version": 1
+}

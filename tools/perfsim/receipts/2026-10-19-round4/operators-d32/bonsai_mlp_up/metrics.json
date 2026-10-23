@@ -1,0 +1,264 @@
+{
+  "architecture": {
+    "core_period_ps": 5000,
+    "dispatch_latency": 1,
+    "dma_buffer_chunks": 128,
+    "dma_store_run": 32,
+    "issue_period": 1,
+    "max_cycles": 10000000,
+    "mxu_chain": 16,
+    "mxu_epilogue_lanes": 0,
+    "mxu_fifo_chunks": 1024,
+    "mxu_queue": 2,
+    "mxu_result_rows": 32,
+    "quant_row_buffer_chunks": 1024,
+    "result_queue": 128,
+    "tmem_read_latency": 2,
+    "tmem_read_ports_per_bank": 32,
+    "tmem_write_ports_per_bank": 1,
+    "vpu_composite_lanes": 0,
+    "vpu_slots": 10,
+    "window": 16
+  },
+  "backend": "ramulator",
+  "boundaries": {
+    "conditional_tokens_per_second": null,
+    "decode_seconds": null,
+    "end": "HALT and all write completions drained",
+    "prefill_seconds": null,
+    "start": "core run, program resident; no host upload",
+    "ttft_seconds": null
+  },
+  "config": {
+    "ACT_BLOCKS": 256,
+    "ACT_ROWS": 0,
+    "D": 32,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "core_frequency_hz": 200000000.0,
+  "cycles": 4993,
+  "frontend_stalls": {},
+  "host_wall_seconds": 0.19993800000520423,
+  "instructions": [
+    {
+      "cycles": 269,
+      "dispatch": 5,
+      "end": 274,
+      "id": 1,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 8192,
+        "read_transactions": 512
+      },
+      "opcode": "LD",
+      "pc": 0,
+      "release": 6,
+      "stalls": {
+        "dma_read_response": 9,
+        "pipeline_latency": 2
+      },
+      "start": 6,
+      "unit": 0,
+      "work": {
+        "lane_issues": 256,
+        "tmem_reads": 0,
+        "tmem_writes": 2048
+      }
+    },
+    {
+      "cycles": 834,
+      "dispatch": 6,
+      "end": 840,
+      "id": 2,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 1,
+      "release": 275,
+      "stalls": {
+        "dependency": 268,
+        "pipeline_latency": 12,
+        "quant_scale_pipeline": 299
+      },
+      "start": 275,
+      "unit": 2,
+      "work": {
+        "lane_issues": 256,
+        "packed_activation_bytes": 2048,
+        "tmem_reads": 2048,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 4958,
+      "dispatch": 7,
+      "end": 4965,
+      "id": 3,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 262144,
+        "read_transactions": 16384
+      },
+      "opcode": "MM",
+      "pc": 2,
+      "release": 841,
+      "stalls": {
+        "activation_dependency": 833,
+        "memory_backpressure": 561,
+        "mxu_array_fill": 4883,
+        "mxu_epilogue_drain": 8,
+        "pipeline_latency": 7
+      },
+      "start": 8,
+      "unit": 1,
+      "work": {
+        "lane_issues": 64,
+        "macs": 131072,
+        "mxu_advances": 4096,
+        "tmem_reads": 0,
+        "tmem_writes": 64
+      }
+    },
+    {
+      "cycles": 4983,
+      "dispatch": 8,
+      "end": 4991,
+      "id": 4,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 256,
+        "write_transactions": 16
+      },
+      "opcode": "ST",
+      "pc": 3,
+      "release": 4966,
+      "stalls": {
+        "dependency": 4693,
+        "dma_store_gather": 12,
+        "memory_completion": 2,
+        "pipeline_latency": 5,
+        "unit_queue": 264
+      },
+      "start": 4966,
+      "unit": 0,
+      "work": {
+        "lane_issues": 8,
+        "tmem_reads": 64,
+        "tmem_writes": 0
+      }
+    }
+  ],
+  "label": "opentpu-perfsim-estimate",
+  "layers": {
+    "LD": {
+      "first_dispatch": 5,
+      "instructions": 1,
+      "last_completion": 274,
+      "memory": {
+        "read_bytes": 8192,
+        "read_transactions": 512
+      },
+      "span_cycles": 270,
+      "stalls": {
+        "dma_read_response": 9,
+        "pipeline_latency": 2
+      }
+    },
+    "MM": {
+      "first_dispatch": 7,
+      "instructions": 1,
+      "last_completion": 4965,
+      "memory": {
+        "read_bytes": 262144,
+        "read_transactions": 16384
+      },
+      "span_cycles": 4959,
+      "stalls": {
+        "activation_dependency": 833,
+        "memory_backpressure": 561,
+        "mxu_array_fill": 4883,
+        "mxu_epilogue_drain": 8,
+        "pipeline_latency": 7
+      }
+    },
+    "QACT": {
+      "first_dispatch": 6,
+      "instructions": 1,
+      "last_completion": 840,
+      "memory": {},
+      "span_cycles": 835,
+      "stalls": {
+        "dependency": 268,
+        "pipeline_latency": 12,
+        "quant_scale_pipeline": 299
+      }
+    },
+    "ST": {
+      "first_dispatch": 8,
+      "instructions": 1,
+      "last_completion": 4991,
+      "memory": {
+        "write_bytes": 256,
+        "write_transactions": 16
+      },
+      "span_cycles": 4984,
+      "stalls": {
+        "dependency": 4693,
+        "dma_store_gather": 12,
+        "memory_completion": 2,
+        "pipeline_latency": 5,
+        "unit_queue": 264
+      }
+    }
+  },
+  "memory": {
+    "logical_read_bytes": 270336,
+    "logical_write_bytes": 256,
+    "peak_outstanding": 64,
+    "read_bytes": 270336,
+    "read_transactions": 16896,
+    "write_bytes": 256,
+    "write_transactions": 16
+  },
+  "memory_config": {
+    "backend": "ramulator",
+    "bridge": "/private/tmp/opentpu-bridge-v2/libopentpu_ramulator.dylib",
+    "controller_period_ps": 1000,
+    "ingress_per_controller_tick": 1,
+    "memory_period_ps": 1000,
+    "native_ports": true,
+    "outstanding": 64,
+    "ramulator_config": "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/hbm2.yaml",
+    "record_trace": true,
+    "rmw": true,
+    "simple_channels": 8,
+    "simple_latency_ticks": 20,
+    "simple_queue_per_channel": 32,
+    "transaction_bytes": 16
+  },
+  "mxu_advance_fraction": 0.8203484878830363,
+  "schema_version": 1,
+  "seconds": 2.4965e-05,
+  "timing_validation": "unvalidated",
+  "unit_busy_fraction": {
+    "0": 0.05868215501702383,
+    "1": 0.9927899058682155,
+    "2": 0.11315842179050671,
+    "3": 0.0,
+    "4": 0.0
+  },
+  "useful_mac_fraction": 0.20508712197075907
+}

@@ -1,0 +1,3017 @@
+{
+  "native-before-scale-alignment": {
+    "status": "failed diagnostic, superseded; not current performance result",
+    "sha256": "114c606431ecf0862c9858db9d14d92cb6027108550cabd6364f1bb5c6e9ab4e",
+    "result": {
+      "backend": "ramulator",
+      "clocks_ps": {
+        "controller": 1000,
+        "core": 5000,
+        "memory": 1000
+      },
+      "native_ports": true,
+      "numerical": {
+        "independent_float_reference": null,
+        "model_vs_isa_bit_exact": true,
+        "rtl_vs_isa_bit_exact": false
+      },
+      "physical_traffic_match": false,
+      "predicted_cycles": 228,
+      "predicted_trace": [
+        {
+          "dispatch": 5,
+          "end": 42,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 130,
+          "pc": 1,
+          "start": 43
+        },
+        {
+          "dispatch": 7,
+          "end": 198,
+          "pc": 2,
+          "start": 8
+        },
+        {
+          "dispatch": 8,
+          "end": 226,
+          "pc": 3,
+          "start": 199
+        }
+      ],
+      "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+      "rtl_cycles": 228,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 42,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 130,
+          "id": 1,
+          "pc": 1,
+          "start": 43
+        },
+        {
+          "dispatch": 7,
+          "end": 198,
+          "id": 2,
+          "pc": 2,
+          "start": 8
+        },
+        {
+          "dispatch": 8,
+          "end": 226,
+          "id": 3,
+          "pc": 3,
+          "start": 199
+        }
+      ],
+      "same_backend_configuration": true,
+      "timing_passed": true,
+      "trace_match": true,
+      "traffic_multiset_match": false
+    }
+  },
+  "vpu-before-dma-register": {
+    "status": "failed diagnostic, superseded; not current performance result",
+    "sha256": "3b36db4d472f0b66c01209797eb035493d24e6c1a1ff794487e848fe39ae2e97",
+    "result": {
+      "backend": "ramulator",
+      "clocks_ps": {
+        "controller": 1000,
+        "core": 5000,
+        "memory": 1000
+      },
+      "native_ports": true,
+      "numerical": {
+        "independent_float_reference": {
+          "model": {
+            "cosine": 0.99979730527387,
+            "passed": true,
+            "relative_l2": 0.020373155088889424
+          },
+          "rtl": {
+            "cosine": 0.99979730527387,
+            "passed": true,
+            "relative_l2": 0.020373155088889424
+          }
+        },
+        "model_vs_isa_bit_exact": true,
+        "rtl_vs_isa_bit_exact": true
+      },
+      "physical_traffic_match": true,
+      "predicted_cycles": 5746,
+      "predicted_trace": [
+        {
+          "dispatch": 6,
+          "end": 27,
+          "pc": 1,
+          "start": 7
+        },
+        {
+          "dispatch": 7,
+          "end": 40,
+          "pc": 2,
+          "start": 26
+        },
+        {
+          "dispatch": 8,
+          "end": 53,
+          "pc": 3,
+          "start": 39
+        },
+        {
+          "dispatch": 11,
+          "end": 72,
+          "pc": 5,
+          "start": 52
+        },
+        {
+          "dispatch": 12,
+          "end": 78,
+          "pc": 6,
+          "start": 28
+        },
+        {
+          "dispatch": 13,
+          "end": 94,
+          "pc": 7,
+          "start": 79
+        },
+        {
+          "dispatch": 14,
+          "end": 110,
+          "pc": 8,
+          "start": 95
+        },
+        {
+          "dispatch": 15,
+          "end": 219,
+          "pc": 9,
+          "start": 111
+        },
+        {
+          "dispatch": 16,
+          "end": 289,
+          "pc": 10,
+          "start": 220
+        },
+        {
+          "dispatch": 17,
+          "end": 382,
+          "pc": 11,
+          "start": 18
+        },
+        {
+          "dispatch": 18,
+          "end": 447,
+          "pc": 12,
+          "start": 105
+        },
+        {
+          "dispatch": 19,
+          "end": 87,
+          "pc": 13,
+          "start": 71
+        },
+        {
+          "dispatch": 20,
+          "end": 102,
+          "pc": 14,
+          "start": 86
+        },
+        {
+          "dispatch": 21,
+          "end": 576,
+          "pc": 15,
+          "start": 382
+        },
+        {
+          "dispatch": 22,
+          "end": 433,
+          "pc": 16,
+          "start": 383
+        },
+        {
+          "dispatch": 23,
+          "end": 449,
+          "pc": 17,
+          "start": 434
+        },
+        {
+          "dispatch": 28,
+          "end": 465,
+          "pc": 18,
+          "start": 450
+        },
+        {
+          "dispatch": 41,
+          "end": 574,
+          "pc": 19,
+          "start": 466
+        },
+        {
+          "dispatch": 54,
+          "end": 593,
+          "pc": 20,
+          "start": 575
+        },
+        {
+          "dispatch": 73,
+          "end": 663,
+          "pc": 21,
+          "start": 594
+        },
+        {
+          "dispatch": 79,
+          "end": 680,
+          "pc": 22,
+          "start": 664
+        },
+        {
+          "dispatch": 88,
+          "end": 683,
+          "pc": 23,
+          "start": 666
+        },
+        {
+          "dispatch": 95,
+          "end": 700,
+          "pc": 24,
+          "start": 684
+        },
+        {
+          "dispatch": 103,
+          "end": 686,
+          "pc": 25,
+          "start": 668
+        },
+        {
+          "dispatch": 111,
+          "end": 689,
+          "pc": 26,
+          "start": 670
+        },
+        {
+          "dispatch": 220,
+          "end": 718,
+          "pc": 27,
+          "start": 690
+        },
+        {
+          "dispatch": 290,
+          "end": 885,
+          "pc": 28,
+          "start": 719
+        },
+        {
+          "dispatch": 383,
+          "end": 557,
+          "pc": 29,
+          "start": 448
+        },
+        {
+          "dispatch": 434,
+          "end": 648,
+          "pc": 30,
+          "start": 577
+        },
+        {
+          "dispatch": 448,
+          "end": 665,
+          "pc": 31,
+          "start": 649
+        },
+        {
+          "dispatch": 450,
+          "end": 691,
+          "pc": 32,
+          "start": 673
+        },
+        {
+          "dispatch": 466,
+          "end": 813,
+          "pc": 33,
+          "start": 700
+        },
+        {
+          "dispatch": 558,
+          "end": 845,
+          "pc": 34,
+          "start": 815
+        },
+        {
+          "dispatch": 575,
+          "end": 873,
+          "pc": 35,
+          "start": 846
+        },
+        {
+          "dispatch": 577,
+          "end": 892,
+          "pc": 36,
+          "start": 874
+        },
+        {
+          "dispatch": 594,
+          "end": 897,
+          "pc": 37,
+          "start": 876
+        },
+        {
+          "dispatch": 649,
+          "end": 916,
+          "pc": 38,
+          "start": 898
+        },
+        {
+          "dispatch": 664,
+          "end": 902,
+          "pc": 39,
+          "start": 878
+        },
+        {
+          "dispatch": 666,
+          "end": 907,
+          "pc": 40,
+          "start": 882
+        },
+        {
+          "dispatch": 681,
+          "end": 935,
+          "pc": 41,
+          "start": 917
+        },
+        {
+          "dispatch": 684,
+          "end": 708,
+          "pc": 42,
+          "start": 686
+        },
+        {
+          "dispatch": 687,
+          "end": 1002,
+          "pc": 43,
+          "start": 936
+        },
+        {
+          "dispatch": 690,
+          "end": 818,
+          "pc": 44,
+          "start": 705
+        },
+        {
+          "dispatch": 692,
+          "end": 820,
+          "pc": 45,
+          "start": 708
+        },
+        {
+          "dispatch": 701,
+          "end": 829,
+          "pc": 46,
+          "start": 813
+        },
+        {
+          "dispatch": 709,
+          "end": 1035,
+          "pc": 47,
+          "start": 886
+        },
+        {
+          "dispatch": 719,
+          "end": 733,
+          "pc": 48,
+          "start": 720
+        },
+        {
+          "dispatch": 734,
+          "end": 1044,
+          "pc": 49,
+          "start": 1036
+        },
+        {
+          "dispatch": 814,
+          "end": 1129,
+          "pc": 50,
+          "start": 1045
+        },
+        {
+          "dispatch": 819,
+          "end": 1131,
+          "pc": 51,
+          "start": 1047
+        },
+        {
+          "dispatch": 821,
+          "end": 857,
+          "pc": 52,
+          "start": 822
+        },
+        {
+          "dispatch": 830,
+          "end": 1146,
+          "pc": 53,
+          "start": 1130
+        },
+        {
+          "dispatch": 846,
+          "end": 1213,
+          "pc": 54,
+          "start": 1147
+        },
+        {
+          "dispatch": 858,
+          "end": 1283,
+          "pc": 55,
+          "start": 890
+        },
+        {
+          "dispatch": 874,
+          "end": 1151,
+          "pc": 56,
+          "start": 1132
+        },
+        {
+          "dispatch": 886,
+          "end": 1160,
+          "pc": 57,
+          "start": 1134
+        },
+        {
+          "dispatch": 893,
+          "end": 1215,
+          "pc": 58,
+          "start": 1146
+        },
+        {
+          "dispatch": 898,
+          "end": 1231,
+          "pc": 59,
+          "start": 1216
+        },
+        {
+          "dispatch": 903,
+          "end": 1290,
+          "pc": 60,
+          "start": 1232
+        },
+        {
+          "dispatch": 908,
+          "end": 1313,
+          "pc": 61,
+          "start": 1291
+        },
+        {
+          "dispatch": 917,
+          "end": 1383,
+          "pc": 62,
+          "start": 1314
+        },
+        {
+          "dispatch": 936,
+          "end": 1540,
+          "pc": 63,
+          "start": 1035
+        },
+        {
+          "dispatch": 1003,
+          "end": 1563,
+          "pc": 64,
+          "start": 1541
+        },
+        {
+          "dispatch": 1036,
+          "end": 1057,
+          "pc": 65,
+          "start": 1037
+        },
+        {
+          "dispatch": 1045,
+          "end": 1614,
+          "pc": 66,
+          "start": 1564
+        },
+        {
+          "dispatch": 1058,
+          "end": 1630,
+          "pc": 67,
+          "start": 1615
+        },
+        {
+          "dispatch": 1130,
+          "end": 1646,
+          "pc": 68,
+          "start": 1631
+        },
+        {
+          "dispatch": 1132,
+          "end": 1755,
+          "pc": 69,
+          "start": 1647
+        },
+        {
+          "dispatch": 1147,
+          "end": 1825,
+          "pc": 70,
+          "start": 1756
+        },
+        {
+          "dispatch": 1152,
+          "end": 2046,
+          "pc": 71,
+          "start": 1283
+        },
+        {
+          "dispatch": 1161,
+          "end": 2239,
+          "pc": 72,
+          "start": 1540
+        },
+        {
+          "dispatch": 1214,
+          "end": 2073,
+          "pc": 73,
+          "start": 2047
+        },
+        {
+          "dispatch": 1216,
+          "end": 2168,
+          "pc": 74,
+          "start": 2074
+        },
+        {
+          "dispatch": 1232,
+          "end": 2195,
+          "pc": 75,
+          "start": 2169
+        },
+        {
+          "dispatch": 1284,
+          "end": 2265,
+          "pc": 76,
+          "start": 2196
+        },
+        {
+          "dispatch": 1291,
+          "end": 2292,
+          "pc": 77,
+          "start": 2266
+        },
+        {
+          "dispatch": 1314,
+          "end": 2319,
+          "pc": 78,
+          "start": 2293
+        },
+        {
+          "dispatch": 1384,
+          "end": 2397,
+          "pc": 79,
+          "start": 2320
+        },
+        {
+          "dispatch": 1541,
+          "end": 2618,
+          "pc": 80,
+          "start": 2046
+        },
+        {
+          "dispatch": 1564,
+          "end": 2641,
+          "pc": 81,
+          "start": 2619
+        },
+        {
+          "dispatch": 1615,
+          "end": 1662,
+          "pc": 5,
+          "start": 1616
+        },
+        {
+          "dispatch": 1631,
+          "end": 2692,
+          "pc": 6,
+          "start": 2642
+        },
+        {
+          "dispatch": 1647,
+          "end": 2708,
+          "pc": 7,
+          "start": 2693
+        },
+        {
+          "dispatch": 1663,
+          "end": 2724,
+          "pc": 8,
+          "start": 2709
+        },
+        {
+          "dispatch": 1756,
+          "end": 2833,
+          "pc": 9,
+          "start": 2725
+        },
+        {
+          "dispatch": 1826,
+          "end": 2903,
+          "pc": 10,
+          "start": 2834
+        },
+        {
+          "dispatch": 2047,
+          "end": 2996,
+          "pc": 11,
+          "start": 2249
+        },
+        {
+          "dispatch": 2074,
+          "end": 3061,
+          "pc": 12,
+          "start": 2618
+        },
+        {
+          "dispatch": 2169,
+          "end": 2184,
+          "pc": 13,
+          "start": 2170
+        },
+        {
+          "dispatch": 2185,
+          "end": 2200,
+          "pc": 14,
+          "start": 2186
+        },
+        {
+          "dispatch": 2196,
+          "end": 3236,
+          "pc": 15,
+          "start": 2996
+        },
+        {
+          "dispatch": 2201,
+          "end": 3047,
+          "pc": 16,
+          "start": 2997
+        },
+        {
+          "dispatch": 2240,
+          "end": 3063,
+          "pc": 17,
+          "start": 3048
+        },
+        {
+          "dispatch": 2266,
+          "end": 3079,
+          "pc": 18,
+          "start": 3064
+        },
+        {
+          "dispatch": 2293,
+          "end": 3188,
+          "pc": 19,
+          "start": 3080
+        },
+        {
+          "dispatch": 2320,
+          "end": 3207,
+          "pc": 20,
+          "start": 3189
+        },
+        {
+          "dispatch": 2398,
+          "end": 3226,
+          "pc": 21,
+          "start": 3208
+        },
+        {
+          "dispatch": 2619,
+          "end": 3243,
+          "pc": 22,
+          "start": 3227
+        },
+        {
+          "dispatch": 2642,
+          "end": 3246,
+          "pc": 23,
+          "start": 3229
+        },
+        {
+          "dispatch": 2693,
+          "end": 3320,
+          "pc": 24,
+          "start": 3247
+        },
+        {
+          "dispatch": 2709,
+          "end": 3249,
+          "pc": 25,
+          "start": 3231
+        },
+        {
+          "dispatch": 2725,
+          "end": 3252,
+          "pc": 26,
+          "start": 3233
+        },
+        {
+          "dispatch": 2834,
+          "end": 3323,
+          "pc": 27,
+          "start": 3253
+        },
+        {
+          "dispatch": 2904,
+          "end": 3420,
+          "pc": 28,
+          "start": 3324
+        },
+        {
+          "dispatch": 2997,
+          "end": 3226,
+          "pc": 29,
+          "start": 3062
+        },
+        {
+          "dispatch": 3048,
+          "end": 3307,
+          "pc": 30,
+          "start": 3237
+        },
+        {
+          "dispatch": 3062,
+          "end": 3340,
+          "pc": 31,
+          "start": 3310
+        },
+        {
+          "dispatch": 3064,
+          "end": 3365,
+          "pc": 32,
+          "start": 3342
+        },
+        {
+          "dispatch": 3080,
+          "end": 3474,
+          "pc": 33,
+          "start": 3366
+        },
+        {
+          "dispatch": 3189,
+          "end": 3502,
+          "pc": 34,
+          "start": 3475
+        },
+        {
+          "dispatch": 3208,
+          "end": 3525,
+          "pc": 35,
+          "start": 3503
+        },
+        {
+          "dispatch": 3227,
+          "end": 3544,
+          "pc": 36,
+          "start": 3526
+        },
+        {
+          "dispatch": 3228,
+          "end": 3549,
+          "pc": 37,
+          "start": 3528
+        },
+        {
+          "dispatch": 3237,
+          "end": 3568,
+          "pc": 38,
+          "start": 3550
+        },
+        {
+          "dispatch": 3244,
+          "end": 3554,
+          "pc": 39,
+          "start": 3530
+        },
+        {
+          "dispatch": 3247,
+          "end": 3559,
+          "pc": 40,
+          "start": 3534
+        },
+        {
+          "dispatch": 3250,
+          "end": 3587,
+          "pc": 41,
+          "start": 3569
+        },
+        {
+          "dispatch": 3253,
+          "end": 3331,
+          "pc": 42,
+          "start": 3307
+        },
+        {
+          "dispatch": 3308,
+          "end": 3654,
+          "pc": 43,
+          "start": 3588
+        },
+        {
+          "dispatch": 3321,
+          "end": 3345,
+          "pc": 44,
+          "start": 3323
+        },
+        {
+          "dispatch": 3324,
+          "end": 3347,
+          "pc": 45,
+          "start": 3328
+        },
+        {
+          "dispatch": 3332,
+          "end": 3356,
+          "pc": 46,
+          "start": 3340
+        },
+        {
+          "dispatch": 3341,
+          "end": 3687,
+          "pc": 47,
+          "start": 3421
+        },
+        {
+          "dispatch": 3346,
+          "end": 3360,
+          "pc": 48,
+          "start": 3347
+        },
+        {
+          "dispatch": 3348,
+          "end": 3696,
+          "pc": 49,
+          "start": 3688
+        },
+        {
+          "dispatch": 3357,
+          "end": 3781,
+          "pc": 50,
+          "start": 3697
+        },
+        {
+          "dispatch": 3361,
+          "end": 3783,
+          "pc": 51,
+          "start": 3699
+        },
+        {
+          "dispatch": 3366,
+          "end": 3486,
+          "pc": 52,
+          "start": 3368
+        },
+        {
+          "dispatch": 3421,
+          "end": 3798,
+          "pc": 53,
+          "start": 3782
+        },
+        {
+          "dispatch": 3475,
+          "end": 3865,
+          "pc": 54,
+          "start": 3799
+        },
+        {
+          "dispatch": 3487,
+          "end": 3935,
+          "pc": 55,
+          "start": 3488
+        },
+        {
+          "dispatch": 3503,
+          "end": 3803,
+          "pc": 56,
+          "start": 3784
+        },
+        {
+          "dispatch": 3526,
+          "end": 3812,
+          "pc": 57,
+          "start": 3786
+        },
+        {
+          "dispatch": 3545,
+          "end": 3867,
+          "pc": 58,
+          "start": 3798
+        },
+        {
+          "dispatch": 3550,
+          "end": 3883,
+          "pc": 59,
+          "start": 3868
+        },
+        {
+          "dispatch": 3555,
+          "end": 3942,
+          "pc": 60,
+          "start": 3884
+        },
+        {
+          "dispatch": 3560,
+          "end": 3965,
+          "pc": 61,
+          "start": 3943
+        },
+        {
+          "dispatch": 3569,
+          "end": 4035,
+          "pc": 62,
+          "start": 3966
+        },
+        {
+          "dispatch": 3588,
+          "end": 4192,
+          "pc": 63,
+          "start": 3687
+        },
+        {
+          "dispatch": 3655,
+          "end": 4215,
+          "pc": 64,
+          "start": 4193
+        },
+        {
+          "dispatch": 3688,
+          "end": 3709,
+          "pc": 65,
+          "start": 3689
+        },
+        {
+          "dispatch": 3697,
+          "end": 4266,
+          "pc": 66,
+          "start": 4216
+        },
+        {
+          "dispatch": 3710,
+          "end": 4288,
+          "pc": 67,
+          "start": 4267
+        },
+        {
+          "dispatch": 3782,
+          "end": 4304,
+          "pc": 68,
+          "start": 4289
+        },
+        {
+          "dispatch": 3784,
+          "end": 4413,
+          "pc": 69,
+          "start": 4305
+        },
+        {
+          "dispatch": 3799,
+          "end": 4483,
+          "pc": 70,
+          "start": 4414
+        },
+        {
+          "dispatch": 3804,
+          "end": 4704,
+          "pc": 71,
+          "start": 3935
+        },
+        {
+          "dispatch": 3813,
+          "end": 4897,
+          "pc": 72,
+          "start": 4192
+        },
+        {
+          "dispatch": 3866,
+          "end": 4731,
+          "pc": 73,
+          "start": 4705
+        },
+        {
+          "dispatch": 3868,
+          "end": 4826,
+          "pc": 74,
+          "start": 4732
+        },
+        {
+          "dispatch": 3884,
+          "end": 4853,
+          "pc": 75,
+          "start": 4827
+        },
+        {
+          "dispatch": 3936,
+          "end": 4923,
+          "pc": 76,
+          "start": 4854
+        },
+        {
+          "dispatch": 3943,
+          "end": 4950,
+          "pc": 77,
+          "start": 4924
+        },
+        {
+          "dispatch": 3966,
+          "end": 4977,
+          "pc": 78,
+          "start": 4951
+        },
+        {
+          "dispatch": 4036,
+          "end": 5055,
+          "pc": 79,
+          "start": 4978
+        },
+        {
+          "dispatch": 4193,
+          "end": 5276,
+          "pc": 80,
+          "start": 4704
+        },
+        {
+          "dispatch": 4216,
+          "end": 5299,
+          "pc": 81,
+          "start": 5277
+        },
+        {
+          "dispatch": 4267,
+          "end": 4288,
+          "pc": 84,
+          "start": 4268
+        },
+        {
+          "dispatch": 4289,
+          "end": 5350,
+          "pc": 85,
+          "start": 5300
+        },
+        {
+          "dispatch": 4290,
+          "end": 5366,
+          "pc": 86,
+          "start": 5351
+        },
+        {
+          "dispatch": 4305,
+          "end": 5382,
+          "pc": 87,
+          "start": 5367
+        },
+        {
+          "dispatch": 4414,
+          "end": 5491,
+          "pc": 88,
+          "start": 5383
+        },
+        {
+          "dispatch": 4484,
+          "end": 5561,
+          "pc": 89,
+          "start": 5492
+        },
+        {
+          "dispatch": 4705,
+          "end": 5718,
+          "pc": 90,
+          "start": 4929
+        },
+        {
+          "dispatch": 4732,
+          "end": 5744,
+          "pc": 91,
+          "start": 5719
+        }
+      ],
+      "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+      "rtl_cycles": 5748,
+      "rtl_trace": [
+        {
+          "dispatch": 6,
+          "end": 27,
+          "id": 0,
+          "pc": 1,
+          "start": 7
+        },
+        {
+          "dispatch": 7,
+          "end": 40,
+          "id": 1,
+          "pc": 2,
+          "start": 26
+        },
+        {
+          "dispatch": 8,
+          "end": 53,
+          "id": 2,
+          "pc": 3,
+          "start": 39
+        },
+        {
+          "dispatch": 11,
+          "end": 72,
+          "id": 3,
+          "pc": 5,
+          "start": 52
+        },
+        {
+          "dispatch": 12,
+          "end": 78,
+          "id": 4,
+          "pc": 6,
+          "start": 28
+        },
+        {
+          "dispatch": 13,
+          "end": 94,
+          "id": 5,
+          "pc": 7,
+          "start": 79
+        },
+        {
+          "dispatch": 14,
+          "end": 110,
+          "id": 6,
+          "pc": 8,
+          "start": 95
+        },
+        {
+          "dispatch": 15,
+          "end": 219,
+          "id": 7,
+          "pc": 9,
+          "start": 111
+        },
+        {
+          "dispatch": 16,
+          "end": 289,
+          "id": 8,
+          "pc": 10,
+          "start": 220
+        },
+        {
+          "dispatch": 17,
+          "end": 382,
+          "id": 9,
+          "pc": 11,
+          "start": 18
+        },
+        {
+          "dispatch": 18,
+          "end": 447,
+          "id": 10,
+          "pc": 12,
+          "start": 105
+        },
+        {
+          "dispatch": 19,
+          "end": 87,
+          "id": 11,
+          "pc": 13,
+          "start": 71
+        },
+        {
+          "dispatch": 20,
+          "end": 102,
+          "id": 12,
+          "pc": 14,
+          "start": 86
+        },
+        {
+          "dispatch": 21,
+          "end": 576,
+          "id": 13,
+          "pc": 15,
+          "start": 382
+        },
+        {
+          "dispatch": 22,
+          "end": 433,
+          "id": 14,
+          "pc": 16,
+          "start": 383
+        },
+        {
+          "dispatch": 23,
+          "end": 449,
+          "id": 15,
+          "pc": 17,
+          "start": 434
+        },
+        {
+          "dispatch": 28,
+          "end": 465,
+          "id": 16,
+          "pc": 18,
+          "start": 450
+        },
+        {
+          "dispatch": 41,
+          "end": 574,
+          "id": 17,
+          "pc": 19,
+          "start": 466
+        },
+        {
+          "dispatch": 54,
+          "end": 593,
+          "id": 18,
+          "pc": 20,
+          "start": 575
+        },
+        {
+          "dispatch": 73,
+          "end": 663,
+          "id": 19,
+          "pc": 21,
+          "start": 594
+        },
+        {
+          "dispatch": 79,
+          "end": 680,
+          "id": 20,
+          "pc": 22,
+          "start": 664
+        },
+        {
+          "dispatch": 88,
+          "end": 683,
+          "id": 21,
+          "pc": 23,
+          "start": 666
+        },
+        {
+          "dispatch": 95,
+          "end": 700,
+          "id": 22,
+          "pc": 24,
+          "start": 684
+        },
+        {
+          "dispatch": 103,
+          "end": 686,
+          "id": 23,
+          "pc": 25,
+          "start": 668
+        },
+        {
+          "dispatch": 111,
+          "end": 689,
+          "id": 24,
+          "pc": 26,
+          "start": 670
+        },
+        {
+          "dispatch": 220,
+          "end": 718,
+          "id": 25,
+          "pc": 27,
+          "start": 690
+        },
+        {
+          "dispatch": 290,
+          "end": 885,
+          "id": 26,
+          "pc": 28,
+          "start": 719
+        },
+        {
+          "dispatch": 383,
+          "end": 557,
+          "id": 27,
+          "pc": 29,
+          "start": 448
+        },
+        {
+          "dispatch": 434,
+          "end": 648,
+          "id": 28,
+          "pc": 30,
+          "start": 577
+        },
+        {
+          "dispatch": 448,
+          "end": 665,
+          "id": 29,
+          "pc": 31,
+          "start": 649
+        },
+        {
+          "dispatch": 450,
+          "end": 691,
+          "id": 30,
+          "pc": 32,
+          "start": 673
+        },
+        {
+          "dispatch": 466,
+          "end": 813,
+          "id": 31,
+          "pc": 33,
+          "start": 700
+        },
+        {
+          "dispatch": 558,
+          "end": 845,
+          "id": 32,
+          "pc": 34,
+          "start": 815
+        },
+        {
+          "dispatch": 575,
+          "end": 873,
+          "id": 33,
+          "pc": 35,
+          "start": 846
+        },
+        {
+          "dispatch": 577,
+          "end": 892,
+          "id": 34,
+          "pc": 36,
+          "start": 874
+        },
+        {
+          "dispatch": 594,
+          "end": 897,
+          "id": 35,
+          "pc": 37,
+          "start": 876
+        },
+        {
+          "dispatch": 649,
+          "end": 916,
+          "id": 36,
+          "pc": 38,
+          "start": 898
+        },
+        {
+          "dispatch": 664,
+          "end": 902,
+          "id": 37,
+          "pc": 39,
+          "start": 878
+        },
+        {
+          "dispatch": 666,
+          "end": 907,
+          "id": 38,
+          "pc": 40,
+          "start": 882
+        },
+        {
+          "dispatch": 681,
+          "end": 935,
+          "id": 39,
+          "pc": 41,
+          "start": 917
+        },
+        {
+          "dispatch": 684,
+          "end": 708,
+          "id": 40,
+          "pc": 42,
+          "start": 686
+        },
+        {
+          "dispatch": 687,
+          "end": 1002,
+          "id": 41,
+          "pc": 43,
+          "start": 936
+        },
+        {
+          "dispatch": 690,
+          "end": 818,
+          "id": 42,
+          "pc": 44,
+          "start": 705
+        },
+        {
+          "dispatch": 692,
+          "end": 820,
+          "id": 43,
+          "pc": 45,
+          "start": 708
+        },
+        {
+          "dispatch": 701,
+          "end": 829,
+          "id": 44,
+          "pc": 46,
+          "start": 813
+        },
+        {
+          "dispatch": 709,
+          "end": 1035,
+          "id": 45,
+          "pc": 47,
+          "start": 886
+        },
+        {
+          "dispatch": 719,
+          "end": 733,
+          "id": 46,
+          "pc": 48,
+          "start": 720
+        },
+        {
+          "dispatch": 734,
+          "end": 1044,
+          "id": 47,
+          "pc": 49,
+          "start": 1036
+        },
+        {
+          "dispatch": 814,
+          "end": 1129,
+          "id": 48,
+          "pc": 50,
+          "start": 1045
+        },
+        {
+          "dispatch": 819,
+          "end": 1131,
+          "id": 49,
+          "pc": 51,
+          "start": 1047
+        },
+        {
+          "dispatch": 821,
+          "end": 857,
+          "id": 50,
+          "pc": 52,
+          "start": 822
+        },
+        {
+          "dispatch": 830,
+          "end": 1146,
+          "id": 51,
+          "pc": 53,
+          "start": 1130
+        },
+        {
+          "dispatch": 846,
+          "end": 1213,
+          "id": 52,
+          "pc": 54,
+          "start": 1147
+        },
+        {
+          "dispatch": 858,
+          "end": 1283,
+          "id": 53,
+          "pc": 55,
+          "start": 890
+        },
+        {
+          "dispatch": 874,
+          "end": 1151,
+          "id": 54,
+          "pc": 56,
+          "start": 1132
+        },
+        {
+          "dispatch": 886,
+          "end": 1160,
+          "id": 55,
+          "pc": 57,
+          "start": 1134
+        },
+        {
+          "dispatch": 893,
+          "end": 1215,
+          "id": 56,
+          "pc": 58,
+          "start": 1146
+        },
+        {
+          "dispatch": 898,
+          "end": 1231,
+          "id": 57,
+          "pc": 59,
+          "start": 1216
+        },
+        {
+          "dispatch": 903,
+          "end": 1290,
+          "id": 58,
+          "pc": 60,
+          "start": 1232
+        },
+        {
+          "dispatch": 908,
+          "end": 1313,
+          "id": 59,
+          "pc": 61,
+          "start": 1291
+        },
+        {
+          "dispatch": 917,
+          "end": 1383,
+          "id": 60,
+          "pc": 62,
+          "start": 1314
+        },
+        {
+          "dispatch": 936,
+          "end": 1540,
+          "id": 61,
+          "pc": 63,
+          "start": 1035
+        },
+        {
+          "dispatch": 1003,
+          "end": 1563,
+          "id": 62,
+          "pc": 64,
+          "start": 1541
+        },
+        {
+          "dispatch": 1036,
+          "end": 1057,
+          "id": 63,
+          "pc": 65,
+          "start": 1037
+        },
+        {
+          "dispatch": 1045,
+          "end": 1614,
+          "id": 64,
+          "pc": 66,
+          "start": 1564
+        },
+        {
+          "dispatch": 1058,
+          "end": 1630,
+          "id": 65,
+          "pc": 67,
+          "start": 1615
+        },
+        {
+          "dispatch": 1130,
+          "end": 1646,
+          "id": 66,
+          "pc": 68,
+          "start": 1631
+        },
+        {
+          "dispatch": 1132,
+          "end": 1755,
+          "id": 67,
+          "pc": 69,
+          "start": 1647
+        },
+        {
+          "dispatch": 1147,
+          "end": 1825,
+          "id": 68,
+          "pc": 70,
+          "start": 1756
+        },
+        {
+          "dispatch": 1152,
+          "end": 2046,
+          "id": 69,
+          "pc": 71,
+          "start": 1283
+        },
+        {
+          "dispatch": 1161,
+          "end": 2239,
+          "id": 70,
+          "pc": 72,
+          "start": 1540
+        },
+        {
+          "dispatch": 1214,
+          "end": 2073,
+          "id": 71,
+          "pc": 73,
+          "start": 2047
+        },
+        {
+          "dispatch": 1216,
+          "end": 2168,
+          "id": 72,
+          "pc": 74,
+          "start": 2074
+        },
+        {
+          "dispatch": 1232,
+          "end": 2196,
+          "id": 73,
+          "pc": 75,
+          "start": 2169
+        },
+        {
+          "dispatch": 1284,
+          "end": 2266,
+          "id": 74,
+          "pc": 76,
+          "start": 2197
+        },
+        {
+          "dispatch": 1291,
+          "end": 2293,
+          "id": 75,
+          "pc": 77,
+          "start": 2267
+        },
+        {
+          "dispatch": 1314,
+          "end": 2320,
+          "id": 76,
+          "pc": 78,
+          "start": 2294
+        },
+        {
+          "dispatch": 1384,
+          "end": 2398,
+          "id": 77,
+          "pc": 79,
+          "start": 2321
+        },
+        {
+          "dispatch": 1541,
+          "end": 2619,
+          "id": 78,
+          "pc": 80,
+          "start": 2046
+        },
+        {
+          "dispatch": 1564,
+          "end": 2642,
+          "id": 79,
+          "pc": 81,
+          "start": 2620
+        },
+        {
+          "dispatch": 1615,
+          "end": 1662,
+          "id": 80,
+          "pc": 5,
+          "start": 1616
+        },
+        {
+          "dispatch": 1631,
+          "end": 2693,
+          "id": 81,
+          "pc": 6,
+          "start": 2643
+        },
+        {
+          "dispatch": 1647,
+          "end": 2709,
+          "id": 82,
+          "pc": 7,
+          "start": 2694
+        },
+        {
+          "dispatch": 1663,
+          "end": 2725,
+          "id": 83,
+          "pc": 8,
+          "start": 2710
+        },
+        {
+          "dispatch": 1756,
+          "end": 2834,
+          "id": 84,
+          "pc": 9,
+          "start": 2726
+        },
+        {
+          "dispatch": 1826,
+          "end": 2904,
+          "id": 85,
+          "pc": 10,
+          "start": 2835
+        },
+        {
+          "dispatch": 2047,
+          "end": 2997,
+          "id": 86,
+          "pc": 11,
+          "start": 2249
+        },
+        {
+          "dispatch": 2074,
+          "end": 3062,
+          "id": 87,
+          "pc": 12,
+          "start": 2619
+        },
+        {
+          "dispatch": 2169,
+          "end": 2184,
+          "id": 88,
+          "pc": 13,
+          "start": 2170
+        },
+        {
+          "dispatch": 2185,
+          "end": 2200,
+          "id": 89,
+          "pc": 14,
+          "start": 2186
+        },
+        {
+          "dispatch": 2197,
+          "end": 3237,
+          "id": 90,
+          "pc": 15,
+          "start": 2997
+        },
+        {
+          "dispatch": 2201,
+          "end": 3048,
+          "id": 91,
+          "pc": 16,
+          "start": 2998
+        },
+        {
+          "dispatch": 2240,
+          "end": 3064,
+          "id": 92,
+          "pc": 17,
+          "start": 3049
+        },
+        {
+          "dispatch": 2267,
+          "end": 3080,
+          "id": 93,
+          "pc": 18,
+          "start": 3065
+        },
+        {
+          "dispatch": 2294,
+          "end": 3189,
+          "id": 94,
+          "pc": 19,
+          "start": 3081
+        },
+        {
+          "dispatch": 2321,
+          "end": 3208,
+          "id": 95,
+          "pc": 20,
+          "start": 3190
+        },
+        {
+          "dispatch": 2399,
+          "end": 3227,
+          "id": 96,
+          "pc": 21,
+          "start": 3209
+        },
+        {
+          "dispatch": 2620,
+          "end": 3244,
+          "id": 97,
+          "pc": 22,
+          "start": 3228
+        },
+        {
+          "dispatch": 2643,
+          "end": 3247,
+          "id": 98,
+          "pc": 23,
+          "start": 3230
+        },
+        {
+          "dispatch": 2694,
+          "end": 3321,
+          "id": 99,
+          "pc": 24,
+          "start": 3248
+        },
+        {
+          "dispatch": 2710,
+          "end": 3250,
+          "id": 100,
+          "pc": 25,
+          "start": 3232
+        },
+        {
+          "dispatch": 2726,
+          "end": 3253,
+          "id": 101,
+          "pc": 26,
+          "start": 3234
+        },
+        {
+          "dispatch": 2835,
+          "end": 3324,
+          "id": 102,
+          "pc": 27,
+          "start": 3254
+        },
+        {
+          "dispatch": 2905,
+          "end": 3421,
+          "id": 103,
+          "pc": 28,
+          "start": 3325
+        },
+        {
+          "dispatch": 2998,
+          "end": 3226,
+          "id": 104,
+          "pc": 29,
+          "start": 3063
+        },
+        {
+          "dispatch": 3049,
+          "end": 3308,
+          "id": 105,
+          "pc": 30,
+          "start": 3238
+        },
+        {
+          "dispatch": 3063,
+          "end": 3341,
+          "id": 106,
+          "pc": 31,
+          "start": 3311
+        },
+        {
+          "dispatch": 3065,
+          "end": 3366,
+          "id": 107,
+          "pc": 32,
+          "start": 3343
+        },
+        {
+          "dispatch": 3081,
+          "end": 3475,
+          "id": 108,
+          "pc": 33,
+          "start": 3367
+        },
+        {
+          "dispatch": 3190,
+          "end": 3503,
+          "id": 109,
+          "pc": 34,
+          "start": 3476
+        },
+        {
+          "dispatch": 3209,
+          "end": 3526,
+          "id": 110,
+          "pc": 35,
+          "start": 3504
+        },
+        {
+          "dispatch": 3227,
+          "end": 3545,
+          "id": 111,
+          "pc": 36,
+          "start": 3527
+        },
+        {
+          "dispatch": 3228,
+          "end": 3550,
+          "id": 112,
+          "pc": 37,
+          "start": 3529
+        },
+        {
+          "dispatch": 3238,
+          "end": 3569,
+          "id": 113,
+          "pc": 38,
+          "start": 3551
+        },
+        {
+          "dispatch": 3245,
+          "end": 3555,
+          "id": 114,
+          "pc": 39,
+          "start": 3531
+        },
+        {
+          "dispatch": 3248,
+          "end": 3560,
+          "id": 115,
+          "pc": 40,
+          "start": 3535
+        },
+        {
+          "dispatch": 3251,
+          "end": 3588,
+          "id": 116,
+          "pc": 41,
+          "start": 3570
+        },
+        {
+          "dispatch": 3254,
+          "end": 3332,
+          "id": 117,
+          "pc": 42,
+          "start": 3308
+        },
+        {
+          "dispatch": 3309,
+          "end": 3655,
+          "id": 118,
+          "pc": 43,
+          "start": 3589
+        },
+        {
+          "dispatch": 3322,
+          "end": 3346,
+          "id": 119,
+          "pc": 44,
+          "start": 3324
+        },
+        {
+          "dispatch": 3325,
+          "end": 3348,
+          "id": 120,
+          "pc": 45,
+          "start": 3329
+        },
+        {
+          "dispatch": 3333,
+          "end": 3357,
+          "id": 121,
+          "pc": 46,
+          "start": 3341
+        },
+        {
+          "dispatch": 3342,
+          "end": 3688,
+          "id": 122,
+          "pc": 47,
+          "start": 3422
+        },
+        {
+          "dispatch": 3347,
+          "end": 3361,
+          "id": 123,
+          "pc": 48,
+          "start": 3348
+        },
+        {
+          "dispatch": 3349,
+          "end": 3697,
+          "id": 124,
+          "pc": 49,
+          "start": 3689
+        },
+        {
+          "dispatch": 3358,
+          "end": 3782,
+          "id": 125,
+          "pc": 50,
+          "start": 3698
+        },
+        {
+          "dispatch": 3362,
+          "end": 3784,
+          "id": 126,
+          "pc": 51,
+          "start": 3700
+        },
+        {
+          "dispatch": 3367,
+          "end": 3487,
+          "id": 127,
+          "pc": 52,
+          "start": 3369
+        },
+        {
+          "dispatch": 3422,
+          "end": 3799,
+          "id": 128,
+          "pc": 53,
+          "start": 3783
+        },
+        {
+          "dispatch": 3476,
+          "end": 3866,
+          "id": 129,
+          "pc": 54,
+          "start": 3800
+        },
+        {
+          "dispatch": 3488,
+          "end": 3936,
+          "id": 130,
+          "pc": 55,
+          "start": 3489
+        },
+        {
+          "dispatch": 3504,
+          "end": 3804,
+          "id": 131,
+          "pc": 56,
+          "start": 3785
+        },
+        {
+          "dispatch": 3527,
+          "end": 3813,
+          "id": 132,
+          "pc": 57,
+          "start": 3787
+        },
+        {
+          "dispatch": 3546,
+          "end": 3868,
+          "id": 133,
+          "pc": 58,
+          "start": 3799
+        },
+        {
+          "dispatch": 3551,
+          "end": 3884,
+          "id": 134,
+          "pc": 59,
+          "start": 3869
+        },
+        {
+          "dispatch": 3556,
+          "end": 3943,
+          "id": 135,
+          "pc": 60,
+          "start": 3885
+        },
+        {
+          "dispatch": 3561,
+          "end": 3966,
+          "id": 136,
+          "pc": 61,
+          "start": 3944
+        },
+        {
+          "dispatch": 3570,
+          "end": 4036,
+          "id": 137,
+          "pc": 62,
+          "start": 3967
+        },
+        {
+          "dispatch": 3589,
+          "end": 4193,
+          "id": 138,
+          "pc": 63,
+          "start": 3688
+        },
+        {
+          "dispatch": 3656,
+          "end": 4216,
+          "id": 139,
+          "pc": 64,
+          "start": 4194
+        },
+        {
+          "dispatch": 3689,
+          "end": 3710,
+          "id": 140,
+          "pc": 65,
+          "start": 3690
+        },
+        {
+          "dispatch": 3698,
+          "end": 4267,
+          "id": 141,
+          "pc": 66,
+          "start": 4217
+        },
+        {
+          "dispatch": 3711,
+          "end": 4290,
+          "id": 142,
+          "pc": 67,
+          "start": 4268
+        },
+        {
+          "dispatch": 3783,
+          "end": 4306,
+          "id": 143,
+          "pc": 68,
+          "start": 4291
+        },
+        {
+          "dispatch": 3785,
+          "end": 4415,
+          "id": 144,
+          "pc": 69,
+          "start": 4307
+        },
+        {
+          "dispatch": 3800,
+          "end": 4485,
+          "id": 145,
+          "pc": 70,
+          "start": 4416
+        },
+        {
+          "dispatch": 3805,
+          "end": 4706,
+          "id": 146,
+          "pc": 71,
+          "start": 3936
+        },
+        {
+          "dispatch": 3814,
+          "end": 4899,
+          "id": 147,
+          "pc": 72,
+          "start": 4193
+        },
+        {
+          "dispatch": 3867,
+          "end": 4733,
+          "id": 148,
+          "pc": 73,
+          "start": 4707
+        },
+        {
+          "dispatch": 3869,
+          "end": 4828,
+          "id": 149,
+          "pc": 74,
+          "start": 4734
+        },
+        {
+          "dispatch": 3885,
+          "end": 4855,
+          "id": 150,
+          "pc": 75,
+          "start": 4829
+        },
+        {
+          "dispatch": 3937,
+          "end": 4925,
+          "id": 151,
+          "pc": 76,
+          "start": 4856
+        },
+        {
+          "dispatch": 3944,
+          "end": 4952,
+          "id": 152,
+          "pc": 77,
+          "start": 4926
+        },
+        {
+          "dispatch": 3967,
+          "end": 4979,
+          "id": 153,
+          "pc": 78,
+          "start": 4953
+        },
+        {
+          "dispatch": 4037,
+          "end": 5057,
+          "id": 154,
+          "pc": 79,
+          "start": 4980
+        },
+        {
+          "dispatch": 4194,
+          "end": 5278,
+          "id": 155,
+          "pc": 80,
+          "start": 4706
+        },
+        {
+          "dispatch": 4217,
+          "end": 5301,
+          "id": 156,
+          "pc": 81,
+          "start": 5279
+        },
+        {
+          "dispatch": 4268,
+          "end": 4289,
+          "id": 157,
+          "pc": 84,
+          "start": 4269
+        },
+        {
+          "dispatch": 4290,
+          "end": 5352,
+          "id": 158,
+          "pc": 85,
+          "start": 5302
+        },
+        {
+          "dispatch": 4291,
+          "end": 5368,
+          "id": 159,
+          "pc": 86,
+          "start": 5353
+        },
+        {
+          "dispatch": 4307,
+          "end": 5384,
+          "id": 160,
+          "pc": 87,
+          "start": 5369
+        },
+        {
+          "dispatch": 4416,
+          "end": 5493,
+          "id": 161,
+          "pc": 88,
+          "start": 5385
+        },
+        {
+          "dispatch": 4486,
+          "end": 5563,
+          "id": 162,
+          "pc": 89,
+          "start": 5494
+        },
+        {
+          "dispatch": 4707,
+          "end": 5720,
+          "id": 163,
+          "pc": 90,
+          "start": 4929
+        },
+        {
+          "dispatch": 4734,
+          "end": 5746,
+          "id": 164,
+          "pc": 91,
+          "start": 5721
+        }
+      ],
+      "same_backend_configuration": true,
+      "timing_passed": false,
+      "trace_match": false,
+      "traffic_multiset_match": true
+    }
+  },
+  "strict-port-gate-before-store-quant-fix": {
+    "status": "failed diagnostic, superseded; not current performance result",
+    "sha256": "2b10165f1f3977ac17c28d1abd778cb346e9bd83107b120fa24c2e7f2ff85990",
+    "result": [
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": false,
+        "predicted_cycles": 585,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 585,
+        "same_backend_configuration": true,
+        "timing_passed": false,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "dma",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 2
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 456,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 456,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "contention",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 229,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 229,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "qst",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 228,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 228,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "gemm",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            },
+            "rtl": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 5748,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5748,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_0",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            },
+            "rtl": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 5750,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5750,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_1",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 5000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            },
+            "rtl": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 5752,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5752,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_2",
+        "profile": "native-hbm2-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": false,
+        "predicted_cycles": 1310,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 1310,
+        "same_backend_configuration": true,
+        "timing_passed": false,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "dma",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 2
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 456,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 456,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "contention",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 348,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 348,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "qst",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 255,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 255,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "gemm",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            },
+            "rtl": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": false,
+        "predicted_cycles": 5783,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5783,
+        "same_backend_configuration": true,
+        "timing_passed": false,
+        "trace_match": false,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_0",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 2
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            },
+            "rtl": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 5785,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5785,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_1",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 833,
+          "core": 5000,
+          "memory": 833
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            },
+            "rtl": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 5787,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 5787,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_2",
+        "profile": "native-ddr4-200mhz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 1606,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 1606,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "dma",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 479,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 479,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "contention",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 726,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 726,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "qst",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": null,
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 466,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 466,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "gemm",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            },
+            "rtl": {
+              "cosine": 0.99979730527387,
+              "passed": true,
+              "relative_l2": 0.020373155088889424
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 18319,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 18319,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_0",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            },
+            "rtl": {
+              "cosine": 0.9997845748134054,
+              "passed": true,
+              "relative_l2": 0.020884309088197456
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 18314,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 18314,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_1",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      },
+      {
+        "backend": "ramulator",
+        "clocks_ps": {
+          "controller": 1000,
+          "core": 1000,
+          "memory": 1000
+        },
+        "native_ports": true,
+        "numerical": {
+          "independent_float_reference": {
+            "model": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            },
+            "rtl": {
+              "cosine": 0.999788780049068,
+              "passed": true,
+              "relative_l2": 0.02109902108721265
+            }
+          },
+          "model_vs_isa_bit_exact": true,
+          "rtl_vs_isa_bit_exact": true
+        },
+        "physical_traffic_match": true,
+        "port_arrival_completion_match": true,
+        "predicted_cycles": 18314,
+        "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+        "rtl_cycles": 18314,
+        "same_backend_configuration": true,
+        "timing_passed": true,
+        "trace_match": true,
+        "traffic_multiset_match": true,
+        "name": "tiny_qwen_2",
+        "profile": "native-hbm2-stress-1ghz",
+        "returncode": 0
+      }
+    ]
+  },
+  "persistent-before-clock-offset-fix": {
+    "status": "failed diagnostic, superseded; not current performance result",
+    "sha256": "860bae495dfff115aa5afcd298b2a5a1ba9024e1e4d589a831cff1fff3d02dfe",
+    "result": {
+      "backend": "ramulator",
+      "boundary": "program-resident core start through final write completion; serial prompt steps, no sampling, host, queueing or input-transfer time",
+      "conditional_decode_tokens_per_second": 305.46943014677805,
+      "decode_seconds": 0.00327365,
+      "device_ttft_seconds": 0.00032643500000000003,
+      "fmax_verified": false,
+      "full_pretrained_model": false,
+      "hardware_measured": false,
+      "label": "opentpu-perfsim-estimate",
+      "memory_state": "persistent controller and KV across all stages; no gaps between launches",
+      "prefill_seconds": 0.00032643500000000003,
+      "profile": "native-hbm2-200mhz",
+      "stages": [
+        {
+          "cycles": 5748,
+          "memory": {
+            "line_order_stall_ticks": 596,
+            "logical_read_bytes": 135488,
+            "logical_write_bytes": 400,
+            "peak_outstanding": 64,
+            "read_bytes": 136832,
+            "read_transactions": 8552,
+            "write_bytes": 1600,
+            "write_transactions": 100
+          },
+          "name": "tiny_qwen_0",
+          "numerical_check": {
+            "cosine": 0.99979730527387,
+            "cosine_minimum": 0.995,
+            "independent_reference": "NumPy reference_logits, float forward",
+            "isa_bit_exact": true,
+            "passed": true,
+            "relative_l2": 0.020373155088889424,
+            "relative_l2_limit": 0.05
+          },
+          "phase": "prefill",
+          "seconds": 2.874e-05
+        },
+        {
+          "cycles": 59539,
+          "memory": {
+            "line_order_stall_ticks": 246,
+            "logical_read_bytes": 135616,
+            "logical_write_bytes": 400,
+            "peak_outstanding": 64,
+            "read_bytes": 136960,
+            "read_transactions": 8560,
+            "write_bytes": 1600,
+            "write_transactions": 100
+          },
+          "name": "tiny_qwen_1",
+          "numerical_check": {
+            "cosine": 0.9997845748134054,
+            "cosine_minimum": 0.995,
+            "independent_reference": "NumPy reference_logits, float forward",
+            "isa_bit_exact": true,
+            "passed": true,
+            "relative_l2": 0.020884309088197456,
+            "relative_l2_limit": 0.05
+          },
+          "phase": "prefill",
+          "seconds": 0.000297695
+        },
+        {
+          "cycles": 654730,
+          "memory": {
+            "line_order_stall_ticks": 551,
+            "logical_read_bytes": 135744,
+            "logical_write_bytes": 400,
+            "peak_outstanding": 64,
+            "read_bytes": 137088,
+            "read_transactions": 8568,
+            "write_bytes": 1600,
+            "write_transactions": 100
+          },
+          "name": "tiny_qwen_2",
+          "numerical_check": {
+            "cosine": 0.999788780049068,
+            "cosine_minimum": 0.995,
+            "independent_reference": "NumPy reference_logits, float forward",
+            "isa_bit_exact": true,
+            "passed": true,
+            "relative_l2": 0.02109902108721265,
+            "relative_l2_limit": 0.05
+          },
+          "phase": "decode",
+          "seconds": 0.00327365
+        }
+      ],
+      "timing_validation": "unvalidated"
+    }
+  }
+}

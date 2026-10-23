@@ -1,0 +1,1732 @@
+{
+  "prior_evidence_unchanged": true,
+  "records": [
+    {
+      "source": "/tmp/opentpu-r6-e2-dstep",
+      "label": "e2-dstep",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 504,
+          "sha256": "b809177eb974579b07a6ca258de4ed1bdc979cc60509ca3fac181856a34a967f",
+          "retained": "e2-dstep/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 364,
+          "sha256": "61fac5776d12e59b44279aeedf27100677bb7b535cc52123dbaccb522da56778",
+          "retained": "e2-dstep/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10740,
+          "sha256": "0f053b538112ed7f2f877a8a806f960173161263728eadd6836ac86064dc539e",
+          "retained": "e2-dstep/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 66089055,
+          "sha256": "68aa35cd0b39048d0af3265375e36b1e51cb033c96f8cbcbe5477bf88ecc72f6",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 683,
+          "sha256": "f7dd8b122a664e1bde0a347d9b8d977f727e5f7f1979852fc1530ac53276469e",
+          "retained": "e2-dstep/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 19944,
+          "sha256": "077b5b85441956cafba6eca29920513eb0d1cf4d29a50868efd41c534505e878",
+          "retained": "e2-dstep/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "0273a4fa19461272f5c26951a87efdecae343e95baa3b2a051c882215f214853",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 1471,
+          "sha256": "76aed79c257ff2ff384adf7fff8b6d3270244413ae6802fd8b250aa642574ece",
+          "retained": "e2-dstep/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 23638996,
+          "sha256": "00eee52486e3b4c990d967131aef0fa585fc72e265436274c6287f4cd625dd2c",
+          "retained": "e2-dstep/stage0/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 155470,
+          "sha256": "95c87fe3f8df22176f5ac34a3a443d96bc92d5475714eef92be5ff2f3f4e2ba9",
+          "retained": "e2-dstep/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 19944,
+          "sha256": "077b5b85441956cafba6eca29920513eb0d1cf4d29a50868efd41c534505e878",
+          "retained": "e2-dstep/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "021d2404f3afd32aabdadda0760f574a6122c8e0da695a01287c41863aee3323",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 4709,
+          "sha256": "94f96a1d5c40ee1a5dfe2208f678c91a5606d93bb9f9b876b950493b5ff19ed5",
+          "retained": "e2-dstep/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "3e435d950ce0fac822228c0c9d251008c8b33c95043680953188b79860f50646",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 1458,
+          "sha256": "3a54f1af77108f51bc7cee5ca1852ee46df2001a565d16050b72697c1ce8ab8d",
+          "retained": "e2-dstep/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 44466285,
+          "sha256": "040be2b236c6c090f55938547c931d8e9f87f19ccd212dc938d9fc52b1c81e70",
+          "retained": "e2-dstep/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 119585,
+          "sha256": "f918005e56a94dfbd1d8c6bd1c1d534171a09c3f00f402d59dd34ff1ea219045",
+          "retained": "e2-dstep/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 15048,
+          "sha256": "c08536332fefdc469aa6c3483f6bc264f0238ad7078256b4e48a79400c369e9c",
+          "retained": "e2-dstep/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "36f1c6980bc7f12d1c0eaeab1e6afd92fdc23309d57cd7c2ba176936d8a8851a",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 3553,
+          "sha256": "f3c39a4f060c310835318743286ddb05321382f351468ebdbd56abb808fc40b2",
+          "retained": "e2-dstep/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "f449096d4daa5ebe853238fec3999c7aaa64942d4a083346db53b8eb2ff3bb53",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 1459,
+          "sha256": "4e5604cbb0752cae1420054700c8ce198d4bd1a622cbc25bea6772ccbd9dfe83",
+          "retained": "e2-dstep/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 65359521,
+          "sha256": "33d2cdbff59808fa0f813de6d9aa15d46f89ca458950ef7898f4fcf6e5251eb0",
+          "retained": "e2-dstep/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 121651,
+          "sha256": "2d4623cba70c06579fb444ca0c8abc7880bc82f418a158d69d291f616dbeae6d",
+          "retained": "e2-dstep/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 15336,
+          "sha256": "5fe19506744d226d757803c5b405a6b9fb5a26638ad5735f06f83c2898b94d01",
+          "retained": "e2-dstep/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "659b8b870cfae7ceaee428066a6a849d09362ecb58d59e9e2fdc51c8bbe0472a",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 3621,
+          "sha256": "576014a428090880dc2fefb87b36b1e1619e2fea4b458f8d5f437f11c7526973",
+          "retained": "e2-dstep/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 199758,
+          "sha256": "03bbdde4c063f9e398d28b52fba7c0ba443849b82a7129ac18005b0ee431b9f4",
+          "retained": "e2-dstep/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 179750,
+          "sha256": "77abea7ebfafdf278c0e4c9a4555c8423b35dc3dd1ce7fd10368b0be8054aa7d",
+          "retained": "e2-dstep/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-e2-stream",
+      "label": "e2-stream",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 506,
+          "sha256": "2b90525cdccede8e385acf3c6a5ea0f3b06aac4b230852dc6a58476dc82120eb",
+          "retained": "e2-stream/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 364,
+          "sha256": "c2fdbe10240d7c2eed28653a51e1776d228d184448e1c72f03ccd38747e587d1",
+          "retained": "e2-stream/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10721,
+          "sha256": "9720e7663d523e94be8d1adb18c4aa8d1d8907bd640d08f6bd46ef03eaa989d6",
+          "retained": "e2-stream/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 66089972,
+          "sha256": "a92cafa78f3aa784c7c15f331c8af9b3614394fcf16d12d0e22c4574813ca129",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 683,
+          "sha256": "f7dd8b122a664e1bde0a347d9b8d977f727e5f7f1979852fc1530ac53276469e",
+          "retained": "e2-stream/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "e2-stream/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "0273a4fa19461272f5c26951a87efdecae343e95baa3b2a051c882215f214853",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 1471,
+          "sha256": "283bb52ff6a7fba2d1a2b280f3674bc50f48828c3093c55105767d4b036b0535",
+          "retained": "e2-stream/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 23639817,
+          "sha256": "4cea31b6c4cdd6516c17f1d9c58cd25ba21a585c1f335d273edfd63ccc460735",
+          "retained": "e2-stream/stage0/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 158317,
+          "sha256": "5da9e1f68d8647ffbe63e3630adb8499738c18cd3621b0920a3b4a9e70eba32a",
+          "retained": "e2-stream/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "e2-stream/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "66fb16feb95c47376c835daae3a0e858af431bfae64b84c61acdcbc5dd03d24c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 4845,
+          "sha256": "809e0936ffd17a50f0bfb62f9735e283ae17f255b3668e1030d82fa326c033f8",
+          "retained": "e2-stream/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "3e435d950ce0fac822228c0c9d251008c8b33c95043680953188b79860f50646",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 1458,
+          "sha256": "efc593d41e31c379b1042094fe4459d384e0fdc6189e34e71705d241e2bb1f88",
+          "retained": "e2-stream/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 44467106,
+          "sha256": "079cc4d030456bfd075897460da4b114b617d3381f3a9f187659aa120f7b1438",
+          "retained": "e2-stream/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 123046,
+          "sha256": "e8cdb5c8431447a5eb430bee103eabdeab52db74ea0a97a4bdf43b29b3edb130",
+          "retained": "e2-stream/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 15624,
+          "sha256": "a15b50a03655ee665aa5f9061165b61ef3e0fb520b0995c833b1badd462de0c1",
+          "retained": "e2-stream/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "227794f68ccf54150b18ad731729df12e86e323539892f8cc06c5a62097fcc60",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 3689,
+          "sha256": "f8b9b24628651fd24aef33069f5e2d6e53daf57a1667a31faedf124d46d0d40f",
+          "retained": "e2-stream/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "f449096d4daa5ebe853238fec3999c7aaa64942d4a083346db53b8eb2ff3bb53",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 1459,
+          "sha256": "80c49061a8ae9ceec2b20533d03bd706b98ef96b7ee82055d82ab49afea6b7ab",
+          "retained": "e2-stream/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 65360342,
+          "sha256": "ce1770ed3f4767915a90c51fa6b8f0000795055a44c87746f14bfdaec72ef606",
+          "retained": "e2-stream/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 125157,
+          "sha256": "4d925518d9aeed75974ce7fcf48a7728ec4ca10136b95c768a103ec0c7b826fc",
+          "retained": "e2-stream/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 15912,
+          "sha256": "5b3e22cb348b75bf9768d9dbff5ea763bf972f664524befd225639cc28f200dc",
+          "retained": "e2-stream/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "5cb819e4c65f0c990a6ea624d2659285dbca191a57338fa3117f2de15e5a936c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 3757,
+          "sha256": "5d0bfbc1058d307a2a04acbda09c135bcacae4bfd21aa66bcf6482d0d20c90af",
+          "retained": "e2-stream/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 201903,
+          "sha256": "7b1651318204a5d91f479af549553a502183da7e33d87df279dd537ad9363c43",
+          "retained": "e2-stream/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 185519,
+          "sha256": "ee2ddc73d5fbfa2bddbfa72249bfc1f8ca9500956ca4e536b427f6e177bc5da1",
+          "retained": "e2-stream/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-e4-dstep",
+      "label": "e4-dstep",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 492,
+          "sha256": "5f319de51eac208b71569a904485e5782f5daee3191946ff818d7d3a7d974464",
+          "retained": "e4-dstep/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 364,
+          "sha256": "61fac5776d12e59b44279aeedf27100677bb7b535cc52123dbaccb522da56778",
+          "retained": "e4-dstep/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10728,
+          "sha256": "eb8821d6fbdd9c27bb236d31065476c435af1865d25cc1696f3eabe5f4e0be00",
+          "retained": "e4-dstep/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 66089055,
+          "sha256": "68aa35cd0b39048d0af3265375e36b1e51cb033c96f8cbcbe5477bf88ecc72f6",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 735,
+          "sha256": "ee2cd6863d3e180499360c813d05f9f7100911a66b9fa5d7016c7f04632f96e3",
+          "retained": "e4-dstep/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 19944,
+          "sha256": "077b5b85441956cafba6eca29920513eb0d1cf4d29a50868efd41c534505e878",
+          "retained": "e4-dstep/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "0273a4fa19461272f5c26951a87efdecae343e95baa3b2a051c882215f214853",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 1471,
+          "sha256": "76aed79c257ff2ff384adf7fff8b6d3270244413ae6802fd8b250aa642574ece",
+          "retained": "e4-dstep/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 23638996,
+          "sha256": "00eee52486e3b4c990d967131aef0fa585fc72e265436274c6287f4cd625dd2c",
+          "retained": "e4-dstep/stage0/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 155470,
+          "sha256": "1d80f876eb909f6b6a7da9e62671427227b68f621ec1c313502b166069e0c971",
+          "retained": "e4-dstep/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 19944,
+          "sha256": "077b5b85441956cafba6eca29920513eb0d1cf4d29a50868efd41c534505e878",
+          "retained": "e4-dstep/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "021d2404f3afd32aabdadda0760f574a6122c8e0da695a01287c41863aee3323",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 4709,
+          "sha256": "94f96a1d5c40ee1a5dfe2208f678c91a5606d93bb9f9b876b950493b5ff19ed5",
+          "retained": "e4-dstep/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "3e435d950ce0fac822228c0c9d251008c8b33c95043680953188b79860f50646",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 1458,
+          "sha256": "3a54f1af77108f51bc7cee5ca1852ee46df2001a565d16050b72697c1ce8ab8d",
+          "retained": "e4-dstep/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 44466285,
+          "sha256": "040be2b236c6c090f55938547c931d8e9f87f19ccd212dc938d9fc52b1c81e70",
+          "retained": "e4-dstep/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 119584,
+          "sha256": "79a5d4f3aa17c9b501f1edd1498bff739865954e88e3cbce8c653480c8912578",
+          "retained": "e4-dstep/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 15048,
+          "sha256": "c08536332fefdc469aa6c3483f6bc264f0238ad7078256b4e48a79400c369e9c",
+          "retained": "e4-dstep/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "36f1c6980bc7f12d1c0eaeab1e6afd92fdc23309d57cd7c2ba176936d8a8851a",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 3553,
+          "sha256": "f3c39a4f060c310835318743286ddb05321382f351468ebdbd56abb808fc40b2",
+          "retained": "e4-dstep/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "f449096d4daa5ebe853238fec3999c7aaa64942d4a083346db53b8eb2ff3bb53",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 1459,
+          "sha256": "4e5604cbb0752cae1420054700c8ce198d4bd1a622cbc25bea6772ccbd9dfe83",
+          "retained": "e4-dstep/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 65359521,
+          "sha256": "33d2cdbff59808fa0f813de6d9aa15d46f89ca458950ef7898f4fcf6e5251eb0",
+          "retained": "e4-dstep/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 121651,
+          "sha256": "90e55c9f3f2628707f8bafde163c5174241f3f4480496bfefe848b76cba94b8d",
+          "retained": "e4-dstep/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 15336,
+          "sha256": "5fe19506744d226d757803c5b405a6b9fb5a26638ad5735f06f83c2898b94d01",
+          "retained": "e4-dstep/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "659b8b870cfae7ceaee428066a6a849d09362ecb58d59e9e2fdc51c8bbe0472a",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 3621,
+          "sha256": "576014a428090880dc2fefb87b36b1e1619e2fea4b458f8d5f437f11c7526973",
+          "retained": "e4-dstep/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 199746,
+          "sha256": "19472b0d8b373cb671f113d5ee275d3f0f44fa6a2d126e504c35aa2c4bc2880b",
+          "retained": "e4-dstep/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 179750,
+          "sha256": "6ff02bbee3d7f81939d41808b93656721750fe07299ca6d60f3dd5ebad714d1c",
+          "retained": "e4-dstep/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-e4-stream",
+      "label": "e4-stream",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 494,
+          "sha256": "5b53d18a837cb48b128ec6f6d8df6637582c137377ab15900d1364220f5b5238",
+          "retained": "e4-stream/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 364,
+          "sha256": "c2fdbe10240d7c2eed28653a51e1776d228d184448e1c72f03ccd38747e587d1",
+          "retained": "e4-stream/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10709,
+          "sha256": "4a9f22a9d044bcb621d434d5a56e51c0b0b97cf3e34d632752fe2f581ead8e8b",
+          "retained": "e4-stream/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 66089972,
+          "sha256": "a92cafa78f3aa784c7c15f331c8af9b3614394fcf16d12d0e22c4574813ca129",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 735,
+          "sha256": "ee2cd6863d3e180499360c813d05f9f7100911a66b9fa5d7016c7f04632f96e3",
+          "retained": "e4-stream/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "e4-stream/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "0273a4fa19461272f5c26951a87efdecae343e95baa3b2a051c882215f214853",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 1471,
+          "sha256": "283bb52ff6a7fba2d1a2b280f3674bc50f48828c3093c55105767d4b036b0535",
+          "retained": "e4-stream/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 23639817,
+          "sha256": "4cea31b6c4cdd6516c17f1d9c58cd25ba21a585c1f335d273edfd63ccc460735",
+          "retained": "e4-stream/stage0/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 158317,
+          "sha256": "8944dd6519cc7a4f9d828dc9411ffb1c36b6d75aa091b04bdbff99e7bbde0165",
+          "retained": "e4-stream/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "e4-stream/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "66fb16feb95c47376c835daae3a0e858af431bfae64b84c61acdcbc5dd03d24c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 4845,
+          "sha256": "809e0936ffd17a50f0bfb62f9735e283ae17f255b3668e1030d82fa326c033f8",
+          "retained": "e4-stream/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "3e435d950ce0fac822228c0c9d251008c8b33c95043680953188b79860f50646",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 1458,
+          "sha256": "efc593d41e31c379b1042094fe4459d384e0fdc6189e34e71705d241e2bb1f88",
+          "retained": "e4-stream/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 44467106,
+          "sha256": "079cc4d030456bfd075897460da4b114b617d3381f3a9f187659aa120f7b1438",
+          "retained": "e4-stream/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 123046,
+          "sha256": "7fd051c9603b7402cb2661ca1a8c801cdd790cdfebb7e8d51da5a4cbc03f23e0",
+          "retained": "e4-stream/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 15624,
+          "sha256": "a15b50a03655ee665aa5f9061165b61ef3e0fb520b0995c833b1badd462de0c1",
+          "retained": "e4-stream/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "227794f68ccf54150b18ad731729df12e86e323539892f8cc06c5a62097fcc60",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 3689,
+          "sha256": "f8b9b24628651fd24aef33069f5e2d6e53daf57a1667a31faedf124d46d0d40f",
+          "retained": "e4-stream/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "f449096d4daa5ebe853238fec3999c7aaa64942d4a083346db53b8eb2ff3bb53",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 1459,
+          "sha256": "80c49061a8ae9ceec2b20533d03bd706b98ef96b7ee82055d82ab49afea6b7ab",
+          "retained": "e4-stream/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 65360342,
+          "sha256": "ce1770ed3f4767915a90c51fa6b8f0000795055a44c87746f14bfdaec72ef606",
+          "retained": "e4-stream/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 125157,
+          "sha256": "02e293bc2e45a3c1864d53996886edfddc26f2a42bbdb6ae8eb57688f26ba50c",
+          "retained": "e4-stream/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 15912,
+          "sha256": "5b3e22cb348b75bf9768d9dbff5ea763bf972f664524befd225639cc28f200dc",
+          "retained": "e4-stream/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "5cb819e4c65f0c990a6ea624d2659285dbca191a57338fa3117f2de15e5a936c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 3757,
+          "sha256": "5d0bfbc1058d307a2a04acbda09c135bcacae4bfd21aa66bcf6482d0d20c90af",
+          "retained": "e4-stream/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 201891,
+          "sha256": "3b44dc20faa51cdf6980ec632760962e6077993d85b2696616bbe56a7d5e27df",
+          "retained": "e4-stream/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 185521,
+          "sha256": "76c9785612e9785d53caa8edddd70d12cf8c2d72fe4f246d52c528982977de85",
+          "retained": "e4-stream/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-epilogue-e2",
+      "label": "epilogue-e2",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 510,
+          "sha256": "318eb65e7dcb3a10ba178198a2d08b7ecf934114d1340b4627a35961e707b5f4",
+          "retained": "epilogue-e2/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 4452,
+          "sha256": "b8d9097cdd0f3de5ddb7545e2bba9c2da372a3cbf3d799fed7ca11acc06b6c7e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 363,
+          "sha256": "2e2dff68db39f9b2f85cac3f3923a4bc0d1dfaae5249e87a3204019a5f762ff3",
+          "retained": "epilogue-e2/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10947,
+          "sha256": "6e6d4f9cb2bc3ae79153e15b452f5da8ce9fa2ed9170391bc66f21b0fcc50e01",
+          "retained": "epilogue-e2/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 712131,
+          "sha256": "39c0cd54516f6de67212d61ca78cb490ecd7e0ebaf80272b0a6b227bf94dbae1",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 683,
+          "sha256": "f7dd8b122a664e1bde0a347d9b8d977f727e5f7f1979852fc1530ac53276469e",
+          "retained": "epilogue-e2/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 360,
+          "sha256": "a914fba39830d57eb831d9827e64a60ebdb0ba9336643b22204320ef500d12d4",
+          "retained": "epilogue-e2/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 4452,
+          "sha256": "b8d9097cdd0f3de5ddb7545e2bba9c2da372a3cbf3d799fed7ca11acc06b6c7e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "4e802062f4fc2cbc96b77b252fbcf4dfb08daafd891aae51409a69c4b567cafd",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 663,
+          "sha256": "62bddf793f04f13c0f8a8345e0e895e9728f44d21a79093af922d185720a8dd6",
+          "retained": "epilogue-e2/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 99565,
+          "sha256": "a08c3936f7d4b159b66e7c30014d6725718dbefefb1e2091ec462f32901fd95d",
+          "retained": "epilogue-e2/stage0/memory-rtl.json"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 6438,
+          "sha256": "850cd201de6465cefd0971b8d1f618110f4340f8e5a830d5aff055d37e09c973",
+          "retained": "epilogue-e2/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 360,
+          "sha256": "a914fba39830d57eb831d9827e64a60ebdb0ba9336643b22204320ef500d12d4",
+          "retained": "epilogue-e2/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "888f2244e736d5c3364ea5b50bd8fed08fe485da007ff99566fa6b05799480c2",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e2/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 12336,
+          "sha256": "feebed574f10cf31d6b6ce7b7c9f06cc58f5bcd590781b185dcb7ade550799c6",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "229b8ab75dce21f7b065fb9e4bda6d948f93e3d2aaebd8552b067d75ed517293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 666,
+          "sha256": "639d17c14b7a56e7086556ca6bd7c9ff9da1bb0296b39be071d8b9d8fa75ebc5",
+          "retained": "epilogue-e2/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 390783,
+          "sha256": "bfd29dda44ed4df3763e3f3e95813495a91bd07887df4011b8acd74f133d640c",
+          "retained": "epilogue-e2/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 6398,
+          "sha256": "5306c324f3fe9c37df5a89c86d53744f074805f60bd599e1c475279b97cbb642",
+          "retained": "epilogue-e2/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 360,
+          "sha256": "1de9759c8b72ad8ab9da5c0cfb527db985a4eaf5ec791eba1f50cbc48bc6f297",
+          "retained": "epilogue-e2/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "245e3a9ef194ed8783f2bac6bd665cff0852cbc6f5077cda0eefd01457b87cd7",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e2/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 13456,
+          "sha256": "d49820daee838a2d8248531c454786e11fe1729b5563c0eb7a9753d0c6fb9ca0",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "04c612aafb503e622cc1ae6e6135b0296f717455f313bd9918fc9774367b8e26",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 666,
+          "sha256": "460da8fcea5a97c425c1362d44535a5a2bdc28f4a1f17455e8107037ef074f15",
+          "retained": "epilogue-e2/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 710771,
+          "sha256": "170e0e11c5612f6e74a699dd4f20c8702a5cab290ed49b5f285758d06c1a40cd",
+          "retained": "epilogue-e2/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 6424,
+          "sha256": "a9bc5989ce39494e326efd6a6764c243cea2780fa7ce6a3e1c22549a1c91296c",
+          "retained": "epilogue-e2/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 360,
+          "sha256": "ef83f361ccf22a02af5c4a40b9223fb2f86adef55add331cb3e6935dfd7c01d6",
+          "retained": "epilogue-e2/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "f63a2bec1c572384de109618f950d082cd4a3156eb1a25b202e1ffe3bf4c9790",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e2/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 4987,
+          "sha256": "1d6a3bf07c277827b25e69b79642795908f795b96244b79a597881a0d2e39fa2",
+          "retained": "epilogue-e2/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 4914,
+          "sha256": "476af74c9f096e33769f96aa524875a036e3900c5351928decf05e6f13c84f68",
+          "retained": "epilogue-e2/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-epilogue-e4",
+      "label": "epilogue-e4",
+      "files": [
+        {
+          "path": "command.json",
+          "bytes": 498,
+          "sha256": "d47520724a0c67d64a74f5a8f3282eb3f563179c7230ab25329e6fec62f8b381",
+          "retained": "epilogue-e4/command.json"
+        },
+        {
+          "path": "dram_0.bin",
+          "bytes": 4452,
+          "sha256": "b8d9097cdd0f3de5ddb7545e2bba9c2da372a3cbf3d799fed7ca11acc06b6c7e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "input.json",
+          "bytes": 363,
+          "sha256": "2e2dff68db39f9b2f85cac3f3923a4bc0d1dfaae5249e87a3204019a5f762ff3",
+          "retained": "epilogue-e4/input.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 10935,
+          "sha256": "02ba7b73e78c776968cd99802bd4337d63582be05be1191a8e9155e34ff33703",
+          "retained": "epilogue-e4/manifest.json"
+        },
+        {
+          "path": "memory-model.json",
+          "bytes": 712090,
+          "sha256": "5159640dc89d34f024ac13d83e4b4b6e58d40d9645910f48282322d9caaaf659",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "profile.json",
+          "bytes": 735,
+          "sha256": "ee2cd6863d3e180499360c813d05f9f7100911a66b9fa5d7016c7f04632f96e3",
+          "retained": "epilogue-e4/profile.json"
+        },
+        {
+          "path": "prog_0.hex",
+          "bytes": 360,
+          "sha256": "a914fba39830d57eb831d9827e64a60ebdb0ba9336643b22204320ef500d12d4",
+          "retained": "epilogue-e4/prog_0.hex"
+        },
+        {
+          "path": "stage0/dram_0.bin",
+          "bytes": 4452,
+          "sha256": "b8d9097cdd0f3de5ddb7545e2bba9c2da372a3cbf3d799fed7ca11acc06b6c7e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "4e802062f4fc2cbc96b77b252fbcf4dfb08daafd891aae51409a69c4b567cafd",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/input.json",
+          "bytes": 663,
+          "sha256": "62bddf793f04f13c0f8a8345e0e895e9728f44d21a79093af922d185720a8dd6",
+          "retained": "epilogue-e4/stage0/input.json"
+        },
+        {
+          "path": "stage0/memory-rtl.json",
+          "bytes": 99565,
+          "sha256": "907abd1952563a2a9eff6ae0e1ab81b12ab45dfc0bc23c161b7de251e03d5aea",
+          "retained": "epilogue-e4/stage0/memory-rtl.json"
+        },
+        {
+          "path": "stage0/metrics.json",
+          "bytes": 6450,
+          "sha256": "62758d88f4d29beea9c042826f87c34ce07a43a653685945856a3dbfb69647b1",
+          "retained": "epilogue-e4/stage0/metrics.json"
+        },
+        {
+          "path": "stage0/prog_0.hex",
+          "bytes": 360,
+          "sha256": "a914fba39830d57eb831d9827e64a60ebdb0ba9336643b22204320ef500d12d4",
+          "retained": "epilogue-e4/stage0/prog_0.hex"
+        },
+        {
+          "path": "stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "888f2244e736d5c3364ea5b50bd8fed08fe485da007ff99566fa6b05799480c2",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage0/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e4/stage0/waits.hex"
+        },
+        {
+          "path": "stage1/dram_0.bin",
+          "bytes": 12336,
+          "sha256": "feebed574f10cf31d6b6ce7b7c9f06cc58f5bcd590781b185dcb7ade550799c6",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "229b8ab75dce21f7b065fb9e4bda6d948f93e3d2aaebd8552b067d75ed517293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/input.json",
+          "bytes": 666,
+          "sha256": "639d17c14b7a56e7086556ca6bd7c9ff9da1bb0296b39be071d8b9d8fa75ebc5",
+          "retained": "epilogue-e4/stage1/input.json"
+        },
+        {
+          "path": "stage1/memory-rtl.json",
+          "bytes": 390783,
+          "sha256": "3e12f03d059e2898c0991e8cb70ae6ece53825ce60fa09384eab40ea5d27849e",
+          "retained": "epilogue-e4/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage1/metrics.json",
+          "bytes": 6330,
+          "sha256": "99971170e14ec7c085cd99cbb3f249aa0f2460b5964515830e92296f6219da08",
+          "retained": "epilogue-e4/stage1/metrics.json"
+        },
+        {
+          "path": "stage1/prog_0.hex",
+          "bytes": 360,
+          "sha256": "1de9759c8b72ad8ab9da5c0cfb527db985a4eaf5ec791eba1f50cbc48bc6f297",
+          "retained": "epilogue-e4/stage1/prog_0.hex"
+        },
+        {
+          "path": "stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "245e3a9ef194ed8783f2bac6bd665cff0852cbc6f5077cda0eefd01457b87cd7",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage1/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e4/stage1/waits.hex"
+        },
+        {
+          "path": "stage2/dram_0.bin",
+          "bytes": 13456,
+          "sha256": "d49820daee838a2d8248531c454786e11fe1729b5563c0eb7a9753d0c6fb9ca0",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "04c612aafb503e622cc1ae6e6135b0296f717455f313bd9918fc9774367b8e26",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/input.json",
+          "bytes": 666,
+          "sha256": "460da8fcea5a97c425c1362d44535a5a2bdc28f4a1f17455e8107037ef074f15",
+          "retained": "epilogue-e4/stage2/input.json"
+        },
+        {
+          "path": "stage2/memory-rtl.json",
+          "bytes": 710730,
+          "sha256": "be4d939f7ff2f663aef1a3e3fe687b78e6844ff1fec07794087c235524cff3be",
+          "retained": "epilogue-e4/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "stage2/metrics.json",
+          "bytes": 6419,
+          "sha256": "09737d72bdffb58d6a75059a7630979eaba59816d422f9d96195b9c563b18af1",
+          "retained": "epilogue-e4/stage2/metrics.json"
+        },
+        {
+          "path": "stage2/prog_0.hex",
+          "bytes": 360,
+          "sha256": "ef83f361ccf22a02af5c4a40b9223fb2f86adef55add331cb3e6935dfd7c01d6",
+          "retained": "epilogue-e4/stage2/prog_0.hex"
+        },
+        {
+          "path": "stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "f63a2bec1c572384de109618f950d082cd4a3156eb1a25b202e1ffe3bf4c9790",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "stage2/waits.hex",
+          "bytes": 85,
+          "sha256": "1b35b04a56cbc58fe027c165dc7b679d8871940fa69adf0244134d2f21213a98",
+          "retained": "epilogue-e4/stage2/waits.hex"
+        },
+        {
+          "path": "stdout.log",
+          "bytes": 4647,
+          "sha256": "8c7f53c3811242925b22eb24346bcda115f3db10b0bc8f359d770147cac4dc4b",
+          "retained": "epilogue-e4/stdout.log"
+        },
+        {
+          "path": "summary.json",
+          "bytes": 4912,
+          "sha256": "d42a99cece2ecedfe046e69424f6a7318334659273e565384a41fc6dd51b2a52",
+          "retained": "epilogue-e4/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-packaged-baseline",
+      "label": "package",
+      "files": [
+        {
+          "path": "bundles/hybrid_0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/hybrid_0/input.json",
+          "bytes": 1471,
+          "sha256": "283bb52ff6a7fba2d1a2b280f3674bc50f48828c3093c55105767d4b036b0535",
+          "retained": "package/bundles/hybrid_0/input.json"
+        },
+        {
+          "path": "bundles/hybrid_0/prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "package/bundles/hybrid_0/prog_0.hex"
+        },
+        {
+          "path": "bundles/hybrid_0/reference_logits.npy",
+          "bytes": 640,
+          "sha256": "a5c60a22e9dd3896f60d889ad89d225eee53c512bd1975770121c93d5d75cb8c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/hybrid_1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/hybrid_1/input.json",
+          "bytes": 1458,
+          "sha256": "efc593d41e31c379b1042094fe4459d384e0fdc6189e34e71705d241e2bb1f88",
+          "retained": "package/bundles/hybrid_1/input.json"
+        },
+        {
+          "path": "bundles/hybrid_1/prog_0.hex",
+          "bytes": 15624,
+          "sha256": "a15b50a03655ee665aa5f9061165b61ef3e0fb520b0995c833b1badd462de0c1",
+          "retained": "package/bundles/hybrid_1/prog_0.hex"
+        },
+        {
+          "path": "bundles/hybrid_1/reference_logits.npy",
+          "bytes": 640,
+          "sha256": "691a0768d507f536f293ffb24dc5b5728c4c074c6950b4290957b1de93608189",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/hybrid_2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/hybrid_2/input.json",
+          "bytes": 1459,
+          "sha256": "80c49061a8ae9ceec2b20533d03bd706b98ef96b7ee82055d82ab49afea6b7ab",
+          "retained": "package/bundles/hybrid_2/input.json"
+        },
+        {
+          "path": "bundles/hybrid_2/prog_0.hex",
+          "bytes": 15912,
+          "sha256": "5b3e22cb348b75bf9768d9dbff5ea763bf972f664524befd225639cc28f200dc",
+          "retained": "package/bundles/hybrid_2/prog_0.hex"
+        },
+        {
+          "path": "bundles/hybrid_2/reference_logits.npy",
+          "bytes": 640,
+          "sha256": "af82f82ef53088de9ceec30001e702118f5fb86c81e3c84d7f25fad07c9cbda5",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "bundles/sequence.json",
+          "bytes": 217,
+          "sha256": "bcc0dcd6429971dc30e504f4540a1e932c3f9d84134adc23d2208d2d20cc52f4",
+          "retained": "package/bundles/sequence.json"
+        },
+        {
+          "path": "commands.json",
+          "bytes": 1478,
+          "sha256": "1a8a0f5020c60eac6214138ec6301049c37dddf7abc498e1c647d3e6341756c7",
+          "retained": "package/commands.json"
+        },
+        {
+          "path": "manifest.json",
+          "bytes": 9769,
+          "sha256": "7d21e4e10ec31ed6404da445cc676ff02a466d1a865533becb7ccad1312fd88d",
+          "retained": "package/manifest.json"
+        },
+        {
+          "path": "metrics/hybrid_0.json",
+          "bytes": 158635,
+          "sha256": "7d86717e09a4d6befb8791d03c1448ff7c36b751fb5f9abafc0c468bace88a17",
+          "retained": "package/metrics/hybrid_0.json"
+        },
+        {
+          "path": "metrics/hybrid_1.json",
+          "bytes": 123364,
+          "sha256": "01c06496d7cff5d664082438cc17a1b1350adb6c9bedf388413e8174e592cd86",
+          "retained": "package/metrics/hybrid_1.json"
+        },
+        {
+          "path": "metrics/hybrid_2.json",
+          "bytes": 125473,
+          "sha256": "939b78f2eacbec8620ae6e27205f8fdf728199b73c5cfcbc02327602812abc9d",
+          "retained": "package/metrics/hybrid_2.json"
+        },
+        {
+          "path": "metrics/manifest.json",
+          "bytes": 11453,
+          "sha256": "4ecd651d89546012ca44dbff63e5874f8dc95be332ec4c579aa7f26b560ca205",
+          "retained": "package/metrics/manifest.json"
+        },
+        {
+          "path": "metrics/summary.json",
+          "bytes": 3243,
+          "sha256": "cf1ac3bfd46ebe78f2a7fac9988f7155d5befdb16f5135e8320d9a344905f989",
+          "retained": "package/metrics/summary.json"
+        },
+        {
+          "path": "report.json",
+          "bytes": 985,
+          "sha256": "828e047821d485678d1f1d2ae687a02a19e5980e1ed3ee35aea6a0e82cf93550",
+          "retained": "package/report.json"
+        },
+        {
+          "path": "rtl-check/command.json",
+          "bytes": 542,
+          "sha256": "52f019374bf70f1bd611bcff2a3458d9f5a8383ca3c6a0ade3fd6c0b9879a706",
+          "retained": "package/rtl-check/command.json"
+        },
+        {
+          "path": "rtl-check/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/input.json",
+          "bytes": 364,
+          "sha256": "c2fdbe10240d7c2eed28653a51e1776d228d184448e1c72f03ccd38747e587d1",
+          "retained": "package/rtl-check/input.json"
+        },
+        {
+          "path": "rtl-check/manifest.json",
+          "bytes": 11030,
+          "sha256": "71173aa2ce414b069fa15008fe5a3a27d5d8c268b747c6f3ac2332b5d602b956",
+          "retained": "package/rtl-check/manifest.json"
+        },
+        {
+          "path": "rtl-check/memory-model.json",
+          "bytes": 66089972,
+          "sha256": "a92cafa78f3aa784c7c15f331c8af9b3614394fcf16d12d0e22c4574813ca129",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/profile.json",
+          "bytes": 683,
+          "sha256": "f7dd8b122a664e1bde0a347d9b8d977f727e5f7f1979852fc1530ac53276469e",
+          "retained": "package/rtl-check/profile.json"
+        },
+        {
+          "path": "rtl-check/prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "package/rtl-check/prog_0.hex"
+        },
+        {
+          "path": "rtl-check/stage0/dram_0.bin",
+          "bytes": 774144,
+          "sha256": "0872e2130f7709ae3154283967685e5dd5bae61dbab0c64c8dc32b52554f9b38",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage0/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "0273a4fa19461272f5c26951a87efdecae343e95baa3b2a051c882215f214853",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage0/input.json",
+          "bytes": 1471,
+          "sha256": "283bb52ff6a7fba2d1a2b280f3674bc50f48828c3093c55105767d4b036b0535",
+          "retained": "package/rtl-check/stage0/input.json"
+        },
+        {
+          "path": "rtl-check/stage0/memory-rtl.json",
+          "bytes": 23639817,
+          "sha256": "4cea31b6c4cdd6516c17f1d9c58cd25ba21a585c1f335d273edfd63ccc460735",
+          "retained": "package/rtl-check/stage0/memory-rtl.json.gz"
+        },
+        {
+          "path": "rtl-check/stage0/metrics.json",
+          "bytes": 158317,
+          "sha256": "7accda844b56759df0c03aff532feb4ae34bcd69cdf390164d2cad5f23a32d30",
+          "retained": "package/rtl-check/stage0/metrics.json"
+        },
+        {
+          "path": "rtl-check/stage0/prog_0.hex",
+          "bytes": 20520,
+          "sha256": "cb054eda74587b972be74989e991d90429a88fe2e1c3532ca2cd0d17847cdd63",
+          "retained": "package/rtl-check/stage0/prog_0.hex"
+        },
+        {
+          "path": "rtl-check/stage0/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "66fb16feb95c47376c835daae3a0e858af431bfae64b84c61acdcbc5dd03d24c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage0/waits.hex",
+          "bytes": 4845,
+          "sha256": "809e0936ffd17a50f0bfb62f9735e283ae17f255b3668e1030d82fa326c033f8",
+          "retained": "package/rtl-check/stage0/waits.hex"
+        },
+        {
+          "path": "rtl-check/stage1/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "791bd6367171d00db9b9c0cc09711ed7f07a158a6ad292db54073be4af8f5293",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage1/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "3e435d950ce0fac822228c0c9d251008c8b33c95043680953188b79860f50646",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage1/input.json",
+          "bytes": 1458,
+          "sha256": "efc593d41e31c379b1042094fe4459d384e0fdc6189e34e71705d241e2bb1f88",
+          "retained": "package/rtl-check/stage1/input.json"
+        },
+        {
+          "path": "rtl-check/stage1/memory-rtl.json",
+          "bytes": 44467106,
+          "sha256": "079cc4d030456bfd075897460da4b114b617d3381f3a9f187659aa120f7b1438",
+          "retained": "package/rtl-check/stage1/memory-rtl.json.gz"
+        },
+        {
+          "path": "rtl-check/stage1/metrics.json",
+          "bytes": 123046,
+          "sha256": "22d187cc09edd674bdb31ddc56952ba5e2e819505539b4d1f333e93aa9111485",
+          "retained": "package/rtl-check/stage1/metrics.json"
+        },
+        {
+          "path": "rtl-check/stage1/prog_0.hex",
+          "bytes": 15624,
+          "sha256": "a15b50a03655ee665aa5f9061165b61ef3e0fb520b0995c833b1badd462de0c1",
+          "retained": "package/rtl-check/stage1/prog_0.hex"
+        },
+        {
+          "path": "rtl-check/stage1/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "227794f68ccf54150b18ad731729df12e86e323539892f8cc06c5a62097fcc60",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage1/waits.hex",
+          "bytes": 3689,
+          "sha256": "f8b9b24628651fd24aef33069f5e2d6e53daf57a1667a31faedf124d46d0d40f",
+          "retained": "package/rtl-check/stage1/waits.hex"
+        },
+        {
+          "path": "rtl-check/stage2/dram_0.bin",
+          "bytes": 33554432,
+          "sha256": "3a861dbb3334d88ad290b64d7ffaa13e747d28a7d5aef98e62ac3a3ab629bb9e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage2/dram_out_0.bin",
+          "bytes": 33554432,
+          "sha256": "f449096d4daa5ebe853238fec3999c7aaa64942d4a083346db53b8eb2ff3bb53",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage2/input.json",
+          "bytes": 1459,
+          "sha256": "80c49061a8ae9ceec2b20533d03bd706b98ef96b7ee82055d82ab49afea6b7ab",
+          "retained": "package/rtl-check/stage2/input.json"
+        },
+        {
+          "path": "rtl-check/stage2/memory-rtl.json",
+          "bytes": 65360342,
+          "sha256": "ce1770ed3f4767915a90c51fa6b8f0000795055a44c87746f14bfdaec72ef606",
+          "retained": "package/rtl-check/stage2/memory-rtl.json.gz"
+        },
+        {
+          "path": "rtl-check/stage2/metrics.json",
+          "bytes": 125157,
+          "sha256": "62be38028228cd94115149834458a72a96f4f5ba4e21bc872d2264cc94ac9a43",
+          "retained": "package/rtl-check/stage2/metrics.json"
+        },
+        {
+          "path": "rtl-check/stage2/prog_0.hex",
+          "bytes": 15912,
+          "sha256": "5b3e22cb348b75bf9768d9dbff5ea763bf972f664524befd225639cc28f200dc",
+          "retained": "package/rtl-check/stage2/prog_0.hex"
+        },
+        {
+          "path": "rtl-check/stage2/tmem_0.hex",
+          "bytes": 589824,
+          "sha256": "5cb819e4c65f0c990a6ea624d2659285dbca191a57338fa3117f2de15e5a936c",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "rtl-check/stage2/waits.hex",
+          "bytes": 3757,
+          "sha256": "5d0bfbc1058d307a2a04acbda09c135bcacae4bfd21aa66bcf6482d0d20c90af",
+          "retained": "package/rtl-check/stage2/waits.hex"
+        },
+        {
+          "path": "rtl-check/stdout.log",
+          "bytes": 201903,
+          "sha256": "bba158865dbf4231f833c5755f2181245722209ff13aca9c9101d3b999f9b13e",
+          "retained": "package/rtl-check/stdout.log"
+        },
+        {
+          "path": "rtl-check/summary.json",
+          "bytes": 185518,
+          "sha256": "f990735dc3f17150e39aac6583e93f4b10d6a9d4b67e3a9354c4cf7a315825ff",
+          "retained": "package/rtl-check/summary.json"
+        }
+      ]
+    },
+    {
+      "source": "/tmp/opentpu-r6-epilogue-bundles",
+      "label": "epilogue-inputs",
+      "files": [
+        {
+          "path": "m3k128n19/dram_0.bin",
+          "bytes": 4452,
+          "sha256": "b8d9097cdd0f3de5ddb7545e2bba9c2da372a3cbf3d799fed7ca11acc06b6c7e",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "m3k128n19/input.json",
+          "bytes": 663,
+          "sha256": "62bddf793f04f13c0f8a8345e0e895e9728f44d21a79093af922d185720a8dd6",
+          "retained": "epilogue-inputs/m3k128n19/input.json"
+        },
+        {
+          "path": "m3k128n19/prog_0.hex",
+          "bytes": 360,
+          "sha256": "a914fba39830d57eb831d9827e64a60ebdb0ba9336643b22204320ef500d12d4",
+          "retained": "epilogue-inputs/m3k128n19/prog_0.hex"
+        },
+        {
+          "path": "m3k128n19/reference_logits.npy",
+          "bytes": 584,
+          "sha256": "3514569ff555497bef227187c2e23addfda85b6775878cb90ddeb42eda382fb2",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "m4k128n67/dram_0.bin",
+          "bytes": 12336,
+          "sha256": "feebed574f10cf31d6b6ce7b7c9f06cc58f5bcd590781b185dcb7ade550799c6",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "m4k128n67/input.json",
+          "bytes": 666,
+          "sha256": "639d17c14b7a56e7086556ca6bd7c9ff9da1bb0296b39be071d8b9d8fa75ebc5",
+          "retained": "epilogue-inputs/m4k128n67/input.json"
+        },
+        {
+          "path": "m4k128n67/prog_0.hex",
+          "bytes": 360,
+          "sha256": "1de9759c8b72ad8ab9da5c0cfb527db985a4eaf5ec791eba1f50cbc48bc6f297",
+          "retained": "epilogue-inputs/m4k128n67/prog_0.hex"
+        },
+        {
+          "path": "m4k128n67/reference_logits.npy",
+          "bytes": 2272,
+          "sha256": "14272df2664e25bc6a91335b3d08df5082e30487c70541774b4e9ffa7b9fa5e3",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "m4k256n33/dram_0.bin",
+          "bytes": 13456,
+          "sha256": "d49820daee838a2d8248531c454786e11fe1729b5563c0eb7a9753d0c6fb9ca0",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "m4k256n33/input.json",
+          "bytes": 666,
+          "sha256": "460da8fcea5a97c425c1362d44535a5a2bdc28f4a1f17455e8107037ef074f15",
+          "retained": "epilogue-inputs/m4k256n33/input.json"
+        },
+        {
+          "path": "m4k256n33/prog_0.hex",
+          "bytes": 360,
+          "sha256": "ef83f361ccf22a02af5c4a40b9223fb2f86adef55add331cb3e6935dfd7c01d6",
+          "retained": "epilogue-inputs/m4k256n33/prog_0.hex"
+        },
+        {
+          "path": "m4k256n33/reference_logits.npy",
+          "bytes": 1184,
+          "sha256": "86d0b3adcd62f7cac92df1a5ac57d948ad7d892825eb814488afc30f71f00803",
+          "retained": null,
+          "reason": "regenerable synthetic data/output or duplicate model trace; original hashes retained"
+        },
+        {
+          "path": "sequence.json",
+          "bytes": 209,
+          "sha256": "a56592896059f08567c7699a92a77fbe0f54b1b11cbba09c0cd58771a3b98c1d",
+          "retained": "epilogue-inputs/sequence.json"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 1000,
+    "core": 5000,
+    "memory": 1000
+  },
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": null,
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 229,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 29,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 227,
+      "pc": 1,
+      "start": 30
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 229,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 29,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 227,
+      "id": 1,
+      "pc": 1,
+      "start": 30
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

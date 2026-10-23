@@ -1,0 +1,31 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 1048576,
+    "DSTEP": true,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": true,
+    "TMEM_WORDS": 8192
+  },
+  "instruction_counts": [
+    6
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "dot_const_q0",
+    "independent_reference": "NumPy float64 recurrence; no ISA arithmetic helpers",
+    "logits_address": 131072,
+    "logits_count": 576,
+    "phase": "synthetic stream descriptor modes",
+    "separate_source_destination": true,
+    "zero": true
+  }
+}

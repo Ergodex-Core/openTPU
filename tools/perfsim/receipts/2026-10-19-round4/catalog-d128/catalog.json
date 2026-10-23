@@ -1,0 +1,378 @@
+{
+  "bonsai_text_config": {
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "attn_output_gate": true,
+    "dtype": "bfloat16",
+    "eos_token_id": 248044,
+    "full_attention_interval": 4,
+    "head_dim": 256,
+    "hidden_act": "silu",
+    "hidden_size": 2048,
+    "initializer_range": 0.02,
+    "intermediate_size": 6144,
+    "layer_types": [
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention",
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention",
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention",
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention",
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention",
+      "linear_attention",
+      "linear_attention",
+      "linear_attention",
+      "full_attention"
+    ],
+    "linear_conv_kernel_dim": 4,
+    "linear_key_head_dim": 128,
+    "linear_num_key_heads": 16,
+    "linear_num_value_heads": 16,
+    "linear_value_head_dim": 128,
+    "mamba_ssm_dtype": "float32",
+    "max_position_embeddings": 262144,
+    "mlp_only_layers": [],
+    "model_type": "qwen3_5_text",
+    "mtp_num_hidden_layers": 1,
+    "mtp_use_dedicated_embeddings": false,
+    "num_attention_heads": 8,
+    "num_hidden_layers": 24,
+    "num_key_value_heads": 2,
+    "rms_norm_eps": 1e-06,
+    "rope_parameters": {
+      "mrope_interleaved": true,
+      "mrope_section": [
+        11,
+        11,
+        10
+      ],
+      "partial_rotary_factor": 0.25,
+      "rope_theta": 10000000,
+      "rope_type": "default"
+    },
+    "tie_word_embeddings": true,
+    "use_cache": true,
+    "vocab_size": 248320
+  },
+  "cases": [
+    {
+      "case": "gemma_q",
+      "compile_wall_seconds": 0.004175875015789643,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 1024,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 79360,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        1152,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_mlp_up",
+      "compile_wall_seconds": 0.0022032920096535236,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6912,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 79360,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        1152,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_mlp_down",
+      "compile_wall_seconds": 0.007350375002715737,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 1152,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 473856,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        6912,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "bonsai_mlp_up",
+      "compile_wall_seconds": 0.002282375004142523,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6144,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 140544,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        2048,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "bonsai_mlp_down",
+      "compile_wall_seconds": 0.012090542004443705,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 2048,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 421120,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        6144,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_prefill4_q_shard",
+      "compile_wall_seconds": 0.002360374986892566,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 1024,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 93184,
+      "logits_count": 256,
+      "shape_M_K_N": [
+        4,
+        1152,
+        64
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "bonsai_int4_pair_shard",
+      "compile_wall_seconds": 0.013112707994878292,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6144,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 78336,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        2048,
+        64
+      ],
+      "weight_format": "int4",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_rmsnorm",
+      "compile_wall_seconds": 0.0010539170179981738,
+      "complete_operator_shape": true,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 1152,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "rmsnorm",
+      "logits_address": 4608,
+      "logits_count": 1152,
+      "shape_M_K_N": [
+        1,
+        1152,
+        1152
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "bonsai_rmsnorm",
+      "compile_wall_seconds": 0.0005556670075748116,
+      "complete_operator_shape": true,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 2048,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "rmsnorm",
+      "logits_address": 8192,
+      "logits_count": 2048,
+      "shape_M_K_N": [
+        1,
+        2048,
+        2048
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_gelu",
+      "compile_wall_seconds": 0.0006524590135086328,
+      "complete_operator_shape": true,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6912,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "gelu",
+      "logits_address": 27648,
+      "logits_count": 6912,
+      "shape_M_K_N": [
+        1,
+        6912,
+        6912
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "bonsai_silu",
+      "compile_wall_seconds": 0.0006339170213323087,
+      "complete_operator_shape": true,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6144,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "silu",
+      "logits_address": 24576,
+      "logits_count": 6144,
+      "shape_M_K_N": [
+        1,
+        6144,
+        6144
+      ],
+      "weight_format": "int8",
+      "weight_source": null
+    },
+    {
+      "case": "gemma_local_q_projection",
+      "compile_wall_seconds": 0.024063542019575834,
+      "complete_operator_shape": true,
+      "data": "synthetic activations; local pretrained projection weights only",
+      "full_operator_N": 1024,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 1200640,
+      "logits_count": 1024,
+      "shape_M_K_N": [
+        1,
+        1152,
+        1024
+      ],
+      "weight_format": "int8",
+      "weight_source": {
+        "bytes_read": 2359296,
+        "dtype": "BF16",
+        "path": "/Users/rachittibrewal/.cache/huggingface/hub/models--google--gemma-3-1b-it/blobs/3d4ef8d71c14db7e448a09ebe891cfb6bf32c57a9b44499ae0d1c098e48516b6",
+        "shape": [
+          1024,
+          1152
+        ],
+        "tensor": "model.layers.0.self_attn.q_proj.weight",
+        "tensor_sha256": "7b9d49d005cfb92505c4e37f92023ee3c4577f5dc9abb84a5cb6d3e3d29b3f44",
+        "whole_checkpoint_loaded": false
+      }
+    },
+    {
+      "case": "bonsai_ternary_int4_pair",
+      "compile_wall_seconds": 0.017966415995033458,
+      "complete_operator_shape": false,
+      "data": "synthetic activations and weights",
+      "full_operator_N": 6144,
+      "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+      "kind": "projection",
+      "logits_address": 78336,
+      "logits_count": 64,
+      "shape_M_K_N": [
+        1,
+        2048,
+        64
+      ],
+      "weight_format": "int4",
+      "weight_source": {
+        "kind": "synthetic ternary weights; no Hadamard model basis claim"
+      }
+    },
+    {
+      "case": "bonsai_deltanet_head128",
+      "compile_wall_seconds": 0.0023482080141548067,
+      "complete_operator_shape": true,
+      "data": "synthetic recurrent state, q/k/v/decay; VPU fallback, no DSTEP/STREAM",
+      "independent_reference": "NumPy float64 DeltaNet recurrence and output; not pretrained model",
+      "kind": "deltanet_head",
+      "logits_address": 67200,
+      "logits_count": 16512,
+      "shape_M_K_N": [
+        128,
+        128,
+        128
+      ],
+      "weight_format": null
+    }
+  ],
+  "configuration_sources": {
+    "/Users/rachittibrewal/.cache/huggingface/hub/models--google--gemma-3-1b-it/snapshots/dcc83ea841ab6100d6b47a070329e1ba4cf78752/config.json": "19cb5d28c97778271ba2b3c3df47bf76bdd6706724777a2318b3522230afe91e",
+    "/Users/rachittibrewal/ergodex-03/openTPU-ternary-bonsai/models/Ternary-Bonsai-2-2B/config.json": "ed1c1723241f23f7f4e23430759cbd7dcfb4103cbdfe052bfe7626b57c2615b4"
+  },
+  "gemma_config": {
+    "architectures": [
+      "Gemma3ForCausalLM"
+    ],
+    "attention_bias": false,
+    "attention_dropout": 0.0,
+    "attn_logit_softcapping": null,
+    "bos_token_id": 2,
+    "cache_implementation": "hybrid",
+    "eos_token_id": [
+      1,
+      106
+    ],
+    "final_logit_softcapping": null,
+    "head_dim": 256,
+    "hidden_activation": "gelu_pytorch_tanh",
+    "hidden_size": 1152,
+    "initializer_range": 0.02,
+    "intermediate_size": 6912,
+    "max_position_embeddings": 32768,
+    "model_type": "gemma3_text",
+    "num_attention_heads": 4,
+    "num_hidden_layers": 26,
+    "num_key_value_heads": 1,
+    "pad_token_id": 0,
+    "query_pre_attn_scalar": 256,
+    "rms_norm_eps": 1e-06,
+    "rope_local_base_freq": 10000,
+    "rope_scaling": null,
+    "rope_theta": 1000000,
+    "sliding_window": 512,
+    "sliding_window_pattern": 6,
+    "torch_dtype": "bfloat16",
+    "transformers_version": "4.50.0.dev0",
+    "use_cache": true,
+    "vocab_size": 262144
+  },
+  "no_sparse_speedup": true,
+  "pretrained_model_validated": false
+}

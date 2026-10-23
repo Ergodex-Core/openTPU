@@ -1,0 +1,18 @@
+{
+  "schema_version": 1,
+  "name": "native-ddr4-200mhz",
+  "description": "Shared native A/B/SW port controller profile for independent RTL and simulator comparison; core clock is assumed, not achieved Fmax.",
+  "architecture": {
+    "core_period_ps": 5000
+  },
+  "memory": {
+    "backend": "ramulator",
+    "controller_period_ps": 833,
+    "memory_period_ps": 833,
+    "transaction_bytes": 64,
+    "outstanding": 64,
+    "ramulator_config": "ddr4.yaml",
+    "bridge": "../../../build/perfsim/bridge/libopentpu_ramulator.dylib",
+    "native_ports": true
+  }
+}

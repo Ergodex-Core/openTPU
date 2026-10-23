@@ -1,0 +1,411 @@
+{
+  "boundary": "Observed finite corpus only. Counts are static encoded instructions, not dynamic executions.",
+  "explicitly_unsupported": [
+    "S>1/GATHER",
+    "WAITW",
+    "WAITC/SEQ_WC",
+    "STREAM",
+    "DSTEP",
+    "HALT CHAIN",
+    "unknown functions/flags/configuration fields",
+    "divided memory-controller clock"
+  ],
+  "fixed_cases": 112,
+  "fixed_exact_trace_and_cycles": 112,
+  "fixed_numeric_passed": 112,
+  "native_cases": 21,
+  "native_exact_trace_cycles_ports": 21,
+  "native_numeric_passed": 21,
+  "native_profiles": [
+    "native-ddr4-200mhz",
+    "native-hbm2-200mhz",
+    "native-hbm2-stress-1ghz"
+  ],
+  "not_established": [
+    "pretrained/full-size model timing",
+    "persistent multi-launch RTL controller timing",
+    "non-D32/LANES8/MCOLS4 parameter timing",
+    "PAIR/alternate packed scaling exhaustive coverage",
+    "WBUF/replicated/subbank/pumped TMEM topology",
+    "FPGA shell/PCIe/host scheduling/sampling",
+    "physical Fmax/resources/power"
+  ],
+  "observed_configurations_S_D_LANES_MCOLS": [
+    "(1, 32, 8, 4)"
+  ],
+  "observed_flags": {
+    "ADDI": [
+      0
+    ],
+    "BAR": [
+      0
+    ],
+    "HALT": [
+      0
+    ],
+    "LD": [
+      0
+    ],
+    "LI": [
+      0
+    ],
+    "LOOP": [
+      0
+    ],
+    "MM": [
+      0,
+      1,
+      5,
+      11,
+      17,
+      33,
+      49,
+      132
+    ],
+    "NOP": [
+      0
+    ],
+    "QACT": [
+      0,
+      2,
+      6,
+      14
+    ],
+    "QST": [
+      0,
+      1,
+      3
+    ],
+    "RLD": [
+      0
+    ],
+    "ST": [
+      0
+    ],
+    "VOP": [
+      0,
+      1,
+      2
+    ]
+  },
+  "observed_shapes": [
+    [
+      "MM",
+      1,
+      1,
+      1
+    ],
+    [
+      "MM",
+      1,
+      3,
+      1
+    ],
+    [
+      "MM",
+      1,
+      7,
+      2
+    ],
+    [
+      "MM",
+      1,
+      32,
+      2
+    ],
+    [
+      "MM",
+      1,
+      64,
+      2
+    ],
+    [
+      "MM",
+      1,
+      64,
+      3
+    ],
+    [
+      "MM",
+      1,
+      96,
+      2
+    ],
+    [
+      "MM",
+      2,
+      1,
+      1
+    ],
+    [
+      "MM",
+      2,
+      2,
+      1
+    ],
+    [
+      "MM",
+      2,
+      3,
+      1
+    ],
+    [
+      "MM",
+      2,
+      13,
+      1
+    ],
+    [
+      "MM",
+      2,
+      13,
+      2
+    ],
+    [
+      "MM",
+      2,
+      17,
+      1
+    ],
+    [
+      "MM",
+      2,
+      17,
+      2
+    ],
+    [
+      "MM",
+      2,
+      17,
+      4
+    ],
+    [
+      "MM",
+      2,
+      32,
+      1
+    ],
+    [
+      "MM",
+      3,
+      1,
+      4
+    ],
+    [
+      "MM",
+      3,
+      17,
+      2
+    ],
+    [
+      "MM",
+      3,
+      19,
+      2
+    ],
+    [
+      "MM",
+      4,
+      9,
+      4
+    ],
+    [
+      "MM",
+      4,
+      33,
+      1
+    ],
+    [
+      "VOP",
+      1,
+      1
+    ],
+    [
+      "VOP",
+      1,
+      2
+    ],
+    [
+      "VOP",
+      1,
+      8
+    ],
+    [
+      "VOP",
+      1,
+      9
+    ],
+    [
+      "VOP",
+      1,
+      16
+    ],
+    [
+      "VOP",
+      1,
+      19
+    ],
+    [
+      "VOP",
+      1,
+      32
+    ],
+    [
+      "VOP",
+      1,
+      64
+    ],
+    [
+      "VOP",
+      1,
+      67
+    ],
+    [
+      "VOP",
+      1,
+      96
+    ],
+    [
+      "VOP",
+      1,
+      128
+    ],
+    [
+      "VOP",
+      1,
+      129
+    ],
+    [
+      "VOP",
+      1,
+      512
+    ],
+    [
+      "VOP",
+      1,
+      513
+    ],
+    [
+      "VOP",
+      2,
+      1
+    ],
+    [
+      "VOP",
+      2,
+      2
+    ],
+    [
+      "VOP",
+      2,
+      3
+    ],
+    [
+      "VOP",
+      2,
+      16
+    ],
+    [
+      "VOP",
+      2,
+      19
+    ],
+    [
+      "VOP",
+      2,
+      32
+    ],
+    [
+      "VOP",
+      2,
+      64
+    ],
+    [
+      "VOP",
+      2,
+      128
+    ],
+    [
+      "VOP",
+      3,
+      19
+    ],
+    [
+      "VOP",
+      3,
+      32
+    ],
+    [
+      "VOP",
+      3,
+      64
+    ],
+    [
+      "VOP",
+      3,
+      128
+    ],
+    [
+      "VOP",
+      4,
+      32
+    ],
+    [
+      "VOP",
+      4,
+      128
+    ],
+    [
+      "VOP",
+      4,
+      256
+    ],
+    [
+      "VOP",
+      9,
+      65
+    ]
+  ],
+  "schema_version": 1,
+  "sources": {
+    "/tmp/opentpu-round3-final-fixed-v2/summary.json": "4725071ce3f460c9c255ff91ca9eb236431463ec55cc458feac7f2870a519347",
+    "/tmp/opentpu-round3-final-native-v3/summary.json": "d458f88832375d9183a07086e20f1f8ec4820264694c60071a0bb512c07cba05"
+  },
+  "static_opcodes": {
+    "ADDI": 7,
+    "BAR": 1,
+    "HALT": 112,
+    "LD": 44,
+    "LI": 4,
+    "LOOP": 5,
+    "MM": 51,
+    "NOP": 1,
+    "QACT": 46,
+    "QST": 11,
+    "RLD": 1,
+    "ST": 19,
+    "VOP": 369
+  },
+  "static_vpu_functions": {
+    "V_ABS": 1,
+    "V_ADD": 43,
+    "V_ARGMAX": 3,
+    "V_COPY": 6,
+    "V_EXP2": 10,
+    "V_EXP2SUB": 7,
+    "V_FILL": 147,
+    "V_LOG2": 2,
+    "V_MAX": 4,
+    "V_MIN": 1,
+    "V_MUL": 73,
+    "V_OUTER": 3,
+    "V_RDOT": 5,
+    "V_RECIP": 9,
+    "V_RMAX": 3,
+    "V_RSQRT": 17,
+    "V_RSSQ": 17,
+    "V_RSUB": 1,
+    "V_RSUM": 10,
+    "V_SUB": 7
+  }
+}

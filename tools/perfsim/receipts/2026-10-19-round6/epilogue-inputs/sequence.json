@@ -1,0 +1,9 @@
+{
+  "full_pretrained_model": false,
+  "programs": [
+    "m3k128n19",
+    "m4k128n67",
+    "m4k256n33"
+  ],
+  "purpose": "independent compiled kernels, each DRAM image replaced; controller/TMEM/ACT retained"
+}

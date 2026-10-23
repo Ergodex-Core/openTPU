@@ -1,0 +1,60 @@
+STAGE_START index=0 global=0
+T0 D c=5 s=0 pc=0 op=30 w1=00000000 w2=00000000 w3=00000000
+T0 S c=6 s=0 u=3 r=6
+T0 D c=6 s=1 pc=1 op=21 w1=00000000 w2=00010001 w3=00000020
+T0 U c=15 u=3 frz=0
+T0 E c=17 s=0
+T0 S c=18 s=1 u=2 r=18
+T0 P c=63 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 U c=77 u=2 frz=0
+T0 E c=79 s=1
+STAGE_RESULT index=0 cycles=81 halted=1 error=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=81 rd=0 pop=0 use=0 cols=4 any=0
+T0 H c=81 bmxu=0 bdma=0 amxu=0 aq=0
+T0 P c=81 n=18 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=81 n=18 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+STAGE_START index=1 global=89
+T0 D c=5 s=0 pc=0 op=20 w1=00000000 w2=00000000 w3=00000040
+T0 S c=6 s=0 u=1 r=6
+T0 D c=6 s=1 pc=1 op=30 w1=00000080 w2=00000000 w3=00000000
+T0 G c=7 s=0
+T0 S c=7 s=1 u=3 r=7
+T0 D c=7 s=2 pc=2 op=11 w1=00000200 w2=00000080 w3=00000020
+MXS0 a=0 sw=0
+T0 U c=23 u=3 frz=0
+T0 E c=25 s=1
+T0 S c=26 s=2 u=0 r=26
+T0 E c=43 s=2
+T0 U c=49 u=1 starve=8 bp=0 frz=0 deny=0
+T0 E c=50 s=0
+STAGE_RESULT index=1 cycles=52 halted=1 error=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=136 rd=41 pop=7 use=7 cols=4 any=1
+T0 H c=52 bmxu=7 bdma=4 amxu=0 aq=0
+T0 P c=52 n=53 bm=7 bd=4 am=0 aq=0 mx=7 fm=0 fq=0 fv=0 fc=0
+T0 Q c=52 n=53 bs=0 as=0 ms=8 mb=0 ff=7 ld=0
+STAGE_START index=2 global=149
+T0 D c=5 s=0 pc=0 op=20 w1=00000000 w2=00000000 w3=00000040
+T0 S c=6 s=0 u=1 r=6
+T0 D c=6 s=1 pc=1 op=11 w1=00000300 w2=00000040 w3=00000007
+T0 G c=7 s=0
+MXS0 a=0 sw=0
+T0 U c=56 u=1 starve=6 bp=0 frz=0 deny=0
+T0 E c=57 s=0
+T0 S c=58 s=1 u=0 r=58
+T0 P c=63 n=64 bm=7 bd=0 am=0 aq=0 mx=7 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=6 mb=0 ff=7 ld=0
+T0 E c=72 s=1
+STAGE_RESULT index=2 cycles=74 halted=1 error=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=213 rd=89 pop=14 use=14 cols=4 any=1
+T0 H c=74 bmxu=7 bdma=1 amxu=0 aq=0
+T0 P c=74 n=11 bm=0 bd=1 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=74 n=11 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+- /private/tmp/opentpu-rtl-persistent-v1/tb_perfsim.sv:121: Verilog $finish
+TMEMSTAT sid=0 cyc=207 lose=0,0,0,0 n= 187,20,0,0,0,0,0 d= 187,20,0,0,0,0,0,0,0 dw= 165,42,0,0,0,0,0,0,0,0 rd= 7,5,4,4,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 2ns; walltime 0.085 s; speed 28.246 ns/s
+- Verilator: cpu 0.081 s on 1 threads; allocated 49 MB

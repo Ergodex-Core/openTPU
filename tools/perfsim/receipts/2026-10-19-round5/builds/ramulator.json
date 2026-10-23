@@ -1,0 +1,49 @@
+{
+  "lock": {
+    "schema_version": 1,
+    "opentpu_base": "3c542bd9cb98f11499729ea52703788f4588e4d2",
+    "ramulator": {
+      "url": "https://github.com/CMU-SAFARI/ramulator2.git",
+      "commit": "be93be78055d922aa1d4d33e15bcc8f2b0c61a9d",
+      "release": "v2.0a",
+      "license": "MIT",
+      "prepare": "ramulator/prepare.py"
+    },
+    "ramulator_dependencies": {
+      "yaml-cpp": {
+        "url": "https://github.com/jbeder/yaml-cpp.git",
+        "commit": "0579ae3d976091d7d664aa9d2527e0d0cff25763",
+        "license": "MIT"
+      },
+      "spdlog": {
+        "url": "https://github.com/gabime/spdlog.git",
+        "commit": "ad0e89cbfb4d0c1ce4d097e134eb7be67baebb36",
+        "license": "MIT"
+      },
+      "argparse": {
+        "url": "https://github.com/p-ranav/argparse.git",
+        "commit": "997da9255618311d1fcb0135ce86022729d1f1cb",
+        "license": "MIT"
+      }
+    },
+    "scale_sim_reference_only": {
+      "url": "https://github.com/scalesim-project/SCALE-Sim.git",
+      "commit": "9f98c4371055a54c75209c2e02b640b897550532",
+      "license": "MIT",
+      "paper": "https://arxiv.org/abs/2504.15377v2",
+      "runtime_dependency": false
+    },
+    "python_tested": "3.14.5",
+    "numpy": "2.5.4",
+    "pytest": "9.1.1"
+  },
+  "python_architecture": "arm64",
+  "patch_sha256": "3c129d13fc16d082c53901d39e53b9fe26a7ce7972224004f193a63ff84629d7",
+  "bridge_sources": {
+    "CMakeLists.txt": "f6cd4eae484a08a731f8bb10252edb78de7fd62d811f2c4ccabcf5625b9da0fd",
+    "bridge.cpp": "7aeddbd6c2f34e166db8048bc16557ad49695c71d765307188b7dd4f3cb1273c"
+  },
+  "libraries": {
+    "libopentpu_ramulator.dylib": "02b420cc56d9cf1b5844944e6d1e4716b5ea625c611be2fb31cabcede7b8b2eb"
+  }
+}

@@ -1,0 +1,64 @@
+T0 D c=5 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00000480
+T0 S c=6 s=0 u=0 r=6
+T0 D c=6 s=1 pc=1 op=30 w1=00000900 w2=00000000 w3=00000000
+T0 D c=7 s=2 pc=2 op=30 w1=00000901 w2=00000900 w3=00000000
+T0 D c=8 s=3 pc=3 op=30 w1=00000902 w2=00000901 w3=00000000
+T0 D c=9 s=4 pc=4 op=30 w1=00000903 w2=00000902 w3=00000000
+T0 D c=10 s=5 pc=5 op=30 w1=00000904 w2=00000000 w3=00000903
+T0 D c=11 s=6 pc=6 op=11 w1=00001200 w2=00000904 w3=00000480
+T0 P c=63 n=64 bm=0 bd=56 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=127 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=162 s=0
+T0 S c=163 s=1 u=3 r=163
+T0 P c=191 n=64 bm=0 bd=24 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=255 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=319 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 U c=347 u=3 frz=0
+T0 E c=349 s=1
+T0 S c=350 s=2 u=3 r=350
+T0 U c=363 u=3 frz=0
+T0 E c=365 s=2
+T0 S c=366 s=3 u=3 r=366
+T0 U c=379 u=3 frz=0
+T0 E c=381 s=3
+T0 S c=382 s=4 u=3 r=382
+T0 P c=383 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=447 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=447 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 U c=488 u=3 frz=0
+T0 E c=490 s=4
+T0 S c=491 s=5 u=3 r=491
+T0 P c=511 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=511 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=575 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=575 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=639 n=64 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=639 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 U c=647 u=3 frz=0
+T0 E c=649 s=5
+T0 S c=650 s=6 u=0 r=650
+T0 P c=703 n=64 bm=0 bd=16 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=703 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=767 n=64 bm=0 bd=62 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=767 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=831 n=64 bm=0 bd=63 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=831 n=64 bs=19 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=879 s=6
+T0 H c=881 bmxu=0 bdma=328 amxu=0 aq=0
+T0 P c=881 n=50 bm=0 bd=43 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=881 n=50 bs=21 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=0 sw=0
+MXACT s0 cyc=1137 rd=0 pop=0 use=0 cols=4 any=0
+RESULT cycles=881 halted=1 error=0
+SLICE 0 icount=8
+- /private/tmp/opentpu-rtl-shapes-v1/tb_perfsim.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=881 lose=0,0,0,0 n= 446,291,144,0,0,0,0 d= 446,291,144,0,0,0,0,0,0 dw= 288,449,10,134,0,0,0,0,0,0 rd= 0,144,0,291,144,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 11ns; walltime 0.127 s; speed 99.786 ns/s
+- Verilator: cpu 0.115 s on 1 threads; allocated 82 MB

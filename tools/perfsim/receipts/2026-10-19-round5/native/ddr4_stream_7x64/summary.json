@@ -1,0 +1,118 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 833,
+    "core": 5000,
+    "memory": 833
+  },
+  "model_host_wall_seconds": 0.004658125020796433,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999994,
+        "passed": true,
+        "relative_l2": 3.341093054712637e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999994,
+        "passed": true,
+        "relative_l2": 3.341093054712637e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 374,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 36,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 47,
+      "pc": 1,
+      "start": 35
+    },
+    {
+      "dispatch": 7,
+      "end": 58,
+      "pc": 2,
+      "start": 46
+    },
+    {
+      "dispatch": 8,
+      "end": 69,
+      "pc": 3,
+      "start": 57
+    },
+    {
+      "dispatch": 9,
+      "end": 356,
+      "pc": 4,
+      "start": 68
+    },
+    {
+      "dispatch": 10,
+      "end": 372,
+      "pc": 5,
+      "start": 356
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 374,
+  "rtl_host_wall_seconds": 0.09303304200875573,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 36,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 47,
+      "id": 1,
+      "pc": 1,
+      "start": 35
+    },
+    {
+      "dispatch": 7,
+      "end": 58,
+      "id": 2,
+      "pc": 2,
+      "start": 46
+    },
+    {
+      "dispatch": 8,
+      "end": 69,
+      "id": 3,
+      "pc": 3,
+      "start": 57
+    },
+    {
+      "dispatch": 9,
+      "end": 356,
+      "id": 4,
+      "pc": 4,
+      "start": 68
+    },
+    {
+      "dispatch": 10,
+      "end": 372,
+      "id": 5,
+      "pc": 5,
+      "start": 356
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

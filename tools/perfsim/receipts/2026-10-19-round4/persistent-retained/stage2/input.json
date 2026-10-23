@@ -1,0 +1,26 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 32,
+    "DRAM_BYTES": 1048576,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 8192
+  },
+  "instruction_counts": [
+    3
+  ],
+  "labels": {},
+  "metadata": {
+    "host_inputs": [],
+    "phase": "retained_state_probe"
+  }
+}

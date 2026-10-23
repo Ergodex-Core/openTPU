@@ -1,0 +1,154 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "OpenTPU/LPN-compatible input bundle",
+  "type": "object",
+  "required": [
+    "config",
+    "instruction_counts"
+  ],
+  "properties": {
+    "config": {
+      "type": "object",
+      "properties": {
+        "S": {
+          "type": "integer",
+          "default": 1
+        },
+        "D": {
+          "type": "integer",
+          "default": 32
+        },
+        "MCOLS": {
+          "type": "integer",
+          "default": 8
+        },
+        "ACT_BLOCKS": {
+          "type": "integer",
+          "default": 64
+        },
+        "TMEM_WORDS": {
+          "type": "integer",
+          "default": 65536
+        },
+        "DRAM_BYTES": {
+          "type": "integer",
+          "default": 1048576
+        },
+        "IMEM_WORDS": {
+          "type": "integer",
+          "default": 65536
+        },
+        "LANES": {
+          "type": "integer",
+          "default": 8
+        },
+        "PAIR": {
+          "type": "boolean",
+          "default": false
+        },
+        "DSTEP": {
+          "type": "boolean",
+          "default": false
+        },
+        "STREAM": {
+          "type": "boolean",
+          "default": false
+        },
+        "ACT_ROWS": {
+          "type": "integer",
+          "default": 0
+        },
+        "SEQ_WC": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "config_export": {
+      "type": "object",
+      "properties": {
+        "S": {
+          "type": "integer",
+          "default": 1
+        },
+        "D": {
+          "type": "integer",
+          "default": 32
+        },
+        "MCOLS": {
+          "type": "integer",
+          "default": 8
+        },
+        "ACT_BLOCKS": {
+          "type": "integer",
+          "default": 64
+        },
+        "TMEM_WORDS": {
+          "type": "integer",
+          "default": 65536
+        },
+        "DRAM_BYTES": {
+          "type": "integer",
+          "default": 1048576
+        },
+        "IMEM_WORDS": {
+          "type": "integer",
+          "default": 65536
+        },
+        "LANES": {
+          "type": "integer",
+          "default": 8
+        },
+        "PAIR": {
+          "type": "boolean",
+          "default": false
+        },
+        "DSTEP": {
+          "type": "boolean",
+          "default": false
+        },
+        "STREAM": {
+          "type": "boolean",
+          "default": false
+        },
+        "ACT_ROWS": {
+          "type": "integer",
+          "default": 0
+        },
+        "SEQ_WC": {
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "instruction_counts": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 1,
+      "items": {
+        "type": "integer",
+        "minimum": 1
+      }
+    },
+    "args": {
+      "type": "array",
+      "maxItems": 8,
+      "items": {
+        "type": "integer",
+        "minimum": 0,
+        "maximum": 4294967295
+      }
+    },
+    "labels": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    },
+    "metadata": {
+      "type": "object"
+    }
+  }
+}

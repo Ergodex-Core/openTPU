@@ -1,0 +1,51 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    5
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "gemma_local_q_projection",
+    "compile_wall_seconds": 0.024063542019575834,
+    "complete_operator_shape": true,
+    "data": "synthetic activations; local pretrained projection weights only",
+    "full_operator_N": 1024,
+    "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+    "kind": "projection",
+    "logits_address": 1200640,
+    "logits_count": 1024,
+    "shape_M_K_N": [
+      1,
+      1152,
+      1024
+    ],
+    "weight_format": "int8",
+    "weight_source": {
+      "bytes_read": 2359296,
+      "dtype": "BF16",
+      "path": "/Users/rachittibrewal/.cache/huggingface/hub/models--google--gemma-3-1b-it/blobs/3d4ef8d71c14db7e448a09ebe891cfb6bf32c57a9b44499ae0d1c098e48516b6",
+      "shape": [
+        1024,
+        1152
+      ],
+      "tensor": "model.layers.0.self_attn.q_proj.weight",
+      "tensor_sha256": "7b9d49d005cfb92505c4e37f92023ee3c4577f5dc9abb84a5cb6d3e3d29b3f44",
+      "whole_checkpoint_loaded": false
+    }
+  }
+}

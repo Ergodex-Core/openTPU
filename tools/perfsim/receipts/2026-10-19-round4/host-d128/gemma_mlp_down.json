@@ -1,0 +1,281 @@
+{
+  "architecture": {
+    "core_period_ps": 5000,
+    "dispatch_latency": 1,
+    "dma_buffer_chunks": 128,
+    "dma_store_run": 32,
+    "issue_period": 1,
+    "max_cycles": 10000000,
+    "mxu_chain": 16,
+    "mxu_epilogue_lanes": 0,
+    "mxu_fifo_chunks": 1024,
+    "mxu_queue": 2,
+    "mxu_result_rows": 32,
+    "quant_row_buffer_chunks": 1024,
+    "result_queue": 128,
+    "tmem_read_latency": 2,
+    "tmem_read_ports_per_bank": 32,
+    "tmem_write_ports_per_bank": 1,
+    "vpu_composite_lanes": 0,
+    "vpu_slots": 10,
+    "window": 16
+  },
+  "backend": "ramulator",
+  "boundaries": {
+    "conditional_tokens_per_second": null,
+    "decode_seconds": null,
+    "end": "HALT and all write completions drained",
+    "prefill_seconds": null,
+    "start": "core run, program resident; no host upload",
+    "ttft_seconds": null
+  },
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "core_frequency_hz": 200000000.0,
+  "cycles": 136172,
+  "frontend_stalls": {},
+  "host_wall_seconds": 5.303552708995994,
+  "instructions": [
+    {
+      "cycles": 878,
+      "dispatch": 5,
+      "end": 883,
+      "id": 1,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 27648,
+        "read_transactions": 1728
+      },
+      "opcode": "LD",
+      "pc": 0,
+      "release": 6,
+      "stalls": {
+        "dma_buffer_full": 30,
+        "dma_read_response": 10,
+        "memory_backpressure": 117,
+        "pipeline_latency": 2
+      },
+      "start": 6,
+      "unit": 0,
+      "work": {
+        "lane_issues": 864,
+        "tmem_reads": 0,
+        "tmem_writes": 6912
+      }
+    },
+    {
+      "cycles": 2659,
+      "dispatch": 6,
+      "end": 2665,
+      "id": 2,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 1,
+      "release": 884,
+      "stalls": {
+        "dependency": 877,
+        "pipeline_latency": 12,
+        "quant_scale_pipeline": 907
+      },
+      "start": 884,
+      "unit": 2,
+      "work": {
+        "lane_issues": 864,
+        "packed_activation_bytes": 6912,
+        "tmem_reads": 6912,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 135967,
+      "dispatch": 7,
+      "end": 135974,
+      "id": 3,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 9953280,
+        "read_transactions": 622080
+      },
+      "opcode": "MM",
+      "pc": 2,
+      "release": 2666,
+      "stalls": {
+        "activation_dependency": 2658,
+        "memory_backpressure": 73559,
+        "mxu_array_fill": 134804,
+        "mxu_epilogue_drain": 8,
+        "mxu_fifo_full": 89,
+        "mxu_weight_starvation": 71060,
+        "pipeline_latency": 7
+      },
+      "start": 8,
+      "unit": 1,
+      "work": {
+        "lane_issues": 1152,
+        "macs": 7962624,
+        "mxu_advances": 62208,
+        "peak_weight_fifo_chunks": 1024,
+        "tmem_reads": 0,
+        "tmem_writes": 1152
+      }
+    },
+    {
+      "cycles": 136162,
+      "dispatch": 8,
+      "end": 136170,
+      "id": 4,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 4608,
+        "write_transactions": 288
+      },
+      "opcode": "ST",
+      "pc": 3,
+      "release": 135975,
+      "stalls": {
+        "dependency": 135093,
+        "dma_store_gather": 132,
+        "memory_backpressure": 10,
+        "memory_completion": 13,
+        "pipeline_latency": 6,
+        "unit_queue": 873
+      },
+      "start": 135975,
+      "unit": 0,
+      "work": {
+        "lane_issues": 144,
+        "tmem_reads": 1152,
+        "tmem_writes": 0
+      }
+    }
+  ],
+  "label": "opentpu-perfsim-estimate",
+  "layers": {
+    "LD": {
+      "first_dispatch": 5,
+      "instructions": 1,
+      "last_completion": 883,
+      "memory": {
+        "read_bytes": 27648,
+        "read_transactions": 1728
+      },
+      "span_cycles": 879,
+      "stalls": {
+        "dma_buffer_full": 30,
+        "dma_read_response": 10,
+        "memory_backpressure": 117,
+        "pipeline_latency": 2
+      }
+    },
+    "MM": {
+      "first_dispatch": 7,
+      "instructions": 1,
+      "last_completion": 135974,
+      "memory": {
+        "read_bytes": 9953280,
+        "read_transactions": 622080
+      },
+      "span_cycles": 135968,
+      "stalls": {
+        "activation_dependency": 2658,
+        "memory_backpressure": 73559,
+        "mxu_array_fill": 134804,
+        "mxu_epilogue_drain": 8,
+        "mxu_fifo_full": 89,
+        "mxu_weight_starvation": 71060,
+        "pipeline_latency": 7
+      }
+    },
+    "QACT": {
+      "first_dispatch": 6,
+      "instructions": 1,
+      "last_completion": 2665,
+      "memory": {},
+      "span_cycles": 2660,
+      "stalls": {
+        "dependency": 877,
+        "pipeline_latency": 12,
+        "quant_scale_pipeline": 907
+      }
+    },
+    "ST": {
+      "first_dispatch": 8,
+      "instructions": 1,
+      "last_completion": 136170,
+      "memory": {
+        "write_bytes": 4608,
+        "write_transactions": 288
+      },
+      "span_cycles": 136163,
+      "stalls": {
+        "dependency": 135093,
+        "dma_store_gather": 132,
+        "memory_backpressure": 10,
+        "memory_completion": 13,
+        "pipeline_latency": 6,
+        "unit_queue": 873
+      }
+    }
+  },
+  "memory": {
+    "logical_read_bytes": 9980928,
+    "logical_write_bytes": 4608,
+    "peak_outstanding": 64,
+    "read_bytes": 9980928,
+    "read_transactions": 623808,
+    "write_bytes": 4608,
+    "write_transactions": 288
+  },
+  "memory_config": {
+    "backend": "ramulator",
+    "bridge": "/private/tmp/opentpu-bridge-v2/libopentpu_ramulator.dylib",
+    "controller_period_ps": 1000,
+    "ingress_per_controller_tick": 1,
+    "memory_period_ps": 1000,
+    "native_ports": true,
+    "outstanding": 64,
+    "ramulator_config": "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/hbm2.yaml",
+    "record_trace": false,
+    "rmw": true,
+    "simple_channels": 8,
+    "simple_latency_ticks": 20,
+    "simple_queue_per_channel": 32,
+    "transaction_bytes": 16
+  },
+  "mxu_advance_fraction": 0.4568340040536968,
+  "numerical_check": {
+    "cosine": 0.9999533740170974,
+    "passed": true,
+    "reference": "NumPy float64 operator; not end-to-end pretrained inference",
+    "relative_l2": 0.009656895041580786
+  },
+  "schema_version": 1,
+  "seconds": 0.00068086,
+  "timing_validation": "unvalidated",
+  "unit_busy_fraction": {
+    "0": 0.007872396674793643,
+    "1": 0.9984872073554034,
+    "2": 0.013079047087506977,
+    "3": 0.0,
+    "4": 0.0
+  },
+  "useful_mac_fraction": 0.1142085010134242
+}

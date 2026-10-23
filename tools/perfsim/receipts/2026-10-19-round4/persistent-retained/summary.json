@@ -1,0 +1,157 @@
+{
+  "backend": "ramulator",
+  "fixed_launch_overhead_cycles": 8,
+  "host_gap_cycles": 0,
+  "model_host_wall_seconds": 0.005287459032842889,
+  "numeric_passed": true,
+  "physical_traffic_match": true,
+  "port_schedule_match": true,
+  "request_arrivals": "independently generated; explicit host gap, no forced request times",
+  "retained": "DRAM, TMEM, ACT RAM, controller/open rows/refresh; reset core registers, sequencer and unit pipelines",
+  "rtl_host_wall_seconds": 0.09411874998477288,
+  "stages": [
+    {
+      "independent_reference": null,
+      "model_cycles": 81,
+      "model_global_start": 0,
+      "model_trace": [
+        {
+          "dispatch": 5,
+          "end": 17,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 79,
+          "pc": 1,
+          "start": 18
+        }
+      ],
+      "name": "retain0",
+      "numeric_bit_exact": true,
+      "phase": "retained_state_probe",
+      "rtl_cycles": 81,
+      "rtl_global_start": 0,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 17,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 79,
+          "id": 1,
+          "pc": 1,
+          "start": 18
+        }
+      ],
+      "stage": 0,
+      "timing_passed": true,
+      "trace_match": true
+    },
+    {
+      "independent_reference": null,
+      "model_cycles": 52,
+      "model_global_start": 89,
+      "model_trace": [
+        {
+          "dispatch": 5,
+          "end": 50,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 25,
+          "pc": 1,
+          "start": 7
+        },
+        {
+          "dispatch": 7,
+          "end": 43,
+          "pc": 2,
+          "start": 26
+        }
+      ],
+      "name": "retain1",
+      "numeric_bit_exact": true,
+      "phase": "retained_state_probe",
+      "rtl_cycles": 52,
+      "rtl_global_start": 89,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 50,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 25,
+          "id": 1,
+          "pc": 1,
+          "start": 7
+        },
+        {
+          "dispatch": 7,
+          "end": 43,
+          "id": 2,
+          "pc": 2,
+          "start": 26
+        }
+      ],
+      "stage": 1,
+      "timing_passed": true,
+      "trace_match": true
+    },
+    {
+      "independent_reference": null,
+      "model_cycles": 74,
+      "model_global_start": 149,
+      "model_trace": [
+        {
+          "dispatch": 5,
+          "end": 57,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 72,
+          "pc": 1,
+          "start": 58
+        }
+      ],
+      "name": "retain2",
+      "numeric_bit_exact": true,
+      "phase": "retained_state_probe",
+      "rtl_cycles": 74,
+      "rtl_global_start": 149,
+      "rtl_trace": [
+        {
+          "dispatch": 5,
+          "end": 57,
+          "id": 0,
+          "pc": 0,
+          "start": 6
+        },
+        {
+          "dispatch": 6,
+          "end": 72,
+          "id": 1,
+          "pc": 1,
+          "start": 58
+        }
+      ],
+      "stage": 2,
+      "timing_passed": true,
+      "trace_match": true
+    }
+  ],
+  "timing_passed": true
+}

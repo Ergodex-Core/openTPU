@@ -1,0 +1,99 @@
+{
+  "backend": "ramulator",
+  "boundary": "program-resident core start through final write completion; serial prompt steps, no sampling, host, queueing or input-transfer time",
+  "conditional_decode_tokens_per_second": 11956.716685598134,
+  "core_only_decode_tokens_per_second": 11962.43794485316,
+  "decode_elapsed_seconds": 0.00016727000000000002,
+  "decode_seconds": 0.00016719,
+  "device_ttft_seconds": 0.00012696,
+  "fmax_verified": false,
+  "full_pretrained_model": false,
+  "hardware_measured": false,
+  "label": "opentpu-perfsim-estimate",
+  "launch_overhead_cycles": 8,
+  "memory_state": "persistent DRAM/TMEM/ACT/controller and KV; core pipeline/register reset; explicit idle/reset launch edges",
+  "prefill_elapsed_seconds": 0.00012696,
+  "prefill_seconds": 0.00012696,
+  "profile": "native-hbm2-200mhz",
+  "stages": [
+    {
+      "cycles": 25392,
+      "memory": {
+        "backend_rejected_ticks": 321,
+        "line_order_stall_ticks": 879,
+        "logical_read_bytes": 818528,
+        "logical_write_bytes": 272432,
+        "peak_outstanding": 64,
+        "read_bytes": 823776,
+        "read_transactions": 51486,
+        "write_bytes": 277120,
+        "write_transactions": 17320
+      },
+      "name": "hybrid_0",
+      "numerical_check": {
+        "cosine": 0.9998390733250437,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.018004618349501577,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "prefill",
+      "seconds": 0.00012696
+    },
+    {
+      "cycles": 16632,
+      "memory": {
+        "backend_rejected_ticks": 0,
+        "line_order_stall_ticks": 535,
+        "logical_read_bytes": 810336,
+        "logical_write_bytes": 141080,
+        "peak_outstanding": 64,
+        "read_bytes": 812928,
+        "read_transactions": 50808,
+        "write_bytes": 143408,
+        "write_transactions": 8963
+      },
+      "name": "hybrid_1",
+      "numerical_check": {
+        "cosine": 0.9998407788819126,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.017856877458248002,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "decode",
+      "seconds": 8.316e-05
+    },
+    {
+      "cycles": 16806,
+      "memory": {
+        "backend_rejected_ticks": 0,
+        "line_order_stall_ticks": 470,
+        "logical_read_bytes": 810496,
+        "logical_write_bytes": 141080,
+        "peak_outstanding": 64,
+        "read_bytes": 813088,
+        "read_transactions": 50818,
+        "write_bytes": 143408,
+        "write_transactions": 8963
+      },
+      "name": "hybrid_2",
+      "numerical_check": {
+        "cosine": 0.9999049697147306,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.0139710540738304,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "decode",
+      "seconds": 8.403e-05
+    }
+  ],
+  "timing_validation": "unvalidated"
+}

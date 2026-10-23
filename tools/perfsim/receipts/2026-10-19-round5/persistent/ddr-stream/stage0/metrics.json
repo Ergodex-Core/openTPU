@@ -1,0 +1,7616 @@
+{
+  "architecture": {
+    "core_period_ps": 5000,
+    "dispatch_latency": 1,
+    "dma_buffer_chunks": 128,
+    "dma_store_run": 32,
+    "issue_period": 1,
+    "max_cycles": 10000000,
+    "mxu_chain": 16,
+    "mxu_epilogue_lanes": 0,
+    "mxu_fifo_chunks": 1024,
+    "mxu_queue": 2,
+    "mxu_result_rows": 32,
+    "quant_row_buffer_chunks": 1024,
+    "result_queue": 128,
+    "tmem_read_latency": 2,
+    "tmem_read_ports_per_bank": 32,
+    "tmem_write_ports_per_bank": 1,
+    "vpu_composite_lanes": 0,
+    "vpu_slots": 10,
+    "window": 16
+  },
+  "backend": "ramulator",
+  "boundaries": {
+    "conditional_tokens_per_second": null,
+    "decode_seconds": null,
+    "end": "HALT and all write completions drained",
+    "prefill_seconds": null,
+    "start": "core run, program resident; no host upload",
+    "ttft_seconds": null
+  },
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "core_frequency_hz": 200000000.0,
+  "cycles": 25219,
+  "frontend_stalls": {
+    "frontend_pipeline_full": 23198,
+    "window_full": 23277
+  },
+  "host_execution": {
+    "core_cycles_skipped": 0,
+    "ramulator_tick_batching": true
+  },
+  "host_wall_seconds": 1.3324855419923551,
+  "instructions": [
+    {
+      "cycles": 10,
+      "dispatch": 3,
+      "end": 13,
+      "id": 1,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 0,
+      "release": 5,
+      "stalls": {
+        "dependency": 1,
+        "pipeline_latency": 1
+      },
+      "start": 5,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 11,
+      "dispatch": 4,
+      "end": 15,
+      "id": 2,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 1,
+      "release": 6,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 7,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 12,
+      "dispatch": 5,
+      "end": 17,
+      "id": 3,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 2,
+      "release": 7,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 3
+      },
+      "start": 9,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 13,
+      "dispatch": 6,
+      "end": 19,
+      "id": 4,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 3,
+      "release": 8,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 4
+      },
+      "start": 11,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 14,
+      "dispatch": 7,
+      "end": 21,
+      "id": 5,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 4,
+      "release": 9,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 5
+      },
+      "start": 13,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 15,
+      "dispatch": 8,
+      "end": 23,
+      "id": 6,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 5,
+      "release": 10,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 15,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 16,
+      "dispatch": 9,
+      "end": 25,
+      "id": 7,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 6,
+      "release": 11,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 7
+      },
+      "start": 17,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 17,
+      "dispatch": 10,
+      "end": 27,
+      "id": 8,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 7,
+      "release": 12,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 8
+      },
+      "start": 19,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 48,
+      "dispatch": 11,
+      "end": 59,
+      "id": 9,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 1024,
+        "read_transactions": 16
+      },
+      "opcode": "LD",
+      "pc": 8,
+      "release": 13,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 11,
+        "pipeline_latency": 2
+      },
+      "start": 13,
+      "unit": 0,
+      "work": {
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 61,
+      "dispatch": 12,
+      "end": 73,
+      "id": 10,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 9,
+      "release": 14,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 45
+      },
+      "start": 58,
+      "unit": 0,
+      "work": {
+        "lane_issues": 4,
+        "tmem_reads": 0,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 74,
+      "dispatch": 13,
+      "end": 87,
+      "id": 11,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 10,
+      "release": 15,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 58
+      },
+      "start": 72,
+      "unit": 0,
+      "work": {
+        "lane_issues": 4,
+        "tmem_reads": 0,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 99,
+      "dispatch": 14,
+      "end": 113,
+      "id": 12,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 11,
+      "release": 16,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 71
+      },
+      "start": 86,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 120,
+      "dispatch": 15,
+      "end": 135,
+      "id": 13,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 12,
+      "release": 61,
+      "stalls": {
+        "dependency": 40,
+        "pipeline_latency": 1,
+        "unit_queue": 5
+      },
+      "start": 61,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 136,
+      "dispatch": 16,
+      "end": 152,
+      "id": 14,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 13,
+      "release": 137,
+      "stalls": {
+        "dependency": 114,
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 137,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 152,
+      "dispatch": 17,
+      "end": 169,
+      "id": 15,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 14,
+      "release": 154,
+      "stalls": {
+        "dependency": 128,
+        "pipeline_latency": 1,
+        "unit_queue": 8
+      },
+      "start": 154,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 261,
+      "dispatch": 18,
+      "end": 279,
+      "id": 16,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 15,
+      "release": 171,
+      "stalls": {
+        "dependency": 142,
+        "pipeline_latency": 1,
+        "unit_queue": 10
+      },
+      "start": 171,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 364,
+      "dispatch": 19,
+      "end": 383,
+      "id": 17,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 16,
+      "release": 281,
+      "stalls": {
+        "dependency": 261,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59
+      },
+      "start": 281,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 544,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 409,
+      "dispatch": 20,
+      "end": 429,
+      "id": 18,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 768,
+        "read_transactions": 12
+      },
+      "opcode": "MM",
+      "pc": 17,
+      "release": 385,
+      "stalls": {
+        "activation_dependency": 363,
+        "dependency": 1,
+        "mxu_array_fill": 393,
+        "mxu_epilogue_drain": 8,
+        "pipeline_latency": 7
+      },
+      "start": 22,
+      "unit": 1,
+      "work": {
+        "lane_issues": 4,
+        "macs": 1024,
+        "mxu_advances": 4,
+        "peak_weight_fifo_chunks": 4,
+        "tmem_reads": 0,
+        "tmem_writes": 8
+      }
+    },
+    {
+      "cycles": 106,
+      "dispatch": 21,
+      "end": 127,
+      "id": 19,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 18,
+      "release": 23,
+      "stalls": {
+        "dma_read_response": 11,
+        "pipeline_latency": 2,
+        "unit_queue": 90
+      },
+      "start": 112,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 116,
+      "dispatch": 22,
+      "end": 138,
+      "id": 20,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 19,
+      "release": 24,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 103
+      },
+      "start": 126,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 423,
+      "dispatch": 23,
+      "end": 446,
+      "id": 21,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 20,
+      "release": 431,
+      "stalls": {
+        "dependency": 397,
+        "pipeline_latency": 1,
+        "unit_queue": 10
+      },
+      "start": 431,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 432,
+      "dispatch": 24,
+      "end": 456,
+      "id": 22,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 21,
+      "release": 448,
+      "stalls": {
+        "dependency": 410,
+        "pipeline_latency": 1,
+        "unit_queue": 13
+      },
+      "start": 448,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 432,
+      "dispatch": 26,
+      "end": 458,
+      "id": 23,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 22,
+      "release": 448,
+      "stalls": {
+        "dependency": 408,
+        "pipeline_latency": 1,
+        "unit_queue": 15
+      },
+      "start": 450,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 521,
+      "dispatch": 28,
+      "end": 549,
+      "id": 24,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 23,
+      "release": 460,
+      "stalls": {
+        "dependency": 413,
+        "pipeline_latency": 1,
+        "unit_queue": 19
+      },
+      "start": 461,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 574,
+      "dispatch": 60,
+      "end": 634,
+      "id": 25,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 24,
+      "release": 551,
+      "stalls": {
+        "dependency": 395,
+        "pipeline_latency": 1,
+        "unit_queue": 95
+      },
+      "start": 551,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 629,
+      "dispatch": 74,
+      "end": 703,
+      "id": 26,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 25,
+      "release": 636,
+      "stalls": {
+        "dependency": 387,
+        "pipeline_latency": 1,
+        "unit_queue": 174
+      },
+      "start": 636,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 725,
+      "dispatch": 88,
+      "end": 813,
+      "id": 27,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 26,
+      "release": 705,
+      "stalls": {
+        "dependency": 390,
+        "pipeline_latency": 1,
+        "unit_queue": 226
+      },
+      "start": 705,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 793,
+      "dispatch": 114,
+      "end": 907,
+      "id": 28,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 27,
+      "release": 815,
+      "stalls": {
+        "dependency": 370,
+        "pipeline_latency": 1,
+        "unit_queue": 330
+      },
+      "start": 815,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 796,
+      "dispatch": 128,
+      "end": 924,
+      "id": 29,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 28,
+      "release": 909,
+      "stalls": {
+        "dependency": 446,
+        "pipeline_latency": 1,
+        "unit_queue": 334
+      },
+      "start": 909,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 18,
+      "dispatch": 136,
+      "end": 154,
+      "id": 30,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 29,
+      "release": 138,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 139,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 100,
+      "dispatch": 139,
+      "end": 239,
+      "id": 31,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 30,
+      "release": 156,
+      "stalls": {
+        "dependency": 13,
+        "pipeline_latency": 1,
+        "unit_queue": 3
+      },
+      "start": 156,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 959,
+      "dispatch": 153,
+      "end": 1112,
+      "id": 32,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 31,
+      "release": 926,
+      "stalls": {
+        "dependency": 436,
+        "pipeline_latency": 1,
+        "unit_queue": 336
+      },
+      "start": 926,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1007,
+      "dispatch": 155,
+      "end": 1162,
+      "id": 33,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 32,
+      "release": 1114,
+      "stalls": {
+        "dependency": 451,
+        "pipeline_latency": 1,
+        "unit_queue": 507
+      },
+      "start": 1114,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1077,
+      "dispatch": 170,
+      "end": 1247,
+      "id": 34,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 33,
+      "release": 1164,
+      "stalls": {
+        "dependency": 452,
+        "pipeline_latency": 1,
+        "unit_queue": 541
+      },
+      "start": 1164,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 208,
+      "dispatch": 240,
+      "end": 448,
+      "id": 35,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 34,
+      "release": 431,
+      "stalls": {
+        "dependency": 190,
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 433,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 255,
+      "dispatch": 280,
+      "end": 535,
+      "id": 36,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 35,
+      "release": 450,
+      "stalls": {
+        "dependency": 163,
+        "pipeline_latency": 1,
+        "unit_queue": 8
+      },
+      "start": 452,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 168,
+      "dispatch": 384,
+      "end": 552,
+      "id": 37,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 36,
+      "release": 537,
+      "stalls": {
+        "dependency": 67,
+        "pipeline_latency": 1,
+        "unit_queue": 85
+      },
+      "start": 537,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 261,
+      "dispatch": 430,
+      "end": 691,
+      "id": 38,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 37,
+      "release": 554,
+      "stalls": {
+        "dependency": 33,
+        "pipeline_latency": 1,
+        "unit_queue": 91
+      },
+      "start": 555,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1931,
+      "dispatch": 447,
+      "end": 2378,
+      "id": 39,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 64,
+        "read_transactions": 1,
+        "write_bytes": 64,
+        "write_transactions": 1
+      },
+      "opcode": "ST",
+      "pc": 38,
+      "release": 1249,
+      "stalls": {
+        "dependency": 801,
+        "dma_store_gather": 5,
+        "memory_completion": 1120,
+        "pipeline_latency": 5
+      },
+      "start": 1249,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1945,
+      "dispatch": 449,
+      "end": 2394,
+      "id": 40,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 64,
+        "read_transactions": 1,
+        "write_bytes": 64,
+        "write_transactions": 1
+      },
+      "opcode": "ST",
+      "pc": 39,
+      "release": 693,
+      "stalls": {
+        "dma_store_gather": 5,
+        "memory_completion": 7,
+        "pipeline_latency": 5,
+        "unit_queue": 1928
+      },
+      "start": 2378,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 90,
+      "dispatch": 457,
+      "end": 547,
+      "id": 41,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 40,
+      "release": 459,
+      "stalls": {
+        "dependency": 1,
+        "pipeline_latency": 1
+      },
+      "start": 459,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 98,
+      "dispatch": 459,
+      "end": 557,
+      "id": 42,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 41,
+      "release": 549,
+      "stalls": {
+        "dependency": 12,
+        "pipeline_latency": 1,
+        "unit_queue": 77
+      },
+      "start": 549,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 103,
+      "dispatch": 536,
+      "end": 639,
+      "id": 43,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 42,
+      "release": 549,
+      "stalls": {
+        "dependency": 10,
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 553,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 157,
+      "dispatch": 548,
+      "end": 705,
+      "id": 44,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 43,
+      "release": 641,
+      "stalls": {
+        "dependency": 5,
+        "pipeline_latency": 1,
+        "unit_queue": 87
+      },
+      "start": 641,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 343,
+      "dispatch": 550,
+      "end": 893,
+      "id": 45,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 44,
+      "release": 707,
+      "stalls": {
+        "dependency": 18,
+        "pipeline_latency": 1,
+        "unit_queue": 138
+      },
+      "start": 707,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 357,
+      "dispatch": 553,
+      "end": 910,
+      "id": 46,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 45,
+      "release": 895,
+      "stalls": {
+        "dependency": 101,
+        "pipeline_latency": 1,
+        "unit_queue": 240
+      },
+      "start": 895,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 462,
+      "dispatch": 558,
+      "end": 1020,
+      "id": 47,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 46,
+      "release": 912,
+      "stalls": {
+        "dependency": 113,
+        "pipeline_latency": 1,
+        "unit_queue": 240
+      },
+      "start": 912,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 479,
+      "dispatch": 635,
+      "end": 1114,
+      "id": 48,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 47,
+      "release": 1022,
+      "stalls": {
+        "dependency": 124,
+        "pipeline_latency": 1,
+        "unit_queue": 262
+      },
+      "start": 1022,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 524,
+      "dispatch": 640,
+      "end": 1164,
+      "id": 49,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 48,
+      "release": 1116,
+      "stalls": {
+        "dependency": 133,
+        "pipeline_latency": 1,
+        "unit_queue": 343
+      },
+      "start": 1117,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 17,
+      "dispatch": 692,
+      "end": 709,
+      "id": 50,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 49,
+      "release": 694,
+      "stalls": {
+        "dependency": 1,
+        "pipeline_latency": 1
+      },
+      "start": 694,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 191,
+      "dispatch": 704,
+      "end": 895,
+      "id": 51,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 50,
+      "release": 711,
+      "stalls": {
+        "dependency": 2,
+        "pipeline_latency": 1,
+        "unit_queue": 4
+      },
+      "start": 711,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 553,
+      "dispatch": 706,
+      "end": 1259,
+      "id": 52,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 51,
+      "release": 1166,
+      "stalls": {
+        "dependency": 132,
+        "pipeline_latency": 1,
+        "unit_queue": 327
+      },
+      "start": 1166,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 566,
+      "dispatch": 710,
+      "end": 1276,
+      "id": 53,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 52,
+      "release": 1261,
+      "stalls": {
+        "dependency": 223,
+        "pipeline_latency": 1,
+        "unit_queue": 327
+      },
+      "start": 1261,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 547,
+      "dispatch": 814,
+      "end": 1361,
+      "id": 54,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 53,
+      "release": 1278,
+      "stalls": {
+        "dependency": 236,
+        "pipeline_latency": 1,
+        "unit_queue": 227
+      },
+      "start": 1278,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 18,
+      "dispatch": 894,
+      "end": 912,
+      "id": 55,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 54,
+      "release": 896,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 897,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 204,
+      "dispatch": 896,
+      "end": 1100,
+      "id": 56,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 55,
+      "release": 914,
+      "stalls": {
+        "dependency": 11,
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 914,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 209,
+      "dispatch": 908,
+      "end": 1117,
+      "id": 57,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 56,
+      "release": 1102,
+      "stalls": {
+        "dependency": 15,
+        "pipeline_latency": 1,
+        "unit_queue": 178
+      },
+      "start": 1102,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 298,
+      "dispatch": 911,
+      "end": 1209,
+      "id": 58,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 57,
+      "release": 1119,
+      "stalls": {
+        "dependency": 23,
+        "pipeline_latency": 1,
+        "unit_queue": 215
+      },
+      "start": 1150,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1497,
+      "dispatch": 913,
+      "end": 2410,
+      "id": 59,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 64,
+        "read_transactions": 1,
+        "write_bytes": 64,
+        "write_transactions": 1
+      },
+      "opcode": "ST",
+      "pc": 58,
+      "release": 1363,
+      "stalls": {
+        "dma_store_gather": 5,
+        "memory_completion": 7,
+        "pipeline_latency": 5,
+        "unit_queue": 1480
+      },
+      "start": 2394,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1501,
+      "dispatch": 925,
+      "end": 2426,
+      "id": 60,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 64,
+        "read_transactions": 1,
+        "write_bytes": 64,
+        "write_transactions": 1
+      },
+      "opcode": "ST",
+      "pc": 59,
+      "release": 1211,
+      "stalls": {
+        "dma_store_gather": 5,
+        "memory_completion": 7,
+        "pipeline_latency": 5,
+        "unit_queue": 1484
+      },
+      "start": 2410,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1438,
+      "dispatch": 1021,
+      "end": 2459,
+      "id": 61,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 60,
+      "release": 1023,
+      "stalls": {
+        "dma_read_response": 14,
+        "pipeline_latency": 2,
+        "unit_queue": 1404
+      },
+      "start": 2426,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 52,
+      "dispatch": 1101,
+      "end": 1153,
+      "id": 62,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 61,
+      "release": 1103,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 1104,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1740,
+      "dispatch": 1113,
+      "end": 2853,
+      "id": 63,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 12288,
+        "read_transactions": 192
+      },
+      "opcode": "LD",
+      "pc": 62,
+      "release": 1115,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 1344
+      },
+      "start": 2458,
+      "unit": 0,
+      "work": {
+        "lane_issues": 384,
+        "tmem_reads": 0,
+        "tmem_writes": 3072
+      }
+    },
+    {
+      "cycles": 1024,
+      "dispatch": 1115,
+      "end": 2139,
+      "id": 64,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 147456,
+        "read_transactions": 2304
+      },
+      "opcode": "MM",
+      "pc": 63,
+      "release": 1117,
+      "stalls": {
+        "dependency": 1,
+        "memory_backpressure": 174,
+        "mxu_array_fill": 241,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 3,
+        "mxu_weight_starvation": 214,
+        "pipeline_latency": 7
+      },
+      "start": 1117,
+      "unit": 1,
+      "work": {
+        "lane_issues": 768,
+        "macs": 196608,
+        "mxu_advances": 768,
+        "peak_weight_fifo_chunks": 41,
+        "tmem_reads": 0,
+        "tmem_writes": 1536
+      }
+    },
+    {
+      "cycles": 1304,
+      "dispatch": 1118,
+      "end": 2422,
+      "id": 65,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 64,
+      "release": 1120,
+      "stalls": {
+        "memory_backpressure": 25,
+        "mxu_array_fill": 17,
+        "mxu_drain_head": 77,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 943,
+        "mxu_pop_head": 37,
+        "mxu_result_full": 6,
+        "mxu_weight_starvation": 20,
+        "pipeline_latency": 8
+      },
+      "start": 2062,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 41,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1834,
+      "dispatch": 1154,
+      "end": 2988,
+      "id": 66,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 3072,
+        "write_transactions": 48
+      },
+      "opcode": "ST",
+      "pc": 65,
+      "release": 1156,
+      "stalls": {
+        "dma_store_gather": 100,
+        "memory_completion": 9,
+        "pipeline_latency": 5,
+        "unit_queue": 1697
+      },
+      "start": 2852,
+      "unit": 0,
+      "work": {
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1956,
+      "dispatch": 1163,
+      "end": 3119,
+      "id": 67,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 3072,
+        "write_transactions": 48
+      },
+      "opcode": "ST",
+      "pc": 66,
+      "release": 2141,
+      "stalls": {
+        "dma_store_gather": 100,
+        "memory_completion": 4,
+        "pipeline_latency": 5,
+        "unit_queue": 1824
+      },
+      "start": 2988,
+      "unit": 0,
+      "work": {
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 2087,
+      "dispatch": 1165,
+      "end": 3252,
+      "id": 68,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 3072,
+        "write_transactions": 48
+      },
+      "opcode": "ST",
+      "pc": 67,
+      "release": 2141,
+      "stalls": {
+        "dma_store_gather": 100,
+        "memory_completion": 6,
+        "pipeline_latency": 5,
+        "unit_queue": 1953
+      },
+      "start": 3119,
+      "unit": 0,
+      "work": {
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 2057,
+      "dispatch": 1210,
+      "end": 3267,
+      "id": 69,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 68,
+      "release": 1212,
+      "stalls": {
+        "dma_read_response": 11,
+        "pipeline_latency": 2,
+        "unit_queue": 2041
+      },
+      "start": 3252,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 2030,
+      "dispatch": 1248,
+      "end": 3278,
+      "id": 70,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 69,
+      "release": 1250,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 2017
+      },
+      "start": 3266,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 2029,
+      "dispatch": 1260,
+      "end": 3289,
+      "id": 71,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 70,
+      "release": 1262,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 2016
+      },
+      "start": 3277,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 2023,
+      "dispatch": 1277,
+      "end": 3300,
+      "id": 72,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 71,
+      "release": 1279,
+      "stalls": {
+        "dma_read_response": 8,
+        "pipeline_latency": 2,
+        "unit_queue": 2010
+      },
+      "start": 3288,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1555,
+      "dispatch": 1362,
+      "end": 2917,
+      "id": 73,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 72,
+      "release": 2855,
+      "stalls": {
+        "dependency": 1492,
+        "pipeline_latency": 1
+      },
+      "start": 2855,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 826,
+      "dispatch": 2140,
+      "end": 2966,
+      "id": 74,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 73,
+      "release": 2855,
+      "stalls": {
+        "dependency": 714,
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 2857,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 636,
+      "dispatch": 2379,
+      "end": 3015,
+      "id": 75,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 74,
+      "release": 2855,
+      "stalls": {
+        "dependency": 475,
+        "pipeline_latency": 1,
+        "unit_queue": 4
+      },
+      "start": 2859,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 684,
+      "dispatch": 2395,
+      "end": 3079,
+      "id": 76,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 75,
+      "release": 3017,
+      "stalls": {
+        "dependency": 569,
+        "pipeline_latency": 1,
+        "unit_queue": 52
+      },
+      "start": 3017,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 780,
+      "dispatch": 2411,
+      "end": 3191,
+      "id": 77,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 76,
+      "release": 3081,
+      "stalls": {
+        "dependency": 615,
+        "pipeline_latency": 1,
+        "unit_queue": 54
+      },
+      "start": 3081,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1101,
+      "dispatch": 2423,
+      "end": 3524,
+      "id": 78,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 77,
+      "release": 3193,
+      "stalls": {
+        "composite_recirculation": 150,
+        "dependency": 713,
+        "pipeline_latency": 1,
+        "unit_queue": 56,
+        "vpu_pipeline_frozen": 3
+      },
+      "start": 3193,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1237,
+      "dispatch": 2427,
+      "end": 3664,
+      "id": 79,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 78,
+      "release": 3526,
+      "stalls": {
+        "dependency": 1039,
+        "pipeline_latency": 1,
+        "unit_queue": 59
+      },
+      "start": 3526,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1580,
+      "dispatch": 2460,
+      "end": 4040,
+      "id": 80,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 79,
+      "release": 3666,
+      "stalls": {
+        "composite_recirculation": 75,
+        "dependency": 1143,
+        "pipeline_latency": 1,
+        "unit_queue": 62
+      },
+      "start": 3666,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1375,
+      "dispatch": 2854,
+      "end": 4229,
+      "id": 81,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 80,
+      "release": 4042,
+      "stalls": {
+        "dependency": 902,
+        "pipeline_latency": 1,
+        "unit_queue": 285
+      },
+      "start": 4042,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 1536,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1591,
+      "dispatch": 2918,
+      "end": 4509,
+      "id": 82,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 81,
+      "release": 4231,
+      "stalls": {
+        "dependency": 893,
+        "pipeline_latency": 1,
+        "unit_queue": 456
+      },
+      "start": 4268,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1691,
+      "dispatch": 2967,
+      "end": 4658,
+      "id": 83,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 82,
+      "release": 4511,
+      "stalls": {
+        "dependency": 847,
+        "pipeline_latency": 1,
+        "unit_queue": 765
+      },
+      "start": 4580,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1815,
+      "dispatch": 2989,
+      "end": 4804,
+      "id": 84,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 83,
+      "release": 4660,
+      "stalls": {
+        "dependency": 839,
+        "pipeline_latency": 1,
+        "unit_queue": 831
+      },
+      "start": 4660,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1899,
+      "dispatch": 3016,
+      "end": 4915,
+      "id": 85,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 84,
+      "release": 4806,
+      "stalls": {
+        "dependency": 919,
+        "pipeline_latency": 1,
+        "unit_queue": 870
+      },
+      "start": 4806,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 2206,
+      "dispatch": 3080,
+      "end": 5286,
+      "id": 86,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 85,
+      "release": 4917,
+      "stalls": {
+        "dependency": 965,
+        "pipeline_latency": 1,
+        "unit_queue": 871
+      },
+      "start": 4917,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1460,
+      "dispatch": 3120,
+      "end": 4580,
+      "id": 87,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 86,
+      "release": 4231,
+      "stalls": {
+        "dependency": 695,
+        "pipeline_latency": 1,
+        "unit_queue": 563
+      },
+      "start": 4379,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1468,
+      "dispatch": 3192,
+      "end": 4660,
+      "id": 88,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 87,
+      "release": 4582,
+      "stalls": {
+        "dependency": 625,
+        "pipeline_latency": 1,
+        "unit_queue": 795
+      },
+      "start": 4613,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1553,
+      "dispatch": 3253,
+      "end": 4806,
+      "id": 89,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 88,
+      "release": 4662,
+      "stalls": {
+        "dependency": 579,
+        "pipeline_latency": 1,
+        "unit_queue": 829
+      },
+      "start": 4662,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 2181,
+      "dispatch": 3268,
+      "end": 5449,
+      "id": 90,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 89,
+      "release": 5288,
+      "stalls": {
+        "dependency": 1118,
+        "pipeline_latency": 1,
+        "unit_queue": 901
+      },
+      "start": 5288,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1337,
+      "dispatch": 3279,
+      "end": 4616,
+      "id": 91,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 90,
+      "release": 4231,
+      "stalls": {
+        "dependency": 538,
+        "pipeline_latency": 1,
+        "unit_queue": 620
+      },
+      "start": 4438,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 277,
+      "dispatch": 3290,
+      "end": 3567,
+      "id": 92,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 91,
+      "release": 3292,
+      "stalls": {
+        "dependency": 1,
+        "pipeline_latency": 1,
+        "vpu_pipeline_frozen": 1
+      },
+      "start": 3292,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 514,
+      "dispatch": 3301,
+      "end": 3815,
+      "id": 93,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 92,
+      "release": 3569,
+      "stalls": {
+        "composite_recirculation": 50,
+        "dependency": 265,
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 3569,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 558,
+      "dispatch": 3525,
+      "end": 4083,
+      "id": 94,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 93,
+      "release": 3817,
+      "stalls": {
+        "dependency": 285,
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 3817,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 811,
+      "dispatch": 3568,
+      "end": 4379,
+      "id": 95,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 94,
+      "release": 4085,
+      "stalls": {
+        "composite_recirculation": 25,
+        "dependency": 248,
+        "pipeline_latency": 1,
+        "unit_queue": 305
+      },
+      "start": 4122,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 991,
+      "dispatch": 3665,
+      "end": 4656,
+      "id": 96,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 95,
+      "release": 4381,
+      "stalls": {
+        "dependency": 154,
+        "pipeline_latency": 1,
+        "unit_queue": 689
+      },
+      "start": 4509,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 316,
+      "dispatch": 3816,
+      "end": 4132,
+      "id": 97,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 96,
+      "release": 3818,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 3819,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 237,
+      "dispatch": 4041,
+      "end": 4278,
+      "id": 98,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 97,
+      "release": 4043,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 31
+      },
+      "start": 4073,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 354,
+      "dispatch": 4084,
+      "end": 4438,
+      "id": 99,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 98,
+      "release": 4086,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 134
+      },
+      "start": 4219,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 576,
+      "dispatch": 4133,
+      "end": 4709,
+      "id": 100,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 99,
+      "release": 4440,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 512
+      },
+      "start": 4646,
+      "unit": 3,
+      "work": {
+        "elements": 384,
+        "lane_issues": 48,
+        "tmem_reads": 768,
+        "tmem_writes": 384
+      }
+    },
+    {
+      "cycles": 683,
+      "dispatch": 4230,
+      "end": 4913,
+      "id": 101,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 100,
+      "release": 4711,
+      "stalls": {
+        "dependency": 24,
+        "pipeline_latency": 1,
+        "unit_queue": 456
+      },
+      "start": 4711,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 964,
+      "dispatch": 4279,
+      "end": 5243,
+      "id": 102,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 101,
+      "release": 4915,
+      "stalls": {
+        "composite_recirculation": 150,
+        "dependency": 224,
+        "pipeline_latency": 1,
+        "unit_queue": 411
+      },
+      "start": 4915,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1003,
+      "dispatch": 4380,
+      "end": 5383,
+      "id": 103,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 102,
+      "release": 5245,
+      "stalls": {
+        "dependency": 550,
+        "pipeline_latency": 1,
+        "unit_queue": 314
+      },
+      "start": 5245,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1225,
+      "dispatch": 4439,
+      "end": 5664,
+      "id": 104,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 103,
+      "release": 5385,
+      "stalls": {
+        "composite_recirculation": 75,
+        "dependency": 575,
+        "pipeline_latency": 1,
+        "unit_queue": 370
+      },
+      "start": 5385,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 768,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1393,
+      "dispatch": 4510,
+      "end": 5903,
+      "id": 105,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 104,
+      "release": 5666,
+      "stalls": {
+        "dependency": 815,
+        "pipeline_latency": 1,
+        "unit_queue": 340
+      },
+      "start": 5666,
+      "unit": 3,
+      "work": {
+        "elements": 768,
+        "lane_issues": 96,
+        "tmem_reads": 1536,
+        "tmem_writes": 768
+      }
+    },
+    {
+      "cycles": 1426,
+      "dispatch": 4581,
+      "end": 6007,
+      "id": 106,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 105,
+      "release": 5905,
+      "stalls": {
+        "dependency": 1051,
+        "pipeline_latency": 1,
+        "unit_queue": 272
+      },
+      "start": 5905,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1617,
+      "dispatch": 4617,
+      "end": 6234,
+      "id": 107,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 106,
+      "release": 6009,
+      "stalls": {
+        "dependency": 1054,
+        "pipeline_latency": 1,
+        "unit_queue": 406
+      },
+      "start": 6078,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1708,
+      "dispatch": 4657,
+      "end": 6365,
+      "id": 108,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 107,
+      "release": 6236,
+      "stalls": {
+        "dependency": 1058,
+        "pipeline_latency": 1,
+        "unit_queue": 520
+      },
+      "start": 6236,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1723,
+      "dispatch": 4659,
+      "end": 6382,
+      "id": 109,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 108,
+      "release": 6367,
+      "stalls": {
+        "dependency": 1164,
+        "pipeline_latency": 1,
+        "unit_queue": 543
+      },
+      "start": 6367,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1769,
+      "dispatch": 4661,
+      "end": 6430,
+      "id": 110,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 109,
+      "release": 6384,
+      "stalls": {
+        "dependency": 1179,
+        "pipeline_latency": 1,
+        "unit_queue": 543
+      },
+      "start": 6384,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1368,
+      "dispatch": 4710,
+      "end": 6078,
+      "id": 111,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 110,
+      "release": 5905,
+      "stalls": {
+        "dependency": 1027,
+        "pipeline_latency": 1,
+        "unit_queue": 169
+      },
+      "start": 5907,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1431,
+      "dispatch": 4805,
+      "end": 6236,
+      "id": 112,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 111,
+      "release": 6080,
+      "stalls": {
+        "dependency": 936,
+        "pipeline_latency": 1,
+        "unit_queue": 369
+      },
+      "start": 6111,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1560,
+      "dispatch": 4807,
+      "end": 6367,
+      "id": 113,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 112,
+      "release": 6238,
+      "stalls": {
+        "dependency": 949,
+        "pipeline_latency": 1,
+        "unit_queue": 481
+      },
+      "start": 6238,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1564,
+      "dispatch": 4914,
+      "end": 6478,
+      "id": 114,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 113,
+      "release": 6432,
+      "stalls": {
+        "dependency": 1010,
+        "pipeline_latency": 1,
+        "unit_queue": 507
+      },
+      "start": 6432,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1198,
+      "dispatch": 4916,
+      "end": 6114,
+      "id": 115,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 114,
+      "release": 5905,
+      "stalls": {
+        "dependency": 827,
+        "pipeline_latency": 1,
+        "unit_queue": 192
+      },
+      "start": 5936,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 172,
+      "dispatch": 5244,
+      "end": 5416,
+      "id": 116,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 115,
+      "release": 5246,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 5247,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 509,
+      "dispatch": 5287,
+      "end": 5796,
+      "id": 117,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 116,
+      "release": 5418,
+      "stalls": {
+        "composite_recirculation": 74,
+        "dependency": 24,
+        "pipeline_latency": 1,
+        "unit_queue": 106
+      },
+      "start": 5418,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 552,
+      "dispatch": 5384,
+      "end": 5936,
+      "id": 118,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 117,
+      "release": 5798,
+      "stalls": {
+        "dependency": 369,
+        "pipeline_latency": 1,
+        "unit_queue": 44
+      },
+      "start": 5798,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 805,
+      "dispatch": 5417,
+      "end": 6222,
+      "id": 119,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 118,
+      "release": 5938,
+      "stalls": {
+        "composite_recirculation": 25,
+        "dependency": 462,
+        "pipeline_latency": 1,
+        "unit_queue": 127
+      },
+      "start": 6007,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 820,
+      "dispatch": 5450,
+      "end": 6270,
+      "id": 120,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 119,
+      "release": 6224,
+      "stalls": {
+        "dependency": 452,
+        "pipeline_latency": 1,
+        "unit_queue": 321
+      },
+      "start": 6224,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 3085,
+      "dispatch": 5665,
+      "end": 8750,
+      "id": 121,
+      "label": "STREAM",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 65536,
+        "write_transactions": 1024
+      },
+      "opcode": "STREAM",
+      "pc": 120,
+      "release": 6480,
+      "stalls": {
+        "dependency": 814
+      },
+      "start": 6480,
+      "unit": 0,
+      "work": {
+        "stream_input_segments": 2048,
+        "tmem_reads": 394,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 5223,
+      "dispatch": 5797,
+      "end": 11020,
+      "id": 122,
+      "label": "STREAM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 65536,
+        "read_transactions": 1024,
+        "write_bytes": 65536,
+        "write_transactions": 1024
+      },
+      "opcode": "STREAM",
+      "pc": 121,
+      "release": 6480,
+      "stalls": {
+        "unit_queue": 2952
+      },
+      "start": 8750,
+      "unit": 0,
+      "work": {
+        "stream_input_segments": 2048,
+        "tmem_reads": 394,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 7455,
+      "dispatch": 5904,
+      "end": 13359,
+      "id": 123,
+      "label": "STREAM",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 65536,
+        "write_transactions": 1024
+      },
+      "opcode": "STREAM",
+      "pc": 122,
+      "release": 6480,
+      "stalls": {
+        "stream_vpu_drain": 71,
+        "unit_queue": 5115
+      },
+      "start": 11020,
+      "unit": 0,
+      "work": {
+        "stream_input_segments": 2048,
+        "tmem_reads": 394,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 9703,
+      "dispatch": 5937,
+      "end": 15640,
+      "id": 124,
+      "label": "STREAM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 65536,
+        "read_transactions": 1024,
+        "write_bytes": 65536,
+        "write_transactions": 1024
+      },
+      "opcode": "STREAM",
+      "pc": 123,
+      "release": 6480,
+      "stalls": {
+        "stream_vpu_drain": 13,
+        "unit_queue": 7421
+      },
+      "start": 13359,
+      "unit": 0,
+      "work": {
+        "stream_input_segments": 2048,
+        "tmem_reads": 394,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 5088,
+      "dispatch": 6008,
+      "end": 11096,
+      "id": 125,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 124,
+      "release": 11022,
+      "stalls": {
+        "dependency": 272,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 4496,
+        "unit_queue": 245
+      },
+      "start": 11022,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 7281,
+      "dispatch": 6079,
+      "end": 13360,
+      "id": 126,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 125,
+      "release": 11098,
+      "stalls": {
+        "dependency": 274,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 6813,
+        "unit_queue": 176,
+        "vpu_pipeline_frozen": 2
+      },
+      "start": 13343,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 7262,
+      "dispatch": 6115,
+      "end": 13377,
+      "id": 127,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 126,
+      "release": 13362,
+      "stalls": {
+        "dependency": 291,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 6813,
+        "unit_queue": 142
+      },
+      "start": 13362,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9509,
+      "dispatch": 6223,
+      "end": 15732,
+      "id": 128,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 127,
+      "release": 13379,
+      "stalls": {
+        "dependency": 290,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 38
+      },
+      "start": 15624,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9611,
+      "dispatch": 6235,
+      "end": 15846,
+      "id": 129,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 128,
+      "release": 15734,
+      "stalls": {
+        "dependency": 387,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 39
+      },
+      "start": 15734,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 9657,
+      "dispatch": 6237,
+      "end": 15894,
+      "id": 130,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 129,
+      "release": 15848,
+      "stalls": {
+        "dependency": 498,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 40
+      },
+      "start": 15848,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 9671,
+      "dispatch": 6271,
+      "end": 15942,
+      "id": 131,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 130,
+      "release": 15896,
+      "stalls": {
+        "dependency": 531,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 21
+      },
+      "start": 15896,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 9437,
+      "dispatch": 6366,
+      "end": 15803,
+      "id": 132,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 131,
+      "release": 15642,
+      "stalls": {
+        "dependency": 189,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 14
+      },
+      "start": 15642,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9480,
+      "dispatch": 6368,
+      "end": 15848,
+      "id": 133,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 132,
+      "release": 15805,
+      "stalls": {
+        "dependency": 348,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 16
+      },
+      "start": 15805,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9513,
+      "dispatch": 6383,
+      "end": 15896,
+      "id": 134,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 133,
+      "release": 15850,
+      "stalls": {
+        "dependency": 374,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 20
+      },
+      "start": 15850,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9606,
+      "dispatch": 6431,
+      "end": 16037,
+      "id": 135,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 134,
+      "release": 15898,
+      "stalls": {
+        "dependency": 372,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 22
+      },
+      "start": 15898,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 9606,
+      "dispatch": 6479,
+      "end": 16085,
+      "id": 136,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 135,
+      "release": 16039,
+      "stalls": {
+        "dependency": 465,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 9072,
+        "unit_queue": 22
+      },
+      "start": 16039,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 7382,
+      "dispatch": 8751,
+      "end": 16133,
+      "id": 137,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 136,
+      "release": 16087,
+      "stalls": {
+        "dependency": 487,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 6824,
+        "unit_queue": 24
+      },
+      "start": 16087,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 5160,
+      "dispatch": 11021,
+      "end": 16181,
+      "id": 138,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 137,
+      "release": 16135,
+      "stalls": {
+        "dependency": 511,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 4576,
+        "unit_queue": 26
+      },
+      "start": 16135,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 5236,
+      "dispatch": 11097,
+      "end": 16333,
+      "id": 139,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 138,
+      "release": 16183,
+      "stalls": {
+        "dependency": 5085,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 75
+      },
+      "start": 16183,
+      "unit": 2,
+      "work": {
+        "lane_issues": 64,
+        "packed_activation_bytes": 512,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 3280,
+      "dispatch": 13360,
+      "end": 16640,
+      "id": 140,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 139,
+      "release": 16335,
+      "stalls": {
+        "activation_dependency": 693,
+        "dependency": 2281,
+        "memory_backpressure": 42,
+        "mxu_array_fill": 851,
+        "mxu_epilogue_drain": 17,
+        "pipeline_latency": 7
+      },
+      "start": 15642,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 256,
+        "tmem_reads": 256,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 3327,
+      "dispatch": 13361,
+      "end": 16688,
+      "id": 141,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 140,
+      "release": 16642,
+      "stalls": {
+        "dependency": 997,
+        "pipeline_latency": 1,
+        "stream_engine_owned": 2259,
+        "unit_queue": 24
+      },
+      "start": 16642,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 2324,
+      "dispatch": 13378,
+      "end": 15702,
+      "id": 142,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 141,
+      "release": 13380,
+      "stalls": {
+        "dma_read_response": 43,
+        "pipeline_latency": 2,
+        "unit_queue": 2261
+      },
+      "start": 15640,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1123,
+      "dispatch": 15641,
+      "end": 16764,
+      "id": 143,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 142,
+      "release": 16690,
+      "stalls": {
+        "dependency": 1026,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 16690,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1078,
+      "dispatch": 15703,
+      "end": 16781,
+      "id": 144,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 143,
+      "release": 16766,
+      "stalls": {
+        "dependency": 1040,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 16766,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1065,
+      "dispatch": 15733,
+      "end": 16798,
+      "id": 145,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 144,
+      "release": 16783,
+      "stalls": {
+        "dependency": 1025,
+        "pipeline_latency": 1,
+        "unit_queue": 24
+      },
+      "start": 16783,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1104,
+      "dispatch": 15804,
+      "end": 16908,
+      "id": 146,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 145,
+      "release": 16800,
+      "stalls": {
+        "dependency": 971,
+        "pipeline_latency": 1,
+        "unit_queue": 24
+      },
+      "start": 16800,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1165,
+      "dispatch": 15847,
+      "end": 17012,
+      "id": 147,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 146,
+      "release": 16910,
+      "stalls": {
+        "dependency": 578,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 484
+      },
+      "start": 16910,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 544,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1461,
+      "dispatch": 15849,
+      "end": 17310,
+      "id": 148,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 147,
+      "release": 17014,
+      "stalls": {
+        "activation_dependency": 1071,
+        "memory_backpressure": 37,
+        "mxu_array_fill": 404,
+        "mxu_drain_head": 697,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 93,
+        "pipeline_latency": 7
+      },
+      "start": 15943,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 512,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1930,
+      "dispatch": 15895,
+      "end": 17825,
+      "id": 149,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 148,
+      "release": 17014,
+      "stalls": {
+        "activation_dependency": 374,
+        "memory_backpressure": 41,
+        "mxu_drain_head": 670,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 249,
+        "mxu_issuer_busy": 343,
+        "mxu_pop_head": 256,
+        "mxu_result_full": 198,
+        "pipeline_latency": 8,
+        "unit_queue": 401
+      },
+      "start": 16640,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 512,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1493,
+      "dispatch": 15897,
+      "end": 17390,
+      "id": 150,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 149,
+      "release": 17312,
+      "stalls": {
+        "dependency": 1396,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 17312,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1695,
+      "dispatch": 15943,
+      "end": 17638,
+      "id": 151,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 150,
+      "release": 17392,
+      "stalls": {
+        "composite_recirculation": 100,
+        "dependency": 1430,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 17392,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1680,
+      "dispatch": 16038,
+      "end": 17718,
+      "id": 152,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 151,
+      "release": 17640,
+      "stalls": {
+        "dependency": 1581,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 17640,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1809,
+      "dispatch": 16086,
+      "end": 17895,
+      "id": 153,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 152,
+      "release": 17720,
+      "stalls": {
+        "composite_recirculation": 50,
+        "dependency": 1613,
+        "pipeline_latency": 1,
+        "unit_queue": 20,
+        "vpu_pipeline_frozen": 4
+      },
+      "start": 17720,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1841,
+      "dispatch": 16134,
+      "end": 17975,
+      "id": 154,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 153,
+      "release": 17897,
+      "stalls": {
+        "dependency": 1742,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 17897,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 1024,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1873,
+      "dispatch": 16182,
+      "end": 18055,
+      "id": 155,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 154,
+      "release": 17977,
+      "stalls": {
+        "dependency": 1774,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 17977,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 1024,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1873,
+      "dispatch": 16334,
+      "end": 18207,
+      "id": 156,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 155,
+      "release": 18057,
+      "stalls": {
+        "dependency": 1046,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 75,
+        "unit_queue": 676
+      },
+      "start": 18057,
+      "unit": 2,
+      "work": {
+        "lane_issues": 64,
+        "packed_activation_bytes": 512,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1864,
+      "dispatch": 16641,
+      "end": 18505,
+      "id": 157,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 156,
+      "release": 18209,
+      "stalls": {
+        "activation_dependency": 899,
+        "memory_backpressure": 10,
+        "mxu_array_fill": 542,
+        "mxu_drain_head": 515,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 298,
+        "pipeline_latency": 7,
+        "unit_queue": 370
+      },
+      "start": 17310,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 326,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1864,
+      "dispatch": 16689,
+      "end": 18553,
+      "id": 158,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 157,
+      "release": 18507,
+      "stalls": {
+        "dependency": 1797,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 18507,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 54,
+      "dispatch": 16765,
+      "end": 16819,
+      "id": 159,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 158,
+      "release": 16767,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 33,
+        "pipeline_latency": 2
+      },
+      "start": 16767,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1847,
+      "dispatch": 16782,
+      "end": 18629,
+      "id": 160,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 159,
+      "release": 18555,
+      "stalls": {
+        "dependency": 1754,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 18555,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1847,
+      "dispatch": 16799,
+      "end": 18646,
+      "id": 161,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 160,
+      "release": 18631,
+      "stalls": {
+        "dependency": 1813,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 18631,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1843,
+      "dispatch": 16820,
+      "end": 18663,
+      "id": 162,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 161,
+      "release": 18648,
+      "stalls": {
+        "dependency": 1809,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 18648,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1864,
+      "dispatch": 16909,
+      "end": 18773,
+      "id": 163,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 162,
+      "release": 18665,
+      "stalls": {
+        "dependency": 1735,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 18665,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1864,
+      "dispatch": 17013,
+      "end": 18877,
+      "id": 164,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 163,
+      "release": 18775,
+      "stalls": {
+        "dependency": 569,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 1192
+      },
+      "start": 18775,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 544,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1736,
+      "dispatch": 17311,
+      "end": 19047,
+      "id": 165,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 24576,
+        "read_transactions": 384
+      },
+      "opcode": "MM",
+      "pc": 164,
+      "release": 18879,
+      "stalls": {
+        "activation_dependency": 1054,
+        "memory_backpressure": 33,
+        "mxu_array_fill": 404,
+        "mxu_drain_head": 680,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 267,
+        "pipeline_latency": 7,
+        "unit_queue": 246
+      },
+      "start": 17825,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 32768,
+        "mxu_advances": 128,
+        "peak_weight_fifo_chunks": 384,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1796,
+      "dispatch": 17391,
+      "end": 19187,
+      "id": 166,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 24576,
+        "read_transactions": 384
+      },
+      "opcode": "MM",
+      "pc": 165,
+      "release": 18879,
+      "stalls": {
+        "activation_dependency": 374,
+        "memory_backpressure": 38,
+        "mxu_drain_head": 542,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 2,
+        "mxu_issuer_busy": 351,
+        "mxu_pop_head": 128,
+        "mxu_result_full": 7,
+        "pipeline_latency": 8,
+        "unit_queue": 762
+      },
+      "start": 18505,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 32768,
+        "mxu_advances": 128,
+        "peak_weight_fifo_chunks": 256,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1926,
+      "dispatch": 17639,
+      "end": 19565,
+      "id": 167,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 166,
+      "release": 18879,
+      "stalls": {
+        "memory_backpressure": 22,
+        "mxu_drain_head": 140,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 112,
+        "mxu_issuer_busy": 333,
+        "mxu_pop_head": 96,
+        "mxu_result_full": 122,
+        "pipeline_latency": 8,
+        "unit_queue": 1074
+      },
+      "start": 19047,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 120,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 32,
+      "dispatch": 17719,
+      "end": 17751,
+      "id": 168,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 167,
+      "release": 17721,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 11,
+        "pipeline_latency": 2
+      },
+      "start": 17721,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 29,
+      "dispatch": 17752,
+      "end": 17781,
+      "id": 169,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 168,
+      "release": 17754,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 8,
+        "pipeline_latency": 2
+      },
+      "start": 17754,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1341,
+      "dispatch": 17782,
+      "end": 19123,
+      "id": 170,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 169,
+      "release": 19049,
+      "stalls": {
+        "dependency": 1252,
+        "pipeline_latency": 1,
+        "unit_queue": 14
+      },
+      "start": 19049,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1314,
+      "dispatch": 17826,
+      "end": 19140,
+      "id": 171,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 170,
+      "release": 19125,
+      "stalls": {
+        "dependency": 1282,
+        "pipeline_latency": 1,
+        "unit_queue": 16
+      },
+      "start": 19125,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1261,
+      "dispatch": 17896,
+      "end": 19157,
+      "id": 172,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 171,
+      "release": 19142,
+      "stalls": {
+        "dependency": 1227,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 19142,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1291,
+      "dispatch": 17976,
+      "end": 19267,
+      "id": 173,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 172,
+      "release": 19159,
+      "stalls": {
+        "dependency": 1164,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 19159,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1259,
+      "dispatch": 18056,
+      "end": 19315,
+      "id": 174,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 173,
+      "release": 19269,
+      "stalls": {
+        "dependency": 1194,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 19269,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1155,
+      "dispatch": 18208,
+      "end": 19363,
+      "id": 175,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 174,
+      "release": 19317,
+      "stalls": {
+        "dependency": 1088,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 19317,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 877,
+      "dispatch": 18506,
+      "end": 19383,
+      "id": 176,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 175,
+      "release": 19365,
+      "stalls": {
+        "dependency": 836,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 19365,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 834,
+      "dispatch": 18554,
+      "end": 19388,
+      "id": 177,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 176,
+      "release": 19365,
+      "stalls": {
+        "dependency": 790,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 19367,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 778,
+      "dispatch": 18630,
+      "end": 19408,
+      "id": 178,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 177,
+      "release": 19390,
+      "stalls": {
+        "dependency": 730,
+        "pipeline_latency": 1,
+        "unit_queue": 29
+      },
+      "start": 19390,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 746,
+      "dispatch": 18647,
+      "end": 19393,
+      "id": 179,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 178,
+      "release": 19365,
+      "stalls": {
+        "dependency": 701,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 19369,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 734,
+      "dispatch": 18664,
+      "end": 19398,
+      "id": 180,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 179,
+      "release": 19365,
+      "stalls": {
+        "dependency": 686,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 19373,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 654,
+      "dispatch": 18774,
+      "end": 19428,
+      "id": 181,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 180,
+      "release": 19410,
+      "stalls": {
+        "dependency": 608,
+        "pipeline_latency": 1,
+        "unit_queue": 27
+      },
+      "start": 19410,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 583,
+      "dispatch": 18878,
+      "end": 19461,
+      "id": 182,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 181,
+      "release": 19430,
+      "stalls": {
+        "dependency": 522,
+        "pipeline_latency": 1,
+        "unit_queue": 29
+      },
+      "start": 19430,
+      "unit": 3,
+      "work": {
+        "elements": 192,
+        "lane_issues": 24,
+        "tmem_reads": 192,
+        "tmem_writes": 192
+      }
+    },
+    {
+      "cycles": 959,
+      "dispatch": 19048,
+      "end": 20007,
+      "id": 183,
+      "label": "QST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 4224,
+        "read_transactions": 66,
+        "write_bytes": 4224,
+        "write_transactions": 66
+      },
+      "opcode": "QST",
+      "pc": 182,
+      "release": 19463,
+      "stalls": {
+        "dependency": 414,
+        "pipeline_latency": 84
+      },
+      "start": 19463,
+      "unit": 2,
+      "work": {
+        "lane_issues": 96,
+        "peak_qst_pipeline": 11,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1475,
+      "dispatch": 19124,
+      "end": 20599,
+      "id": 184,
+      "label": "QST",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 16512,
+        "read_transactions": 258,
+        "write_bytes": 16512,
+        "write_transactions": 258
+      },
+      "opcode": "QST",
+      "pc": 183,
+      "release": 19189,
+      "stalls": {
+        "pipeline_latency": 84,
+        "quant_output_frozen": 108,
+        "unit_queue": 881
+      },
+      "start": 20006,
+      "unit": 2,
+      "work": {
+        "lane_issues": 288,
+        "peak_qst_pipeline": 11,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 500,
+      "dispatch": 19141,
+      "end": 19641,
+      "id": 185,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 184,
+      "release": 19567,
+      "stalls": {
+        "dependency": 398,
+        "pipeline_latency": 1,
+        "unit_queue": 27
+      },
+      "start": 19567,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 566,
+      "dispatch": 19158,
+      "end": 19724,
+      "id": 186,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 185,
+      "release": 19643,
+      "stalls": {
+        "dependency": 456,
+        "pipeline_latency": 1,
+        "unit_queue": 28
+      },
+      "start": 19643,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 553,
+      "dispatch": 19188,
+      "end": 19741,
+      "id": 187,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 186,
+      "release": 19726,
+      "stalls": {
+        "dependency": 508,
+        "pipeline_latency": 1,
+        "unit_queue": 29
+      },
+      "start": 19726,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 583,
+      "dispatch": 19268,
+      "end": 19851,
+      "id": 188,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 187,
+      "release": 19743,
+      "stalls": {
+        "dependency": 442,
+        "pipeline_latency": 1,
+        "unit_queue": 32
+      },
+      "start": 19743,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 583,
+      "dispatch": 19316,
+      "end": 19899,
+      "id": 189,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 188,
+      "release": 19853,
+      "stalls": {
+        "dependency": 503,
+        "pipeline_latency": 1,
+        "unit_queue": 33
+      },
+      "start": 19853,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 601,
+      "dispatch": 19364,
+      "end": 19965,
+      "id": 190,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 189,
+      "release": 19901,
+      "stalls": {
+        "dependency": 502,
+        "pipeline_latency": 1,
+        "unit_queue": 34
+      },
+      "start": 19901,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 619,
+      "dispatch": 19384,
+      "end": 20003,
+      "id": 191,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 190,
+      "release": 19967,
+      "stalls": {
+        "dependency": 558,
+        "pipeline_latency": 1,
+        "unit_queue": 24
+      },
+      "start": 19967,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 619,
+      "dispatch": 19389,
+      "end": 20008,
+      "id": 192,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 191,
+      "release": 19967,
+      "stalls": {
+        "dependency": 553,
+        "pipeline_latency": 1,
+        "unit_queue": 26
+      },
+      "start": 19969,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 644,
+      "dispatch": 19394,
+      "end": 20038,
+      "id": 193,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 192,
+      "release": 20010,
+      "stalls": {
+        "dependency": 557,
+        "pipeline_latency": 1,
+        "unit_queue": 61
+      },
+      "start": 20013,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 614,
+      "dispatch": 19399,
+      "end": 20013,
+      "id": 194,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 193,
+      "release": 19967,
+      "stalls": {
+        "dependency": 545,
+        "pipeline_latency": 1,
+        "unit_queue": 43
+      },
+      "start": 19988,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 609,
+      "dispatch": 19409,
+      "end": 20018,
+      "id": 195,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 194,
+      "release": 19967,
+      "stalls": {
+        "dependency": 535,
+        "pipeline_latency": 1,
+        "unit_queue": 48
+      },
+      "start": 19993,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 648,
+      "dispatch": 19429,
+      "end": 20077,
+      "id": 196,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 195,
+      "release": 20040,
+      "stalls": {
+        "dependency": 525,
+        "pipeline_latency": 1,
+        "unit_queue": 88
+      },
+      "start": 20043,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 683,
+      "dispatch": 19462,
+      "end": 20145,
+      "id": 197,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 196,
+      "release": 20079,
+      "stalls": {
+        "dependency": 497,
+        "pipeline_latency": 1,
+        "unit_queue": 122
+      },
+      "start": 20082,
+      "unit": 3,
+      "work": {
+        "elements": 192,
+        "lane_issues": 24,
+        "tmem_reads": 192,
+        "tmem_writes": 192
+      }
+    },
+    {
+      "cycles": 146,
+      "dispatch": 19566,
+      "end": 19712,
+      "id": 198,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 197,
+      "release": 19568,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 19569,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 87,
+      "dispatch": 19642,
+      "end": 19729,
+      "id": 199,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 198,
+      "release": 19714,
+      "stalls": {
+        "dependency": 69,
+        "pipeline_latency": 1,
+        "unit_queue": 2
+      },
+      "start": 19714,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 33,
+      "dispatch": 19713,
+      "end": 19746,
+      "id": 200,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 199,
+      "release": 19731,
+      "stalls": {
+        "dependency": 13,
+        "pipeline_latency": 1,
+        "unit_queue": 4
+      },
+      "start": 19731,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 131,
+      "dispatch": 19725,
+      "end": 19856,
+      "id": 201,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 200,
+      "release": 19748,
+      "stalls": {
+        "dependency": 16,
+        "pipeline_latency": 1,
+        "unit_queue": 6
+      },
+      "start": 19748,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 202,
+      "dispatch": 19730,
+      "end": 19932,
+      "id": 202,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 201,
+      "release": 19858,
+      "stalls": {
+        "dependency": 119,
+        "pipeline_latency": 1,
+        "unit_queue": 8
+      },
+      "start": 19858,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 256,
+      "dispatch": 19742,
+      "end": 19998,
+      "id": 203,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 202,
+      "release": 19934,
+      "stalls": {
+        "dependency": 181,
+        "pipeline_latency": 1,
+        "unit_queue": 10
+      },
+      "start": 19934,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 276,
+      "dispatch": 19747,
+      "end": 20023,
+      "id": 204,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 203,
+      "release": 20000,
+      "stalls": {
+        "dependency": 211,
+        "pipeline_latency": 1,
+        "unit_queue": 41
+      },
+      "start": 20000,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 176,
+      "dispatch": 19852,
+      "end": 20028,
+      "id": 205,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 204,
+      "release": 20000,
+      "stalls": {
+        "dependency": 108,
+        "pipeline_latency": 1,
+        "unit_queue": 42
+      },
+      "start": 20003,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 225,
+      "dispatch": 19857,
+      "end": 20082,
+      "id": 206,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 205,
+      "release": 20030,
+      "stalls": {
+        "dependency": 109,
+        "pipeline_latency": 1,
+        "unit_queue": 93
+      },
+      "start": 20060,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 133,
+      "dispatch": 19900,
+      "end": 20033,
+      "id": 207,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 206,
+      "release": 20000,
+      "stalls": {
+        "dependency": 64,
+        "pipeline_latency": 1,
+        "unit_queue": 43
+      },
+      "start": 20008,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 110,
+      "dispatch": 19933,
+      "end": 20043,
+      "id": 208,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 207,
+      "release": 20000,
+      "stalls": {
+        "dependency": 33,
+        "pipeline_latency": 1,
+        "unit_queue": 51
+      },
+      "start": 20018,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 191,
+      "dispatch": 19966,
+      "end": 20157,
+      "id": 209,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 208,
+      "release": 20084,
+      "stalls": {
+        "dependency": 6,
+        "pipeline_latency": 1,
+        "unit_queue": 111
+      },
+      "start": 20084,
+      "unit": 3,
+      "work": {
+        "elements": 32,
+        "lane_issues": 4,
+        "tmem_reads": 64,
+        "tmem_writes": 32
+      }
+    },
+    {
+      "cycles": 207,
+      "dispatch": 19999,
+      "end": 20206,
+      "id": 210,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 209,
+      "release": 20159,
+      "stalls": {
+        "dependency": 7,
+        "pipeline_latency": 1,
+        "unit_queue": 167
+      },
+      "start": 20174,
+      "unit": 3,
+      "work": {
+        "elements": 192,
+        "lane_issues": 24,
+        "tmem_reads": 192,
+        "tmem_writes": 192
+      }
+    },
+    {
+      "cycles": 59,
+      "dispatch": 20004,
+      "end": 20063,
+      "id": 211,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 210,
+      "release": 20006,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 20023,
+      "unit": 3,
+      "work": {
+        "elements": 128,
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 692,
+      "dispatch": 20008,
+      "end": 20700,
+      "id": 212,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 211,
+      "release": 20147,
+      "stalls": {
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 589
+      },
+      "start": 20598,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 56,
+      "dispatch": 20009,
+      "end": 20065,
+      "id": 213,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 212,
+      "release": 20011,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 20028,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 73,
+      "dispatch": 20014,
+      "end": 20087,
+      "id": 214,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 213,
+      "release": 20016,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 47
+      },
+      "start": 20062,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 101,
+      "dispatch": 20019,
+      "end": 20120,
+      "id": 215,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 214,
+      "release": 20021,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 47
+      },
+      "start": 20067,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 153,
+      "dispatch": 20024,
+      "end": 20177,
+      "id": 216,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 215,
+      "release": 20026,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 92
+      },
+      "start": 20117,
+      "unit": 3,
+      "work": {
+        "elements": 128,
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 772,
+      "dispatch": 20029,
+      "end": 20801,
+      "id": 217,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 216,
+      "release": 20208,
+      "stalls": {
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 669
+      },
+      "start": 20699,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 145,
+      "dispatch": 20034,
+      "end": 20179,
+      "id": 218,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 217,
+      "release": 20036,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 107
+      },
+      "start": 20142,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 142,
+      "dispatch": 20039,
+      "end": 20181,
+      "id": 219,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 218,
+      "release": 20041,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 117
+      },
+      "start": 20157,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 195,
+      "dispatch": 20044,
+      "end": 20239,
+      "id": 220,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 219,
+      "release": 20046,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 131
+      },
+      "start": 20176,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 682,
+      "dispatch": 20064,
+      "end": 20746,
+      "id": 221,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 192,
+        "read_transactions": 3
+      },
+      "opcode": "MM",
+      "pc": 220,
+      "release": 20702,
+      "stalls": {
+        "activation_dependency": 636,
+        "dependency": 1,
+        "mxu_array_fill": 666,
+        "mxu_epilogue_drain": 8,
+        "pipeline_latency": 9
+      },
+      "start": 20066,
+      "unit": 1,
+      "work": {
+        "lane_issues": 2,
+        "macs": 256,
+        "mxu_advances": 1,
+        "peak_weight_fifo_chunks": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 4
+      }
+    },
+    {
+      "cycles": 782,
+      "dispatch": 20066,
+      "end": 20848,
+      "id": 222,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 384,
+        "read_transactions": 6
+      },
+      "opcode": "MM",
+      "pc": 221,
+      "release": 20803,
+      "stalls": {
+        "activation_dependency": 733,
+        "mxu_array_fill": 87,
+        "mxu_drain_head": 676,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 3,
+        "pipeline_latency": 9
+      },
+      "start": 20070,
+      "unit": 1,
+      "work": {
+        "lane_issues": 3,
+        "macs": 512,
+        "mxu_advances": 2,
+        "peak_weight_fifo_chunks": 3,
+        "tmem_reads": 0,
+        "tmem_writes": 6
+      }
+    },
+    {
+      "cycles": 538,
+      "dispatch": 20078,
+      "end": 20616,
+      "id": 223,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 222,
+      "release": 20601,
+      "stalls": {
+        "dependency": 522,
+        "dma_read_response": 11,
+        "pipeline_latency": 2
+      },
+      "start": 20601,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 673,
+      "dispatch": 20083,
+      "end": 20756,
+      "id": 224,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 223,
+      "release": 20748,
+      "stalls": {
+        "dependency": 546,
+        "pipeline_latency": 1,
+        "unit_queue": 118
+      },
+      "start": 20748,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 754,
+      "dispatch": 20088,
+      "end": 20842,
+      "id": 225,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 224,
+      "release": 20758,
+      "stalls": {
+        "dependency": 554,
+        "pipeline_latency": 1,
+        "unit_queue": 115
+      },
+      "start": 20758,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 2,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 723,
+      "dispatch": 20121,
+      "end": 20844,
+      "id": 226,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 225,
+      "release": 20758,
+      "stalls": {
+        "dependency": 554,
+        "pipeline_latency": 1,
+        "unit_queue": 84
+      },
+      "start": 20760,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 126,
+      "dispatch": 20146,
+      "end": 20272,
+      "id": 227,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 226,
+      "release": 20148,
+      "stalls": {
+        "pipeline_latency": 1,
+        "unit_queue": 31
+      },
+      "start": 20178,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 732,
+      "dispatch": 20158,
+      "end": 20890,
+      "id": 228,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 227,
+      "release": 20844,
+      "stalls": {
+        "dependency": 634,
+        "pipeline_latency": 1,
+        "unit_queue": 51
+      },
+      "start": 20844,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 2,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 816,
+      "dispatch": 20178,
+      "end": 20994,
+      "id": 229,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 228,
+      "release": 20892,
+      "stalls": {
+        "dependency": 92,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 621
+      },
+      "start": 20892,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 256,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 993,
+      "dispatch": 20180,
+      "end": 21173,
+      "id": 230,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 16384,
+        "read_transactions": 256
+      },
+      "opcode": "MM",
+      "pc": 229,
+      "release": 20996,
+      "stalls": {
+        "activation_dependency": 250,
+        "mxu_array_fill": 178,
+        "mxu_drain_head": 102,
+        "mxu_epilogue_drain": 17,
+        "pipeline_latency": 7,
+        "unit_queue": 565
+      },
+      "start": 20746,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 32768,
+        "mxu_advances": 128,
+        "peak_weight_fifo_chunks": 128,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 713,
+      "dispatch": 20182,
+      "end": 20895,
+      "id": 231,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 230,
+      "release": 20846,
+      "stalls": {
+        "dependency": 634,
+        "pipeline_latency": 1,
+        "unit_queue": 29
+      },
+      "start": 20846,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 697,
+      "dispatch": 20207,
+      "end": 20904,
+      "id": 232,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 231,
+      "release": 20846,
+      "stalls": {
+        "dependency": 629,
+        "pipeline_latency": 1,
+        "unit_queue": 40
+      },
+      "start": 20877,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 719,
+      "dispatch": 20240,
+      "end": 20959,
+      "id": 233,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 232,
+      "release": 20844,
+      "stalls": {
+        "dependency": 596,
+        "pipeline_latency": 1,
+        "unit_queue": 53
+      },
+      "start": 20890,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 16,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 703,
+      "dispatch": 20273,
+      "end": 20976,
+      "id": 234,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 233,
+      "release": 20961,
+      "stalls": {
+        "dependency": 621,
+        "pipeline_latency": 1,
+        "unit_queue": 66
+      },
+      "start": 20961,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 507,
+      "dispatch": 20600,
+      "end": 21107,
+      "id": 235,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 234,
+      "release": 20978,
+      "stalls": {
+        "dependency": 307,
+        "pipeline_latency": 1,
+        "unit_queue": 70
+      },
+      "start": 20978,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 631,
+      "dispatch": 20617,
+      "end": 21248,
+      "id": 236,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 235,
+      "release": 21175,
+      "stalls": {
+        "dependency": 419,
+        "pipeline_latency": 1,
+        "unit_queue": 138,
+        "vpu_pipeline_frozen": 16
+      },
+      "start": 21175,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 14,
+      "dispatch": 20701,
+      "end": 20715,
+      "id": 237,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 128,
+        "read_transactions": 2
+      },
+      "opcode": "LD",
+      "pc": 236,
+      "release": 20703,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 8,
+        "pipeline_latency": 2
+      },
+      "start": 20703,
+      "unit": 0,
+      "work": {
+        "lane_issues": 1,
+        "tmem_reads": 0,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 248,
+      "dispatch": 20716,
+      "end": 20964,
+      "id": 238,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 237,
+      "release": 20850,
+      "stalls": {
+        "dependency": 120,
+        "pipeline_latency": 1,
+        "unit_queue": 55
+      },
+      "start": 20892,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 303,
+      "dispatch": 20747,
+      "end": 21050,
+      "id": 239,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 238,
+      "release": 20966,
+      "stalls": {
+        "dependency": 149,
+        "pipeline_latency": 1,
+        "unit_queue": 69
+      },
+      "start": 20966,
+      "unit": 3,
+      "work": {
+        "elements": 4,
+        "lane_issues": 2,
+        "tmem_reads": 6,
+        "tmem_writes": 4
+      }
+    },
+    {
+      "cycles": 295,
+      "dispatch": 20757,
+      "end": 21052,
+      "id": 240,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 239,
+      "release": 20966,
+      "stalls": {
+        "dependency": 141,
+        "pipeline_latency": 1,
+        "unit_queue": 69
+      },
+      "start": 20968,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 78,
+      "dispatch": 20802,
+      "end": 20880,
+      "id": 241,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 240,
+      "release": 20804,
+      "stalls": {
+        "dependency": 1,
+        "pipeline_latency": 1
+      },
+      "start": 20804,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 277,
+      "dispatch": 20843,
+      "end": 21120,
+      "id": 242,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 241,
+      "release": 21052,
+      "stalls": {
+        "dependency": 140,
+        "pipeline_latency": 1,
+        "unit_queue": 68
+      },
+      "start": 21052,
+      "unit": 3,
+      "work": {
+        "elements": 4,
+        "lane_issues": 2,
+        "tmem_reads": 8,
+        "tmem_writes": 4
+      }
+    },
+    {
+      "cycles": 379,
+      "dispatch": 20845,
+      "end": 21224,
+      "id": 243,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 242,
+      "release": 21122,
+      "stalls": {
+        "dependency": 129,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 147
+      },
+      "start": 21122,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 256,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 554,
+      "dispatch": 20849,
+      "end": 21403,
+      "id": 244,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 16384,
+        "read_transactions": 256
+      },
+      "opcode": "MM",
+      "pc": 243,
+      "release": 21226,
+      "stalls": {
+        "activation_dependency": 349,
+        "mxu_array_fill": 83,
+        "mxu_drain_head": 296,
+        "mxu_epilogue_drain": 17,
+        "mxu_issuer_busy": 27,
+        "pipeline_latency": 7
+      },
+      "start": 20877,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 32768,
+        "mxu_advances": 128,
+        "peak_weight_fifo_chunks": 245,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 244,
+      "dispatch": 20881,
+      "end": 21125,
+      "id": 245,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 244,
+      "release": 21054,
+      "stalls": {
+        "dependency": 140,
+        "pipeline_latency": 1,
+        "unit_queue": 32
+      },
+      "start": 21054,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 243,
+      "dispatch": 20891,
+      "end": 21134,
+      "id": 246,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 245,
+      "release": 21054,
+      "stalls": {
+        "dependency": 140,
+        "pipeline_latency": 1,
+        "unit_queue": 75
+      },
+      "start": 21107,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 293,
+      "dispatch": 20896,
+      "end": 21189,
+      "id": 247,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 246,
+      "release": 21052,
+      "stalls": {
+        "dependency": 140,
+        "pipeline_latency": 1,
+        "unit_queue": 83
+      },
+      "start": 21120,
+      "unit": 3,
+      "work": {
+        "elements": 4,
+        "lane_issues": 16,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 345,
+      "dispatch": 20905,
+      "end": 21250,
+      "id": 248,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 247,
+      "release": 21191,
+      "stalls": {
+        "dependency": 205,
+        "pipeline_latency": 1,
+        "unit_queue": 80,
+        "vpu_pipeline_frozen": 16
+      },
+      "start": 21191,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 4,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 350,
+      "dispatch": 20960,
+      "end": 21310,
+      "id": 249,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 248,
+      "release": 21252,
+      "stalls": {
+        "dependency": 209,
+        "pipeline_latency": 1,
+        "unit_queue": 82
+      },
+      "start": 21252,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 486,
+      "dispatch": 20965,
+      "end": 21451,
+      "id": 250,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 249,
+      "release": 21405,
+      "stalls": {
+        "dependency": 357,
+        "pipeline_latency": 1,
+        "unit_queue": 82
+      },
+      "start": 21405,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 288,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 724,
+      "dispatch": 20977,
+      "end": 21701,
+      "id": 251,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 250,
+      "release": 20979,
+      "stalls": {
+        "memory_backpressure": 34,
+        "mxu_drain_head": 230,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 32,
+        "mxu_issuer_busy": 30,
+        "mxu_pop_head": 181,
+        "mxu_result_full": 47,
+        "pipeline_latency": 8,
+        "unit_queue": 165
+      },
+      "start": 21173,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 198,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 786,
+      "dispatch": 20995,
+      "end": 21781,
+      "id": 252,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 251,
+      "release": 21703,
+      "stalls": {
+        "dependency": 629,
+        "pipeline_latency": 1,
+        "unit_queue": 78
+      },
+      "start": 21703,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 978,
+      "dispatch": 21051,
+      "end": 22029,
+      "id": 253,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 252,
+      "release": 21783,
+      "stalls": {
+        "composite_recirculation": 100,
+        "dependency": 651,
+        "pipeline_latency": 1,
+        "unit_queue": 80
+      },
+      "start": 21783,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1056,
+      "dispatch": 21053,
+      "end": 22109,
+      "id": 254,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 253,
+      "release": 22031,
+      "stalls": {
+        "dependency": 897,
+        "pipeline_latency": 1,
+        "unit_queue": 80
+      },
+      "start": 22031,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1174,
+      "dispatch": 21108,
+      "end": 22282,
+      "id": 255,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 254,
+      "release": 22111,
+      "stalls": {
+        "composite_recirculation": 50,
+        "dependency": 975,
+        "pipeline_latency": 1,
+        "unit_queue": 27
+      },
+      "start": 22111,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1241,
+      "dispatch": 21121,
+      "end": 22362,
+      "id": 256,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 255,
+      "release": 22284,
+      "stalls": {
+        "dependency": 1146,
+        "pipeline_latency": 1,
+        "unit_queue": 16
+      },
+      "start": 22284,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 1024,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1388,
+      "dispatch": 21126,
+      "end": 22514,
+      "id": 257,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 256,
+      "release": 22364,
+      "stalls": {
+        "dependency": 1141,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 75,
+        "unit_queue": 96
+      },
+      "start": 22364,
+      "unit": 2,
+      "work": {
+        "lane_issues": 64,
+        "packed_activation_bytes": 512,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1677,
+      "dispatch": 21135,
+      "end": 22812,
+      "id": 258,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 257,
+      "release": 22516,
+      "stalls": {
+        "activation_dependency": 1050,
+        "memory_backpressure": 21,
+        "mxu_array_fill": 973,
+        "mxu_drain_head": 235,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 293,
+        "pipeline_latency": 7,
+        "unit_queue": 37
+      },
+      "start": 21466,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 256,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1686,
+      "dispatch": 21174,
+      "end": 22860,
+      "id": 259,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 258,
+      "release": 22814,
+      "stalls": {
+        "dependency": 1621,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 22814,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 37,
+      "dispatch": 21190,
+      "end": 21227,
+      "id": 260,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 259,
+      "release": 21192,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 16,
+        "pipeline_latency": 2
+      },
+      "start": 21192,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1711,
+      "dispatch": 21225,
+      "end": 22936,
+      "id": 261,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 260,
+      "release": 22862,
+      "stalls": {
+        "dependency": 1620,
+        "pipeline_latency": 1,
+        "unit_queue": 16
+      },
+      "start": 22862,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 256,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1725,
+      "dispatch": 21228,
+      "end": 22953,
+      "id": 262,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 261,
+      "release": 22938,
+      "stalls": {
+        "dependency": 1691,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 22938,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1721,
+      "dispatch": 21249,
+      "end": 22970,
+      "id": 263,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 262,
+      "release": 22955,
+      "stalls": {
+        "dependency": 1685,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 22955,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1829,
+      "dispatch": 21251,
+      "end": 23080,
+      "id": 264,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 263,
+      "release": 22972,
+      "stalls": {
+        "dependency": 1698,
+        "pipeline_latency": 1,
+        "unit_queue": 22
+      },
+      "start": 22972,
+      "unit": 3,
+      "work": {
+        "elements": 2,
+        "lane_issues": 1,
+        "tmem_reads": 2,
+        "tmem_writes": 2
+      }
+    },
+    {
+      "cycles": 1873,
+      "dispatch": 21311,
+      "end": 23184,
+      "id": 265,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 264,
+      "release": 23082,
+      "stalls": {
+        "dependency": 569,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 1201
+      },
+      "start": 23082,
+      "unit": 2,
+      "work": {
+        "lane_issues": 32,
+        "packed_activation_bytes": 256,
+        "tmem_reads": 544,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 2078,
+      "dispatch": 21404,
+      "end": 23482,
+      "id": 266,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 265,
+      "release": 23186,
+      "stalls": {
+        "activation_dependency": 1440,
+        "memory_backpressure": 89,
+        "mxu_array_fill": 404,
+        "mxu_drain_head": 1066,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 341,
+        "pipeline_latency": 7
+      },
+      "start": 21746,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 512,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 2488,
+      "dispatch": 21452,
+      "end": 23940,
+      "id": 267,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 266,
+      "release": 23186,
+      "stalls": {
+        "activation_dependency": 374,
+        "memory_backpressure": 10,
+        "mxu_drain_head": 670,
+        "mxu_epilogue_drain": 8,
+        "mxu_epilogue_frozen": 192,
+        "mxu_issuer_busy": 641,
+        "mxu_pop_head": 256,
+        "mxu_result_full": 198,
+        "pipeline_latency": 8,
+        "unit_queue": 718
+      },
+      "start": 22812,
+      "unit": 1,
+      "work": {
+        "lane_issues": 256,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 512,
+        "tmem_reads": 0,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 21702,
+      "end": 23562,
+      "id": 268,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 267,
+      "release": 23484,
+      "stalls": {
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 23484,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 2028,
+      "dispatch": 21782,
+      "end": 23810,
+      "id": 269,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 268,
+      "release": 23564,
+      "stalls": {
+        "composite_recirculation": 100,
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 23564,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22030,
+      "end": 23890,
+      "id": 270,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 269,
+      "release": 23812,
+      "stalls": {
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 23812,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1953,
+      "dispatch": 22110,
+      "end": 24063,
+      "id": 271,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 270,
+      "release": 23892,
+      "stalls": {
+        "composite_recirculation": 50,
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 23892,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 512,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22283,
+      "end": 24143,
+      "id": 272,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 271,
+      "release": 24065,
+      "stalls": {
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 24065,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 1024,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22363,
+      "end": 24223,
+      "id": 273,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 272,
+      "release": 24145,
+      "stalls": {
+        "dependency": 1761,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 24145,
+      "unit": 3,
+      "work": {
+        "elements": 512,
+        "lane_issues": 64,
+        "tmem_reads": 1024,
+        "tmem_writes": 512
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22515,
+      "end": 24375,
+      "id": 274,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 273,
+      "release": 24225,
+      "stalls": {
+        "dependency": 1042,
+        "pipeline_latency": 13,
+        "quant_scale_pipeline": 75,
+        "unit_queue": 667
+      },
+      "start": 24225,
+      "unit": 2,
+      "work": {
+        "lane_issues": 64,
+        "packed_activation_bytes": 512,
+        "tmem_reads": 512,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22813,
+      "end": 24673,
+      "id": 275,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 49152,
+        "read_transactions": 768
+      },
+      "opcode": "MM",
+      "pc": 274,
+      "release": 24377,
+      "stalls": {
+        "activation_dependency": 895,
+        "memory_backpressure": 18,
+        "mxu_array_fill": 595,
+        "mxu_drain_head": 458,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 267,
+        "pipeline_latency": 7,
+        "unit_queue": 401
+      },
+      "start": 23482,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 65536,
+        "mxu_advances": 256,
+        "peak_weight_fifo_chunks": 321,
+        "tmem_reads": 0,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 1860,
+      "dispatch": 22861,
+      "end": 24721,
+      "id": 276,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 275,
+      "release": 24675,
+      "stalls": {
+        "dependency": 1793,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 24675,
+      "unit": 3,
+      "work": {
+        "elements": 256,
+        "lane_issues": 32,
+        "tmem_reads": 512,
+        "tmem_writes": 256
+      }
+    },
+    {
+      "cycles": 50,
+      "dispatch": 22937,
+      "end": 22987,
+      "id": 277,
+      "label": "LD",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 512,
+        "read_transactions": 8
+      },
+      "opcode": "LD",
+      "pc": 276,
+      "release": 22939,
+      "stalls": {
+        "dependency": 1,
+        "dma_read_response": 29,
+        "pipeline_latency": 2
+      },
+      "start": 22939,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1827,
+      "dispatch": 22954,
+      "end": 24781,
+      "id": 278,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 277,
+      "release": 24723,
+      "stalls": {
+        "dependency": 1750,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 24723,
+      "unit": 3,
+      "work": {
+        "elements": 128,
+        "lane_issues": 16,
+        "tmem_reads": 128,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 1827,
+      "dispatch": 22971,
+      "end": 24798,
+      "id": 279,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 278,
+      "release": 24783,
+      "stalls": {
+        "dependency": 1793,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 24783,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 1,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 1827,
+      "dispatch": 22988,
+      "end": 24815,
+      "id": 280,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 279,
+      "release": 24800,
+      "stalls": {
+        "dependency": 1793,
+        "pipeline_latency": 1,
+        "unit_queue": 18
+      },
+      "start": 24800,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 1,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 1844,
+      "dispatch": 23081,
+      "end": 24925,
+      "id": 281,
+      "label": "VOP",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "VOP",
+      "pc": 280,
+      "release": 24817,
+      "stalls": {
+        "dependency": 1715,
+        "pipeline_latency": 1,
+        "unit_queue": 20
+      },
+      "start": 24817,
+      "unit": 3,
+      "work": {
+        "elements": 1,
+        "lane_issues": 1,
+        "tmem_reads": 1,
+        "tmem_writes": 1
+      }
+    },
+    {
+      "cycles": 1827,
+      "dispatch": 23185,
+      "end": 25012,
+      "id": 282,
+      "label": "QACT",
+      "loop_context": [],
+      "memory": {},
+      "opcode": "QACT",
+      "pc": 281,
+      "release": 24927,
+      "stalls": {
+        "dependency": 553,
+        "pipeline_latency": 12,
+        "quant_scale_pipeline": 59,
+        "unit_queue": 1188
+      },
+      "start": 24927,
+      "unit": 2,
+      "work": {
+        "lane_issues": 16,
+        "packed_activation_bytes": 128,
+        "tmem_reads": 272,
+        "tmem_writes": 0
+      }
+    },
+    {
+      "cycles": 1699,
+      "dispatch": 23483,
+      "end": 25182,
+      "id": 283,
+      "label": "MM",
+      "loop_context": [],
+      "memory": {
+        "read_bytes": 24576,
+        "read_transactions": 384
+      },
+      "opcode": "MM",
+      "pc": 282,
+      "release": 25014,
+      "stalls": {
+        "activation_dependency": 1074,
+        "mxu_array_fill": 371,
+        "mxu_drain_head": 733,
+        "mxu_epilogue_drain": 8,
+        "mxu_issuer_busy": 275,
+        "pipeline_latency": 7,
+        "unit_queue": 181
+      },
+      "start": 23940,
+      "unit": 1,
+      "work": {
+        "lane_issues": 128,
+        "macs": 16384,
+        "mxu_advances": 128,
+        "peak_weight_fifo_chunks": 384,
+        "tmem_reads": 0,
+        "tmem_writes": 128
+      }
+    },
+    {
+      "cycles": 1654,
+      "dispatch": 23563,
+      "end": 25217,
+      "id": 284,
+      "label": "ST",
+      "loop_context": [],
+      "memory": {
+        "write_bytes": 512,
+        "write_transactions": 8
+      },
+      "opcode": "ST",
+      "pc": 283,
+      "release": 25184,
+      "stalls": {
+        "dependency": 1620,
+        "dma_store_gather": 20,
+        "memory_completion": 6,
+        "pipeline_latency": 5
+      },
+      "start": 25184,
+      "unit": 0,
+      "work": {
+        "lane_issues": 16,
+        "tmem_reads": 128,
+        "tmem_writes": 0
+      }
+    }
+  ],
+  "label": "opentpu-perfsim-estimate",
+  "layers": {
+    "LD": {
+      "first_dispatch": 11,
+      "instructions": 20,
+      "last_completion": 22987,
+      "memory": {
+        "read_bytes": 18688,
+        "read_transactions": 292
+      },
+      "span_cycles": 22977,
+      "stalls": {
+        "dependency": 529,
+        "dma_read_response": 270,
+        "pipeline_latency": 40,
+        "unit_queue": 13460
+      }
+    },
+    "MM": {
+      "first_dispatch": 20,
+      "instructions": 20,
+      "last_completion": 25182,
+      "memory": {
+        "read_bytes": 795968,
+        "read_transactions": 12437
+      },
+      "span_cycles": 25163,
+      "stalls": {
+        "activation_dependency": 11629,
+        "dependency": 2284,
+        "memory_backpressure": 594,
+        "mxu_array_fill": 6209,
+        "mxu_drain_head": 7787,
+        "mxu_epilogue_drain": 187,
+        "mxu_epilogue_frozen": 590,
+        "mxu_issuer_busy": 4505,
+        "mxu_pop_head": 954,
+        "mxu_result_full": 578,
+        "mxu_weight_starvation": 234,
+        "pipeline_latency": 150,
+        "unit_queue": 4920
+      }
+    },
+    "QACT": {
+      "first_dispatch": 19,
+      "instructions": 13,
+      "last_completion": 25012,
+      "memory": {},
+      "span_cycles": 24994,
+      "stalls": {
+        "dependency": 11065,
+        "pipeline_latency": 168,
+        "quant_scale_pipeline": 831,
+        "unit_queue": 7530
+      }
+    },
+    "QST": {
+      "first_dispatch": 19048,
+      "instructions": 2,
+      "last_completion": 20599,
+      "memory": {
+        "read_bytes": 20736,
+        "read_transactions": 324,
+        "write_bytes": 20736,
+        "write_transactions": 324
+      },
+      "span_cycles": 1552,
+      "stalls": {
+        "dependency": 414,
+        "pipeline_latency": 168,
+        "quant_output_frozen": 108,
+        "unit_queue": 881
+      }
+    },
+    "ST": {
+      "first_dispatch": 447,
+      "instructions": 8,
+      "last_completion": 25217,
+      "memory": {
+        "read_bytes": 256,
+        "read_transactions": 4,
+        "write_bytes": 9984,
+        "write_transactions": 156
+      },
+      "span_cycles": 24771,
+      "stalls": {
+        "dependency": 2421,
+        "dma_store_gather": 340,
+        "memory_completion": 1166,
+        "pipeline_latency": 40,
+        "unit_queue": 10366
+      }
+    },
+    "STREAM": {
+      "first_dispatch": 5665,
+      "instructions": 4,
+      "last_completion": 15640,
+      "memory": {
+        "read_bytes": 131072,
+        "read_transactions": 2048,
+        "write_bytes": 262144,
+        "write_transactions": 4096
+      },
+      "span_cycles": 9976,
+      "stalls": {
+        "dependency": 814,
+        "stream_vpu_drain": 84,
+        "unit_queue": 15488
+      }
+    },
+    "VOP": {
+      "first_dispatch": 3,
+      "instructions": 217,
+      "last_completion": 24925,
+      "memory": {},
+      "span_cycles": 24923,
+      "stalls": {
+        "composite_recirculation": 1074,
+        "dependency": 125035,
+        "pipeline_latency": 217,
+        "stream_engine_owned": 113429,
+        "unit_queue": 27062,
+        "vpu_pipeline_frozen": 42
+      }
+    }
+  },
+  "memory": {
+    "backend_rejected_ticks": 1178,
+    "line_order_stall_ticks": 2634,
+    "logical_read_bytes": 818528,
+    "logical_write_bytes": 272432,
+    "peak_outstanding": 64,
+    "read_bytes": 966720,
+    "read_transactions": 15105,
+    "write_bytes": 292864,
+    "write_transactions": 4576
+  },
+  "memory_config": {
+    "backend": "ramulator",
+    "bridge": "/private/tmp/opentpu-bridge-v5-final/libopentpu_ramulator.dylib",
+    "controller_period_ps": 833,
+    "ingress_per_controller_tick": 1,
+    "memory_period_ps": 833,
+    "native_ports": true,
+    "outstanding": 64,
+    "ramulator_config": "/Users/rachittibrewal/Documents/Codex/2026-10-19/task/openTPU-sim/tools/perfsim/configs/ddr4.yaml",
+    "record_trace": true,
+    "rmw": true,
+    "simple_channels": 8,
+    "simple_latency_ticks": 20,
+    "simple_queue_per_channel": 32,
+    "transaction_bytes": 64
+  },
+  "mxu_advance_fraction": 0.16777033189262064,
+  "schema_version": 1,
+  "seconds": 0.000126095,
+  "timing_validation": "unvalidated",
+  "unit_busy_fraction": {
+    "0": 0.4619532891867243,
+    "1": 0.42630556326579166,
+    "2": 0.10448471390618184,
+    "3": 0.40715333676989574,
+    "4": 0.0
+  },
+  "useful_mac_fraction": 0.08261628137515366
+}

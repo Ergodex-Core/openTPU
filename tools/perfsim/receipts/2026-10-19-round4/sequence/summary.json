@@ -1,0 +1,146 @@
+{
+  "backend": "ramulator",
+  "boundary": "program-resident core start through final write completion; serial prompt steps, no sampling, host, queueing or input-transfer time",
+  "conditional_decode_tokens_per_second": 34774.545033035814,
+  "core_only_decode_tokens_per_second": 34822.983168891464,
+  "decode_elapsed_seconds": 8.627000000000001e-05,
+  "decode_seconds": 8.615000000000001e-05,
+  "device_ttft_seconds": 5.757e-05,
+  "fmax_verified": false,
+  "full_pretrained_model": false,
+  "hardware_measured": false,
+  "label": "opentpu-perfsim-estimate",
+  "launch_overhead_cycles": 8,
+  "memory_state": "persistent DRAM/TMEM/ACT/controller and KV; core pipeline/register reset; explicit idle/reset launch edges",
+  "prefill_elapsed_seconds": 5.757e-05,
+  "prefill_seconds": 5.753e-05,
+  "profile": "native-hbm2-200mhz",
+  "stages": [
+    {
+      "cycles": 5748,
+      "memory": {
+        "line_order_stall_ticks": 596,
+        "logical_read_bytes": 135488,
+        "logical_write_bytes": 400,
+        "peak_outstanding": 64,
+        "read_bytes": 136832,
+        "read_transactions": 8552,
+        "write_bytes": 1600,
+        "write_transactions": 100
+      },
+      "name": "tiny_qwen_0",
+      "numerical_check": {
+        "cosine": 0.9997973049609623,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.020373175119272995,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "prefill",
+      "seconds": 2.874e-05
+    },
+    {
+      "cycles": 5758,
+      "memory": {
+        "line_order_stall_ticks": 246,
+        "logical_read_bytes": 135616,
+        "logical_write_bytes": 400,
+        "peak_outstanding": 64,
+        "read_bytes": 136960,
+        "read_transactions": 8560,
+        "write_bytes": 1600,
+        "write_transactions": 100
+      },
+      "name": "tiny_qwen_1",
+      "numerical_check": {
+        "cosine": 0.999784572628691,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.020884415456146464,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "prefill",
+      "seconds": 2.879e-05
+    },
+    {
+      "cycles": 5715,
+      "memory": {
+        "line_order_stall_ticks": 246,
+        "logical_read_bytes": 135744,
+        "logical_write_bytes": 400,
+        "peak_outstanding": 64,
+        "read_bytes": 137088,
+        "read_transactions": 8568,
+        "write_bytes": 1600,
+        "write_transactions": 100
+      },
+      "name": "tiny_qwen_2",
+      "numerical_check": {
+        "cosine": 0.9997887797624726,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.021099040495761223,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "decode",
+      "seconds": 2.8575e-05
+    },
+    {
+      "cycles": 5752,
+      "memory": {
+        "line_order_stall_ticks": 246,
+        "logical_read_bytes": 135872,
+        "logical_write_bytes": 400,
+        "peak_outstanding": 64,
+        "read_bytes": 137216,
+        "read_transactions": 8576,
+        "write_bytes": 1600,
+        "write_transactions": 100
+      },
+      "name": "tiny_qwen_3",
+      "numerical_check": {
+        "cosine": 0.9997349520185788,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.02304678594259132,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "decode",
+      "seconds": 2.876e-05
+    },
+    {
+      "cycles": 5763,
+      "memory": {
+        "line_order_stall_ticks": 246,
+        "logical_read_bytes": 136000,
+        "logical_write_bytes": 400,
+        "peak_outstanding": 64,
+        "read_bytes": 137344,
+        "read_transactions": 8584,
+        "write_bytes": 1600,
+        "write_transactions": 100
+      },
+      "name": "tiny_qwen_4",
+      "numerical_check": {
+        "cosine": 0.9998620477954248,
+        "cosine_minimum": 0.995,
+        "independent_reference": "NumPy reference_logits, float forward",
+        "isa_bit_exact": true,
+        "passed": true,
+        "relative_l2": 0.017134236166839394,
+        "relative_l2_limit": 0.05
+      },
+      "phase": "decode",
+      "seconds": 2.8815e-05
+    }
+  ],
+  "timing_validation": "unvalidated"
+}

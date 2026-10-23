@@ -1,0 +1,234 @@
+{
+  "backend": "ramulator",
+  "fixed_launch_overhead_cycles": 8,
+  "host_gap_cycles": 0,
+  "model_host_wall_seconds": 0.03747020801529288,
+  "numeric_passed": true,
+  "physical_traffic_match": true,
+  "port_schedule_match": true,
+  "request_arrivals": "independently generated; explicit host gap, no forced request times",
+  "retained": "DRAM, TMEM, ACT RAM, controller/open rows/refresh; reset core registers, sequencer and unit pipelines",
+  "rtl_host_wall_seconds": 0.2258404999738559,
+  "stages": [
+    {
+      "independent_reference": {
+        "cosine": 0.9999445296851732,
+        "passed": true,
+        "relative_l2": 0.010634114811423736
+      },
+      "model_cycles": 277,
+      "model_global_start": 0,
+      "model_trace": [
+        {
+          "dispatch": 3,
+          "end": 66,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 187,
+          "pc": 1,
+          "start": 68
+        },
+        {
+          "dispatch": 5,
+          "end": 248,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 275,
+          "pc": 3,
+          "start": 250
+        }
+      ],
+      "name": "m3k128n19",
+      "numeric_bit_exact": true,
+      "phase": "independent epilogue kernel",
+      "rtl_cycles": 277,
+      "rtl_global_start": 0,
+      "rtl_trace": [
+        {
+          "dispatch": 3,
+          "end": 66,
+          "id": 0,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 187,
+          "id": 1,
+          "pc": 1,
+          "start": 68
+        },
+        {
+          "dispatch": 5,
+          "end": 248,
+          "id": 2,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 275,
+          "id": 3,
+          "pc": 3,
+          "start": 250
+        }
+      ],
+      "stage": 0,
+      "timing_passed": true,
+      "trace_match": true
+    },
+    {
+      "independent_reference": {
+        "cosine": 0.999950416104517,
+        "passed": true,
+        "relative_l2": 0.010072315261431231
+      },
+      "model_cycles": 390,
+      "model_global_start": 285,
+      "model_trace": [
+        {
+          "dispatch": 3,
+          "end": 80,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 218,
+          "pc": 1,
+          "start": 82
+        },
+        {
+          "dispatch": 5,
+          "end": 327,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 388,
+          "pc": 3,
+          "start": 329
+        }
+      ],
+      "name": "m4k128n67",
+      "numeric_bit_exact": true,
+      "phase": "independent epilogue kernel",
+      "rtl_cycles": 390,
+      "rtl_global_start": 285,
+      "rtl_trace": [
+        {
+          "dispatch": 3,
+          "end": 80,
+          "id": 0,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 218,
+          "id": 1,
+          "pc": 1,
+          "start": 82
+        },
+        {
+          "dispatch": 5,
+          "end": 327,
+          "id": 2,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 388,
+          "id": 3,
+          "pc": 3,
+          "start": 329
+        }
+      ],
+      "stage": 1,
+      "timing_passed": true,
+      "trace_match": true
+    },
+    {
+      "independent_reference": {
+        "cosine": 0.9999325271185415,
+        "passed": true,
+        "relative_l2": 0.011632851713114139
+      },
+      "model_cycles": 507,
+      "model_global_start": 683,
+      "model_trace": [
+        {
+          "dispatch": 3,
+          "end": 144,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 362,
+          "pc": 1,
+          "start": 146
+        },
+        {
+          "dispatch": 5,
+          "end": 470,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 505,
+          "pc": 3,
+          "start": 472
+        }
+      ],
+      "name": "m4k256n33",
+      "numeric_bit_exact": true,
+      "phase": "independent epilogue kernel",
+      "rtl_cycles": 507,
+      "rtl_global_start": 683,
+      "rtl_trace": [
+        {
+          "dispatch": 3,
+          "end": 144,
+          "id": 0,
+          "pc": 0,
+          "start": 5
+        },
+        {
+          "dispatch": 4,
+          "end": 362,
+          "id": 1,
+          "pc": 1,
+          "start": 146
+        },
+        {
+          "dispatch": 5,
+          "end": 470,
+          "id": 2,
+          "pc": 2,
+          "start": 7
+        },
+        {
+          "dispatch": 6,
+          "end": 505,
+          "id": 3,
+          "pc": 3,
+          "start": 472
+        }
+      ],
+      "stage": 2,
+      "timing_passed": true,
+      "trace_match": true
+    }
+  ],
+  "timing_passed": true
+}

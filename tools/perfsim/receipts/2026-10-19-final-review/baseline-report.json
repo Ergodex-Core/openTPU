@@ -1,0 +1,29 @@
+{
+  "baseline": "opentpu-native-hbm2-program-resident-v1",
+  "conditional_decode_tokens_per_second": 11956.716685598134,
+  "core_frequency_hz": 200000000,
+  "cycles": [
+    25392,
+    16632,
+    16806
+  ],
+  "decode_tokens": 2,
+  "device_ttft_seconds": 0.00012696,
+  "engine": "stream",
+  "epilogue_lanes": 2,
+  "full_pretrained_model": false,
+  "limits": [
+    "tiny random complete hybrid topology only",
+    "program/input loading, sampling and host time excluded",
+    "pumped TMEM and production shell unsupported",
+    "physical Fmax and resources unverified"
+  ],
+  "loading_chain_waitw_included": false,
+  "numeric_passed": true,
+  "original_int4_quality_failures": "still failed at D32=5.77272%, D128=7.94663%; packed arithmetic is independently bit-exact; see validation-round5.md",
+  "physical_hardware_measured": false,
+  "prefill_tokens": 2,
+  "timing_passed": true,
+  "tmem_impl": 0,
+  "validation": "strict RTL cycles/instructions/ports plus independent NumPy logits"
+}

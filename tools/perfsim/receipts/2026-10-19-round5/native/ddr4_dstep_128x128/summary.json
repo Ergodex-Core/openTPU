@@ -1,0 +1,105 @@
+{
+  "backend": "ramulator",
+  "clocks_ps": {
+    "controller": 833,
+    "core": 5000,
+    "memory": 833
+  },
+  "model_host_wall_seconds": 0.03649945798679255,
+  "native_ports": true,
+  "numerical": {
+    "independent_float_reference": {
+      "model": {
+        "cosine": 0.9999999999999996,
+        "passed": true,
+        "relative_l2": 3.625637506443936e-08
+      },
+      "rtl": {
+        "cosine": 0.9999999999999996,
+        "passed": true,
+        "relative_l2": 3.625637506443936e-08
+      }
+    },
+    "model_vs_isa_bit_exact": true,
+    "rtl_vs_isa_bit_exact": true
+  },
+  "physical_traffic_match": true,
+  "port_arrival_completion_match": true,
+  "predicted_cycles": 2390,
+  "predicted_trace": [
+    {
+      "dispatch": 5,
+      "end": 52,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 78,
+      "pc": 1,
+      "start": 51
+    },
+    {
+      "dispatch": 7,
+      "end": 89,
+      "pc": 2,
+      "start": 77
+    },
+    {
+      "dispatch": 8,
+      "end": 2355,
+      "pc": 3,
+      "start": 88
+    },
+    {
+      "dispatch": 9,
+      "end": 2388,
+      "pc": 4,
+      "start": 2355
+    }
+  ],
+  "request_arrivals": "independently generated; no trace replay or arrival-time forcing",
+  "rtl_cycles": 2390,
+  "rtl_host_wall_seconds": 0.16014512500260025,
+  "rtl_trace": [
+    {
+      "dispatch": 5,
+      "end": 52,
+      "id": 0,
+      "pc": 0,
+      "start": 6
+    },
+    {
+      "dispatch": 6,
+      "end": 78,
+      "id": 1,
+      "pc": 1,
+      "start": 51
+    },
+    {
+      "dispatch": 7,
+      "end": 89,
+      "id": 2,
+      "pc": 2,
+      "start": 77
+    },
+    {
+      "dispatch": 8,
+      "end": 2355,
+      "id": 3,
+      "pc": 3,
+      "start": 88
+    },
+    {
+      "dispatch": 9,
+      "end": 2388,
+      "id": 4,
+      "pc": 4,
+      "start": 2355
+    }
+  ],
+  "same_backend_configuration": true,
+  "timing_passed": true,
+  "trace_match": true,
+  "traffic_multiset_match": true
+}

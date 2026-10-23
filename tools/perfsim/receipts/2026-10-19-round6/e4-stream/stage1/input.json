@@ -1,0 +1,82 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": true,
+    "STREAM": true,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    217
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "complete random hybrid decoder",
+    "full_pretrained_model": false,
+    "host_inputs": [
+      [
+        0,
+        512
+      ],
+      [
+        1024,
+        64
+      ],
+      [
+        1152,
+        64
+      ]
+    ],
+    "independent_reference": "unchanged baseline NumPy Qwen3.5 forward; no ISA arithmetic helpers",
+    "logits_address": 1792,
+    "logits_count": 128,
+    "phase": "decode",
+    "position": 2,
+    "positions": [
+      2
+    ],
+    "seed": 20261022,
+    "spec": {
+      "conv_k": 4,
+      "embed": "f32",
+      "eos": [
+        248046,
+        248044
+      ],
+      "eps": 1e-06,
+      "ffn": 256,
+      "formats": "",
+      "head_dim": 128,
+      "hidden": 128,
+      "kinds": [
+        "linear",
+        "attn"
+      ],
+      "lin_dk": 128,
+      "lin_dv": 128,
+      "lin_heads": 2,
+      "lin_kheads": 0,
+      "mix": "",
+      "moe": null,
+      "mtp": false,
+      "n_kv": 1,
+      "n_q": 2,
+      "pair_loop": null,
+      "qk_share": null,
+      "rope_dim": 32,
+      "theta": 10000000.0,
+      "tied": true,
+      "vocab": 128
+    },
+    "token": 9
+  }
+}

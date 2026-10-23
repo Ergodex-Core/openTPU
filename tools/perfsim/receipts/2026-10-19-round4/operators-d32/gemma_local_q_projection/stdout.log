@@ -1,0 +1,1290 @@
+T0 D c=5 s=0 pc=0 op=10 w1=00000000 w2=00000000 w3=00000480
+T0 S c=6 s=0 u=0 r=6
+T0 D c=6 s=1 pc=1 op=21 w1=00000000 w2=00240001 w3=00000480
+T0 D c=7 s=2 pc=2 op=20 w1=00001200 w2=00121200 w3=00000480
+T0 S c=8 s=2 u=1 r=8
+T0 D c=8 s=3 pc=3 op=11 w1=0012b200 w2=00000480 w3=00000400
+T0 P c=63 n=64 bm=0 bd=56 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=63 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=127 n=64 bm=0 bd=64 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=127 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=162 s=0
+T0 S c=163 s=1 u=2 r=163
+T0 P c=191 n=64 bm=40 bd=24 am=40 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=191 n=64 bs=0 as=0 ms=0 mb=0 ff=296 ld=0
+T0 P c=255 n=64 bm=57 bd=0 am=57 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=255 n=64 bs=0 as=0 ms=0 mb=0 ff=2296 ld=0
+T0 P c=319 n=64 bm=62 bd=0 am=62 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=319 n=64 bs=0 as=0 ms=0 mb=0 ff=6075 ld=0
+T0 P c=383 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=383 n=64 bs=0 as=0 ms=0 mb=0 ff=10144 ld=0
+T0 P c=447 n=64 bm=64 bd=0 am=64 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=447 n=64 bs=0 as=0 ms=0 mb=0 ff=14240 ld=0
+T0 U c=502 u=2 frz=0
+T0 E c=504 s=1
+T0 G c=505 s=2
+T0 P c=511 n=64 bm=64 bd=0 am=64 aq=0 mx=5 fm=0 fq=0 fv=0 fc=0
+T0 Q c=511 n=64 bs=0 as=0 ms=0 mb=0 ff=18326 ld=0
+T0 P c=575 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=575 n=64 bs=0 as=0 ms=0 mb=0 ff=20096 ld=0
+T0 P c=639 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=639 n=64 bs=0 as=0 ms=0 mb=0 ff=20096 ld=0
+T0 P c=703 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=703 n=64 bs=0 as=0 ms=0 mb=0 ff=20096 ld=0
+T0 P c=767 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=767 n=64 bs=0 as=0 ms=0 mb=0 ff=20096 ld=0
+T0 P c=831 n=64 bm=27 bd=0 am=27 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=831 n=64 bs=0 as=0 ms=0 mb=0 ff=19886 ld=0
+T0 P c=895 n=64 bm=42 bd=0 am=42 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=895 n=64 bs=0 as=0 ms=0 mb=0 ff=17516 ld=0
+T0 P c=959 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=959 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1023 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1023 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1087 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1087 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1151 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1151 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1215 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1215 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1279 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1279 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1343 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1343 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1407 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1407 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1471 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1471 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1535 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1535 n=64 bs=0 as=0 ms=0 mb=0 ff=17216 ld=0
+T0 P c=1599 n=64 bm=39 bd=0 am=39 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1599 n=64 bs=0 as=0 ms=0 mb=0 ff=16963 ld=0
+T0 P c=1663 n=64 bm=30 bd=0 am=30 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1663 n=64 bs=0 as=0 ms=0 mb=0 ff=14113 ld=0
+T0 P c=1727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1727 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=1791 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1791 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=1855 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1855 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=1919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1919 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=1983 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=1983 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2047 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2047 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2111 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2175 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2175 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2239 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2239 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2303 n=64 bs=0 as=0 ms=0 mb=0 ff=13440 ld=0
+T0 P c=2367 n=64 bm=51 bd=0 am=51 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2367 n=64 bs=0 as=0 ms=0 mb=0 ff=13385 ld=0
+T0 P c=2431 n=64 bm=18 bd=0 am=18 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2431 n=64 bs=0 as=0 ms=0 mb=0 ff=10847 ld=0
+T0 P c=2495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2495 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2559 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2559 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2623 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2623 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2687 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2687 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2751 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2751 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2815 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2815 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2879 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2879 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=2943 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=2943 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=3007 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3007 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=3071 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3071 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=3135 n=64 bm=63 bd=0 am=63 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3135 n=64 bs=0 as=0 ms=0 mb=0 ff=9664 ld=0
+T0 P c=3199 n=64 bm=6 bd=0 am=6 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3199 n=64 bs=0 as=0 ms=0 mb=0 ff=7721 ld=0
+T0 P c=3263 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3263 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3327 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3327 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3391 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3391 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3455 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3455 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3519 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3519 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3583 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3583 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3647 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3647 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3711 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3711 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3775 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3775 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3839 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3839 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3903 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3903 n=64 bs=0 as=0 ms=0 mb=0 ff=5952 ld=0
+T0 P c=3967 n=64 bm=11 bd=0 am=11 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=3967 n=64 bs=0 as=0 ms=0 mb=0 ff=4626 ld=0
+T0 P c=4031 n=64 bm=58 bd=0 am=58 aq=0 mx=60 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4031 n=64 bs=0 as=0 ms=0 mb=4 ff=2326 ld=0
+T0 P c=4095 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4095 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4159 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4159 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4223 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4223 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4287 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4287 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4351 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4351 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4415 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4415 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4479 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4479 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4543 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4543 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4607 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4607 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4671 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4671 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=4735 n=64 bm=18 bd=0 am=18 aq=0 mx=51 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4735 n=64 bs=0 as=0 ms=0 mb=13 ff=1520 ld=0
+T0 P c=4799 n=64 bm=41 bd=0 am=41 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4799 n=64 bs=0 as=0 ms=0 mb=64 ff=750 ld=0
+T0 P c=4863 n=64 bm=59 bd=0 am=59 aq=0 mx=55 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4863 n=64 bs=0 as=0 ms=0 mb=9 ff=2220 ld=0
+T0 P c=4927 n=64 bm=63 bd=0 am=63 aq=0 mx=55 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4927 n=64 bs=0 as=0 ms=0 mb=9 ff=2181 ld=0
+T0 P c=4991 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=4991 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5055 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5055 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5119 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5119 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5183 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5183 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5247 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5247 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5311 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5311 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5375 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5375 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5439 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5439 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=5503 n=64 bm=35 bd=0 am=35 aq=0 mx=62 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5503 n=64 bs=0 as=0 ms=0 mb=2 ff=2290 ld=0
+T0 P c=5567 n=64 bm=34 bd=0 am=34 aq=0 mx=28 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5567 n=64 bs=0 as=0 ms=0 mb=36 ff=2198 ld=0
+T0 P c=5631 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5631 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=5695 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5695 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=5759 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5759 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=5823 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5823 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=5887 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5887 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=5951 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=5951 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6015 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6015 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6079 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6079 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6143 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6143 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6207 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6207 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6271 n=64 bm=47 bd=0 am=47 aq=0 mx=52 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6271 n=64 bs=0 as=0 ms=0 mb=12 ff=2314 ld=0
+T0 P c=6335 n=64 bm=22 bd=0 am=22 aq=0 mx=17 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6335 n=64 bs=0 as=0 ms=0 mb=47 ff=2186 ld=0
+T0 P c=6399 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6399 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6463 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6463 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6527 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6527 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6591 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6591 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6655 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6655 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6719 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6719 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6783 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6783 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6847 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6847 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6911 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6911 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=6975 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=6975 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=7039 n=64 bm=59 bd=0 am=59 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7039 n=64 bs=0 as=0 ms=0 mb=1 ff=2362 ld=0
+T0 P c=7103 n=64 bm=10 bd=0 am=10 aq=0 mx=5 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7103 n=64 bs=0 as=0 ms=0 mb=59 ff=2202 ld=0
+T0 P c=7167 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7167 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7231 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7231 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7295 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7295 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7359 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7359 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7423 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7423 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7487 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7487 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7551 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7551 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7615 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7615 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7679 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7679 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7743 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7743 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7807 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7807 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=7871 n=64 bm=7 bd=0 am=7 aq=0 mx=11 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7871 n=64 bs=0 as=0 ms=0 mb=53 ff=2270 ld=0
+T0 P c=7935 n=64 bm=62 bd=0 am=62 aq=0 mx=58 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7935 n=64 bs=0 as=0 ms=0 mb=6 ff=2417 ld=0
+T0 P c=7999 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=7999 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8063 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8063 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8127 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8127 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8191 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8191 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8255 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8255 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8319 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8319 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8383 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8383 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8447 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8447 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8511 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8511 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8575 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8575 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8639 n=64 bm=19 bd=0 am=19 aq=0 mx=22 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8639 n=64 bs=0 as=0 ms=0 mb=42 ff=2347 ld=0
+T0 P c=8703 n=64 bm=50 bd=0 am=50 aq=0 mx=47 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8703 n=64 bs=0 as=0 ms=0 mb=17 ff=2399 ld=0
+T0 P c=8767 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8767 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8831 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8831 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8895 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8895 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=8959 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=8959 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9023 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9023 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9087 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9087 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9151 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9151 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9215 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9215 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9279 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9279 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=9343 n=64 bm=58 bd=0 am=58 aq=0 mx=49 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9343 n=64 bs=0 as=0 ms=0 mb=15 ff=2201 ld=0
+T0 P c=9407 n=64 bm=17 bd=0 am=17 aq=0 mx=12 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9407 n=64 bs=0 as=0 ms=0 mb=52 ff=2441 ld=0
+T0 P c=9471 n=64 bm=35 bd=0 am=35 aq=0 mx=35 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9471 n=64 bs=0 as=0 ms=0 mb=29 ff=2587 ld=0
+T0 P c=9535 n=64 bm=64 bd=0 am=64 aq=0 mx=62 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9535 n=64 bs=0 as=0 ms=0 mb=2 ff=2555 ld=0
+T0 P c=9599 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9599 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9663 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9663 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9727 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9791 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9791 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9855 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9855 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9919 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=9983 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=9983 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=10047 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10047 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=10111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10111 n=64 bs=0 as=0 ms=0 mb=0 ff=2560 ld=0
+T0 P c=10175 n=64 bm=43 bd=0 am=43 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10175 n=64 bs=0 as=0 ms=0 mb=0 ff=2545 ld=0
+T0 P c=10239 n=64 bm=26 bd=0 am=26 aq=0 mx=21 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10239 n=64 bs=0 as=0 ms=0 mb=43 ff=1430 ld=0
+T0 P c=10303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10303 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10367 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10367 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10431 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10431 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10495 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10559 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10559 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10623 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10623 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10687 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10687 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10751 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10751 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10815 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10815 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10879 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10879 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=10943 n=64 bm=55 bd=0 am=55 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=10943 n=64 bs=0 as=0 ms=0 mb=0 ff=2347 ld=0
+T0 P c=11007 n=64 bm=14 bd=0 am=14 aq=0 mx=14 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11007 n=64 bs=0 as=0 ms=0 mb=50 ff=1207 ld=0
+T0 P c=11071 n=64 bm=64 bd=0 am=64 aq=0 mx=55 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11071 n=64 bs=0 as=0 ms=0 mb=9 ff=2387 ld=0
+T0 P c=11135 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11135 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11199 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11199 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11263 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11263 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11327 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11327 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11391 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11391 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11455 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11455 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11519 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11519 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11583 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11583 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11647 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11647 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11711 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11711 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=11775 n=64 bm=5 bd=0 am=5 aq=0 mx=25 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11775 n=64 bs=0 as=0 ms=0 mb=39 ff=1403 ld=0
+T0 P c=11839 n=64 bm=64 bd=0 am=64 aq=0 mx=43 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11839 n=64 bs=0 as=0 ms=0 mb=21 ff=2148 ld=0
+T0 P c=11903 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11903 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=11967 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=11967 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12031 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12031 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12095 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12095 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12159 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12159 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12223 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12223 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12287 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12287 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12351 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12351 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12415 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12415 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12479 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12479 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12543 n=64 bm=15 bd=0 am=15 aq=0 mx=37 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12543 n=64 bs=0 as=0 ms=0 mb=27 ff=1684 ld=0
+T0 P c=12607 n=64 bm=54 bd=0 am=54 aq=0 mx=33 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12607 n=64 bs=0 as=0 ms=0 mb=31 ff=1955 ld=0
+T0 P c=12671 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12671 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12735 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12735 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12799 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12799 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12863 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12863 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12927 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12927 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=12991 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=12991 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13055 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13055 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13119 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13119 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13183 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13183 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13247 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13247 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13311 n=64 bm=27 bd=0 am=27 aq=0 mx=47 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13311 n=64 bs=0 as=0 ms=0 mb=17 ff=1909 ld=0
+T0 P c=13375 n=64 bm=42 bd=0 am=42 aq=0 mx=23 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13375 n=64 bs=0 as=0 ms=0 mb=41 ff=1783 ld=0
+T0 P c=13439 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13439 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13503 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13503 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13567 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13567 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13631 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13631 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13695 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13695 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13759 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13759 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13823 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13823 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13887 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13887 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=13951 n=64 bm=60 bd=0 am=60 aq=0 mx=42 fm=0 fq=0 fv=0 fc=0
+T0 Q c=13951 n=64 bs=0 as=0 ms=0 mb=22 ff=2227 ld=0
+T0 P c=14015 n=64 bm=59 bd=0 am=59 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14015 n=64 bs=0 as=0 ms=0 mb=1 ff=2322 ld=0
+T0 P c=14079 n=64 bm=39 bd=0 am=39 aq=0 mx=61 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14079 n=64 bs=0 as=0 ms=0 mb=3 ff=2394 ld=0
+T0 P c=14143 n=64 bm=30 bd=0 am=30 aq=0 mx=21 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14143 n=64 bs=0 as=0 ms=0 mb=43 ff=1299 ld=0
+T0 P c=14207 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14207 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14271 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14271 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14335 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14335 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14399 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14399 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14463 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14463 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14527 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14527 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14591 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14591 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14655 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14655 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14719 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14719 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14783 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14783 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=14847 n=64 bm=51 bd=0 am=51 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14847 n=64 bs=0 as=0 ms=0 mb=0 ff=2366 ld=0
+T0 P c=14911 n=64 bm=18 bd=0 am=18 aq=0 mx=14 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14911 n=64 bs=0 as=0 ms=0 mb=50 ff=1009 ld=0
+T0 P c=14975 n=64 bm=64 bd=0 am=64 aq=0 mx=55 fm=0 fq=0 fv=0 fc=0
+T0 Q c=14975 n=64 bs=0 as=0 ms=0 mb=9 ff=2387 ld=0
+T0 P c=15039 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15039 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15103 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15103 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15167 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15167 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15231 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15231 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15295 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15295 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15359 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15359 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15423 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15423 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15487 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15487 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15551 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15551 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15615 n=64 bm=63 bd=0 am=63 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15615 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=15679 n=64 bm=6 bd=0 am=6 aq=0 mx=25 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15679 n=64 bs=0 as=0 ms=0 mb=39 ff=1167 ld=0
+T0 P c=15743 n=64 bm=64 bd=0 am=64 aq=0 mx=44 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15743 n=64 bs=0 as=0 ms=0 mb=20 ff=2160 ld=0
+T0 P c=15807 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15807 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=15871 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15871 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=15935 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15935 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=15999 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=15999 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16063 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16063 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16127 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16127 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16191 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16191 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16255 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16255 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16319 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16319 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16383 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16383 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=16447 n=64 bm=11 bd=0 am=11 aq=0 mx=36 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16447 n=64 bs=0 as=0 ms=0 mb=28 ff=1471 ld=0
+T0 P c=16511 n=64 bm=58 bd=0 am=58 aq=0 mx=33 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16511 n=64 bs=0 as=0 ms=0 mb=31 ff=1964 ld=0
+T0 P c=16575 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16575 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16639 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16639 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16703 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16703 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16767 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16767 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16831 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16831 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16895 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16895 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=16959 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=16959 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=17023 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17023 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=17087 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17087 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=17151 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17151 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=17215 n=64 bm=23 bd=0 am=23 aq=0 mx=47 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17215 n=64 bs=0 as=0 ms=0 mb=17 ff=1788 ld=0
+T0 P c=17279 n=64 bm=46 bd=0 am=46 aq=0 mx=22 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17279 n=64 bs=0 as=0 ms=0 mb=42 ff=1681 ld=0
+T0 P c=17343 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17343 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17407 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17407 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17471 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17471 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17535 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17535 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17599 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17599 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17663 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17663 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17727 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17791 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17791 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17855 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17855 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17919 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=17983 n=64 bm=35 bd=0 am=35 aq=0 mx=58 fm=0 fq=0 fv=0 fc=0
+T0 Q c=17983 n=64 bs=0 as=0 ms=0 mb=6 ff=2032 ld=0
+T0 P c=18047 n=64 bm=34 bd=0 am=34 aq=0 mx=11 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18047 n=64 bs=0 as=0 ms=0 mb=53 ff=1471 ld=0
+T0 P c=18111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18111 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18175 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18175 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18239 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18239 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18303 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18367 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18367 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18431 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18431 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=18495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18495 n=64 bs=0 as=0 ms=0 mb=0 ff=2299 ld=0
+T0 P c=18559 n=64 bm=59 bd=0 am=59 aq=0 mx=45 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18559 n=64 bs=0 as=0 ms=0 mb=19 ff=2123 ld=0
+T0 P c=18623 n=64 bm=61 bd=0 am=61 aq=0 mx=57 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18623 n=64 bs=0 as=0 ms=0 mb=7 ff=2316 ld=0
+T0 P c=18687 n=64 bm=64 bd=0 am=64 aq=0 mx=62 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18687 n=64 bs=0 as=0 ms=0 mb=2 ff=2271 ld=0
+T0 P c=18751 n=64 bm=47 bd=0 am=47 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18751 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=18815 n=64 bm=22 bd=0 am=22 aq=0 mx=33 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18815 n=64 bs=0 as=0 ms=0 mb=31 ff=1299 ld=0
+T0 P c=18879 n=64 bm=64 bd=0 am=64 aq=0 mx=55 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18879 n=64 bs=0 as=0 ms=0 mb=9 ff=2323 ld=0
+T0 P c=18943 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=18943 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19007 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19007 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19071 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19071 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19135 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19135 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19199 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19199 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19263 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19263 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19327 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19327 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19391 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19391 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19455 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19455 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=19519 n=64 bm=59 bd=0 am=59 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19519 n=64 bs=0 as=0 ms=0 mb=0 ff=2367 ld=0
+T0 P c=19583 n=64 bm=10 bd=0 am=10 aq=0 mx=25 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19583 n=64 bs=0 as=0 ms=0 mb=39 ff=1001 ld=0
+T0 P c=19647 n=64 bm=64 bd=0 am=64 aq=0 mx=45 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19647 n=64 bs=0 as=0 ms=0 mb=19 ff=2242 ld=0
+T0 P c=19711 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19711 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=19775 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19775 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=19839 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19839 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=19903 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19903 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=19967 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=19967 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20031 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20031 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20095 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20095 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20159 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20159 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20223 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20223 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20287 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20287 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=20351 n=64 bm=7 bd=0 am=7 aq=0 mx=35 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20351 n=64 bs=0 as=0 ms=0 mb=29 ff=1298 ld=0
+T0 P c=20415 n=64 bm=62 bd=0 am=62 aq=0 mx=34 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20415 n=64 bs=0 as=0 ms=0 mb=30 ff=1919 ld=0
+T0 P c=20479 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20479 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20543 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20543 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20607 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20607 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20671 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20671 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20735 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20735 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20799 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20799 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20863 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20863 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20927 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20927 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=20991 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=20991 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21055 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21055 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21119 n=64 bm=19 bd=0 am=19 aq=0 mx=46 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21119 n=64 bs=0 as=0 ms=0 mb=18 ff=1618 ld=0
+T0 P c=21183 n=64 bm=50 bd=0 am=50 aq=0 mx=23 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21183 n=64 bs=0 as=0 ms=0 mb=41 ff=1643 ld=0
+T0 P c=21247 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21247 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21311 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21311 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21375 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21375 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21439 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21439 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21503 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21503 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21567 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21567 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21631 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21631 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21695 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21695 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21759 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21759 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21823 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21823 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=21887 n=64 bm=31 bd=0 am=31 aq=0 mx=57 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21887 n=64 bs=0 as=0 ms=0 mb=7 ff=1924 ld=0
+T0 P c=21951 n=64 bm=38 bd=0 am=38 aq=0 mx=13 fm=0 fq=0 fv=0 fc=0
+T0 Q c=21951 n=64 bs=0 as=0 ms=0 mb=51 ff=1420 ld=0
+T0 P c=22015 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22015 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22079 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22079 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22143 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22143 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22207 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22207 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22271 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22271 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22335 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22335 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22399 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22399 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22463 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22463 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22527 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22527 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22591 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22591 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22655 n=64 bm=43 bd=0 am=43 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22655 n=64 bs=0 as=0 ms=0 mb=0 ff=2178 ld=0
+T0 P c=22719 n=64 bm=26 bd=0 am=26 aq=0 mx=5 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22719 n=64 bs=0 as=0 ms=0 mb=59 ff=1201 ld=0
+T0 P c=22783 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22783 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22847 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22847 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22911 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22911 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=22975 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=22975 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23039 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23039 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23103 n=64 bm=59 bd=0 am=59 aq=0 mx=48 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23103 n=64 bs=0 as=0 ms=0 mb=16 ff=2285 ld=0
+T0 P c=23167 n=64 bm=59 bd=0 am=59 aq=0 mx=54 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23167 n=64 bs=0 as=0 ms=0 mb=10 ff=2184 ld=0
+T0 P c=23231 n=64 bm=63 bd=0 am=63 aq=0 mx=60 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23231 n=64 bs=0 as=0 ms=0 mb=4 ff=2351 ld=0
+T0 P c=23295 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23295 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=23359 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23359 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=23423 n=64 bm=55 bd=0 am=55 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23423 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=23487 n=64 bm=14 bd=0 am=14 aq=0 mx=44 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23487 n=64 bs=0 as=0 ms=0 mb=20 ff=1239 ld=0
+T0 P c=23551 n=64 bm=64 bd=0 am=64 aq=0 mx=43 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23551 n=64 bs=0 as=0 ms=0 mb=21 ff=2137 ld=0
+T0 P c=23615 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23615 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23679 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23679 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23743 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23743 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23807 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23807 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23871 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23871 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23935 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23935 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=23999 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=23999 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=24063 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24063 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=24127 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24127 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=24191 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24191 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=24255 n=64 bm=5 bd=0 am=5 aq=0 mx=37 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24255 n=64 bs=0 as=0 ms=0 mb=27 ff=1008 ld=0
+T0 P c=24319 n=64 bm=64 bd=0 am=64 aq=0 mx=32 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24319 n=64 bs=0 as=0 ms=0 mb=32 ff=1904 ld=0
+T0 P c=24383 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24383 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24447 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24447 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24511 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24511 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24575 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24575 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24639 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24639 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24703 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24703 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24767 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24767 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24831 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24831 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24895 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24895 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=24959 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=24959 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25023 n=64 bm=15 bd=0 am=15 aq=0 mx=48 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25023 n=64 bs=0 as=0 ms=0 mb=16 ff=1424 ld=0
+T0 P c=25087 n=64 bm=54 bd=0 am=54 aq=0 mx=21 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25087 n=64 bs=0 as=0 ms=0 mb=43 ff=1552 ld=0
+T0 P c=25151 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25151 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25215 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25215 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25279 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25279 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25343 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25343 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25407 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25407 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25471 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25471 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25535 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25535 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25599 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25599 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25663 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25663 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25727 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=25791 n=64 bm=27 bd=0 am=27 aq=0 mx=59 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25791 n=64 bs=0 as=0 ms=0 mb=5 ff=1812 ld=0
+T0 P c=25855 n=64 bm=42 bd=0 am=42 aq=0 mx=10 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25855 n=64 bs=0 as=0 ms=0 mb=54 ff=1188 ld=0
+T0 P c=25919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25919 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=25983 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=25983 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26047 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26047 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26111 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26175 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26175 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26239 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26239 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26303 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26367 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26367 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26431 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26431 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26495 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26559 n=64 bm=39 bd=0 am=39 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26559 n=64 bs=0 as=0 ms=0 mb=0 ff=2115 ld=0
+T0 P c=26623 n=64 bm=30 bd=0 am=30 aq=0 mx=6 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26623 n=64 bs=0 as=0 ms=0 mb=58 ff=916 ld=0
+T0 P c=26687 n=64 bm=64 bd=0 am=64 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26687 n=64 bs=0 as=0 ms=0 mb=1 ff=2367 ld=0
+T0 P c=26751 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26751 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26815 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26815 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26879 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26879 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=26943 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=26943 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27007 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27007 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27071 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27071 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27135 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27135 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27199 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27199 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27263 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27263 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=27327 n=64 bm=51 bd=0 am=51 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27327 n=64 bs=0 as=0 ms=0 mb=0 ff=2313 ld=0
+T0 P c=27391 n=64 bm=18 bd=0 am=18 aq=0 mx=17 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27391 n=64 bs=0 as=0 ms=0 mb=47 ff=865 ld=0
+T0 P c=27455 n=64 bm=64 bd=0 am=64 aq=0 mx=52 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27455 n=64 bs=0 as=0 ms=0 mb=12 ff=2354 ld=0
+T0 P c=27519 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27519 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=27583 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27583 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=27647 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27647 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=27711 n=64 bm=64 bd=0 am=64 aq=0 mx=57 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27711 n=64 bs=0 as=0 ms=0 mb=7 ff=2475 ld=0
+T0 P c=27775 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27775 n=64 bs=0 as=0 ms=0 mb=0 ff=2496 ld=0
+T0 P c=27839 n=64 bm=57 bd=0 am=57 aq=0 mx=47 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27839 n=64 bs=0 as=0 ms=0 mb=17 ff=2232 ld=0
+T0 P c=27903 n=64 bm=59 bd=0 am=59 aq=0 mx=60 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27903 n=64 bs=0 as=0 ms=0 mb=4 ff=2242 ld=0
+T0 P c=27967 n=64 bm=64 bd=0 am=64 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=27967 n=64 bs=0 as=0 ms=0 mb=1 ff=2399 ld=0
+T0 P c=28031 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28031 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=28095 n=64 bm=63 bd=0 am=63 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28095 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=28159 n=64 bm=6 bd=0 am=6 aq=0 mx=22 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28159 n=64 bs=0 as=0 ms=0 mb=42 ff=2260 ld=0
+T0 P c=28223 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28223 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28287 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28287 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28351 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28351 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28415 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28415 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28479 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28479 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28543 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28543 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28607 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28607 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28671 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28671 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28735 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28735 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28799 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28799 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28863 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28863 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=28927 n=64 bm=11 bd=0 am=11 aq=0 mx=15 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28927 n=64 bs=0 as=0 ms=0 mb=49 ff=2269 ld=0
+T0 P c=28991 n=64 bm=58 bd=0 am=58 aq=0 mx=54 fm=0 fq=0 fv=0 fc=0
+T0 Q c=28991 n=64 bs=0 as=0 ms=0 mb=10 ff=2349 ld=0
+T0 P c=29055 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29055 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29119 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29119 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29183 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29183 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29247 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29247 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29311 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29311 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29375 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29375 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29439 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29439 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29503 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29503 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29567 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29567 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29631 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29631 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=29695 n=64 bm=23 bd=0 am=23 aq=0 mx=26 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29695 n=64 bs=0 as=0 ms=0 mb=38 ff=2330 ld=0
+T0 P c=29759 n=64 bm=46 bd=0 am=46 aq=0 mx=44 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29759 n=64 bs=0 as=0 ms=0 mb=20 ff=2304 ld=0
+T0 P c=29823 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29823 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=29887 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29887 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=29951 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=29951 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30015 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30015 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30079 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30079 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30143 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30143 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30207 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30207 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30271 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30271 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30335 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30335 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30399 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30399 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=30463 n=64 bm=35 bd=0 am=35 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30463 n=64 bs=0 as=0 ms=0 mb=0 ff=1953 ld=0
+T0 P c=30527 n=64 bm=34 bd=0 am=34 aq=0 mx=8 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30527 n=64 bs=0 as=0 ms=0 mb=56 ff=628 ld=0
+T0 P c=30591 n=64 bm=64 bd=0 am=64 aq=0 mx=61 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30591 n=64 bs=0 as=0 ms=0 mb=3 ff=2362 ld=0
+T0 P c=30655 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30655 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=30719 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30719 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=30783 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30783 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=30847 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30847 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=30911 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30911 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=30975 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=30975 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=31039 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31039 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=31103 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31103 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=31167 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31167 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=31231 n=64 bm=47 bd=0 am=47 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31231 n=64 bs=0 as=0 ms=0 mb=0 ff=2232 ld=0
+T0 P c=31295 n=64 bm=22 bd=0 am=22 aq=0 mx=19 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31295 n=64 bs=0 as=0 ms=0 mb=45 ff=464 ld=0
+T0 P c=31359 n=64 bm=64 bd=0 am=64 aq=0 mx=50 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31359 n=64 bs=0 as=0 ms=0 mb=14 ff=2199 ld=0
+T0 P c=31423 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31423 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31487 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31487 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31551 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31551 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31615 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31615 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31679 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31679 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31743 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31743 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31807 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31807 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31871 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31871 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31935 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31935 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=31999 n=64 bm=59 bd=0 am=59 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=31999 n=64 bs=0 as=0 ms=0 mb=0 ff=2301 ld=0
+T0 P c=32063 n=64 bm=10 bd=0 am=10 aq=0 mx=30 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32063 n=64 bs=0 as=0 ms=0 mb=34 ff=693 ld=0
+T0 P c=32127 n=64 bm=64 bd=0 am=64 aq=0 mx=38 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32127 n=64 bs=0 as=0 ms=0 mb=26 ff=2081 ld=0
+T0 P c=32191 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32191 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32255 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32255 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32319 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32319 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32383 n=64 bm=64 bd=0 am=64 aq=0 mx=59 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32383 n=64 bs=0 as=0 ms=0 mb=5 ff=2398 ld=0
+T0 P c=32447 n=64 bm=57 bd=0 am=57 aq=0 mx=47 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32447 n=64 bs=0 as=0 ms=0 mb=17 ff=2109 ld=0
+T0 P c=32511 n=64 bm=60 bd=0 am=60 aq=0 mx=61 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32511 n=64 bs=0 as=0 ms=0 mb=3 ff=2313 ld=0
+T0 P c=32575 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32575 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32639 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32639 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32703 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32703 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32767 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32767 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=32831 n=64 bm=7 bd=0 am=7 aq=0 mx=31 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32831 n=64 bs=0 as=0 ms=0 mb=33 ff=2099 ld=0
+T0 P c=32895 n=64 bm=62 bd=0 am=62 aq=0 mx=52 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32895 n=64 bs=0 as=0 ms=0 mb=12 ff=2360 ld=0
+T0 P c=32959 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=32959 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33023 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33023 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33087 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33087 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33151 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33151 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33215 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33215 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33279 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33279 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33343 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33343 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33407 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33407 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33471 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33471 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33535 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33535 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33599 n=64 bm=19 bd=0 am=19 aq=0 mx=28 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33599 n=64 bs=0 as=0 ms=0 mb=36 ff=2116 ld=0
+T0 P c=33663 n=64 bm=50 bd=0 am=50 aq=0 mx=41 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33663 n=64 bs=0 as=0 ms=0 mb=23 ff=2276 ld=0
+T0 P c=33727 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33727 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33791 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33791 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33855 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33855 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33919 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33919 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=33983 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=33983 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34047 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34047 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34111 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34111 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34175 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34175 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34239 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34239 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34303 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34303 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34367 n=64 bm=31 bd=0 am=31 aq=0 mx=39 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34367 n=64 bs=0 as=0 ms=0 mb=25 ff=2236 ld=0
+T0 P c=34431 n=64 bm=38 bd=0 am=38 aq=0 mx=30 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34431 n=64 bs=0 as=0 ms=0 mb=34 ff=2215 ld=0
+T0 P c=34495 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34495 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34559 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34559 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34623 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34623 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34687 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34687 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34751 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34751 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34815 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34815 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34879 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34879 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=34943 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=34943 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=35007 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35007 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=35071 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35071 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=35135 n=64 bm=43 bd=0 am=43 aq=0 mx=50 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35135 n=64 bs=0 as=0 ms=0 mb=14 ff=2313 ld=0
+T0 P c=35199 n=64 bm=26 bd=0 am=26 aq=0 mx=19 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35199 n=64 bs=0 as=0 ms=0 mb=45 ff=2113 ld=0
+T0 P c=35263 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35263 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35327 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35327 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35391 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35391 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35455 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35455 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35519 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35519 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35583 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35583 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35647 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35647 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35711 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35711 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35775 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35775 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35839 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35839 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=35903 n=64 bm=55 bd=0 am=55 aq=0 mx=61 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35903 n=64 bs=0 as=0 ms=0 mb=3 ff=2350 ld=0
+T0 P c=35967 n=64 bm=14 bd=0 am=14 aq=0 mx=8 fm=0 fq=0 fv=0 fc=0
+T0 Q c=35967 n=64 bs=0 as=0 ms=0 mb=56 ff=2162 ld=0
+T0 P c=36031 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36031 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36095 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36095 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36159 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36159 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36223 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36223 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36287 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36287 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36351 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36351 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36415 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36415 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36479 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36479 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36543 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36543 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36607 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36607 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36671 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36671 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36735 n=64 bm=5 bd=0 am=5 aq=0 mx=8 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36735 n=64 bs=0 as=0 ms=0 mb=56 ff=2202 ld=0
+T0 P c=36799 n=64 bm=64 bd=0 am=64 aq=0 mx=61 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36799 n=64 bs=0 as=0 ms=0 mb=3 ff=2426 ld=0
+T0 P c=36863 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36863 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36927 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36927 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=36991 n=64 bm=63 bd=0 am=63 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=36991 n=64 bs=0 as=0 ms=0 mb=1 ff=2116 ld=0
+T0 P c=37055 n=64 bm=56 bd=0 am=56 aq=0 mx=41 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37055 n=64 bs=0 as=0 ms=0 mb=23 ff=2058 ld=0
+T0 P c=37119 n=64 bm=64 bd=0 am=64 aq=0 mx=63 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37119 n=64 bs=0 as=0 ms=0 mb=1 ff=2296 ld=0
+T0 P c=37183 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37183 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=37247 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37247 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=37311 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37311 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=37375 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37375 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=37439 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37439 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=37503 n=64 bm=15 bd=0 am=15 aq=0 mx=44 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37503 n=64 bs=0 as=0 ms=0 mb=20 ff=2059 ld=0
+T0 P c=37567 n=64 bm=54 bd=0 am=54 aq=0 mx=41 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37567 n=64 bs=0 as=0 ms=0 mb=23 ff=2170 ld=0
+T0 P c=37631 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37631 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=37695 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37695 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=37759 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37759 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=37823 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37823 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=37887 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37887 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=37951 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=37951 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=38015 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38015 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=38079 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38079 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=38143 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38143 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=38207 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38207 n=64 bs=0 as=0 ms=0 mb=0 ff=2368 ld=0
+T0 P c=38271 n=64 bm=27 bd=0 am=27 aq=0 mx=39 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38271 n=64 bs=0 as=0 ms=0 mb=25 ff=2073 ld=0
+T0 P c=38335 n=64 bm=42 bd=0 am=42 aq=0 mx=31 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38335 n=64 bs=0 as=0 ms=0 mb=33 ff=2043 ld=0
+T0 P c=38399 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38399 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38463 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38463 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38527 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38527 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38591 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38591 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38655 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38655 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38719 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38719 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38783 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38783 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38847 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38847 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38911 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38911 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=38975 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=38975 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39039 n=64 bm=39 bd=0 am=39 aq=0 mx=49 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39039 n=64 bs=0 as=0 ms=0 mb=15 ff=2156 ld=0
+T0 P c=39103 n=64 bm=30 bd=0 am=30 aq=0 mx=20 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39103 n=64 bs=0 as=0 ms=0 mb=44 ff=1980 ld=0
+T0 P c=39167 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39167 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39231 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39231 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39295 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39295 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39359 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39359 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39423 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39423 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39487 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39487 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39551 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39551 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39615 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39615 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39679 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39679 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39743 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39743 n=64 bs=0 as=0 ms=0 mb=0 ff=2304 ld=0
+T0 P c=39807 n=64 bm=51 bd=0 am=51 aq=0 mx=60 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39807 n=64 bs=0 as=0 ms=0 mb=4 ff=2255 ld=0
+T0 P c=39871 n=64 bm=18 bd=0 am=18 aq=0 mx=8 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39871 n=64 bs=0 as=0 ms=0 mb=56 ff=1964 ld=0
+T0 P c=39935 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39935 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=39999 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=39999 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=40063 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40063 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+T0 P c=40127 n=64 bm=64 bd=0 am=64 aq=0 mx=64 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40127 n=64 bs=0 as=0 ms=0 mb=0 ff=2432 ld=0
+MXS0 a=36864 sw=0
+T0 P c=40191 n=64 bm=5 bd=0 am=5 aq=0 mx=60 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40191 n=64 bs=0 as=0 ms=0 mb=0 ff=1577 ld=0
+T0 U c=40213 u=1 starve=0 bp=2817 frz=0 deny=3258
+T0 E c=40214 s=2
+T0 S c=40215 s=3 u=0 r=40215
+T0 P c=40255 n=64 bm=0 bd=3 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40255 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=40319 n=64 bm=0 bd=62 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40319 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 P c=40383 n=64 bm=0 bd=63 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40383 n=64 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+T0 E c=40387 s=3
+T0 H c=40389 bmxu=36864 bdma=272 amxu=36864 aq=0
+T0 P c=40389 n=6 bm=0 bd=0 am=0 aq=0 mx=0 fm=0 fq=0 fv=0 fc=0
+T0 Q c=40389 n=6 bs=0 as=0 ms=0 mb=0 ff=0 ld=0
+MXSCALE s0 areq=36864 sw=0
+MXACT s0 cyc=40645 rd=39707 pop=36864 use=36864 cols=4 any=1
+RESULT cycles=40389 halted=1 error=0
+SLICE 0 icount=5
+- /private/tmp/opentpu-rtl-shapes-v1/tb_perfsim.sv:142: Verilog $finish
+TMEMSTAT sid=0 cyc=40389 lose=0,0,0,0 n= 40117,272,0,0,0,0,0 d= 40117,272,0,0,0,0,0,0,0 dw= 38949,1440,0,0,0,0,0,0,0,0 rd= 0,128,144,0,0,0,0,0 rpl= 0,0,0,0,0,0,0,0
+- S i m u l a t i o n   R e p o r t: Verilator 5.048 2026-04-26
+- Verilator: $finish at 407ns; walltime 2.097 s; speed 197.008 ns/s
+- Verilator: cpu 2.063 s on 1 threads; allocated 379 MB

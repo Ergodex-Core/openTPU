@@ -1,0 +1,10 @@
+{
+  "decode_steps": 2,
+  "full_pretrained_model": false,
+  "prefill_steps": 1,
+  "programs": [
+    "hybrid_0",
+    "hybrid_1",
+    "hybrid_2"
+  ]
+}

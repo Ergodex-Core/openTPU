@@ -1,0 +1,38 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 64,
+    "ACT_ROWS": 0,
+    "D": 128,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    14
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "bonsai_deltanet_head128",
+    "compile_wall_seconds": 0.0023482080141548067,
+    "complete_operator_shape": true,
+    "data": "synthetic recurrent state, q/k/v/decay; VPU fallback, no DSTEP/STREAM",
+    "independent_reference": "NumPy float64 DeltaNet recurrence and output; not pretrained model",
+    "kind": "deltanet_head",
+    "logits_address": 67200,
+    "logits_count": 16512,
+    "shape_M_K_N": [
+      128,
+      128,
+      128
+    ],
+    "weight_format": null
+  }
+}

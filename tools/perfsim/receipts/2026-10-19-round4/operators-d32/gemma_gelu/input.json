@@ -1,0 +1,40 @@
+{
+  "args": [],
+  "config": {
+    "ACT_BLOCKS": 256,
+    "ACT_ROWS": 0,
+    "D": 32,
+    "DRAM_BYTES": 33554432,
+    "DSTEP": false,
+    "IMEM_WORDS": 65536,
+    "LANES": 8,
+    "MCOLS": 4,
+    "PAIR": false,
+    "S": 1,
+    "SEQ_WC": false,
+    "STREAM": false,
+    "TMEM_WORDS": 65536
+  },
+  "instruction_counts": [
+    11
+  ],
+  "labels": {},
+  "metadata": {
+    "case": "gemma_gelu",
+    "compile_wall_seconds": 0.0006285000126808882,
+    "complete_operator_shape": true,
+    "data": "synthetic activations and weights",
+    "full_operator_N": 6912,
+    "independent_reference": "NumPy float64 operator; not end-to-end pretrained inference",
+    "kind": "gelu",
+    "logits_address": 27648,
+    "logits_count": 6912,
+    "shape_M_K_N": [
+      1,
+      6912,
+      6912
+    ],
+    "weight_format": "int8",
+    "weight_source": null
+  }
+}
