@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible shared-ISA PCM qualification with optional FP32 initial, transpose, residual and output convolutions; no physical/full-speech acceptance",
+  "purpose": "Reproducible resident output-codec precision qualification with optional FP32 RVQ/decoder/SEANet; no physical/full-speech acceptance",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -119,7 +119,7 @@
     "opentpu/llm/personaplex_depth_input.py": "881d83f7a14b584fab8817ef9e52482bed40749f4582b46cb5c8d911ac684777",
     "opentpu/llm/personaplex_depth_layer.py": "2a4dfe7d04565e5d366ccf535e4df0ca9aad6e75e711bb1a33e9f059dae7484d",
     "opentpu/llm/personaplex_depth_chain.py": "7f7310e9121c484e11b931c56f0117357d212c14db7acab35006a2f67f8deb00",
-    "opentpu/llm/personaplex_mimi.py": "8c6598024d62b0fb9c36abe4eff54d72393b4ac191ab35f324fc79252e87cdf7",
+    "opentpu/llm/personaplex_mimi.py": "5115ae352d7efd3dea3bceaa1db5cbd7579fd7ce27a9acfe6e0977a17c2e2b34",
     "tools/personaplex_isa_check.py": "ccca343c7ed12cd5daeefdbee4271ff3325d11d4f82972e7a8d821a781836337",
     "tools/personaplex_depth_input_check.py": "70f3df0c7b36fe1d63fc6fce5f7724e2887eafd2c78c2cceb90c0f43e99bb556",
     "tools/personaplex_depth_layer_check.py": "7732e1c03af9d7f46fe6dc9133702b12553815a87df27443a9ffbf870c30d45e",
@@ -135,7 +135,7 @@
     "tools/data/personaplex/shared_gemma150.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
     "tools/data/personaplex/shared_gemma150_contract.json": "562118053dd58f22ca58ac2a8eb3cb14a977225830c99ca0812b122551d0af4f",
     "tools/data/personaplex/mimi_rvq_contract.json": "5342c087a41a95fd899bf62ac92c2c2ad31e8fa09d60788eda74214df5dd4aa1",
-    "opentpu/llm/personaplex_mimi_decoder.py": "dab0ddce7902a695f2fe8b6eb2977e210cdbdafe63b681d5bc67d432f26476d7",
+    "opentpu/llm/personaplex_mimi_decoder.py": "d0a19789b7ed233a440329d7a14bcaee398f33240b781f966ce910cffbfe17ca",
     "tests/test_personaplex_mimi_decoder.py": "71d6f340e7544b634c24525834d97d0b104bfa817c714ac670a2c7b20e130200",
     "tests/test_personaplex_mimi_decoder_check.py": "11981d94fcd669f41f36353a5a1cdcaf6d1096c18996a6d086e29d609955eec6",
     "tools/personaplex_mimi_decoder_check.py": "05436437658acf5b60a147fdf0245d0a6b21c8620510f06e9716b59358f38ea0",
@@ -151,7 +151,11 @@
     "tests/test_personaplex_pcm_metrics.py": "0b027f7630ec812efc2ce2452cfff3638be9bdf9b38de0cd0a9a940ac16d12e2",
     "tools/personaplex_pcm_precision_check.py": "623672fb943daec31252fd7424b8f91ee171822ea0cb0f634eb6e590a104e6e1",
     "tests/test_personaplex_pcm_precision.py": "6714748fd9c7582c5b28e0daec20bb4b00b7a4af1f2ca7a8adcee99ff46e7f4d",
-    "tests/test_personaplex_pcm_convolution_precision.py": "c9a8d4d6fa0f907950aa181754e00520c2b459272238401a75b88fe444ef7fbe"
+    "tests/test_personaplex_pcm_convolution_precision.py": "c9a8d4d6fa0f907950aa181754e00520c2b459272238401a75b88fe444ef7fbe",
+    "tests/test_personaplex_rvq_precision.py": "6fa1ad6c5310bc76c504d3805317f8d68ec44bb4bac5b7882cda450e769b9bd2",
+    "tests/test_personaplex_decoder_precision.py": "b5681636bb03a5dc953bd99f3b426992bfaa5e0f399b2ca7c44ee3c5ddd992db",
+    "tools/personaplex_output_codec_check.py": "7d761a384270d9122a3b39e0c27d34ad256c084c11efcac7803ce2e72cd541c8",
+    "tests/test_personaplex_output_codec_check.py": "5d5f6a0502faa1958e2ee2f2308fab5d8abee7b75e2d6a25e9ceef2b4895b77a"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {

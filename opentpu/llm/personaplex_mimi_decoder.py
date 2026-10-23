@@ -34,6 +34,7 @@ class MimiDecoderSpec:
     max_frames: int = 128
     eps: float = 1e-5
     rope_base: float = 10000.0
+    precision: str = "int8"
 
     def __post_init__(self):
         for name in ("hidden", "n_heads", "ffn", "layers", "context", "max_frames"):
@@ -46,6 +47,8 @@ class MimiDecoderSpec:
             raise ValueError("invalid decoder normalization or RoPE constant")
         if 2 * self.max_frames >= 1 << 24:
             raise ValueError("decoder positions must be exactly representable in FP32")
+        if self.precision not in ("int8", "fp32"):
+            raise ValueError("decoder precision must be int8 or fp32")
 
     @property
     def head_dim(self):
@@ -106,6 +109,71 @@ def _upsample(m):
     ol.store(m.overlap, new_partial)
 
 
+def _linear_fp32(x, weights, output):
+    """FP32 coefficient-row reductions into resident two-token scratch."""
+    rows, cols = weights.shape
+    for channel in ol.range(rows):
+        coefficients = ol.load(Tensor(weights.base + channel * (4 * cols),
+                                      (cols,), (1,)))
+        reduced = ol.sum(x * coefficients[None, :], axis=1)
+        column = ol.empty((2, 1))
+        column.set(reduced[:, None])
+        ol.store(output[:, channel:channel + 1], column)
+    return ol.load(output)
+
+
+def _decoder_attention_fp32(x, w, slots, cos, sin, masks, spec, cap):
+    normalized = _layer_norm(x, ol.load(w.norm1_weight), ol.load(w.norm1_bias), spec.eps)
+    q = _linear_fp32(normalized, w.wq, w.projection_output["wq"])
+    k = _linear_fp32(normalized, w.wk, w.projection_output["wk"])
+    v = _linear_fp32(normalized, w.wv, w.projection_output["wv"])
+    del normalized
+    d = spec.head_dim
+    # Complete both tokens in each native ring before either query attends.
+    # Real/imag Q/K row permutation is the same as the INT8 path.
+    for head in range(spec.n_heads):
+        keys = rope_rows(k[:, head * d:(head + 1) * d], cos, sin)
+        values = v[:, head * d:(head + 1) * d]
+        base = w.fp_heads[head]
+        for token in range(2):
+            ol.store(Tensor(Affine(base["k"]) + slots[token] * (4 * d),
+                            (1, d), (d, 1)), keys[token:token + 1, :])
+            ol.store(Tensor(Affine(base["vt"]) + slots[token] * 4,
+                            (d, 1), (cap, 1)), values[token:token + 1, :].reshape(d, 1))
+    del keys, values
+    attended = ol.empty((2, spec.hidden))
+    tile = math.gcd(cap, 32)
+    for head in range(spec.n_heads):
+        base = w.fp_heads[head]
+        queries = rope_rows(q[:, head * d:(head + 1) * d], cos, sin)
+        for token in range(2):
+            query = queries[token, :]
+            # Bound cache working sets independently of the full context.
+            # Scores/probabilities are resident scratch, never host feedback.
+            for block in ol.range(cap // tile):
+                start = block * tile
+                keys = ol.load(Tensor(base["k"] + start * (4 * d), (tile, d), (d, 1)))
+                partial_scores = ol.sum(keys * query[None, :], axis=1).reshape(1, tile)
+                ol.store(w.attention_scores[token:token + 1, start:start + tile], partial_scores)
+            scores = ol.load(w.attention_scores[token:token + 1, :])
+            scores = scores * (ol.LOG2E / math.sqrt(d)) + masks[token:token + 1, :cap] * ol.LOG2E
+            probabilities = ol.exp2(scores - ol.max(scores, axis=1)[:, None])
+            ol.store(w.attention_probabilities[token:token + 1, :], probabilities)
+            total = ol.sum(probabilities, axis=1)
+            weighted = ol.zeros((d,))
+            for block in ol.range(cap // tile):
+                start = block * tile
+                values = ol.load(Tensor(base["vt"] + start * 4, (d, tile), (cap, 1)))
+                part = ol.load(w.attention_probabilities[token:token + 1, start:start + tile])
+                weighted.set(weighted + ol.sum(values * part[0, :][None, :], axis=1))
+            result = weighted.reshape(1, d) / total[:, None]
+            attended[token:token + 1, head * d:(head + 1) * d].set(result)
+        # Static head expansion must release the preceding head's large cache
+        # tiles before allocating the next head on the production profile.
+        del keys, values, queries, query, scores, probabilities, total, weighted, result, partial_scores, part
+    return x + _linear_fp32(attended, w.wo, w.projection_output["wo"]) * ol.load(w.scale1)[None, :]
+
+
 def _decoder_attention(x, w, slots, cos, sin, seq, spec, cap):
     normalized = ol.quantize(_layer_norm(x, ol.load(w.norm1_weight), ol.load(w.norm1_bias), spec.eps))
     k, v = ol.dot(normalized, w.wk), ol.dot(normalized, w.wv)
@@ -145,9 +213,17 @@ def _decoder_layer(m):
     sin = ol.load(Tensor(Affine(m.sin_at) + frame * (8 * half), (2, half), (half, 1)))
     seq = Blocks([(0, m.cap, Additive(Affine(m.masks_at) + frame * (8 * (m.cap + 1)), m.cap))])
     x = ol.load(m.output)
-    x.set(_decoder_attention(x, m.layer, slots, cos, sin, seq, m.spec, m.cap))
-    normalized = ol.quantize(_layer_norm(x, ol.load(m.layer.norm2_weight), ol.load(m.layer.norm2_bias), m.spec.eps))
-    ffn = ol.dot(ol.quantize(_gelu(ol.dot(normalized, m.layer.w1))), m.layer.w2)
+    if m.spec.precision == "fp32":
+        masks = ol.load(Tensor(Affine(m.masks_at) + frame * (8 * (m.cap + 1)),
+                               (2, m.cap + 1), (m.cap + 1, 1)))
+        x.set(_decoder_attention_fp32(x, m.layer, slots, cos, sin, masks, m.spec, m.cap))
+        normalized = _layer_norm(x, ol.load(m.layer.norm2_weight), ol.load(m.layer.norm2_bias), m.spec.eps)
+        hidden = _gelu(_linear_fp32(normalized, m.layer.w1, m.layer.projection_output["w1"]))
+        ffn = _linear_fp32(hidden, m.layer.w2, m.layer.projection_output["w2"])
+    else:
+        x.set(_decoder_attention(x, m.layer, slots, cos, sin, seq, m.spec, m.cap))
+        normalized = ol.quantize(_layer_norm(x, ol.load(m.layer.norm2_weight), ol.load(m.layer.norm2_bias), m.spec.eps))
+        ffn = ol.dot(ol.quantize(_gelu(ol.dot(normalized, m.layer.w1))), m.layer.w2)
     x.set(x + ffn * ol.load(m.layer.scale2)[None, :])
     ol.store(m.output, x)
     ol.store(m.layer_output, x)
@@ -209,22 +285,34 @@ class MimiDecoderImage:
         self.norm_offsets, self.layer_outputs, self.kv_heads, self.cache_regions = [], [], [], []
         self.mats = {name: (spec.hidden, spec.hidden) for name in ("wq", "wk", "wv", "wo")}
         self.mats.update(w1=(spec.ffn, spec.hidden), w2=(spec.hidden, spec.ffn))
-        self.weight_offsets = []
+        self.weight_offsets, self.projection_outputs, self.attention_scratch = [], [], []
         for index in range(spec.layers):
             self.norm_offsets.append({name: alloc(f"layer{index}_{name}", 4 * spec.hidden, kind="immutable")
                 for name in ("norm1_weight", "norm1_bias", "norm2_weight", "norm2_bias", "scale1", "scale2")})
             self.layer_outputs.append(alloc(f"layer{index}_output", 8 * spec.hidden))
             heads = {}; start = cursor["decoder_state"]
             for head in range(spec.n_heads):
-                heads[head] = {"k": alloc(f"kv{index}_{head}_k", self.cap * self.dpad),
-                               "ks": alloc(f"kv{index}_{head}_ks", self.cap * k_scale_bytes(self.dpad, cfg.D)),
-                               "vt": alloc(f"kv{index}_{head}_vt", self.dpad * self.cap),
-                               "vs": alloc(f"kv{index}_{head}_vs", 4 * self.cap)}
+                if spec.precision == "fp32":
+                    heads[head] = {"k": alloc(f"kv{index}_{head}_k", 4 * self.cap * spec.head_dim),
+                                   "vt": alloc(f"kv{index}_{head}_vt", 4 * spec.head_dim * self.cap)}
+                else:
+                    heads[head] = {"k": alloc(f"kv{index}_{head}_k", self.cap * self.dpad),
+                                   "ks": alloc(f"kv{index}_{head}_ks", self.cap * k_scale_bytes(self.dpad, cfg.D)),
+                                   "vt": alloc(f"kv{index}_{head}_vt", self.dpad * self.cap),
+                                   "vs": alloc(f"kv{index}_{head}_vs", 4 * self.cap)}
             self.kv_heads.append(heads); self.cache_regions.append((start, cursor["decoder_state"] - start))
-            self.weight_offsets.append({name: (
-                alloc(f"layer{index}_{name}_codes", rows * Q.row_bytes(cols, "int8", cfg.D), "decoder_weights", "immutable"),
-                alloc(f"layer{index}_{name}_scales", rows * Q.scale_bytes(cols, "int8", cfg.D), "decoder_weights", "immutable"))
-                for name, (rows, cols) in self.mats.items()})
+            if spec.precision == "fp32":
+                self.weight_offsets.append({name: (alloc(f"layer{index}_{name}_fp32", 4 * rows * cols,
+                    "decoder_weights", "immutable"), None) for name, (rows, cols) in self.mats.items()})
+                self.projection_outputs.append({name: alloc(f"layer{index}_{name}_scratch", 8 * rows)
+                                                for name, (rows, _) in self.mats.items()})
+                self.attention_scratch.append({name: alloc(f"layer{index}_attention_{name}", 8 * self.cap)
+                                               for name in ("scores", "probabilities")})
+            else:
+                self.weight_offsets.append({name: (
+                    alloc(f"layer{index}_{name}_codes", rows * Q.row_bytes(cols, "int8", cfg.D), "decoder_weights", "immutable"),
+                    alloc(f"layer{index}_{name}_scales", rows * Q.scale_bytes(cols, "int8", cfg.D), "decoder_weights", "immutable"))
+                    for name, (rows, cols) in self.mats.items()})
         self.state_end = -(-cursor["decoder_state"] // 4096) * 4096
         self.weight_end = -(-cursor["decoder_weights"] // 4096) * 4096
         if self.state_end > state_limit or self.weight_end > weight_limit:
@@ -232,7 +320,8 @@ class MimiDecoderImage:
         self.required_bytes = max(self.state_end, self.weight_end)
         self.kv_bytes = sum(size for _, size in self.cache_regions)
         self.weight_bytes = 16 * spec.hidden + spec.layers * (24 * spec.hidden + sum(
-            rows * (Q.row_bytes(cols, "int8", cfg.D) + Q.scale_bytes(cols, "int8", cfg.D))
+            (4 * rows * cols if spec.precision == "fp32" else
+             rows * (Q.row_bytes(cols, "int8", cfg.D) + Q.scale_bytes(cols, "int8", cfg.D)))
             for rows, cols in self.mats.values()))
 
     def layer_descriptor(self, index):
@@ -240,8 +329,18 @@ class MimiDecoderImage:
         value = SimpleNamespace(**{name: Tensor(at, (s.hidden,), (1,))
                                    for name, at in self.norm_offsets[index].items()})
         for name, (rows, cols) in self.mats.items():
-            setattr(value, name, QTensor.weight(*self.weight_offsets[index][name], rows, cols, "int8", self.cfg.D))
-        value.kv = KVDesc(self.kv_heads[index], self.cap, self.dpad, self.cfg.D, 1, 0, dv=s.head_dim)
+            if s.precision == "fp32":
+                setattr(value, name, Tensor(self.weight_offsets[index][name][0], (rows, cols), (cols, 1)))
+            else:
+                setattr(value, name, QTensor.weight(*self.weight_offsets[index][name], rows, cols, "int8", self.cfg.D))
+        if s.precision == "fp32":
+            value.fp_heads = self.kv_heads[index]
+            value.projection_output = {name: Tensor(at, (2, self.mats[name][0]), (self.mats[name][0], 1))
+                                       for name, at in self.projection_outputs[index].items()}
+            for name, at in self.attention_scratch[index].items():
+                setattr(value, "attention_" + name, Tensor(at, (2, self.cap), (self.cap, 1)))
+        else:
+            value.kv = KVDesc(self.kv_heads[index], self.cap, self.dpad, self.cfg.D, 1, 0, dv=s.head_dim)
         return value
 
     def compile(self):
@@ -271,6 +370,7 @@ class MimiDecoderImage:
                 "payload_bytes": sum(p["bytes"] for p in self.spans if p["kind"] == "immutable"),
                 "program_words": [len(p) * 8 for p in self.compile()], "spans": self.spans,
                 "payload_sha256": self.payload_hashes, "max_frames": self.spec.max_frames,
+                "precision": self.spec.precision,
                 "cache_policy": "native two-token complete before attention; delta<=0 position defect preserved",
                 "gelu": "native erf form approximated by device polynomial, separately measured"}
 
@@ -311,10 +411,20 @@ class MimiDecoderImage:
                 if name in ("wq", "wk"):
                     value = _split_pairs(value, s)
                 da, sa = self.weight_offsets[index][name]
+                if s.precision == "fp32":
+                    put(f"layer{index}_{name}_fp32", da, value)
+                    continue
                 batch.submit(value, "int8", self.cfg.D,
                     lambda q, scales, index=index, name=name, da=da, sa=sa:
                     (put(f"layer{index}_{name}_codes", da, q), put(f"layer{index}_{name}_scales", sa, scales)))
             batch.wait()
+        if s.precision == "fp32":
+            # Fresh inactive slots must be finite even before their masks are
+            # applied. Logical reset later retains these caches as source does.
+            for heads in self.kv_heads:
+                for values in heads.values():
+                    for at in values.values():
+                        backend.write(0, at, np.zeros(self.cap * s.head_dim, np.float32))
         # Native partial=None skips the first overlap add. Adding -0 is the
         # FP32 identity even for a -0 product, unlike adding an initial +0.
         backend.write(0, self.io["overlap"], np.full((2, s.hidden), -0.0, np.float32))

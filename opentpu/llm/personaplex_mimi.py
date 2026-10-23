@@ -2,7 +2,9 @@
 
 Frozen centroids are normalized offline from the source checkpoint. Inference
 gathers the first eight generated IDs, sums the two source branches separately,
-projects with INT8 weights and adds the FP32 results entirely in device programs.
+projects with INT8 weights by default and adds the FP32 results entirely in
+device programs. An optional FP32 coefficient-row path avoids projection
+quantization while retaining resident source sums and outputs.
 """
 from dataclasses import dataclass
 import hashlib
@@ -25,6 +27,7 @@ class MimiRVQSpec:
     vocab: int = 2048
     dim: int = 256
     latent: int = 512
+    projection_precision: str = "int8"
 
     def __post_init__(self):
         for name in ("codebooks", "vocab", "dim", "latent"):
@@ -33,6 +36,8 @@ class MimiRVQSpec:
                 raise ValueError(f"{name} must be a positive integer below 2^24")
         if self.codebooks < 2:
             raise ValueError("Mimi split RVQ requires semantic and acoustic codebooks")
+        if self.projection_precision not in ("int8", "fp32"):
+            raise ValueError("projection_precision must be int8 or fp32")
 
 
 def normalize_codebooks(embedding_sums, cluster_usages):
@@ -77,10 +82,26 @@ def _rvq_latent(m):
         acoustic = acoustic + value
     ol.store(m.semantic, semantic)
     ol.store(m.acoustic, acoustic)
-    first = ol.dot(ol.quantize(semantic), m.projections[0])
-    rest = ol.dot(ol.quantize(acoustic), m.projections[1])
-    ol.store(m.semantic_projected, first)
-    ol.store(m.acoustic_projected, rest)
+    if m.projection_precision == "fp32":
+        # Stream one checkpoint coefficient row per output channel. The VPU
+        # multiplies and reduces resident FP32 values without QACT or MXU MM.
+        for channel in ol.range(m.latent):
+            coefficient = ol.load(Tensor(m.projection_fp_data[0] + channel * (4 * m.dim),
+                                          (m.dim,), (1,)))
+            reduced = ol.sum(semantic * coefficient[None, :], axis=1)
+            ol.store(m.semantic_projected[:, channel:channel + 1], reduced[:, None])
+        for channel in ol.range(m.latent):
+            coefficient = ol.load(Tensor(m.projection_fp_data[1] + channel * (4 * m.dim),
+                                          (m.dim,), (1,)))
+            reduced = ol.sum(acoustic * coefficient[None, :], axis=1)
+            ol.store(m.acoustic_projected[:, channel:channel + 1], reduced[:, None])
+        first = ol.load(m.semantic_projected)
+        rest = ol.load(m.acoustic_projected)
+    else:
+        first = ol.dot(ol.quantize(semantic), m.projections[0])
+        rest = ol.dot(ol.quantize(acoustic), m.projections[1])
+        ol.store(m.semantic_projected, first)
+        ol.store(m.acoustic_projected, rest)
     ol.store(m.output, first + rest)
 
 
@@ -121,15 +142,22 @@ class MimiRVQImage:
                     ("output", spec.latent))}
         self.identity_at = alloc("identity", 4 * spec.vocab, kind="immutable")
         self.tables_at = alloc("tables", 4 * spec.codebooks * spec.vocab * spec.dim, kind="immutable")
-        self.code_bytes = spec.latent * Q.row_bytes(spec.dim, "int8", cfg.D)
-        self.scale_bytes = spec.latent * Q.scale_bytes(spec.dim, "int8", cfg.D)
-        self.projection_offsets = [(alloc(f"projection{index}_codes", self.code_bytes,
-                                          max(128, cfg.D), "immutable"),
-                                    alloc(f"projection{index}_scales", self.scale_bytes,
-                                          128, "immutable")) for index in range(2)]
+        if spec.projection_precision == "fp32":
+            self.code_bytes = self.scale_bytes = 0
+            self.projection_offsets = [alloc(f"projection{index}_fp32",
+                                             4 * spec.latent * spec.dim,
+                                             kind="immutable") for index in range(2)]
+        else:
+            self.code_bytes = spec.latent * Q.row_bytes(spec.dim, "int8", cfg.D)
+            self.scale_bytes = spec.latent * Q.scale_bytes(spec.dim, "int8", cfg.D)
+            self.projection_offsets = [(alloc(f"projection{index}_codes", self.code_bytes,
+                                              max(128, cfg.D), "immutable"),
+                                        alloc(f"projection{index}_scales", self.scale_bytes,
+                                              128, "immutable")) for index in range(2)]
         self.required_bytes = -(-at // 4096) * 4096
         self.weight_bytes = (4 * spec.codebooks * spec.vocab * spec.dim
-                             + 2 * (self.code_bytes + self.scale_bytes))
+                             + (8 * spec.latent * spec.dim if spec.projection_precision == "fp32"
+                                else 2 * (self.code_bytes + self.scale_bytes)))
         if self.required_bytes > limit:
             raise MemoryError("aligned Mimi allocation exceeds reserved persistent region")
         external = [(audio_ids_at, audio_ids_at + 4 * spec.codebooks), (counter_at, counter_at + 4)]
@@ -142,11 +170,15 @@ class MimiRVQImage:
         return SimpleNamespace(
             counter=Tensor(self.counter_at, (1,), (1,)), expected_steps=self.expected_steps,
             codes=Tensor(self.audio_ids_at, (s.codebooks,), (1,)), dim=s.dim,
+            latent=s.latent, projection_precision=s.projection_precision,
             identity=Tensor(self.identity_at, (s.vocab, 1), (1, 1)),
             tables=[Tensor(self.tables_at + 4 * i * s.vocab * s.dim,
                            (s.vocab, s.dim), (s.dim, 1)) for i in range(s.codebooks)],
-            projections=[QTensor.weight(da, sa, s.latent, s.dim, "int8", self.cfg.D)
-                         for da, sa in self.projection_offsets],
+            projections=([QTensor.weight(da, sa, s.latent, s.dim, "int8", self.cfg.D)
+                          for da, sa in self.projection_offsets]
+                         if s.projection_precision == "int8" else None),
+            projection_fp_data=(self.projection_offsets
+                                if s.projection_precision == "fp32" else None),
             **{name: Tensor(at, (1, s.dim if name in ("semantic", "acoustic") else s.latent),
                             (s.dim if name in ("semantic", "acoustic") else s.latent, 1))
                for name, at in self.io.items()})
@@ -182,10 +214,14 @@ class MimiRVQImage:
             backend.write(0, address, raw)
         put("identity", self.identity_at, np.arange(s.vocab, dtype=np.float32))
         put("tables", self.tables_at, tables)
-        for index, (da, sa) in enumerate(self.projection_offsets):
-            batch = QC.Batch()
-            batch.submit(projections[index], "int8", self.cfg.D,
-                         lambda q, scales, index=index, da=da, sa=sa:
-                         (put(f"projection{index}_codes", da, q),
-                          put(f"projection{index}_scales", sa, scales)))
-            batch.wait()
+        if s.projection_precision == "fp32":
+            for index, address in enumerate(self.projection_offsets):
+                put(f"projection{index}_fp32", address, projections[index])
+        else:
+            for index, (da, sa) in enumerate(self.projection_offsets):
+                batch = QC.Batch()
+                batch.submit(projections[index], "int8", self.cfg.D,
+                             lambda q, scales, index=index, da=da, sa=sa:
+                             (put(f"projection{index}_codes", da, q),
+                              put(f"projection{index}_scales", sa, scales)))
+                batch.wait()

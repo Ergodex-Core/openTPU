@@ -142,3 +142,7 @@ full-speech gates remain temporal paging/resident handoff, prompt/voice/delay
 state, extension beyond 128 code frames, same-image transport and coordinated
 physical end-to-end acceptance. Full speech stays disabled. No production,
 card, image, service, synthesis or paid-resource changes occurred.
+
+The next [output-codec precision increment](personaplex_output_codec_precision.md)
+adds optional FP32 RVQ projections and decoder matrices/KV while retaining these
+measurements and the default INT8 paths.
