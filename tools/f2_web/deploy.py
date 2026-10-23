@@ -81,7 +81,7 @@ def main(argv=None) -> None:
     ap.add_argument("--instance", required=True)
     ap.add_argument("--bucket", required=True)
     ap.add_argument("--region", default="us-east-1")
-    ap.add_argument("--passcode", help="default: a new random one (printed)")
+    ap.add_argument("--passcode", help="default: a new random one; retrieve it from the deployed function's environment")
     ap.add_argument("--rate-limit", type=int, default=5, help="endpoint requests per second")
     a = ap.parse_args(argv)
     s = boto3.Session(region_name=a.region)
@@ -142,22 +142,22 @@ def main(argv=None) -> None:
                                                       "PASSCODE": passcode}}}
     names = [f["functionName"] for f in web.list_web_functions().get("functions", [])]
     if NAME not in names:
-        r = web.create_web_function(functionName=NAME, revisionConfig=rev,
+        web.create_web_function(functionName=NAME, revisionConfig=rev,
             endpointConfig={"endpointName": "dev", "endpointType": "HomeRegion",
                             "authType": "ApplicationManaged", "autoDeploymentMode": "LatestRevision",
                             "scalingConfig": {"maxEnvironments": 2},
                             "throttleConfig": {"rateLimit": a.rate_limit}},
             tags={"Project": "openTPU"})
     else:
-        r = web.create_web_function_revision(functionName=NAME, **rev)
-    print(json.dumps(r, indent=1, default=str)[:3000])
+        web.create_web_function_revision(functionName=NAME, **rev)
+    print("web function revision submitted")
     for _ in range(60):
         eps = web.list_web_function_endpoints(functionName=NAME).get("endpoints", [])
         url = next((f"https://{e['domainName']}" for e in eps if e.get("domainName")), None)
         if url:
             break
         time.sleep(5)
-    print(f"\npage: {url}\npasscode: {passcode}")
+    print(f"\npage: {url}\npasscode: configured (value omitted)")
 
 
 if __name__ == "__main__":
