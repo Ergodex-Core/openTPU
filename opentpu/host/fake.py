@@ -75,7 +75,7 @@ class FakeTransport:
                  trace_drop: int = 0, D: int | None = None, MCOLS: int | None = None,
                  LANES: int | None = None,
                  i2c: list | None = None, ddr_mts: int | None = None,
-                 w4: bool = True, pair: bool = False, dstep: bool = False,
+                 w4: bool = True, pair: bool = False, dstep: bool = False, t2: bool = False,
                  args: bool = False, stream: bool = False, gen: bool = False,
                  chash: bool = False, calib: tuple = (True, True), ecc_ded: bool = False,
                  cfg: dict | None = None, act_rows: int | None = None, mx: bool = True,
@@ -112,6 +112,7 @@ class FakeTransport:
         self.gen = gen                  # CAPS bit30: the decode loop (RLD, ARGMAX, HALT CHAIN)
         self.chash = chash              # CAPS bit7: the hashed channel interleave
         self.mx = mx                    # CAPS bit29: the MX numerics (every bitstream of this tree)
+        self.t2 = t2                    # CAPS bit28: t2 weights, MM QUAD, QACT DUP4
         self.gather = gather            # CAPS2 bit0 (register map 5): the collective's GATHER
         self.calib = list(calib)        # STATUS CALIB0 / CALIB1
         self.ecc_ded = ecc_ded          # STATUS ECC_DED
@@ -238,6 +239,7 @@ class FakeTransport:
                     | (R.CAP_DSTEP if self.dstep else 0) | (R.CAP_ARGS if self.args else 0)
                     | (R.CAP_STREAM if self.stream else 0) | (R.CAP_GEN if self.gen else 0)
                     | (R.CAP_CHASH if self.chash else 0) | (R.CAP_MX if self.mx else 0)
+                    | (R.CAP_T2 if self.t2 else 0)
                     | (R.CAP_ACT if self.act_rows > self.version >> 8 & 0xFF else 0)
                     | self.trace_log2 << 8 | 6 << 16)
         if off == R.R_ACT_ROWS and self.act_rows > self.version >> 8 & 0xFF:

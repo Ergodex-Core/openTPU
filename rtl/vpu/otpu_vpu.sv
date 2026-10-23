@@ -27,13 +27,21 @@
 // exact). ARGMAX is RMAX with the index: the tree carries each value's lane (ties: the lower),
 // the running maximum its column (ties: the older), and a row's (max, i2f(column + imm)) pair
 // is written through lanes 0 and 1 four cycles after the row (the index add and the int ->
-// fp32 conversion, pipelined; docs/isa.md). RSUM/RSSQ/RDOT implement isum_64 (of A, A*A, A*B): lane l owns the partials l,
-// l+LANES, ... and adds each chunk's term into the partial last updated RL = 64/LANES chunks
-// ago -- a loop of exactly RL cycles through a pipelined adder. Rows are padded with +0 terms
-// to a multiple of 64 columns; the final partials of a row come out LANES per cycle, in order,
-// and a streaming folding tree sums them while the next row streams: the levels across rows on
-// LANES adders fed by delay lines on a fixed schedule, the levels across lanes on a pipeline
-// of adders (level 2 reuses level 1's, which are idle then).
+// fp32 conversion, pipelined; docs/isa.md). RSUM/RSSQ/RDOT implement isum_64 (of A, A*A, A*B)
+// on RLN = min(LANES, 16) reduction lanes: lane l owns the partials l, l+RLN, ... and adds each
+// 16-lane chunk's term into the partial last updated RL = 64/RLN chunks ago -- a loop of
+// exactly RL >= LA cycles through a pipelined adder. Rows are padded with +0 terms to a
+// multiple of 64 columns; the final partials of a row come out RLN per cycle, in order, and a
+// streaming folding tree sums them while the next row streams: the levels across rows on RLN
+// adders fed by delay lines on a fixed schedule, the levels across lanes on a pipeline of
+// adders (level 2 reuses level 1's, which are idle then). Past 16 lanes (LANES 32, 64) a
+// LANES-wide chunk goes through the loop in KS = LANES / RLN sub-steps of RLN elements (the
+// issue leaves KS - 1 bubbles behind every reduction chunk; see "the reductions' sub-steps"),
+// so RSUM / RSSQ / RDOT run at 16 elements a cycle whatever the lanes, the same bits as at 16
+// lanes (the loop's order of additions is isum_64's at any LANES), while the elementwise VOPs
+// and RMAX / ARGMAX run at LANES a cycle. (A loop shorter than the adder, RL < LA, is what kept
+// LANES at 16; the alternative, four rows interleaved through a 64-lane loop, would run the
+// sums at LANES a cycle: docs/vla_frequency_plan.md L4.)
 //
 // RDOT (up to 256 rows into consecutive words) keeps its row sums in a buffer and writes them
 // LANES per cycle after the last row: an RDOT then requests no TMEM writes while it streams,
@@ -78,7 +86,9 @@ module otpu_vpu
   // the VPU's writes (the board's: every read port has its own TMEM copy). 0: everything
   // advances on the grant itself.
   parameter bit WBUF  = 0,
-  parameter bit HAS_SE = 1'b0                         // the stream engine (LANES = 8)
+  parameter bit HAS_SE = 1'b0,                        // the stream engine (LANES = 8)
+  parameter int AW    = 20                            // TMEM word address bits (otpu_slice:
+                                                      //   log2 TMEM_WORDS, at least 20)
 ) (
   input  logic                    clk,
   input  logic                    rst,
@@ -124,7 +134,10 @@ module otpu_vpu
   localparam int SL = 1 + LM + LA;          // cycles per slot
   localparam int NSLOT = 10;
   localparam int NP = 64;                    // RSUM/RSSQ partials (isum_64)
-  localparam int RL = NP / LANES;            // partial loop length in chunks
+  localparam int RLN = (LANES > 16) ? 16 : LANES;   // the reductions' lanes (the header)
+  localparam int KS = LANES / RLN;           // sub-steps a chunk takes through them (1 to 16 lanes)
+  localparam int RL = NP / RLN;              // partial loop length in 16-lane chunks (sub-steps)
+  localparam int RLC = (NP > LANES) ? NP / LANES : 1;   // ... in LANES-wide chunks (the padding)
   localparam int LW = $clog2(LANES);
   // the stream engine: its tail is built for 8 lanes (slot 0's partial loop, RL = 8)
   localparam bit SE = HAS_SE && (LANES == 8);
@@ -133,14 +146,13 @@ module otpu_vpu
   localparam int NLL = C8 ? 0 : NCL;         // long lanes (the composites' slot chains)
   localparam int NSX = C8 ? 1 : NSLOT;       // slots along the lane taps
   localparam int CLW = $clog2(NCL);
-  // TMEM word address bits (the TMEM has far fewer words and $fatals past them); the ports
-  // zero-extend to 32 bits
-  localparam int AW = 20;
+  // TMEM word address bits (AW: the slice's TMEM_WORDS, at least 20; the TMEM $fatals past its
+  // words); the ports zero-extend to 32 bits
   // OUTER's column buffers: 256 columns (docs/isa.md) over the lanes
   localparam int CBD = 256 / LANES;
   localparam int CBW = $clog2(CBD);
-  initial if (RL < LA || NP % LANES != 0)
-    $fatal(1, "otpu_vpu: LANES must be a power of two <= 16");
+  initial if (RL < LA || NP % LANES != 0 || (LANES > 16 && LANES % 16 != 0))
+    $fatal(1, "otpu_vpu: LANES must be a power of two <= 64");
   localparam int TA = 1 + LM + LA;           // stream: the tail's X registers -> slot 0's pacc
 
   localparam f32_t F_NZ = 32'h8000_0000;     // -0: (a*b) + -0 == a*b exactly
@@ -268,9 +280,12 @@ module otpu_vpu
   assign iss_thr = 1'b1;
   assign red_thr = 1'b1;
 `endif
-  wire              iss_ok = !(C8 && comp_f(func) && c_hold) && iss_thr;
-
+  // the reductions' sub-steps (KS > 1): a sum reduction's chunk issues only once the last one
+  // has left its KS - 1 bubbles (rbub, counted down below)
+  logic [3:0]       rbub;
   wire is_sum = (func == V_RSUM) || (func == V_RSSQ) || (func == V_RDOT);
+  wire              iss_ok = !(C8 && comp_f(func) && c_hold) && iss_thr && !(is_sum && rbub != 0);
+
   wire is_am = (func == V_ARGMAX);
   wire is_mx = (func == V_RMAX) || is_am;
   wire is_red = is_sum || is_mx;
@@ -406,9 +421,9 @@ module otpu_vpu
     logic [AW-1:0]    waddr;     // elementwise: dst row + column; reductions: dst row
     logic             row_last;  // last chunk of its row
     logic             all_last;  // last chunk of the instruction
-    logic             first;     // reductions: chunk index < RL (partials start at +0)
-    logic             final_;    // reductions: chunk index >= nch - RL (partials become final)
-    logic [7:0]       sub;       // chunk index mod RL
+    logic             first;     // reductions: chunk index < RLC (partials start at +0)
+    logic             final_;    // reductions: chunk index >= nch - RLC (partials become final)
+    logic [7:0]       sub;       // chunk index mod RLC
     logic             sq;        // func == V_RSSQ (the squarer's operand select, from a flip-flop)
     logic             dot;       // func == V_RDOT (the product's B operand, from a flip-flop)
     logic             fill;      // an OUTER fill chunk (not written): into the column buffers
@@ -1028,27 +1043,103 @@ module otpu_vpu
       end
     end
 
+  // ------------------------------------------------------------------ the reductions' sub-steps
+  // LANES > 16 (KS > 1): a chunk of LANES elements goes through the RLN-lane partial loop in
+  // KS sub-steps of RLN elements: sub-step s carries elements s RLN .. s RLN + RLN - 1 of the
+  // chunk, the 16-lane chunk index c KS + s, at the loop position (c mod RLC) KS + s. The
+  // chunk's data, mask and B operand are held from m0 and shifted RLN lanes a sub-step (the
+  // issue leaves KS - 1 bubbles behind every reduction chunk, so nothing arrives meanwhile:
+  // rbub), and the sub-step's meta (r0m) is m0's with its loop position, row_last and all_last
+  // on the last sub-step. The loop, the tree and the row sums then see exactly the stream a
+  // 16-lane VPU sees (the same bits). At LANES <= 16 (KS 1) the stage is m0 itself.
+  rm_t            r0m;
+  f32_t           rxa [RLN], ryb [RLN];
+  logic [RLN-1:0] rmk;
+  logic           r0_sq, r0_dot;
+  if (KS == 1) begin : g_r0
+    assign r0m = m0r;
+    for (genvar l = 0; l < RLN; l++) begin : g_l
+      assign rxa[l] = xa[l];
+      assign ryb[l] = (m0.bmode == B_SCALAR) ? m0.imm : (m0.bmode == B_ROW) ? xb[0] : xb[l];
+      assign rmk[l] = m0.mask[l];
+    end
+    assign r0_sq = m0.sq;
+    assign r0_dot = m0.dot;
+  end else begin : g_r0k
+    localparam int KSW = $clog2(KS);
+    f32_t             hx [LANES], hb [LANES];
+    logic [LANES-1:0] hm;
+    f32_t             hb0, himm;
+    logic [1:0]       hbm;
+    logic             hsq, hdot, hv;
+    logic [KSW-1:0]   hs;
+    rm_t              hmeta;
+    wire ld = m0.v && (m0d.fh[V_RSUM] || m0d.fh[V_RSSQ] || m0d.fh[V_RDOT]);
+    wire last = (hs == KSW'(KS - 1));
+    always_ff @(posedge clk) begin
+      if (rst) begin
+        hv <= 1'b0; hs <= '0;
+      end else if (en) begin
+        if (ld) begin
+          hv <= 1'b1; hs <= '0;
+          for (int l = 0; l < LANES; l++) begin hx[l] <= xa[l]; hb[l] <= xb[l]; end
+          hm <= m0.mask;
+          hb0 <= xb[0]; himm <= m0.imm; hbm <= m0.bmode; hsq <= m0.sq; hdot <= m0.dot;
+          hmeta <= m0r;
+        end else begin
+          hv <= hv && !last;
+          hs <= last ? '0 : hs + 1'b1;
+          for (int l = 0; l < LANES - RLN; l++) begin
+            hx[l] <= hx[l + RLN]; hb[l] <= hb[l + RLN]; hm[l] <= hm[l + RLN];
+          end
+        end
+      end
+    end
+    assign r0m = '{v: hv, tag: hmeta.tag, waddr: hmeta.waddr,
+                   row_last: hmeta.row_last && last, all_last: hmeta.all_last && last,
+                   first: hmeta.first, final_: hmeta.final_,
+                   sub: 8'((32'(hmeta.sub) << KSW) | 32'(hs))};
+    for (genvar l = 0; l < RLN; l++) begin : g_l
+      assign rxa[l] = hx[l];
+      assign ryb[l] = (hbm == B_SCALAR) ? himm : (hbm == B_ROW) ? hb0 : hb[l];
+      assign rmk[l] = hv && hm[l];
+    end
+    assign r0_sq = hsq;
+    assign r0_dot = hdot;
+`ifndef SYNTHESIS
+    always @(posedge clk)
+      if (!rst && en && ld && hv && !last)
+        $fatal(1, "otpu_vpu: a reduction chunk arrived in another's sub-steps (hs %0d)", hs);
+`endif
+  end
+
   // ------------------------------------------------------------------ RSUM / RSSQ
   // RMA: the term enters the lane's slot 0 through its input register (ra/rb/rc), so it reaches
   // the adder one cycle later than a squarer of its own would
   rm_t   mtq, mt;                       // meta at the adder inputs / aligned with `pacc`
-  otpu_delay #(.W($bits(rm_t)), .N(RMA ? LM + 1 : LM)) u_mtq (.clk, .en, .d(m0r), .q(mtq));
+  otpu_delay #(.W($bits(rm_t)), .N(RMA ? LM + 1 : LM)) u_mtq (.clk, .en, .d(r0m), .q(mtq));
   otpu_delay #(.W($bits(rm_t)), .N(LA)) u_mt (.clk, .en, .d(mtq), .q(mt));
   logic  first_e;                       // !RMA: mtq.first one cycle early
   if (RMA) begin : g_nfe
     assign first_e = 1'b0;
   end else begin : g_fe
-    otpu_delay #(.W(1), .N(LM - 1)) u_first (.clk, .en, .d(m0.first), .q(first_e));
+    otpu_delay #(.W(1), .N(LM - 1)) u_first (.clk, .en, .d(r0m.first), .q(first_e));
   end
   for (genvar l = 0; l < LANES; l++) begin : g_red
+    if (l >= RLN) begin : g_none              // no reduction lane past RLN (KS > 1)
+      assign pacc[l] = '0;
+      assign rsa[l] = '0;
+      assign rsb[l] = '0;
+      assign rfb[l] = '0;
+    end else begin : g_lane
     f32_t sa, sb, yb;
-    // sign/exponent masked; the significand raw from xa (the multiplier flushes a zero exponent
-    // itself and reads the significand only when both exponents are normal), so the term is
-    // the same as that of m0.mask[l] ? ftz(xa[l]) : +0. RDOT's B is 1.0 on masked lanes (a
-    // padding term 0 * B must stay +0 when B is infinite).
-    assign sa = {m0.mask[l] & xa[l][31], m0.mask[l] ? xa[l][30:23] : 8'd0, xa[l][22:0]};
-    assign yb = (m0.bmode == B_SCALAR) ? m0.imm : (m0.bmode == B_ROW) ? xb[0] : xb[l];
-    assign sb = m0.sq ? sa : (m0.dot && m0.mask[l]) ? yb : F_ONE;
+    // sign/exponent masked; the significand raw from rxa (the multiplier flushes a zero
+    // exponent itself and reads the significand only when both exponents are normal), so the
+    // term is the same as that of rmk[l] ? ftz(rxa[l]) : +0. RDOT's B is 1.0 on masked lanes
+    // (a padding term 0 * B must stay +0 when B is infinite).
+    assign sa = {rmk[l] & rxa[l][31], rmk[l] ? rxa[l][30:23] : 8'd0, rxa[l][22:0]};
+    assign yb = ryb[l];
+    assign sb = r0_sq ? sa : (r0_dot && rmk[l]) ? yb : F_ONE;
     // stream mode: the term is the tail's S * a (bubbles come only after the last row, and
     // their partials are never captured)
     assign rsa[l] = (SE && sa_r[l]) ? s_xd[l] : sa;
@@ -1081,9 +1172,10 @@ module otpu_vpu
       end
       otpu_fadd #(.LAT(LA)) u_acc (.clk, .en, .a(prev), .b(tq), .y(pacc[l]));
     end
+    end
   end
 
-  // the folding tree (otpu_vtree): a row's sum RD cycles after its last final partial
+  // the folding tree (otpu_vtree, RLN lanes): a row's sum RD cycles after its last final partial
   // a final partial of this reduction (or of the stream's dot A) is on `pacc`, or one of the
   // tail's dot Q, in a window of its own (q_cap)
   wire  a_cap = (SE && ss_act) ? s_mt.v && s_mt.final_ :
@@ -1091,8 +1183,8 @@ module otpu_vpu
   wire  cap = a_cap || q_cap;
   wire  vt_rl = q_cap ? q_rl : (SE && ss_act) ? s_mt.row_last : mt.row_last;
   wire  [7:0] vt_sub = q_cap ? q_sub : (SE && ss_act) ? s_mt.sub : mt.sub;
-  f32_t vt_in [LANES];
-  for (genvar l = 0; l < LANES; l++) begin : g_vtin
+  f32_t vt_in [RLN];
+  for (genvar l = 0; l < RLN; l++) begin : g_vtin
     assign vt_in[l] = q_cap ? q_pd[l] : pacc[l];
   end
   // root_o: the root from a copy of its register, for the DMA's O path alone (the tail's Q dot,
@@ -1101,7 +1193,7 @@ module otpu_vpu
   // levels, 6.6 ns of route, +0.102 ns)
   f32_t root, root_o;
   logic root_v;
-  otpu_vtree #(.LANES(LANES), .LA(LA)) u_vt (.clk, .rst(rst || s_init), .en, .pacc(vt_in), .cap,
+  otpu_vtree #(.LANES(RLN), .LA(LA)) u_vt (.clk, .rst(rst || s_init), .en, .pacc(vt_in), .cap,
                                               .row_last(vt_rl), .sub(vt_sub), .root, .root_o,
                                               .root_v);
 `ifndef SYNTHESIS
@@ -1421,6 +1513,7 @@ module otpu_vpu
       ew_n <= '0; last_tap <= '0;
       mi <= '0;
       tag <= '0;
+      rbub <= '0;
     end else begin
       logic [6:0] ewn;
       logic [1:0] qn;
@@ -1452,7 +1545,7 @@ module otpu_vpu
           nchunks = comp_f(hf) ? (c16 + 16'(NCL) - 1) >> CLW : (c16 + 16'(LANES) - 1) >> LW;
 `endif
           if (hf == V_RSUM || hf == V_RSSQ || hf == V_RDOT)
-            nchunks = ((nchunks + 16'(RL) - 1) / 16'(RL)) * 16'(RL);
+            nchunks = ((nchunks + 16'(RLC) - 1) / 16'(RLC)) * 16'(RLC);
           nch <= nchunks;
           ir <= '0; ic <= '0; ch <= '0;
           a_row <= AW'(hc.w2); b_row <= AW'(hc.w3); d_row <= AW'(hc.w1);
@@ -1482,6 +1575,9 @@ module otpu_vpu
       if (en) begin
         // ---- issue the next chunk (its data arrives next cycle, described by mi)
         mi <= '0;
+        // (KS > 1: a sum reduction's chunk is followed by KS - 1 bubbles, its sub-steps)
+        if (issuing && !filling && iss_ok && is_sum) rbub <= 4'(KS - 1);
+        else if (rbub != 0) rbub <= rbub - 1'b1;
         if (issuing && filling) begin
           mi.fill <= 1'b1;
           mi.cb <= CBW'(ch);
@@ -1502,9 +1598,9 @@ module otpu_vpu
           mi.waddr <= is_red ? d_row : d_row + AW'(ic);
           mi.row_last <= irow_last;
           mi.all_last <= iall_last;
-          mi.first <= (ch < 16'(RL));
-          mi.final_ <= (ch + 16'(RL) >= nch);
-          mi.sub <= 8'(ch % 16'(RL));
+          mi.first <= (ch < 16'(RLC));
+          mi.final_ <= (ch + 16'(RLC) >= nch);
+          mi.sub <= 8'(ch % 16'(RLC));
           mi.sq <= (func == V_RSSQ);
           mi.dot <= (func == V_RDOT);
           mi.cb <= CBW'(ch);

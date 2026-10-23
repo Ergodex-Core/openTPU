@@ -41,6 +41,59 @@ module otpu_pe #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0, paramete
 endmodule
 
 
+// One packed position (docs/mxu_packing.md): two int8 weights wa, wb of one position, the same
+// activation, two products a cycle in one multiplier. The pre-adder forms the packed operand
+// ad = wa + wb * 2^19 in the DSP48E2's 27 bits (in range for weights in [-127, 127]: |ad| <=
+// 127 * 2^19 + 127 < 2^26; wb = -128 beside a negative wa would wrap), the product m = ad * act
+// is wa * act + (wb * act) * 2^19, and the chain's running sum P = PCIN + M (FIRST: P = M)
+// stays packed: P = L + H * 2^19 with L = sum wa * act, H = sum wb * act over the chain's CLS
+// positions. The lanes are exact as long as |L| < 2^18 (CLS 16 products of operands in
+// [-127, 127]: at most 258,064); the chain end unpacks them (otpu_mxu_pk_col: L =
+// sext19(P[18:0]), H = P[47:19] + P[18]). The pre-adder is the packing's, so the stream select
+// of otpu_pe becomes a lane select, sel = {b, a} (registered as otpu_pe's: its next value): 2'b11
+// both lanes (packed, AD = wa + wb 2^19), 2'b01 lane a alone (AD = wa: an unpacked product in the
+// low lane, the high lane exactly 0), 2'b10 lane b alone (AD = wb 2^19: the product in the high
+// lane, the low lane 0), so a 4-bit PAIR's column reads its stream from one lane and the lanes'
+// column ends sum to the column's integer (otpu_mxu PACK). The pipeline is
+// otpu_pe's: act registered (B), the weights registered when WREG (A and D: wa, wb are their
+// next values), M, then P unless LAST. p is the 48-bit sum (the packed sum needs 38 bits).
+module otpu_pe_pk #(parameter bit FIRST = 1'b0, parameter bit LAST = 1'b0,
+                    parameter bit WREG = 1'b0) (
+  input  logic               clk,
+  input  logic               en,
+  input  logic [7:0]         act,
+  input  logic [7:0]         wa,                // the low lane's weight (WREG: from the next cycle on)
+  input  logic [7:0]         wb,                // the high lane's
+  input  logic [1:0]         sel,               // the lanes used {b, a} (from the next cycle on)
+  input  logic [47:0]        pcin,
+  output logic [47:0]        pcout,
+  output logic signed [47:0] p
+);
+  logic [7:0] br, war, wbr;
+  logic [1:0] selr;
+  logic signed [47:0] m;
+  wire  [7:0] wal = WREG ? war : wa, wbl = WREG ? wbr : wb;
+  // the pre-adder: A = wa sign-extended (gated by sel[0]), D = wb at bit 19 (enabled by
+  // sel[1]), 27 bits
+  wire signed [26:0] ad = (selr[0] ? 27'($signed(wal)) : 27'sd0) +
+                          (selr[1] ? $signed({wbl, 19'd0}) : 27'sd0);
+  wire  signed [47:0] pn = (FIRST ? 48'sd0 : $signed(pcin)) + m;
+  always_ff @(posedge clk) if (en) begin
+    br <= act;
+    selr <= sel;
+    war <= wa;
+    wbr <= wb;
+    m <= 48'(longint'(ad) * longint'($signed(br)));
+  end
+  if (LAST) begin : g_comb
+    assign p = pn;
+  end else begin : g_preg
+    always_ff @(posedge clk) if (en) p <= pn;
+  end
+  assign pcout = LAST ? 48'd0 : 48'(p);
+endmodule
+
+
 // The MX column end (otpu_mxu, docs/mx_mxu.md): a column's eight group sums, each one chain end
 // (a[g], the LAST position's unregistered sum) or, at two chains a group (CPG 2), two (a[g] +
 // d[g]), times the group's B = m << sh (bm[g], unsigned, < 2^17), summed and accumulated over the

@@ -7,8 +7,8 @@
 // of the word written at the same edge returns the old word here (read-first); the macros do not
 // promise it (a 1R1W macro's same-address read is undefined), so a user must not depend on it
 // (otpu_tmem bypasses the write it would hit); otpu_ram_1rw1r is read-first on both families
-// (below). STYLE is the FPGA's ram_style ("block",
-// "distributed" or "auto"); the macros ignore it. In simulation every word starts at 0, unless
+// (below). STYLE is the FPGA's ram_style ("block", "ultra" (UltraScale+ URAM: no initial
+// contents on the device), "distributed" or "auto"); the macros ignore it. In simulation every word starts at 0, unless
 // ZERO is 0 (a user that loads the memory from its own initial block: their order is undefined).
 
 // One read port and one write port (simple dual-port).
@@ -28,6 +28,15 @@ module otpu_ram_1r1w #(
 );
   if (STYLE == "distributed") begin : g_lut
     (* ram_style = "distributed" *) logic [W-1:0] mem [N];
+    always_ff @(posedge clk) begin
+      if (we) mem[wa] <= wd;
+      if (re) rd <= mem[ra];
+    end
+`ifndef SYNTHESIS
+    initial if (ZERO) for (int i = 0; i < N; i++) mem[i] = '0;
+`endif
+  end else if (STYLE == "ultra") begin : g_uram
+    (* ram_style = "ultra" *) logic [W-1:0] mem [N];
     always_ff @(posedge clk) begin
       if (we) mem[wa] <= wd;
       if (re) rd <= mem[ra];
@@ -75,6 +84,15 @@ module otpu_ram_1r1w_be #(
   initial if (W % 8 != 0) $fatal(1, "otpu_ram_1r1w_be: W %0d is not a multiple of 8", W);
   if (STYLE == "block") begin : g_bram
     (* ram_style = "block" *) logic [W-1:0] mem [N];
+    always_ff @(posedge clk) begin
+      for (int k = 0; k < W / 8; k++) if (we && wbe[k]) mem[wa][8*k +: 8] <= wd[8*k +: 8];
+      if (re) rd <= mem[ra];
+    end
+`ifndef SYNTHESIS
+    initial if (ZERO) for (int i = 0; i < N; i++) mem[i] = '0;
+`endif
+  end else if (STYLE == "ultra") begin : g_uram
+    (* ram_style = "ultra" *) logic [W-1:0] mem [N];
     always_ff @(posedge clk) begin
       for (int k = 0; k < W / 8; k++) if (we && wbe[k]) mem[wa][8*k +: 8] <= wd[8*k +: 8];
       if (re) rd <= mem[ra];

@@ -6,10 +6,18 @@
 // stay below MCOLS). The MXU reads one block of MCOLS rows per cycle: rows g*MCOLS ..
 // g*MCOLS+MCOLS-1 of group `r_grp` (ROWS > MCOLS: the MXU replays a weight chunk for each group
 // of an MM), block r_blk, or r_blk2 for the rows in r_hi (MM PAIR: the odd blocks).
+// T2 (docs/ternary.md): `w_dup4` (QACT DUP4) writes rows w_row + c w_off, c = 0..3, and MM QUAD
+// reads r_blk3 / r_blk4 for the rows in r_hq (r_hi picking the latter): four blocks a cycle.
+// Without T2 neither is built.
 //
 // Block RAM: one memory per column j (rows j, j+MCOLS, ...) and piece p (bytes p*PB ..
 // p*PB+PB-1: four 64-bit block RAMs at PB = 32), GROUPS*BLOCKS words of PB bytes with byte
-// write enables, group-major. The read is registered (the MXU's first pipeline register) and
+// write enables, group-major. STYLE is the pieces' and the scale records' technology RAM style
+// (rtl/tech): "auto" leaves it to the tool (the card's 1K x 256-bit pieces are block RAM
+// either way); f2-vla names "block" (otpu_slice ACT_RAM 1): at 255 rows x 128 blocks x 32
+// columns (4 MB) Vivado's "auto" announced URAM, hit its block RAM limit and spilled the whole
+// RAM into 131 K LUT RAM cells (docs/vla_frequency_plan.md 6b); as block RAM it is 1,024 RAMB36
+// for the pieces (8 of 1K x 36 a piece) and 64 for the scale records. The read is registered (the MXU's first pipeline register) and
 // advances with the column's `ren` bit (otpu_mxu: the columns of the MM's rows); a read of a block written at the same edge returns the old bytes. Writes
 // land three cycles after they are presented: the quantizer's write is registered as it arrives
 // and again (LANES bytes, their index and row, the scale), so it crosses from the quantizer in
@@ -22,9 +30,15 @@
 module otpu_actram #(
   parameter int D      = 32,
   parameter int MCOLS  = 8,
-  parameter int ROWS   = MCOLS,     // a multiple of MCOLS, MCOLS a power of two if more
+  parameter int ROWS   = MCOLS,     // MCOLS a power of two if more (the RAM holds ceil(ROWS /
+                                    // MCOLS) groups: ROWS 255, the ISA's most, at MCOLS 32 is 8)
   parameter int BLOCKS = 64,
-  parameter int LANES  = 8
+  parameter int LANES  = 8,
+  parameter bit T2     = 1'b0,      // QACT DUP4, MM QUAD's four blocks (docs/ternary.md)
+  parameter string STYLE = "auto",  // the RAMs' style (rtl/tech otpu_ram_1r1w_be STYLE; above)
+  parameter bit RREG   = 1'b0       // the read request through an input register (the MXU's
+                                    // array side in another SLR: otpu_mxu ARR, plan 6i; the read
+                                    // data a cycle later than the request, as the MXU expects)
 ) (
   input  logic                   clk,
   input  logic [LANES-1:0]       we,          // lane l writes byte w_idx + l
@@ -32,6 +46,7 @@ module otpu_actram #(
   input  logic [31:0]            w_idx,       // byte index within the row: block*D + i
   input  logic [LANES-1:0][7:0]  w_data,
   input  logic                   w_dup,
+  input  logic                   w_dup4,      // T2: also rows w_row + 2 w_off, + 3 w_off
   input  logic [7:0]             w_off,
   input  logic                   swe,
   input  logic [7:0]             s_row,
@@ -42,21 +57,41 @@ module otpu_actram #(
   input  logic [15:0]            r_blk,
   input  logic [15:0]            r_blk2,
   input  logic [MCOLS-1:0]       r_hi,
+  input  logic [15:0]            r_blk3,      // T2 (QUAD): for the rows in r_hq, r_blk4 for
+  input  logic [15:0]            r_blk4,      // those also in r_hi
+  input  logic [MCOLS-1:0]       r_hq,
   input  logic [7:0]             r_grp,
   output wire  [MCOLS*D*8-1:0]   r_data,      // row j at [j*D*8 +: D*8], byte i at [+8i]
   output wire  [MCOLS*64-1:0]    r_scale
 );
+  // the read request as the RAMs take it: the inputs, or (RREG) their registered copies
+  logic [MCOLS-1:0] ren_r, r_hi_r, r_hq_r;
+  logic             r_use_r;
+  logic [15:0]      r_blk_r, r_blk2_r, r_blk3_r, r_blk4_r;
+  logic [7:0]       r_grp_r;
+  if (RREG) begin : g_rr
+    always_ff @(posedge clk) begin
+      ren_r <= ren; r_use_r <= r_use; r_hi_r <= r_hi; r_hq_r <= r_hq;
+      r_blk_r <= r_blk; r_blk2_r <= r_blk2; r_blk3_r <= r_blk3; r_blk4_r <= r_blk4; r_grp_r <= r_grp;
+    end
+`ifndef SYNTHESIS
+    initial begin ren_r = '0; r_use_r = 1'b0; end
+`endif
+  end else begin : g_rw
+    assign ren_r = ren, r_use_r = r_use, r_hi_r = r_hi, r_hq_r = r_hq;
+    assign r_blk_r = r_blk, r_blk2_r = r_blk2, r_blk3_r = r_blk3, r_blk4_r = r_blk4, r_grp_r = r_grp;
+  end
   localparam int BW = $clog2(BLOCKS);
   localparam int DW = $clog2(D);
-  localparam int GROUPS = ROWS / MCOLS;
+  localparam int GROUPS = (ROWS + MCOLS - 1) / MCOLS;
   localparam int GW = (GROUPS > 1) ? $clog2(GROUPS) : 1;
   localparam int PB = (D > 32) ? 32 : D;      // bytes per piece
   localparam int NP = D / PB;
   localparam int RAW = $clog2(GROUPS * BLOCKS);  // the RAMs' address bits
   initial if (D % LANES != 0) $fatal(1, "otpu_actram: LANES must divide D");
   initial if (D % PB != 0) $fatal(1, "otpu_actram: D must be a multiple of 32 above 32");
-  initial if (ROWS % MCOLS != 0 || (GROUPS > 1 && (MCOLS & (MCOLS - 1)) != 0))
-    $fatal(1, "otpu_actram: ROWS must be a multiple of MCOLS, a power of two if larger");
+  initial if (ROWS < MCOLS || (GROUPS > 1 && (MCOLS & (MCOLS - 1)) != 0))
+    $fatal(1, "otpu_actram: ROWS %0d >= MCOLS %0d, MCOLS a power of two if larger", ROWS, MCOLS);
   // a row's column and group
   function automatic int col(input logic [7:0] r);
     return (MCOLS > 1) ? int'(r) % MCOLS : 0;
@@ -64,10 +99,12 @@ module otpu_actram #(
   function automatic logic [GW-1:0] grp(input logic [7:0] r);
     return (GROUPS > 1) ? GW'(int'(r) / MCOLS) : '0;
   endfunction
-  // a write to row r (with dup, also to row r + off) selects column j, in the group returned
+  // a write to row r (with dup, also to row r + off; dup4, T2: and r + 2 off, r + 3 off, all
+  // below MCOLS, so in group 0 as row r + off) selects column j, in the group returned
   function automatic logic sel(input int j, input logic [7:0] r, input logic dup,
-                               input logic [7:0] off);
-    return (col(r) == j) || (dup && col(8'(r + off)) == j);
+                               input logic dup4, input logic [7:0] off);
+    return (col(r) == j) || ((dup || (T2 && dup4)) && col(8'(r + off)) == j) ||
+           (T2 && dup4 && (col(8'(r + 2 * off)) == j || col(8'(r + 3 * off)) == j));
   endfunction
   function automatic logic [GW-1:0] sgrp(input int j, input logic [7:0] r, input logic [7:0] off);
     return (col(r) == j) ? grp(r) : grp(8'(r + off));
@@ -82,6 +119,7 @@ module otpu_actram #(
   (* shreg_extract = "no" *) logic [DW+BW-1:0]      w_idx_i, w_idx_h;
   (* shreg_extract = "no" *) logic [LANES-1:0][7:0] w_data_i, w_data_h;
   (* shreg_extract = "no" *) logic                  w_dup_i, swe_i, w_dup_h, swe_h;
+  (* shreg_extract = "no" *) logic                  w_dup4_i, w_dup4_h;
   (* shreg_extract = "no" *) logic [BW-1:0]         s_blk_i, s_blk_h;
   (* shreg_extract = "no" *) logic [63:0]           s_data_i, s_data_h;
   always_ff @(posedge clk) begin
@@ -90,6 +128,7 @@ module otpu_actram #(
     w_idx_i <= w_idx[DW+BW-1:0];
     w_data_i <= w_data;
     w_dup_i <= w_dup;
+    w_dup4_i <= T2 && w_dup4;
     w_off_i <= w_off;
     swe_i <= swe;
     s_row_i <= s_row;
@@ -100,6 +139,7 @@ module otpu_actram #(
     w_idx_h <= w_idx_i;
     w_data_h <= w_data_i;
     w_dup_h <= w_dup_i;
+    w_dup4_h <= w_dup4_i;
     w_off_h <= w_off_i;
     swe_h <= swe_i;
     s_row_h <= s_row_i;
@@ -121,8 +161,8 @@ module otpu_actram #(
   logic [GW-1:0]    wg_n [MCOLS], sg_n [MCOLS];
   always_comb
     for (int j = 0; j < MCOLS; j++) begin
-      wsel_n[j] = sel(j, w_row_h, w_dup_h, w_off_h) && (|we_h);
-      ssel_n[j] = swe_h && sel(j, s_row_h, w_dup_h, w_off_h);
+      wsel_n[j] = sel(j, w_row_h, w_dup_h, w_dup4_h, w_off_h) && (|we_h);
+      ssel_n[j] = swe_h && sel(j, s_row_h, w_dup_h, w_dup4_h, w_off_h);
       wg_n[j] = sgrp(j, w_row_h, w_off_h);
       sg_n[j] = sgrp(j, s_row_h, w_off_h);
     end
@@ -144,8 +184,9 @@ module otpu_actram #(
 
   for (genvar j = 0; j < MCOLS; j++) begin : g_row
     logic [63:0]    rs;
-    wire [BW-1:0] rb = r_hi[j] ? r_blk2[BW-1:0] : r_blk[BW-1:0];
-    wire [GW+BW-1:0] ra = (GROUPS > 1) ? {r_grp[GW-1:0], rb} : (GW+BW)'(rb);
+    wire [BW-1:0] rb = (T2 && r_hq_r[j]) ? (r_hi_r[j] ? r_blk4_r[BW-1:0] : r_blk3_r[BW-1:0])
+                                         : (r_hi_r[j] ? r_blk2_r[BW-1:0] : r_blk_r[BW-1:0]);
+    wire [GW+BW-1:0] ra = (GROUPS > 1) ? {r_grp_r[GW-1:0], rb} : (GW+BW)'(rb);
     wire [GW+BW-1:0] sa = (GROUPS > 1) ? {sg[j], sb} : (GW+BW)'(sb);
     // a piece's block RAMs take their write address from a copy of the block address (and
     // select, group) of their own: on 812bb01 one wb drove all MCOLS * D / 8 of them across
@@ -162,31 +203,31 @@ module otpu_actram #(
       end
       wire [GW+BW-1:0] wa = (GROUPS > 1) ? {wg, wb} : (GW+BW)'(wb);
       // the piece's bytes: a technology RAM with byte enables (rtl/tech)
-      otpu_ram_1r1w_be #(.W(PB*8), .N(GROUPS*BLOCKS), .STYLE("auto")) u_act (
+      otpu_ram_1r1w_be #(.W(PB*8), .N(GROUPS*BLOCKS), .STYLE(STYLE)) u_act (
         .clk, .we(wsel), .wbe(wbe[p*PB +: PB]), .wa(wa[RAW-1:0]), .wd(wd[p*PB*8 +: PB*8]),
-        .re(ren[j]), .ra(ra[RAW-1:0]), .rd);
+        .re(ren_r[j]), .ra(ra[RAW-1:0]), .rd);
       assign r_data[j*D*8 + p*PB*8 +: PB*8] = rd;
 `ifndef SYNTHESIS
       initial wsel = 1'b0;
 `endif
     end
     // the column's block scale records
-    otpu_ram_1r1w #(.W(64), .N(GROUPS*BLOCKS), .STYLE("auto")) u_asc (
-      .clk, .we(ssel[j]), .wa(sa[RAW-1:0]), .wd(sd), .re(ren[j]), .ra(ra[RAW-1:0]), .rd(rs));
+    otpu_ram_1r1w #(.W(64), .N(GROUPS*BLOCKS), .STYLE(STYLE)) u_asc (
+      .clk, .we(ssel[j]), .wa(sa[RAW-1:0]), .wd(sd), .re(ren_r[j]), .ra(ra[RAW-1:0]), .rd(rs));
     assign r_scale[j*64 +: 64] = rs;
 `ifndef SYNTHESIS
     // a consumed read of a block (or its scale) with a write in any register: it would return
     // the old bytes
     wire [GW+BW-1:0] wa = g_pc[0].wa;
-    wire             wsel_1 = sel(j, w_row_i, w_dup_i, w_off_i) && (|we_i);
-    wire             ssel_1 = swe_i && sel(j, s_row_i, w_dup_i, w_off_i);
+    wire             wsel_1 = sel(j, w_row_i, w_dup_i, w_dup4_i, w_off_i) && (|we_i);
+    wire             ssel_1 = swe_i && sel(j, s_row_i, w_dup_i, w_dup4_i, w_off_i);
     wire [GW+BW-1:0] wa_1 = (GROUPS > 1) ? {sgrp(j, w_row_i, w_off_i), w_idx_i[DW +: BW]}
                                          : (GW+BW)'(w_idx_i[DW +: BW]);
     wire [GW+BW-1:0] sa_1 = (GROUPS > 1) ? {sgrp(j, s_row_i, w_off_i), s_blk_i} : (GW+BW)'(s_blk_i);
     wire [GW+BW-1:0] wa_n = (GROUPS > 1) ? {wg_n[j], w_idx_h[DW +: BW]} : (GW+BW)'(w_idx_h[DW +: BW]);
     wire [GW+BW-1:0] sa_n = (GROUPS > 1) ? {sg_n[j], s_blk_h} : (GW+BW)'(s_blk_h);
     always @(posedge clk)
-      if (ren[j] && r_use && ((g_pc[0].wsel && wa == ra) || (wsel_n[j] && wa_n == ra) ||
+      if (ren_r[j] && r_use_r && ((g_pc[0].wsel && wa == ra) || (wsel_n[j] && wa_n == ra) ||
                            (wsel_1 && wa_1 == ra) || (ssel[j] && sa == ra) ||
                            (ssel_n[j] && sa_n == ra) || (ssel_1 && sa_1 == ra)))
         $fatal(1, "otpu_actram: column %0d block %0d read while its write is in flight at %0t",

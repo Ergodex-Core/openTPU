@@ -341,8 +341,9 @@ class QTensor:
             return self.padded_cols(r0, nr, c0, nc, nc)
         if self.wf == I.W8:
             data = self.data + r0 * self.rs + c0
-        else:                     # 4-bit rows stream whole D-byte chunks of two D-blocks
-            data = self.data + r0 * self.rs + c0.div_exact(2 * self.D) * self.D
+        else:                     # 4-bit (t2) rows stream whole D-byte chunks of 2 (4) D-blocks
+            bpc = I.blocks_per_chunk(self.wf)
+            data = self.data + r0 * self.rs + c0.div_exact(bpc * self.D) * self.D
         scale, k0 = None, self.k0
         if self.scale is not None:
             # the rows' scale rows stay where they are (each starts with its Sw): a column
@@ -361,6 +362,8 @@ class QTensor:
 VT_TILE = 256          # V^T cache tile (tokens): the attention block (qwen3.ATTN_BLOCK)
 QACT_KB_MAX = 255      # QACT's blocks (the RTL's field)
 QST_KB_MAX = 1024      # QST's blocks without ROW (the RTL's limit)
+QST_T = True           # transposed stores through the quantizer's transposer (QST T) where the
+                       # strides allow (store_quantized); False: a byte a cycle, for measurements
 
 
 def vt_tile(cap: int) -> int:
@@ -685,9 +688,10 @@ class Stationary:
     "MM"), so dot() runs an MM per range and adds them up (MM ACC)."""
 
     def __init__(self, src: Tile, chunks: list, KB: int, owners: list, pair: bool = False,
-                 qranges: list | None = None):
+                 qranges: list | None = None, quad: bool = False):
         self.src, self.chunks, self.KB, self.owners = src, chunks, KB, owners
-        self.pair = pair
+        self.pair = pair or quad
+        self.quad = quad            # also rows 2M..4M-1 (QACT DUP4): t2 MMs take QUAD
         self.qranges = qranges
 
     def add_qrange(self, k0: int, k1: int) -> None:
@@ -1564,17 +1568,22 @@ class Builder:
         # 4-bit MM can feed the odd K-blocks to the second half of the columns. A taller tile
         # (up to ACT_ROWS rows) replays the streamed chunks instead: PAIR would not be faster
         pair = self.cfg.PAIR and 2 * x.rows <= self.cfg.MCOLS
-        st = Stationary(x, chunks, KB, owners, pair)
+        # t2 (Config.T2): a tile of at most MCOLS/4 rows four times (QACT DUP4), so t2 MMs take
+        # a whole chunk of four blocks a cycle (MM QUAD; the copies also serve PAIR)
+        quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
+            and 4 * x.rows <= self.cfg.MCOLS
+        st = Stationary(x, chunks, KB, owners, pair, quad=quad)
         for m0 in builtins.range(0, x.rows, self.cfg.act_rows):
             mc = min(self.cfg.act_rows, x.rows - m0)
             ab, owner = self.act_alloc(KB)
             for k in builtins.range(ab, ab + KB):   # live now: the next chunk must not take it
                 self.act_live[k] = weakref.ref(st)
             self.emit(I.qact(src + m0 * rs, mc, ab, KB, rs, cscale=cs,
-                             rscale=None if rsc is None else rsc + m0, dup=pair,
+                             rscale=None if rsc is None else rsc + m0, dup=pair and not quad,
+                             dup4=quad,
                              comment="quantize -> ACT" + (" x col scale" if cs is not None else "")
                              + (" x row scale" if rsc is not None else "")
-                             + (" dup" if pair else "")))
+                             + (" dup4" if quad else " dup" if pair else "")))
             chunks.append((ab, mc))
             owners.append(owner)
         st.loop = self.loops[-1].loop if self.loops else None     # created in this loop body
@@ -1595,7 +1604,9 @@ class Builder:
             raise CompileError(f"a stationary of {rows} rows: ACT RAM holds {self.cfg.act_rows}")
         KB = cols // D
         pair = self.cfg.PAIR and 2 * rows <= self.cfg.MCOLS
-        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[])
+        quad = (getattr(self.cfg, "T2", False) or getattr(self.cfg, "PORTB", 1) > 1) and pair \
+            and 4 * rows <= self.cfg.MCOLS
+        st = Stationary(_Parts(self, rows, cols), [], KB, [], pair, qranges=[], quad=quad)
         ab, owner = self.act_alloc(KB)
         for k in builtins.range(ab, ab + KB):
             self.act_live[k] = weakref.ref(st)
@@ -1626,7 +1637,8 @@ class Builder:
         (ab, mc), = st.chunks
         rs = x.rs if len(x.shape) == 2 else x.cols
         ra, src = (0, x.base) if at is None else self.addr(Affine(x.base) + Affine.of(at))
-        self.emit(I.qact(src, mc, ab + col // D, x.cols // D, rs, dup=st.pair, ra=ra,
+        self.emit(I.qact(src, mc, ab + col // D, x.cols // D, rs, dup=st.pair and not st.quad,
+                         dup4=st.quad, ra=ra,
                          cscale=None if cscale is None else cscale.base,
                          comment="quantize -> ACT (part)" + (" dup" if st.pair else "")
                          + (" x col scale" if cscale is not None else "")))
@@ -1858,6 +1870,19 @@ class Builder:
         ins.comment += " +rowmax"
         return Tile(self, x.base + M * ors, (M,), None, x.buf)
 
+    def mm_stride(self, N: int) -> int:
+        """The row stride of a 2-D tile the MXU writes into (dot's fresh outputs, the language's
+        empty / zeros / full): odd, so the M results of one streamed row sit in M distinct TMEM
+        banks and the drain writes them in one cycle (N + 1 for an even N); under MXROT (the
+        MXU's TMEM ports rotators, no lane crossbar: f2-vla) the first value >= N that is 1 mod
+        LANES, the rotation pattern the drain's lanes must land in (N + 1 for every width that
+        is a multiple of LANES; an attention's 558 keys get 577, a 46-key last block 65 instead
+        of 47; any other stride drains one result a step, otpu_mxu drain_run;
+        docs/vla_frequency_plan.md 6c)."""
+        if getattr(self.cfg, "MXROT", False):
+            return N + (1 - N) % self.cfg.LANES
+        return N if N % 2 else N + 1
+
     def dot(self, a, w: QTensor, acc: Tile | None = None, out: Tile | None = None,
             temp: bool = False, rowmax: bool = False, acc_scale: Tile | None = None) -> Tile:
         if not isinstance(w, QTensor):
@@ -1882,9 +1907,10 @@ class Builder:
         M = st.src.rows
         if acc is None and out is None:
             # Layout choice: an odd row stride puts the M results of one streamed row in M
-            # distinct TMEM banks, so the MXU writes them back in a single cycle. The spare row
-            # after the tile receives the row maxima if the kernel asks for them (RMAX).
-            rs = N if (one_d or M == 1 or N % 2) else N + 1
+            # distinct TMEM banks, so the MXU writes them back in a single cycle (mm_stride:
+            # under MXROT the first stride >= N that is 1 mod LANES). The spare row after the
+            # tile receives the row maxima if the kernel asks for them (RMAX).
+            rs = N if (one_d or M == 1) else self.mm_stride(N)
             out = self.alloc((N,) if one_d else (M, N), rs, spare=0 if one_d else M)
         else:
             out = acc if acc is not None else out
@@ -1906,34 +1932,41 @@ class Builder:
         unit = w.scale is None
         # PAIR reads a chunk's two blocks' scales at once: 8-byte (nvfp4: 16-byte) aligned rows
         # and an even first block
-        al = 16 if w.wf == I.WNV else 8
-        pair = st.pair and w.wf != I.W8 and (unit or w.rsc or (
+        al = 16 if w.wf in (I.WNV, I.WT2) else 4 if w.wf == I.W8 else 8
+        portb = getattr(self.cfg, "PORTB", 1)
+        pair = st.pair and I.chunks_per_cycle(w.wf, True, False) <= portb and (unit or w.rsc or (
             w.k0 % 2 == 0 and w.srs % al == 0 and Affine.of(w.scale).const % al == 0
             and all(c * getattr(v, "align", 1) % al == 0
                     for v, c in Affine.of(w.scale).terms.items())))
+        # QUAD (t2): a chunk's four blocks a cycle from ACT rows j + c M (QACT DUP4)
+        quad = pair and getattr(st, "quad", False) and \
+            I.chunks_per_cycle(w.wf, True, True) <= portb
         # one MM per QACT range of the operand (an MM's rows read one Sa: docs/isa.md "MM"),
         # added up in the output: the first as asked (overwrite, ACC or ASCALE), the rest ACC;
         # RMAX on the last, whose written values are the sums
-        bpb = self.cfg.D if w.wf == I.W8 else self.cfg.D // 2   # streamed bytes per block
+        bpb = self.cfg.D // I.blocks_per_chunk(w.wf)            # streamed bytes per block
         parts = st.ranges()
         for i, (k0, k1) in enumerate(parts):
             if (k0 * bpb) % self.cfg.D:
-                raise CompileError(f"dot: a QACT range starting at block {k0} of 4-bit weights "
-                                   f"(their D-byte chunks hold two blocks): split the operand "
-                                   f"at even blocks")
+                raise CompileError(f"dot: a QACT range starting at block {k0} of 4-bit or t2 "
+                                   f"weights (their D-byte chunks hold two or four blocks): "
+                                   f"split the operand at whole chunks")
             first, last = i == 0, i == len(parts) - 1
             kp = 0 if unit or w.rsc else w.k0 + k0
             ppair = pair and kp % 2 == 0
+            pquad = quad and kp % 4 == 0
             m0 = 0
             for ab, mc in st.chunks:
                 ins = I.mm(sa + k0 * bpb, ssa, out.base + m0 * ors, N, k1 - k0, w.rs, ors, mc,
                            ab + k0, w.srs, unit=unit, acc=acc is not None or not first,
                            rmax=rowmax and last, wf=w.wf, pair=ppair, k0=kp, rsc=w.rsc,
+                           quad=pquad,
                            ascale=acc_scale.base if acc_scale is not None and first else None,
                            ra=ra, rb=rb,
                            comment=f"mm {M}x{K} . {N}x{K}^T"
                            + (f" part {k0}:{k1}" if len(parts) > 1 else "")
-                           + (" pair" if ppair else "") + (" +rowmax" if rowmax and last else "")
+                           + (" quad" if pquad else " pair" if ppair else "")
+                           + (" +rowmax" if rowmax and last else "")
                            + (" acc*=scale" if acc_scale is not None and first else ""))
                 self.emit(ins)
                 m0 += mc
@@ -1954,8 +1987,12 @@ class Builder:
         rs = x.rs if len(x.shape) == 2 else x.cols
         if not row_scale and x.cols // D > QST_KB_MAX:
             raise CompileError(f"QST of {x.cols // D} blocks without ROW: at most {QST_KB_MAX}")
+        # transposed rows (the V^T appends: consecutive rows at consecutive bytes, the columns
+        # a word-aligned stride apart) go through the quantizer's transposer, a word of four
+        # rows a cycle instead of a byte (docs/isa.md QST T; the bytes are the same)
+        t = QST_T and drs == 1 and es % 4 == 0 and es != 0 and x.cols <= I.QST_T_MAX
         self.emit(I.qst(x.base, dimm, simm, x.rows, x.cols // D, rs, drs, es, row=row_scale,
-                        half=half, rb=rb, rc=rc, comment="quantized store"))
+                        half=half, t=t, rb=rb, rc=rc, comment="quantized store"))
 
     def all_gather(self, x: Tile, S: int) -> Tile:
         x = self.materialize(x)
@@ -2084,25 +2121,29 @@ def slow_drains(prog, cfg, lanes: int | None = None) -> list:
     """The MMs of `prog` whose drain cannot keep up with their array: [(pc, comment)].
 
     The array consumes a streamed row's chunks once per group of MCOLS stationary rows (replay:
-    ceil(M / MCOLS) groups), KB advances a group (ceil(KB / 2) with PAIR). The drain writes a
+    ceil(M / MCOLS) groups), KB advances a group (ceil(KB / 2) with PAIR, ceil(KB / 4) with
+    QUAD). The drain writes a
     group's results, one a row at the output's row stride (ors), `lanes` a cycle (the MXU's
     epilogue lanes; production's MCOLS) from distinct TMEM banks only: its pick takes rows in
     order up to the first bank conflict (bank = address mod LANES). At a row stride that is a
     multiple of the banks, that is one a cycle. An MM is slow when its drain takes more steps a
     group than its array takes advances: W_down at KB 2 into a [16, 1152] tile loaded from DRAM
     (MiniCPM-V's tower: 40% of its pops). A fresh output and ol.empty / zeros / full give an odd
-    row stride, which spreads the rows over the banks."""
+    row stride, which spreads the rows over the banks. With MXROT (rotator ports) a row stride
+    that is not 1 mod LANES drains one result a step, whatever its banks."""
     lanes = lanes or cfg.MCOLS
     out = []
     for pc, ins in enumerate(prog):
         if ins.op != I.MM:
             continue
         ors, M, KB = ins.w[5] & 0xFFFF, (ins.w[5] >> 16) & 0xFF, (ins.w[3] >> 16) & 0xFF
-        adv = -(-KB // 2) if ins.flags & I.F_PAIR else KB
+        _, pair, quad = I.mm_format(ins)        # advances a group: QUAD four t2 blocks, PAIR two
+        adv = -(-KB // 4) if quad else -(-KB // 2) if pair else KB
         steps, j, rows = 0, 0, min(M, cfg.MCOLS)
+        run = 1 if (getattr(cfg, "MXROT", False) and ors % cfg.LANES != 1) else lanes
         while j < rows:
             banks = set()
-            while j < rows and len(banks) < lanes and (j * ors) % cfg.LANES not in banks:
+            while j < rows and len(banks) < run and (j * ors) % cfg.LANES not in banks:
                 banks.add((j * ors) % cfg.LANES)
                 j += 1
             steps += 1

@@ -280,6 +280,8 @@ def _gemma4(spec) -> bool:
 def unsupported(spec) -> str | None:
     """Why the golden cannot stand for this model's device, or None: a MoE's routers are int8
     in every format and its experts stream (Gemma 4 26B-A4B's too)."""
+    if type(spec).__module__.endswith(".gemma3"):
+        return "Gemma 3's golden hooks are not implemented; use tools/gemma3_check.py"
     if getattr(spec, "moe", None) is not None or getattr(spec, "experts", 0):
         return "MoE models are not supported (the routers' formats, the experts' streaming)"
     return None

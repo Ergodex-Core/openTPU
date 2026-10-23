@@ -127,8 +127,11 @@ compares order raw sign-magnitude bits (a NaN with the sign set is below `-inf`)
   `p[q] = +0 + x[q] + x[q+P] + x[q+2P] + ...` (left to right, each `+` an fp32 add), then a
   folding tree over the partials: `n = P/2, P/4, ..., 1: p[i] = p[i] + p[i+n]` for `i < n`.
   RSUM, RSSQ and RDOT use P = 64 over the columns and pad a row with +0 terms to a multiple
-  of 64 columns (each added: a -0 partial, from a sum that flushed, becomes +0). MM sums
-  exactly: an integer ("MM").
+  of 64 columns (each added: a -0 partial, from a sum that flushed, becomes +0). The order is
+  the definition's whatever the implementation's width: the RTL's VPU evaluates it on 16
+  lanes at any LANES (its 64 / LANES partial loop; past 16 lanes a chunk goes through in
+  sub-steps, the same bits, 16 elements a cycle: rtl/vpu/otpu_vpu.sv). MM sums exactly: an
+  integer ("MM").
 - `q8(x)`: round half to even to an integer, saturate to `[-127, 127]`; NaN gives 0 (a zero
   times an infinite `inv`, below).
 
@@ -182,7 +185,12 @@ Fields: `sa = R[ra]+w1` (streamed rows, bytes), `ssa = R[rb]+w2` (the weights' s
 bytes), `out = R[rc]+w3` (TMEM words), `N = w4[15:0]`, `KB = w4[23:16]`, `k0 = w4[31:24]` (the
 first block of the MM within the scale rows), `rs = w5` (row stride, bytes), `ors = w6[15:0]`
 (output row stride, words), `M = w6[23:16]`, `ab = w6[31:24]` (first ACT RAM block),
-`srs = w7` (scale row stride, bytes). Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
+`srs = w7` (scale row stride, bytes). `ors` is a layout choice with a rate behind it: the MXU
+drains a streamed row's M results, `ors` words apart, at as many a cycle as land in distinct
+TMEM banks (an odd stride: all of them; on a build with `MXROT`, Config.MXROT / CAPS2 bit7,
+whose MXU ports are rotators rather than a lane crossbar, only a stride `= 1 mod LANES` drains
+at full width and any other one result a cycle; the compiler lays fresh outputs out so, the
+results are the same either way; docs/vla_frequency_plan.md 6c). Flags: bit0 `UNIT` (no scale rows: `Sw = 1.0`, every
 `dw = 0` and `m = 1`; nothing is read at `ssa`), bit1 `ACC` (accumulate into `out`), bit2 `RMAX`
 (also write each output row's maximum: `T[out + M*ors + j] = fold(max, y[j][0..N-1])`, folded
 from `n = 0` like the `RMAX` VOP; the softmax row max comes for free from the MXU epilogue), bit3
@@ -266,6 +274,27 @@ together: `k0` is even and `ssa` and `srs` are multiples of 8 (WF 3: 16); with K
 chunk's second block word is read and ignored. ACC, RMAX and ASCALE are unchanged and write M
 rows.
 
+#### Packed int8 (PACK builds)
+
+A build with `PACK` (Config.PACK; CAPS2 bit6; docs/mxu_packing.md) computes int8 MMs (`WF = 0`)
+two weight rows at a time: the MXU's DSPs form `w[2p] + w[2p+1] * 2^19` in their pre-adders and
+each physical column yields output columns `n = 2p` and `2p+1` of a pass, so MCOLS physical
+columns are 2 MCOLS logical ones and an int8 MM takes `ceil(N/2) * KB * ceil(M / MCOLS)`
+advances instead of `N * KB * ceil(M / MCOLS)`, two chunks an advance (at `PORTB = 1` the stream
+feeds one chunk a cycle: an MM with `M <= MCOLS` runs at the port's rate, half the array's; from
+`M > MCOLS` on, the replayed passes hide it). Nothing in the encoding or in the loop above
+changes: every output is the same exact integer and the same fp32 epilogue (the lanes are
+split at the chain ends, before the block scales `B` apply; the ISA simulator ignores `PACK`),
+RMAX, ACC and ASCALE write the same words in the same order (rows `n`, `n+1` of each pass), an
+odd `N`'s last row runs alone, `M > MCOLS` needs the same `KB <= FIFO depth` (a replayed pair
+takes `KB` slots of a two-bank FIFO). The 4-bit formats, PAIR / QUAD and t2 run unpacked, one
+product a DSP, as on a build without `PACK`, at the physical MCOLS's rate. One contract: the
+packing is exact for weights in `[-127, 127]`, quant.py's int8 range; a weight byte of `-128` in
+row `2p+1` beside a negative weight at the same position of row `2p` wraps the DSP's 27-bit
+pre-adder and row `2p+1`'s product reads as `+128 * act` (docs/mxu_packing.md 3.4; the ISA
+simulator does not model it: a host writing int8 rows outside quant.py keeps `-128` out of them,
+or out of the odd rows). `-128` in row `2p`, or in row `2p+1` beside a weight `>= 0`, is exact.
+
 ### QACT
 
 `src = R[ra]+w1` (TMEM words), `rows = w2[7:0]` (at most ACT_ROWS), `ab = w2[15:8]`,
@@ -295,6 +324,15 @@ the other bytes of those beats while it runs. Flag bit1 `HALF` (`ROW` mode only)
 still the whole row's, but only elements `c < KB*D/2` are written (a V^T append of a head half
 as wide as its padded row, LFM2's 64 of 128, then writes its 64 real rows instead of 128
 byte-strided ones; a quantizer without `HALF` writes the zero padding too, which nothing reads).
+Flag bit2 `T` (transposed rows: `drs = 1`, `es` a non-zero multiple of 4, `KB*D <= 256`
+elements a row): the bytes are the same, but the quantizer writes them a word at a time, the
+four consecutive rows that share the word `dst + r*drs + c*es` lies in (rows `r` with the same
+`(dst + r) / 4`; the first and last groups of an instruction may hold fewer, written with byte
+enables) for each column `c`, through a four-row transposer, instead of a byte a cycle (the
+V^T appends of the KV cache: `compiler.store_quantized` sets it whenever the strides allow;
+`T` with `HALF` writes the columns `c < KB*D/2`). Without `T`, a QST whose elements are
+contiguous (`es = 1`) and whose rows are word aligned writes a word of four elements a cycle
+(the K appends), any other a byte a cycle.
 
 ### VOP
 

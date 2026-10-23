@@ -23,13 +23,24 @@ WF_SHIFT = 4
 # int8 | int4 / E2M1 with a 6-bit multiplier per D/4 | E2M1 with an E4M3 scale per D/8; every
 # format a per-row fp32 scale Sw and power-of-two offsets dw under it (MX, docs/mx_mxu.md)
 W8, W4I, W4F, WNV = 0, 1, 2, 3
-WFORMATS = {"int8": W8, "int4": W4I, "fp4": W4F, "nvfp4": WNV}
-MX_W = {W8: 16, W4I: 11, W4F: 11, WNV: 13}   # the shift window W of each format
-F_PAIR = 0x40                   # MM, 4-bit only: column reuse, two K-blocks per cycle and row
+# t2 (docs/ternary.md): 2-bit elements c - 1 in {-1, 0, 1, 2}, four per byte, int4's scale words
+# after a 16-byte header. Its encoding is WF = 1 with bit 0 of the row stride rs (a multiple of
+# D: bits 1:0 are free); WT2 is the assembler's name for it, not a WF code.
+WT2 = 4
+WFORMATS = {"int8": W8, "int4": W4I, "fp4": W4F, "nvfp4": WNV, "t2": WT2}
+MX_W = {W8: 16, W4I: 11, W4F: 11, WNV: 13, WT2: 11}   # the shift window W of each format
+RS_T2, RS_QUAD = 0x1, 0x2       # MM rs bits: t2 elements; QUAD (with PAIR): column reuse x4
+RS_MASK = 0x3                   # the rs bits that are flags (rs is a multiple of D >= 4; the
+                                # stride is rs & ~RS_MASK)
+F_PAIR = 0x40                   # MM: column reuse, two K-blocks per cycle and row (int8: PORTB 2)
 F_RSC = 0x80                    # MM: row scales only (each scale row is Sw[n]; dw 0, m 1)
 F_ROW, F_CSCALE, F_RSCALE = 0x1, 0x2, 0x4   # QACT (QST: F_ROW)
 F_DUP = 0x8                     # QACT: also write the rows to ACT rows rows..2*rows-1 (PAIR)
+F_DUP4 = 0x10                   # QACT: also to rows..4*rows-1, three copies (MM QUAD)
 F_HALF = 0x2                    # QST, ROW mode: write only the first half of each row
+F_T = 0x4                       # QST: transposed rows (drs 1, es a multiple of 4): four rows'
+                                #   bytes of a column written as one word (docs/isa.md QST)
+QST_T_MAX = 256                 # QST T: a row's most elements (the quantizer's transposer)
 F_RAW = 0x1                     # RLD: the word's bits (no fp32 -> int conversion)
 F_MUL = 0x2                     # RLD: times R[rb] + w2 (mod 2^32)
 F_BOUND = 0x4                   # RLD: w3 <= the value <= w4 (the waits pass's; the hardware ignores it)
@@ -388,20 +399,29 @@ def stream_hw_cfg(d: StreamDesc, flags: int = 0) -> dict | None:
 
 
 def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=False,
-       ascale=None, wf=W8, pair=False, k0=0, rsc=False, ra=0, rb=0, rc=0, comment=""):
+       ascale=None, wf=W8, pair=False, k0=0, rsc=False, quad=False, ra=0, rb=0, rc=0,
+       comment=""):
     """MM (docs/isa.md). With `ascale` (a TMEM address; needs unit and acc) the old accumulator
     is first multiplied by a per-row factor: y = T[out] * T[ascale + j] + a.w (the
     flash-attention rescale, done in the MXU epilogue). The address travels in the (unused)
     scale field. `wf`: the streamed weights' format (W8, W4I, W4F, WNV). `pair` (4-bit only):
     column reuse, ACT row j + m carries the odd K-blocks of row j ("Column reuse"). `k0`: the
     MM's first block within the scale rows at `ssa` (each row starts with its Sw). `rsc`: the
-    scale rows are Sw alone (one word a row: the K cache)."""
+    scale rows are Sw alone (one word a row: the K cache). `wf` WT2 (t2) is WF 1 with rs bit 0;
+    `quad` (t2 with pair): column reuse x4, ACT row j + c M carries the blocks k = c mod 4
+    (4 M <= MCOLS, k0 a multiple of 4), encoded as rs bit 1."""
     _check(0 < n < 65536 and 0 < kb < 256 and 0 < m < 256 and 0 <= ab < 256
            and 0 <= ors < 65536 and 0 <= k0 < 256,
            f"MM: n {n}, kb {kb}, m {m}, ab {ab}, ors {ors}, k0 {k0}")
-    _check(wf in (W8, W4I, W4F, WNV), f"MM: weight format {wf}")
-    _check(not pair or wf != W8, "MM: PAIR needs 4-bit weights")
+    _check(wf in (W8, W4I, W4F, WNV, WT2), f"MM: weight format {wf}")
     _check(not pair or k0 % 2 == 0, "MM: PAIR needs an even k0")
+    _check(not quad or (pair and k0 % 4 == 0), "MM: QUAD needs PAIR and k0 a multiple of 4")
+    _check(not rsc or wf != WT2, "MM: RSC does not take t2")
+    _check(rs & RS_MASK == 0, f"MM: rs {rs} is not a multiple of 4")
+    if wf == WT2:
+        rs, wf = rs | RS_T2, W4I
+    if quad:
+        rs |= RS_QUAD
     _check(not rsc or wf != WNV, "MM: RSC does not take NVFP4")
     if ascale is not None:
         _check(unit and acc, "MM: ASCALE needs UNIT and ACC")
@@ -415,25 +435,60 @@ def mm(sa, ssa, out, n, kb, rs, ors, m, ab, srs, unit=False, acc=False, rmax=Fal
                  comment=comment)
 
 
-def qact(src, rows, ab, kb, srs, row=False, cscale=None, rscale=None, dup=False, ra=0,
-         comment=""):
+def mm_format(ins) -> tuple[int, bool, bool]:
+    """An MM's (format, PAIR, QUAD): format W8, W4I, W4F, WNV or WT2 (WF 1 with rs bit 0)."""
+    wf = (ins.flags >> WF_SHIFT) & 3
+    rs = ins.w[4]
+    t2 = wf == W4I and bool(rs & RS_T2)
+    pair = bool(ins.flags & F_PAIR)
+    return (WT2 if t2 else wf), pair, pair and bool(rs & RS_QUAD)
+
+
+def blocks_per_chunk(wf: int) -> int:
+    return 1 if wf == W8 else 4 if wf == WT2 else 2
+
+
+def reuse(pair: bool, quad: bool) -> int:
+    """K-blocks an MM takes a cycle per output row: column reuse x1, x2 (PAIR), x4 (QUAD)."""
+    return 4 if quad else 2 if pair else 1
+
+
+def chunks_per_cycle(wf: int, pair: bool, quad: bool, pack: bool = False) -> float:
+    """The D-byte chunks an MM streams a cycle at the MXU's full rate: int8 PAIR 2, QUAD 4;
+    4-bit PAIR 1, QUAD 2; t2 QUAD 1. Column reuse (PAIR / QUAD) needs the port (at most
+    Config.PORTB). `pack` (Config.PACK, docs/mxu_packing.md): a packed MXU takes two int8 rows
+    an advance, 2 chunks a cycle for a plain int8 MM; a narrower port only halves its rate
+    (profile.py), it refuses nothing."""
+    if pack and wf == W8 and not pair and not quad:
+        return 2.0
+    return reuse(pair, quad) / blocks_per_chunk(wf)
+
+
+def qact(src, rows, ab, kb, srs, row=False, cscale=None, rscale=None, dup=False, dup4=False,
+         ra=0, comment=""):
     """QACT. `cscale`/`rscale`: TMEM addresses of a per-column / per-row factor applied before
     quantization, x' = (x * T[rscale + r]) * T[cscale + c]. `dup`: ACT row r + rows receives
     a copy of row r in the same cycles (the odd K-blocks' column of an MM PAIR)."""
     _check(0 < rows < 256 and 0 <= ab < 256 and 0 < kb < 65536,
            f"QACT: rows {rows}, ab {ab}, kb {kb}")
     fl = (F_ROW if row else 0) | (F_CSCALE if cscale is not None else 0) | \
-        (F_RSCALE if rscale is not None else 0) | (F_DUP if dup else 0)
+        (F_RSCALE if rscale is not None else 0) | (F_DUP if dup else 0) | (F_DUP4 if dup4 else 0)
+    _check(not (dup and dup4), "QACT: DUP or DUP4, not both")
     return Instr(QACT, ra=ra, flags=fl,
                  w=_w(src, rows | (ab << 8) | (kb << 16), srs, cscale or 0, rscale or 0),
                  comment=comment)
 
 
-def qst(src, dst, sdst, rows, kb, srs, drs, es, row=False, half=False, ra=0, rb=0, rc=0,
-        comment=""):
+def qst(src, dst, sdst, rows, kb, srs, drs, es, row=False, half=False, t=False, ra=0, rb=0,
+        rc=0, comment=""):
+    """t: the transposed store (F_T): rows at consecutive bytes (drs 1) and columns es (a
+    multiple of 4) apart, written a word of four rows at a time; a row at most QST_T_MAX
+    elements."""
     _check(0 < rows < 65536 and 0 < kb < 65536, f"QST: rows {rows}, kb {kb}")
     _check(row or not half, "QST: HALF needs ROW mode")
-    return Instr(QST, ra=ra, rb=rb, rc=rc, flags=(F_ROW if row else 0) | (F_HALF if half else 0),
+    _check(not t or (drs == 1 and es % 4 == 0 and es != 0), f"QST T: drs {drs}, es {es}")
+    return Instr(QST, ra=ra, rb=rb, rc=rc,
+                 flags=(F_ROW if row else 0) | (F_HALF if half else 0) | (F_T if t else 0),
                  w=_w(src, dst, sdst, rows | (kb << 16), srs, drs, es), comment=comment)
 
 

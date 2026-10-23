@@ -6,7 +6,7 @@
 //
 // Each row is read twice, both passes LANES elements a cycle (QST's pass 1: one byte, or a word
 // of four, a cycle), everything advancing on the cycles the TMEM grant is given:
-//   pass 0: read | prescale: (x*r)*c (2 multipliers) | chunk max (two stages, also per group
+//   pass 0: read | prescale: (x*r)*c (2 multipliers) | chunk max (three stages, also per group
 //           where a chunk holds several QACT groups) | fold: the row's max and the group maxes
 //           (a_g, kept in four RAMs: group g in RAM g%4, word g/4) | the scale unit (recip: 2
 //           Newton steps and the correction on multiply-add slots, then *127 and *1/127)
@@ -17,6 +17,17 @@
 //           block's first chunk its record {da3, da2, da1, da0, S}; QST: the bytes)
 // A row's pass 1 starts once its scale is out of the scale unit (and QST's scale row written);
 // the next row's pass 0 follows its pass 1 at once.
+//
+// QST T (docs/isa.md QST: transposed rows, drs 1 and es a multiple of 4, the V^T appends of the
+// KV cache): pass 1 reads LANES elements a cycle, as QACT's, and its bytes go to the transposer
+// instead of DRAM: two halves (the groups' parity) of LANES x XT words, lane l's word of chunk
+// c holding the four rows' bytes of element c LANES + l, byte s the row whose byte address
+// dst + r is s mod 4. A group is the rows that share a word (up to four; the first and last
+// of an instruction may hold fewer): at the group's last write the half is flushed to DRAM
+// port A a word a cycle (GW words: element c's four bytes at (dst + r) & ~3 + c es, the byte
+// enables the rows present), while the reader goes on with the next group in the other half
+// (its pass 1 waits if that half's flush has not finished). Without T a QST writes a byte a
+// cycle (a word a cycle where the elements are contiguous and the row word aligned: wide).
 //
 // QACT rows of up to XD x LANES elements go through the row buffer instead (XD > 0): pass 0
 // also pushes the prescaled chunks into a FIFO (block RAM, XD chunks) and the reader goes on to
@@ -133,6 +144,8 @@ module otpu_quant
   parameter int LANES = 8,
   parameter int GR    = 1024,               // group maxes of a row (QACT 4*KB, QST KB; not ROW)
   parameter int XD    = 1024,               // row buffer chunks (QACT rows <= XD*LANES); 0: none
+  parameter int TB    = 256,                // QST T: a row's most elements (isa.QST_T_MAX)
+  parameter bit T2    = 1'b0,               // QACT DUP4 (docs/ternary.md)
   parameter int SID   = 0
 ) (
   input  logic                    clk,
@@ -158,6 +171,7 @@ module otpu_quant
   output logic [31:0]             act_idx,
   output logic [LANES-1:0][7:0]   act_data,
   output logic                    act_dup,    // QACT DUP: also rows act_row + act_off
+  output logic                    act_dup4,   // QACT DUP4 (T2): also + 2 act_off, + 3 act_off
   output logic [7:0]              act_off,
   output logic                    asc_we,
   output logic [7:0]              asc_row,
@@ -187,6 +201,10 @@ module otpu_quant
   localparam int GA = $clog2(GWN);
   localparam int NB = 4;                    // row banks: group maxes and scales of rows in flight
   localparam int XW = (XD > 1) ? $clog2(XD) : 1;
+  localparam int LW = $clog2(LANES);
+  localparam int XT = TB / LANES;           // QST T: a half's chunks
+  localparam int XTW = (XT > 1) ? $clog2(XT) : 1;
+  initial if (TB % LANES != 0 || XT < 1) $fatal(1, "otpu_quant: TB a multiple of LANES");
   initial if (XD == 1 || (XD & (XD - 1)) != 0) $fatal(1, "otpu_quant: XD 0 or a power of two >= 2");
   initial if (D % LANES != 0 || (D & (D - 1)) != 0)
     $fatal(1, "otpu_quant: D a power of two, a multiple of LANES");
@@ -197,7 +215,7 @@ module otpu_quant
   wire en = gnt;
 
   // ------------------------------------------------------------------ command
-  logic        busy, is_st, rowm, csf, rsf, ackw, dup;
+  logic        busy, is_st, is_t, rowm, csf, rsf, ackw, dup, dup4;
   logic        bm;                           // QACT through the row buffer
   logic [31:0] csb, rsb, srs, drs, es;
   logic [15:0] rows, KB;
@@ -226,9 +244,10 @@ module otpu_quant
   logic        rd_done;
   logic        sw_ph;                        // QST: the scale row's writes
   logic [15:0] sw_i;                         // ... its word
-  // elements per read: QST pass 1 one byte (or one word) a cycle, everything else LANES
-  wire [31:0] ew = (is_st && pass) ? (wide ? 32'd4 : 32'd1) : 32'(LANES);
-  wire [31:0] bstep = wide ? 32'd4 : es;     // QST pass 1: badr per read
+  // elements per read: QST pass 1 one byte (or one word) a cycle, everything else LANES (QST T
+  // too: its pass 1 fills the transposer; badr stays the row's base, the group's word)
+  wire [31:0] ew = (is_st && pass && !is_t) ? (wide ? 32'd4 : 32'd1) : 32'(LANES);
+  wire [31:0] bstep = wide ? 32'd4 : is_t ? 32'd0 : es;   // QST pass 1: badr per read
   wire [31:0] Gr = pass ? GW : G;            // the elements of this pass
   wire rlast = (e + ew >= Gr);
   // the elements left in the row, Gr - e, kept alongside e (set wherever e or the pass moves):
@@ -250,7 +269,15 @@ module otpu_quant
   // buffered: a read needs a free FIFO entry, and row r's banks free (pass 1 of row r - NB done);
   // one LUT on the read enables' path
   wire xok = !bm || (!xocc[XW] && !dr[2]);
-  wire riss = busy && !ackw && !rd_done && !rd_wait && !sw_ph && xok;
+  // QST T: the reader's half (the group's parity) and the group's last row (the rows sharing
+  // a word: the row at byte 3 of its word, or the instruction's last); the flush state (below:
+  // tf_*, a flush pending, the half being flushed); a pass 1 read waits while its half is not
+  // free (a flush pending, or the half's flush running)
+  logic        tg;
+  wire         tgl = (brs[1:0] == 2'd3) || (32'(r) + 1 == 32'(rows));
+  logic        tf_pend, tf_act, tf_g;
+  wire         tok = !is_t || !pass || !(tf_pend || (tf_act && tf_g == tg));
+  wire riss = busy && !ackw && !rd_done && !rd_wait && !sw_ph && xok && tok;
 
   typedef struct packed {
     logic             v;
@@ -258,6 +285,8 @@ module otpu_quant
     logic [31:0]      e;         // element index within the row (of lane 0)
     logic             last;      // last chunk of the pass
     logic             glast;     // ... of the instruction
+    logic             tl;        // QST T: ... of the group (pass 1 of its last row)
+    logic             tg;        // QST T: the half
     logic [15:0]      row;
     logic [LANES-1:0] mask;
   } rm_t;
@@ -344,13 +373,20 @@ module otpu_quant
   endfunction
 
   // ------------------------------------------------------------------ pass 0: maxes
-  // The chunk's max over contiguous lanes in two registered stages: pairs, then the rest; on the
-  // way, the max of each QACT group the chunk holds (QN of PL lanes, where D/4 < LANES)
+  // The chunk's max over contiguous lanes in three registered stages: pairs, then eights (two
+  // more levels), then the rest (log2(LANES / 8) levels: three at 64 lanes, where the 64-lane
+  // tree in one stage, 20 logic levels, missed 200 MHz by 0.3 ns post-synthesis on f2-vla,
+  // docs/vla_frequency_plan.md 6c); on the way, the max of each QACT group the chunk holds (QN
+  // of PL lanes, where D/4 < LANES), taken at the level that completes it and carried. The
+  // row's max is a cycle later than with two stages: a row's pass 1 starts a cycle later.
   localparam int HL = LANES / 2;
+  localparam int H2 = (HL > 4) ? HL / 4 : 1;   // the second stage's maxes (8 lanes each)
   f32_t  ca [HL];
+  f32_t  cb [H2];
+  f32_t  pmb [QN];                             // group maxes complete after the second stage
   f32_t  cmax;
   f32_t  pmx [QN];
-  rm_t   mh, mc;
+  rm_t   mh, mi, mc;
   always_ff @(posedge clk) if (en) begin
     f32_t v [LANES];
     // xp is flushed (otpu_fmul), so clearing the sign is fabs
@@ -363,14 +399,28 @@ module otpu_quant
     f32_t pm [QN];
     for (int l = 0; l < HL; l++) v[l] = ca[l];
     for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 2];          // (PL 2: the pairs)
-    for (int s = 1; s < HL; s = s * 2) begin                      // v[l] covers 4s lanes after
+    for (int s = 1; s < HL && s < 4; s = s * 2) begin             // v[l] covers 4s lanes after
       for (int l = 0; l + s < HL; l = l + 2 * s)
         if (mgt(v[l + s], v[l])) v[l] = v[l + s];
       if (4 * s == PL) for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 2];
     end
+    for (int l = 0; l < H2; l++) cb[l] <= v[4 * l];               // (HL <= 4: v[0] alone)
+    pmb <= pm;
+    mi <= mh;
+  end
+  always_ff @(posedge clk) if (en) begin
+    f32_t v [H2];
+    f32_t pm [QN];
+    for (int l = 0; l < H2; l++) v[l] = cb[l];                    // v[l] covers 8 lanes
+    pm = pmb;
+    for (int s = 1; s < H2; s = s * 2) begin                      // v[l] covers 16s lanes after
+      for (int l = 0; l + s < H2; l = l + 2 * s)
+        if (mgt(v[l + s], v[l])) v[l] = v[l + s];
+      if (16 * s == PL) for (int p = 0; p < QN; p++) pm[p] = v[p * PL / 8];
+    end
     cmax <= v[0];
     pmx <= pm;
-    mc <= mh;
+    mc <= mi;
   end
 
   // the row's running max with this chunk folded in (a row's first chunk restarts it): the
@@ -493,9 +543,11 @@ module otpu_quant
     logic             sw;        // write the scale record (first chunk of a block)
     logic [15:0]      blk;
     logic [31:0]      da;        // the block's offsets {da3, da2, da1, da0}
-    logic             st;        // QST byte
-    logic [31:0]      baddr;     // QST byte address
+    logic             st;        // QST byte (T: a transposer write)
+    logic [31:0]      baddr;     // QST byte address (T: the row's, dst + r)
     logic             fin;       // last write of the instruction
+    logic             tl;        // QST T: the group's last write
+    logic             tg;        // QST T: the half
     logic [31:0]      sc;        // the row's S (the scale record)
   } wm_t;
   wm_t   wq, wqd;                            // at the multiplier input / at the write stage
@@ -553,7 +605,10 @@ module otpu_quant
         winv[l] = mb2.v ? invl[l] : invp[l];
       end
       wq.row = m.row[7:0];
-      wq.idx = (32'(ab) * D + m.e) & ~32'(LANES - 1);   // QACT: e steps by LANES (QST: unused)
+      // QACT: e steps by LANES (QST: unused; T: the element, its chunk the transposer's word)
+      wq.idx = is_st ? m.e : (32'(ab) * D + m.e) & ~32'(LANES - 1);
+      wq.tl = m.tl;
+      wq.tg = m.tg;
       wq.sw = !is_st && (m.e[DL-1:0] == 0);
       wq.blk = 16'(ab) + 16'(m.e >> DL);
       wq.da = mb2.v ? dal : dap;
@@ -608,6 +663,63 @@ module otpu_quant
   end
   otpu_qdly #(.W($bits(wm_t)), .N(LM + 2)) u_wq (.clk, .rst, .en, .d(wq_r), .q(wqd));  // ends in a flip-flop
 
+  // QST T: the transposer (two halves of LANES x XT words, a byte per row of the group), the
+  // halves' byte enables so far, and the flush: pending (tp_*: the half, its byte enables, the
+  // group's word address and whether it ends the instruction) from the group's last write,
+  // running (tf_*) a word a cycle, element c's word at the group's base + c es, while no scale
+  // row goes out (sw_ph takes port A first)
+  logic [31:0] tbuf [2][LANES][XT];
+  logic [3:0]  tbe [2];
+  logic        tp_g, tp_fin, tf_fin;
+  logic [3:0]  tp_be, tf_be;
+  logic [31:0] tp_base, tf_wa;
+  logic [31:0] tf_c;                         // the column being written
+  wire         tf_fire = tf_act && !sw_ph;   // the flush writes a word this cycle (under gnt)
+  wire         tf_last = (tf_c + 32'd1 >= GW);
+  logic [31:0] tf_word;
+  always_comb tf_word = tbuf[tf_g][tf_c[LW-1:0]][XTW'(tf_c >> LW)];
+  always_ff @(posedge clk) begin
+    if (rst || start) begin
+      tf_pend <= 1'b0; tf_act <= 1'b0; tf_g <= 1'b0; tf_c <= '0; tf_wa <= '0;
+      tbe[0] <= '0; tbe[1] <= '0; tp_g <= 1'b0; tp_be <= '0; tp_base <= '0; tp_fin <= 1'b0;
+      tf_be <= '0; tf_fin <= 1'b0;
+    end else if (en) begin
+      // the flush: starts the cycle after the group's last write once no flush runs
+      if (tf_act) begin
+        if (tf_fire) begin
+          tf_c <= tf_c + 32'd1;
+          tf_wa <= tf_wa + (es >> 2);
+          if (tf_last) tf_act <= 1'b0;
+        end
+      end else if (tf_pend) begin
+        tf_act <= 1'b1; tf_pend <= 1'b0;
+        tf_g <= tp_g; tf_be <= tp_be; tf_wa <= tp_base >> 2; tf_c <= '0; tf_fin <= tp_fin;
+      end
+      // the writes: lane l's byte of the chunk's word in the half, byte (dst + r) mod 4
+      if (busy && !ackw && wqd.v && wqd.st && is_t) begin
+        for (int l = 0; l < LANES; l++)
+          if (wqd.mask[l]) tbuf[wqd.tg][l][XTW'(wqd.idx >> LW)][8 * wqd.baddr[1:0] +: 8] <= qb[l];
+        tbe[wqd.tg] <= tbe[wqd.tg] | (4'b0001 << wqd.baddr[1:0]);
+        if (wqd.tl) begin
+          tf_pend <= 1'b1;
+          tp_g <= wqd.tg;
+          tp_be <= tbe[wqd.tg] | (4'b0001 << wqd.baddr[1:0]);
+          tp_base <= wqd.baddr & ~32'd3;
+          tp_fin <= wqd.fin;
+          tbe[wqd.tg] <= '0;
+        end
+      end
+    end
+  end
+`ifndef SYNTHESIS
+  // one group pending at a time (the reader's pass 1 waits on tf_pend), and a half is not
+  // written while its flush runs
+  always @(posedge clk) if (!rst && busy && en && wqd.v && wqd.st && is_t) begin
+    if (wqd.tl && tf_pend) $fatal(1, "otpu_quant: a second QST T group pending");
+    if (tf_act && tf_g == wqd.tg) $fatal(1, "otpu_quant: QST T half %0d written while flushed", wqd.tg);
+  end
+`endif
+
   // QST's scale row: S, then (not ROW) the d words: word j holds groups 4j .. 4j+3, the group
   // RAMs' word j (read the cycle before), the bytes of groups past KB 0
   logic [31:0] dword;
@@ -618,9 +730,10 @@ module otpu_quant
         dword[8*s +: 8] = {3'b0, dval(grd[s], amx_q[r[1:0]], 1'b0)};
   end
   // a DRAM write is waiting (independent of the grant, which the slice derives from it)
-  assign a_want = (busy && !ackw && wqd.v && wqd.st) || sw_ph;
+  assign a_want = (busy && !ackw && wqd.v && wqd.st && !is_t) || sw_ph || tf_act;
 
   assign act_dup = dup;
+  assign act_dup4 = T2 && dup4;
   assign act_off = rows[7:0];
 
   always_comb begin
@@ -628,7 +741,8 @@ module otpu_quant
     asc_we = 1'b0; asc_row = '0; asc_blk = '0; asc_data = '0;
     a_req = 1'b0; a_we = 1'b0; a_addr = '0; a_wdata = '0; a_be = '0;
     if (busy && !ackw && wqd.v) begin
-      if (wqd.st) begin
+      if (wqd.st && is_t) begin                   // (the transposer's write, above)
+      end else if (wqd.st) begin
         a_req = 1'b1;
         a_we = 1'b1;
         a_addr = wqd.baddr >> 2;
@@ -656,6 +770,13 @@ module otpu_quant
         end
       end
     end
+    if (tf_fire) begin                          // QST T: the flush's word
+      a_req = 1'b1;
+      a_we = 1'b1;
+      a_addr = tf_wa;
+      a_wdata = tf_word;
+      a_be = tf_be;
+    end
     if (sw_ph) begin
       a_req = 1'b1;
       a_we = 1'b1;
@@ -668,9 +789,10 @@ module otpu_quant
     end
   end
 `ifndef SYNTHESIS
-  // the scale row goes out between a row's passes: no data write is in flight then
+  // the scale row goes out between a row's passes: no data write is in flight then (QST T's
+  // transposer writes may be: they take no port A cycle)
   always @(posedge clk)
-    if (!rst && busy && sw_ph && wqd.v)
+    if (!rst && busy && sw_ph && wqd.v && !is_t)
       $fatal(1, "otpu_quant: a QST data write during the scale row");
 `endif
 
@@ -713,12 +835,15 @@ module otpu_quant
       kb = qst ? cmd.w4[31:16] : cmd.w2[31:16];
       nw = (32'(kb) + 32'd3) >> 2;                // d words of a scale row
       is_st <= qst;
+      is_t  <= qst && cmd.flags[2];
+      tg    <= 1'b0;
       rowm  <= cmd.flags[0];
       csf   <= !qst && cmd.flags[1];
       csb   <= cmd.w4;
       rsf   <= !qst && cmd.flags[2];
       rsb   <= cmd.w5;
       dup   <= !qst && cmd.flags[3];
+      dup4  <= T2 && !qst && cmd.flags[4];
       rows  <= nr;
       KB    <= kb;
       G     <= 32'(kb) * D;
@@ -741,6 +866,12 @@ module otpu_quant
       sbase <= cmd.w3;                           // QST sdst
       row_src <= cmd.w1;
       pass <= 1'b0; rd_wait <= 1'b0; wide <= 1'b0; sw_ph <= 1'b0; sw_i <= '0;
+`ifndef SYNTHESIS
+      if (qst && cmd.flags[2] && (cmd.w6 != 32'd1 || cmd.w7[1:0] != 2'd0 || cmd.w7 == 32'd0 ||
+                                  32'(kb) * D > TB))
+        $fatal(1, "otpu_quant: QST T: drs %0d (1), es %0d (a non-zero multiple of 4), %0d elements a row (at most %0d)",
+               cmd.w6, cmd.w7, 32'(kb) * D, TB);
+`endif
       m0a <= '0;
       st_frz <= '0;
       bm <= XD > 0 && !qst && 32'(kb) * D <= 32'(XD) * LANES;
@@ -766,6 +897,8 @@ module otpu_quant
         m0a.row <= r;
         m0a.mask <= rmask;
         m0a.glast <= pass && rlast && (32'(r) + 1 == 32'(rows));
+        m0a.tl <= is_t && pass && rlast && tgl;
+        m0a.tg <= tg;
         if (!rlast) begin
           e <= e + ew;
           rem <= rem - ew;
@@ -775,7 +908,7 @@ module otpu_quant
           e <= '0;
           rem <= G;
           badr <= brs;
-          wide <= is_st && es == 32'd1 && brs[1:0] == 2'd0;
+          wide <= is_st && !is_t && es == 32'd1 && brs[1:0] == 2'd0;
         end else begin                             // the next row (buffered: after pass 0)
           e <= '0;
           rem <= G;
@@ -783,6 +916,7 @@ module otpu_quant
           wide <= 1'b0;
           r <= r + 1;
           if (32'(r) + 1 == 32'(rows)) rd_done <= 1'b1;
+          if (is_t && tgl) tg <= ~tg;              // the next group: the other half
           brs <= brs + drs;
           badr <= brs + drs;
           row_src <= row_src + srs;
@@ -844,8 +978,9 @@ module otpu_quant
           rd_wait <= 1'b0;
         end else sw_i <= sw_i + 16'd1;
       end
-      // ---- the last write
-      if (wqd.v && wqd.fin) fin = 1'b1;
+      // ---- the last write (QST T: the last group's flush)
+      if (wqd.v && wqd.fin && !is_t) fin = 1'b1;
+      if (tf_fire && tf_last && tf_fin) fin = 1'b1;
       if (fin && is_st) begin
         ackw <= 1'b1;                              // the last write is taken this cycle
       end else if (fin) begin

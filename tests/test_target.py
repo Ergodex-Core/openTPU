@@ -73,7 +73,11 @@ def _hash_without_numerics(cfg) -> int:
     import hashlib
     import json
     d = dataclasses.asdict(cfg)
-    d.pop("SEQ_WC")                     # (a field that host's Config does not have)
+    d.pop("SEQ_WC")                     # (fields that host's Config does not have)
+    d.pop("T2")
+    d.pop("PORTB")
+    d.pop("PACK")
+    d.pop("MXROT")
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -375,7 +379,10 @@ def test_bcu1525_target_matches_its_rtl_defaults():
 
 
 def test_tech_families_define_the_same_cells():
-    """rtl/tech/<family>/ files define the same modules with the same ports and parameters."""
+    """rtl/tech/<family>/ files define the same modules with the same ports and parameters.
+    The packed position (otpu_pe_pk, docs/mxu_packing.md) exists in the generic and the
+    DSP48E2 families only: the DSP48E1's 25-bit pre-adder cannot pack a chain (a PACK build
+    on xilinx7 does not elaborate)."""
     def iface(path: Path) -> dict:
         txt = re.sub(r"//.*", "", path.read_text())
         mods = {}
@@ -384,9 +391,10 @@ def test_tech_families_define_the_same_cells():
             mods[m.group(1)] = (norm(m.group(2)), norm(m.group(3)))
         return mods
     ref = iface(ROOT / "rtl/tech/generic/otpu_tech_dsp.sv")
-    assert set(ref) == {"otpu_pe", "otpu_mxce"}
-    for fam in ("xilinx7", "xilinxus"):
-        assert iface(ROOT / f"rtl/tech/{fam}/otpu_tech_dsp.sv") == ref, fam
+    assert set(ref) == {"otpu_pe", "otpu_pe_pk", "otpu_mxce"}
+    assert iface(ROOT / "rtl/tech/xilinxus/otpu_tech_dsp.sv") == ref
+    x7 = iface(ROOT / "rtl/tech/xilinx7/otpu_tech_dsp.sv")
+    assert x7 == {k: v for k, v in ref.items() if k != "otpu_pe_pk"}
 
 
 # the DRAM's handshakes and read data that otpu_slice's units, loader and arbiters see only through
@@ -431,10 +439,10 @@ def test_the_slice_reads_dram_writes_through_the_sw_register():
     txt = (ROOT / "rtl/top/otpu_slice.sv").read_text()
     assert _slice_sw_uses(txt) == []
     # the check sees one: the quantizer's grant on the raw ready
-    bad = txt.replace("if (g == G_Q && q_awant && !sw_rdy_i) aok[g] = 1'b0;",
-                      "if (g == G_Q && q_awant && !sw_rdy) aok[g] = 1'b0;")
+    bad = txt.replace("if (g == G_Q && q_awant && !sw_rdy_i) apre[g] = 1'b0;",
+                      "if (g == G_Q && q_awant && !sw_rdy) apre[g] = 1'b0;")
     assert bad != txt and [t for _, t in _slice_sw_uses(bad)] == \
-        ["if (g == G_Q && q_awant && !sw_rdy) aok[g] = 1'b0;"]
+        ["if (g == G_Q && q_awant && !sw_rdy) apre[g] = 1'b0;"]
     # and a unit connected to the raw one implicitly (.wr_idle, as before the register)
     bad = txt.replace(".a_want(q_awant), .wr_idle(wr_idle_i),", ".a_want(q_awant), .wr_idle,")
     assert bad != txt and [t for _, t in _slice_sw_uses(bad)] == [".a_want(q_awant), .wr_idle,"]

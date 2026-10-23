@@ -27,6 +27,10 @@ PAIR = true
 DSTEP = true
 STREAM = true
 SEQ_WC = true                   # the sequencer's wait entries (WAITC v2, docs/seq_vpu.md; release r2):
+T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
+PACK = false                    # the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
+MXROT = false                   # the MXU's TMEM ports as rotators (otpu_slice MXROT; CAPS2 bit7; f2-vla's)
 #                                 the host loads them with every program; needs WIN <= 16
 
 [uarch]                         # timing only: RTL parameters the programs do not see

@@ -1,0 +1,76 @@
+# AWS EC2 F2 with the HBM, one slice on 16 channels (docs/f2_hbm.md): f2-hbm's build with NCH =
+# 16, so the slice's channels hold 16 x 512 MiB = 8 GiB (CFG_DRAM 33: the host's map and the
+# adapter, the bridges and the 34-bit HBM addresses span it) for Ternary-Bonsai-2-27B's t2 image
+# (~7.3 GiB) in one slice. The slice's programs still address 4 GiB (DRAM_BYTES: the ISA's DRAM
+# byte addresses are 32-bit registers; docs/f2_hbm.md, "Past 4 GiB a slice"), interleaved over
+# all 16 channels (the low 256 MiB of each), until that limit goes.
+
+[target]
+name = "f2-hbm16"
+kind = "fpga"
+platform_id = 6
+description = "AWS F2: xcvu47p (small shell), 1 slice x 16 HBM pseudo-channels (8 GiB), 200 MHz core, OCL + PCIS"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: what its 32-bit DRAM byte addresses reach
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
+PACK = false                    # the MXU packs two int8 weight rows a DSP (docs/mxu_packing.md; CAPS2 bit6)
+MXROT = false                   # the MXU's TMEM ports as rotators (otpu_slice MXROT; CAPS2 bit7; f2-vla's)
+
+[uarch]                         # the f2 target's (the YPCB card's m4)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 200.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 6 (TMEM: / 3)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0             # the AXI ports' clock (an MMCM from clk_hbm_ref: 900 MHz / 2)
+hostcal = false
+channels_per_slice = 16
+channel_bytes = 536870912       # a pseudo-channel: slice s's channel c at HBM byte (NCH s + c) x 512 MiB
+slice_bytes = 8589934592        # 16 x 512 MiB in the slice's channels (CFG_DRAM 33)
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"

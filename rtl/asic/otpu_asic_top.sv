@@ -46,7 +46,13 @@ module otpu_asic_top
   parameter int TMEM_PMP   = 0,         // 0 only: no 2x clock
   parameter int TMEM_PRK   = 0,
   parameter int TMEM_SDM   = -1,
+  parameter int TMEM_WARB  = 0,       // the VPU / MXU-drain write arbitration (otpu_slice)
+  parameter bit MXROT      = 1'b0,    // the MXU's TMEM ports as rotators (otpu_slice; CAPS2 bit7)
+  parameter int ACT_RAM    = 0,       // the ACT RAM's RAM style (otpu_slice: 0 auto, 1 block, 2 ultra)
+  parameter int TMEM_RAM   = 0,       // TMEM_IMPL 3's RAM style (otpu_slice: 0 / 1 block, 2 ultra)
+  parameter bit MXU_ARR    = 1'b0,    // the MXU's array side behind a registered boundary (otpu_slice)
   parameter bit SEQ_WC     = 1'b0,      // the sequencer's wait entries (otpu_slice)
+  parameter bit T2         = 1'b0,      // t2 weights, MM QUAD, QACT DUP4 (otpu_slice)
   parameter bit COLL_GATHER = 1'b1      // 0: the collective unit runs BAR alone (otpu_coll_bar)
 ) (
   input  logic                clk,
@@ -120,8 +126,8 @@ module otpu_asic_top
                .ULANES(ULANES), .HAS_DSTEP(HAS_DSTEP), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
                .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
-               .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM),
-               .SEQ_WC(SEQ_WC)) u_slice (
+               .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB), .MXROT(MXROT), .ACT_RAM(ACT_RAM), .TMEM_RAM(TMEM_RAM), .MXU_ARR(MXU_ARR), .COLL_GATHER(COLL_GATHER),
+               .SEQ_WC(SEQ_WC), .T2(T2)) u_slice (
     // clk_f: TMEM_PMP 0 (above), so no 2x clock
     .clk, .clk_f(1'b0), .sys_rst, .rst, .rinit(rinit_a), .ld_start, .ld_addr, .ld_n, .ld_busy,
     .a_rdy, .b_rdy, .sw_rdy, .wr_idle, .rd_idle,

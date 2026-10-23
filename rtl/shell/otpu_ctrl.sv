@@ -44,7 +44,8 @@
 //                      bit25 the run's arguments (ARG0..7), bit26 STREAM (the stream engine's
 //                      hardware subset, docs/stream.md; with DSTEP), bit27 the DDR3
 //                      controllers want the host's calibration (LiteDRAM:
-//                      opentpu/host/memcal.py), bit29 MX: the MX numerics (MM's exact
+//                      opentpu/host/memcal.py), bit28 T2: t2 weights, MM QUAD and QACT
+//                      DUP4 (docs/ternary.md), bit29 MX: the MX numerics (MM's exact
 //                      accumulation with power-of-two block scales, QACT / QST's offsets;
 //                      docs/isa.md, docs/mx_mxu.md; every bitstream since), bit30 GEN: the
 //                      decode loop's instructions
@@ -58,7 +59,11 @@
 //   0x58 ACT_ROWS  RO  ACT RAM rows: the most rows of one MM (build parameter; CAPS bit24)
 //   0x5C CAPS2     RO  (version 5; CAPS is full) bit0 GATHER: the collective unit runs GATHER
 //                      (always at S > 1; at S = 1 unless built without it, otpu_board COLL_GATHER:
-//                      then BAR alone, and a GATHER raises ERROR)
+//                      then BAR alone, and a GATHER raises ERROR); [5:1] the wide-port branch's PORTB / ROWLANES / ALINE (0 here); bit6 PACK: the MXU packs
+//                      two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md: an
+//                      int8 MM's rate doubles; no program or result changes); bit7 MXROT: the MXU's TMEM
+//                      ports are rotators, the drain writes its lanes at output row strides
+//                      = 1 mod LANES only (otpu_slice MXROT: the compiler's layout rule)
 //   0x60 + 4k      RW  ARG0..ARG7: the run's arguments, R8..R15 when RUN rises (CAPS bit25;
 //                      docs/isa.md "Arguments"); reset 0
 //   0x80 CFG_SLICES   RO  slices S (version 4: the configuration the target file built,
@@ -107,7 +112,11 @@ module otpu_ctrl #(
   parameter bit DSTEP = 1'b1,            // CAPS bit6 and bit26: the stream engine (DSTEP, STREAM)
   parameter bit HOSTCAL = 1'b0,          // CAPS bit27: the host calibrates the DDR3 controllers
   parameter bit COLL_GATHER = 1'b1,      // CAPS2 bit0 (with S > 1): the collective unit runs GATHER
-  parameter int LDP = 2,                 // cycles after LOAD before the loaders' busy shows (>= 2)
+  parameter bit T2 = 1'b0,               // CAPS bit28: t2 weights, MM QUAD, QACT DUP4
+  parameter bit PACK = 1'b0,             // CAPS2 bit6: the MXU packs two int8 weight rows a DSP
+  parameter bit MXROT = 1'b0,            // CAPS2 bit7: the MXU's TMEM ports are rotators (the drain's
+                                         //   lanes at output row strides = 1 mod LANES; otpu_slice)
+  parameter int LDP = 2,               // cycles after LOAD before the loaders' busy shows (>= 2)
   // the configuration registers (CFG_*, register map 4): the target's values
   parameter int S          = 1,
   parameter int TMEM_WORDS = 1 << 16,
@@ -187,13 +196,15 @@ module otpu_ctrl #(
   input  logic [4:0]  i2c_in
 );
   localparam int NFR = 13;
-  localparam logic [31:0] CAPS = {1'b1, 1'b1, 1'b1, 1'b0, HOSTCAL, DSTEP, 2'd3,  // bit31 WAITW, bit30 GEN, bit29 MX, bit27 HOSTCAL, bit26 STREAM, bit25 ARG, bit24 ACT_ROWS
+  localparam logic [31:0] CAPS = {1'b1, 1'b1, 1'b1, T2, HOSTCAL, DSTEP, 2'd3,  // bit31 WAITW, bit30 GEN, bit29 MX, bit28 T2, bit27 HOSTCAL, bit26 STREAM, bit25 ARG, bit24 ACT_ROWS
                                   8'($clog2(PQ_WIN)),
                                   8'(TRACE_DEPTH != 0 ? $clog2(TRACE_DEPTH) : 0),
                                   CHASH, DSTEP, 1'b1, 1'b1, DDR_MTS != 0, HAS_I2C, HAS_TEMP,
                                   TRACE_DEPTH != 0};
 
-  localparam logic [31:0] CAPS2 = {31'd0, COLL_GATHER || S > 1};   // bit0 GATHER
+  // bit7 MXROT, bit6 PACK; [5:1] reserved for the wide-port branch's PORTB [3:1], ROWLANES (4)
+  // and ALINE (5), 0 here; bit0 GATHER
+  localparam logic [31:0] CAPS2 = {24'd0, MXROT, PACK, 5'd0, COLL_GATHER || S > 1};
 
   logic [63:0] cycles;
   logic [31:0] n_brd, n_bwr, n_ard, n_awr, n_bst, scratch;

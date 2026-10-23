@@ -443,6 +443,14 @@ their side only) but adds the write's port-A conflict. Pumping removes the write
 the bypass; guests remove two askers; one RAM a bank removes the data select and leaves a bank
 compare per pair.
 
+At 64 lanes (f2-vla, docs/vla_frequency_plan.md 6b / 6c) the picture changes: the one copy
+synthesized to 424,760 LUTs, of which the MXU's two general-crossbar ports (`GEN_R` /
+`GEN_W`: 64 x 64 bank-row AND-OR trees and 2,048 64:1 lane selects) are ~300K by difference,
+the ten rotator ports and the arbitration ~120K. 6c makes the MXU's ports rotators whose lanes
+carry their own rows (`ROW_R` / `ROW_W`, otpu_slice `MXROT`): the drain's results sit `ors`
+words apart and at `ors = 1 mod LANES` lane k's bank is `(a0 + k) mod LANES`, the rotation
+pattern, so the rotator moves {enable, row} to the banks and the data back (~20K for the pair).
+
 ### 6.3 Out of context
 
 Placed and routed, xc7k480t-2, 133.33 MHz (and 266.67 MHz for the pumped RAMs, from an MMCM in

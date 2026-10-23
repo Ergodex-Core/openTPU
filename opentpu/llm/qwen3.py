@@ -42,7 +42,7 @@ from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, T
                         Words, current, k_scale_bytes, trace_fit)
 from . import formats as FM
 from . import generate as G
-from . import rope_parameters
+from . import rope_parameters, yarn_rope
 from . import snapshot as SN
 from ..isasim import Config, Machine, design_config
 from ..kernels.attention import Additive, Bucket, _attend_heads
@@ -53,6 +53,7 @@ from ..kernels import gather as GA
 from ..kernels.gather import gather_row, onehot, onehot_blocks
 from ..kernels.gather import operand as gather_operand
 from ..kernels.lib import rmsnorm, rope, rope_rows, sigmoid, softcap
+from ..kernels.hadamard import rotate
 from ..kernels.mlp import _chunk, down_chunk, swiglu_down
 from ..runtime import ALIGN
 
@@ -95,7 +96,13 @@ class Spec:
     @staticmethod
     def from_hf(model_dir) -> "Spec":
         c = json.loads((Path(model_dir) / "config.json").read_text())
-        rp = rope_parameters(c, model_dir)          # (Qwen3's YaRN: not supported)
+        rp = rope_parameters(c, model_dir, ("default", "yarn"))
+        theta = rp.get("rope_theta") or c.get("rope_theta") or 10000.0
+        hd = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
+        yarn = {}
+        if rp.get("rope_type", rp.get("type")) == "yarn":   # (Ternary-Bonsai's: factor 4 of 8192)
+            div, af = yarn_rope(rp, theta, hd, c.get("max_position_embeddings", 0))
+            yarn = dict(rope_div=div, rope_scale=af)
         if c.get("use_sliding_window"):
             raise ValueError(f"{model_dir}: sliding-window attention is not supported")
         if c.get("attention_bias"):
@@ -108,10 +115,10 @@ class Spec:
                     n_q=c["num_attention_heads"], n_kv=c["num_key_value_heads"],
                     head_dim=c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"],
                     ffn=c["intermediate_size"], vocab=c["vocab_size"], eps=c["rms_norm_eps"],
-                    theta=rp.get("rope_theta") or c.get("rope_theta") or 10000.0,
-                    tied=c.get("tie_word_embeddings", True),
+                    theta=theta, tied=c.get("tie_word_embeddings", True),
                     bos=c.get("bos_token_id", 151643),
-                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c))
+                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c),
+                    **yarn)
 
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
@@ -237,6 +244,13 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
+    from .bonsai2 import is_bonsai2
+    if is_bonsai2(model_dir):           # Ternary-Bonsai 2: a Qwen3.5 GGUF (prism-ml)
+        from .bonsai2 import Weights as Bonsai2Weights
+        return Bonsai2Weights(model_dir, mtp)
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma3", "gemma3_text"):
+        from .gemma3 import load_weights as gemma3_weights
+        return gemma3_weights(model_dir)
     if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
                                                                           "gemma4_text"):
         from .gemma4 import load_weights as gemma4_weights
@@ -947,7 +961,7 @@ class Image(EmbedHost):
         # W_down in column parts of the MLP's F chunk: each down MM streams one part, whose
         # scales are then contiguous (with row-major scales every row would cost a DRAM beat);
         # the chunk by W_down's format
-        self.dchunks = {fd: _chunk(self.f_loc, D, D if fd == "int8" else 2 * D)
+        self.dchunks = {fd: _chunk(self.f_loc, D, Q.per_chunk(fd) * D)
                         for fd in sorted({f[2] for f in self.lf})}
         self.dchunk = self.dchunks[self.lf[0][2]]
         self.bofs, self.bsize = {}, {}                  # per layout: offsets inside its block
@@ -1322,7 +1336,8 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     kv = lw.kv
     kpos = pos.pos if isinstance(pos, RunPos) else pos
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [1, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     sg = sigmoid(ol.dot(xs, lw.wgate)) if gated else None       # [1, nq_loc*d]
@@ -1372,14 +1387,15 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
         else:
             o_loc[r0:r1, :].set((acc / l[:, None]) * sg.reshape(G * nh, d)[r0:r1, :])
     o_all = ol.all_gather(o_row)                # [1, n_q*d], slice-major head order
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [1, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [1, H]
     return x + y
 
 
 def _mlp(x, lw, spec: Spec):
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_post), spec.eps))
-    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False))
+    rot = getattr(lw, "rot", None)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_post), spec.eps), rot))
+    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False), rot=rot)
     h_loc = lw.wd.shape[0]
     mine = slice(sid * h_loc, (sid + 1) * h_loc)
     return ol.all_gather(x[:, mine] + y)
@@ -1685,7 +1701,7 @@ def _lm_head(x, m, spec):
         ol.store(split, x)
         return
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(m.g_final), spec.eps), getattr(m, "rot", None)))
     chunk = min(HEAD_CHUNK, ol.tmem_words() // 8)
     sink = getattr(m, "lm_sink", None)
     for c0 in range(0, m.v_loc, chunk):
@@ -1746,7 +1762,8 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
     layer's prompt rows in a layer-major prefill, qwen35.qwen35_mtp_kv_run)."""
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     R = rows.R if isinstance(rows, RunRows) else len(rows)
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [R, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     q = None if kv_only else ol.dot(xs, lw.wq)  # [R, nq_loc*d]
@@ -1806,7 +1823,7 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
             cols = slice(h0 * d, min(nq, h0 + mc) * d)      # a time (TMEM)
             o[:, cols].set(o[:, cols] * sigmoid(ol.dot(xs, lw.wgate[cols, :])))
     o_all = ol.all_gather(o)                    # [R, n_q*d]
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [R, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [R, H]
     return x + y
 
 
@@ -1847,7 +1864,8 @@ def _lm_head_rows(x, m, spec, logit_rows):
         return
     sid = ol.program_id()
     a, e = logit_rows[0], logit_rows[-1] + 1
-    xs = ol.quantize(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps),
+                            getattr(m, "rot", None)))
     chunk = head_rows_chunk(e - a)
     sinks = getattr(m, "lm_sinks", None)
     for c0 in range(0, m.v_loc, chunk):
@@ -2060,7 +2078,7 @@ def fit_chunk(image, block: int, seq: int, p0: int, n: int, left: int, fit: int,
 
 def mxu_time(progs) -> float:
     """A run's MXU time, statically, in weight blocks: each MM's streamed rows times its K
-    blocks, half of that PAIRed (two 4-bit blocks a cycle), times its loops' counts (a loop
+    blocks, half of that PAIRed (two 4-bit blocks a cycle), a quarter with QUAD, times its loops' counts (a loop
     with a run-time count once); the slowest slice's."""
     best = 0.0
     for prog in progs:
@@ -2072,8 +2090,9 @@ def mxu_time(progs) -> float:
                 loops.append((pc + ins.w[0], ins.w[1] if ins.ra == 0 else 1))
             elif ins.op == I.MM:
                 mult = math.prod(c for _, c in loops)
+                wf, pair, quad = I.mm_format(ins)        # (QUAD: a t2 chunk, 4 blocks, a cycle)
                 t += mult * (ins.w[3] & 0xFFFF) * ((ins.w[3] >> 16) & 0xFF) * \
-                    (0.5 if ins.flags & I.F_PAIR else 1.0)
+                    (0.25 if quad else 0.5 if pair else 1.0)
         best = max(best, t)
     return best
 

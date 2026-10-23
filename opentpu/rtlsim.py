@@ -23,7 +23,7 @@ BUILD = ROOT / "build" / "verilator"
 RTL_SOURCES = [
     "vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_dram.sv", "mem/otpu_tmem.sv",
     "mem/otpu_native_dram.sv", "mem/otpu_actram.sv", "seq/otpu_seq.sv",
-    "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
+    "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu_arr.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
     "tech/generic/otpu_tech_ram.sv",
     "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv", "vpu/otpu_vpu.sv",
     "top/otpu_coll.sv", "exp/tmem_nocopy/otpu_tmem_model.sv", "top/otpu_slice.sv",
@@ -62,11 +62,28 @@ def build_dir(top: str, sources: list[Path], params: dict | None = None) -> Path
     return BUILD / f"{top}_{h.hexdigest()[:12]}"
 
 
+def _big_stack() -> None:
+    """(In the child, before exec) the stack limit raised to the hard limit: Verilator recurses
+    over a design's wide concatenations (the slice's 64-lane TMEM request arrays at f2-vla's
+    LANES 64: 8 ports x 64 lanes x 32 bits) deeper than the default 8 MB stack takes, and dies
+    (a 'Verilator internal fault' or, under Rosetta, 'unexpectedly need to EmulateForward on a
+    synchronous exception'); at 64 MB (macOS's hard limit) the same build passes."""
+    import resource
+    soft, hard = resource.getrlimit(resource.RLIMIT_STACK)
+    want = (1 << 30) if hard == resource.RLIM_INFINITY else hard
+    if soft != resource.RLIM_INFINITY and soft < want:
+        try:
+            resource.setrlimit(resource.RLIMIT_STACK, (want, hard))
+        except (ValueError, OSError):
+            pass
+
+
 def build(top: str, sources: list[Path], params: dict | None = None) -> Path:
     """Compile `top` with Verilator (--binary); cached (build_dir). The build runs in a
     temporary directory, renamed into place once linked, under a lock per build: a concurrent
     build of the same waits for it instead of running a half-linked executable, and a build
-    killed or failed leaves no executable for the next to take."""
+    killed or failed leaves no executable for the next to take. Verilator runs with the stack
+    limit raised (_big_stack: the 64-lane builds)."""
     params = params or {}
     out = build_dir(top, sources, params)
     exe = out / f"V{top}"
@@ -85,7 +102,7 @@ def build(top: str, sources: list[Path], params: dict | None = None) -> Path:
             cmd = ["verilator", *VFLAGS, "--top-module", top, "-Mdir", str(tmp)]
             cmd += [f"-G{k}={v}" for k, v in params.items()]
             cmd += [str(s) for s in sources]
-            r = subprocess.run(cmd, capture_output=True, text=True)
+            r = subprocess.run(cmd, capture_output=True, text=True, preexec_fn=_big_stack)
             if r.returncode != 0 and "linker command failed" in r.stdout + r.stderr:
                 # the parallel make occasionally archives a stale object: rebuild the archive once
                 for f in tmp.glob("*__ALL.a"):
@@ -176,12 +193,13 @@ if os.environ.get("OTPU_UARCH") == "board":
     UARCH = dict(BOARD_UARCH)
 # The MXU: the MX column's 2D systolic array, as the board builds it (weights hop column to
 # column; docs/mxu_systolic.md, docs/mx_mxu.md), the only dot product (OTPU_MXU=systolic, the
-# only value). OTPU_MXU_E: its epilogue lanes (otpu_mxu E; timing only, 0: MCOLS / 2).
+# only value). OTPU_MXU_E: its epilogue lanes (otpu_mxu E; timing only, 0: MCOLS / 2), over
+# the target's in the board uarch too (f2-vla's 32: a packed pass's two rows in two steps).
 if os.environ.get("OTPU_MXU", "systolic") != "systolic":
     raise ValueError("OTPU_MXU: the systolic MXU is the only one")
 UARCH["MXU_IMPL"] = 2
 if os.environ.get("OTPU_MXU_E"):
-    UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
+    UARCH["MXU_E"] = BOARD_UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
 # OTPU_QUANT_XD: the quantizer's row buffer in chunks (otpu_quant XD; timing only, 0: QACT reads
 # its rows from TMEM twice)
 if os.environ.get("OTPU_QUANT_XD"):
@@ -219,6 +237,13 @@ if os.environ.get("OTPU_TMEM_IMPL"):
 for _k in ("NSB", "SBP", "SBH", "RPL", "TDP", "GST", "PMP", "PRK", "SDM"):
     if os.environ.get("OTPU_TMEM_" + _k):
         UARCH["TMEM_" + _k] = int(os.environ["OTPU_TMEM_" + _k], 0)
+# OTPU_TMEM_WARB=0..3: the VPU / MXU-drain write arbitration (otpu_slice TMEM_WARB; timing only;
+# the target's in BOARD_UARCH, f2-vla's 3); in simulation +tm_warb=N overrides a build's
+if os.environ.get("OTPU_TMEM_WARB"):
+    UARCH["TMEM_WARB"] = BOARD_UARCH["TMEM_WARB"] = int(os.environ["OTPU_TMEM_WARB"])
+# OTPU_MXU_ARR=1: the MXU's array side behind a registered boundary (otpu_mxu ARR; timing only)
+if os.environ.get("OTPU_MXU_ARR"):
+    UARCH["MXU_ARR"] = BOARD_UARCH["MXU_ARR"] = int(os.environ["OTPU_MXU_ARR"])
 # TMEM lanes of the MXU and the quantizer when fewer than LANES (timing only): OTPU_ULANES=8
 if os.environ.get("OTPU_ULANES"):
     UARCH["ULANES"] = int(os.environ["OTPU_ULANES"])
@@ -265,12 +290,30 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "DRAM_WORDS": (dram_bytes or cfg.DRAM_BYTES) // 4, "DRAM_LAT": dram_lat,
          "LANES": cfg.LANES,
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
+    if getattr(cfg, "T2", False):       # t2 weights, MM QUAD, QACT DUP4 (otpu_slice T2; only
+        p["T2"] = 1                     # when on: the other builds' cache keys stay)
+    if getattr(cfg, "PACK", False):     # the MXU's int8 weight packing (otpu_mxu PACK)
+        p["PACK"] = 1
+    if getattr(cfg, "MXROT", False):    # the MXU's rotator TMEM ports (otpu_slice MXROT)
+        p["MXROT"] = 1
     p.update(UARCH)
     p.update(uarch or {})
-    if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
+    if axi == 1 and os.environ.get("OTPU_NCH"):
+        # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
+        # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
+        p["NCH"] = int(os.environ["OTPU_NCH"])
+    if p.get("TMEM_RPL") and p.get("RPB", 0) < _target.NRP * cfg.LANES:
+        # the board uarch's RPB is "every read lane" of the target's LANES (sim_uarch: NRP x
+        # max(16, LANES)); a simulation with more lanes than the target (OTPU_LANES, a test's
+        # Config at 64 on the card's target) keeps the replaying arbiter it implies (ARB_MASK:
+        # otpu_slice's TMEM_IMPL 3 check), so RPB follows the simulated lanes
+        p["RPB"] = _target.NRP * cfg.LANES
+    if p.get("TMEM_IMPL") == 3:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
-        # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
-        p["TMEM_SBP"] = max(3, (cfg.LANES - 1).bit_length())
+        # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4; a simulation with more
+        # lanes than the target (OTPU_LANES, a test's Config at 64 on f2-vla32's 32, whose toml
+        # states 5) raises the target's bit to its lanes' (timing only)
+        p["TMEM_SBP"] = max(int(p.get("TMEM_SBP", 3)), (cfg.LANES - 1).bit_length())
     return p
 
 
@@ -419,7 +462,9 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         args += ldc_plusargs(ldc, MEMORY["LDC_MHZ"])
     if boot:
         args += ["+boot", f"+boot_addr={at}", f"+boot_n={max(nins)}"]
-    r = run_sim(args, timeout=3600)
+    # the simulation's time limit: an hour, or OTPU_SIM_TIMEOUT seconds (the cut pi0.5 phases
+    # at the f2-vla sizes run for hours: tools/pi05_rtl.py)
+    r = run_sim(args, timeout=float(os.environ.get("OTPU_SIM_TIMEOUT", 3600)))
     out = r.stdout + r.stderr
     import re
     if os.environ.get("OTPU_TMEMSTAT_LOG"):   # the TMEM's read demand (docs/tmem_pump.md)
@@ -460,9 +505,9 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         # counters; reads and writes as (commands, beats) (a native command is one beat), ar_a:
         # the A runs and SW fill reads, rmw_a: the A and SW writes with a partial byte mask
         mem = [dict(zip(("rd", "wr", "row_miss", "rmw"), map(int, m))) for m in
-               re.findall(r"MEM ch\d rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
+               re.findall(r"MEM ch\d+ rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
         nat = [dict(kv.split("=") for kv in m.split()) for m in
-               re.findall(r"NATIVE ch\d (.*)", out)]
+               re.findall(r"NATIVE ch\d+ (.*)", out)]
         nat = [{k: int(v) for k, v in d.items()} for d in nat]
         stats["native"] = nat
         stats["axi_reads"] = [(m["rd"], m["rd"]) for m in mem]
