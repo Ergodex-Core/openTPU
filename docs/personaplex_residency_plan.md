@@ -42,10 +42,14 @@ KV at`0x10000–0x02110000` (34,603,008 bytes), a4MiB depth-KV reservation at
 `0x02110000–0x02510000`,16MiB activation/scratch at`0x02510000–0x03510000`, and
 remaining guard. Temporal KV derives from32 layers×32 heads×128 positions×
 (128 K bytes+4 K-scale bytes+128 V bytes+4 V-scale bytes).
-A possible padded depth layout with six layers,16 heads,128 physical positions
-and64-wide heads padded to128 uses3,244,032 bytes. This is a reservation, not a
-verified implementation of native depth context8/window/reset semantics. Codec
-state, prompt-cache capacity and complete activation liveness remain unverified.
+The compiled depth layout with six layers, 16 heads, 128 physical positions
+and 64-wide heads padded to 128 uses 3,244,032 bytes. The native runtime overrides
+JSON context8 to None and uses a 16-step cache; its final-step boundary defect
+excludes slot0. The [reusable depth layer](personaplex_depth_layer.md) implements
+that pinned policy, independent per-layer KV and reset. One checkpoint layer
+and synthetic composition are validated; six-layer checkpoint execution is not.
+Codec state, prompt-cache capacity and complete activation liveness remain
+unverified.
 
 The current Qwen-derived temporal layout interleaves KV within each layer's
 weight block (`opentpu/llm/qwen3.py`). It cannot be overwritten as a page. Refactor
@@ -80,17 +84,17 @@ correct halted paging before considering a separately qualified overlap scheme.
 
 ## Depth bank and codec limits
 
-Integer estimates from actual checkpoint tensor dimensions, `quant.row_bytes`,
-`quant.scale_bytes` and `kernels/mlp._chunk` give1,253,031,936 bytes for all16
-steps of the six-layer depth transformer at INT8, including norms and repeated
-chunk scales. Sixteen4096→1024 input projections add67,698,688 bytes; that payload
-has now been materialized and CPU/ISA-validated in the standalone depth-input
-stage. The transformer-bank estimate remains unmaterialized. B would
-hold1,320,730,624 bytes with21,446,656 bytes of slack before verified alignment,
-materialized quantization, compiler program area and final activation accounting.
-The step embeddings already reside in P. The standalone depth-input component
-now provides a way to test the projection and ragged embedding semantics; it
-does not establish that the complete depth bank or program fits.
+Measured six-layer layout and compilation give 1,253,031,936 bytes for all
+16 INT8 banks per layer, including shared norms and repeated chunk scales.
+The program uses 24,088 of 32,768 instruction words with no host arguments.
+One checkpoint layer has been materialized and executed; the full six-layer
+checkpoint payload has not. Sixteen 4096→1024 input projections add 67,698,688
+bytes, already materialized and CPU/ISA-validated. B would hold 1,320,730,624
+bytes with 21,446,656 bytes of slack. Programs, KV and interstage activations
+belong in P; the standalone layout must be relocated accordingly. Unified
+allocation/alignment checks and complete activation liveness remain pending.
+Step embeddings already reside in P. Individual capacity/compile evidence does
+not establish a working combined runtime or complete speech fit.
 
 Mimi remains unimplemented and unbudgeted: streaming convolution/transposed
 convolution, encoder/decoder attention, RVQ/codebook operations and streaming
@@ -112,7 +116,7 @@ allocation only. It is not proof that the complete speech model fits4GiB.
    submissions exchange only persistent addresses, never host activation math.
 3. Device final norm/text head stores its greedy text ID in a token slot.
 4. Depth step0 reads that ID, selects its projection/text embedding and runs
-   the six-layer depth program once implemented. Its audio head stores the
+   the compiled six-layer depth program after checkpoint/integration validation. Its audio head stores the
    greedy audio ID directly for the next step. Steps1–15 use device-selected
    projection/previous-audio embeddings and appropriate per-step weights/state.
 5. Update delayed stream queues on device. Add Mimi stages only after their
@@ -131,8 +135,8 @@ every context bucket; explicit IMEM/TMEM/WAITC budgets; packed-packet hash and
 generation identity; an empty/loading/ready/in-use/retired packet state machine;
 DMA-complete publication and drained retirement; failure-latched reset/replay;
 and transfer accounting split into weights/programs/control/PCM/diagnostics.
-Native depth ordering, cache restoration and prompt/delay scheduling still need
-implementation. Greedy is the explicit final mode; stochastic sampling/RNG is
+Native depth ordering and reset are implemented in the standalone layer; shared
+state relocation, complete prompt/delay scheduling and integration remain. Greedy is the explicit final mode; stochastic sampling/RNG is
 optional additional scope.
 
 ## Correctness, timing and hardware gate

@@ -9,7 +9,8 @@ Later development adds CPU/ISA-validated standalone device slices for resident
 RoPE/text-head/greedy selection and input embeddings/stored voice/audio heads.
 See [token slice](personaplex_token_slice.md) and
 [device components](personaplex_device_components.md), including later
-[depth conditioning](personaplex_depth_input.md). These were not part of the
+[depth conditioning](personaplex_depth_input.md) and a
+[reusable depth layer](personaplex_depth_layer.md). These were not part of the
 physical measurements below and do not make the hybrid server FPGA-only.
 
 ## Diagnosis and targeted source correction
@@ -106,7 +107,7 @@ Output NPY SHA-256 for both mixed backends is
 | Temporal transformer, KV and final norm | FPGA, measured above | Precision acceptance, context/capacity and latency improvements |
 | RoPE coefficients | Resident device table in the CPU/ISA-validated token slice; original temporal bridge computes on host | Qualified physical combined-path validation |
 | Text vocabulary projection | INT8 device head/greedy in the CPU/ISA-validated token slice; original server still uses CPU | Combined physical path and quality acceptance |
-| Depth projections, step embeddings, six-layer depth transformer and audio heads | Standalone device conditioning/audio-head programs validated on CPU/ISA; six-layer depth path remains CPU | Device transformer, per-codebook state, residency and chaining |
+| Depth projections, step embeddings, six-layer depth transformer and audio heads | Standalone conditioning/audio-head programs and one checkpoint depth layer validated on CPU/ISA; six-layer program compiled, integrated server remains CPU | Six-layer checkpoint correctness, unified state/residency and physical chaining |
 | Temperature, top-k and token sampling/RNG | Native CPU LMGen; device greedy is implemented in standalone heads | Explicit greedy-only final mode, or separately implement native stochastic mode |
 
 `personaplex_bridge.install_bridge` replaces only `lm.transformer` and

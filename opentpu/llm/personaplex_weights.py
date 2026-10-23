@@ -280,6 +280,57 @@ class _Layer(Mapping):
         return f.matrix(p + "gating.linear_out.weight", (h, ff))
 
 
+class _DepthStep(Mapping):
+    KEYS = ("wq", "wk", "wv", "wo", "wg", "wu", "wd")
+
+    def __init__(self, owner, layer, step):
+        self.owner, self.layer, self.step = owner, layer, step
+
+    def __iter__(self):
+        return iter(self.KEYS)
+
+    def __len__(self):
+        return len(self.KEYS)
+
+    def __getitem__(self, key):
+        if key not in self.KEYS:
+            raise KeyError(key)
+        dep, f = self.owner.config["depformer"], self.owner._depth_input_reader()
+        h, ff, count = dep["dim"], dep["dim_feedforward"], dep["num_steps"]
+        prefix = f"layers.{self.layer}."
+        if key in ("wq", "wk", "wv"):
+            start = self.step * 3 * h + ("wq", "wk", "wv").index(key) * h
+            return f.matrix(prefix + "self_attn.in_proj_weight", (count * 3 * h, h), (start, start + h))
+        if key == "wo":
+            start = self.step * h
+            return f.matrix(prefix + "self_attn.out_proj.weight", (count * h, h), (start, start + h))
+        gate = prefix + f"gating.{self.step}."
+        if key in ("wg", "wu"):
+            start = 0 if key == "wg" else ff
+            return f.matrix(gate + "linear_in.weight", (2 * ff, h), (start, start + ff))
+        return f.matrix(gate + "linear_out.weight", (h, ff))
+
+
+class _DepthLayer(Mapping):
+    def __init__(self, owner, layer):
+        self.owner, self.layer = owner, layer
+
+    def __iter__(self):
+        return iter(("norm1", "norm2", "steps"))
+
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, key):
+        if key == "steps":
+            return tuple(_DepthStep(self.owner, self.layer, i)
+                         for i in range(self.owner.config["depformer"]["num_steps"]))
+        if key not in ("norm1", "norm2"):
+            raise KeyError(key)
+        return self.owner._depth_input_reader().norm(
+            f"layers.{self.layer}.{key}.alpha", self.owner.config["depformer"]["dim"])
+
+
 class MLXWeights:
     """Lazy temporal layer dictionaries and a streaming iterator of CPU LM tensors.
 
@@ -423,6 +474,38 @@ class MLXWeights:
         entries = self.depth_conditioning_metadata()["embeddings"]
         reader = self._text_head_reader()
         return tuple(reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries)
+
+    def depth_layer_metadata(self, layer=0):
+        """Validate one depth layer's packed step banks without reading payloads."""
+        dep, reader = self.config["depformer"], self._depth_input_reader()
+        if type(layer) is not int or not 0 <= layer < dep["num_layers"]:
+            raise ValueError("depth layer index outside checkpoint")
+        h, ff, count = dep["dim"], dep["dim_feedforward"], dep["num_steps"]
+        prefix = f"layers.{layer}."
+        expected = [(prefix + "self_attn.in_proj_weight", (count * 3 * h, h)),
+                    (prefix + "self_attn.out_proj.weight", (count * h, h))]
+        expected += [(prefix + f"gating.{i}." + name, shape)
+                     for i in range(count) for name, shape in
+                     (("linear_in.weight", (2 * ff, h)), ("linear_out.weight", (h, ff)))]
+        result = []
+        for name, shape in expected:
+            item = reader.metadata(name)
+            if tuple(item["shape"]) != shape:
+                raise ValueError(f"{name}: invalid depth layer shape {item['shape']}")
+            if item["quantized"] and "depformer" not in self.config["quantization"]["quantized_components"]:
+                raise ValueError("depth layer quantization disagrees with config")
+            result.append(item)
+        for key in ("norm1", "norm2"):
+            item = reader.metadata(prefix + key + ".alpha")
+            if tuple(item["shape"]) not in ((h,), (1, 1, h)):
+                raise ValueError("invalid shared depth norm shape")
+            result.append(item)
+        return result
+
+    def depth_layer_weights(self, layer=0):
+        """Lazy canonical step dictionaries; no RoPE projection-row permutation."""
+        self.depth_layer_metadata(layer)
+        return _DepthLayer(self, layer)
 
     def host_checkpoint_fingerprint(self):
         """Invalidate a cached preflight if checkpoint files change on disk."""

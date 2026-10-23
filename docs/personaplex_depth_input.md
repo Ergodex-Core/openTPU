@@ -108,15 +108,17 @@ hashes and checkpoint/native-source metadata remained unchanged.
 
 ## Remaining gates
 
-The next device compute work is a bounded depth-transformer layer/state path
-with native per-step weights, attention context/window semantics, RMSNorm/SiLU
-and persistent KV. Full six-layer execution, stream/prompt/cache/delay scheduling,
-Mimi/RVQ and PCM validation remain. Prior temporal32.9% error and181.39ms/frame
+The later [reusable depth layer](personaplex_depth_layer.md) implements native
+per-step weights, RMSNorm/SiLU, attention and persistent device KV. One real
+checkpoint layer and reset are CPU/ISA-validated; six layers compile within the
+current program/memory limits. Full six-layer checkpoint execution, resident
+stage integration, stream/prompt/cache/delay scheduling, Mimi/RVQ and PCM
+validation remain. Prior temporal32.9% error and181.39ms/frame
 are still unaccepted; a correct conditioning stage does not establish quality.
 
 The [unified residency plan](personaplex_residency_plan.md) separates persistent
-state/tables from temporal and depth/codec weight overlays. Its offsets and depth
-bank are estimates pending real packed allocation and compilation. The prior
+state/tables from temporal and depth/codec weight overlays. Its unified offsets remain a design; standalone depth banks/programs now have
+measured allocation and compilation, while relocation and integration are pending. The prior
 three standalone images totaled5,270,028,288 bytes; adding this independent image
 would total5,594,951,680 bytes. A unified allocator must share the depth embedding
 tables and program/state areas rather than add independent images together.

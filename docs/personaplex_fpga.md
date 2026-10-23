@@ -13,6 +13,13 @@ The [resident temporal-to-token slice](personaplex_token_slice.md) adds resident
 RoPE, an INT8 text head and device greedy selection, with CPU/ISA validation
 kept separate from physical execution and full speech readiness.
 
+Later standalone [embedding/head](personaplex_device_components.md),
+[depth conditioning](personaplex_depth_input.md) and
+[depth-layer](personaplex_depth_layer.md) programs have CPU/ISA validation.
+One checkpoint depth layer now runs with device KV/reset; six-layer compilation
+fits, but full checkpoint execution and shared residency/chaining remain pending.
+The original hybrid server described below still uses host model components.
+
 ## Current implementation and validation boundary
 
 The port accepts `aufklarer/PersonaPlex-7B-MLX-4bit` directly on Linux. The MLX

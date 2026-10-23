@@ -320,6 +320,88 @@ def test_depth_input_projection_affine_int4_is_read_from_depformer_file(checkpoi
         np.testing.assert_array_equal(weights.depth_input_projections, np.stack(expected))
 
 
+def _depth_layer_fixture(checkpoint):
+    path, _, _ = checkpoint
+    owner = MLXWeights(path)
+    owner.config["depformer"].update(dim=128, num_steps=3, num_layers=2, dim_feedforward=256)
+    rng, values, reference = np.random.default_rng(531), {}, {}
+    shapes = {"self_attn.in_proj_weight": (3 * 3 * 128, 128),
+              "self_attn.out_proj.weight": (3 * 128, 128)}
+    shapes.update({f"gating.{i}." + name: shape for i in range(3) for name, shape in
+                   (("linear_in.weight", (512, 128)), ("linear_out.weight", (128, 256)))})
+    for key, shape in shapes.items():
+        q, scales, biases, expected = _quantized(rng, *shape)
+        name = "layers.0." + key
+        values[name] = q
+        stem = name[:-7] + ("_" if name.endswith("_weight") else ".")
+        values[stem + "scales"], values[stem + "biases"] = scales, biases
+        reference[key] = expected
+    for name in ("norm1", "norm2"):
+        values[f"layers.0.{name}.alpha"] = np.linspace(0.8, 1.2, 128, dtype=np.float32).reshape(1, 1, 128)
+    return path, owner, values, reference
+
+
+def test_depth_layer_reader_preserves_contiguous_step_qkv_gate_order_and_shared_norms(checkpoint, monkeypatch):
+    path, owner, values, reference = _depth_layer_fixture(checkpoint)
+    _save_file(values, path / "depformer.safetensors")
+    raw, reads = _TensorFile.raw, []
+    def read(reader, key, rows=None):
+        reads.append((key, rows))
+        assert reader.path.name == "depformer.safetensors" and key.startswith("layers.0.")
+        return raw(reader, key, rows)
+    monkeypatch.setattr(_TensorFile, "raw", read)
+    assert len(owner.depth_layer_metadata(0)) == 10
+    layer = owner.depth_layer_weights(0)
+    assert reads == [] and set(layer) == {"norm1", "norm2", "steps"}
+    np.testing.assert_array_equal(layer["norm1"], values["layers.0.norm1.alpha"].reshape(-1))
+    for step in range(3):
+        bank = layer["steps"][step]
+        assert set(bank) == {"wq", "wk", "wv", "wo", "wg", "wu", "wd"}
+        for part, name in enumerate(("wq", "wk", "wv")):
+            start = step * 384 + part * 128
+            np.testing.assert_array_equal(bank[name], reference["self_attn.in_proj_weight"][start:start + 128])
+        np.testing.assert_array_equal(bank["wo"], reference["self_attn.out_proj.weight"][step * 128:(step + 1) * 128])
+        np.testing.assert_array_equal(bank["wg"], reference[f"gating.{step}.linear_in.weight"][:256])
+        np.testing.assert_array_equal(bank["wu"], reference[f"gating.{step}.linear_in.weight"][256:])
+        np.testing.assert_array_equal(bank["wd"], reference[f"gating.{step}.linear_out.weight"])
+    with pytest.raises(KeyError):
+        _ = layer["steps"][0]["q_norm"]
+    with pytest.raises(KeyError):
+        _ = layer["final_norm"]
+    assert reads
+
+
+@pytest.mark.parametrize("fault", ["missing", "shape", "metadata", "nonfinite_norm", "nonfinite_matrix"])
+def test_depth_layer_reader_refuses_invalid_selected_checkpoint(checkpoint, fault):
+    path, owner, values, _ = _depth_layer_fixture(checkpoint)
+    key = "layers.0.gating.2.linear_in.weight"
+    if fault == "missing":
+        del values[key]
+    elif fault == "shape":
+        values[key] = values[key][:-1]
+    elif fault == "metadata":
+        del values["layers.0.gating.2.linear_in.scales"]
+    elif fault == "nonfinite_norm":
+        values["layers.0.norm1.alpha"][0, 0, 4] = np.nan
+    else:
+        values["layers.0.gating.2.linear_in.biases"][3, 0] = np.inf
+    _save_file(values, path / "depformer.safetensors")
+    with pytest.raises(ValueError):
+        layer = owner.depth_layer_weights(0)
+        if fault == "nonfinite_norm":
+            _ = layer["norm1"]
+        elif fault == "nonfinite_matrix":
+            _ = layer["steps"][2]["wg"]
+
+
+@pytest.mark.parametrize("index", [-1, 2, True, 0.0])
+def test_depth_layer_reader_rejects_bad_index(checkpoint, index):
+    path, owner, values, _ = _depth_layer_fixture(checkpoint)
+    _save_file(values, path / "depformer.safetensors")
+    with pytest.raises(ValueError, match="index"):
+        owner.depth_layer_weights(index)
+
+
 @pytest.mark.parametrize("fault", ["missing", "shape", "metadata"])
 def test_corrupt_checkpoint_is_refused(checkpoint, fault):
     path, _, values = checkpoint

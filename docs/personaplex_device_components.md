@@ -103,18 +103,19 @@ The later [depth conditioning slice](personaplex_depth_input.md) now implements
 device-selected `depformer_in[codebook]` (or the shared projection when configured),
 4096→1024 projection and text/previous-audio embedding addition. Its source
 references isolate projection quantization from exact embedding addition.
-The next compute gate is a bounded depth-transformer layer/state path, followed
-by all six layers with verified per-step banks and native context/window/reset
-semantics. The [unified residency plan](personaplex_residency_plan.md) supplies a
+The later [depth-layer slice](personaplex_depth_layer.md) validates one checkpoint
+layer with device step selection, persistent KV and native reset. Six layers
+compile within current memory/instruction limits; full checkpoint execution and
+resident integration remain pending. The [unified residency plan](personaplex_residency_plan.md) supplies a
 candidate fixed-state/paged-weight map and explicit host transport budget.
 
 The header-only checkpoint inventory found16 input projections
 `[1024,4096]` (268,435,456 expanded FP32 bytes), one text and15 audio step
 embedding tables (256,966,656 FP32 bytes), and216 depth-transformer tensors
 (4,932,550,656 expanded FP32 bytes). These are validated metadata counts, not
-device-layout estimates or a quantized lower bound. Even the next standalone
-conditioning slice needs an explicit packed-bank and residency budget. No
-depth program has been compiled, and no fit or numerical correctness is implied.
+device-layout estimates or a quantized lower bound. Later conditioning/depth
+slices supply measured standalone budgets and source-reference comparisons;
+this historical inventory alone does not prove residency or correctness.
 
 Mimi streaming convolution/transposed convolution, encoder/decoder attention,
 RVQ/codebooks and codec state still need a bounded lowering/capacity study; no
