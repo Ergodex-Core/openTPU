@@ -1,0 +1,68 @@
+{
+  "candidates": [
+    {
+      "name": "portb2-gemma3",
+      "commit": "a9acb2b05da2b0ddcdbb97254b2776ca2cee2c87",
+      "target": "f2-hbm",
+      "baseline_profile": "f2-hbm-burst200",
+      "queued_utc": "2026-10-16T13:46:11.180060+00:00",
+      "gates": {
+        "tests/test_wide_port_rtl.py": "53 passed (docs/wide_port.md, Verilator 5.048)",
+        "perf_qwen --layers 2 PORTB 1 vs 2": "2,798,478 vs 1,643,595 cycles (docs/wide_port.md); fresh receipts in hwloop-scratch/runs",
+        "visualsim": "prepared, not executed (seat)",
+        "lpn": "baseline graded (+0.88%; with the channels at 60 cycles +0.83%); candidate PORTB 2 graded +1.23% (the wide model, on the 96a90c2f export)"
+      },
+      "workload": {
+        "models": "gemma3-1b",
+        "max_tokens": 128,
+        "prompts": "tools/f2_bench.py SHORT and LONG"
+      },
+      "run_dir": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs/opentpu_portb2",
+      "status": "QUEUED_AWAITING_APPROVAL",
+      "lpn": {
+        "baseline": "lpn-estimate 2,823,232 cycles (upstream's model at Timing.dram_latency 8: +0.88% vs the 2,798,478-cycle PORTB 1 receipt; outside its validated configuration); the wide model with the NCH 8 channels at 60 cycles: 2,821,563, +0.83% vs 2,798,478 (graded on the 96a90c2f export, whose PORTB 1 receipt is identical)",
+        "candidate": "lpn-estimate 1,663,796 cycles, +1.23% vs the 1,643,595-cycle PORTB 2 receipt (graded; the wide model: port B as a credit of 2 chunks a cycle, 87,619 two-part reads of 1,242,880 counted from the addresses = the receipt's). The receipt on 96a90c2f (receipts/2026-10-17/opentpu96_portb2) is identical to a9acb2b0's: the LPN point stands for this candidate",
+        "receipts": [
+          "tools/hwloop/receipts/2026-10-16/lpn_gemma3_portb1 (upstream's model, PORTB 1)",
+          "tools/hwloop/receipts/2026-10-17/lpn96_portb2 (the wide model, PORTB 2; graded against opentpu96_portb2)",
+          "tools/hwloop/lpn/validated.json (the graded points and the export's RTL fingerprint)"
+        ],
+        "drift_rule": "an LPN point more than 5% from its Verilator receipt is uncalibrated; both points are inside"
+      }
+    },
+    {
+      "name": "portb4-rl4-int4-gemma3",
+      "commit": "96a90c2f",
+      "target": "f2-hbm:p4rl8",
+      "baseline_profile": "f2-hbm-burst200",
+      "queued_utc": "2026-10-16T19:55:39.894628+00:00",
+      "gates": {
+        "tests/test_wide_port_rtl.py": "53 + 43 row-lane tests bit-exact (docs/wide_port.md Row lanes, Verilator 5.048)",
+        "tests/test_rtl.py": "176 passed, mode off and on",
+        "perf_qwen --rowlanes whole model": "int4 RL 4 PORTB 4 MCOLS 8: 1,474,025 cycles = 135.7 tok/s at 200 MHz (f943c2b0); int8 RL 4: 2,393,990 = 83.5",
+        "lpn": "candidate graded: int4 RL 4 PORTB 4 MCOLS 8 +4.16% (4 layers + head), int8 RL 4 +4.11%; the whole-model estimates +1.95% (int4) / +2.10% (int8) against docs/wide_port.md's measured; the wide model on the 96a90c2f export",
+        "visualsim": "not prepared for this point"
+      },
+      "workload": {
+        "models": "gemma3-1b int4 (row-lane image) and int8",
+        "max_tokens": 128,
+        "prompts": "tools/f2_bench.py SHORT and LONG",
+        "baseline": "burst200 image 22.3 tok/s int8 PORTB 1"
+      },
+      "run_dir": null,
+      "lpn": {
+        "baseline": "lpn-estimate 2,821,563 cycles for the int8 PORTB 1 token (2 layers + head; the wide model with the NCH 8 channels at 60 cycles, +0.83% vs 2,798,478); the board baseline (burst200, 22.3 tok/s) is a board number, not modelled",
+        "candidate": "lpn-estimate 603,411 cycles for int4 RL 4 at PORTB 4 / MCOLS 8, 4 layers + head, +4.16% vs the 579,306-cycle receipt (graded; channel-bound in the model: RD 64 beats in flight a channel over a 74-cycle round trip, 0.865 beats a cycle); int8 RL 4 at PORTB 4: 988,507, +4.11% vs 949,485 (graded). Whole model (26 layers + head, --layers 0, no receipt in this repository, uncalibrated): int4 RL 4 1,502,766 cycles = 133.1 tok/s at 200 MHz, +1.95% of docs/wide_port.md's measured 1,474,025 (135.7 tok/s); int8 RL 4 2,444,351 = 81.8 tok/s, +2.10% of the measured 2,393,990 (83.5 tok/s)",
+        "receipts": [
+          "tools/hwloop/receipts/2026-10-17/lpn96_rl4_int4_mcols8 (graded against opentpu96_rl4_int4_mcols8: 579,306)",
+          "tools/hwloop/receipts/2026-10-17/lpn96_rl4_int8 (graded against opentpu96_rl4_int8: 949,485)",
+          "tools/hwloop/receipts/2026-10-17/lpn96_whole_rl4_int4 and lpn96_whole_rl4_int8 (--layers 0, estimates: no receipt in this repository)",
+          "tools/hwloop/lpn/validated.json"
+        ],
+        "drift_rule": "an LPN point more than 5% from its Verilator receipt is uncalibrated; both 4-layer points are inside (+4.1% / +4.2%); the whole-model points have no receipt here and are estimates"
+      },
+      "status": "QUEUED_AWAITING_APPROVAL"
+    }
+  ],
+  "note": "queued only; nothing scheduled or launched"
+}

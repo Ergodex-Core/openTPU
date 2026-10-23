@@ -1,0 +1,318 @@
+{
+  "label": "measured",
+  "kind": "verilator_rtl_decode_token",
+  "run_dir": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4",
+  "source": {
+    "tree": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f",
+    "command": [
+      "/Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python",
+      "tools/perf_qwen.py",
+      "--model",
+      "gemma3",
+      "--layers",
+      "2",
+      "--wformat",
+      "int8",
+      "--head-format",
+      "int8",
+      "--lat",
+      "60",
+      "--mhz",
+      "200.0",
+      "--json",
+      "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/perf.jsonl",
+      "--plus",
+      "+nat_trace=/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/nat_trace.txt",
+      "--portb",
+      "4"
+    ],
+    "env": {
+      "OMP_NUM_THREADS": "8",
+      "OTPU_NCH": "8",
+      "OTPU_TARGET": "f2-hbm"
+    },
+    "shell": "cd /Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-96a90c2f && OMP_NUM_THREADS=8 OTPU_NCH=8 OTPU_TARGET=f2-hbm /Users/rachittibrewal/ergodex-03/bonsai2-venv/bin/python tools/perf_qwen.py --model gemma3 --layers 2 --wformat int8 --head-format int8 --lat 60 --mhz 200.0 --json /Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/perf.jsonl --plus +nat_trace=/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/nat_trace.txt --portb 4",
+    "exit_code": 0,
+    "wall_s": 382.91515404099846,
+    "status": "OK"
+  },
+  "summary": {
+    "layers": "2",
+    "pos": 9,
+    "bw_pct": 100,
+    "lat": "60",
+    "cycles": 1308691,
+    "sim_wall_s": 369,
+    "roofline_cycles": 925224,
+    "portb_chunks": 2787778,
+    "porta_cycles": 695728,
+    "mxu_cycles": 925224,
+    "roofline_efficiency": 0.7070000000000001,
+    "channels": [
+      {
+        "reads": 705394,
+        "writes": 2178,
+        "porta_reads": 452,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705105,
+        "writes": 2049,
+        "porta_reads": 318,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705138,
+        "writes": 2049,
+        "porta_reads": 319,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705395,
+        "writes": 2178,
+        "porta_reads": 452,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705112,
+        "writes": 2049,
+        "porta_reads": 318,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705432,
+        "writes": 2177,
+        "porta_reads": 452,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705427,
+        "writes": 2179,
+        "porta_reads": 454,
+        "row_opens": 0,
+        "rmw": 0
+      },
+      {
+        "reads": 705137,
+        "writes": 2049,
+        "porta_reads": 319,
+        "row_opens": 0,
+        "rmw": 0
+      }
+    ],
+    "mxu_starved_cycles": 9321,
+    "mxu_starved_pct": 0.7,
+    "mxu_blocked_pct": 27.6,
+    "mxu_mac_pct": 70.7,
+    "read_beats_per_cycle_per_channel": 2.156,
+    "useful_bytes": 367951096,
+    "useful_roofline_cycles": 718654,
+    "port_bytes_per_cycle": 512,
+    "core_mhz": 200.0,
+    "ms_per_token": 6.54,
+    "tok_s_device": 152.8,
+    "unit_busy_pct": {
+      "DMA": 3,
+      "MXU": 100,
+      "QUANT": 1,
+      "VPU": 3
+    },
+    "portb_busy_pct": 71,
+    "portb_mxu_chunks": 925224,
+    "portb_dma_chunks": 8778,
+    "phases": {
+      "other": {
+        "cycles": 1102475,
+        "share_pct": 84.2,
+        "bytes": 312486912,
+        "roofline_cycles": 2441304,
+        "vpu_busy": 552,
+        "mxu_busy": 1101913
+      },
+      "MLP": {
+        "cycles": 180451,
+        "share_pct": 13.8,
+        "bytes": 49287168,
+        "roofline_cycles": 385056,
+        "vpu_busy": 26586,
+        "mxu_busy": 180729
+      },
+      "attention": {
+        "cycles": 25763,
+        "share_pct": 2.0,
+        "bytes": 6177016,
+        "roofline_cycles": 48258,
+        "vpu_busy": 6772,
+        "mxu_busy": 25528
+      }
+    },
+    "mxu_gaps": {
+      "prologue": 1216,
+      "epilogue": 1079,
+      "gaps": 9187
+    },
+    "wide_reads_line": "wide port B reads: 631808 of 2485760 chunks, 358331 in two parts (a pair twice)"
+  },
+  "perf_json": {
+    "model": "gemma3",
+    "wformat": "int8",
+    "head": "int8",
+    "rows": 0,
+    "batch": 0,
+    "pos": 9,
+    "layers": "2",
+    "mcols": 4,
+    "hack": "",
+    "hacked": {},
+    "cycles": 1308691,
+    "instructions": 276,
+    "busy": {
+      "DMA": 37748,
+      "MXU": 1307595,
+      "QUANT": 9193,
+      "VPU": 33910,
+      "COLL": 0
+    },
+    "se_busy": 0,
+    "vop": {
+      "add": [
+        59,
+        6396,
+        4207
+      ],
+      "copy": [
+        2,
+        52,
+        2
+      ],
+      "exp2": [
+        18,
+        5922,
+        5184
+      ],
+      "exp2sub": [
+        4,
+        632,
+        54
+      ],
+      "fill": [
+        10,
+        1700,
+        452
+      ],
+      "max": [
+        2,
+        18,
+        2
+      ],
+      "mul": [
+        142,
+        15738,
+        11503
+      ],
+      "recip": [
+        20,
+        4456,
+        3460
+      ],
+      "rsqrt": [
+        13,
+        1459,
+        52
+      ],
+      "rssq": [
+        13,
+        2205,
+        1616
+      ],
+      "rsum": [
+        2,
+        178,
+        64
+      ],
+      "sub": [
+        4,
+        654,
+        160
+      ]
+    },
+    "phases": {
+      "other": {
+        "cycles": 1102475,
+        "portb": 2367576,
+        "porta": 2359296,
+        "MXU": 1101913,
+        "VPU": 552,
+        "SE": 0,
+        "bytes": 312486912
+      },
+      "attention": {
+        "cycles": 25763,
+        "portb": 46810,
+        "porta": 47152,
+        "MXU": 25528,
+        "VPU": 6772,
+        "SE": 0,
+        "bytes": 6177016
+      },
+      "MLP": {
+        "cycles": 180451,
+        "portb": 373392,
+        "porta": 373248,
+        "MXU": 180729,
+        "VPU": 26586,
+        "SE": 0,
+        "bytes": 49287168
+      }
+    },
+    "mxu_gaps": {
+      "prologue": 1216,
+      "epilogue": 1079,
+      "gaps": 9187,
+      "blame": {
+        "QACT": 9187
+      }
+    },
+    "roofline": 2787778
+  },
+  "memory_trace": {
+    "window_cycles": 1024,
+    "channels": 8,
+    "reads": 5642140,
+    "writes": 16908,
+    "first_cycle": 9,
+    "last_cycle": 1308897,
+    "active_span_cycles": 1308889,
+    "beats_per_cycle": 4.3235507365406844,
+    "max_outstanding_reads_est": 319,
+    "idle_gaps_over_64": 17,
+    "idle_cycles_in_gaps": 3019,
+    "csv_rows": 1279,
+    "csv": "/Users/rachittibrewal/ergodex-03/hwloop-scratch/runs96/portb4/mem_windows.csv",
+    "csv_sha256": "0eee315226429d578b3fc37cb5941fecfbd2454232e2fe86f20e4a43dece7cf7"
+  },
+  "derived": {
+    "cycles": 1308691,
+    "core_mhz": 200.0,
+    "device_ms_per_token": 6.543455,
+    "device_tok_s": 152.82446352882383,
+    "dram_read_bytes": 361096960,
+    "dram_write_bytes": 1082112,
+    "dram_bytes": 362179072,
+    "beats": 5659048,
+    "bytes_per_cycle": 276.7491118988363,
+    "achieved_GBps": 55.34982237976727,
+    "portb_chunk_bytes": 128,
+    "portb_utilization": 2.1302033864372873,
+    "roofline_efficiency": 0.7070000000000001,
+    "mxu_starved_cycles": 9321,
+    "mxu_blocked_pct": 27.6,
+    "note": "device cycles of one decode token at the run's position; no host, no sampling"
+  }
+}

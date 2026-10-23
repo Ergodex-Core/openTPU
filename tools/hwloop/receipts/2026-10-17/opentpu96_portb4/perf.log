@@ -1,0 +1,55 @@
+waits: slice 0: 276 instructions, 475 visits, 0 loops widened, 0 unreached
+layers=2 pos=9 bw=100% lat=60: 1308691 cycles (369s sim), core-port roofline 925224 cycles (port B 2787778 chunks / 4 a cycle, port A 695728, MXU 925224), efficiency 70.7%
+DRAM read / write beats per channel: 705394 / 2178, 705105 / 2049, 705138 / 2049, 705395 / 2178, 705112 / 2049, 705432 / 2177, 705427 / 2179, 705137 / 2049; dram=off
+MXU starved (chunk FIFO empty while streaming, the card's MXU_STARVE) 9321 cycles = 0.7%; blocked (chunks but no MAC) 27.6%; MAC 70.7%; DRAM read beats/cycle/channel 2.156
+wide port B reads: 631808 of 2485760 chunks, 358331 in two parts (a pair twice)
+  ch0: port A reads 452, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch1: port A reads 318, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch2: port A reads 319, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch3: port A reads 452, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch4: port A reads 318, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch5: port A reads 452, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch6: port A reads 454, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+  ch7: port A reads 319, DDR3 row opens 0, read-modify-writes 0 (port A / QST 0)
+MXU scale lines: 924712 requests (9435.8 per MM), 0 for a row's Sw alone (0.0%)
+useful bytes 367951096 -> 718654 cycles at 512 B/cycle x 100% (the core's port): efficiency 54.9%
+at 200 MHz: 6.54 ms/token, 152.8 tok/s (simulated cycles, no host time)
+gemma-3-1b-it: 1308691 cycles, roofline 2787778 (213.0% of roofline)
+  slice 0 unit busy: DMA 3%  MXU 100%  QUANT 1%  VPU 3%
+  slice 0 DRAM port B busy 71% (MXU 925224, DMA 8778)
+phases: cycles, share, useful bytes -> cycles at 100% (their roofline), VPU busy, MXU busy
+  other          1102475  84.2%   312486912 B ->   2441304 (221.4%)  VPU       552  MXU   1101913
+  MLP             180451  13.8%    49287168 B ->    385056 (213.4%)  VPU     26586  MXU    180729
+  attention        25763   2.0%     6177016 B ->     48258 (187.3%)  VPU      6772  MXU     25528
+MM by source: count, chunks, release->end cycles, scale lines, of them Sw alone
+  gemma4.py:1968 gemma4_step                             32   2359296   1104439    786432         0
+  mlp.py:67 swiglu_down                                  32    221184    107242     73728         0
+  gemma4.py:1726 _dense                                  18    124416     66825     41472         0
+  gemma4.py:1944 layer                                    8     46080     19502     13824         0
+  mlp.py:63 swiglu_down                                   4     27648     11386      9216         0
+  attention.py:279 _attend_heads                          2       512       772         0         0
+  attention.py:247 prime                                  2        40       126        40         0
+MXU prologue 1216 epilogue 1079 gaps 9187
+  gap     3144  after QACT   pc=   77 gemma4.py:1725 _dense
+  gap     1572  after QACT   pc=   10 gemma4.py:1665 _attention
+  gap     1572  after QACT   pc=  210 qwen3.py:1909 _lm_head_rows
+  gap     1301  after QACT   pc=   43 attention.py:117 __init__
+  gap      916  after QACT   pc=   62 gemma4.py:1705 _attention
+  gap      682  after QACT   pc=   54 attention.py:199 _finish
+  MM      n=    98 busy=  1324176 work=   925224 wait_dep=  1982105 wait_unit=  5644963
+  ST      n=    32 busy=    34461 work=    32768 wait_dep=  7826169 wait_unit=        0
+  VOP.mul n=   142 busy=    15738 work=    11503 wait_dep=   990201 wait_unit=     1120
+  QACT    n=    29 busy=     7807 work=     6176 wait_dep=   196393 wait_unit=      912
+  VOP.add n=    59 busy=     6396 work=     4207 wait_dep=   432038 wait_unit=      232
+  VOP.exp2 n=    18 busy=     5922 work=     1728 wait_dep=   153625 wait_unit=        0
+  VOP.recip n=    20 busy=     4456 work=     1730 wait_dep=   157643 wait_unit=        0
+  LD      n=    17 busy=     3290 work=     1636 wait_dep=     2340 wait_unit=     1238
+  VOP.rssq n=    13 busy=     2205 work=     1616 wait_dep=    84857 wait_unit=        2
+  VOP.fill n=    10 busy=     1700 work=      452 wait_dep=       20 wait_unit=     2964
+  VOP.rsqrt n=    13 busy=     1459 work=       13 wait_dep=    73367 wait_unit=        0
+  QST     n=     4 busy=     1388 work=     1152 wait_dep=    15853 wait_unit=        0
+  VOP.sub n=     4 busy=      654 work=      160 wait_dep=    12502 wait_unit=      144
+  VOP.exp2sub n=     4 busy=      632 work=       18 wait_dep=     5140 wait_unit=        4
+  VOP.rsum n=     2 busy=      178 work=       16 wait_dep=     2096 wait_unit=       44
+  VOP.copy n=     2 busy=       52 work=        2 wait_dep=     2368 wait_unit=        0
+  VOP.max n=     2 busy=       18 work=        2 wait_dep=     2822 wait_unit=        0

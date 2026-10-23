@@ -1,0 +1,62 @@
+{
+  "label": "measured",
+  "kind": "verilator_rtl_pinned_config",
+  "tree": "/Users/rachittibrewal/ergodex-03/lpn-scratch/openTPU-lpn-pin",
+  "revision": "f237dab2f196855a59a083b1454786df8f01291f",
+  "verilator": "Verilator 5.048 2026-04-26 rev vUNKNOWN-built20260426",
+  "vflags": [
+    "--binary",
+    "-j",
+    "8",
+    "-Wno-fatal",
+    "-Wno-WIDTHEXPAND",
+    "-Wno-WIDTHTRUNC",
+    "-Wno-UNUSEDSIGNAL",
+    "-Wno-UNUSEDPARAM",
+    "-O3",
+    "--x-assign",
+    "0",
+    "--x-initial",
+    "0"
+  ],
+  "dram_lat": 8,
+  "uarch": "tb_top default",
+  "memory": "behavioral otpu_dram.sv, axi=False",
+  "config": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 4,
+    "ACT_BLOCKS": 128,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 536870912,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": false,
+    "STREAM": false,
+    "ACT_ROWS": 16,
+    "SEQ_WC": false
+  },
+  "cycles": 2797992,
+  "instructions_dynamic": [
+    475
+  ],
+  "build_s": 139.41192933399907,
+  "run_s": 469.94212445799894,
+  "isa_s": 5.8428080000012415,
+  "rtl_matches_pin_isa_simulator": true,
+  "identical_prog_hex": {
+    "prog_0.hex": true
+  },
+  "pin_isa": {
+    "dram_sha256": "bfceef4b77d6a887155cafe9c2d12126d2515de2107e4b813a7caa01907ff913",
+    "tmem_sha256": "76314b416b18853a9611e4f1501d900c503bdc33e00fd2561ccc702e800602eb"
+  },
+  "export_isa": {
+    "dram_sha256": "bfceef4b77d6a887155cafe9c2d12126d2515de2107e4b813a7caa01907ff913",
+    "tmem_sha256": "76314b416b18853a9611e4f1501d900c503bdc33e00fd2561ccc702e800602eb"
+  },
+  "pin_isa_matches_export_isa": true,
+  "command_pcs_traced": 469,
+  "binary_sha256": "5e584b21cecb16875f5b3954af961c6a1013acea5e7f23da8dda999fed26c3fc"
+}

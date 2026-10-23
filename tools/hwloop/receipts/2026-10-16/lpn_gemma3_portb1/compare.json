@@ -1,0 +1,27 @@
+[
+  {
+    "receipt": "tools/hwloop/receipts/2026-10-16/opentpu_portb1",
+    "receipt_label": "measured",
+    "receipt_kind": "verilator_rtl_decode_token",
+    "rtl_cycles": 2798478,
+    "lpn_cycles": 2823232,
+    "gate": 0.05,
+    "rel_error": 0.008845522458993837,
+    "within_gate": true,
+    "rtl_portb_chunks": 2779176,
+    "lpn_portb_chunks": 2779176,
+    "same_mxu_chunks": true,
+    "rtl_dram_bytes_beats": 362179072,
+    "lpn_dram_bytes_footprint": 362063442,
+    "bytes_rel": -0.00031926195890197295,
+    "rtl_portb_utilization": 0.9961764930794524,
+    "lpn_portb_utilization": 0.9843951896266406,
+    "configuration_deltas": [
+      "receipt target f2-hbm with the board micro-architecture (rtlsim.BOARD_UARCH: MXU_E 4, one-copy pumped TMEM, WIN 16) vs the model's validated testbench default (2 epilogue lanes, replicated TMEM)",
+      "receipt memory: otpu_native_dram over NCH 8 channels at --lat 60 cycles vs the model's behavioral DRAM (otpu_dram.sv), one port, <= 128 B/cycle, 8-cycle read latency (this run's Timing.dram_latency 8)",
+      "receipt RTL tree /Users/rachittibrewal/ergodex-03/hwloop-scratch/opentpu-a9acb2b0 is not the model's pin f237dab2: 16 changed, 14 added, 0 removed fingerprinted files"
+    ],
+    "overlap": "the same program and DRAM image (the export's compiler), the same MM weight chunks",
+    "verdict": "outside the validated configuration (3 deltas): the error is recorded, not a calibration"
+  }
+]

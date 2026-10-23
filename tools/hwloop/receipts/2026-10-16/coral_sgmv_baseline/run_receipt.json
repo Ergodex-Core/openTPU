@@ -1,0 +1,10 @@
+{
+  "tree": "/Users/rachittibrewal/ergodex-03/coral-gemma-f2-hwloop",
+  "scenario": "perf_token",
+  "lanes": 4,
+  "status": "OK",
+  "exit_code": 0,
+  "wall_s": 103.5,
+  "shell": "make -C sim/engine build/L4/Vsgmv_top JOBS=6 PY=~/ergodex-03/bonsai2-venv/bin/python && ~/ergodex-03/bonsai2-venv/bin/python sim/engine/gen_perf.py sim/engine/build/perf --only perf_token && sim/engine/build/L4/Vsgmv_top sim/engine/build/perf/perf_token",
+  "note": "run 2026-10-16T13:32:08Z..13:33:52Z from the hwloop worktree at d2227ac (make.log and perf_token.log in hwloop-scratch/runs)"
+}
