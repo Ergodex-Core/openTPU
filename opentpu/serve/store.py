@@ -304,6 +304,8 @@ class PrefixCache:
         self.max_entries, self.mtp = max_entries, mtp
         self.entries: OrderedDict = OrderedDict()   # entry key -> Entry (oldest use first)
         self.refs: dict = {}                        # blob key -> entries using it
+        self.pending: dict = {}                     # entry key -> (tokens, Future): saves in
+        #                                             flight (save's background ones)
         self.lock = threading.RLock()
         self.stats = {"saved_pages": 0, "shared_pages": 0, "saved_tails": 0, "restored_pages": 0,
                       "restores": 0, "hit_tokens": 0, "lookups": 0}
@@ -328,9 +330,36 @@ class PrefixCache:
         from a saved context."""
         q = np.asarray(tokens, np.int64)
         limit = len(q) if limit is None else min(limit, len(q))
+        best = self._match(q, limit)
+        with self.lock:                     # a save in flight with more of the prompt: its end
+            wait = [f for t, f in self.pending.values()
+                    if self._common(t, q, limit, best.k) > best.k]
+        if wait:
+            for f in wait:
+                try:
+                    f.result()
+                except BaseException:       # noqa: BLE001 (_settled reported it)
+                    pass
+            best = self._match(q, limit, count=False)
+        return best
+
+    def _common(self, t, q, limit: int, k: int) -> int:
+        """The prefix of q a context of tokens t would give (match's rule), 0 when not more
+        than k."""
+        n = min(len(t), limit)
+        if n <= k:
+            return 0
+        eq = t[:n] == q[:n]
+        c = n if eq.all() else int(np.argmin(eq))
+        if self.L.stateful:
+            return c if c == len(t) else 0
+        return c
+
+    def _match(self, q, limit: int, count: bool = True) -> Match:
         best = Match(0)
         with self.lock:
-            self.stats["lookups"] += 1
+            if count:
+                self.stats["lookups"] += 1
             for e in self.entries.values():
                 n = min(e.n, limit)
                 if n <= best.k:
@@ -346,12 +375,18 @@ class PrefixCache:
 
     # ---- save and restore
     def save(self, io, tokens, pin: bool = False, follow: int | None = None,
-             held: np.ndarray | None = None) -> Entry:
+             held: np.ndarray | None = None, background: bool = False) -> Entry | None:
         """The device's context (its first len(tokens) positions hold `tokens`) into the store:
         the whole pages it does not have yet and the tail (last partial page, state); returns
         the entry (pinned: its blobs kept until unpin). MTP: follow, the token the MTP layer's
         last row took (None: not known, -1 in its pages' keys), and held, that row's residual
-        (or None)."""
+        (or None).
+
+        background (an unpinned save without MTP's row): the bytes are copied into the device's
+        staging area now and read back on a thread (ContextIO.stage), so the device's context
+        can be overwritten at once while the host's link carries them; the entry joins the
+        cache when they are in the store (returns None; match waits for a save in flight that
+        would give a longer prefix, drain for all). Without a staging area, in line."""
         P, L = self.L.P, self.L
         toks = np.asarray(tokens, np.int64)
         n = len(toks)
@@ -379,15 +414,58 @@ class PrefixCache:
                     self.store.pin(old.blobs())
                 return old
             missing = [i for i, k in enumerate(pages) if k not in self.store]
+            if background and key in self.pending:
+                return None
+        e = Entry(key, toks.copy(), pages, tail, m, follow=follow, held=hkey)
+        want = [(i, P) for i in missing] + ([(full, m)] if tail is not None and m else [])
+        state = tail is not None and L.stateful
+        if background and not pin and held is None and not self.mtp:
+            fut = io.stage(want, state, then=lambda got, st: self._commit(
+                e, missing, got, st, False, None))
+            if fut is not None:
+                with self.lock:
+                    self.pending[key] = (e.tokens, fut)
+                fut.add_done_callback(lambda f: self._settled(key, f))
+                return None
         # the device reads (no lock: the engine's thread)
-        got = io.read_pages([(i, P) for i in missing]) if missing else []
+        got = io.read_pages(want) if want else []
+        return self._commit(e, missing, got, io.read_state() if state else None, pin, held)
+
+    def _settled(self, key: str, fut) -> None:
+        with self.lock:
+            self.pending.pop(key, None)
+        if fut.exception() is not None:
+            import traceback
+            traceback.print_exception(fut.exception())
+
+    def drain(self) -> None:
+        """Wait for the saves in flight (save's background ones)."""
+        while True:
+            with self.lock:
+                futs = [f for _, f in self.pending.values()]
+            if not futs:
+                return
+            for f in futs:
+                try:
+                    f.result()
+                except BaseException:       # noqa: BLE001 (_settled reported it)
+                    pass
+            with self.lock:                 # (done: their callbacks may not have run yet)
+                for k in [k for k, (_, f) in self.pending.items() if f.done()]:
+                    del self.pending[k]
+
+    def _commit(self, e: Entry, missing, got, state, pin: bool, held) -> Entry:
+        """save's end: the pages read (missing ones, then the tail's partial page) and the
+        state into the store, the entry into the cache."""
+        pages, tail, hkey, toks, n = e.pages, e.tail, e.held, e.tokens, e.n
+        L = self.L
         tail_data = None
         if tail is not None:
-            parts = io.read_pages([(full, m)]) if m else []
-            if L.stateful:
-                parts.append(io.read_state())
+            parts = list(got[len(missing):])
+            if state is not None:
+                parts.append(state)
             tail_data = np.concatenate(parts) if len(parts) > 1 else parts[0]
-        e = Entry(key, toks.copy(), pages, tail, m, follow=follow, held=hkey)
+        got = got[:len(missing)]
         with self.lock:
             for i, d in zip(missing, got):
                 self.store.put(pages[i], d)
@@ -462,6 +540,7 @@ class PrefixCache:
         self.store.unpin(e.blobs())
 
     def clear(self) -> None:
+        self.drain()
         with self.lock:
             for e in list(self.entries.values()):
                 self._remove(e)

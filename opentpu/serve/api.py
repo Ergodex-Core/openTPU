@@ -39,6 +39,8 @@ from . import store as ST
 IMAGE_BYTES = 32 << 20      # an image_url's file at most
 FETCH_S = 20.0              # an http(s) image's fetch timeout (--image-fetch)
 MAX_SLICES = 36             # a request's max_slices at most
+# the program cache's disk where progcache has none (OTPU_PROG_CACHE unset, no ~/otpu-build)
+PROG_CACHE = Path.home() / ".cache" / "otpu" / "prog"
 
 
 WARM_CAP = 300.0         # /health's 503 "warming" at most this long (s; the card host's HDD
@@ -822,10 +824,21 @@ def load(a):
             c = device_config(spec, a.cap, batch=B, rows=PREFILL_ROWS, lookup=True,
                               wformat=wformat, head_format=a.head_format, S=1)
             cfg = replace(c, DRAM_BYTES=2 * c.DRAM_BYTES)
+        prompt_runs, rows = not a.no_prompt_runs, {}
+        if B > 1 and prompt_runs:
+            # the batched worker feeds every prompt with batched steps (batch.Steps.feed), never
+            # with the prompt runs: no prompt programs (prefill.warm's thread compiled bucket 1's
+            # 32 tiled runs and their wait entries, ~30 s holding the GIL against the first
+            # requests' runs), the image's rows as the prompt runs would make them
+            from ..llm import prefill as PF
+            from ..llm.qwen3 import PREFILL_ROWS
+            prompt_runs = False
+            if PF.tile_flag(None) and cfg.S == 1 and cfg.act_rows > max(PREFILL_ROWS, B):
+                rows = {"rows": cfg.act_rows}
         eng = Engine(spec, load_weights(path), cap=a.cap, cfg=cfg, backend=backend,
                      wformat=wformat, head_format=a.head_format, resident=True,
-                     prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                     batch=B, batch_area=B > 1)
+                     prog_cache=not a.no_prog_cache, prompt_runs=prompt_runs,
+                     batch=B, batch_area=B > 1, **rows)
     weights = CH.weights_label(eng.image, wformat)
     print(f"weights: {weights}; loaded in {time.perf_counter() - t0:.1f} s", flush=True)
     tok = tokenizer()
@@ -873,7 +886,8 @@ def main(argv=None):
     ap = argparse.ArgumentParser(prog="otpu-serve", description=__doc__.split("\n")[0])
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
-    ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim"])
+    ap.add_argument("--backend", default="isa",
+                    choices=["isa", "board", "board-isa", "board-sim"])
     ap.add_argument("--dev", default="/dev/xdma0")
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8000)
@@ -936,6 +950,13 @@ def main(argv=None):
                     help="a streamed MoE: /health says 503 'warming' while its expert pool is "
                          "read into the page cache, at most this many seconds (0: never)")
     a = ap.parse_args(argv)
+    if not a.no_prog_cache:
+        from .. import progcache as PC
+        if PC.cache_dir() is None:
+            # a host without ~/otpu-build (the F2 instance): the programs and their wait entries
+            # on disk all the same, so a server's compiles (its generate loop's buckets, its
+            # prompt runs) are done once per tree, not once per start (gen_warm needs it)
+            os.environ["OTPU_PROG_CACHE"] = str(PROG_CACHE)
     return busy_exits(_main)(a)
 
 

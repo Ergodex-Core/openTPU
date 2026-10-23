@@ -390,3 +390,17 @@ def test_import_nvfp4_exact():
     assert np.array_equal(Q.dequantize_mxu(rows, srows, "nvfp4", K),
                           _e2m1(codes) * np.repeat(Q.E4M3[far], 16, 1) * np.float64(ts))
     assert srows[4, 17] == 0x01 and srows[4, 18] == 0x03       # MXU subnormals
+
+
+def test_gguf_q4_0_nibble_order_and_signed_scales():
+    """Q4_0's split low/high halves differ from the MXU's adjacent-nibble packing."""
+    raw = np.zeros((2, 36), np.uint8)
+    blocks = raw.reshape(2, 2, 18)
+    scales = np.array([[0.25, -2.0], [0.0, 0.125]], dtype='<f2')
+    blocks[..., :2] = scales[..., None].view(np.uint8)
+    blocks[..., 2:] = np.arange(16, dtype=np.uint8) | ((15 - np.arange(16, dtype=np.uint8)) << 4)
+    codes = np.concatenate((np.arange(16) - 8, np.arange(15, -1, -1) - 8))
+    expected = (scales.astype(np.float32)[..., None] * codes).reshape(2, 64)
+    np.testing.assert_array_equal(Q.dequantize_q4_0(raw), expected)
+    with pytest.raises(ValueError, match="multiple of 18"):
+        Q.dequantize_q4_0(np.zeros((2, 17), np.uint8))

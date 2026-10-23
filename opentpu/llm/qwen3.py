@@ -42,7 +42,7 @@ from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, T
                         Words, current, k_scale_bytes, trace_fit)
 from . import formats as FM
 from . import generate as G
-from . import rope_parameters
+from . import rope_parameters, yarn_rope
 from . import snapshot as SN
 from ..isasim import Config, Machine, design_config
 from ..kernels.attention import Additive, Bucket, _attend_heads
@@ -95,7 +95,13 @@ class Spec:
     @staticmethod
     def from_hf(model_dir) -> "Spec":
         c = json.loads((Path(model_dir) / "config.json").read_text())
-        rp = rope_parameters(c, model_dir)          # (Qwen3's YaRN: not supported)
+        rp = rope_parameters(c, model_dir, ("default", "yarn"))
+        theta = rp.get("rope_theta") or c.get("rope_theta") or 10000.0
+        hd = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
+        yarn = {}
+        if rp.get("rope_type", rp.get("type")) == "yarn":   # (Ternary-Bonsai's: factor 4 of 8192)
+            div, af = yarn_rope(rp, theta, hd, c.get("max_position_embeddings", 0))
+            yarn = dict(rope_div=div, rope_scale=af)
         if c.get("use_sliding_window"):
             raise ValueError(f"{model_dir}: sliding-window attention is not supported")
         if c.get("attention_bias"):
@@ -108,10 +114,10 @@ class Spec:
                     n_q=c["num_attention_heads"], n_kv=c["num_key_value_heads"],
                     head_dim=c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"],
                     ffn=c["intermediate_size"], vocab=c["vocab_size"], eps=c["rms_norm_eps"],
-                    theta=rp.get("rope_theta") or c.get("rope_theta") or 10000.0,
-                    tied=c.get("tie_word_embeddings", True),
+                    theta=theta, tied=c.get("tie_word_embeddings", True),
                     bos=c.get("bos_token_id", 151643),
-                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c))
+                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c),
+                    **yarn)
 
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
@@ -237,6 +243,9 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma3", "gemma3_text"):
+        from .gemma3 import load_weights as gemma3_weights
+        return gemma3_weights(model_dir)
     if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
                                                                           "gemma4_text"):
         from .gemma4 import load_weights as gemma4_weights

@@ -83,7 +83,11 @@ SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
          "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                          "boards/ypcb-00338/otpu_fpga_top_ld.sv"],
-          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"]}
+          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"],
+          # the F2 slot's: its top, cl_opentpu (boards/f2/design), takes the AWS shell's ports
+          # and sh_ddr from the HDK, so it is the HDK flow's, not in this list
+          "f2": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_nch.sv",
+                 "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"]}
 
 
 class TargetError(ValueError):
