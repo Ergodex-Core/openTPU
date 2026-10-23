@@ -42,6 +42,12 @@
 // finishes (and drains) the older one. The issuer yields DRAM ports to the DMA and QST
 // (a_gnt/b_gnt). A row's first advance pops only once all of the row's chunks and scales are in
 // the FIFOs, so a row never stalls in its middle and the array needs no clock enable.
+//
+// Chunk lanes (docs/v4/proposal-2-four-lanes.md; otpu_mxu_lanes below): C copies of this module
+// run in lock step, lane l streaming rows l, l + C, ... of every MM (its command: the row base
+// and scale row of row l, the strides C times, ceil((N - l) / C) rows, the output base + l). Each
+// row is summed in one lane in today's order, so the results are bit-identical to C = 1. The
+// hooks (the parameters C, RSTEP, RMAX_WR, ALPHA_EXT and the lane ports) are inert at C = 1.
 module otpu_mxu
   import otpu_pkg::*;
   import otpu_fp::*;
@@ -54,7 +60,15 @@ module otpu_mxu
   parameter int IMPL  = 2,       // the dot product: 2 systolic (the only one; CFG_UARCH reports it)
   parameter int CL    = 16,      // products per cascade chain (at most D/8)
   parameter int E     = 0,       // epilogue lanes (0: MCOLS / 2, at least 1; more than MCOLS: MCOLS)
-  parameter int SID   = 0
+  parameter int SID   = 0,
+  // lock-step chunk lanes (otpu_mxu_lanes): this module is one of C (the drain's runs keep the
+  // C lanes' words of a step in distinct banks), its streamed rows RSTEP apart in the output
+  // (dad += RSTEP a row), RMAX_WR: it writes RMAX (lane 0; the other lanes' maxima fold into its
+  // through mk_x), ALPHA_EXT: its ASCALE factors come from alpha_i / al_rdy_i (lane 0 reads them)
+  parameter int C     = 1,
+  parameter int RSTEP = 1,
+  parameter bit RMAX_WR = 1'b1,
+  parameter bit ALPHA_EXT = 1'b0
 ) (
   input  logic                  clk,
   input  logic                  rst,
@@ -97,9 +111,31 @@ module otpu_mxu
   output logic [LANES-1:0]        t_wen,
   output logic [LANES-1:0][31:0]  t_waddr,
   output logic [LANES-1:0][31:0]  t_wdata,
-  input  logic                    t_gnt
+  input  logic                    t_gnt,
+  // the lock-step lanes' hooks (otpu_mxu_lanes; C = 1: pop_ok and fin_ok 1, the rest unused):
+  // a pop happens only with pop_ok (every lane with a pop left in the group's command pops in
+  // the same cycle); pop_want is the pop without it, pop_pend that the pop head has chunks not
+  // yet popped, pop_ord the pop head's command (accepted commands counted); the head completes
+  // only with fin_ok (lane 0's fin_o: its completion), mk_o / mxh_o are the RMAX keys and their
+  // presence per column (lane 0 folds the others' mk_x / mxh_x into its writes); alpha_o /
+  // al_rdy_o the ASCALE factors read (lane 0's), alpha_i / al_rdy_i the ones taken (ALPHA_EXT)
+  input  logic                    pop_ok,
+  output logic                    pop_want,
+  output logic                    pop_pend,
+  output logic [7:0]              pop_ord,
+  input  logic                    fin_ok,
+  output logic                    fin_o,
+  output logic [MCOLS-1:0][31:0]  mk_o,
+  output logic [MCOLS-1:0]        mxh_o,
+  input  logic [((C > 1) ? C - 1 : 1)-1:0][MCOLS-1:0][31:0] mk_x,
+  input  logic [((C > 1) ? C - 1 : 1)-1:0][MCOLS-1:0]       mxh_x,
+  output logic [MCOLS-1:0][31:0]  alpha_o,
+  output logic                    al_rdy_o,
+  input  logic [MCOLS-1:0][31:0]  alpha_i,
+  input  logic                    al_rdy_i
 );
   localparam int BW = $clog2(LANES);
+  localparam int NX = (C > 1) ? C - 1 : 1;   // the other lanes' key sets (mk_x)
   localparam int PW = $clog2(DEPTH);
   localparam int LM = 2, LA = 4;
   // epilogue lanes; NL: the drain's lanes per step
@@ -127,14 +163,35 @@ module otpu_mxu
   initial if (EL > LANES) $fatal(1, "otpu_mxu: E %0d > LANES", EL);
   initial if (ROWS < MCOLS || ROWS > 255) $fatal(1, "otpu_mxu: MCOLS <= ROWS < 256");
 
-  // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL
+  // conflict-free drain run for a row stride: LANES / gcd(ors, LANES), at most NL. With C
+  // lock-step lanes (the lanes drain their rows n .. n + C - 1 in the same step, lane l's
+  // results at out + n + l + j * ors), the largest run r <= NL whose C x r words fall in
+  // distinct banks: the words of a step are l + j * ors (mod LANES), l < C, j < r, whatever the
+  // step's first column (a shift by its ors multiple keeps them distinct)
   function automatic logic [MW-1:0] drain_run(input logic [15:0] ors);
     int d;
+    logic [LANES-1:0] used;
+    bit ok;
     d = 1;                                   // ors a multiple of LANES: one lane per cycle
-    for (int t = BW - 1; t >= 0; t--)        // the lowest set bit t: gcd = 2^t
-      if (ors[t]) d = LANES >> t;
-    return MW'((d < NL) ? d : NL);
+    if (C == 1) begin
+      for (int t = BW - 1; t >= 0; t--)      // the lowest set bit t: gcd = 2^t
+        if (ors[t]) d = LANES >> t;
+      return MW'((d < NL) ? d : NL);
+    end
+    for (int r = 1; r <= NL; r++) begin
+      used = '0; ok = 1'b1;
+      for (int l = 0; l < C; l++)
+        for (int j = 0; j < r; j++) begin
+          logic [BW-1:0] bk;
+          bk = BW'(32'(l) + 32'(j) * 32'(ors));
+          if (used[bk]) ok = 1'b0;
+          used[bk] = 1'b1;
+        end
+      if (ok) d = r;
+    end
+    return MW'(d);
   endfunction
+  initial if (C < 1 || (C > 1 && C > LANES)) $fatal(1, "otpu_mxu: C %0d lanes, LANES %0d", C, LANES);
   localparam logic [1:0] WF_W8 = 2'd0, WF_NV = 2'd3;
 `ifndef SYNTHESIS
   // a replayed row (M > MCOLS) must fit the FIFO: its chunks (4-bit: two blocks each)
@@ -167,6 +224,11 @@ module otpu_mxu
   logic        i_swn;                       // the next row's Sw is in the advance's line
   logic        i_sws;                       // a request for the row's Sw alone comes first
   logic [PW:0] occ;                         // chunks issued and not yet popped (<= DEPTH)
+  // C > 1 (lock-step lanes): occ takes a pop's decrement a cycle late (fpop_q), off the lanes'
+  // pop_ok cone (every lane's pop_w gathered and broadcast back: the F2 build's worst core path,
+  // docs/v4/p2-f2.md); occ then counts at most one chunk too many for a cycle, so the issue credit
+  // is only conservative. C = 1: as before, cycle for cycle
+  logic fpop_q;
   logic [TDW:0] tg_n;                       // port A requests in flight
 
   // ================================================================== command queue (2)
@@ -334,9 +396,14 @@ module otpu_mxu
   wire [15:0] c_rch = (c_w4 && !c_pair) ? 16'((32'(c_KBa) + 1) / 2) : c_KBa;   // chunks a row
   wire row_in   = cg != 0 ||
                   (32'(f_count) >= 32'(c_rch) && (c_unit || 32'(s_count) >= 32'(c_rch)));
-  wire pop      = more && f_av && (c_unit || s_av) &&
+  wire pop_w    = more && f_av && (c_unit || s_av) &&
                   (ck != 0 || (row_in && (RFW+2)'(rows_live) + (RFW+2)'(rows_p) < (RFW+2)'(RF)));
+  wire pop      = pop_w && pop_ok;           // (C = 1: pop_ok is 1)
   wire fpop     = pop && last_g && cdone;
+  assign pop_want = pop_w;
+  assign pop_pend = (q_n != 0) && (cl_ld || c_left != 0);
+  logic [7:0] po_q;                          // the pop head's command ordinal
+  assign pop_ord = po_q;
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst) begin
     if (more && ck != 0 && !pop) $fatal(1, "otpu_mxu: row stalled at advance %0d", ck);
@@ -877,7 +944,11 @@ module otpu_mxu
   logic [NL-1:0][31:0] dsa_l;
   logic [NL-1:0][7:0]  dcol_l;
   // (the result FIFO's head row is the head command's while it has rows not yet drained)
-  wire  drain_go = rf_nz && rl_nz && (!c_asc || al_st == 2'd2);
+  // the ASCALE factors loaded: this lane's (al_st), or lane 0's (ALPHA_EXT: al_rdy_i)
+  wire  al_ok = ALPHA_EXT ? al_rdy_i : (al_st == 2'd2);
+  assign al_rdy_o = (al_st == 2'd2);
+  always_comb for (int j = 0; j < MCOLS; j++) alpha_o[j] = alpha[j];
+  wire  drain_go = rf_nz && rl_nz && (!c_asc || al_ok);
 `ifndef SYNTHESIS
   always @(posedge clk) if (!rst && drain_go && dg1 != dg + 8'd1) $fatal(1, "otpu_mxu: dg1 %0d, dg %0d", dg1, dg);
 `endif
@@ -922,13 +993,18 @@ module otpu_mxu
     if (a_req && i_pair && !i_sws && !i_rsc && scale_addr[2])
       $fatal(1, "otpu_mxu: PAIR scales must be 8-byte aligned");
   // the lane count is what a greedy pick that stops at the first bank conflict would take
+  // (with C lock-step lanes, a result's word and the other lanes' words of the same step, the
+  // C consecutive words from it, all count)
   always @(posedge clk) if (drain_go) begin
     logic [LANES-1:0] used;
     int n;
+    bit clash;
     used = '0; n = 0;
     for (int k = 0; k < NL && 32'(dj) + 32'(k) < 32'(c_Mn); k++) begin
-      if (used[dad[MW'(dj) + MW'(k)][BW-1:0]]) break;
-      used[dad[MW'(dj) + MW'(k)][BW-1:0]] = 1'b1;
+      clash = 1'b0;
+      for (int d = 0; d < C; d++) if (used[BW'(dad[MW'(dj) + MW'(k)] + 32'(d))]) clash = 1'b1;
+      if (clash) break;
+      for (int d = 0; d < C; d++) used[BW'(dad[MW'(dj) + MW'(k)] + 32'(d))] = 1'b1;
       n++;
     end
     if (n != 32'(ncnt)) $fatal(1, "otpu_mxu: drain lanes %0d, greedy pick %0d", ncnt, n);
@@ -1028,7 +1104,8 @@ module otpu_mxu
       r1 <= r0;
       for (int k = 0; k < NL; k++) begin
         xo[k]  <= t_rdata[k];
-        alr[k] <= c_asc ? alpha[r0.col[k][MW-2:0]] : F_ONE;
+        alr[k] <= !c_asc ? F_ONE : ALPHA_EXT ? alpha_i[r0.col[k][MW-2:0]]
+                                             : alpha[r0.col[k][MW-2:0]];
       end
     end
   for (genvar k = 0; k < NL; k++) begin : g_rmw
@@ -1045,6 +1122,20 @@ module otpu_mxu
   logic mx_done;
   function automatic f32_t unkey(input logic [31:0] k);
     return k[31] ? {1'b0, k[30:0]} : ~k;
+  endfunction
+  // the RMAX keys for the lanes' fold (mk_o: this lane's; mk_fold: with the other lanes', the
+  // max under the keys' total order: the same bits whatever the order, opentpu.fp32.chain_max)
+  always_comb
+    for (int j = 0; j < MCOLS; j++) begin
+      mk_o[j] = mk[j];
+      mxh_o[j] = mx_have[j];
+    end
+  function automatic logic [31:0] mk_fold(input logic [MW-1:0] j);
+    logic [31:0] m;
+    m = mk[j];
+    for (int x = 0; x < NX; x++)
+      if (C > 1 && mxh_x[x][j] && mk_x[x][j] > m) m = mk_x[x][j];
+    return m;
   endfunction
   // rw's column hits, one-hot, computed from r1 and carried alongside u_rw (same length and
   // enable); the last stage is a reset flop, not an SRL tap. c_rmax is fixed while entries are
@@ -1108,10 +1199,14 @@ module otpu_mxu
   always @(posedge clk) if (!rst && mx_gq != (mx_q && !mx_done))
     $fatal(1, "otpu_mxu: mx_gq %0d, mx_q %0d, mx_done %0d", mx_gq, mx_q, mx_done);
 `endif
-  wire c_fin     = c_drained && (!c_rmax || mx_done || c_tz);
+  // this lane's completion (a lane that writes no RMAX, RMAX_WR 0, waits for no mx_done), and
+  // the head's: with the group's (fin_ok, lane 0's fin_o; 1 at C = 1)
+  wire c_fin_own = c_drained && (!c_rmax || mx_done || c_tz || !RMAX_WR);
+  assign fin_o   = c_fin_own;
+  wire c_fin     = c_fin_own && fin_ok;
   // the head completes (while the pop head may pop the next command's chunks)
   wire c_done    = c_fin;
-  wire al_go     = c_act && c_asc && al_st == 2'd0;
+  wire al_go     = !ALPHA_EXT && c_act && c_asc && al_st == 2'd0;
 
   // RMAX lanes (mx_i + k < c_M), registered as the drain's; next: mx_i + LANES. Their TMEM
   // addresses h.mxo + mx_i + k are registered too (mxl, loaded from h.mxo while no RMAX write
@@ -1177,7 +1272,7 @@ module otpu_mxu
         if (mxm[k]) begin
           t_wen[k] = 1'b1;
           t_waddr[k] = mxl[k];
-          t_wdata[k] = unkey(mk[MW'(32'(mx_i) + 32'(k))]);
+          t_wdata[k] = unkey(mk_fold(MW'(32'(mx_i) + 32'(k))));
         end
       end
     end
@@ -1204,7 +1299,7 @@ module otpu_mxu
     if (rst) begin
       i_act <= 1'b0; i_ini <= 1'b0;
       q_n <= '0; pn <= 1'b0; rows_p <= '0;
-      occ <= '0; tg_n <= '0; tg_t <= '0; tg_h <= '0;
+      occ <= '0; tg_n <= '0; tg_t <= '0; tg_h <= '0; fpop_q <= 1'b0;
       f_head <= '0; f_tail <= '0; f_count <= '0; f_rd <= '0; f_tl <= '0; f_rdl <= '0;
       s_head <= '0; s_tail <= '0; s_count <= '0; s_rd <= '0;
       ck <= '0; cg <= '0; dg <= '0; dg1 <= 8'd1; c_left <= '0; cl_ld <= 1'b0; rows_live <= '0;
@@ -1215,6 +1310,7 @@ module otpu_mxu
       r0 <= '0; rA <= '0; rx <= '0; rmw_n <= '0; ln_n <= '0;
       st_starve <= '0; st_bp <= '0; st_frz <= '0; st_deny <= '0;
       st_c <= '0; st_f <= 1'b0; mx_q <= 1'b0; mx_gq <= 1'b0;
+      po_q <= '0;
     end else begin
       logic [1:0] qn;
       logic [RFW:0] rn;
@@ -1339,7 +1435,8 @@ module otpu_mxu
       tg_n <= tg_n + (a_req ? 1'b1 : 1'b0) - (rv1 ? 1'b1 : 1'b0);
       if (r_cpl) s_tail <= s_tail + 1'b1;
       f_count <= f_count + (b_rvalid ? 1 : 0) - (fpop ? 1 : 0);
-      occ <= occ + (b_req ? 1'b1 : 1'b0) - (fpop ? 1'b1 : 1'b0);
+      fpop_q <= fpop;
+      occ <= occ + (b_req ? 1'b1 : 1'b0) - ((C > 1 ? fpop_q : fpop) ? 1'b1 : 1'b0);
       s_count <= s_count + (r_cpl ? 1 : 0) - ((fpop && !c_unit) ? 1 : 0);
       // ---- pop one advance (the row's last group frees its chunk and scale entry)
       if (fpop) begin
@@ -1397,7 +1494,7 @@ module otpu_mxu
               dg <= '0; dg1 <= 8'd1;
               for (int j = 0; j < MCOLS; j++) begin
                 logic [31:0] a;
-                a = drow[j] + 32'd1;
+                a = drow[j] + 32'(RSTEP);     // the lane's next streamed row (C rows on)
                 dad[j] <= a;
                 drow[j] <= a;
                 if (j < NL) dal[j] <= a;
@@ -1462,15 +1559,17 @@ module otpu_mxu
           n.pair == h.pair && (!h.pair || n.M == h.M)) begin
         pnx = 1'b1;
         c_left <= n.total;
+        po_q <= po_q + 8'd1;                  // the pop head is the next command
       end
+      if (c_done && !pn) po_q <= po_q + 8'd1; // (with pn it moved already)
       // ---- statistics
       st_c <= {want_iss && !go_iss, !t_gnt && (drain_go || lo.v || rw.v || mx_go || al_go),
                more && f_count != 0 && !pop, more && f_count == 0};
       st_f <= c_done;
-      mx_q <= c_drained && c_rmax && !mx_done && !c_tz;
+      mx_q <= RMAX_WR && c_drained && c_rmax && !mx_done && !c_tz;
       // mx_q's next value and mx_done's (set by the last RMAX lanes' grant; a completing head
       // clears it, and then mx_q's next is low: it completes only with mx_done or c_tz)
-      mx_gq <= c_drained && c_rmax && !mx_done && !c_tz &&
+      mx_gq <= RMAX_WR && c_drained && c_rmax && !mx_done && !c_tz &&
                !(t_gnt && mx_go && 32'(mx_i) + LANES >= 32'(c_M));
       st_starve <= st_starve + 32'(st_g[0]);
       st_bp <= st_bp + 32'(st_g[1]);
@@ -1573,6 +1672,264 @@ module otpu_mxu
   end
 `endif
 
+endmodule
+
+// C lock-step chunk lanes (docs/v4/proposal-2-four-lanes.md, candidate P2): C copies of otpu_mxu,
+// lane l streaming rows l, l + C, ... of every MM, C chunks a cycle. The slice sees one MXU.
+// - Commands: every lane takes every MM, as its own rows: row base + l x rs and stride C x rs
+//   (the scale rows the same way), ceil((N - l) / C) rows (0 for a lane past N: the command is
+//   empty there), output base + l (RSTEP C: lane l writes y[j][l], y[j][l + C], ...). The ISA,
+//   the image and the programs do not change; a row's sum is one lane's, in today's order.
+// - Lock step: a pop happens only when every lane that has a pop left in lane 0's current
+//   command can pop (pop_want): the lanes then consume block k of the same rows n .. n + C - 1
+//   in the same cycle, so the ACT RAM's read (lane 0's addresses and enables) serves all of
+//   them. A lane with fewer rows (N not a multiple of C) finishes its command a row early and
+//   waits for lane 0 at the next command (pop_ord); lane 0 always has the most rows.
+// - Results: the lanes' result FIFOs fill in the same cycles, their drains run under the one
+//   TMEM grant with the same steps, and each drain's run keeps the C lanes' words of a step in
+//   distinct banks (otpu_mxu drain_run with C), so the slice's all-or-nothing arbiter sees one
+//   unit whose lanes write distinct banks. The epilogue lanes are E in all (E / C a lane, at
+//   least 1): at M = 1 one result a lane a cycle, the row group's C words consecutive in TMEM.
+// - RMAX: every lane keeps its rows' maxima; lane 0 alone writes them, folded with the other
+//   lanes' (mk_x), once every lane has drained (the other lanes complete with lane 0: fin_ok).
+//   The fold is bit-exact (a total order's maximum). ASCALE: lane 0 reads the factors, the
+//   other lanes take them from it (ALPHA_EXT).
+// - DRAM: lane 0 streams on the slice's ports A and B (shared with the DMA, as today); lanes
+//   1 .. C - 1 on read-only lane ports of their own (lb_*: chunks, la_*: scale lines), which
+//   the memory model serves (otpu_dram / otpu_native_mem lane ports; the HBM adapter is M4).
+// - Profiling: the slice's view is lane 0's (pf_*, computing, the ACT statistics); lane 0's
+//   pf_block includes the cycles it waited for another lane's chunks.
+// C = 1 is one otpu_mxu with its hooks tied off: today's MXU, cycle for cycle.
+module otpu_mxu_lanes
+  import otpu_pkg::*;
+  import otpu_fp::*;
+#(
+  parameter int D     = 32,
+  parameter int MCOLS = 8,
+  parameter int ROWS  = MCOLS,
+  parameter int DEPTH = 16,
+  parameter int LANES = 8,
+  parameter int IMPL  = 2,
+  parameter int CL    = 16,
+  parameter int E     = 0,
+  parameter int SID   = 0,
+  parameter int C     = 1        // chunk lanes (MXU_C; docs/v4/proposal-2-four-lanes.md)
+) (
+  input  logic                  clk,
+  input  logic                  rst,
+  input  logic                  start,
+  input  logic                  go,
+  input  cmd_t                  cmd,
+  output logic                  rdy,
+  output logic                  done,
+  output logic                  computing,
+  output logic [$clog2(DEPTH):0] pf_level,
+  output logic                  pf_starve,
+  output logic                  pf_block,
+  output logic                  pf_u,
+  output logic [3:0][31:0]      pf_uv,
+  output logic [15:0]           act_blk,
+  output logic [15:0]           act_blk2,
+  output logic [MCOLS-1:0]      act_hi,
+  output logic [7:0]            act_grp,
+  output logic [MCOLS-1:0]      act_ren,
+  input  logic [MCOLS*D*8-1:0]  act_data,
+  input  logic [MCOLS*64-1:0]   act_scale,
+  output logic                  a_req,
+  output logic [31:0]           a_addr,
+  input  logic                  a_gnt,
+  input  logic                  a_rvalid,
+  input  logic [255:0]          a_rdata,
+  output logic                  b_req,
+  output logic [31:0]           b_addr,
+  input  logic                  b_gnt,
+  input  logic                  b_rvalid,
+  input  logic [D*8-1:0]        b_rdata,
+  // lanes 1 .. C-1's DRAM reads (lane 0 is on the ports above; [0] unused): chunks (lb_*) and
+  // scale lines (la_*), each a request taken with its grant, its data back in order
+  output logic [C-1:0]          lb_req,
+  output logic [C-1:0][31:0]    lb_addr,
+  input  logic [C-1:0]          lb_gnt,
+  input  logic [C-1:0]          lb_rvalid,
+  input  logic [C-1:0][D*8-1:0] lb_rdata,
+  output logic [C-1:0]          la_req,
+  output logic [C-1:0][31:0]    la_addr,
+  input  logic [C-1:0]          la_gnt,
+  input  logic [C-1:0]          la_rvalid,
+  input  logic [C-1:0][255:0]   la_rdata,
+  output logic [LANES-1:0]        t_ren,
+  output logic [LANES-1:0][31:0]  t_raddr,
+  input  logic [LANES-1:0][31:0]  t_rdata,
+  output logic [LANES-1:0]        t_wen,
+  output logic [LANES-1:0][31:0]  t_waddr,
+  output logic [LANES-1:0][31:0]  t_wdata,
+  input  logic                    t_gnt
+);
+  // the epilogue lanes as otpu_mxu resolves E, shared by the C lanes (E / C each, at least 1)
+  localparam int EL  = (E > MCOLS) ? MCOLS : (E > 0) ? E : ((MCOLS >= 2) ? MCOLS / 2 : 1);
+  localparam int EPL = (C == 1) ? E : ((EL / C >= 1) ? EL / C : 1);
+  localparam int NLL = (C == 1) ? EL : EPL;       // a lane's drain lanes (its TMEM slots)
+  localparam int NX  = (C > 1) ? C - 1 : 1;
+  initial if (C > 1 && C * NLL > LANES)
+    $fatal(1, "otpu_mxu_lanes: %0d lanes x %0d epilogue lanes > %0d TMEM lanes", C, NLL, LANES);
+
+  // ---- the lanes' commands
+  cmd_t lcmd [C];
+  always_comb
+    for (int l = 0; l < C; l++) begin
+      logic [31:0] n, nl;
+      lcmd[l] = cmd;
+      if (C > 1) begin
+        n = 32'(cmd.w4[15:0]);
+        nl = (n > 32'(l)) ? (n - 32'(l) + 32'(C) - 32'd1) / 32'(C) : 32'd0;
+        lcmd[l].w1 = cmd.w1 + 32'(l) * cmd.w5;             // row l's chunks, stride C rows
+        lcmd[l].w5 = cmd.w5 * 32'(C);
+        if (!cmd.flags[0]) lcmd[l].w2 = cmd.w2 + 32'(l) * cmd.w7;   // its scale row (not UNIT:
+        lcmd[l].w7 = cmd.w7 * 32'(C);                       // ASCALE's address stays)
+        lcmd[l].w3 = cmd.w3 + 32'(l);                       // its outputs: y[j][l + C m]
+        lcmd[l].w4 = {cmd.w4[31:16], nl[15:0]};
+      end
+    end
+
+  // ---- the lanes
+  logic [C-1:0] l_rdy, l_done, l_pop, l_want, l_pend, l_fin, l_alrdy, l_pfs, l_pfb, l_pfu;
+  logic [C-1:0][7:0] l_ord;
+  logic [C-1:0][$clog2(DEPTH):0] l_lvl;
+  logic [C-1:0][3:0][31:0] l_pfuv;
+  logic [C-1:0][15:0] l_blk, l_blk2;
+  logic [C-1:0][MCOLS-1:0] l_hi, l_ren, l_mxh;
+  logic [C-1:0][7:0] l_grp;
+  logic [C-1:0][MCOLS-1:0][31:0] l_mk, l_alpha;
+  logic [C-1:0] l_areq, l_breq, l_agnt, l_arv, l_bgnt, l_brv;
+  logic [C-1:0][31:0] l_aaddr, l_baddr;
+  logic [C-1:0][255:0] l_ard;
+  logic [C-1:0][D*8-1:0] l_brd;
+  logic [C-1:0][LANES-1:0] l_tren, l_twen;
+  logic [C-1:0][LANES-1:0][31:0] l_traddr, l_trd, l_twaddr, l_twdata;
+  logic [C-1:0] pop_ok;
+  logic [NX-1:0][MCOLS-1:0][31:0] mk_x;
+  logic [NX-1:0][MCOLS-1:0] mxh_x;
+  always_comb begin
+    mk_x = '0; mxh_x = '0;
+    for (int l = 1; l < C; l++) begin
+      mk_x[l-1] = l_mk[l];
+      mxh_x[l-1] = l_mxh[l];
+    end
+  end
+
+  for (genvar l = 0; l < C; l++) begin : g_lane
+    otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ROWS), .DEPTH(DEPTH), .LANES(LANES), .IMPL(IMPL),
+               .CL(CL), .E(EPL), .SID(SID), .C(C), .RSTEP(C), .RMAX_WR(l == 0),
+               .ALPHA_EXT(l != 0)) u_m (
+      .clk, .rst, .start, .go, .cmd(lcmd[l]), .rdy(l_rdy[l]), .done(l_done[l]),
+      .computing(l_pop[l]), .pf_level(l_lvl[l]), .pf_starve(l_pfs[l]), .pf_block(l_pfb[l]),
+      .pf_u(l_pfu[l]), .pf_uv(l_pfuv[l]),
+      .act_blk(l_blk[l]), .act_blk2(l_blk2[l]), .act_hi(l_hi[l]), .act_grp(l_grp[l]),
+      .act_ren(l_ren[l]), .act_data, .act_scale,
+      .a_req(l_areq[l]), .a_addr(l_aaddr[l]), .a_gnt(l_agnt[l]), .a_rvalid(l_arv[l]),
+      .a_rdata(l_ard[l]),
+      .b_req(l_breq[l]), .b_addr(l_baddr[l]), .b_gnt(l_bgnt[l]), .b_rvalid(l_brv[l]),
+      .b_rdata(l_brd[l]),
+      .t_ren(l_tren[l]), .t_raddr(l_traddr[l]), .t_rdata(l_trd[l]),
+      .t_wen(l_twen[l]), .t_waddr(l_twaddr[l]), .t_wdata(l_twdata[l]), .t_gnt,
+      .pop_ok(pop_ok[l]), .pop_want(l_want[l]), .pop_pend(l_pend[l]), .pop_ord(l_ord[l]),
+      .fin_ok((l == 0) ? 1'b1 : l_fin[0]), .fin_o(l_fin[l]),
+      .mk_o(l_mk[l]), .mxh_o(l_mxh[l]), .mk_x((l == 0) ? mk_x : '0), .mxh_x((l == 0) ? mxh_x : '0),
+      .alpha_o(l_alpha[l]), .al_rdy_o(l_alrdy[l]), .alpha_i(l_alpha[0]), .al_rdy_i(l_alrdy[0]));
+  end
+
+  // ---- lock step: every lane with a pop left in lane 0's command (active) must want to pop
+  logic [C-1:0] active;
+  logic all_ready;
+  always_comb begin
+    for (int l = 0; l < C; l++) active[l] = l_pend[l] && (l_ord[l] == l_ord[0]);
+    all_ready = &(~active | l_want);
+    for (int l = 0; l < C; l++) pop_ok[l] = (C == 1) || (all_ready && active[l]);
+  end
+
+  // ---- the slice's view: lane 0's
+  assign rdy = &l_rdy;
+  assign done = l_done[0];
+  assign computing = l_pop[0];
+  assign pf_level = l_lvl[0];
+  assign pf_starve = l_pfs[0];
+  assign pf_block = l_pfb[0];
+  assign pf_u = l_pfu[0];
+  assign pf_uv = l_pfuv[0];
+  assign act_blk = l_blk[0];
+  assign act_blk2 = l_blk2[0];
+  assign act_hi = l_hi[0];
+  assign act_grp = l_grp[0];
+  assign act_ren = l_ren[0];
+  // ---- DRAM: lane 0 on the slice's ports, the others on theirs
+  assign a_req = l_areq[0];
+  assign a_addr = l_aaddr[0];
+  assign b_req = l_breq[0];
+  assign b_addr = l_baddr[0];
+  always_comb begin
+    l_agnt[0] = a_gnt; l_arv[0] = a_rvalid; l_ard[0] = a_rdata;
+    l_bgnt[0] = b_gnt; l_brv[0] = b_rvalid; l_brd[0] = b_rdata;
+    lb_req = '0; lb_addr = '0; la_req = '0; la_addr = '0;
+    for (int l = 1; l < C; l++) begin
+      lb_req[l] = l_breq[l]; lb_addr[l] = l_baddr[l];
+      l_bgnt[l] = lb_gnt[l]; l_brv[l] = lb_rvalid[l]; l_brd[l] = lb_rdata[l];
+      la_req[l] = l_areq[l]; la_addr[l] = l_aaddr[l];
+      l_agnt[l] = la_gnt[l]; l_arv[l] = la_rvalid[l]; l_ard[l] = la_rdata[l];
+    end
+  end
+  // ---- TMEM: lane 0's slots as they are (its drain's NLL, RMAX / ASCALE's LANES), lane l's
+  // drain slot k at l x NLL + k; the data back the same way
+  always_comb begin
+    t_ren = l_tren[0]; t_raddr = l_traddr[0];
+    t_wen = l_twen[0]; t_waddr = l_twaddr[0]; t_wdata = l_twdata[0];
+    l_trd = '0;
+    l_trd[0] = t_rdata;
+    for (int l = 1; l < C; l++)
+      for (int k = 0; k < NLL; k++) begin
+        if (l_tren[l][k]) begin t_ren[l * NLL + k] = 1'b1; t_raddr[l * NLL + k] = l_traddr[l][k]; end
+        if (l_twen[l][k]) begin
+          t_wen[l * NLL + k] = 1'b1; t_waddr[l * NLL + k] = l_twaddr[l][k];
+          t_wdata[l * NLL + k] = l_twdata[l][k];
+        end
+        l_trd[l][k] = t_rdata[l * NLL + k];
+      end
+  end
+`ifndef SYNTHESIS
+  // the lanes consume the same block of the same rows in the same cycle; a lane past its drain
+  // slots never asks TMEM (RMAX and ASCALE are lane 0's); the lanes complete together
+  always @(posedge clk) if (!rst && C > 1) begin
+    for (int l = 1; l < C; l++) begin
+      if (l_pop[l] && !l_pop[0])
+        $fatal(1, "otpu_mxu_lanes: lane %0d pops without lane 0", l);
+      if (l_pop[l] && (l_blk[l] != l_blk[0] || l_blk2[l] != l_blk2[0] || l_hi[l] != l_hi[0] ||
+                       l_grp[l] != l_grp[0] || l_ren[l] != l_ren[0]))
+        $fatal(1, "otpu_mxu_lanes: lane %0d's ACT read differs from lane 0's", l);
+      for (int k = NLL; k < LANES; k++)
+        if (l_tren[l][k] || l_twen[l][k])
+          $fatal(1, "otpu_mxu_lanes: lane %0d asks TMEM slot %0d", l, k);
+      if (l_done[l] != l_done[0]) $fatal(1, "otpu_mxu_lanes: lane %0d completes apart from lane 0", l);
+    end
+    for (int l = 0; l < C; l++)
+      if (l_pop[l] && !pop_ok[l]) $fatal(1, "otpu_mxu_lanes: lane %0d pops without pop_ok", l);
+  end
+  // the scale and ACT statistics the slice prints (otpu_slice MXSCALE / MXACT): the scale
+  // requests summed over the lanes, the ACT RAM's reads lane 0's (the one read serves all)
+  longint unsigned xs_a, xs_sw, xa_cyc, xa_rd, xa_pop, xa_use;
+  logic [MCOLS-1:0] xa_any;
+  longint unsigned lx_a [C], lx_sw [C];
+  for (genvar l = 0; l < C; l++) begin : g_x
+    always_comb begin lx_a[l] = g_lane[l].u_m.xs_a; lx_sw[l] = g_lane[l].u_m.xs_sw; end
+  end
+  always_comb begin
+    xs_a = 0; xs_sw = 0;
+    for (int l = 0; l < C; l++) begin
+      xs_a += lx_a[l];
+      xs_sw += lx_sw[l];
+    end
+    xa_cyc = g_lane[0].u_m.xa_cyc; xa_rd = g_lane[0].u_m.xa_rd; xa_pop = g_lane[0].u_m.xa_pop;
+    xa_use = g_lane[0].u_m.xa_use; xa_any = g_lane[0].u_m.xa_any;
+  end
+`endif
 endmodule
 
 // A shared epilogue lane (docs/mx_mxu.md 4): one result a cycle, once per output:

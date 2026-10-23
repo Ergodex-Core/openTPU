@@ -21,6 +21,7 @@ module tb_top;
   parameter int MXU_IMPL   = 2;
   parameter int MXU_CL     = 16;
   parameter int MXU_E      = 0;       // MXU epilogue lanes (0: MCOLS / 2)
+  parameter int MXU_C      = 1;       // MXU chunk lanes (otpu_mxu_lanes; docs/v4/proposal-2-four-lanes.md)
   parameter int QUANT_XD   = 1024;    // quantizer row buffer chunks (0: two passes over TMEM)
   parameter int VPU_CL     = (LANES >= 8) ? LANES / 4 : 1;
   parameter int ULANES     = LANES;
@@ -42,6 +43,16 @@ module tb_top;
   parameter int TMEM_SDM   = -1;      // TMEM_TDP: the read ports' RAM sides (otpu_slice)
   parameter bit COLL_GATHER = 1'b1;   // 0: the BAR-only collective unit (otpu_coll_bar) at S = 1,
                                       // as the card builds it (rtlsim.BOARD_UARCH); S > 1 has GATHER
+  parameter bit LMEM       = 1'b1;    // AXI = 1, MXU_C > 1: the lane memory (otpu_top; docs/v4/p2-f2.md)
+  parameter bit SWFILL     = 1'b1;    // AXI = 1: SW partial beats with a fill read (OTPU_SWFILL=0: masks)
+  parameter bit NAXI       = 1'b0;    // AXI = 1: the F2 build's channel path (otpu_naxi_mem; OTPU_NAXI)
+  parameter int NAXI_XR    = 3;
+  parameter int NAXI_BURST = 8;
+  parameter int NAXI_IDLE  = 1;
+  parameter bit NAXI_WAIT  = 1'b1;
+  parameter int NAXI_OT    = 32;
+  parameter bit NAXI_PORDER = 1'b0;
+  parameter bit NAXI_ZB    = 1'b0;
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -53,12 +64,14 @@ module tb_top;
 
   otpu_top #(.S(S), .D(D), .MCOLS(MCOLS), .ACT_BLOCKS(ACT_BLOCKS), .ACT_ROWS(ACT_ROWS), .TMEM_WORDS(TMEM_WORDS),
              .IMEM_WORDS(IMEM_WORDS), .DRAM_WORDS(DRAM_WORDS), .DRAM_LAT(DRAM_LAT),
-             .LANES(LANES), .WIN(WIN), .RPB(RPB), .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES), .AXI(AXI), .FIFO_DEPTH(FIFO_DEPTH),
+             .LANES(LANES), .WIN(WIN), .RPB(RPB), .WPB(WPB), .MXU_IMPL(MXU_IMPL), .MXU_CL(MXU_CL), .MXU_E(MXU_E), .MXU_C(MXU_C), .QUANT_XD(QUANT_XD), .VPU_CL(VPU_CL), .ULANES(ULANES), .AXI(AXI), .FIFO_DEPTH(FIFO_DEPTH),
              .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ), .TMEM_NCP(TMEM_NCP),
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC),
-             .COLL_GATHER(COLL_GATHER || S > 1)) dut (
+             .COLL_GATHER(COLL_GATHER || S > 1), .LMEM(LMEM), .SWFILL(SWFILL), .NAXI(NAXI), .NAXI_XR(NAXI_XR),
+             .NAXI_BURST(NAXI_BURST), .NAXI_IDLE(NAXI_IDLE), .NAXI_WAIT(NAXI_WAIT), .NAXI_OT(NAXI_OT),
+             .NAXI_PORDER(NAXI_PORDER), .NAXI_ZB(NAXI_ZB)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);
 

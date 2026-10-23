@@ -60,6 +60,11 @@ module tb_board;
   parameter int TMEM_PMP   = 0;
   parameter int TMEM_PRK   = 0;
   parameter int TMEM_SDM   = -1;
+  parameter int MXU_C      = 1;       // the MXU's chunk lanes (S 1): > 1 the lane memory, copy l's
+                                      //   model on channels 2 l, 2 l + 1 (SID l: ch<2l>.bin, ch<2l+1>.bin)
+  parameter bit SWFILL     = 1'b1;    // SW partial beats with a fill read (otpu_native_dram; 0 the F2's)
+  localparam int NCB = (MXU_C > 1) ? 2 * MXU_C : 2;   // channels a slice
+  initial if (MXU_C > 1 && S != 1) $fatal(1, "tb_board: MXU_C > 1 needs S = 1");
 
   logic clk = 1'b0, clk_f = 1'b0, rst = 1'b1, dump = 1'b0;
   // TMEM_PMP 1: clk_f (2 x clk) rises with each edge of clk, in clk's own process (as tb_top);
@@ -82,19 +87,19 @@ module tb_board;
   logic [1:0]  bresp, rresp;
   logic [2:0]  led;
 
-  // native channels (slice s on 2s and 2s + 1)
-  logic [2*S-1:0] ncv, ncr, ncwe, nwv, nwr, nrv;
-  logic [2*S-1:0][24:0] nca;
-  logic [2*S-1:0][511:0] nwd, nrd;
-  logic [2*S-1:0][63:0] nwm;
-  logic [2*S-1:0][15:0] nwdone;
-  logic [2*S-1:0] nerr;
+  // native channels (slice s on 2s and 2s + 1; MXU_C > 1: copy l on 2l, 2l + 1)
+  logic [NCB*S-1:0] ncv, ncr, ncwe, nwv, nwr, nrv;
+  logic [NCB*S-1:0][24:0] nca;
+  logic [NCB*S-1:0][511:0] nwd, nrd;
+  logic [NCB*S-1:0][63:0] nwm;
+  logic [NCB*S-1:0][15:0] nwdone;
+  logic [NCB*S-1:0] nerr;
 
   // I2C: wired AND of the board's drive-low bits and the outside's holds, pulled up
   logic [3:0] i2c_lo;
   logic [4:0] i2c_hold = '0;
   initial void'($value$plusargs("i2c_hold=%h", i2c_hold));
-  logic [2*S-1:0] calib = '1, ded = '0;
+  logic [NCB*S-1:0] calib = '1, ded = '0;
   initial begin
     void'($value$plusargs("calib=%h", calib));
     void'($value$plusargs("ded=%h", ded));
@@ -107,7 +112,7 @@ module tb_board;
                .ARCH_HASH(ARCH_HASH), .COLL_GATHER(COLL_GATHER || S > 1), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL),
                .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK),
-               .TMEM_SDM(TMEM_SDM)) dut (
+               .TMEM_SDM(TMEM_SDM), .MXU_C(MXU_C), .NCH(NCB), .SWFILL(SWFILL)) dut (
     .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),
@@ -119,12 +124,12 @@ module tb_board;
     .n_wdata(bwd), .n_wmask(bwm), .n_rvalid(brv), .n_rdata(brd), .n_wdone(bwdone), .n_err(berr));
 
   // the board's side of the channels, and the register slices where NREG asks for them
-  logic [2*S-1:0] bcv, bcr, bcwe, bwv, bwr, brv, berr;
-  logic [2*S-1:0][24:0] bca;
-  logic [2*S-1:0][511:0] bwd, brd;
-  logic [2*S-1:0][63:0] bwm;
-  logic [2*S-1:0][15:0] bwdone;
-  for (genvar j = 0; j < 2 * S; j++) begin : g_nreg
+  logic [NCB*S-1:0] bcv, bcr, bcwe, bwv, bwr, brv, berr;
+  logic [NCB*S-1:0][24:0] bca;
+  logic [NCB*S-1:0][511:0] bwd, brd;
+  logic [NCB*S-1:0][63:0] bwm;
+  logic [NCB*S-1:0][15:0] bwdone;
+  for (genvar j = 0; j < NCB * S; j++) begin : g_nreg
     if (NREG >> j & 1) begin : g_reg
       logic cv, cr, cwe, wv, wr, rv, err;
       logic [24:0] ca;
@@ -151,7 +156,9 @@ module tb_board;
     end
   end
 
-  for (genvar s = 0; s < S; s++) begin : g_slice
+  // the memories: a model a slice, or at MXU_C > 1 one a copy of the lane memory (SID l: its
+  // channel files ch<2l>.bin / ch<2l+1>.bin; the host's SimTransport writes every copy's)
+  for (genvar s = 0; s < (MXU_C > 1 ? MXU_C : S); s++) begin : g_slice
     localparam int C = 2 * s;
     if (MEM_NATIVE == 2) begin : g_ch
       otpu_chmem #(.WORDS(WORDS), .LAT(LAT), .PHYS(1), .SID(s)) u_mem (
@@ -197,6 +204,9 @@ module tb_board;
     assign ri = dut.q_rd_idle[s];
     always @(posedge clk)
       if (!rst) begin
+        if (MXU_C > 1 && s == 0 && ri && (|dut.u_slice.lb_req || |dut.u_slice.la_req ||
+                                         |dut.u_slice.lb_rvalid_i || |dut.u_slice.la_rvalid_i))
+          $fatal(1, "tb_board: slice 0 read idle with a chunk lane's read in its registers");
         if (wi && sw_v)
           $fatal(1, "tb_board: slice %0d write idle with a write in its SW register", s);
         if (wi && b_v && b_w)
@@ -223,7 +233,7 @@ module tb_board;
     logic [1:0] pv;
     if (s == 0) begin : g_0
       assign fl = dut.x_rst[0] || dut.x_ld_start[0] || dut.a_inval;
-      assign al_v = dut.u_mem.al_v; assign pv = dut.u_mem.pv;
+      assign al_v = dut.u_mem.g_cp[0].u_adapt.al_v; assign pv = dut.u_mem.g_cp[0].u_adapt.pv;
     end else begin : g_s
       assign fl = dut.x_rst[s] || dut.x_ld_start[s] || dut.g_slice[s].a_inval;
       assign al_v = dut.g_slice[s].u_mem.al_v; assign pv = dut.g_slice[s].u_mem.pv;

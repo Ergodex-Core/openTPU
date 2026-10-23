@@ -466,7 +466,13 @@ class SimTransport:
         # channels each), CFG_PLATFORM and CFG_HASH
         self.target = load(target) if isinstance(target, str) else (target or current())
         self.slices = self.target.arch["S"]
-        self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices)]
+        # the MXU's chunk lanes as the target builds them (OTPU_MXU_C overrides): > 1, the lane
+        # memory (rtl/mem/otpu_lane_mem.sv): `copies` images of the slice's two channels, every
+        # write to each, reads from copy 0, as the F2's host does (opentpu/host/f2.py)
+        from opentpu import rtlsim               # (the simulator's: not on the card's path)
+        self.mxu_c = int(rtlsim.UARCH.get("MXU_C", self.target.uarch.get("MXU_C", 1)))
+        self.copies = self.mxu_c if self.mxu_c > 1 else 1
+        self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices * self.copies)]
         self.stall, self.seed = stall, seed
         self.params = params or {}
         self.native = native                    # the channels (rtlsim.MEMORY["NATIVE"]):
@@ -495,7 +501,8 @@ class SimTransport:
 
     def mem_write(self, ch: int, off: int, data: np.ndarray) -> None:
         self.flush()
-        self.ch[ch][off:off + len(data)] = data
+        for k in range(self.copies):             # (the lane memory: every copy)
+            self.ch[ch + 2 * self.slices * k][off:off + len(data)] = data
 
     def mem_read(self, ch: int, off: int, n: int, out: np.ndarray | None = None) -> np.ndarray:
         self.flush()
@@ -535,7 +542,8 @@ class SimTransport:
         root = Path(__file__).resolve().parents[2]
         srcs = [rtlsim.RTL / s for s in rtlsim.RTL_SOURCES if not s.endswith("otpu_top.sv")]
         shell = root / "rtl/shell"                  # the FPGA boards' shell (docs/targets.md)
-        srcs += [shell / "otpu_ctrl.sv", shell / "otpu_trace.sv", shell / "otpu_board.sv"]
+        srcs += [shell / "otpu_ctrl.sv", shell / "otpu_trace.sv", shell / "otpu_xr.sv",
+                 shell / "otpu_board.sv"]
         native = rtlsim.MEMORY["NATIVE"] if self.native is None else self.native
         srcs += [rtlsim.TB / "otpu_native_mem.sv", shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv",
                  shell / "otpu_axi_split2.sv",      # otpu_native_reg (tb_board NREG)
@@ -552,6 +560,8 @@ class SimTransport:
              # the MXU's epilogue lanes as the target builds them (OTPU_MXU_E overrides)
              "MXU_E": rtlsim.UARCH.get("MXU_E", self.target.uarch.get("MXU_E", 0)),
              "MEM_NATIVE": 2 if native == "ld" else 1}
+        if self.mxu_c > 1:                          # the chunk lanes and the lane memory
+            p["MXU_C"] = self.mxu_c
         if rtlsim.UARCH.get("SEQ_WC"):              # (EXPERIMENTAL: WAITC, CFG_UARCH bit24)
             p["SEQ_WC"] = 1
         if "COLL_GATHER" in rtlsim.UARCH:           # the board's: BAR alone at S = 1 (gather)
@@ -595,9 +605,26 @@ class SimTransport:
                     self.cycles += int(line.split("=")[1])
             for c in range(len(self.ch)):
                 self.ch[c] = np.fromfile(d / f"ch{c}_out.bin", np.uint8)
+            # the lane memory's copies hold the same image after every run (a write that missed
+            # a copy, or a copy's fill read of other data, shows here)
+            for k in range(1, self.copies):
+                for c in range(2 * self.slices):
+                    if not np.array_equal(self.ch[c + 2 * self.slices * k], self.ch[c]):
+                        raise RuntimeError(f"board simulation: lane memory copy {k}'s channel {c} "
+                                           f"differs from copy 0's")
 
 
 # ------------------------------------------------------------------------------ the board
+def open_transport(dev: str | None = None, dma: bool = True):
+    """Open OTPU_DEVICE (default /dev/xdma0), or an explicit XDMA prefix / f2:slot / f2:BDF (the
+    AWS F2's OCL / PCIS BARs: opentpu/host/f2.py, e04/tpubench's)."""
+    dev = os.environ.get("OTPU_DEVICE", "/dev/xdma0") if dev is None else dev
+    if dev.startswith("f2:"):
+        from .f2 import F2Transport
+        return F2Transport(dev, dma=dma)
+    return XdmaTransport(dev) if dma else XdmaTransport(dev, dma=False)
+
+
 def _lock(t) -> DeviceLock | None:
     """The device lock, shared by every Board on the same transport object (a transport is one
     open of the device); a second transport on the same device, in this process or another,
@@ -660,7 +687,7 @@ class Board:
         """check: the card must answer as openTPU; calibrate: then calibrate its DDR3 if the
         bitstream wants the host to (LiteDRAM, CAPS bit27: memcal.ensure; once per
         configuration, as the STATUS calibration bits say)."""
-        self.t = transport or XdmaTransport()
+        self.t = transport or open_transport(dma=lock)
         self.lock = _lock(self.t) if lock else None
         self._info = None
         self._trace = None              # (depth, keep_first) of a started traced run

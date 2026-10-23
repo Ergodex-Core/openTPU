@@ -128,6 +128,7 @@ module otpu_asic_top
     .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
     .sw_req, .sw_addr, .sw_wdata, .sw_be,
     .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
+    .lb_req(), .lb_addr(), .lb_rdy('0), .lb_rvalid('0), .lb_rdata('0), .la_req(), .la_addr(), .la_rdy('0), .la_rvalid('0), .la_rdata('0),
     .coll_req, .coll_cmd(coll_cmd[0]), .coll_ack,
     .coll_ren(coll_ren[0]), .coll_raddr(coll_raddr[0]), .coll_rdata(coll_rdata[0]),
     .coll_wen, .coll_waddr, .coll_wdata, .coll_gnt_local(coll_gl), .coll_gnt(coll_gl),

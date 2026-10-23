@@ -22,7 +22,7 @@ BUILD = ROOT / "build" / "verilator"
 
 RTL_SOURCES = [
     "vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_dram.sv", "mem/otpu_tmem.sv",
-    "mem/otpu_native_dram.sv", "mem/otpu_actram.sv", "seq/otpu_seq.sv",
+    "mem/otpu_native_dram.sv", "mem/otpu_lane_mem.sv", "mem/otpu_actram.sv", "seq/otpu_seq.sv",
     "vpu/otpu_vtree.sv", "dma/otpu_dma.sv", "mxu/otpu_mxu.sv", "tech/generic/otpu_tech_dsp.sv",
     "tech/generic/otpu_tech_ram.sv",
     "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv", "vpu/otpu_vpu.sv",
@@ -182,6 +182,12 @@ if os.environ.get("OTPU_MXU", "systolic") != "systolic":
 UARCH["MXU_IMPL"] = 2
 if os.environ.get("OTPU_MXU_E"):
     UARCH["MXU_E"] = int(os.environ["OTPU_MXU_E"])
+# OTPU_MXU_C: the MXU's lock-step chunk lanes (otpu_mxu_lanes C; timing only, docs/v4/
+# proposal-2-four-lanes.md): C copies of the array, lane l streaming row n + l of every MM, C
+# chunks a cycle through port B (the memory models' lane ports). Default the target's (MXU_C,
+# 1 unless the target states it: the card's c4 variant is 4)
+if os.environ.get("OTPU_MXU_C"):
+    UARCH["MXU_C"] = BOARD_UARCH["MXU_C"] = int(os.environ["OTPU_MXU_C"])
 # OTPU_QUANT_XD: the quantizer's row buffer in chunks (otpu_quant XD; timing only, 0: QACT reads
 # its rows from TMEM twice)
 if os.environ.get("OTPU_QUANT_XD"):
@@ -267,11 +273,32 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
+    if axi == 1 and int(p.get("MXU_C", 1)) > 1 and os.environ.get("OTPU_LMEM", "1") == "0":
+        # the lanes on the model's behavioural lane ports (P2's M2 stand-in) instead of the lane
+        # memory (otpu_lane_mem: an image copy and adapter a lane, docs/v4/p2-f2.md)
+        p["LMEM"] = 0
+    if axi == 1 and os.environ.get("OTPU_SWFILL", "1") == "0":
+        # SW partial beats written with their byte masks, no fill read (the F2 build's adapters:
+        # its HBM takes masks; otpu_native_dram SWFILL, docs/v4/p2-f2.md)
+        p["SWFILL"] = 0
+    if axi == 1 and os.environ.get("OTPU_NAXI", "0") == "1":
+        # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
+        # the SLR chain and otpu_native_axi per channel; the lane memory's copies each)
+        p["NAXI"] = 1
+        for k in ("XR", "BURST", "IDLE", "WAIT", "OT", "PORDER", "ZB"):
+            if os.environ.get("OTPU_NAXI_" + k):
+                p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
         p["TMEM_SBP"] = max(3, (cfg.LANES - 1).bit_length())
     return p
+
+
+def chunk_lanes(uarch: dict | None = None) -> int:
+    """The MXU's lock-step chunk lanes of a simulation (UARCH with `uarch` over it: MXU_C; 1
+    today): C chunks a cycle through port B and the MXU (docs/v4/proposal-2-four-lanes.md)."""
+    return int({**UARCH, **(uarch or {})}.get("MXU_C", 1))
 
 
 def gathers(S: int, uarch: dict | None = None) -> bool:
@@ -286,6 +313,8 @@ def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool = Fal
     shell = RTL / "shell"
     mem = ([shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv", TB / LDC_MODELS[ldc],
             TB / "otpu_ldc_mem.sv"] if ldc else [TB / "otpu_native_mem.sv"] if axi else [])
+    if axi and not ldc and os.environ.get("OTPU_NAXI", "0") == "1":
+        mem += [RTL / "boards/f2/otpu_native_axi.sv", TB / "otpu_naxi_mem.sv"]
     return build("tb_top", [RTL / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
                  top_params(cfg, dram_lat, uarch, 2 if ldc else axi, dram_bytes))
 
@@ -465,6 +494,24 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
                re.findall(r"NATIVE ch\d (.*)", out)]
         nat = [{k: int(v) for k, v in d.items()} for d in nat]
         stats["native"] = nat
+        # the lane memory (otpu_lane_mem, MXU_C > 1): each copy's image hash, equal over a slice's
+        # copies or the run failed (a write missed a copy); the copies' adapter and model counters
+        hashes: dict = {}
+        for sid, cp, h in re.findall(r"MEM s(\d+) copy(\d+) hash=([0-9a-f]+)", out):
+            hashes.setdefault(int(sid), {})[int(cp)] = h
+        if hashes:
+            stats["lmem_hash"] = hashes
+            bad = {sid: hs for sid, hs in hashes.items() if len(set(hs.values())) > 1}
+            if bad:
+                raise RuntimeError(f"lane memory copies differ at the dump: {bad}")
+        # OTPU_NAXI: otpu_native_axi's read bursts per channel (sim/verilator/otpu_naxi_mem.sv)
+        stats["naxi"] = re.findall(r"^NAXI .*$", out, re.M)
+        stats["native_copies"] = [{"copy": int(cp), "ch": int(ch),
+                                   **{k: int(v) for k, v in (kv.split("=") for kv in rest.split())}}
+                                  for cp, ch, rest in re.findall(r"NATIVE cp(\d+) ch(\d) (.*)", out)]
+        stats["mem_copies"] = [{"copy": int(cp), "ch": int(ch), "rd": int(rd), "wr": int(wr)}
+                               for cp, ch, rd, wr in re.findall(
+                                   r"MEM cp(\d+) ch(\d) rd=(\d+) wr=(\d+)", out)]
         stats["axi_reads"] = [(m["rd"], m["rd"]) for m in mem]
         stats["axi_writes"] = [(m["wr"], m["wr"]) for m in mem]
         stats["axi_detail"] = [{"ar_a": n["a_runs"] + n["sw_rd"], "row_miss": m["row_miss"],

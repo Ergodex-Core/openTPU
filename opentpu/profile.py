@@ -101,8 +101,11 @@ class Rec:
     porta: int = 0           # DRAM port-A transfers it needs
 
 
-def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
-    """(name, detail, nominal cycles, port-B transfers, port-A transfers) of an instruction."""
+def _describe(ins: I.Instr, cfg, C: int = 1) -> tuple[str, str, int, int, int]:
+    """(name, detail, nominal cycles, port-B transfers, port-A transfers) of an instruction.
+    C: the MXU's lock-step chunk lanes (rtlsim.chunk_lanes, MXU_C; docs/v4/
+    proposal-2-four-lanes.md): an MM of N rows takes ceil(N / C) x KB chunk-cycles, lane l
+    streaming row n + l; its transfers (chunks, scale lines) do not change."""
     w, D, L = ins.w, cfg.D, cfg.LANES
     burst = min(D // 4, L)
     op = ins.op
@@ -129,13 +132,14 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
         wf = (ins.flags >> I.WF_SHIFT) & 3
+        NC = -(-N // C)                            # rows a lane streams (C lanes in lock step)
         if wf == I.W8:
-            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", N * KB, N * KB, scales
+            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", NC * KB, N * KB, scales
         # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle
         pair = bool(ins.flags & I.F_PAIR)
         return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {'int4' if wf == I.W4I else 'fp4'}"
                       f"{' pair' if pair else ''}{acc}",
-                N * (-(-KB // 2) if pair else KB), N * -(-KB // 2), scales)
+                NC * (-(-KB // 2) if pair else KB), N * -(-KB // 2), scales)
     if op == I.QACT:
         rows, KB = w[1] & 0xFF, w[1] >> 16
         n = rows * KB * D
@@ -170,14 +174,18 @@ class Profile:
     recs: list[Rec]
     ports: list[dict]          # per slice: bmxu, bdma, amxu, aq, c
     programs: list
+    C: int = 1                 # the MXU's chunk lanes (MXU_C): C transfers a cycle on the ports
 
     # ------------------------------------------------------------------ derived metrics
     def slice_recs(self, s: int) -> list[Rec]:
         return [r for r in self.recs if r.slice == s]
 
     def roofline(self) -> dict:
-        """Lower bound on cycles from the DRAM ports (and the MXU, which shares their rate)."""
+        """Lower bound on cycles from the DRAM ports (and the MXU, which shares their rate):
+        with C chunk lanes the ports move C transfers a cycle (the MM work is per lane
+        already, _describe)."""
         per = []
+        C = max(1, self.C)
         for s in range(self.cfg.S):
             rs = self.slice_recs(s)
             b = sum(r.portb for r in rs)
@@ -187,7 +195,7 @@ class Profile:
                      for r in rs)
             m = sum(r.work for r in rs if r.op == I.MM)
             per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m,
-                        "bound": max(ac, b, m)})
+                        "bound": max(-(-ac // C), -(-b // C), m)})
         bound = max(p["bound"] for p in per) if per else 0
         return {"bound": bound, "per_slice": per,
                 "efficiency": bound / self.cycles if self.cycles else 0.0}
@@ -304,7 +312,9 @@ class Profile:
 _EV = re.compile(r"^T(\d+) ([DSEUHGPQ]) c=(\d+)(.*)$")
 
 
-def parse(trace: str, cfg, programs, name: str = "") -> Profile:
+def parse(trace: str, cfg, programs, name: str = "", C: int = 1) -> Profile:
+    """The Profile of an RTL trace (+trace). C: the MXU's chunk lanes the RTL ran with
+    (rtlsim.chunk_lanes of its uarch): the MMs' nominal cycles and the roofline take it."""
     recs: list[Rec] = []
     open_slot: dict[tuple[int, int], Rec] = {}
     unit_done: dict[tuple[int, int], list[Rec]] = {}
@@ -323,7 +333,7 @@ def parse(trace: str, cfg, programs, name: str = "") -> Profile:
         if kind == "D":
             slot, pc, op = int(kv["s"]), int(kv["pc"]), int(kv["op"], 16)
             ins = programs[s][pc]
-            nm, det, work, pb, pa = _describe(ins, cfg)
+            nm, det, work, pb, pa = _describe(ins, cfg, C)
             unit = {I.LD: 0, I.ST: 0, I.DSTEP: 0, I.STREAM: 0, I.WAITW: 0, I.MM: 1, I.QACT: 2,
                     I.QST: 2, I.VOP: 3}.get(op, 4)
             r = Rec(s, counts[s], pc, op, unit, c, name=nm, detail=det, comment=ins.comment,
@@ -360,7 +370,7 @@ def parse(trace: str, cfg, programs, name: str = "") -> Profile:
     for key, rs in unit_done.items():
         for r, st in zip(sorted(rs, key=lambda x: x.end), unit_stats.get(key, [])):
             r.stats = st
-    p = Profile(name, cfg, last, recs, ports, programs)
+    p = Profile(name, cfg, last, recs, ports, programs, C=max(1, C))
     p.buckets = buckets
     return p
 
@@ -371,6 +381,7 @@ def profile(kernel, cfg, name: str = "", dram_lat: int = 8, uarch: dict | None =
     comp, imgs = compile_kernel(kernel, cfg, **args)
     _, _, st = rtlsim.run(cfg, comp.programs, imgs, dram_lat=dram_lat, trace=True, uarch=uarch,
                           **(run_kw or {}))
-    p = parse(st["trace"], cfg, comp.programs, name or kernel.__name__)
+    p = parse(st["trace"], cfg, comp.programs, name or kernel.__name__,
+              C=rtlsim.chunk_lanes(uarch))
     p.cycles = st["cycles"]
     return p

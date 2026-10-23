@@ -123,6 +123,15 @@ def test_card_variants(tmp_path):
                                       DSTEP=1, SEQ_WC=1)) == 0x4ffd1e17
     with pytest.raises(T.TargetError, match="no variant 'm9'"):
         T.load("ypcb-00338:m9")
+    # c4 (docs/v4/proposal-2-four-lanes.md): m4's arch with MXU_C 4 lock-step chunk lanes, a
+    # uarch key (the same CFG_HASH: the programs and images do not change); the simulators and
+    # the RTL parameters take it, and a target without it is at 1 (today's MXU)
+    c4v = T.load("ypcb-00338:c4")
+    assert T.config(c4v) == c4 and c4v.uarch["MXU_C"] == 4 and m4.uarch["MXU_C"] == 1
+    assert T.sim_uarch(c4v)["MXU_C"] == 4 and "MXU_C" not in T.sim_uarch(m4)
+    assert T.rtl_params(c4v)["MXU_C"] == 4 and T.rtl_params(m4)["MXU_C"] == 1
+    for n in T.names():          # (f2-p2: P2's F2 build, docs/v4/p2-f2.md, four lanes)
+        assert T.rtl_params(n)["MXU_C"] == (4 if n == "f2-p2" else 1)
     # the file's [arch] / [uarch] state its default variant's values
     p = tmp_path / "ypcb-00338.toml"
     p.write_text((ROOT / "targets/ypcb-00338.toml").read_text().replace(
@@ -220,7 +229,7 @@ def test_bad_target_files(tmp_path):
 def test_cfg_register_codec():
     c = dict(S=2, TMEM_WORDS=1 << 16, IMEM_WORDS=1 << 15, ACT_BLOCKS=128, DRAM_BYTES=1 << 32,
              channels=2, channel_bytes=1 << 31, MXU_IMPL=2, TMEM_IMPL=1, VPU_CL=2, ULANES=8,
-             SEQ_WC=1, platform=2, hash=0x8B699C81)
+             SEQ_WC=1, platform=2, hash=0x8B699C81, copies=1, MXU_C=1)
     assert R.cfg(R.cfg_words(c)) == c
     assert R.cfg(R.cfg_words(dict(c, SEQ_WC=0)))["SEQ_WC"] == 0
 
@@ -330,8 +339,8 @@ def test_rtl_file_lists_agree():
     make = _make_rtl(ROOT / "boards/ypcb-00338/Makefile")
     assert make == [f for f in card if not f.endswith("otpu_fpga_top_ld.sv")]
     sim = [f for f in rtlsim.RTL_SOURCES
-           if f not in ("mem/otpu_dram.sv", "mem/otpu_native_dram.sv", "top/otpu_top.sv",
-                        "exp/tmem_nocopy/otpu_tmem_model.sv")]
+           if f not in ("mem/otpu_dram.sv", "mem/otpu_native_dram.sv", "mem/otpu_lane_mem.sv",
+                        "top/otpu_top.sv", "exp/tmem_nocopy/otpu_tmem_model.sv")]
     assert sim == T.sources("nangate45", "generic")
     for f in T.CORE + T.SHELL + sum(T.TECH.values(), []) + sum(T.BOARDS.values(), []):
         assert (ROOT / "rtl" / f).exists(), f
@@ -462,8 +471,12 @@ def test_the_board_counts_the_port_registers_as_requests_pending():
     assert re.findall(r"\.rd_idle\(([^)]*)\)", code) == ["m_rd_idle"] * 4
     assert re.findall(r"assign\s+q_wr_idle\[(\w+)\]\s*=\s*([^;]*);", code) == \
         [(k, "m_wr_idle && !sw_req && !(b_req && b_we)") for k in ("0", "s")]
-    assert re.findall(r"assign\s+q_rd_idle\[(\w+)\]\s*=\s*([^;]*);", code) == \
-        [(k, "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv") for k in ("0", "s")]
+    # (slice 0 also waits for its chunk lanes' registers at MXU_C > 1: the lane memory's reads)
+    assert [(k, " ".join(v.split())) for k, v in
+            re.findall(r"assign\s+q_rd_idle\[(\w+)\]\s*=\s*([^;]*);", code)] == \
+        [("0", "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv && "
+               "!(LM && (|lb_req || |la_req || m_lrv))"),
+         ("s", "m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv")]
     assert re.findall(r"m_rv\s*<=\s*([^;]*);", code) == \
         [f"!x_srst[{k}] && b_rvalid" for k in ("0", "s")]
 

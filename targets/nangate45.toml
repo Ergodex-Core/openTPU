@@ -31,6 +31,7 @@ SEQ_WC = true                   # the sequencer's wait entries (WAITC v2, docs/s
 [uarch]
 MXU_IMPL = 2
 MXU_CL = 16
+MXU_C = 1                       # chunk lanes (docs/v4/proposal-2-four-lanes.md): today's MXU
 MXU_E = 4                       # the card's m4: MCOLS epilogue lanes
 VPU_CL = 2
 ULANES = 8

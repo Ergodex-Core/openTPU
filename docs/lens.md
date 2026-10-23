@@ -10,6 +10,7 @@ what kept it off.
 python3 -m opentpu.lens list                                   # the workloads
 python3 -m opentpu.lens record mlp attn -o run.otpuprof        # RTL traces (Verilator)
 python3 -m opentpu.lens record qwen-tiny --board --axi --pos 64 -o qwen.otpuprof
+python3 -m opentpu.lens record model --model gemma3 --axi -o g3.otpuprof   # a checkpoint's decode token
 python3 -m opentpu.lens open run.otpuprof                      # opens the app in the browser
 python3 -m opentpu.lens html run.otpuprof -o run.html          # one standalone page
 python3 -m opentpu.lens info run.otpuprof
@@ -40,6 +41,27 @@ as JSON; `--slice N` selects a slice. `info` stays the one-line facts.
 `qwen` runs one token of the real Qwen3-0.6B (`models/Qwen3-0.6B`): the tokens before `--pos`
 run on the ISA simulator, the traced one on the RTL -- several minutes. `qwen-tiny` is a small
 random Qwen3 with the same structure and runs in seconds.
+
+`model` runs one decode token of any checkpoint (`--model`: a name of `opentpu.llm.MODELS`,
+`models/<dir>`, or a directory) on its real weights after `--prompt` (a user turn of the chat
+template): the prompt is prefilled and decoded greedily on the ISA simulator up to
+`--model-pos` (default the prompt's last token, whose step picks the first new token), and the
+step there runs traced on the RTL, or with `--isa` on the ISA simulator. A model that takes one
+slice (Gemma 3, Gemma 4) runs in the card's configuration (as `--board`). The resident decode
+program, as otpu-chat runs it (`--per-position` for the per-position programs); `--wformat` /
+`--head-format` pick the weight formats.
+
+`--candidate C=n,LANES=n,MHZ=f[,TMEM_WORDS=n,FIFO_DEPTH=n,WIN=n,S=n,MEM=hbm,PCS=n]` (with
+`--isa`) re-times the recorded instruction stream on a candidate architecture
+(`parse_candidate`, `isa_data`): MM work divided by C (C chunks a cycle through the port and
+the MXU), the vector / quantizer / store work at LANES, the DRAM bound divided by C, the times
+at MHZ; the other keys are drawn, not timed. The profile's floorplan follows its config: C
+lane groups of MCOLS columns in the MXU and a FIFO per lane, port B at C chunks a cycle, the
+memory blocks as HBM pseudo-channel groups (`MEM=hbm`, PCS of them), LANES VPU lanes in
+columns of 8, TMEM's banks and words, the dispatch window's slots. It is a model for comparing
+candidates (docs/v4/), not a measurement: the ISA timing serializes the units and has none
+of the RTL's losses. `--mhz` alone labels a run's clock (an RTL trace at the F2 build's
+200 MHz).
 
 ## The app
 

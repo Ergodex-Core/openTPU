@@ -104,17 +104,21 @@ def cfg(vals: list[int]) -> dict:
     return {"S": s, "TMEM_WORDS": tmem, "IMEM_WORDS": imem, "ACT_BLOCKS": act,
             "DRAM_BYTES": 1 << (dram & 0xFF), "channels": (dram >> 8) & 0xFF,
             "channel_bytes": 1 << ((dram >> 16) & 0xFF),
+            # the image's copies (the lane memory, docs/v4/p2-f2.md: every write to each, reads
+            # from copy 0; 1 on every bitstream before) and the MXU's chunk lanes
+            "copies": ((dram >> 24) & 0xFF) + 1,
             "MXU_IMPL": ua & 0xF, "TMEM_IMPL": (ua >> 4) & 0xF, "VPU_CL": (ua >> 8) & 0xFF,
-            "ULANES": (ua >> 16) & 0xFF, "SEQ_WC": (ua >> 24) & 1, "platform": plat, "hash": h}
+            "ULANES": (ua >> 16) & 0xFF, "SEQ_WC": (ua >> 24) & 1, "MXU_C": ((ua >> 25) & 0xF) + 1,
+            "platform": plat, "hash": h}
 
 
 def cfg_words(c: dict) -> list[int]:
     """cfg()'s inverse: the register values for a configuration (the fake card's)."""
     return [c["S"], c["TMEM_WORDS"], c["IMEM_WORDS"], c["ACT_BLOCKS"],
             (c["DRAM_BYTES"] - 1).bit_length() | c["channels"] << 8
-            | (c["channel_bytes"] - 1).bit_length() << 16,
+            | (c["channel_bytes"] - 1).bit_length() << 16 | (c.get("copies", 1) - 1) << 24,
             c["MXU_IMPL"] | c["TMEM_IMPL"] << 4 | c["VPU_CL"] << 8 | c["ULANES"] << 16
-            | c.get("SEQ_WC", 0) << 24,
+            | c.get("SEQ_WC", 0) << 24 | (c.get("MXU_C", 1) - 1) << 25,
             c["platform"], c["hash"]]
 
 
