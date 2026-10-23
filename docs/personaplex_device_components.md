@@ -106,8 +106,9 @@ references isolate projection quantization from exact embedding addition.
 The later [depth-layer slice](personaplex_depth_layer.md) validates one checkpoint
 layer with device step selection, persistent KV and native reset. A later real
 six-layer checkpoint pass now validates output/all-cache reset and reports source
-error on CPU/ISA. Resident integration remains pending; see the
-[concrete depth-chain plan](personaplex_depth_chain_plan.md). The [unified residency plan](personaplex_residency_plan.md) supplies a
+error on CPU/ISA. The later [shared depth chain](personaplex_depth_chain.md)
+now integrates conditioning/depth/greedy heads with device feedback; temporal
+and codec integration remain pending. The [unified residency plan](personaplex_residency_plan.md) supplies a
 candidate fixed-state/paged-weight map and explicit host transport budget.
 
 The header-only checkpoint inventory found16 input projections

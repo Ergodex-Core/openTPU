@@ -1,5 +1,9 @@
 # Next implementation: resident PersonaPlex depth chain
 
+The first shared resident depth-only software slice is now implemented and
+validated on two cached inputs; see [implementation and receipts](personaplex_depth_chain.md).
+Temporal paging, complete model integration and physical acceptance remain open.
+
 This plan follows the six-layer cached-checkpoint validation in
 [depth-layer evidence](personaplex_depth_layer.md). It describes software changes
 on the existing ISA, not a completed shared runtime, FPGA measurement or speech

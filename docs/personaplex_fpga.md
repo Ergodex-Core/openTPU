@@ -16,8 +16,10 @@ kept separate from physical execution and full speech readiness.
 Later standalone [embedding/head](personaplex_device_components.md),
 [depth conditioning](personaplex_depth_input.md) and
 [depth-layer](personaplex_depth_layer.md) programs have CPU/ISA validation.
-All six checkpoint depth layers now run with device KV/reset on CPU/ISA;
-shared residency/chaining and physical validation remain pending.
+The [shared resident depth chain](personaplex_depth_chain.md) now validates
+conditioning, all six layers and greedy audio heads with device feedback on
+CPU/ISA. Temporal/codec integration and common-image physical qualification
+remain pending.
 The original hybrid server described below still uses host model components.
 
 ## Current implementation and validation boundary

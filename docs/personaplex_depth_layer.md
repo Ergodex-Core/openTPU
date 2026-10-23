@@ -196,10 +196,10 @@ storage belongs to the reserved program region. These relocations and unified
 allocation checks are not implemented by constructing independent engines.
 
 The measured six-layer layout/program and checkpoint execution remove the prior
-standalone depth capacity/execution gates for this bounded INT8 design. Relocation
-and integrated conditioning→depth→head token flow still need tests. The
-[concrete next implementation plan](personaplex_depth_chain_plan.md) starts with
-one sparse resident depth chain before temporal paging.
+standalone depth capacity/execution gates for this bounded INT8 design. The later [shared resident depth chain](personaplex_depth_chain.md) relocates
+these components and validates conditioning→depth→head token feedback on two
+saved inputs. Temporal paging and full speech remain open; the
+[implementation plan](personaplex_depth_chain_plan.md) records their boundaries.
 Keep head selection and next-token IDs in device slots; host submission and
 transport may orchestrate predetermined stages but must not compute activations,
 embeddings, logits or token selection. Mimi remains unbudgeted and unsupported.
@@ -217,7 +217,8 @@ embeddings, logits or token selection. Mimi remains unbudgeted and unsupported.
 | Six-layer checkpoint execution | CPU/ISA16steps + reset validated; source error reported above |
 | Complete model quality | Pending; standalone depth correctness is insufficient |
 | Mimi convolution/transposed convolution, codec attention, RVQ and streaming state | Unimplemented/unbudgeted |
-| Unified temporal paging, resident stage chaining, prompt/cache/delay scheduling | Unimplemented |
+| Shared resident depth-stage chaining | CPU/ISA implemented and two checkpoint inputs validated |
+| Temporal paging and prompt/cache/delay scheduling | Unimplemented |
 
 No required new RTL/image capability has been demonstrated. The current kernels
 and capacity pass on ISA. A genuine unsupported operation, non-partitionable

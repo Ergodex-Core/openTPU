@@ -44,9 +44,9 @@ def _checked(value, shape, name):
 
 
 @ol.jit
-def _audio_head(m):
+def _audio_head(m, index=None):
     b = ol.current()
-    index = ol.load(m.codebook)
+    index = ol.load(m.codebook) if index is None else index
     rq, rs = b.scratch(), b.scratch()
     # Integer multiplication in RLD selects resident weight offsets. The host
     # uploads only the scalar index, never an offset or a selected head's weights.
@@ -65,9 +65,11 @@ def _audio_head(m):
         logits = ol.dot(hidden, head[lo:hi, :])
         ol.store(m.logits[:, lo:hi], logits)
         greedy(logits, lo)
-    ol.store(m.token_id, greedy.token())
+    token = greedy.token()
+    ol.store(m.token_id, token)
     b.unscratch(rq)
     b.unscratch(rs)
+    return token
 
 
 class AudioHeadImage:

@@ -1,7 +1,9 @@
 # Candidate unified PersonaPlex residency and device chaining
 
 This is a compiler/runtime design, not a demonstrated full-model fit or a
-hardware result. No image change, synthesis, card access or paid resource is
+hardware result. Its P/B depth-only subset now has a [shared ISA implementation](personaplex_depth_chain.md)
+and two cached generated-sequence checks. A/temporal paging and codec integration
+remain unimplemented. No image change, synthesis, card access or paid resource is
 required to investigate it. Existing standalone images total5,270,028,288 bytes
 versus4,294,967,296 mapped bytes. Shared workspaces alone cannot solve residency:
 input embedding tables exceed the temporal/token free space by940,683,264 bytes.
@@ -186,4 +188,6 @@ before I/O/masks/programs/alignment. Add a sparse shared allocator and one runne
 alias interstage vectors, and keep counter/token feedback on device. The current
 depth program increments the counter; audio selection must use counter−1.
 Validate this16-step resident chain before refactoring four temporal packets.
-None of that shared runtime is implemented by the standalone checkpoint checker.
+The later depth-only shared runtime now implements P/B relocation and device
+feedback, with measured B slack21,495,808B after moving norms to P. Temporal
+paging and full-model scheduling are not supplied by that depth-only slice.

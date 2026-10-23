@@ -112,8 +112,10 @@ The later [reusable depth layer](personaplex_depth_layer.md) implements native
 per-step weights, RMSNorm/SiLU, attention and persistent device KV. One real
 checkpoint layer and reset were initially CPU/ISA-validated; the later six-layer
 check now executes all layers with exact output/KV reset and reported source
-error. Resident stage integration, stream/prompt/cache/delay scheduling, Mimi/RVQ and PCM
-validation remain. Prior temporal32.9% error and181.39ms/frame
+error. The later [shared chain](personaplex_depth_chain.md) now integrates conditioning,
+all depth layers and greedy audio heads on CPU/ISA with device feedback. Temporal
+integration, stream/prompt/cache/delay scheduling, Mimi/RVQ and PCM validation
+remain. Prior temporal32.9% error and181.39ms/frame
 are still unaccepted; a correct conditioning stage does not establish quality.
 
 The [unified residency plan](personaplex_residency_plan.md) separates persistent
