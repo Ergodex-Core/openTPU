@@ -239,6 +239,87 @@ def test_component_readers_reject_invalid_selected_payload(checkpoint, kind, fau
         _ = weights.input_embeddings if kind == "input" else weights.audio_heads
 
 
+def _depth_reader_fixture(checkpoint):
+    path, _, _ = checkpoint
+    weights = MLXWeights(path)
+    weights.config["depformer"].update(num_steps=3, dim=32, text_card=8, card=4)
+    values = {f"depformer_in.{i}.weight": np.full((32, 128), i + 1, np.float16) for i in range(3)}
+    values["depformer_text_emb.weight"] = np.full((9, 32), 5, np.float16)
+    values.update({f"depformer_emb.{i}.weight": np.full((5, 32), i + 6, np.float16) for i in range(2)})
+    return path, weights, values
+
+
+def _save_depth_fixture(values, path):
+    projections = {k: v for k, v in values.items() if k.startswith("depformer_in.")}
+    embeddings = {k: v for k, v in values.items() if not k.startswith("depformer_in.")}
+    # A same-named decoy makes selecting the wrong checkpoint file observable.
+    embeddings["depformer_in.0.weight"] = np.full((32, 128), -99, np.float16)
+    _save_file(projections, path / "depformer.safetensors")
+    _save_file(embeddings, path / "embeddings.safetensors")
+
+
+def test_depth_input_readers_validate_headers_and_materialize_only_requested_bank(checkpoint, monkeypatch):
+    path, weights, values = _depth_reader_fixture(checkpoint)
+    values["linears.0.weight"] = np.ones((1, 1), np.float16)  # unrelated malformed audio head
+    _save_depth_fixture(values, path)
+    original, reads = _TensorFile.raw, []
+    def read(reader, key, rows=None):
+        assert reader.path.name == ("depformer.safetensors" if key.startswith("depformer_in.") else
+                                    "embeddings.safetensors")
+        reads.append(key)
+        return original(reader, key, rows)
+    monkeypatch.setattr(_TensorFile, "raw", read)
+    metadata = weights.depth_conditioning_metadata()
+    assert len(metadata["projections"]) == len(metadata["embeddings"]) == 3
+    assert reads == []
+    projection = weights.depth_input_projections
+    assert reads == [f"depformer_in.{i}.weight" for i in range(3)]
+    np.testing.assert_array_equal(projection[:, 0, 0], [1, 2, 3])
+    embeddings = weights.depth_input_embeddings
+    assert reads[3:] == ["depformer_text_emb.weight", "depformer_emb.0.weight", "depformer_emb.1.weight"]
+    assert all(e.dtype == np.float32 for e in embeddings)
+    np.testing.assert_array_equal([e[0, 0] for e in embeddings], [5, 6, 7])
+
+
+@pytest.mark.parametrize("kind", ["projection", "embedding"])
+@pytest.mark.parametrize("fault", ["missing", "shape", "nonfinite"])
+def test_depth_input_reader_rejects_bad_selected_checkpoint(checkpoint, kind, fault):
+    path, weights, values = _depth_reader_fixture(checkpoint)
+    key = "depformer_in.1.weight" if kind == "projection" else "depformer_emb.1.weight"
+    if fault == "missing":
+        del values[key]
+    elif fault == "shape":
+        values[key] = values[key][:-1]
+    else:
+        values[key][0, 0] = np.nan
+    _save_depth_fixture(values, path)
+    with pytest.raises(ValueError):
+        _ = weights.depth_input_projections if kind == "projection" else weights.depth_input_embeddings
+
+
+@pytest.mark.parametrize("wrong_config", [False, True])
+def test_depth_input_projection_affine_int4_is_read_from_depformer_file(checkpoint, wrong_config):
+    path, weights, values = _depth_reader_fixture(checkpoint)
+    expected = []
+    rng = np.random.default_rng(438)
+    for index in range(3):
+        q, scale, bias, reference = _quantized(rng, 32, 128)
+        values[f"depformer_in.{index}.weight"] = q
+        values[f"depformer_in.{index}.scales"] = scale
+        values[f"depformer_in.{index}.biases"] = bias
+        expected.append(reference)
+    _save_depth_fixture(values, path)
+    if wrong_config:
+        weights.config["quantization"]["quantized_components"] = ["temporal"]
+        with pytest.raises(ValueError, match="quantization disagrees"):
+            weights.depth_conditioning_metadata()
+    else:
+        metadata = weights.depth_conditioning_metadata()
+        assert all(m["quantized"] and m["source_file"] == "depformer.safetensors"
+                   for m in metadata["projections"])
+        np.testing.assert_array_equal(weights.depth_input_projections, np.stack(expected))
+
+
 @pytest.mark.parametrize("fault", ["missing", "shape", "metadata"])
 def test_corrupt_checkpoint_is_refused(checkpoint, fault):
     path, _, values = checkpoint

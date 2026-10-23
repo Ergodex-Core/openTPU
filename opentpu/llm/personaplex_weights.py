@@ -386,6 +386,44 @@ class MLXWeights:
         entries = self.audio_head_metadata()
         return np.stack([reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries])
 
+    def _depth_input_reader(self):
+        reader = getattr(self, "_depth_input_file", None)
+        if reader is None:
+            q = self.config["quantization"]
+            reader = _TensorFile(self.model_dir / "depformer.safetensors", q["bits"], q["group_size"])
+            self._depth_input_file = reader
+        return reader
+
+    def depth_conditioning_metadata(self):
+        """Header-only native forward_depformer input projection/embedding banks."""
+        projections, embeddings = self._depth_input_reader(), self._text_head_reader()
+        dep = self.config["depformer"]
+        count = dep["num_steps"] if dep["multi_linear"] else 1
+        def entry(reader, name, shape):
+            item = reader.metadata(name)
+            if tuple(item["shape"]) != shape:
+                raise ValueError(f"{name}: invalid depth conditioning shape {item['shape']}")
+            if item["quantized"] and "depformer" not in self.config["quantization"]["quantized_components"]:
+                raise ValueError(f"{name}: depth quantization disagrees with config")
+            return item
+        return {"projections": [entry(projections, f"depformer_in.{i}.weight", (dep["dim"], self.spec.hidden))
+                                 for i in range(count)],
+                "embeddings": [entry(embeddings, "depformer_text_emb.weight", (dep["text_card"] + 1, dep["dim"]))] +
+                    [entry(embeddings, f"depformer_emb.{i}.weight", (dep["card"] + 1, dep["dim"]))
+                     for i in range(dep["num_steps"] - 1)]}
+
+    @property
+    def depth_input_projections(self):
+        entries = self.depth_conditioning_metadata()["projections"]
+        reader = self._depth_input_reader()
+        return np.stack([reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries])
+
+    @property
+    def depth_input_embeddings(self):
+        entries = self.depth_conditioning_metadata()["embeddings"]
+        reader = self._text_head_reader()
+        return tuple(reader.matrix(item["source_key"], tuple(item["shape"])) for item in entries)
+
     def host_checkpoint_fingerprint(self):
         """Invalidate a cached preflight if checkpoint files change on disk."""
         if read_config(self.model_dir) != self.config:

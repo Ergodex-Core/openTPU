@@ -41,12 +41,14 @@ IsaTransport; that is CPU simulation, not physical hardware evidence.
 | 17 input tables plus four stored voice frames | 1,061,965,824 | codes704; voice56 |
 | 16 INT8 audio heads | 34,127,872 | 168 |
 | Existing temporal/token slice, cap128 mixed precision | 4,173,934,592 | temporal25,240; text head184 |
+| Later depth input projection plus step embeddings | 324,923,392 | 208 |
 
 Each program fits the recorded32,768-word IMEM. Input-table payload alone is
 1,061,715,968 bytes; four voice frames add65,536 bytes. Audio-head payload is
 33,947,648 bytes. These are measured compiler/layout results, not timing estimates.
-The naive independent-image sum is5,270,028,288 bytes versus4,294,967,296 mapped
-bytes. It double-counts standalone workspaces and is not a lower bound, but the
+The prior three independent images total5,270,028,288 bytes versus4,294,967,296
+mapped bytes; adding standalone depth conditioning gives5,594,951,680 bytes.
+These sums double-count workspaces and are not lower bounds, but the
 input tables alone exceed the temporal/token image's121,032,704-byte free space.
 No unified allocator, phased residency scheme or device stage chaining is
 implemented. Capacity must be resolved before calling this a combined model.
@@ -97,15 +99,14 @@ for the audio bank; these are CPU/ISA construction times, not FPGA timing.
 
 ## Next implementation gate
 
-The smallest next compiler/runtime slice is the native depth input conditioning:
-select `depformer_in[codebook]` (or the shared projection when configured), project
-the normalized temporal output4096→1024, then add `depformer_text_emb(text_id)`
-for codebook0 or `depformer_emb[codebook-1](previous_audio_id)` for later steps.
-Its device-selected banks must match native same-input references and report
-quantization loss independently. It needs indexed projection/embedding layouts,
-not a speculative new RTL operation. Before implementing the full six-layer
-streaming depth transformer, inventory its per-step weight banks, context/KV
-semantics, instruction and residency costs against the actual checkpoint.
+The later [depth conditioning slice](personaplex_depth_input.md) now implements
+device-selected `depformer_in[codebook]` (or the shared projection when configured),
+4096→1024 projection and text/previous-audio embedding addition. Its source
+references isolate projection quantization from exact embedding addition.
+The next compute gate is a bounded depth-transformer layer/state path, followed
+by all six layers with verified per-step banks and native context/window/reset
+semantics. The [unified residency plan](personaplex_residency_plan.md) supplies a
+candidate fixed-state/paged-weight map and explicit host transport budget.
 
 The header-only checkpoint inventory found16 input projections
 `[1024,4096]` (268,435,456 expanded FP32 bytes), one text and15 audio step
