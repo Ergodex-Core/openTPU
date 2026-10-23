@@ -296,6 +296,28 @@ def test_hbm_geometry_maps_every_slice_channel_and_beat(pci, slices, nch):
         t.close()
 
 
+def test_every_f2_target_platform_opens_and_others_are_refused(pci):
+    """The transport takes the CFG_PLATFORM of every F2 target of this tree (the HBM shell's
+    images report f2-hbm's 5 or f2-hbm16's 6, not f2's 3: the 2026-10-21 card run of 417243f1
+    was refused for it), and no other board's."""
+    from opentpu.target import load, names
+    root, _ = pci
+    f2_ids = {load(n).platform_id for n in names() if n == "f2" or n.startswith("f2-")}
+    assert f2_ids == set(f2.PLATFORMS)
+    others = {load(n).platform_id for n in names()} - f2_ids
+    assert others
+    raw = bytearray((root / "resource0").read_bytes())
+    for pid in sorted(f2_ids | others):
+        struct.pack_into("<I", raw, R.R_CFG_PLATFORM, pid)
+        (root / "resource0").write_bytes(raw)
+        if pid in f2_ids:
+            f2.F2Transport("f2:" + BDF).close()
+        else:
+            with pytest.raises(RuntimeError, match="not the F2"):
+                f2.F2Transport("f2:" + BDF)
+        runstate.DeviceLock("f2-" + BDF, wait=0).release()
+
+
 def test_hbm_host_map_is_the_adapters():
     """beat_at is the inverse of rtl/mem/otpu_native_dram.sv's chan_of / cb_of as its testbench
     states it (sim/verilator/tb_native_nch.sv lbeat): chunk m = u x NCH / 2 + (pair ^ fold(u))."""

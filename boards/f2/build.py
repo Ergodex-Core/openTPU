@@ -3,8 +3,9 @@
 
 --target f2 (the default) builds the DDR4 CL (one slice on the slot's DIMM, sh_ddr); a target
 whose platform mem is "hbm" (targets/f2-hbm*.toml) builds the HBM CL: S slices of NCH channels,
-each channel on its own HBM pseudo-channel (cl_opentpu_hbm.sv as cl_opentpu, otpu_f2_hbm_sys, the
-HDK's cl_mem_hbm_wrapper and cl_hbm IP; docs/f2_hbm.md)."""
+each channel on its own HBM pseudo-channel (cl_opentpu_hbm.sv as cl_opentpu, otpu_f2_hbm_sys, a
+SmartConnect fabric generated first by build/scripts/create_hbm_sc.tcl, the HDK's
+cl_mem_hbm_wrapper and cl_hbm IP; docs/f2_hbm.md)."""
 from __future__ import annotations
 
 import argparse
@@ -42,6 +43,20 @@ def check_vivado_version(output: str, expected: str) -> None:
 
 
 HBM_WRAPPER = 'hdk/cl/examples/cl_mem_perf/design/cl_mem_hbm_wrapper.sv'
+HBM_BD_SRC = 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd'
+HBM_CHAIN_IP = ('hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/axi_register_slice/axi_register_slice.xci',
+                'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/ip/cl_axi3_256b_reg_slice/cl_axi3_256b_reg_slice.xci',
+                HBM_BD_SRC + '/cl_axi_sc_1x1/cl_axi_sc_1x1.bd',
+                'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd/cl_axi_sc_1x1/hdl/cl_axi_sc_1x1_wrapper.v')
+
+# The HBM CL's core clocks (cl_opentpu_hbm.sv u_mmcm, from clk_main_a0 = 250 MHz): core kHz ->
+# (DIVCLK_DIVIDE, CLKFBOUT_MULT_F, CLKOUT0_DIVIDE_F = the core clock, CLKOUT1_DIVIDE = the pumped
+# TMEM's, 2x the core); every VCO 800-1600 MHz, multiples of 0.125, integer CLKOUT1
+# CLKFBOUT_MULT_F steps by 0.125: M 4.8 at DIVCLK 1 is not one (DRC AVAL-168 moved it to 4.75,
+# the core at 148.4 / 197.9 MHz); DIVCLK 5 / M 24 (PFD 50, VCO 1200) gives 150 / 200 exactly
+HBM_CORE_MMCM = {200000: (5, 24.0, 6.0, 3),     # PFD 50, VCO 1200: 200 / 400
+                 175000: (5, 21.0, 6.0, 3),     # PFD 50, VCO 1050: 175 / 350
+                 150000: (5, 24.0, 8.0, 4)}     # PFD 50, VCO 1200: 150 / 300
 
 
 def is_hbm(t: target.Target) -> bool:
@@ -56,16 +71,56 @@ def check_hbm_ip(hdk: Path) -> None:
     if not ip.is_file():
         raise RuntimeError(f'Missing HBM IP: {ip}; source hdk_setup.sh')
     p = json.loads(ip.read_text())['ip_inst']['parameters']['component_parameters']
+    # the global address switch on: the host's own port (NPORT) reaches every channel's
+    # pseudo-channel; the monitor APB on: the shell's MON_APB ports are connected (the AWS Shell
+    # Interface Specification: an unconnected monitor interface fails AFI creation)
     want = {'USER_HBM_STACK': '2', 'USER_AXI_CLK_FREQ': '450', 'USER_HBM_DENSITY': '16GB',
-            'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE'}
+            'USER_SWITCH_ENABLE_00': 'TRUE', 'USER_SWITCH_ENABLE_01': 'TRUE',
+            'USER_MON_APB_EN': 'TRUE'}
     for k, v in want.items():
-        if p.get(k, [{}])[0].get('value') != v:
-            raise RuntimeError(f'{ip}: {k} is not {v}')
+        if str(p.get(k, [{}])[0].get('value')).upper() != v:   # (the HDK writes 'true' / 'TRUE')
+            near = sorted(n for n in p if 'APB' in n or 'SWITCH' in n)
+            raise RuntimeError(f'{ip}: {k} is not {v} (the IP\'s APB / switch parameters: {near})')
     gen = hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/ip/cl_hbm/synth/cl_hbm.v'
     if not gen.is_file():
         raise RuntimeError(f'Missing HBM generated product: {gen}')
     if not (hdk / HBM_WRAPPER).is_file():
         raise RuntimeError(f'Missing HDK HBM wrapper: {hdk / HBM_WRAPPER}')
+    # the memory path's prebuilt IP (AWS's cl_dram_hbm_dma chain: docs/f2_hbm.md)
+    for rel in HBM_CHAIN_IP:
+        if not (hdk / rel).is_file():
+            raise RuntimeError(f'Missing HDK IP for the HBM chain: {hdk / rel}')
+
+
+HBM_RST_PIPE = ("  lib_pipe #(.WIDTH(1), .STAGES(4)) PIPE_HBM_AXI_RST (.clk(axi_clk), .rst_n(1'b1), "
+                ".in_bus(i_rst_450m_n), .out_bus(axi_rst_n));\n")
+HBM_RST_PORT = '.AXI_``P``_ARESET_N           (axi_rst_n                      )'
+
+
+def hbm_wrapper_per_port_reset(text: str) -> str:
+    """The HDK's cl_mem_hbm_wrapper with one AXI reset pipeline per HBM port. AWS's single
+    lib_pipe (PIPE_HBM_AXI_RST) fans out to all 32 ports' ARESET_N across the die's bottom edge:
+    placed at a 450 MHz AXI clock its last register reached port 0 2.25 ns of route away on the
+    2.222 ns period (a recovery check, -0.261 ns, the 150 MHz build 62b34824). Each port now has
+    its own four-stage pipe, DONT_TOUCH so synthesis (-keep_equivalent_registers) and opt_design
+    keep the equivalent registers apart; the original pipe stays for the wrapper's own uses.
+    Fails closed: every marker must occur exactly once (a changed HDK wrapper stops the build)."""
+    marks = [('  logic axi_rst_n;\n',
+              '  logic axi_rst_n;\n  logic [31:0] axi_rst_n_p;   // openTPU: a reset pipeline per HBM port (g_otpu_rst)\n'),
+             (HBM_RST_PIPE, HBM_RST_PIPE +
+              "  // openTPU (boards/f2/build.py hbm_wrapper_per_port_reset): a reset pipeline per HBM AXI\n"
+              "  // port, each placed by its port; the single pipe above fans out across the bottom edge\n"
+              "  for (genvar otpu_rp = 0; otpu_rp < 32; otpu_rp++) begin : g_otpu_rst\n"
+              "    (* DONT_TOUCH = \"yes\" *) lib_pipe #(.WIDTH(1), .STAGES(4)) PIPE_HBM_AXI_RST_P "
+              "(.clk(axi_clk), .rst_n(1'b1), .in_bus(i_rst_450m_n), .out_bus(axi_rst_n_p[otpu_rp]));\n"
+              "  end\n"),
+             (HBM_RST_PORT, '.AXI_``P``_ARESET_N           (axi_rst_n_p[P]                 )')]
+    for old, new in marks:
+        if text.count(old) != 1:
+            raise RuntimeError(f'cl_mem_hbm_wrapper.sv: expected exactly one {old.strip()[:60]!r} '
+                               f'({text.count(old)} found): the HDK wrapper changed, review the per-port reset patch')
+        text = text.replace(old, new)
+    return text
 
 
 def check_hdk(hdk: Path, t: target.Target, *, shell: bool) -> Path:
@@ -120,10 +175,11 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
     p = t.platform
     if hbm:
         nport = t.arch['S'] * p['channels_per_slice']
-        if (t.core_khz != 200000 or p['channel_bytes'] != 2**29 or nport > 32 or
+        if (t.core_khz not in HBM_CORE_MMCM or p['channel_bytes'] != 2**29 or nport > 31 or
                 p['channels_per_slice'] & (p['channels_per_slice'] - 1) or t.uarch['TMEM_PMP'] != 1):
-            raise RuntimeError('F2 HBM CL requires 200 MHz (TMEM 400), 512 MiB channels, '
-                               'a power-of-two NCH and S x NCH <= 32 ports')
+            raise RuntimeError('F2 HBM CL requires a 200, 175 or 150 MHz core (the pumped TMEM at '
+                               '2x), 512 MiB channels, a power-of-two NCH and S x NCH <= 31 ports (the host '
+                               'has its own HBM port)')
     elif t.core_khz != 100000 or t.arch['S'] != 1 or p['channel_bytes'] != 2**31:
         raise RuntimeError('F2 wrapper requires 100 MHz, one slice, 2 GiB per channel')
     cl = out / 'cl_opentpu'
@@ -150,13 +206,22 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         if not w.is_file():
             raise RuntimeError(f'Missing HDK HBM wrapper: {w}')
         shutil.copy2(w, cl / 'design/cl_mem_hbm_wrapper.sv')
+        wt = (cl / 'design/cl_mem_hbm_wrapper.sv').read_text()
+        if 'lib_pipe' in wt:          # the HDK's wrapper (tests may pass a stub): per-port resets
+            (cl / 'design/cl_mem_hbm_wrapper.sv').write_text(hbm_wrapper_per_port_reset(wt))
+        div, mult, d0, d1 = HBM_CORE_MMCM[t.core_khz]
         (cl / 'design/opentpu_geometry.vh').write_text(
-            f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n")
+            f"localparam int S = {t.arch['S']};\nlocalparam int NCH = {p['channels_per_slice']};\n"
+            f"localparam int CORE_KHZ_CL = {t.core_khz};\n"
+            f"localparam int MMCM_DIVCLK = {div};\nlocalparam real MMCM_MULT = {mult};\n"
+            f"localparam real MMCM_DIV0 = {d0};\nlocalparam int MMCM_DIV1 = {d1};\n")
     else:
         (cl / 'design/cl_opentpu_hbm.sv').unlink()
         (scripts / 'synth_cl_opentpu_hbm.tcl').unlink()
         (cons / 'cl_timing_user_hbm.tcl').unlink()
         (cons / 'cl_pnr_user_hbm.tcl').unlink()
+        (scripts / 'create_hbm_sc.tcl').unlink()
+        (scripts / 'hbm_sc_inst.tcl').unlink()
     files = target.sources(t)
     for name in files:
         dest = cl / 'design/rtl' / name
@@ -194,6 +259,17 @@ def prepare(out: Path, sh: Path, t: target.Target, build_id: str,
         'sources': {str(p.relative_to(cl)): sha(p) for p in sorted(cl.rglob('*')) if p.is_file()}}
     (out / 'inputs.json').write_text(json.dumps(provenance, indent=2) + '\n')
     return cl
+
+
+def hbm_sc_command(cl: Path, t: target.Target, log: Path, hdk: Path | None = None) -> list[str]:
+    """The SmartConnect fabric's generation (an HBM target, before synthesis): Vivado batch on
+    create_hbm_sc.tcl into cl/ip (the block design, its OOC checkpoints, its wrapper and the
+    CL's instance of it, otpu_hbm_sc_inst.vh; docs/f2_hbm.md "The memory path")."""
+    nport = t.arch['S'] * t.platform['channels_per_slice']
+    return ['vivado', '-mode', 'batch', '-source', str(cl / 'build/scripts/create_hbm_sc.tcl'),
+            '-log', str(log), '-journal', str(log.with_suffix('.jou')),
+            '-tclargs', str(cl / 'ip'), str(nport), t.tech['part'], str(t.core_khz * 1000),
+            str((hdk or Path('/HDK')) / HBM_BD_SRC)]
 
 
 def load_synthesis(run: Path, expected_sha: str) -> tuple[dict, Path, str]:
@@ -249,6 +325,80 @@ def inherit_synthesis(out: Path, cl: Path, run: Path, info: dict, dcp: Path, exp
     current['parent_synthesis'] = {'run': str(run), 'inputs_sha256': sha(run / 'inputs.json'),
         'checkpoint': str(dcp), 'checkpoint_sha256': digest}
     (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
+
+
+INCR_DIRECTIVES = ('TimingClosure', 'RuntimeOptimized', 'Quick')
+
+
+def load_incremental_reference(run: Path, expected_sha: str, t: target.Target) -> tuple[dict, Path]:
+    """A finished implementation run's routed checkpoint as the reference of an incremental
+    implementation (read_checkpoint -incremental before place_design): met or VIOLATED (a
+    reference is never packaged), exactly one of them, pinned by digest, built for the same
+    platform and device as `t`."""
+    if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
+        raise RuntimeError('--incremental-sha256 must be a SHA256 digest')
+    info = json.loads((run / 'inputs.json').read_text())
+    build_id = info['build_id']
+    if not re.fullmatch(r'[0-9a-fA-F]{8}', build_id):
+        raise RuntimeError('Invalid reference build ID')
+    exit_code = run / 'exit_code'
+    if not exit_code.is_file() or not re.fullmatch(r'[0-9]+', exit_code.read_text().strip()):
+        raise RuntimeError('Incremental reference run has no completed exit status')
+    for key in ('platform', 'tech'):
+        if info.get(key) != t.to_dict().get(key):
+            raise RuntimeError(f'Incremental reference {key} differs from target {t.name}')
+    checkpoints = run / 'cl_opentpu/build/checkpoints'
+    routed = [p for p in (checkpoints / f'cl_opentpu.{build_id}.post_route.dcp',
+                          checkpoints / f'cl_opentpu.{build_id}.post_route.VIOLATED.dcp')
+              if p.is_file()]
+    if len(routed) != 1:
+        raise RuntimeError(f'Incremental reference run needs exactly one routed checkpoint, has {len(routed)}')
+    if sha(routed[0]) != expected_sha.lower():
+        raise RuntimeError('Incremental reference checkpoint SHA256 mismatch')
+    return info, routed[0]
+
+
+def attach_incremental(out: Path, run: Path, info: dict, dcp: Path, expected_sha: str,
+                       directive: str, force: bool) -> dict:
+    """Copy the pinned reference into the run (its provenance in inputs.json) and return the
+    environment build_level_1_cl.tcl reads (OTPU_INCR_*)."""
+    if directive not in INCR_DIRECTIVES:
+        raise RuntimeError(f'Unknown incremental directive {directive}')
+    dest = out / 'incremental_reference' / dcp.name
+    dest.parent.mkdir()
+    shutil.copy2(dcp, dest)
+    digest = expected_sha.lower()
+    if sha(dcp) != digest or sha(dest) != digest:
+        raise RuntimeError('Copied incremental reference SHA256 mismatch')
+    current = json.loads((out / 'inputs.json').read_text())
+    current['incremental_reference'] = {'run': str(run), 'build_id': info['build_id'],
+        'inputs_sha256': sha(run / 'inputs.json'), 'checkpoint': str(dcp),
+        'checkpoint_sha256': digest, 'timing_met': not dcp.name.endswith('.VIOLATED.dcp'),
+        'directive': directive, 'force_incr': force, 'copy': str(dest)}
+    (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
+    return {'OTPU_INCR_DCP': str(dest), 'OTPU_INCR_SHA256': digest,
+            'OTPU_INCR_DIRECTIVE': directive, 'OTPU_INCR_FORCE': '1' if force else '0'}
+
+
+def attach_qor_suggestions(out: Path, rqs: Path, expected_sha: str) -> dict:
+    """Copy a pinned .rqs file (write_qor_suggestions of an earlier routed run) into the run,
+    record it in inputs.json and return the environment build_level_1_cl.tcl reads (OTPU_RQS*)."""
+    if not re.fullmatch(r'[0-9a-fA-F]{64}', expected_sha):
+        raise RuntimeError('--qor-suggestions-sha256 must be a SHA256 digest')
+    if rqs.suffix != '.rqs' or not rqs.is_file():
+        raise RuntimeError(f'{rqs}: not a QoR suggestions (.rqs) file')
+    digest = expected_sha.lower()
+    if sha(rqs) != digest:
+        raise RuntimeError('QoR suggestions file SHA256 mismatch')
+    dest = out / 'qor_suggestions' / rqs.name
+    dest.parent.mkdir()
+    shutil.copy2(rqs, dest)
+    if sha(dest) != digest:
+        raise RuntimeError('Copied QoR suggestions SHA256 mismatch')
+    current = json.loads((out / 'inputs.json').read_text())
+    current['qor_suggestions'] = {'file': str(rqs), 'sha256': digest, 'copy': str(dest)}
+    (out / 'inputs.json').write_text(json.dumps(current, indent=2) + '\n')
+    return {'OTPU_RQS': str(dest), 'OTPU_RQS_SHA256': digest}
 
 
 def load_routed_run(run: Path, expected_sha: str) -> tuple[dict, Path]:
@@ -368,6 +518,21 @@ def main() -> None:
     p.add_argument('--place-directive', default='SSI_SpreadLogic_high',
         help="place_design's directive for build_all.tcl's first tclarg (SSI_SpreadLogic_high: the "
              "flow's since its first run; SSI_SpreadLogic_low keeps the slice together: docs/wide_port.md Placement)")
+    p.add_argument('--incremental-from', type=Path,
+        help='a finished ImplCL/BuildAll run whose routed checkpoint (met or VIOLATED) seeds an '
+             'incremental place and route (read_checkpoint -incremental before place_design; '
+             'docs/wide_port.md "Incremental implementation")')
+    p.add_argument('--incremental-sha256', help="the reference routed checkpoint's digest")
+    p.add_argument('--incremental-directive', choices=INCR_DIRECTIVES, default='TimingClosure',
+        help='read_checkpoint -incremental -directive (TimingClosure: target WNS 0, the failing '
+             "paths ripped up; RuntimeOptimized: keep the reference's WNS; Quick: not timing-driven)")
+    p.add_argument('--incremental-force', action='store_true',
+        help="read_checkpoint -force_incr: incremental even where Vivado's reuse / reference "
+             'quality criteria would fall back to the default algorithms')
+    p.add_argument('--qor-suggestions', type=Path,
+        help='an .rqs file (write_qor_suggestions of an earlier routed run of this netlist) read '
+             'before opt_design; its automatic suggestions apply at opt_design / place_design')
+    p.add_argument('--qor-suggestions-sha256', help="the .rqs file's digest")
     a = p.parse_args()
     t = target.load(a.target)
     if t.platform.get('board') != 'f2':
@@ -375,7 +540,8 @@ def main() -> None:
     hdk, out = a.hdk.resolve(), a.out.resolve()
     if a.package_only:
         if (not a.route_sha256 or a.package or a.prepare_only or a.from_synth or
-                a.synth_sha256 or a.build_id or a.flow != 'SynthCL'):
+                a.synth_sha256 or a.build_id or a.flow != 'SynthCL' or a.incremental_from or
+                a.incremental_sha256 or a.incremental_force or a.qor_suggestions):
             p.error('--package-only requires --route-sha256 and does not accept build options')
         sh = check_hdk(hdk, t, shell=True)
         check_vivado_version(command('vivado', '-version'), t.platform['vivado'])
@@ -393,8 +559,20 @@ def main() -> None:
         p.error('--from-synth and --synth-sha256 are only valid with ImplCL')
     if a.package and a.flow == 'SynthCL':
         p.error('--package requires ImplCL or BuildAll')
+    if bool(a.incremental_from) != bool(a.incremental_sha256):
+        p.error('--incremental-from and --incremental-sha256 go together')
+    if a.incremental_from and a.flow == 'SynthCL':
+        p.error('--incremental-from requires ImplCL or BuildAll')
+    if a.incremental_force and not a.incremental_from:
+        p.error('--incremental-force requires --incremental-from')
+    if bool(a.qor_suggestions) != bool(a.qor_suggestions_sha256):
+        p.error('--qor-suggestions and --qor-suggestions-sha256 go together')
+    if a.qor_suggestions and a.flow == 'SynthCL':
+        p.error('--qor-suggestions requires ImplCL or BuildAll')
     sh = check_hdk(hdk, t, shell=a.flow != 'SynthCL')
     parent = load_synthesis(a.from_synth.resolve(), a.synth_sha256) if a.from_synth else None
+    reference = (load_incremental_reference(a.incremental_from.resolve(), a.incremental_sha256, t)
+                 if a.incremental_from else None)
     build_id = (parent[0]['build_id'] if parent else a.build_id or
                 command('git', '-C', str(ROOT), 'rev-parse', '--short=8', 'HEAD'))
     if parent and a.build_id and a.build_id != build_id:
@@ -404,6 +582,11 @@ def main() -> None:
     cl = prepare(out, sh, t, build_id, hdk / HBM_WRAPPER if is_hbm(t) else None)
     if parent:
         inherit_synthesis(out, cl, a.from_synth.resolve(), *parent)
+    incremental = (attach_incremental(out, a.incremental_from.resolve(), *reference,
+                                      a.incremental_sha256, a.incremental_directive,
+                                      a.incremental_force) if reference else {})
+    rqs = (attach_qor_suggestions(out, a.qor_suggestions.resolve(), a.qor_suggestions_sha256)
+           if a.qor_suggestions else {})
     env = dict(os.environ, CL_DIR=str(cl), CL='cl_opentpu', SHELL_MODE='small_shell',
         BUILD_FLOW=a.flow, BUILD_TAG=build_id, ENCRYPT='0',
         HDK_SHELL_DIR=str(sh), HDK_SHELL_DESIGN_DIR=str(sh / 'design'),
@@ -412,18 +595,28 @@ def main() -> None:
         HDK_BD_SRC_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.srcs/sources_1/bd'),
         HDK_BD_GEN_DIR=str(hdk / 'hdk/common/ip/cl_ip/cl_ip.gen/sources_1/bd'),
         VIVADO_TOOL_VERSION=t.platform['vivado'])
+    env.pop('OTPU_INCR_DCP', None)      # never inherited from the caller's shell
+    env.pop('OTPU_RQS', None)
+    env.update(incremental | rqs)
     cmd = ['vivado', '-mode', 'batch', '-source', 'build_all.tcl', '-log', str(out / 'vivado.log'),
         '-journal', str(out / 'vivado.jou'), '-tclargs', a.place_directive,
         'AggressiveExplore', 'AggressiveExplore', 'A1', 'B2', 'C0', 'H2']
-    (out / 'invocation.json').write_text(json.dumps({'command': cmd,
+    ip_cmd = (hbm_sc_command(cl, t, out / 'hbm_sc.log', hdk)
+              if is_hbm(t) and a.flow != 'ImplCL' else None)
+    (out / 'invocation.json').write_text(json.dumps({'command': cmd, 'ip_command': ip_cmd,
         'cwd': str(cl / 'build/scripts'),
-        'environment': {k: env[k] for k in env if k.startswith('HDK_') or
+        'environment': {k: env[k] for k in env if k.startswith(('HDK_', 'OTPU_INCR_', 'OTPU_RQS')) or
             k in ('CL_DIR', 'CL', 'SHELL_MODE', 'BUILD_FLOW', 'BUILD_TAG', 'ENCRYPT', 'VIVADO_TOOL_VERSION')}}, indent=2) + '\n')
     if a.prepare_only:
         print(f'Prepared {cl}; invocation: {out / "invocation.json"}')
         return
     version = command('vivado', '-version')
     check_vivado_version(version, t.platform['vivado'])
+    if ip_cmd:                          # the SmartConnect fabric first (an HBM target)
+        with (out / 'hbm_sc_console.log').open('w') as log:
+            r = subprocess.run(ip_cmd, cwd=out, stdout=log, stderr=subprocess.STDOUT)
+        if r.returncode or not (cl / 'ip/ip_done.txt').is_file():
+            raise RuntimeError(f'SmartConnect generation failed; see {out / "hbm_sc_console.log"}')
     with (out / 'console.log').open('w') as log:
         result = subprocess.run(cmd, cwd=cl / 'build/scripts', env=env, stdout=log,
                                 stderr=subprocess.STDOUT)
@@ -432,6 +625,12 @@ def main() -> None:
     checkpoint = cl / f'build/checkpoints/cl_opentpu.{build_id}.{stage}.dcp'
     if result.returncode or not checkpoint.is_file():
         raise RuntimeError(f'{a.flow} failed; see {out / "console.log"}')
+    if reference and not re.search(r'^OTPU_INCREMENTAL_REFERENCE ',
+                                     (out / 'console.log').read_text(), re.M):
+        raise RuntimeError('The incremental reference was never loaded')
+    if a.qor_suggestions and not re.search(r'^OTPU_QOR_SUGGESTIONS ',
+                                           (out / 'console.log').read_text(), re.M):
+        raise RuntimeError('The QoR suggestions were never read')
     if a.flow != 'SynthCL' and not (checkpoint.parent /
             f'cl_opentpu.{build_id}.route_validation.passed').is_file():
         raise RuntimeError(f'Post-route validation failed; see {out / "console.log"}')

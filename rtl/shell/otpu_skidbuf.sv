@@ -14,13 +14,13 @@ module otpu_skidbuf #(
   input  logic         i_v,
   output logic         i_r,
   input  logic [W-1:0] i_d,
-  output logic         o_v,
+  (* shreg_extract = "no" *) output logic o_v,
   input  logic         o_r,
-  output logic [W-1:0] o_d,
+  (* shreg_extract = "no" *) output logic [W-1:0] o_d,
   output logic         any                 // a beat in either slot
 );
-  logic         r1_v;                      // the second slot (holds the beat taken as the
-  logic [W-1:0] r1_d;                      //   consumer stalled)
+  (* shreg_extract = "no" *) logic         r1_v;   // the second slot (holds the beat taken as
+  (* shreg_extract = "no" *) logic [W-1:0] r1_d;   //   the consumer stalled; never an SRL)
   assign i_r = !r1_v;
   assign any = o_v || r1_v;
   wire i_tk = i_v && !r1_v;

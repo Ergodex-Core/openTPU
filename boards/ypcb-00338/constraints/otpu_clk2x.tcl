@@ -106,6 +106,19 @@ if {[llength $c2x_pb]} {
       error "\[otpu_clk2x.tcl\] the [llength $c2x_paths] worst core -> pump RAM paths hold $c2x_nr read and $c2x_nw write-stage paths: both kinds must appear"
     }
     puts "otpu_clk2x.tcl: $c2x_np pumped TMEM RAMs ([get_property NAME $c2x_cs] $c2x_ts ns, [get_property NAME $c2x_cf] $c2x_tf ns), [llength $c2x_br] block RAM primitives with [llength $c2x_ip] input pins, [llength $c2x_pk] write-stage registers, [llength $c2x_qp] word pins; of the [llength $c2x_paths] worst core -> RAM paths $c2x_nr read requests at [expr {2.0 * $c2x_tf}] ns and $c2x_nw write-stage at $c2x_req_w ns"
+    # the read data's return (clk_f -> clk), a report only: the worst paths through the word pins
+    # (their requirement two fast periods, as set above) and the worst clk_f -> clk paths of any
+    # start (the F2 alex-shell build placed 148 such endpoints at one fast period: if their start
+    # is not a piece's qa / qb register, they are outside this exception by design; a capture
+    # register on clk at the piece would add a core cycle of TMEM read latency, not done)
+    if {[catch {
+      foreach c2x_p [get_timing_paths -quiet -setup -nworst 1 -max_paths 4 -from $c2x_cf -through $c2x_qp -to $c2x_cs] {
+        puts "otpu_clk2x.tcl: read return [get_property STARTPOINT_PIN $c2x_p] -> [get_property ENDPOINT_PIN $c2x_p]: requirement [get_property REQUIREMENT $c2x_p] ns, slack [get_property SLACK $c2x_p]"
+      }
+      foreach c2x_p [get_timing_paths -quiet -setup -nworst 1 -max_paths 8 -from $c2x_cf -to $c2x_cs] {
+        puts "otpu_clk2x.tcl: clk_f -> clk [get_property STARTPOINT_PIN $c2x_p] -> [get_property ENDPOINT_PIN $c2x_p]: requirement [get_property REQUIREMENT $c2x_p] ns, slack [get_property SLACK $c2x_p]"
+      }
+    } c2x_err]} { puts "otpu_clk2x.tcl: (the return-path report failed: $c2x_err)" }
   }
 } else {
   puts "otpu_clk2x.tcl: no pumped TMEM RAMs (otpu_pump_bank)"

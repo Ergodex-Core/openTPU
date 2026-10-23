@@ -15,7 +15,9 @@ module otpu_xr #(
   input  logic [W-1:0] d,
   output logic [W-1:0] q
 );
-  (* max_fanout = 256 *) logic [W-1:0] r;     // r_reg: the floorplan's USER_SLL_REG cells
+  // (shreg_extract no: a chain of stages must stay flip-flops, one per SLR, never an SRL: the AWS
+  // Shell Interface Specification's rule for crossing registers)
+  (* max_fanout = 256, shreg_extract = "no" *) logic [W-1:0] r;   // r_reg: the floorplan's USER_SLL_REG cells
   assign q = r;
   always_ff @(posedge clk) begin
     r <= d;

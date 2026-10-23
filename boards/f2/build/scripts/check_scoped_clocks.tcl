@@ -1,5 +1,11 @@
 # Optional TIMING-54 context classification, never a timing waiver. The caller
 # must apply the normal severity policy to `remaining` and retain timing gates.
+# Two CLs are reviewed (cl_kind): the DDR CL (boards/f2/design/cl_opentpu.sv: the HDK's DDR
+# UI clock group and cl_timing_user.tcl's main / core pair at 4.000 ns both ways, three
+# context findings) and the HBM CL (cl_opentpu_hbm.sv, since the alex-shell rework: no DIMM,
+# the SmartConnect fabric u_sc; cl_timing_user_hbm.tcl's pair, main -> core at the core
+# period, 5.000 / 5.714 / 6.667 ns at 200 / 175 / 150 MHz, core -> main at 4.000: two
+# findings). Everything else in TIMING-54 stays unreviewed (an error here).
 # Reviewed evidence: shell-methodology-evidence-001.json SHA256
 # c95e4fd49e6d9428f2626ade7bb6cc85b24898d8f1b4ac11908be0cab808e6d2;
 # clock-query-evidence-001.json SHA256
@@ -32,19 +38,71 @@ proc ::otpu_scoped::names {objects} {
     # Preserve order and duplicates for the caller's exact identity checks.
     return [values $objects NAME]
 }
-proc ::otpu_scoped::clock_data {} {
-    return {
-        clk_main_a0 {PERIOD 4.000 MASTER_CLOCK clk_fpga SOURCE_PINS WRAPPER/IO_SHIM/RL_CLKS/MMCM_CLK_MAIN_A/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst/CLKOUT0}
-        clk_raw {PERIOD 10.000 MASTER_CLOCK clk_main_a0 SOURCE_PINS WRAPPER/CL/u_mmcm/CLKOUT0}
-        mmcm_clkout0 {PERIOD 3.752 MASTER_CLOCK CLK_DIMM_DP SOURCE_PINS WRAPPER/CL/SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0}
-    }
+proc ::otpu_scoped::ddr_pin {} {
+    return WRAPPER/CL/SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0
 }
-proc ::otpu_scoped::commands {} {
-    return {
-        {set_clock_groups -asynchronous -group [get_clocks clk_main_a0] -group [get_clocks -of_objects [get_pins -hierarchical -filter NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0]]}
-        {set_max_delay -datapath_only -from [get_clocks clk_main_a0] -to [get_clocks -of_objects [get_pins u_clk/O]] 4.000}
-        {set_max_delay -datapath_only -from [get_clocks -of_objects [get_pins u_clk/O]] -to [get_clocks clk_main_a0] 4.000}
+proc ::otpu_scoped::cl_kind {} {
+    # The CL of the linked design, fail closed: "ddr" (the DDR4 IP's MMCM pin and its UI clock
+    # mmcm_clkout0, no SmartConnect fabric) or "hbm" (the fabric WRAPPER/CL/u_sc, no DDR4 IP, no
+    # UI clock: the validator's own HBM marker, validate_route.tcl). Anything else is unreviewed.
+    set ddr [llength [get_pins -quiet -hierarchical -filter {NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0}]]
+    set sc [llength [get_cells -quiet WRAPPER/CL/u_sc]]
+    set ui [llength [get_clocks -quiet mmcm_clkout0]]
+    if {$ddr == 1 && $sc == 0 && $ui == 1} {return ddr}
+    if {$ddr == 0 && $sc == 1 && $ui == 0} {return hbm}
+    error "scoped clocks: unreviewed CL (DDR4 MMCM pins $ddr, SmartConnect fabric cells $sc, DDR UI clocks $ui)"
+}
+proc ::otpu_scoped::hbm_periods {} {
+    # the HBM CL's core periods, ns: boards/f2/build.py HBM_CORE_MMCM (200 / 175 / 150 MHz)
+    return {5.000 5.714 6.667}
+}
+proc ::otpu_scoped::core_period {kind} {
+    # clk_raw's period as the design has it, three decimals (clocks' PERIOD and exceptions'
+    # requirements print so), one of the reviewed: the DDR CL's 10.000 (100 MHz), the HBM CL's
+    # hbm_periods
+    set period [format %.3f [property [resolve clock clk_raw] PERIOD]]
+    if {$kind eq "ddr"} {set reviewed {10.000}} else {set reviewed [hbm_periods]}
+    if {$period ni $reviewed} {
+        error "scoped clocks: clk_raw PERIOD $period differs from the reviewed $kind core periods ($reviewed)"
     }
+    return $period
+}
+proc ::otpu_scoped::bounds {kind t_core} {
+    # the main / core pair's datapath-only bounds by direction: the DDR CL 4.000 both ways
+    # (cl_timing_user.tcl: the smaller period); the HBM CL the destination's period
+    # (cl_timing_user_hbm.tcl: main -> core the core's, core -> main clk_main_a0's 4.000)
+    if {$kind eq "ddr"} {set main_to_core 4.000} else {set main_to_core $t_core}
+    return [dict create {clk_main_a0 clk_raw} $main_to_core {clk_raw clk_main_a0} 4.000]
+}
+proc ::otpu_scoped::clock_data {kind t_core} {
+    set data [dict create \
+        clk_main_a0 {PERIOD 4.000 MASTER_CLOCK clk_fpga SOURCE_PINS WRAPPER/IO_SHIM/RL_CLKS/MMCM_CLK_MAIN_A/inst/CLK_CORE_DRP_I/clk_inst/mmcme4_adv_inst/CLKOUT0} \
+        clk_raw [list PERIOD $t_core MASTER_CLOCK clk_main_a0 SOURCE_PINS WRAPPER/CL/u_mmcm/CLKOUT0]]
+    if {$kind eq "ddr"} {
+        dict set data mmcm_clkout0 [list PERIOD 3.752 MASTER_CLOCK CLK_DIMM_DP SOURCE_PINS [ddr_pin]]
+    }
+    return $data
+}
+proc ::otpu_scoped::commands {kind t_core} {
+    # the reviewed scoped constraints as write_xdc renders them (scope WRAPPER/CL), each with its
+    # role: the DDR CL the HDK's DDR UI clock group and the main / core pair; the HBM CL the pair
+    set b [bounds $kind $t_core]
+    set data [dict create]
+    if {$kind eq "ddr"} {
+        dict set data {set_clock_groups -asynchronous -group [get_clocks clk_main_a0] -group [get_clocks -of_objects [get_pins -hierarchical -filter NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0]]} group
+    }
+    dict set data "set_max_delay -datapath_only -from \[get_clocks clk_main_a0\] -to \[get_clocks -of_objects \[get_pins u_clk/O\]\] [dict get $b {clk_main_a0 clk_raw}]" main_to_core
+    dict set data "set_max_delay -datapath_only -from \[get_clocks -of_objects \[get_pins u_clk/O\]\] -to \[get_clocks clk_main_a0\] [dict get $b {clk_raw clk_main_a0}]" core_to_main
+    return $data
+}
+proc ::otpu_scoped::canonical {command} {
+    # an exported set_max_delay's value as three decimals: the HBM pair's main -> core bound is
+    # set from the core clock's PERIOD property and written back as Vivado prints the double
+    # (4.000 and 6.667 stay as they are; nothing else of a command is touched)
+    if {[regexp {^(set_max_delay -datapath_only -from \[.*\] -to \[.*\]) ([0-9]+(?:\.[0-9]+)?)$} $command -> head value]} {
+        return "$head [format %.3f $value]"
+    }
+    return $command
 }
 proc ::otpu_scoped::export_record {entries position scope commands} {
     if {$position eq "" && ![llength $commands]} {return $entries}
@@ -131,9 +189,11 @@ proc ::otpu_scoped::reset_path {path} {
         {WRAPPER/CL/core_reset_n_reg[2]/CLR}
     }}]
 }
-proc ::otpu_scoped::bound4 {path} {
-    return [expr {[dict get $path EXCEPTION] eq "MaxDelay Path 4.000ns -datapath_only" &&
-        [dict get $path REQUIREMENT] eq "4.000"}]
+proc ::otpu_scoped::bound {path src dst bounds} {
+    # the pair's datapath-only bound in this direction (bounds: the CL's, by direction)
+    set required [dict get $bounds [list $src $dst]]
+    return [expr {[dict get $path EXCEPTION] eq "MaxDelay Path ${required}ns -datapath_only" &&
+        [dict get $path REQUIREMENT] eq $required}]
 }
 proc ::otpu_scoped::paths {audit tag sk sn dk dn ignored limit nworst} {
     set opt {}; if {$ignored} {set opt {-user_ignored}}
@@ -162,27 +222,32 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
     if {[llength [lsort -unique $live_names]] != [llength $live_names] ||
         [llength [lsort -unique $violation_names]] != [llength $violation_names] ||
         [lsort $violation_names] ne [lsort $live_names]} {error "scoped clocks: incomplete live violation inventory"}
+    set cl [cl_kind]
+    set t_core [core_period $cl]
+    set b [bounds $cl $t_core]
+    puts $audit [list cl_kind $cl core_period $t_core bounds $b]
     set export ${prefix}_scoped_clocks.xdc
     if {[file exists $export]} {error "scoped clocks: evidence export already exists"}
     write_xdc -type timing -constraints all -write_id $export
     set entries [read_export $export]
-    set expected [commands]
+    set expected [commands $cl $t_core]
     set exported_positions {}
     dict for {id records} $entries {
         foreach record $records {
             lassign $record scope commands
             foreach command $commands {
-                if {$command in $expected} {
+                set canon [canonical $command]
+                if {[dict exists $expected $canon]} {
                     unique_export $entries $id
-                    if {$scope ne "WRAPPER/CL" || [dict exists $exported_positions $command]} {
+                    if {$scope ne "WRAPPER/CL" || [dict exists $exported_positions $canon]} {
                         error "scoped clocks: wrong scope or duplicate reviewed command"
                     }
-                    dict set exported_positions $command $id
+                    dict set exported_positions $canon $id
                 }
             }
         }
     }
-    if {[dict size $exported_positions] != 3} {error "scoped clocks: reviewed commands missing or changed"}
+    if {[dict size $exported_positions] != [dict size $expected]} {error "scoped clocks: reviewed commands missing or changed"}
     set context {}; set remaining {}; set matched {}
     foreach name [lsort $violation_names] {
         set finding [get_methodology_violations $name]
@@ -204,21 +269,27 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
         }
         if {![dict exists $entries $position]} {error "scoped clocks: finding export position missing"}
         lassign [unique_export $entries $position] scope command
-        if {$scope ne "WRAPPER/CL" || $command ni $expected || $command in $matched} {
+        set canon [canonical $command]
+        if {$scope ne "WRAPPER/CL" || ![dict exists $expected $canon] || $canon in $matched} {
             error "scoped clocks: finding does not map uniquely to reviewed command"
         }
-        if {$command eq [lindex $expected 0]} {
+        set role [dict get $expected $canon]
+        if {$role eq "group"} {
             if {$kind ne "Clock Group" || $clocks ne "clk_main_a0 and mmcm_clkout0"} {error "scoped clocks: DDR finding mismatch"}
         } elseif {$kind ne "Max Delay Datapath Only" || $clocks ne "clk_main_a0 and clk_raw"} {error "scoped clocks: main/core finding mismatch"}
-        puts $audit [list scoped_constraint $name position $position scope $scope command $command]
-        lappend matched $command; lappend context $name
+        puts $audit [list scoped_constraint $name position $position scope $scope command $command role $role]
+        lappend matched $canon; lappend context $name
     }
-    if {[llength $context] != 3 || [lsort $matched] ne [lsort $expected]} {error "scoped clocks: expected exact three context findings"}
-    set outside {}; set clock_data [clock_data]
+    if {[llength $context] != [dict size $expected] || [lsort $matched] ne [lsort [dict keys $expected]]} {
+        error "scoped clocks: expected exact [dict size $expected] context findings ($cl CL)"
+    }
+    set outside {}; set clock_data [clock_data $cl $t_core]
     dict for {name props} $clock_data {
         set object [resolve clock $name]
         dict for {key value} [dict merge $props {IS_GENERATED 1 IS_VIRTUAL 0 IS_PROPAGATED 1}] {
-            if {[property $object $key] ne $value} {error "scoped clocks: $name $key differs from reviewed clock"}
+            set actual [property $object $key]
+            if {$key eq "PERIOD"} {set actual [format %.3f $actual]; set value [format %.3f $value]}
+            if {$actual ne $value} {error "scoped clocks: $name $key differs from reviewed clock"}
         }
         puts $audit [list clock $name properties $props]
         set member_names [names [all_registers -clock [resolve clock $name] -cells]]
@@ -234,24 +305,26 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
         dict set outside $name $external
         puts $audit [list membership $name count [llength $member_names] outside_cl $external]
     }
-    foreach {pin clock} {
-        WRAPPER/CL/clk_main_a0 clk_main_a0
-        WRAPPER/CL/u_clk/O clk_raw
-        WRAPPER/CL/SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0 mmcm_clkout0
-    } {
+    set pin_clocks {WRAPPER/CL/clk_main_a0 clk_main_a0 WRAPPER/CL/u_clk/O clk_raw}
+    if {$cl eq "ddr"} {lappend pin_clocks [ddr_pin] mmcm_clkout0}
+    foreach {pin clock} $pin_clocks {
         set selected [get_pins $pin]
         if {[names $selected] ne [list $pin] || [names [get_clocks -of_objects $selected]] ne [list $clock]} {
             error "scoped clocks: constraint clock-pin resolution mismatch"
         }
     }
-    # The exported DDR selector is a wildcard. Prove it resolves to only the
-    # reviewed infrastructure pin, including against an accidental extra copy.
-    set ddr_pins [get_pins -hierarchical -filter {NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0}]
-    if {[names $ddr_pins] ne [list [dict get $clock_data mmcm_clkout0 SOURCE_PINS]] ||
-        [names [get_clocks -of_objects $ddr_pins]] ne {mmcm_clkout0}} {
-        error "scoped clocks: DDR wildcard clock selection changed"
+    set pairs {clk_main_a0 clk_raw clk_raw clk_main_a0}
+    if {$cl eq "ddr"} {
+        # The exported DDR selector is a wildcard. Prove it resolves to only the
+        # reviewed infrastructure pin, including against an accidental extra copy.
+        set ddr_pins [get_pins -hierarchical -filter {NAME=~*SH_DDR/genblk1.IS_DDR_PRESENT.DDR4_0/inst/u_ddr4_infrastructure/gen_mmcme4.u_mmcme_adv_inst/CLKOUT0}]
+        if {[names $ddr_pins] ne [list [dict get $clock_data mmcm_clkout0 SOURCE_PINS]] ||
+            [names [get_clocks -of_objects $ddr_pins]] ne {mmcm_clkout0}} {
+            error "scoped clocks: DDR wildcard clock selection changed"
+        }
+        lappend pairs clk_main_a0 mmcm_clkout0 mmcm_clkout0 clk_main_a0
     }
-    foreach {src dst} {clk_main_a0 clk_raw clk_raw clk_main_a0 clk_main_a0 mmcm_clkout0 mmcm_clkout0 clk_main_a0} {
+    foreach {src dst} $pairs {
         set is_core [expr {$src eq "clk_raw" || $dst eq "clk_raw"}]
         foreach ignored {0 1} {
             set tag ${src}_to_${dst}_ignored${ignored}
@@ -272,7 +345,7 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
                     if {$ignored} {
                         if {![reset_path $path] || [dict get $path EXCEPTION] ne "False Path"} {error "scoped clocks: unexpected ignored main/core data path"}
                     } else {
-                        if {![bound4 $path]} {error "scoped clocks: main/core datapath bound missing"}
+                        if {![bound $path $src $dst $b]} {error "scoped clocks: main/core datapath bound missing"}
                         if {![reset_path $path]} {incr data_count}
                     }
                 } elseif {[dict get $path EXCEPTION] ne "Asynchronous Clock Groups"} {
@@ -292,7 +365,7 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
                         error "scoped clocks: outside register query found another clock pair"
                     }
                     if {!$is_core || ![reset_path $path]} {error "scoped clocks: unexpected outside-boundary path"}
-                    if {![bound4 $path] && [dict get $path EXCEPTION] ne "False Path"} {error "scoped clocks: reset entry exception changed"}
+                    if {![bound $path $src $dst $b] && [dict get $path EXCEPTION] ne "False Path"} {error "scoped clocks: reset entry exception changed"}
                 }
             }
             foreach side {inputs outputs} {
@@ -315,7 +388,7 @@ proc ::otpu_scoped::main {violation_names prefix audit} {
     }
     foreach name $context {puts $audit [list methodology $name severity {Critical Warning} classification reviewed_scoped_clock_context]}
     flush $audit
-    return [dict create context $context remaining $remaining export $export]
+    return [dict create context $context remaining $remaining export $export kind $cl core_period $t_core]
 }
 proc otpu_classify_scoped_clocks {violation_names evidence_prefix audit} {
     return [::otpu_scoped::main $violation_names $evidence_prefix $audit]

@@ -55,6 +55,9 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 # docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
+# platform keys a [variants.<name>] table may set (a board build at another core clock: the
+# F2 HBM build's c150, docs/wide_port.md "Alex's shell")
+VARIANT_PLATFORM_KEYS = ("core_mhz",)
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
 # The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
@@ -90,9 +93,11 @@ BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                  "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
           # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
           # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
-          "f2-hbm": ["shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
-                     "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
-                     "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
+          # (since the alex-shell rework: Alex's burst200 memory path, otpu_native_axi per channel
+          # into SmartConnect; otpu_f2_hbm_nch / _port / _host / _mem are no longer built)
+          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+                     "boards/f2/otpu_native_axi.sv", "boards/f2/otpu_f2_pcis_gate.sv",
+                     "boards/f2/otpu_f2_hbm_axi.sv", "boards/f2/otpu_hbm_geometry.sv",
                      "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
@@ -166,7 +171,7 @@ def load(name: str | None = None) -> Target:
         if base not in variants:
             raise TargetError(f"{path}: [target] variant {base!r} has no [variants.{base}]")
         diff = sorted(k for k, v in variants[base].items()
-                      if raw["arch"].get(k, raw["uarch"].get(k)) != v)
+                      if raw["arch"].get(k, raw["uarch"].get(k, raw["platform"].get(k))) != v)
         if diff:
             raise TargetError(f"{path}: [arch] / [uarch] {diff} differ from the default variant "
                               f"{base!r}'s")
@@ -176,13 +181,17 @@ def load(name: str | None = None) -> Target:
             raise TargetError(f"{path}: no variant {var!r} (its variants: "
                               f"{', '.join(sorted(variants)) or 'none'})")
         raw["arch"], raw["uarch"] = dict(raw["arch"]), dict(raw["uarch"])
+        raw["platform"] = dict(raw["platform"])
         for k, v in variants[var].items():
-            if k in raw["arch"]:
+            if k in VARIANT_PLATFORM_KEYS:
+                raw["platform"][k] = v
+            elif k in raw["arch"]:
                 raw["arch"][k] = v
             elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
                 raw["uarch"][k] = v
             else:
-                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
+                raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key "
+                                  f"(or a platform key a variant may set: {VARIANT_PLATFORM_KEYS})")
     cf = _config_fields()
     bad = sorted(set(raw["arch"]) - set(cf))
     if bad:
