@@ -1,0 +1,35 @@
+{
+  "kind": "HISTORICAL_PHYSICAL_SMOKE_REFERENCE",
+  "objective": "Gemma 3 1B INT8 / wide-port 417243f1 only",
+  "source": "evidence/sources/afbfd5b4-L33277.json",
+  "cases": [
+    {
+      "id": "wide-moon-eight",
+      "prompt_ids": [
+        2,
+        6974,
+        886,
+        13315,
+        1003,
+        506,
+        19656,
+        236761
+      ],
+      "expected_token_ids": [
+        108,
+        818,
+        19656,
+        563,
+        496,
+        83798,
+        2742,
+        600
+      ]
+    }
+  ],
+  "limitations": [
+    "Eight-token historical smoke, not broad correctness coverage.",
+    "No complete model weight/tokenizer hashes in local source excerpt.",
+    "New performance prompts require frozen independently generated references on opentpu-m8a-build."
+  ]
+}

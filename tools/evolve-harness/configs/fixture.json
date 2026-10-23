@@ -1,0 +1,137 @@
+{
+  "schema": 1,
+  "mode": "fixture",
+  "seed": {
+    "id": "TEST_FIXTURE",
+    "identity": {
+      "model": "TEST_FIXTURE_NOT_A_MODEL",
+      "checkpoint_sha256": "de98858e30e441360c33c06443d00e766ff71bc61023965db78eb81aad0d62ae",
+      "tokenizer_sha256": "ec0f312ee3d6aac2f842484eeb8bc77a62ad6638a3b49aad81df19953a520655",
+      "weights": "int8",
+      "head": "int8",
+      "loop_count": 1,
+      "agfi": "TEST_FIXTURE_NO_IMAGE",
+      "afi": "TEST_FIXTURE_NO_IMAGE",
+      "clock_mhz": 200,
+      "image_source_commit": "TEST_FIXTURE",
+      "runtime_commit": "TEST_FIXTURE",
+      "runtime_tree_sha256": "17d5ccb1bde2ba2c3981b46e78df2af7c7a8a7036f6ffd54b219c80afb203d63",
+      "device": "TEST_FIXTURE_NO_DEVICE",
+      "instance_name": "TEST_FIXTURE_NOT_EC2",
+      "instance_id": "TEST_FIXTURE_NOT_EC2"
+    },
+    "correctness_suite_sha256": "9b30e1d9a7ae21a23b5e23f79068d759f3b9965037aeb4a0c564739efa128557"
+  },
+  "heldout": {
+    "kind": "TEST_FIXTURE",
+    "cases": [
+      {
+        "id": "synthetic-heldout-a",
+        "prompt_ids": [
+          8,
+          4,
+          2
+        ],
+        "expected_token_ids": [
+          11,
+          13,
+          17,
+          19
+        ]
+      },
+      {
+        "id": "synthetic-heldout-b",
+        "prompt_ids": [
+          9,
+          5,
+          3
+        ],
+        "expected_token_ids": [
+          23,
+          29,
+          31,
+          37
+        ]
+      }
+    ]
+  },
+  "workloads": [
+    {
+      "id": "warm_resident",
+      "state": "warm_resident",
+      "prompt_ids": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "expected_token_ids": [
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71
+      ],
+      "output_tokens": 8,
+      "initial_context_tokens": 0,
+      "context_capacity": 128,
+      "loop_count": 1,
+      "timed_prefill_tokens": 4,
+      "sampling": "greedy",
+      "speculation": false,
+      "cache_policy": "weights_resident; prompt_KV_empty; program_cache_per_candidate",
+      "warmup_requests": 1,
+      "timing_boundary": "caller_request_start_to_accepted_token_delivery_monotonic_seconds"
+    },
+    {
+      "id": "cold_process",
+      "state": "cold_process",
+      "prompt_ids": [
+        2,
+        3,
+        5,
+        7
+      ],
+      "expected_token_ids": [
+        41,
+        43,
+        47,
+        53,
+        59,
+        61,
+        67,
+        71
+      ],
+      "output_tokens": 8,
+      "initial_context_tokens": 0,
+      "context_capacity": 128,
+      "loop_count": 1,
+      "timed_prefill_tokens": 4,
+      "sampling": "greedy",
+      "speculation": false,
+      "cache_policy": "weights_resident; prompt_KV_empty; program_cache_per_candidate",
+      "warmup_requests": 1,
+      "timing_boundary": "caller_request_start_to_accepted_token_delivery_monotonic_seconds"
+    }
+  ],
+  "baseline_settings": {
+    "program_cache": true,
+    "prompt_runs": true,
+    "quantum": 32
+  },
+  "trial_timeout_s": 15,
+  "run_budget_s": 180,
+  "policy": {
+    "max_candidates": 6,
+    "min_pairs": 8,
+    "family_alpha": 0.05,
+    "min_decode_gain": 0.02,
+    "max_ttft_regression": 0.0,
+    "max_prefill_regression": 0.0,
+    "max_baseline_noise": 0.05,
+    "random_seed": 1729
+  }
+}

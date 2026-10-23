@@ -1,0 +1,33 @@
+{
+  "kind": "TEST_FIXTURE",
+  "cases": [
+    {
+      "id": "synthetic-heldout-a",
+      "prompt_ids": [
+        8,
+        4,
+        2
+      ],
+      "expected_token_ids": [
+        11,
+        13,
+        17,
+        19
+      ]
+    },
+    {
+      "id": "synthetic-heldout-b",
+      "prompt_ids": [
+        9,
+        5,
+        3
+      ],
+      "expected_token_ids": [
+        23,
+        29,
+        31,
+        37
+      ]
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+{
+  "source_commit": "175c317e743e54bc82a33a8130ebe67c773394a5",
+  "verbatim_files": 44,
+  "bytes": 323932,
+  "python_syntax_files": 11,
+  "json_files_parsed": 22,
+  "source_receipt_hashes_verified": 21,
+  "live_seed_count": 14,
+  "live_seeds_enabled": 0,
+  "unit_integration_suite": "not executed; original builder-only restriction retained",
+  "live_loop": "not executed",
+  "hardware_access": "none",
+  "new_paid_resources": "none"
+}

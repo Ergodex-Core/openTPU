@@ -1,0 +1,23 @@
+{
+  "schema": 1,
+  "status": "QUEUED_NOT_ENABLED",
+  "target": "opentpu-f2",
+  "builder": "opentpu-m8a-build",
+  "eligible_registry": "configs/eligibility.json",
+  "default_seed": "gemma3-1b-wide-port-int8",
+  "ownership_window": {
+    "schema": 1,
+    "access": "not-established",
+    "portal_pending": true,
+    "other_owner_active": "unknown"
+  },
+  "trusted_bridge": null,
+  "missing": [
+    "current authorized connectivity and instance identity",
+    "exclusive owner window coordinated with portal and existing owners",
+    "full checkpoint/tokenizer/runtime/image hashes",
+    "new fixed-length prompt/output reference suite from builder",
+    "reviewed instrumented trusted evaluator bridge"
+  ],
+  "no_hardware_attempted": true
+}
