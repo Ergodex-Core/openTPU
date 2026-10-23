@@ -27,12 +27,21 @@
     "encoding": "pcm_s16le",
     "sample_rate_hz": 16000,
     "channels": 1,
+    "min_samples": 320,
     "max_seconds": 30,
     "resampling": "unsupported",
     "hotwords": "unsupported",
     "note": "Proposed first integration envelope; endpoint remains unavailable."
   },
-  "implemented_slice": "Offline five-value unpacking and two-plane device linear projection",
+  "implemented_slice": "Five-value projections and one complete bounded Conformer block on the existing ISA; offline audited frontend golden vectors",
+  "qualification": {
+    "conformer_blocks": 1,
+    "max_stored_encoder_frames": 8,
+    "frontend_device_implemented": false,
+    "tdt_device_implemented": false,
+    "evidence": "docs/phonon2/conformer_validation.json",
+    "frontend_policy": "docs/phonon2/semantic_policy.json"
+  },
   "error": {
     "code": "ASR_FPGA_NOT_READY",
     "http_status": 503
@@ -48,7 +57,7 @@
     },
     {
       "code": "conformer",
-      "detail": "Complete device FastConformer blocks, relative-position attention and convolution are missing."
+      "detail": "One complete full-width block is ISA-qualified for 1..8 stored frames; the full-length 24-block encoder and device graph integration remain missing."
     },
     {
       "code": "predictor",
@@ -64,7 +73,7 @@
     },
     {
       "code": "numerics",
-      "detail": "INT8 activation quantization and two-plane accumulation need real-weight encoder/transcript validation."
+      "detail": "A real-weight block is qualified on synthetic activations; frontend numerical parity, full-encoder and transcript validation remain missing."
     },
     {
       "code": "hardware_evidence",

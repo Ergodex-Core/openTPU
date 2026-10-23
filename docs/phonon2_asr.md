@@ -1,6 +1,9 @@
 # Phonon-2: FPGA-only ASR readiness
 
-Status: **blocked; one projection kernel is qualified in the ISA simulator**.
+Status: **blocked; projection and one bounded complete Conformer block are
+qualified in the ISA simulator**. The follow-up [Conformer/front-end report](phonon2_conformer.md)
+contains the new golden vectors, policies, full-width block budgets and real-weight
+receipt. The original projection receipt below retains its historical compiler binding.
 There is no audio-to-transcript engine, FPGA transcript, latency result, or WER
 result from this integration. No FPGA locks, image loads, registers, or running
 inference jobs were touched. No synthesis was started.
@@ -91,8 +94,9 @@ None is an FPGA backend or an acceptable production fallback here.
 Before a full graph is accepted, resolve these explicitly:
 
 1. The archive's NeMo config has `dither=1e-5`; the inspected Transformers and
-   CUDA feature paths contain no dither. Choose and pin a reference convention,
-   with feature golden vectors. MLX execution parity has not been established.
+   CUDA feature paths contain no dither. The follow-up qualification explicitly
+   selects zero dither and includes feature golden vectors. MLX execution parity
+   has not been established.
 2. The inspected feature path uses a nonperiodic Hann window, centered constant
    padding, magnitude via `sqrt(real^2+imag^2)^2`, Slaney filters built in FP32,
    and `ln(mel + 2^-24)`. Do not silently replace these by a different FFT,
@@ -100,7 +104,7 @@ Before a full graph is accepted, resolve these explicitly:
 3. Valid feature length is `floor(samples/160)`, although the centered STFT
    produces an extra frame. Normalization ignores padded frames, divides
    variance by `valid_frames-1`, and adds `1e-5` **after** square root. Short
-   inputs with fewer than two valid frames require an explicit policy. A 30 s
+   inputs with fewer than two valid frames are rejected by the qualification policy. A 30 s
    input has 3000 valid / 3001 stored mel frames and 375 valid / 376 stored
    encoder frames under the inspected unbucketed path.
 4. The reference mixes channels on host and chooses librosa resampling, with a
@@ -154,16 +158,17 @@ graph fit, bandwidth, timing closure or usable ASR latency.
 | Missing integration | Existing-ISA possibility / exact gap |
 |---|---|
 | Waveform frontend | No FFT/STFT/mel ASR kernels. FP32 add/mul/reductions/log2/rsqrt can express the math, but fixed-coefficient transforms, permutations, masks and normalization need lowering and validation. No native FFT or PCM16 conversion opcode. |
-| Subsampling and convolution | No complete Phonon Conv2D/depthwise/GLU path. Strided loads and VPU math can build one; layout, boundary padding and masks remain unimplemented. |
-| FastConformer | Dense projections/SiLU/LayerNorm building blocks exist; noncausal relative-position attention, relative shift, BatchNorm and complete residual graph are not wired. |
+| Learned subsampling | Phonon Conv2D subsampling, layouts and masks remain unimplemented. The separate Conformer kernel9 depthwise/GLU path is now ISA-qualified. |
+| FastConformer | One full-width, complete 1..8-frame block is ISA-qualified with real weights; tiled full-context attention, all 24 blocks and device mask handoff are not integrated. |
 | LSTM predictor | No resident two-layer Phonon LSTM, embedding lookup or cache commit policy. Affines and sigmoid/tanh can use existing units; state/gate layout and gating must be compiled. |
 | TDT and text output | ARGMAX, RLD, LOOP and HALT CHAIN exist; token/duration split, blank masking, zero-duration bounds, state updates, UTF-8 token assembly and termination are not compiled. |
 | Native five-value storage | No trit/nonuniform-five-level MXU format. This slice bypasses that gap at roughly two matrix passes and greater storage. Native packing would need an ISA/RTL proposal and a separate image. |
 
-No new image has yet been shown necessary for correctness. First, pin frontend
-and TDT semantics and prepare approved reference vectors, without installing or
-running unknown upstream code. Next, implement bounded device frontend and one
-complete Conformer block with real weights, masks and memory reports. Then add
+No new image has yet been shown necessary for correctness. Frontend qualification
+semantics and vectors, and one complete Conformer block, are now available in the
+follow-up report. Next implement the bounded device frontend and learned subsampler,
+then test the block on their output. Resolve the documented TDT runtime disagreement,
+then add
 INT6 export and resident LSTM/joint/TDT control, test blank/zero-duration/limit
 cases, and assemble the tiled 24-layer graph. Compare features, encoder outputs,
 decoder states and tokens against the selected reference. Only if an existing

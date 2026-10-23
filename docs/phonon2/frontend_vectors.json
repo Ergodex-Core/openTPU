@@ -1,0 +1,104 @@
+{
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "base_revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b",
+  "generator": "own audited equations using installed PyTorch CPU; no upstream model code executed",
+  "torch": "2.14.1",
+  "numpy": "2.5.4",
+  "machine": "arm64",
+  "vector_sha256": "20d5f575082b99c64727641af164b9bf05d6b25e922b1a3da8023264db554078",
+  "vector_bytes": 85901,
+  "normalization": "FP32 masked mean; unbiased variance / (valid_frames - 1); std + 1e-5",
+  "dither": 0.0,
+  "dither_reason": "pinned Transformers path has no dither; NeMo archive says 1e-5",
+  "input_policy": {
+    "encoding": "pcm_s16le",
+    "sample_rate": 16000,
+    "channels": 1,
+    "min_samples": 320,
+    "max_samples": 480000,
+    "resampling": false
+  },
+  "librosa_algorithm_audit": "https://github.com/librosa/librosa/blob/0.11.0/librosa/filters.py#L121",
+  "numerical_caveat": "Golden outputs identify this Torch CPU implementation; silence normalization is sensitive to FP32 reduction order. NumPy FFT/normalization is not a bitwise oracle or production path.",
+  "hardware_validated": false,
+  "records": [
+    {
+      "name": "silence_min",
+      "samples": 320,
+      "pcm_sha256": "9e132485d5107211de325a45e7917cbe3e4b5b9cde3e4ee91d7d2102317759ee",
+      "stored_frames": 3,
+      "valid_frames": 2,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 0.0,
+        "features": 0.0
+      },
+      "first_feature": 0.0
+    },
+    {
+      "name": "silence_100ms",
+      "samples": 1600,
+      "pcm_sha256": "5a312281df4bd8dfbb4d4a94ad0bf44d01bb8cfced1206b90e21b4ca0568cdb1",
+      "stored_frames": 11,
+      "valid_frames": 10,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 0.0,
+        "features": 0.1588064730167389
+      },
+      "first_feature": 0.0
+    },
+    {
+      "name": "boundary_impulses",
+      "samples": 321,
+      "pcm_sha256": "564a74a4f289a58300b605a3aa125edd8956e3b2e1b56c1cc5e8e3797d5bb250",
+      "stored_frames": 3,
+      "valid_frames": 2,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 2.86102294921875e-06,
+        "features": 0.00010985136032104492
+      },
+      "first_feature": -0.7071015238761902
+    },
+    {
+      "name": "chirp_partial_hop",
+      "samples": 1601,
+      "pcm_sha256": "33dd340f029e6724c0f62856a47cccab0e4be2d0a42bdf7f11310e78ec9d0d4e",
+      "stored_frames": 11,
+      "valid_frames": 10,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 0.0002079010009765625,
+        "features": 4.1544437408447266e-05
+      },
+      "first_feature": 2.502448797225952
+    },
+    {
+      "name": "noise_exact_hop",
+      "samples": 1600,
+      "pcm_sha256": "503dd746116854e66e060a9026662bc5900c3991638374b0f27632a6a8001350",
+      "stored_frames": 11,
+      "valid_frames": 10,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 2.6702880859375e-05,
+        "features": 1.8656253814697266e-05
+      },
+      "first_feature": 1.0736037492752075
+    },
+    {
+      "name": "noise_partial_hop",
+      "samples": 3199,
+      "pcm_sha256": "c6848d08e9825d3c30b29d5052cae6bd90cc3f5b91de9b8490dcc48597870118",
+      "stored_frames": 20,
+      "valid_frames": 19,
+      "numpy_max_abs_error": {
+        "preemphasis": 0.0,
+        "log_mel": 0.00018310546875,
+        "features": 3.6716461181640625e-05
+      },
+      "first_feature": 0.07542795687913895
+    }
+  ]
+}
