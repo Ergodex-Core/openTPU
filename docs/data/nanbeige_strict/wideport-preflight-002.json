@@ -1,0 +1,37 @@
+{
+  "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
+  "profile_evidence": "UI saved image-switch receipt, not a fresh hardware probe",
+  "hardware_used": false,
+  "config": {
+    "S": 1,
+    "D": 128,
+    "MCOLS": 8,
+    "ACT_BLOCKS": 128,
+    "TMEM_WORDS": 65536,
+    "DRAM_BYTES": 4294967296,
+    "IMEM_WORDS": 32768,
+    "LANES": 8,
+    "PAIR": true,
+    "DSTEP": true,
+    "STREAM": true,
+    "ACT_ROWS": 16,
+    "PORTB": 4,
+    "T2": true,
+    "ROWLANES": true,
+    "ALINE": 64,
+    "SEQ_WC": true
+  },
+  "arch_hash": 3714814630,
+  "source_overlay": {
+    "nanbeige_weights.py": "e75ac2d468a6cd4ce7c1dbbae261f66eaa5411fa2e681db5c970f9fed9c564e8",
+    "nanbeige.py": "7094064c56eae7eb14c3f58b6e9e46ccaf01bbaf871648dcdf7bb5f52809f107",
+    "nanbeige_strict.py": "9fc8d192a595bb0458933565a5a95fb9d8c2d3985221e92abc7250c3fe44bebd",
+    "nanbeige_specdec.py": "4e405e18ce0cb61fea7122cf327f4afc1301168fbefd84f10cb49bba107960b0"
+  },
+  "status": "blocked",
+  "error_type": "MemoryError",
+  "error": "strict Nanbeige int8 embedding needs 4762836992 bytes; device has 4294967296; host offload is forbidden",
+  "physical_open_attempts": 0,
+  "prototype_change": "Omit removed spec_rows/base positional args when zero; original defaults preserved",
+  "traceback": "Traceback (most recent call last):\n  File \"<stdin>\", line 22, in <module>\n  File \"/home/ubuntu/nanbeige-strict-20261023/wideport-preflight/opentpu/llm/nanbeige_strict.py\", line 79, in plan\n    raise MemoryError(f\"strict Nanbeige {embedding_format} embedding needs {required} bytes; \"\nMemoryError: strict Nanbeige int8 embedding needs 4762836992 bytes; device has 4294967296; host offload is forbidden\n"
+}
