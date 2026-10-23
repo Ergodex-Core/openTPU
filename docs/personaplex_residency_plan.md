@@ -99,9 +99,12 @@ allocation/alignment checks and complete activation liveness remain pending.
 Step embeddings already reside in P. Individual capacity/compile evidence does
 not establish a working combined runtime or complete speech fit.
 
-Mimi remains unimplemented and unbudgeted: streaming convolution/transposed
-convolution, encoder/decoder attention, RVQ/codebook operations and streaming
-state all need lowering and capacity checks. Prefer testing codec packets in A
+The optional [Mimi RVQ latent slice](personaplex_mimi.md) now occupies unused P
+guard space beginning0x5D850000, with eight FP32 centroid tables and two INT8
+projections. Combined compiled budgets are recorded separately; A/B placement
+and the prior depth allocation remain unchanged. The remaining Mimi streaming
+convolution/transposed convolution, encoder/decoder attention and streaming
+state still need lowering and capacity checks. Prefer testing codec packets in A
 before temporal execution and after depth execution, when temporal weights are
 no longer live. If codec packets/scratch fit that overlay, B can retain the depth
 bank and the added per-frame traffic is encoder/decoder packet transfer rather

@@ -21,6 +21,7 @@ from . import qwen3 as G
 from .personaplex_audio_heads import AudioHeadImage, _audio_head, _checked
 from .personaplex_depth_input import DepthInputImage, DepthInputSpec
 from .personaplex_depth_layer import DepthLayerImage, DepthLayerSpec
+from .personaplex_mimi import MimiRVQImage, MimiRVQSpec
 
 
 @dataclass(frozen=True)
@@ -69,7 +70,7 @@ class DepthChainImage:
         "heads": (0x5B7D1400, 0x5D831400), "B": (0xB0000000, 1 << 32),
     }
 
-    def __init__(self, spec, cfg):
+    def __init__(self, spec, cfg, *, mimi_spec=None):
         if cfg.S != 1 or cfg.DRAM_BYTES > 1 << 32:
             raise ValueError("resident depth chain needs one slice and unsigned32 mapped DRAM")
         self.spec, self.cfg = spec, cfg
@@ -140,14 +141,28 @@ class DepthChainImage:
                   "head", source_head.head_offsets[0], "immutable"),
             alloc("head_scales", spec.steps * source_head.scale_stride, "heads", 64,
                   "head", source_head.head_offsets[1], "immutable"))
+        self.mimi = None
+        if mimi_spec is not None:
+            if mimi_spec.vocab != spec.head_vocab:
+                raise ValueError("Mimi vocabulary must equal the device audio-head vocabulary")
+            self.mimi = MimiRVQImage(mimi_spec, cfg, audio_ids_at=audio_ids,
+                                     counter_at=control, expected_steps=spec.steps)
+            for span in self.mimi.spans:
+                if any(span["base"] < p["base"] + p["bytes"] and
+                       p["base"] < span["base"] + span["bytes"] for p in self.spans):
+                    raise ValueError("Mimi span overlaps a resident depth span")
+            self.spans.extend(self.mimi.spans)
         self.program_slots = [alloc(f"program{index}", waits.area(cfg.IMEM_WORDS, cfg.SEQ_WC),
-                                    "program", 4096, kind="program") for index in range(3)]
+                                    "program", 4096, kind="program")
+                              for index in range(4 if self.mimi else 3)]
         self.required_bytes = -(-max(p["base"] + p["bytes"] for p in self.spans) // 4096) * 4096
         if self.required_bytes > min(cfg.DRAM_BYTES, 1 << 32):
             raise MemoryError("aligned resident mapping exceeds device capacity")
         self.B_used_bytes = cursor["B"] - self.REGIONS["B"][0]
         self.kv_bytes = source_depth.kv_bytes
         self.weight_bytes = (source_condition.weight_bytes + source_depth.weight_bytes + source_head.weight_bytes)
+        if self.mimi is not None:
+            self.weight_bytes += self.mimi.weight_bytes
 
     def compile(self):
         if self.programs is None:
@@ -158,6 +173,8 @@ class DepthChainImage:
             b = trace_fit(_resident_head, self.cfg, 0, lambda: {"m": m})
             head = b.finish()
             self.programs = [condition, depth, head]
+            if self.mimi is not None:
+                self.programs.extend(self.mimi.compile())
             for program in self.programs:
                 if program.run_args or len(program) * 8 > self.cfg.IMEM_WORDS:
                     raise CompileError("resident stage has host arguments or exceeds instruction capacity")
@@ -172,7 +189,10 @@ class DepthChainImage:
                 "B_slack_bytes": self.REGIONS["B"][1] - self.REGIONS["B"][0] - self.B_used_bytes,
                 "program_words": [len(p) * 8 for p in self.compile()],
                 "program_slots": self.program_slots, "spans": self.spans,
-                "payload_sha256": self.payload_hashes}
+                "payload_sha256": {**self.payload_hashes,
+                    **({"mimi_" + k: v for k, v in self.mimi.payload_hashes.items()}
+                       if self.mimi else {})},
+                "mimi": self.mimi.budget() if self.mimi else None}
 
     def upload(self, backend, projections, embeddings, layers, head_bank):
         """Pack offline using established component builders; upload named spans only."""
@@ -197,19 +217,28 @@ class DepthChainImage:
 
 class DepthChainEngine:
     """ISA-only runner; model compute/feedback remain device programs, not host math."""
-    def __init__(self, projections, embeddings, layers, head_bank, *, spec=None, cfg=None, backend="isa"):
+    def __init__(self, projections, embeddings, layers, head_bank, *, spec=None, cfg=None,
+                 backend="isa", mimi_tables=None, mimi_projections=None, mimi_spec=None):
         if backend != "isa":
             raise ValueError("resident depth chain is software/ISA only; no physical backend is qualified")
         self.spec = spec or DepthChainSpec()
         self._closed = self._failed = self._ready = self._active = False
+        self._mimi_ready = False
+        if (mimi_tables is None) != (mimi_projections is None):
+            raise ValueError("Mimi tables and projections must be supplied together")
+        if mimi_spec is not None and mimi_tables is None:
+            raise ValueError("Mimi specification requires its offline payloads")
         self.poss, self.last_stats = [0], {}
         self.cfg = cfg or Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=128, ACT_ROWS=16,
                                 TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True, DRAM_BYTES=1 << 32)
-        self.image = DepthChainImage(self.spec, self.cfg)
+        self.image = DepthChainImage(self.spec, self.cfg,
+            mimi_spec=(mimi_spec or MimiRVQSpec()) if mimi_tables is not None else None)
         self.programs = self.image.compile()  # capacity before any lazy payload reads
         self.backend = G.IsaBackend(self.cfg, [np.zeros(self.cfg.DRAM_BYTES, np.uint8)], adopt=True)
         try:
             self.image.upload(self.backend, projections, embeddings, layers, head_bank)
+            if self.image.mimi is not None:
+                self.image.mimi.upload(self.backend, mimi_tables, mimi_projections)
         except BaseException:
             self.close(); raise
 
@@ -234,7 +263,7 @@ class DepthChainEngine:
             raise ValueError("text ID must be integral") from error
         if not -1 <= token < self.spec.text_vocab:
             raise ValueError("text ID outside vocabulary")
-        self._ready = self._active = False
+        self._ready = self._active = self._mimi_ready = False
         try:
             self.backend.write(0, self.image.io["hidden"], value)
             self.backend.write(0, self.image.io["control"], np.array([0, token], np.float32))
@@ -248,9 +277,9 @@ class DepthChainEngine:
             raise RuntimeError("begin a frame before resident depth steps")
         if self.pos >= self.spec.steps:
             raise RuntimeError("depth pass is full; reset/begin a new frame")
-        self._ready = False; started = time.perf_counter(); stages = []
+        self._ready = self._mimi_ready = False; started = time.perf_counter(); stages = []
         try:
-            for program in self.programs:
+            for program in self.programs[:3]:
                 stages.append(self.backend.run([program]))
         except BaseException:
             self._failed = True; raise
@@ -262,6 +291,34 @@ class DepthChainEngine:
         self.begin_frame(hidden, text_id)
         for _ in range(self.spec.steps):
             self.step()
+
+    def run_mimi(self):
+        """Consume resident generated IDs without host readback or arguments."""
+        self._check()
+        if self.image.mimi is None:
+            raise RuntimeError("Mimi RVQ was not configured")
+        if not self._ready or self.pos != self.spec.steps:
+            raise RuntimeError("complete all depth steps before Mimi RVQ")
+        self._mimi_ready = False
+        try:
+            self.mimi_stats = self.backend.run([self.programs[3]])
+        except BaseException:
+            self._failed = True; raise
+        self._mimi_ready = True
+
+    def read_mimi(self, name="output"):
+        self._check()
+        image = self.image.mimi
+        if image is None or not self._mimi_ready:
+            raise RuntimeError("no completed resident Mimi RVQ output")
+        if name not in image.io:
+            raise ValueError("unknown Mimi RVQ output")
+        width = image.spec.dim if name in ("semantic", "acoustic") else image.spec.latent
+        value = np.asarray(self.backend.read(0, image.io[name], 4 * width), np.uint8).view(np.float32).copy()
+        if value.shape != (width,) or not np.isfinite(value).all():
+            self._failed = True
+            raise RuntimeError("invalid resident Mimi RVQ output")
+        return value
 
     def _read(self, name, width, ready=True):
         self._check()
@@ -319,7 +376,7 @@ class DepthChainEngine:
             self.backend.write(0, self.image.io["control"], np.array([0, -1], np.float32))
         except BaseException:
             self._failed = True; raise
-        self._failed = self._ready = self._active = False
+        self._failed = self._ready = self._active = self._mimi_ready = False
         self.poss[0], self.last_stats = 0, {}
 
     def close(self):

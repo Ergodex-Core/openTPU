@@ -3,8 +3,10 @@
 `DepthChainEngine` implements one diagnostic depth pass on the ISA simulator:
 selected temporal-to-depth projection and previous-token embedding, all six
 depth layers with independent KV, then selected audio head and greedy ID. It
-produces sixteen codebook IDs. It does not implement temporal inference, prompt
-and delay scheduling, Mimi/RVQ or PCM speech, and is not a serving fallback.
+produces sixteen codebook IDs. Its optional [Mimi RVQ stage](personaplex_mimi.md)
+consumes the first eight directly from resident state and produces a512-channel
+latent. It does not implement temporal inference, prompt/delay scheduling,
+the remaining Mimi decoder or PCM speech, and is not a serving fallback.
 Physical backends are refused before source payload access.
 
 ## Resident state and execution

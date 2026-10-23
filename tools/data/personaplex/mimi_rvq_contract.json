@@ -1,0 +1,54 @@
+{
+  "scope": "Mimi RVQ to continuous latent only; full PCM/physical inference disabled",
+  "installed_source_sha256": {
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "models/compression.py": "7af4b2791d16fd0add4ef4f51d4322fc9fec159cc96604e569bbb53fe756b4ed",
+    "quantization/vq.py": "2c07f475a1cfc939fef0c93805f2a134ef3bf268d7ed5a0f9a461255d1464158",
+    "quantization/core_vq.py": "14a32264b0cd414cc045cc614d1f593a9fc39fca44276978bb7450815b8de10d",
+    "modules/resample.py": "136931781a9de1e43afd19c4ffc9817e462f20b695853d415695d34f912405d9",
+    "modules/transformer.py": "0eccf9b539ba738910d201a66809c68f5dad14f6b020fee862a592fd00e1de55",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/seanet.py": "1611e47987b635bb90b19944fc3deca91c4100270f2117bf9fd9cc70bf0da9cc",
+    "server.py": "cdb9f68a326328308fa4acd43e7e75d79030d2214c43f828d186a0e03a13da99"
+  },
+  "codec_header": {
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318
+  },
+  "codec_filename": "tokenizer-e351c8d8-checkpoint125.safetensors",
+  "native_constructor": {
+    "dimension": 256,
+    "n_q": 32,
+    "bins": 2048,
+    "input_dimension": 512,
+    "output_dimension": 512
+  },
+  "active_codebooks": 8,
+  "semantic_codebooks": 1,
+  "normalization_epsilon": 1e-05,
+  "device_spec": {
+    "codebooks": 8,
+    "vocab": 2048,
+    "dim": 256,
+    "latent": 512
+  },
+  "output_projection_keys": [
+    "quantizer.rvq_first.output_proj.weight",
+    "quantizer.rvq_rest.output_proj.weight"
+  ],
+  "remaining_pcm_decode_contract": {
+    "resampling": "compression.py:192-220 chooses learnt causal conv resampling, with upsample_channel_wise_bug=True by default at 142. resample.py:94-124 creates channel-wise StreamingConvTranspose1d, 512 groups, stride=2, kernel=4, no bias; header key upsample.convtr.convtr.convtr.weight is F32 [512,1,4].",
+    "transformer": "loaders.py:75-89 configures decoder ProjectedTransformer width=512, 8 heads, 8 layers, causal context=250, RoPE, layer_norm, layer_scale=0.01, FFN=2048. transformer.py:762-774 transposes convolution layout [B,C,T] to [B,T,C] and back; StreamingTransformer.forward at 698-720 advances position offset and layers. Stateful causal attention/KV behavior remains to implement and check.",
+    "seanet": "loaders.py:48-67 configures mono causal SEANet with ELU, norm=none, filters=64, one residual layer per upsample stage, ratios [8,6,5,4], kernels 7/3/3, compress=2, true_skip=True. seanet.py:336-411 starts Conv1d 512->1024 kernel7, then ELU plus causal ConvTranspose1d stages 1024->512/512->256/256->128/128->64 with kernels 16/12/10/8 and strides 8/6/5/4, one residual block per stage, then ELU and Conv1d 64->1 kernel3. Streaming conv and transposed-conv padding/trim state must match conv.py:249-275,323-350.",
+    "pcm_interface": "compression.py:398-419 returns reconstructed float [B,1,T]. loaders.py:39-40 fixes 24000 Hz and 12.5 frames/s, implying 1920 PCM samples per code frame after the 2x latent upsample and 8*6*5*4 SEANet stages. Exact streaming boundary/padding behavior is not yet numerically qualified."
+  },
+  "transport_interface": {
+    "legacy_fixture": "The pinned runtime's absent opentpu.host.isaboard fixture is not a Mimi dependency. No legacy board-ISA fixture was invoked in this audit.",
+    "pinned_host_adapter": "board.py:1608-1635 defines BoardBackend(cfg, images, transport=None, model=None, status=True, own_transport=None), wraps Board(transport), and scrubs during initialization; board.py:1737-1746 provides write/read; 1782-1806 prepares and starts programs; 2063-2065 run=start+wait. It must not be instantiated for a source-only audit.",
+    "transport_protocol": "board.py:317-452 XdmaTransport and 489-591 SimTransport expose mem_write(ch,off,data), mem_read(ch,off,n,out), reg_write(off,val), reg_read(off), reg_read_many(offs), and poll(...). XdmaTransport also defines close; the inspected SimTransport class has no close method. A future isolated simulator fixture should supply the register/memory protocol to BoardBackend rather than importing opentpu.host.isaboard.",
+    "f2_selection": "board.py:674-680 open_transport('f2:slot' or 'f2:BDF') selects F2Transport. f2.py:126-264 defines F2Transport with the same register/memory methods; its constructor opens PCI resources and lock, and BoardBackend scrubs memory, so this path is excluded from the current software-only qualification.",
+    "physical_status": "No F2 transport, BoardBackend, image reload, or card access was attempted. The requested common image agfi-0001de1dd3df8e21e and profile f2-hbm:p4rl8a64c150 remain source-context constraints, not an acceptance result for PCM."
+  }
+}
