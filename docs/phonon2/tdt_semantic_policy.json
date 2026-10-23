@@ -1,0 +1,36 @@
+{
+  "base_tokenizer_url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/tokenizer.json",
+  "base_tokenizer_sha256": "bd321b096832a3f270bd3b2a88823957920f1a5c5ada71114a26ea729d0cbe91",
+  "vocabulary_asset_sha256": "6a134f91e10e12d95d1abd5a8cf7f8b8d621b17a226401fe303d10263e87f682",
+  "changes": "Extracted ID-ordered vocabulary; appended declared blank ID8192. No learned weights. UTF-8 table generation replaces metaspace only and omits configured special IDs.",
+  "decoder": {
+    "type": "Metaspace",
+    "replacement": "\u2581",
+    "prepend_scheme": "always",
+    "split": true
+  },
+  "skip_special_ids": [
+    0,
+    2,
+    3,
+    8192
+  ],
+  "configured_special_ids_note": "UNK0, PAD2, configured EOS3, added blank8192; other control-looking pieces are retained as in the pinned tokenizer configuration, rather than Fermion CUDA broad filtering.",
+  "clean_up_tokenization_spaces": false,
+  "group_tokens": false,
+  "durations": [
+    0,
+    1,
+    2,
+    3,
+    4
+  ],
+  "blank_zero_duration": "advance one frame",
+  "nonblank_zero_duration": "remain on frame, commit predictor/cache per Transformers input token semantics; no ten-symbol forced advance",
+  "termination": "encoder valid length exhausted or configured EOS3; step-budget exhaustion is incomplete/error, never success",
+  "max_steps_default": "10 * stored_encoder_frames - 1, corresponding to Transformers max_length including initial blank",
+  "text_layout": "32-byte UTF-8 scatter/gather slots plus device byte lengths; ordinary output I/O may coalesce segments, with no token mapping, whitespace conversion or model computation on host",
+  "license": "CC-BY-4.0; preserve NVIDIA/Fermion attribution/NOTICE",
+  "tokenizer_decoder_source": "https://github.com/huggingface/tokenizers/blob/v0.22.1/tokenizers/src/pre_tokenizers/metaspace.rs",
+  "transformers_tokenizer_source": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/tokenization_parakeet.py"
+}

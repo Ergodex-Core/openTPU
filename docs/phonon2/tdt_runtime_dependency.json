@@ -1,0 +1,63 @@
+{
+  "format_version": 1,
+  "repository": "https://github.com/Ergodex-Core/openTPU",
+  "runtime_manifest": {
+    "revision": "df69c0a9d970ba4f78b8ac6e979b41dc69d4f181",
+    "files": {
+      "opentpu/__init__.py": "61aed8b1d8520b9e1f033fd9b83878abea3e12592a8f6a3d1c4932a0b9ca01ff",
+      "opentpu/compiler.py": "d490923a7c44c2de7d4131a44029667c172d94fdbc57103783c1d75f1caa6533",
+      "opentpu/isasim.py": "14d6b84e2330e366c17ac6ea1d55ff4e82922fb9a6db2027f764a4dd9601ebe6",
+      "opentpu/isa.py": "a5af8a04945ef5cb9bc0d6929dee509cefaa8cebc8dee79ca1c5ea9668e9487d",
+      "opentpu/quant.py": "337a4c297ddcf4c25c2ccda546b96d73faabfe221b0cfee4418a1523d1df6aed",
+      "opentpu/fp32.py": "3f7be0284fabfe73bab735344f23d0dfe32385b5ad9aedb6bca1804f0121c28a",
+      "opentpu/language.py": "81a5a192ae69fad247be7307e3fb888d9d613d16cc52898cc9a872360f8a0d92",
+      "opentpu/target.py": "e65273a8da53d832fbbcfda1afd0bcaafe40f9035adb8c010f84f68728dfeb2f",
+      "opentpu/waits.py": "ad33168a68a53ce966bee76c8168416010937ff2719513ab391c5c996144baa3",
+      "opentpu/kernels/__init__.py": "b94e2b05a22069885ef32ee1ba2e6d6f637ad9bd665904f1f83dfe0f96c5befe",
+      "opentpu/kernels/lib.py": "b5a1f136c6d1ac9169539c97d6b55b9f95d6340065cddcf43307324ee77d9502",
+      "opentpu/kernels/vit.py": "ab5e5d69a630a75fe295c0d5b2e545f12f08d0bb3bb80bfdb4250e4498a643fd",
+      "opentpu/kernels/attention.py": "69cff970c5f60a81d26f98f7bcb9f37d93e53ee6d83979b1b64b9393fa62a827",
+      "opentpu/kernels/pieces.py": "d63689701da5283f0d3352802e648769773b6800498cad3d932f035d6ebf2312",
+      "opentpu/kernels/mlp.py": "104152447f22deef5ad5954878ed97c274c58cdae6365265ce3855d219feb32d",
+      "targets/f2-hbm.toml": "7acb13c3b7dc51dbeb72031df1baaf7b488717232a20a10a962e161585972b3c",
+      "opentpu/kernels/hadamard.py": "54b642310305fda10787ed67c24d60a570e8bf44200aa5fa60c7f06877ab2d3f"
+    }
+  },
+  "profile": "f2-hbm:p4rl8a64c150",
+  "agfi": "agfi-0001de1dd3df8e21e",
+  "declared_cfg_hash": "dd6b92a6",
+  "agfi_binding": "Parent-provided identity; source capabilities inspected; no live physical verification",
+  "required_instruction_features": [
+    "Existing encoder features from shared_profile.json",
+    "RLD FP32 integer conversion to bounded device registers",
+    "Register-count LOOP with zero iterations skipping its body; nesting up to three",
+    "VOP ARGMAX first-index tie behavior",
+    "Word-aligned register-indexed LD/ST",
+    "SEQ_WC program/wait images"
+  ],
+  "new_opcode_or_image_required": false,
+  "rtl_source_evidence_sha256": {
+    "rtl/seq/otpu_seq.sv": "90887e2e2a6c03607a13945f96d7b3af806b9c537eb9a8af7fc2e164cb1e106e",
+    "rtl/top/otpu_slice.sv": "a2f65c9f5ecb9e1a162a2fc5d5f489c74031343c7bafe8794d388965a8e38896",
+    "rtl/top/otpu_pkg.sv": "15b589b170c0d4f87a66895b1bafb1ccd47b4a86c91fc57cd462654de17f8c49"
+  },
+  "external_semantic_source": {
+    "tokenization_parakeet.py": {
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/tokenization_parakeet.py",
+      "sha256": "f170422f744bfddd63a994d861a67f90aa0ee7df9d874c2ac8e1fbf0641cecf7"
+    },
+    "tokenization_utils_tokenizers.py": {
+      "url": "https://raw.githubusercontent.com/huggingface/transformers/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/tokenization_utils_tokenizers.py",
+      "sha256": "9ca05b9e41dbd73b53e2c6521eb28194f1f3ae55c153b9f3e8fd6b0ef450e1ea"
+    },
+    "metaspace-v0.22.1.rs": {
+      "url": "https://raw.githubusercontent.com/huggingface/tokenizers/v0.22.1/tokenizers/src/pre_tokenizers/metaspace.rs",
+      "sha256": "0048101657d3d0ab8d6280be30c4ac72d0ee1f00eb2a4ddad9ae45c6f424735b"
+    }
+  },
+  "prepare_source_closure": "python -B -m tools.phonon2_common_runtime --prepare-from-git /existing/common-runtime-checkout --destination /tmp/phonon2-common-runtime",
+  "verify_source_closure": "python -B -m tools.phonon2_common_runtime --verify-root /tmp/phonon2-common-runtime",
+  "qualification": "python -B -m tools.phonon2_run_shared_tdt --runtime-root /tmp/phonon2-common-runtime --container /existing/ec2/model.fermion --pcm docs/phonon2/speech_1688_crop.pcm --wave /existing/ec2/speech_1688_full.wav --output-dir /tmp/phonon2-tdt-qualification",
+  "readiness_gate": "No physical/card/image/serving action authorized; device waveform frontend and physical end-to-end acceptance still missing",
+  "minimum_software": "Existing NumPy/Torch environment for CPU ISA and offline native audit; tokenizers is needed only for exhaustive tokenizer tests; no Transformers model import or remote code execution"
+}

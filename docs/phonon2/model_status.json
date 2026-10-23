@@ -10,7 +10,7 @@
   "parameters": 627008134,
   "checkpoint_download_bytes": 163515201,
   "status": "blocked",
-  "readiness": "learned_encoder_isa_only",
+  "readiness": "learned_encoder_tdt_isa_only",
   "available": false,
   "ready": false,
   "execution_policy": "fpga_only",
@@ -33,7 +33,7 @@
     "hotwords": "unsupported",
     "note": "Proposed first integration envelope; endpoint remains unavailable."
   },
-  "implemented_slice": "Complete learned 8x subsampler and 24 whole-context Conformer layers on the shared-profile ISA; device-only residual QACT and one weight slot; offline waveform oracle",
+  "implemented_slice": "Learned 8x subsampler, all 24 Conformer layers, LSTM predictor and autonomous TDT/UTF-8 selection on the shared-profile ISA; waveform frontend remains offline oracle",
   "shared_image": {
     "profile": "f2-hbm:p4rl8a64c150",
     "agfi": "agfi-0001de1dd3df8e21e",
@@ -50,7 +50,16 @@
     "max_real_checkpoint_tested_encoder_frames": 89,
     "longer_context_status": "compile/resource qualification only",
     "frontend_device_implemented": false,
-    "tdt_device_implemented": false,
+    "tdt_device_implemented": true,
+    "predictor_isa_implemented": true,
+    "text_isa_implemented": true,
+    "tdt_evidence": "docs/phonon2/tdt_validation.json",
+    "tdt_semantic_policy": "docs/phonon2/tdt_semantic_policy.json",
+    "runtime_dependency": "docs/phonon2/tdt_runtime_dependency.json",
+    "real_speech_token_duration_frame_and_text_parity": true,
+    "tdt_reset_bitwise_passed": true,
+    "text_output_format": "Device-selected UTF-8 scatter/gather bytes plus lengths; host output I/O only",
+    "word_timestamps_implemented": false,
     "evidence": "docs/phonon2/encoder_validation.json",
     "activation_passes": 2,
     "encoder_reset_bitwise_passed": true,
@@ -79,20 +88,20 @@
       "detail": "All 24 whole-context Conformer layers and one-slot residency are shared-profile ISA-qualified with real checkpoint weights; physical program/wait loading and execution remain unverified."
     },
     {
-      "code": "predictor",
-      "detail": "Resident two-layer LSTM, token embedding and state commit on non-blank are missing."
+      "code": "predictor_integration",
+      "detail": "INT6 embedding, both LSTM layers and the Transformers cache policy are shared-profile ISA-qualified; physical state/cache acceptance remains gated."
     },
     {
       "code": "tdt_decode",
-      "detail": "Device joint head, separate token/duration selection, blank/zero-duration control and termination are missing."
+      "detail": "Joint head, token/duration selection, EOS and zero-duration/watchdog behavior pass real-checkpoint ISA tests; physical runtime integration remains unverified."
     },
     {
       "code": "text_output",
-      "detail": "Device token-to-text output and timestamp conventions are not implemented or qualified."
+      "detail": "Device-selected UTF-8 segments and byte lengths match the pinned text policy; physical output I/O/API integration remains unqualified."
     },
     {
       "code": "numerics",
-      "detail": "Learned subsampler plus 24 layers pass real-speech CPU/ISA comparisons with two-pass device QACT; device frontend parity, larger-context numerical coverage and transcript/WER acceptance remain missing."
+      "detail": "Learned encoder and TDT/text path pass real-speech CPU/ISA comparisons; device waveform parity, larger-context coverage, physical transcript and WER acceptance remain missing."
     },
     {
       "code": "hardware_evidence",

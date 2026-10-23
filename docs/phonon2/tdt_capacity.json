@@ -1,0 +1,39 @@
+{
+  "dram_image_bytes": 37360640,
+  "immutable_prefix_bytes": 34636672,
+  "phases": [
+    {
+      "name": "reset_decoder",
+      "instruction_words": 80,
+      "tmem_peak_live_words": 513
+    },
+    {
+      "name": "encoder_projector",
+      "instruction_words": 336,
+      "tmem_peak_live_words": 7432
+    },
+    {
+      "name": "bounded_device_tdt",
+      "instruction_words": 2248,
+      "tmem_peak_live_words": 25879
+    }
+  ],
+  "max_instruction_words": 2248,
+  "max_tmem_live_words": 25879,
+  "frames": 376,
+  "valid": 375,
+  "max_steps": 3759,
+  "policy": "transformers-ea52711b-tdt-cache-eos3-metaspace-watchdog-v1",
+  "text_format": "UTF-8 scatter/gather segments; device-selected bytes and lengths",
+  "hardware_validated": false,
+  "model_ready": false,
+  "scope": "Compile-only 30-second envelope using synthetic values with official tensor shapes",
+  "profile": "f2-hbm:p4rl8a64c150",
+  "declared_cfg_hash": "dd6b92a6",
+  "program_slot_address": 4294803456,
+  "program_slot_bytes": 163840,
+  "largest_program_wait_bytes": 11336,
+  "text_segment_bytes": 32,
+  "max_text_segments": 3759,
+  "audit_state_snapshots": false
+}
