@@ -1,0 +1,68 @@
+{
+  "base_preserved": "0a99508d5b80087f33f67ab490d5eefda2253983",
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "instance": "i-0c78de2253f66519d",
+  "region": "us-east-1",
+  "exact_replay_command": "30cdfe28-dbc2-4be6-8234-5303a0b3be91",
+  "precision_command": "6185de96-7657-45c4-b678-333ef184a043",
+  "recovered_original_job_without_rerun": true,
+  "tests": {
+    "passed": 56,
+    "seconds": 53.39
+  },
+  "exact_replay": {
+    "layer_comparisons": 160,
+    "head_comparisons": 30,
+    "bitwise_equal": true
+  },
+  "numerical_acceptance": {
+    "exit_code": 2,
+    "accepted": false,
+    "summary": {
+      "fp32": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 134,
+        "complete_frame_agreement": 6,
+        "open_loop_predictor_greedy_agreement": 125,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 135,
+        "max_open_loop_predictor_logit_error": 0.2771695655908112,
+        "max_conditional_predictor_logit_error": 0.00021424466427847624,
+        "max_feedback_logit_error": 0.07477272789084964,
+        "max_embedding_sum_error": 0.0,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 33,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      },
+      "bf16": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 130,
+        "complete_frame_agreement": 6,
+        "open_loop_predictor_greedy_agreement": 121,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 129,
+        "max_open_loop_predictor_logit_error": 0.36484747468462586,
+        "max_conditional_predictor_logit_error": 0.04824042378395758,
+        "max_feedback_logit_error": 0.10660053749607239,
+        "max_embedding_sum_error": 0.001841214192911817,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 34,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      }
+    }
+  },
+  "receipt_bytes": 231400,
+  "receipt_sha256": "969680e0a9a558107a159fb9d1ac376531548447e9f7a6fd4344647d7de81b2c",
+  "prefill_unchanged": true,
+  "independent_reference_sequences_unchanged": true,
+  "source_hashes_verified": true,
+  "hardware_access": false,
+  "tts_enabled": false,
+  "serving_interruption_seconds": 0
+}

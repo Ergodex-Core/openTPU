@@ -1,0 +1,1812 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "prompt": {
+    "text": "Hello.",
+    "wrapped": "<|im_start|>assistant\nHello.<|im_end|>\n<|im_start|>assistant\n",
+    "input_ids": [
+      151644,
+      77091,
+      198,
+      9707,
+      13,
+      151645,
+      198,
+      151644,
+      77091,
+      198
+    ],
+    "body_ids": [
+      9707,
+      13
+    ]
+  },
+  "ids": [
+    [
+      1995,
+      117,
+      1114,
+      1723,
+      1443,
+      1543,
+      1751,
+      240,
+      1242,
+      329,
+      293,
+      1347,
+      747,
+      2027,
+      1900,
+      786
+    ],
+    [
+      215,
+      1782,
+      519,
+      1176,
+      350,
+      1573,
+      1631,
+      145,
+      883,
+      455,
+      743,
+      1382,
+      914,
+      1484,
+      812,
+      803
+    ]
+  ],
+  "rows": [
+    {
+      "frame": 0,
+      "position": 0,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 0,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 0,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 0,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 0,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 1,
+      "part": "predictor.head.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 117,
+      "device_greedy": 117
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 2,
+      "part": "predictor.head.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1114,
+      "device_greedy": 1114
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 3,
+      "part": "predictor.head.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1723,
+      "device_greedy": 1723
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 4,
+      "part": "predictor.head.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1443,
+      "device_greedy": 1443
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 5,
+      "part": "predictor.head.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1543,
+      "device_greedy": 1543
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 6,
+      "part": "predictor.head.5",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1751,
+      "device_greedy": 1751
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 7,
+      "part": "predictor.head.6",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 240,
+      "device_greedy": 240
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 8,
+      "part": "predictor.head.7",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1242,
+      "device_greedy": 1242
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 9,
+      "part": "predictor.head.8",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 329,
+      "device_greedy": 329
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 10,
+      "part": "predictor.head.9",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 293,
+      "device_greedy": 293
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 11,
+      "part": "predictor.head.10",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1347,
+      "device_greedy": 1347
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 12,
+      "part": "predictor.head.11",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 747,
+      "device_greedy": 747
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 13,
+      "part": "predictor.head.12",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 2027,
+      "device_greedy": 2027
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 14,
+      "part": "predictor.head.13",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1900,
+      "device_greedy": 1900
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 0,
+      "position": 15,
+      "part": "predictor.head.14",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 786,
+      "device_greedy": 786
+    },
+    {
+      "frame": 1,
+      "position": 0,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 0,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 0,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 0,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 0,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 1,
+      "part": "predictor.head.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1782,
+      "device_greedy": 1782
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 2,
+      "part": "predictor.head.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 519,
+      "device_greedy": 519
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 3,
+      "part": "predictor.head.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1176,
+      "device_greedy": 1176
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 4,
+      "part": "predictor.head.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 350,
+      "device_greedy": 350
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 5,
+      "part": "predictor.head.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1573,
+      "device_greedy": 1573
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 6,
+      "part": "predictor.head.5",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1631,
+      "device_greedy": 1631
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 7,
+      "part": "predictor.head.6",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 145,
+      "device_greedy": 145
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 8,
+      "part": "predictor.head.7",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 883,
+      "device_greedy": 883
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 9,
+      "part": "predictor.head.8",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 455,
+      "device_greedy": 455
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 10,
+      "part": "predictor.head.9",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 743,
+      "device_greedy": 743
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 11,
+      "part": "predictor.head.10",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1382,
+      "device_greedy": 1382
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 12,
+      "part": "predictor.head.11",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 914,
+      "device_greedy": 914
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 13,
+      "part": "predictor.head.12",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 1484,
+      "device_greedy": 1484
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 14,
+      "part": "predictor.head.13",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 812,
+      "device_greedy": 812
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.layer.0",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.layer.1",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.layer.2",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.layer.3",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.layer.4",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": null,
+      "device_greedy": null
+    },
+    {
+      "frame": 1,
+      "position": 15,
+      "part": "predictor.head.14",
+      "bitwise_equal": true,
+      "max_absolute_error": 0.0,
+      "reference_greedy": 803,
+      "device_greedy": 803
+    }
+  ],
+  "layer_comparisons": 160,
+  "head_comparisons": 30,
+  "all_bitwise_equal": true,
+  "seconds": 69.77912748197559,
+  "code_sha256": {
+    "tools/qwen3_tts_predictor_replay.py": "694f2516bdecec960c80ebea985a28df2b1127fc1ac50c0eea4d6f647bc8fac3",
+    "tests/qwen3_tts_predictor_exact.py": "32f0424fa34947649b9296cd5a22c7401d4ea1b0b141f5ea479bee69da9b480e",
+    "tests/qwen3_tts_exact_mx.py": "82da5f48435a08a9ec8228732d6858f051e650c1081e112aea2beab6865e26eb"
+  },
+  "scope": "Independent operator replay sharing documented FP32/MX primitives and offline packer; not quality acceptance",
+  "physical_hardware_access": false,
+  "tts_enabled": false
+}

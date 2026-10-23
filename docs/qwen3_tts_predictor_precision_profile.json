@@ -1,0 +1,148 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "programs": [
+    {
+      "capacity": 512,
+      "talker_position": 511,
+      "device_dram_bytes": 2103400320,
+      "incremental_dram_bytes": 121962496,
+      "free_dram_bytes": 2191566976,
+      "residual_matrix_bytes": 111329280,
+      "identity_bytes": 5390336,
+      "fp32_predictor_kv_bytes": 5242880,
+      "programs_per_frame": 143,
+      "total_imem_words": 625448,
+      "max_part_imem_words": 9560,
+      "max_tmem_words": 20181,
+      "opcodes": {
+        "LD": 12812,
+        "VOP": 48758,
+        "ST": 1598,
+        "HALT": 143,
+        "QACT": 2773,
+        "MM": 11598,
+        "LI": 34,
+        "RLD": 17,
+        "QST": 448
+      },
+      "vop_functions": {
+        "copy": 1955,
+        "fill": 2179,
+        "argmax": 18,
+        "rssq": 448,
+        "mul": 18802,
+        "add": 13651,
+        "rsqrt": 448,
+        "sub": 1111,
+        "rdot": 1280,
+        "rmax": 1280,
+        "exp2sub": 2176,
+        "rsum": 1728,
+        "recip": 2369,
+        "exp2": 865,
+        "max": 448
+      },
+      "mm_flags": [
+        0,
+        2,
+        64,
+        65,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        18,
+        32,
+        38
+      ]
+    },
+    {
+      "capacity": 32768,
+      "talker_position": 32767,
+      "device_dram_bytes": 4027406208,
+      "incremental_dram_bytes": 121962496,
+      "free_dram_bytes": 267561088,
+      "residual_matrix_bytes": 111329280,
+      "identity_bytes": 5390336,
+      "fp32_predictor_kv_bytes": 5242880,
+      "programs_per_frame": 143,
+      "total_imem_words": 693992,
+      "max_part_imem_words": 9560,
+      "max_tmem_words": 20181,
+      "opcodes": {
+        "LD": 13484,
+        "VOP": 53462,
+        "ST": 1598,
+        "HALT": 143,
+        "QACT": 3445,
+        "MM": 12942,
+        "LI": 90,
+        "RLD": 17,
+        "QST": 448,
+        "LOOP": 224,
+        "ADDI": 896
+      },
+      "vop_functions": {
+        "copy": 2627,
+        "fill": 2179,
+        "argmax": 18,
+        "rssq": 448,
+        "mul": 19474,
+        "add": 14323,
+        "rsqrt": 448,
+        "sub": 1111,
+        "rdot": 1280,
+        "rmax": 1280,
+        "exp2sub": 3520,
+        "rsum": 2400,
+        "recip": 2369,
+        "exp2": 865,
+        "max": 1120
+      },
+      "mm_flags": [
+        0,
+        2,
+        64,
+        65,
+        66,
+        75,
+        196
+      ],
+      "qact_flags": [
+        18,
+        32,
+        38
+      ]
+    }
+  ],
+  "physical_hardware_access": false,
+  "new_rtl": false
+}
