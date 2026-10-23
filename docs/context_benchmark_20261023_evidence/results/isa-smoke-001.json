@@ -1,0 +1,94 @@
+{
+  "evidence_kind": "ISA_correctness_NOT_FPGA_performance",
+  "hardware_executed": false,
+  "production_mutated": false,
+  "models": {
+    "gemma-3-1b-it": {
+      "runs": [
+        {
+          "text": "Hello there! How\u2019s your day",
+          "ids_including_eos": [
+            9259,
+            993,
+            236888,
+            2088,
+            236858,
+            236751,
+            822,
+            1719
+          ],
+          "end": "max_new",
+          "prefill_tokens": 11,
+          "note": "selection='device' exercises ISA device instructions; no physical FPGA"
+        },
+        {
+          "text": "Hello there! How\u2019s your day",
+          "ids_including_eos": [
+            9259,
+            993,
+            236888,
+            2088,
+            236858,
+            236751,
+            822,
+            1719
+          ],
+          "end": "max_new",
+          "prefill_tokens": 11,
+          "note": "selection='device' exercises ISA device instructions; no physical FPGA"
+        }
+      ],
+      "exact_reset_replay": true,
+      "capacity": 4096,
+      "kv_full": true,
+      "batch": 1,
+      "weights_format": "int8",
+      "head_format": "int8",
+      "greedy": true
+    },
+    "gemma-3-270m-it": {
+      "runs": [
+        {
+          "text": "Hello! How can I help you today",
+          "ids_including_eos": [
+            9259,
+            236888,
+            2088,
+            740,
+            564,
+            1601,
+            611,
+            3124
+          ],
+          "end": "max_new",
+          "prefill_tokens": 11,
+          "note": "selection='device' exercises ISA device instructions; no physical FPGA"
+        },
+        {
+          "text": "Hello! How can I help you today",
+          "ids_including_eos": [
+            9259,
+            236888,
+            2088,
+            740,
+            564,
+            1601,
+            611,
+            3124
+          ],
+          "end": "max_new",
+          "prefill_tokens": 11,
+          "note": "selection='device' exercises ISA device instructions; no physical FPGA"
+        }
+      ],
+      "exact_reset_replay": true,
+      "capacity": 4096,
+      "kv_full": true,
+      "batch": 1,
+      "weights_format": "int8",
+      "head_format": "int8",
+      "greedy": true
+    }
+  },
+  "physical_open_attempts": 0
+}

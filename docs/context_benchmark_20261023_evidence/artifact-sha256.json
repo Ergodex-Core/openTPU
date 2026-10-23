@@ -1,0 +1,78 @@
+{
+  "CHECKPOINT.json": {
+    "bytes": 3338,
+    "sha256": "b63cb29fc97be8297c6f2ee1f3437fe0969b1914c52ceca48d10b3ddbd657347"
+  },
+  "DELIVERABLE_SHA256.txt": {
+    "bytes": 381,
+    "sha256": "f9a3286c92158fc4830d036807d22ed5fd726321f156f2dbf63e857f4b3ca4a6"
+  },
+  "README.md": {
+    "bytes": 1076,
+    "sha256": "8a84240f91f93200cfbfdcdb444db5a1a414d54f54c16c6ad573a282d0a11e90"
+  },
+  "publication-verification.json": {
+    "bytes": 4174,
+    "sha256": "8028b229678961c8b15eef4f1e707166c9b0bbaa609650f18d02281d0f9fd461"
+  },
+  "screenshot-transcription.json": {
+    "bytes": 1782,
+    "sha256": "51994e68cb52f51b108be2a2868f1476b475eed76f70225bb057175a9ec48431"
+  },
+  "results/source-verification.json": {
+    "bytes": 981,
+    "sha256": "754434da4c2da5e70ec1953aee7b22910a004413f546040b1499d90b6fed5a20"
+  },
+  "results/regression-001.log": {
+    "bytes": 99,
+    "sha256": "fb5e678eb1e216b56b06e13e4c1c611f528161fc6f97b20871f4f6d86733caf7"
+  },
+  "results/regression-003.log": {
+    "bytes": 459,
+    "sha256": "a095e26f368fb534ee123f179913bf7b319bd3e6f521bdaf948c3b99bd6ab840"
+  },
+  "results/isa-smoke-001.log": {
+    "bytes": 108,
+    "sha256": "5caf146fecae6177fc7321f523d1da0d26c761c8ba20f657894d5539da43858a"
+  },
+  "results/regression-004.log": {
+    "bytes": 110,
+    "sha256": "28b5ecda640177c2e64898f36b07a237c8e5e3927d35b6cb4b57e4c39b60eb33"
+  },
+  "results/regression-005.log": {
+    "bytes": 99,
+    "sha256": "3cba0581d1f0f4530c829f261d51cca62ac4b957992b569e2dfc49ca6eb90162"
+  },
+  "results/isa-smoke-001.json": {
+    "bytes": 2308,
+    "sha256": "f025d2bebceb1cef35fc42ffb4ed24621c45bc5915fec544c59daebb57d55405"
+  },
+  "results/environment.json": {
+    "bytes": 299,
+    "sha256": "c0a85305fd558b70396399dce0631305e82edf68eb2e622cc644bc4aa9e5a025"
+  },
+  "historical/gemma-runtime-migration.json": {
+    "bytes": 1383,
+    "sha256": "67fcf4b8798e5958d118bedd517f1627b75e12313e3a36475c15abf012f8ca3e"
+  },
+  "historical/verification-v4.md": {
+    "bytes": 5434,
+    "sha256": "66269b4245b0700784ad3f23054f1630cdcb6534a2bb44d625142da1def0b151"
+  },
+  "historical/cap768-hardware.jsonl": {
+    "bytes": 10231,
+    "sha256": "37b7afdee0cf8ee8fc5320e46d1991138aa69f1cc2f96797e6cfcebc8b7fbe21"
+  },
+  "results/results-001/preparation.json": {
+    "bytes": 732522,
+    "sha256": "b784108e64478970d3fa0c3f15760eb8e0a03e61b98021179896b07d5fedff89"
+  },
+  "results/results-001/gemma-3-270m-it.json": {
+    "bytes": 306963,
+    "sha256": "1b64d56e1882aa291167e7129541b21204be757659fdc190fd5ffa70d9867e45"
+  },
+  "results/results-001/gemma-3-1b-it.json": {
+    "bytes": 307123,
+    "sha256": "40647d7cafc038a15d5d735c009474886a388f699c3f3663ea5f7369b8bae060"
+  }
+}

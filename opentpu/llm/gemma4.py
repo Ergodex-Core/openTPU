@@ -257,10 +257,10 @@ class Spec:
               wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
               ple_format: str | None = None, ple_host: bool | None = None,
               formats: str | None = None, experts: int | None = None,
-              prefill_rows: int | None = None) -> "Image":
+              prefill_rows: int | None = None, kv_full: bool = False) -> "Image":
         return Image(self, cfg, cap, batch, rows, wformat, head_format, lookup, ple_format,
                      ple_host=ple_host, formats=formats, experts=experts,
-                     prefill_rows=prefill_rows)
+                     prefill_rows=prefill_rows, kv_full=kv_full)
 
     def truncated(self, layers) -> "Spec":
         """A model of some of the checkpoint's layers (in order): each shared layer attends to
@@ -801,7 +801,8 @@ class Image:
                  wformat: str = "int8", head_format: str | None = None, lookup: bool = False,
                  ple_format: str | None = None, block: int = ATTN_BLOCK,
                  ple_host: bool | None = None, formats: str | None = None,
-                 experts: int | None = None, prefill_rows: int | None = None):
+                 experts: int | None = None, prefill_rows: int | None = None,
+                 kv_full: bool = False):
         spec.check(cfg)
         if batch != 1:
             raise ValueError("Gemma 4 runs one sequence: batch=1")
@@ -816,7 +817,7 @@ class Image:
             if not formats and wformat == "int8" and spec.fit_formats and \
                     Image(spec, replace(cfg, DRAM_BYTES=1 << 40), cap, 1, rows, wformat,
                           head_format, lookup, ple_format, block, ple_host,
-                          "", experts).nbytes > _fit_bytes(cfg):
+                          "", experts, kv_full=kv_full).nbytes > _fit_bytes(cfg):
                 formats = spec.fit_formats  # int8 layers do not fit beside any PLE choice
         if ple_format is None:
             ple_format = os.environ.get("OTPU_PLE_FORMAT")
@@ -831,7 +832,7 @@ class Image:
             for ple_format, ple_host in opts:           # the first that fits (else the last)
                 if Image(spec, replace(cfg, DRAM_BYTES=1 << 40), cap, 1, rows, wformat,
                          head_format, lookup, ple_format, block, ple_host,
-                         formats, experts).nbytes <= _fit_bytes(cfg):
+                         formats, experts, kv_full=kv_full).nbytes <= _fit_bytes(cfg):
                     break
         self.ple_host = bool(ple_host)
         D, H, P, L = cfg.D, spec.hidden, spec.ple_dim, spec.layers
@@ -849,9 +850,13 @@ class Image:
         # Engine's compile worker)
         self.choices = dict(formats=formats, ple_format=ple_format, ple_host=self.ple_host,
                             head_format=self.head_format)
+        if kv_full:
+            self.choices["kv_full"] = True
         rb = lambda k, f: Q.row_bytes(k, f, D)                          # noqa: E731
         self.v_loc = spec.vocab
-        self.ring = min(cap, spec.window + RING_BLOCKS * block)         # sliding cache slots
+        # Retain each position for strict stateless-KV serving at larger contexts.
+        # Only storage changes: _slide_seq still applies spec.window's exact mask.
+        self.ring = cap if kv_full else min(cap, spec.window + RING_BLOCKS * block)
         hs, hg, rot = spec.head_dim, spec.global_head_dim, spec.global_rot
         self.rw = hs + 2 * rot                  # a RoPE row: cos, sin (sliding), cos, sin (global)
         dmax = max(hs, hg)
