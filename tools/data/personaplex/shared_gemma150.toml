@@ -1,0 +1,132 @@
+# AWS EC2 F2 with the HBM (docs/f2_hbm.md): the slot's xcvu47p, small shell 0x10212415, HDK 2.3.0;
+# S slices of NCH = 8 channels, each channel one HBM AXI port and its own 512 MiB pseudo-channel
+# (cl_mem_hbm_wrapper, the cl_hbm IP, 450 MHz AXI): a slice holds 8 x 512 MiB = 4 GiB without
+# crossing the HBM's switch, at 8 x 14.4 GB/s of ports for the 25.6 GB/s a slice streams at 200
+# MHz. The host reaches every pseudo-channel through PCIS (AppPF BAR4 offset = HBM address).
+# Core 200 MHz, TMEM pumped at 400 (TMEM_PMP 1), as Alex's f2-hbm200 image; the
+# p4rl8a64tdp variant keeps the TMEM at the core clock (TMEM_PMP 0). The arch is the f2
+# target's (the YPCB card's m4: the same programs and CFG_HASH). Variants: s2 (S = 2: 16 ports,
+# 8 GiB), s4 (S = 4: all 32 ports, 16 GiB; the 27B at a quarter per slice). f2-hbm16 is S = 1 on
+# 16 channels (8 GiB in one slice).
+
+[target]
+name = "f2-hbm"
+kind = "fpga"
+platform_id = 5
+description = "AWS F2: xcvu47p (small shell), S slices x 8 HBM pseudo-channels (cl_hbm, 450 MHz AXI), 200 MHz core, OCL + PCIS"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: what its 32-bit DRAM byte addresses reach
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = true                       # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+PORTB = 1                       # D-byte chunks a cycle port B and the MXU stream take (docs/wide_port.md)
+ROWLANES = false                # MM RL row lanes and QACT DUP8 (docs/row_lanes.md; CAPS2 bit4)
+ALINE = 32                      # port A's line, bytes: 32, or 64 (CAPS2 bit5; docs/row_lanes.md)
+
+[uarch]                         # the f2 target's (the YPCB card's m4)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: 400 MHz from the core clock's MMCM
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 200.0                # the CL's MMCM from clk_main_a0: VCO 1200 MHz / 6 (TMEM: / 3)
+mem = "hbm"
+mem_ctrl = "amd_hbm"            # cl_hbm (hbm_v1_0), both stacks, through cl_mem_hbm_wrapper
+hbm_axi_mhz = 450.0             # the AXI ports' clock (an MMCM from clk_hbm_ref: 900 MHz / 2)
+hostcal = false
+channels_per_slice = 8
+channel_bytes = 536870912       # a pseudo-channel: slice s's channel c at HBM byte (NCH s + c) x 512 MiB
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"
+
+[variants.s2]                   # two slices: HBM ports 0-15, 2 x 4 GiB
+S = 2
+
+[variants.s4]                   # four slices: all 32 HBM ports, 4 x 4 GiB
+S = 4
+
+[variants.p2]                   # a wide port B: two chunks a cycle over the 8 channels (4 pairs: a
+PORTB = 2                       # request's two chunks on two pairs; docs/wide_port.md). The
+                                # nightly's PORTB 2 build: build.py --target f2-hbm:p2
+
+[variants.p4rl]                 # the wide port at four chunks a cycle with row lanes (MM RL,
+PORTB = 4                       # docs/row_lanes.md): int8 decode with four lanes on MCOLS 4
+ROWLANES = true                 # (the 102 GB/s ceiling of the port); 8 channels at a beat a
+                                # cycle each. build.py --target f2-hbm:p4rl
+
+[variants.p4rl8]                # ... on MCOLS 8: int4 decode with four lanes of two columns
+PORTB = 4                       # (eight streams, otpu_mxu RL 8), the > 100 tok/s point of the
+ROWLANES = true                 # tally. build.py --target f2-hbm:p4rl8
+MCOLS = 8
+
+[variants.p4rl8a64]             # ... with port A at 64 bytes a line (Config.ALINE; CAPS2 bit5):
+PORTB = 4                       # int4 L 4's group Sw shares its first advance's line, one line
+ROWLANES = true                 # an advance, the MXU's roofline (docs/row_lanes.md "Port A at
+MCOLS = 8                       # 64 bytes"). build.py --target f2-hbm:p4rl8a64
+ALINE = 64
+
+[variants.p4rl8a64c150]         # ... at a 150 MHz core (TMEM pumped at 300; the shell's 250 and
+PORTB = 4                       # the HBM AXI's 450 unchanged): the alex-shell path's first build
+ROWLANES = true                 # placed at WNS -1.609 ns at 200 MHz (docs/wide_port.md "Alex's
+MCOLS = 8                       # shell"). build.py --target f2-hbm:p4rl8a64c150
+ALINE = 64
+core_mhz = 150.0
+
+[variants.p4rl8a64tdp]          # the 200 MHz wide port with core-clock true dual-port TMEM:
+PORTB = 4                       # the write takes port A and conflicting reads replay.
+ROWLANES = true
+MCOLS = 8
+ALINE = 64
+TMEM_PMP = 0
+
+[variants.p2rl]                 # the PORTB 2 build with row lanes: int8 / int4 decode with
+PORTB = 2                       # two lanes on MCOLS 4. build.py --target f2-hbm:p2rl
+ROWLANES = true
+
+[variants.p2rl8]                # the PORTB 2 build with row lanes on MCOLS 8: Bonsai-2's t2
+PORTB = 2                       # decode as MM RL 2 (two rows' chunks a cycle into eight
+ROWLANES = true                 # columns: docs/ternary.md 8, the t2 doubling at M = 1).
+MCOLS = 8                       # build.py --target f2-hbm:p2rl8
+
+[variants.p2m8]                 # PORTB 2 on MCOLS 8 without row lanes: t2 QUAD at M = 2 (a
+PORTB = 2                       # verify's two rows or two sequences a chunk a cycle: MTP on
+MCOLS = 8                       # the t2 images, docs/ternary.md 9). build.py --target f2-hbm:p2m8

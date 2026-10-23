@@ -40,6 +40,8 @@ from tools.personaplex_depth_layer_check import (
     EXPECTED_NATIVE_SOURCE, check_native_positions, native_stack,
 )
 from tools.personaplex_isa_check import PINNED_REVISION, PROFILE, precision_metrics
+# The imported historical ISA tool sets its own worker default; restore this bound.
+os.environ["OTPU_BUILD_JOBS"] = "1"
 
 
 def sha256(path):
@@ -97,7 +99,7 @@ def _checked_output(folder, receipt, name):
     return path
 
 
-def preflight(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_index=0):
+def preflight(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_index=0, target_name=None):
     """Require a saved pinned chain of receipts before touching large payloads."""
     if type(frame_index) is not int or not 0 <= frame_index < 4:
         raise ValueError("Frame index must select one of the four saved temporal inputs")
@@ -160,18 +162,21 @@ def preflight(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, 
     for name, digest in EXPECTED_NATIVE_SOURCE.items():
         if sha256(native_root / name) != digest:
             raise ValueError(f"Native source contract changed: {name}")
+    selected_target = target.load(target_name or str(PROFILE))
     source_paths = [Path(__file__), ROOT / "opentpu/llm/personaplex_depth_chain.py",
                     ROOT / "opentpu/llm/personaplex_weights.py",
                     ROOT / "opentpu/llm/personaplex_audio_heads.py",
                     ROOT / "opentpu/llm/personaplex_depth_input.py",
                     ROOT / "tools/personaplex_depth_input_check.py",
-                    ROOT / "tools/personaplex_depth_layer_check.py", PROFILE]
+                    ROOT / "tools/personaplex_depth_layer_check.py", selected_target.path,
+                    *[ROOT / ("opentpu/" + name + ".py") for name in
+                      ("isa", "fp32", "quant", "compiler", "isasim", "target")]]
     for name in ("opentpu/llm/personaplex_depth_layer.py", "opentpu/llm/personaplex_weights.py"):
         if sha256(ROOT / name) != stack["source_files"][name]:
             raise ValueError(f"Core source differs from the completed six-layer baseline: {name}")
     return {"paths": {"token_receipt": token_path, "conditioning_receipt": input_path,
                       "stack_receipt": stack_path, "hidden": hidden_path, "tokens": tokens_path},
-            "files": files, "native_root": native_root,
+            "files": files, "native_root": native_root, "target": selected_target,
             "source_files": {str(p.relative_to(ROOT)): sha256(p) for p in source_paths},
             "hidden": hidden[frame_index].copy(), "text_id": int(tokens[frame_index]),
             "baseline_hashes": {str(p): sha256(p) for p in
@@ -258,11 +263,11 @@ def _save_array(output_dir, receipt, name, value):
                                "shape": list(array.shape), "dtype": str(array.dtype)}
 
 
-def run(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_index=0):
+def run(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_index=0, target_name=None):
     import torch
     torch.set_num_threads(1)
     model_dir, output_dir = Path(model_dir).resolve(), Path(output_dir).resolve()
-    guard = preflight(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, frame_index=frame_index)
+    guard = preflight(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, frame_index=frame_index, target_name=target_name)
     weights = MLXWeights(model_dir)
     spec = DepthChainSpec()
     if (spec.hidden != 4096 or spec.depth != 1024 or spec.n_heads != 16
@@ -274,7 +279,7 @@ def run(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_
     component_metadata = {"conditioning": weights.depth_conditioning_metadata(),
                           "heads": weights.audio_head_metadata(),
                           "layers": [weights.depth_layer_metadata(i) for i in range(spec.layers)]}
-    cfg = target.config(target.load(str(PROFILE)))
+    cfg = target.config(guard["target"])
     image = DepthChainImage(spec, cfg)
     programs = image.compile()
     if len(programs) != 3:
@@ -291,7 +296,8 @@ def run(model_dir, token_dir, conditioning_dir, stack_dir, output_dir, *, frame_
         "payload_identity": "Pinned revision and size/mtime guard; materialized stage-array SHA-256 hashes",
         "baseline_sha256": guard["baseline_hashes"],
         "native_source_sha256": guard["native_source_sha256"],
-        "source_files": guard["source_files"], "profile_sha256": sha256(PROFILE),
+        "source_files": guard["source_files"], "profile_sha256": sha256(guard["target"].path),
+        "execution_target": guard["target"].to_dict(),
         "component_metadata": component_metadata, "spec": asdict(spec), "budget": budget,
         "program_words": [len(p) * 8 for p in programs],
         "frame_index": frame_index, "text_id": guard["text_id"],
@@ -455,9 +461,10 @@ def main():
     for name in ("model-dir", "token-dir", "conditioning-dir", "stack-dir", "output-dir"):
         parser.add_argument("--" + name, required=True)
     parser.add_argument("--frame-index", type=int, choices=range(4), default=0)
+    parser.add_argument("--target", help="Explicit target/variant from the active runtime; no compatibility substitution")
     args = parser.parse_args()
     receipt = run(args.model_dir, args.token_dir, args.conditioning_dir,
-                  args.stack_dir, args.output_dir, frame_index=args.frame_index)
+                  args.stack_dir, args.output_dir, frame_index=args.frame_index, target_name=args.target)
     print(json.dumps({key: receipt[key] for key in
                       ("status", "isa_ids", "native_original_ids", "native_teacher_forced_ids",
                        "isa_vs_native_original_id_matches", "reset_bit_exact", "cpu_wall_seconds")},

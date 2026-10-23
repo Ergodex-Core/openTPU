@@ -147,8 +147,10 @@ small JSON/log receipts and artifact hashes are in the task handoff.
 
 The deployment target is now the SAME shared Gemma image
 `agfi-0001de1dd3df8e21e`, profile `f2-hbm:p4rl8a64c150`, for every model.
-The compilation and measurements above target the recorded burst200 profile;
-they do not qualify the shared image. Do not infer opcode/capability or numeric
+The original compilation and measurements above target the recorded burst200
+profile. A later [exact shared-profile software qualification](personaplex_shared_image.md)
+passes on the pinned Gemma runtime with byte-identical outputs for frame0;
+physical acceptance remains open. Do not infer opcode/capability or numeric
 compatibility from a clock or variant name. No per-model reload is permitted.
 
 Before physical acceptance, obtain that exact target definition and saved
