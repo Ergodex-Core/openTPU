@@ -134,3 +134,7 @@ handoff, prompt/voice/delay scheduling, streaming beyond 128 code frames,
 qualified common-image transport and coordinated end-to-end physical
 acceptance. No FPGA/card/lock/image/service changes, synthesis, new resources
 or CPU/GPU serving fallback occurred. Full speech stays disabled.
+
+The subsequent [initial and transposed convolution increment](personaplex_pcm_convolutions.md)
+adds explicit FP32 choices and closes the isolated SEANet numerical gate on
+this fixture; the accumulated output-codec gate remains open.

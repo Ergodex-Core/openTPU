@@ -27,6 +27,8 @@ class MimiPCMSpec:
     input_rows: int = 2
     final_precision: str = "int8"
     residual_precision: str = "int8"
+    initial_precision: str = "int8"
+    transpose_precision: str = "int8"
 
     def __post_init__(self):
         for name in ("hidden", "n_filters", "input_rows"):
@@ -42,6 +44,9 @@ class MimiPCMSpec:
             raise ValueError("final_precision must be int8 or fp32")
         if self.residual_precision not in ("int8", "fp32"):
             raise ValueError("residual_precision must be int8 or fp32")
+        for name in ("initial_precision", "transpose_precision"):
+            if getattr(self, name) not in ("int8", "fp32"):
+                raise ValueError(f"{name} must be int8 or fp32")
 
     @property
     def samples(self):
@@ -109,14 +114,28 @@ def _conv(m):
 
 @ol.jit
 def _transpose(m):
-    raw_bias = ol.load(m.raw_bias)
+    if m.precision != "fp32":
+        raw_bias = ol.load(m.raw_bias)
     for block in ol.range(m.rows // m.tile):
         start = block * m.tile
         x = _elu(ol.load(m.input[start:start + m.tile, :]))
         ol.store(m.activated[start:start + m.tile, :], x)
         window = ol.zeros((m.tile, m.padded_k))
         window[:, :m.cin].set(x)
-        ol.store(m.raw[start:start + m.tile, :], ol.dot(window, m.weight) + raw_bias[None, :])
+        if m.precision == "fp32":
+            # Native [in,out,tap] coefficients are packed tap-major. Produce
+            # every tap/channel without quantizing x, before the unchanged
+            # source streaming overlap below. The raw tail retains bias.
+            for channel in ol.range(m.matrix_shape[0]):
+                coefficient = ol.load(Tensor(m.fp_data + channel * (4 * m.padded_k),
+                                              (m.padded_k,), (1,)))
+                reduced = ol.sum(window * coefficient[None, :], axis=1)
+                column = ol.empty((m.tile, 1))
+                column.set(reduced[:, None])
+                column.set(column + ol.load(m.raw_bias[channel:channel + 1])[None, :])
+                ol.store(m.raw[start:start + m.tile, channel:channel + 1], column)
+        else:
+            ol.store(m.raw[start:start + m.tile, :], ol.dot(window, m.weight) + raw_bias[None, :])
     bias = ol.load(m.bias)
     seen = ol.load(m.seen)
     b = ol.current()
@@ -195,6 +214,8 @@ class MimiPCMImage:
                 skip=tensor(skip_at, rows, cout) if skip_at is not None else None,
                 elu=elu, last=last, frame=Tensor(frame_at, (1,), (1,)))
             m.precision = (spec.final_precision if last else
+                           spec.transpose_precision if trans else
+                           spec.initial_precision if model_index == 0 else
                            spec.residual_precision if subpath.startswith("block.") else "int8")
             m.matrix_shape = (matrix_rows, padded_k)
             if elu:
@@ -319,6 +340,10 @@ class MimiPCMImage:
             pcm_format="raw mono FP32; no clipping or scaling",
             final_precision=self.spec.final_precision,
             residual_precision=self.spec.residual_precision,
+            initial_precision=self.spec.initial_precision,
+            transpose_precision=self.spec.transpose_precision,
             precision=("FP32 final mono convolution; " if self.spec.final_precision == "fp32" else "") +
                       ("FP32 residual convolutions; " if self.spec.residual_precision == "fp32" else "") +
+                      ("FP32 initial convolution; " if self.spec.initial_precision == "fp32" else "") +
+                      ("FP32 transposed convolutions; " if self.spec.transpose_precision == "fp32" else "") +
                       "other convolution weights/activations INT8; bias, history, overlap, ELU and residual FP32")
