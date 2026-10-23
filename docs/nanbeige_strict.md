@@ -36,6 +36,14 @@ that precision therefore needs additional addressable device memory and a BF16
 gather kernel/compiler/RTL path, or a separately accepted reduction elsewhere.
 The INT8 candidate is an explicit approximation, not a source-fidelity claim.
 
+The actual checkpoint used for validation is
+`Nanbeige/Nanbeige4.2-3B-GPTQ-Int8`, revision
+`e8c6ccdb655bbcf410952686026d3fcbf4c07392`. Its cached configuration was
+checked directly: hidden 3072, FFN 10752, vocabulary 166144, 48 query heads,
+8 KV heads, head dimension 128, 22 physical layers, two loops, theta 70000000,
+and `skip_loop_final_norm=false`. The separately cached DSpark checkpoint is
+not used by this adapter.
+
 Host work is chat templating/tokenization, text decoding, request validation,
 queueing, cancellation, program compilation, transport, counters, and token
 streaming. Setup imports/decompresses/requantizes checkpoint tensors and builds
@@ -151,3 +159,53 @@ Actual-checkpoint ISA validation is separate from this aggregate and from the
 pending physical gate. A first attempt stopped before model construction because
 the PersonaPlex environment lacks Transformers. An existing Nanbeige environment
 was located without installing or downloading dependencies.
+
+The raw BOS + `Hi` check completed on the full checkpoint with two generated
+IDs `[90956, 13]`. It exercised prefill, all 44 logical layers, the vocabulary
+head and device greedy feedback; transport reads were restricted to the output
+token area. Its receipt records zero physical opens and no hardware cycles.
+This is an ISA path check, not a measured FPGA result or a chat-quality claim.
+
+The full checkpoint chat template for user prompt `Hi` contains 36 input IDs.
+That strict ISA run also completed: output `[17782, 152518]`, decoded `Hello!`.
+The independent `nanbeige.reference_logits` oracle produced exactly the same
+two IDs for both the raw and chat inputs. The oracle uses decompressed source
+INT8 linear weights and original BF16 embedding/norm/head values in FP64
+arithmetic; it does not reproduce official BF16 activation rounding. Matching
+four decisions across these two inputs is a bounded correctness comparison,
+not general checkpoint-quality acceptance. The first-token embedding-only
+precision comparisons also retained the reference token in both cases.
+
+Receipts are in `data/nanbeige_strict/raw-isa.json`, `chat-isa.json` and
+`source-reference.json`. The chat run used one existing EC2 CPU at nice19;
+its 851.63 s of ISA execution is software validation time, not FPGA latency.
+Its only model readback was the output-token area, and physical-open attempts
+were zero. Source comparison and chat validation shared CPU23 initially;
+the reference was moved to CPU21 after checking its own process identity.
+Both jobs completed within their 1100 s process bounds. No jobs remain running.
+
+## Current wide-port integration gap
+
+An isolated CPU-only copy of the UI's pinned runtime
+`18fb978033799f0f21258f0e6e085c0360322d96` was checked against its saved
+image-switch receipt. That describes `agfi-0001de1dd3df8e21e`, 150 MHz,
+MCOLS8, PORTB4, ROWLANES, ALINE64, platform5, eight 512 MiB channels and
+configuration hash3714814630. No fresh probe or physical access was performed.
+
+The existing Nanbeige image constructor first fails because the newer Qwen3
+image API removed the final `spec_rows` and `base` positional arguments. An
+isolated prototype omitted those arguments when zero. Capacity preflight then
+correctly rejected a 4,762,836,992-byte layout, 467,869,696 bytes above 4 GiB.
+The newer Qwen3 layout allocates both a standard head and a row-lane head even
+for this untied model. This duplicate head is a concrete target for a compact
+layout change; disabling the extra head representation or omitting the unused
+standard copy must be compiled and numerically tested before hardware use.
+The prototype changes were not promoted into this branch or the UI runtime.
+
+The smallest route on the currently loaded image is to port that constructor,
+remove the unnecessary duplicate head allocation without changing precision,
+then run capacity/compiler and strict ISA gates on the pinned wide-port runtime.
+A coordinated window under both normal locks remains necessary afterward.
+The existing tested burst200 adapter can instead be validated only in a
+separately authorized compatible-image window. Neither route authorizes an
+image reload or interruption of the warm Gemma worker.

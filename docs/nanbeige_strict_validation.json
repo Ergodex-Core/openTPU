@@ -29,7 +29,46 @@
       ]
     ]
   },
-  "checkpoint_isa": "pending separately recorded validation",
+  "checkpoint_isa": {
+    "status": "raw and full chat template gates completed",
+    "model_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+    "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392",
+    "raw_receipt": "data/nanbeige_strict/raw-isa.json",
+    "raw_tokens": [
+      90956,
+      13
+    ],
+    "hardware_executed": false,
+    "source_reference_raw_tokens_match": true,
+    "reference": "Existing independent NumPy FP64 loop oracle with source checkpoint weights; not official BF16 rounding",
+    "chat_receipt": "data/nanbeige_strict/chat-isa.json",
+    "source_reference_receipt": "data/nanbeige_strict/source-reference.json",
+    "chat_tokens": [
+      17782,
+      152518
+    ],
+    "chat_text": "Hello!",
+    "raw_and_chat_source_reference_match": true,
+    "chat_input_tokens": 36,
+    "chat_isa_seconds": 851.630794442026,
+    "physical_open_attempts": 0
+  },
   "physical_fpga": "pending coordinated compatible burst200 window",
-  "published_checkpoint_quality_accepted": false
+  "published_checkpoint_quality_accepted": false,
+  "wideport_preflight": {
+    "runtime": "18fb978033799f0f21258f0e6e085c0360322d96",
+    "image": "agfi-0001de1dd3df8e21e",
+    "saved_config_hash": 3714814630,
+    "hardware_used": false,
+    "initial_failure": "Qwen3 Image constructor no longer accepts zero spec_rows/base positional arguments",
+    "prototype_fix": "Pass no removed positional arguments when both zero",
+    "prototype_required_bytes": 4762836992,
+    "device_bytes": 4294967296,
+    "fit": false,
+    "physical_open_attempts": 0,
+    "prototype_receipt": "data/nanbeige_strict/wideport-preflight-002.json",
+    "excess_bytes": 467869696,
+    "smallest_next_step": "Port image constructor and compact the duplicate untied head allocation, then requalify the adapter against pinned wide-port runtime; no reload required for that CPU work"
+  },
+  "running_validation_jobs": []
 }

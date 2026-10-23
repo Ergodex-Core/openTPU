@@ -1,0 +1,305 @@
+{
+  "status": "complete",
+  "started_utc": "2026-10-23T09:07:19.451997+00:00",
+  "hardware_used": false,
+  "model": {
+    "repo_id": "Nanbeige/Nanbeige4.2-3B-GPTQ-Int8",
+    "revision": "e8c6ccdb655bbcf410952686026d3fcbf4c07392"
+  },
+  "config": {
+    "hidden_size": 3072,
+    "num_hidden_layers": 22,
+    "num_loops": 2,
+    "num_attention_heads": 48,
+    "num_key_value_heads": 8,
+    "head_dim": 128,
+    "intermediate_size": 10752,
+    "vocab_size": 166144,
+    "model_type": "nanbeige",
+    "rope_theta": 70000000,
+    "skip_loop_final_norm": false
+  },
+  "source_files": {
+    "opentpu/llm/nanbeige_strict.py": "9fc8d192a595bb0458933565a5a95fb9d8c2d3985221e92abc7250c3fe44bebd",
+    "tools/nanbeige_strict.py": "ebe89fe4237ae56488b20c5a2b6867bcba09c4180e50a06ee203a27f8eb4bc09",
+    "tests/test_nanbeige_strict.py": "ff3f02e06dd045843918e0eedca1862abf230a050a2cc2f742ac144283606ad7"
+  },
+  "source_modeling_sha256": "547737f989f5cb741c1a568acaf85f83521fa67a8f7268e19f9a37e60127c0d5",
+  "reference": "Independent existing NumPy FP64 looped-model oracle using decompressed source INT8 linear weights and original BF16 norm/head/embedding values; not official BF16 activation rounding",
+  "reference_function_sha256": "343f18b0fcba8d93ca67cf16cb7a9b0f7bab3bdba7a883e8d80616c4e64d972c",
+  "full_model_quality_accepted": false,
+  "comparisons": [
+    {
+      "name": "raw_BOS_Hi",
+      "prompt_tokens": [
+        166100,
+        15050
+      ],
+      "strict_isa_tokens": [
+        90956,
+        13
+      ],
+      "reference_tokens": [
+        90956,
+        13
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "token": 90956,
+          "text": ".\u201d\u00a0",
+          "seconds": 88.78163127508014,
+          "top10": [
+            [
+              90956,
+              23.169973846696852
+            ],
+            [
+              88315,
+              23.044785221928155
+            ],
+            [
+              99893,
+              22.341832459262843
+            ],
+            [
+              149355,
+              22.11661383276125
+            ],
+            [
+              122956,
+              22.115286118121606
+            ],
+            [
+              141072,
+              22.097355418071295
+            ],
+            [
+              122071,
+              22.075766805003646
+            ],
+            [
+              162353,
+              21.818840766466398
+            ],
+            [
+              137914,
+              21.796668385836046
+            ],
+            [
+              125306,
+              21.777761633709382
+            ]
+          ],
+          "best_margin": 0.12518862476869685,
+          "int8_embedding_only_token": 90956,
+          "int8_embedding_only_cosine": 0.999995454484776,
+          "int8_embedding_only_relative_l2": 0.0030982494499278562
+        },
+        {
+          "step": 1,
+          "token": 13,
+          "text": "\n",
+          "seconds": 183.18773299700115,
+          "top10": [
+            [
+              13,
+              16.12818653655577
+            ],
+            [
+              166101,
+              14.120042629419977
+            ],
+            [
+              764,
+              14.037360727698138
+            ],
+            [
+              152546,
+              13.868563850642152
+            ],
+            [
+              152420,
+              13.579760715672961
+            ],
+            [
+              2798,
+              13.433305328410414
+            ],
+            [
+              3934,
+              13.294660899429461
+            ],
+            [
+              152375,
+              13.267673190934637
+            ],
+            [
+              1874,
+              13.260571614334767
+            ],
+            [
+              152343,
+              13.244407348084243
+            ]
+          ],
+          "best_margin": 2.0081439071357927
+        }
+      ],
+      "reference_text": ".\u201d\u00a0\n",
+      "exact_tokens_match": true
+    },
+    {
+      "name": "chat_Hi",
+      "prompt_tokens": [
+        166100,
+        8481,
+        13,
+        18215,
+        19433,
+        154675,
+        152372,
+        21863,
+        152672,
+        57437,
+        162001,
+        46372,
+        152590,
+        5004,
+        15825,
+        152435,
+        3237,
+        3942,
+        152389,
+        166101,
+        13,
+        166100,
+        2714,
+        13,
+        25389,
+        166101,
+        13,
+        166100,
+        66354,
+        13,
+        166103,
+        13,
+        13,
+        166104,
+        13,
+        13
+      ],
+      "strict_isa_tokens": null,
+      "reference_tokens": [
+        17782,
+        152518
+      ],
+      "steps": [
+        {
+          "step": 0,
+          "token": 17782,
+          "text": "Hello",
+          "seconds": 200.13682271691505,
+          "top10": [
+            [
+              17782,
+              42.52773139092613
+            ],
+            [
+              25389,
+              41.63880760273446
+            ],
+            [
+              37552,
+              34.61684818333465
+            ],
+            [
+              152518,
+              33.963821176818534
+            ],
+            [
+              155829,
+              32.23585942666555
+            ],
+            [
+              22779,
+              30.507647191947317
+            ],
+            [
+              243,
+              29.721855556380987
+            ],
+            [
+              454,
+              29.098942227803075
+            ],
+            [
+              39173,
+              28.727089974457584
+            ],
+            [
+              152417,
+              28.147363599974558
+            ]
+          ],
+          "best_margin": 0.8889237881916685,
+          "int8_embedding_only_token": 17782,
+          "int8_embedding_only_cosine": 0.9999959552917679,
+          "int8_embedding_only_relative_l2": 0.0029059753504032415
+        },
+        {
+          "step": 1,
+          "token": 152518,
+          "text": "!",
+          "seconds": 103.16010998992715,
+          "top10": [
+            [
+              152518,
+              43.84325694764309
+            ],
+            [
+              687,
+              35.51319016737228
+            ],
+            [
+              112292,
+              29.852539761504406
+            ],
+            [
+              152956,
+              29.66817904035429
+            ],
+            [
+              4242,
+              29.399187611879476
+            ],
+            [
+              23323,
+              28.050485079724513
+            ],
+            [
+              152363,
+              27.92706035244316
+            ],
+            [
+              1375,
+              27.486726428824383
+            ],
+            [
+              289,
+              26.57344346967309
+            ],
+            [
+              13,
+              26.53564939598084
+            ]
+          ],
+          "best_margin": 8.330066780270812
+        }
+      ],
+      "reference_text": "Hello!"
+    }
+  ],
+  "physical_open_attempts": 0,
+  "finished_utc": "2026-10-23T09:23:09.447692+00:00"
+}
