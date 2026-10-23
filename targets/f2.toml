@@ -1,0 +1,74 @@
+# AWS EC2 F2 (f2.6xlarge: one Virtex UltraScale+ HBM xcvu47p per slot, AWS FPGA small shell
+# 0x10212415, HDK 2.3.0; docs/f2.md). One slice on the slot's DDR4 DIMM (64 GB, the HDK's sh_ddr:
+# AXI4 512 bits at clk_main_a0, 250 MHz): both of its channels are 2 GiB windows of the one DIMM
+# (otpu_f2_sys). The host reaches the control registers through the shell's OCL (AppPF BAR0) and
+# the DIMM through PCIS (AppPF BAR4); the small shell has no DMA engine (opentpu/host/f2.py). The
+# arch is the YPCB card's m4 (the same programs, the same CFG_HASH but for the platform); the
+# first builds run the core at 100 MHz (functional qualification first, Fmax afterwards).
+
+[target]
+name = "f2"
+kind = "fpga"
+platform_id = 3
+description = "AWS F2: xcvu47p (small shell), 1 slice on the DDR4 DIMM (sh_ddr), OCL + PCIS"
+
+[arch]
+S = 1
+D = 128
+MCOLS = 4
+ACT_BLOCKS = 128
+ACT_ROWS = 16
+TMEM_WORDS = 65536
+IMEM_WORDS = 32768
+DRAM_BYTES = 4294967296         # per slice: 2 GiB of the DIMM per channel
+LANES = 8
+PAIR = true
+DSTEP = true
+STREAM = true
+SEQ_WC = true
+T2 = false                      # t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+
+[uarch]                         # the YPCB card's m4 (targets/ypcb-00338.toml)
+MXU_IMPL = 2
+MXU_CL = 16
+MXU_E = 4
+VPU_CL = 2
+ULANES = 8
+TMEM_IMPL = 3
+TMEM_NSB = 2
+TMEM_RPL = true
+TMEM_TDP = true
+TMEM_GST = true
+TMEM_PMP = 1                    # pumped at 2x: the CL's MMCM makes clk_f = 2 x core_clk
+RPB = 0
+WPB = 1
+WIN = 16
+FIFO_DEPTH = 1024
+TRACE_DEPTH = 16384
+PQ_WIN = 1024
+CHASH = true
+
+[tech]
+family = "xilinxus"             # rtl/tech/xilinxus: DSP48E2 cells
+part = "xcvu47p-fsvh2892-2-e"
+vendor = "xilinx"
+
+[platform]
+board = "f2"
+core_mhz = 100.0                # the CL's MMCM from clk_main_a0 (250 MHz): VCO 1000 MHz / 10
+mem = "ddr4"
+mem_mts = 2133                  # pinned cl_ddr4: C0.DDR4_TimePeriod 938 ps (~2133 MT/s)
+mem_ctrl = "sh_ddr"
+hostcal = false                 # sh_ddr calibrates its DIMM itself (vLED bit 1: ready)
+channels_per_slice = 2
+channel_bytes = 2147483648      # channel c of the slice at DIMM byte c x 2 GiB (BAR4 offset)
+channel_phys_bytes = 68719476736
+beat_bytes = 64
+host = "pcie"
+pcie_gen = 4
+pcie_lanes = 16
+shell = "small_shell"
+shell_version = "0x10212415"
+hdk_commit = "20fe90180574464fd509c994680ec67191e9759f"   # aws-fpga 2.3.0
+ip_commit = "6d32be972e6da854e61a8d3d6ec0466ab491c1b3"    # hdk/common/ip (Vivado 2025.2)
+vivado = "2025.2"

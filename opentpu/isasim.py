@@ -30,6 +30,8 @@ class Config:
     STREAM: bool = False     # the stream engine runs STREAM's hardware subset (docs/stream.md)
     ACT_ROWS: int = 0        # ACT RAM rows == max stationary rows of one MM (0: MCOLS); more
     #                          than MCOLS: the MXU replays each streamed chunk (docs/isa.md, MM)
+    T2: bool = False         # t2 weights (MM WF 1 + rs bit 0), MM QUAD and QACT DUP4
+    #                          (docs/ternary.md; CAPS bit28)
     SEQ_WC: bool = False     # EXPERIMENTAL: the sequencer takes each program's wait entries
     #                          (WAITC, docs/isa.md "Wait counts"): the host writes them after
     #                          every program (opentpu.waits), the chain slots hold them. The
@@ -73,7 +75,8 @@ def board_config(**kw) -> Config:
                 PAIR=bool(int(env.get("OTPU_PAIR", 0))),
                 DSTEP=bool(int(env.get("OTPU_DSTEP", 0))),
                 STREAM=bool(int(env.get("OTPU_STREAM", 0))),
-                SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))))
+                SEQ_WC=bool(int(env.get("OTPU_SEQ_WC", 0))),
+                T2=bool(int(env.get("OTPU_T2", 0))))
     base.update(kw)
     return Config(**base)
 
@@ -83,12 +86,17 @@ class SimError(RuntimeError):
 
 
 class Slice:
-    def __init__(self, cfg: Config, sid: int, program: list[I.Instr], dram: np.ndarray | None):
+    def __init__(self, cfg: Config, sid: int, program: list[I.Instr], dram: np.ndarray | None,
+                 adopt: bool = False):
         self.cfg, self.sid = cfg, sid
         self.prog = program
-        self.dram = np.zeros(cfg.DRAM_BYTES, dtype=np.uint8)
-        if dram is not None:
-            self.dram[: len(dram)] = dram
+        if adopt and isinstance(dram, np.ndarray) and dram.dtype == np.uint8 and \
+                dram.ndim == 1 and len(dram) == cfg.DRAM_BYTES:
+            self.dram = dram            # the caller's array is the slice's DRAM (no copy:
+        else:                           # four 4 GiB images, lens's traced ISA step)
+            self.dram = np.zeros(cfg.DRAM_BYTES, dtype=np.uint8)
+            if dram is not None:
+                self.dram[: len(dram)] = dram
         self.tmem = np.zeros(cfg.TMEM_WORDS, dtype=np.uint32)
         self.act = np.zeros((cfg.act_rows, cfg.ACT_BLOCKS * cfg.D), dtype=np.int8)
         # the scale record of each (row, block): the row's Sa and the sub-blocks' offsets da
@@ -430,10 +438,11 @@ class Slice:
         block, group) the offset dw and the multiplier m [N, KB, G] (G = 8 groups of D/8 for
         NVFP4, else the 4 sub-blocks of D/4)."""
         G = 8 if wf == I.WNV else Q.NSUB
+        t2 = wf == I.WT2
         if unit:
             return (np.ones(N, np.float32), np.zeros((N, KB, G), np.int64),
                     np.ones((N, KB, G), np.int64))
-        align = 16 if wf == I.WNV else 8 if wf in (I.W4I, I.W4F) and not rsc else 4
+        align = 16 if wf in (I.WNV, I.WT2) else 8 if wf in (I.W4I, I.W4F) and not rsc else 4
         if ssa % align or srs % align:
             raise SimError(f"MM: ssa and srs must be multiples of {align}")
         rows = ssa + np.arange(N) * srs
@@ -447,8 +456,9 @@ class Slice:
                 raise SimError("MM: scale rows out of range")
             dw = np.repeat(self.dram[ba].astype(np.int64)[:, :, None], G, axis=2)
             return sw, dw, np.ones((N, KB, G), np.int64)
-        if wf in (I.W4I, I.W4F):          # a word per block after Sw and a reserved word
-            word = self.m32[self._widx(rows[:, None] + 8 + 4 * kk[None, :])].astype(np.int64)
+        if wf in (I.W4I, I.W4F, I.WT2):   # a word per block after Sw and a reserved word (t2:
+            h = 16 if t2 else 8           # three reserved words)
+            word = self.m32[self._widx(rows[:, None] + h + 4 * kk[None, :])].astype(np.int64)
             dw = np.repeat((word & 0xFF)[:, :, None], G, axis=2)
             m = np.stack([(word >> (8 + 6 * b)) & 63 for b in range(G)], -1)
             return sw, dw, m
@@ -471,12 +481,15 @@ class Slice:
         ssa = (self.reg(ins.rb) + w[1]) & 0xFFFFFFFF
         out = (self.reg(ins.rc) + w[2]) & 0xFFFFFFFF
         N, KB, k0 = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[3] >> 24) & 0xFF
-        rs = w[4]
+        wf, pair, quad = I.mm_format(ins)
+        rs = w[4] & ~I.RS_MASK
+        if w[4] & I.RS_QUAD and not (wf == I.WT2 and pair):
+            raise SimError("MM: rs bit 1 (QUAD) needs t2 (WF 1, rs bit 0) and PAIR")
         ors, M, ab = w[5] & 0xFFFF, (w[5] >> 16) & 0xFF, w[5] >> 24
         srs = w[6]
         unit, accf = bool(ins.flags & I.F_UNIT), bool(ins.flags & I.F_ACC)
-        pair, rsc = bool(ins.flags & I.F_PAIR), bool(ins.flags & I.F_RSC)
-        R = 2 * M if pair else M                          # ACT rows read
+        rsc = bool(ins.flags & I.F_RSC)
+        R = 4 * M if quad else 2 * M if pair else M       # ACT rows read
         if not N or not KB:
             raise SimError("MM: N and KB must be at least 1")
         if not (0 < R <= cfg.act_rows) or ab + KB > cfg.ACT_BLOCKS:
@@ -484,8 +497,13 @@ class Slice:
         if M > cfg.MCOLS and ins.flags & (I.F_RMAX | I.F_ASCALE):
             raise SimError("MM: RMAX and ASCALE need M <= MCOLS")
         if pair and R > cfg.MCOLS:
-            raise SimError("MM: PAIR needs 2*M <= MCOLS")
-        wf = (ins.flags >> I.WF_SHIFT) & 3
+            raise SimError("MM: PAIR needs 2*M <= MCOLS (QUAD: 4*M)")
+        if quad and k0 % 4:
+            raise SimError("MM: QUAD needs k0 a multiple of 4")
+        if wf == I.WT2 and not cfg.T2:
+            raise SimError("MM: t2 weights on a configuration without T2")
+        if rsc and wf == I.WT2:
+            raise SimError("MM: RSC does not take t2")
         if pair and wf == I.W8:
             raise SimError("MM: PAIR needs 4-bit weights")
         if pair and k0 % 2:
@@ -494,20 +512,23 @@ class Slice:
             raise SimError("MM: RSC does not take NVFP4")
         if ins.flags & I.F_ASCALE and not (unit and accf):
             raise SimError("MM: ASCALE needs UNIT and ACC")
-        bpb = D if wf == I.W8 else D // 2                 # streamed bytes per K-block
+        bpb = D // I.blocks_per_chunk(wf)                 # streamed bytes per K-block
         if sa % D or rs % D or sa + (N - 1) * rs + -(-KB * bpb // D) * D > cfg.DRAM_BYTES:
             raise SimError("MM: streamed rows must be D-byte aligned and in range")
         wv = np.lib.stride_tricks.as_strided(self.dram[sa:], (N, KB, bpb),
                                              (rs, bpb, 1))               # [N, KB, bpb], no copy
         if wf == I.W8:
             wel = wv.view(np.int8)
+        elif wf == I.WT2:
+            wel = Q.DEC["t2"][Q.unpack2(wv)]
         else:
             wel = Q.DEC["int4" if wf == I.W4I else "fp4"][Q.unpack4(wv)]
         sw, dw, mw = self._mx_scales(wf, ssa, srs, N, KB, k0, unit, rsc)
         G = dw.shape[2]
         # the ACT row of each (output row, block): PAIR takes the odd blocks from row j + M
         kk = np.arange(KB)
-        rsel = np.arange(M)[:, None] + np.where(pair & (kk % 2 == 1), M, 0)[None, :]   # [M, KB]
+        reuse = 4 if quad else 2 if pair else 1           # QUAD: block k from row j + (k % 4) M
+        rsel = np.arange(M)[:, None] + (M * (kk % reuse))[None, :]                     # [M, KB]
         sa_rows = self.ascale[:R, ab:ab + KB]
         if np.any(sa_rows.view(np.uint32) != sa_rows[np.arange(R) % M][:, :1].view(np.uint32)):
             raise SimError("MM: the ACT rows' blocks hold different Sa (more than one QACT)")
@@ -557,14 +578,20 @@ class Slice:
         src = (self.reg(ins.ra) + w[0]) & 0xFFFFFFFF
         rows, ab, KB = w[1] & 0xFF, (w[1] >> 8) & 0xFF, w[1] >> 16
         srs = w[2]
-        dup = bool(ins.flags & I.F_DUP)
-        if (2 * rows > cfg.MCOLS if dup else rows > cfg.act_rows) or ab + KB > cfg.ACT_BLOCKS:
+        dup, dup4 = bool(ins.flags & I.F_DUP), bool(ins.flags & I.F_DUP4)
+        copies = 4 if dup4 else 2 if dup else 1
+        if dup and dup4:
+            raise SimError("QACT: DUP and DUP4")
+        if dup4 and not cfg.T2:
+            raise SimError("QACT: DUP4 on a configuration without T2")
+        if (copies * rows > cfg.MCOLS if copies > 1 else rows > cfg.act_rows) \
+                or ab + KB > cfg.ACT_BLOCKS:
             raise SimError("QACT out of ACT RAM bounds")
         cs = (w[3] & 0xFFFFFFFF) if ins.flags & I.F_CSCALE else None
         rsc = (w[4] & 0xFFFFFFFF) if ins.flags & I.F_RSCALE else None
         q, s, d = self._quant_rows(src, rows, KB, srs, cfg.D // Q.NSUB,
                                    bool(ins.flags & I.F_ROW), cs, rsc)
-        for r0 in ((0, rows) if dup else (0,)):     # DUP: rows r and r + rows, same bytes
+        for r0 in range(0, copies * rows, rows):    # DUP / DUP4: rows r + c rows, same bytes
             self.act[r0:r0 + rows, ab * cfg.D:(ab + KB) * cfg.D] = q
             self.ascale[r0:r0 + rows, ab:ab + KB] = s[:, None]
             self.adoff[r0:r0 + rows, ab:ab + KB] = d.reshape(rows, KB, Q.NSUB)
@@ -740,11 +767,11 @@ class Machine:
     """args: the run's arguments (up to 8 words): R8..R15 start with them (0 without)."""
 
     def __init__(self, cfg: Config, programs: list[list[I.Instr]], drams: list[np.ndarray | None],
-                 args=None):
+                 args=None, adopt: bool = False):
         assert len(programs) == cfg.S and len(drams) == cfg.S
         _fit_imem(cfg, programs)
         self.cfg = cfg
-        self.slices = [Slice(cfg, s, programs[s], drams[s]) for s in range(cfg.S)]
+        self.slices = [Slice(cfg, s, programs[s], drams[s], adopt) for s in range(cfg.S)]
         self.args = args
         self.chains = 0                  # HALT CHAIN restarts so far
         self.host = None                 # WAITW's host: host(machine) when every slice waits

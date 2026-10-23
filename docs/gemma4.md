@@ -139,6 +139,79 @@ pieces), at every build the image cache misses. Caching those records
 padding, prebuild covering such runs) would take 1.27 GB of the card host's disk; it is parked
 while that disk is at its floor, as only an explicit `--wformat int8` E2B pays it.
 
+## Slices
+
+Gemma 3 and Gemma 4 run on S = 1, 2, 3 or 4 slices (`Spec.check`; `SLICES`), the tensor-parallel
+split of the v4 plan's proposal P4 ([v4/proposal-4-four-slices.md](v4/proposal-4-four-slices.md),
+section 3; status in [v4/p4-status.md](v4/p4-status.md)). S must divide the hidden size, the
+MLP widths and ple_dim; the query heads, the K / V rows and the vocabulary may split unevenly
+(S = 3 on Gemma 3 1B: `split_rows` pads a gathered matrix's rows to whole blocks, the last
+slice's zero, and cuts the gathered tile; when S does not divide n_q every slice attends every
+head on the gathered q; `split_ranges` gives the LM head per-slice row ranges, `v_off`:
+[v4/f2-burst200-s3.md](v4/f2-burst200-s3.md)). One slice is today's: the image and
+every program (per-position rows, the resident decode, the generate loop, the prompt runs) are
+byte-identical to the one-slice code's. The simulators' default for these models stays the
+card's one slice (`Spec.one_slice_default`: otpu-chat and Lens do not pick the design's two
+slices for them); S > 1 is asked for with a configuration of S slices (`board_config(S=4)`,
+`tools/compare_hf.py --cfg board --slices 4`, `lens record model --slices 4`).
+
+**The split.** Every matrix is split by output rows, never by K (a K split would cut the rows
+to 2-3 blocks and triple the MXU's per-row cost: proposal 4, section 4), with qwen3.py's S = 2
+scheme (dataflow's split (a): the inputs all-gathered, `ol.all_gather`, one GATHER each). Slice
+s holds rows s / S .. (s + 1) / S of each projection; the norms, the RoPE and mask tables, the
+generate loop's area and the whole int8 LM head table (the embedding gathers read it) are
+replicated, as is the KV cache: the single KV head is appended by every slice to its own copy,
+so attention reads no other slice's memory. Per layer of Gemma 3 1B at S = 4 (`_attention`,
+`_split_mlp`, `_mlp`):
+
+| Block | Per slice s | Gather |
+|:--|:--|:--|
+| input norm | replicated on the whole x [1, 1152] | |
+| W_q (1024 x 1152) | rows 256 s .. + 255: query head s | |
+| W_k, W_v (256 x 1152) | rows 64 s .. + 63 of each; k and v gathered to [1, 256], then k_norm, RoPE and the append to the slice's own cache | 2 x 256 words |
+| attention | head s alone (M = 1) over the slice's K / V copy | |
+| W_o (1152 x 1024) | the heads gathered to [1, 1024]; rows 288 s .. + 287; y gathered to [1, 1152] | 1024 + 1152 words |
+| post-attention norm, residual | replicated | |
+| gate / up (6912 x 1152) | rows 1728 s .. + 1727 of each, in pieces of the F chunk (768, 768, 192), gelu_tanh x up per piece | |
+| down (1152 x 6912) | the product gathered to [1, 6912] in F order; rows 288 s .. + 287 over all 54 blocks in the one-slice image's 9 column parts of 768; y gathered | 6912 + 1152 words |
+| post-MLP norm, residual, layer scalar | replicated | |
+| LM head (262,144 x 1152) | rows 65,536 s ..: 8 chunks of 8,192 with their ARGMAX; the (max, id) of the slices gathered (generate.Greedy) | 2 x 4 words a token |
+| embedding of the next token | gathered from the whole int8 head table in every slice | |
+
+Six gathers and 10,752 words a layer, 156 a token (279,552 words = 1.07 MiB fp32) plus the
+head's two. Gemma 4's per-layer inputs split the same way: the PLE projection's rows of each
+layer (P / S a slice, gathered a layer at a time before its norm, `_ple_inputs`), the PLE gate's
+rows on the slice's columns of the input and the PLE projection's rows (`_ple`). A MoE model
+(26B-A4B), the layer-major prefill and the expert runs stay on one slice.
+
+**Bit-exact.** The split keeps every fp32 sum in the one-slice program's order: a matrix's
+output rows are independent dots over the whole K (the same blocks in the same order), the
+gathered k, v, heads, y and product are the one-slice tiles' values in the same column order,
+the norms and the residual run on the same [R, H] tiles, and the down projection quantizes the
+gathered product over the same 768-column ranges (one QACT a chunk) before the same 9
+accumulating MMs. The attention of one head at M = 1 is the 4-head entry's row. So S = 2 and
+S = 4 give S = 1's logits bit for bit, per-position, resident and in the chunked prefill
+(`tests/test_gemma3.py::test_slices_match_hf_and_one_slice`,
+`test_four_slices_resident_and_prefill_are_bit_exact`; Gemma 4 with its PLE paths:
+`tests/test_gemma4.py::test_two_slices_match_one`), and the real model's tokens at S = 4 are
+S = 1's ([gemma3.md](gemma3.md) Accuracy).
+
+**The image per slice** (`Image`, the same offsets in every slice, different contents): Gemma
+3 1B int8 at a 2048-token capacity is 1,053 MiB on one slice, 715 MiB a slice at S = 2 and
+547 MiB at S = 4 (layers 731 / 393 / 225 MiB, the KV caches 55 MiB and the head 292 MiB in
+every slice). `Image.build` quantizes each slice's rows (`_job_matrix`'s `rowrange`, `rowpad`
+and `rowcols` selections: a row's quantization is its own, so the rows are the one-slice
+image's bytes) and the head once for all slices; `descriptors(sid)` points the LM head MM at
+the slice's vocab / S rows of the table; `compile_decode`, `compile_rows`, `compile_step` and
+`compile_prompt_run` return one program per slice, the Engine writes the state and reads the
+logits per slice as it does for Qwen3 at S = 2 (each slice's logits at its column offset,
+`v_loc`).
+
+**What the hardware would do** (none of it exists yet; proposal 4 sections 2, 7): four slices
+of today's design with the collective hub between them, each with a quarter of the weight
+bytes a token. The ISA simulator runs the S programs in lock step at every GATHER (`Machine`);
+its analytic timing per slice is the Lens profile of [v4/p4-status.md](v4/p4-status.md).
+
 ## Accuracy
 
 This section's measurements are the base checkpoint's (gemma-4-E2B); the instruct checkpoint's
@@ -532,6 +605,11 @@ per-layer input):
 - Device inputs: a 4-row prefill run and a per-position program with their tokens compiled in
   (the device gathers the rows and loads the RoPE rows) bit-exact against the same programs with
   host-written inputs (`Image.host_inputs`, the gathers' host twins).
+- Two slices (`test_two_slices_match_one`; "Slices" above): the per-position and the resident
+  logits at S = 2, the PLE projections split too, bit-exact to one slice's. Gemma 3's slice
+  tests (S = 2 and 4 against Hugging Face and S = 1; the resident decode and the chunked
+  prefill at S = 4 across the ring's wrap; `Spec.check`'s divisibility) are in
+  `tests/test_gemma3.py`.
 - `--runslow`: a token at position 600 on the Verilator RTL through the board's memory path,
   per-position and resident, bit-exact against the ISA simulator (logits and DRAM).
 - With models/gemma-4-E2B-it: the real model's resident decode programs fit IMEM with 6

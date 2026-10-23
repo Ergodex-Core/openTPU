@@ -35,8 +35,17 @@ def test_every_target_loads():
         assert set(T.rtl_params(t)) >= {"MCOLS", "PLATFORM", "ARCH_HASH", "TMEM_IMPL"}
         d = t.to_dict()
         assert d["arch_hash"] == f"{T.arch_hash(cfg):08x}"
-    ids = [T.load(n).platform_id for n in T.names()]
-    assert len(ids) == len(set(ids)), "platform ids are unique"
+    # a platform id is a board's (CFG_PLATFORM: what the host's by_platform reads the family,
+    # the wait window and the memory kind from): the F2's DDR and HBM targets share 3 (the
+    # device reports its memory in CFG_DRAM), so the targets of one id share what the host
+    # takes from it
+    by_id = {}
+    for n in T.names():
+        t = T.load(n)
+        by_id.setdefault(t.platform_id, []).append(t)
+    for pid, ts in by_id.items():
+        keys = {(t.kind, t.family, t.platform.get("board"), t.uarch["WIN"]) for t in ts}
+        assert len(keys) == 1, f"platform id {pid}: {[t.name for t in ts]} differ in {keys}"
 
 
 def test_board_config_is_the_card_by_default(no_env):
@@ -73,7 +82,8 @@ def _hash_without_numerics(cfg) -> int:
     import hashlib
     import json
     d = dataclasses.asdict(cfg)
-    d.pop("SEQ_WC")                     # (a field that host's Config does not have)
+    d.pop("SEQ_WC")                     # (fields that host's Config does not have: the wait
+    d.pop("T2")                         # entries, and t2 weights of the f2-hbm merge)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")

@@ -1957,15 +1957,23 @@ class Builder:
         self.emit(I.qst(x.base, dimm, simm, x.rows, x.cols // D, rs, drs, es, row=row_scale,
                         half=half, rb=rb, rc=rc, comment="quantized store"))
 
-    def all_gather(self, x: Tile, S: int) -> Tile:
+    def all_gather(self, x: Tile, S: int, out: Tile | None = None) -> Tile:
+        """out: the destination, allocated by the caller where the slices' allocations agree
+        (a GATHER names one destination for every slice: the RTL writes all of them at slice
+        0's), e.g. before work whose tiles differ in size between slices."""
         x = self.materialize(x)
         self.check_live(x)
+        shape = (x.cols * S,) if len(x.shape) == 1 else (x.rows, x.cols * S)
+        if out is None:
+            out = self.alloc(shape)
+        elif tuple(out.shape) != shape:
+            raise CompileError(f"all_gather: out is {tuple(out.shape)}, not {shape}")
+        else:
+            self.check_live(out)
         if len(x.shape) == 1:
-            out = self.alloc((x.cols * S,))
             self.emit(I.gather(x.base, out.base, 1, x.cols, x.cols, x.cols * S, x.cols,
                                comment="all-gather"))
         else:
-            out = self.alloc((x.rows, x.cols * S))
             self.emit(I.gather(x.base, out.base, x.rows, x.cols, x.rs, out.rs, x.cols,
                                comment="all-gather"))
         return out

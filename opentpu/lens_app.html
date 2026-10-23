@@ -10,6 +10,7 @@
   --faint: #8d9a95; --line: #d7dfdb; --grid: #e8edeb; --focus: #1f6fd1;
   --u0: #4f6fae; --u1: #0f8a78; --u2: #bb7f12; --u3: #7357bf; --u4: #bb4b76;
   --busy: #1d8a4c; --dram: #cf3b30; --arb: #8a47c9; --blocked: #e07a12; --dep: #c9a100;
+  --blkc: #c9a100; --blkr: #d4b85a; --blks: #b5519a; --blko: #8d7a5a;
   --idle: #b8c2be; --good: #1d8a4c; --warn: #a86a05; --bad: #c23b33; --info: #3d5a8a;
   --good-bg: #e3f3ea; --warn-bg: #fbf0dc; --bad-bg: #fbe4e2; --info-bg: #e6edf7;
   --mono: ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
@@ -22,6 +23,7 @@
     --faint: #6a7c74; --line: #26322d; --grid: #1d2824; --focus: #6ea8ff;
     --u0: #86a3de; --u1: #3cc6ae; --u2: #e6ae46; --u3: #aa8eeb; --u4: #e782a8;
     --busy: #47c07a; --dram: #f06a5f; --arb: #b88af0; --blocked: #f5a04a; --dep: #e0c030;
+    --blkc: #e0c030; --blkr: #ecd27a; --blks: #d57ec0; --blko: #b5a07a;
     --idle: #3c4a45; --good: #4cc27d; --warn: #e5ad4a; --bad: #f06c62; --info: #86a8e0;
     --good-bg: #13291d; --warn-bg: #2c2412; --bad-bg: #321715; --info-bg: #16213a;
   }
@@ -32,6 +34,7 @@
   --faint: #6a7c74; --line: #26322d; --grid: #1d2824; --focus: #6ea8ff;
   --u0: #86a3de; --u1: #3cc6ae; --u2: #e6ae46; --u3: #aa8eeb; --u4: #e782a8;
   --busy: #47c07a; --dram: #f06a5f; --arb: #b88af0; --blocked: #f5a04a; --dep: #e0c030;
+  --blkc: #e0c030; --blkr: #ecd27a; --blks: #d57ec0; --blko: #b5a07a;
   --idle: #3c4a45; --good: #4cc27d; --warn: #e5ad4a; --bad: #f06c62; --info: #86a8e0;
   --good-bg: #13291d; --warn-bg: #2c2412; --bad-bg: #321715; --info-bg: #16213a;
 }
@@ -337,7 +340,11 @@ const CAUSES = [
   ["busy", "DRAM port B streaming", "--u1"],
   ["dram", "DRAM not ready (backpressure)", "--dram"],
   ["starve", "MXU starved: chunk FIFO empty (latency)", "--blocked"],
-  ["blocked", "MXU not consuming (drain / row credits)", "--dep"],
+  ["blocked", "MXU not consuming (drain / row credits)", "--dep"],   // profiles without the split
+  ["blocked_credits", "MXU not consuming: no result-FIFO credit (drain)", "--blkc"],
+  ["blocked_row", "MXU not consuming: row's chunks not all in the FIFO", "--blkr"],
+  ["blocked_scales", "MXU not consuming: row's scales not all in", "--blks"],
+  ["blocked_other", "MXU not consuming: other", "--blko"],
   ["arb", "TMEM bank arbitration", "--arb"],
   ["mxu", "MXU computing, not streaming (row turnarounds, epilogue)", "--u1"],
   ["w3", "waiting on VPU work", "--u3"],
@@ -346,6 +353,9 @@ const CAUSES = [
   ["w0", "waiting on DMA work", "--u0"],
   ["none", "nothing in flight (dispatch / program order)", "--idle"],
 ];
+// the RTL's one cause per blocked MXU cycle (otpu_mxu pf_bcause: credits, row, scales, other), the Q line's mbc mbr mbs mbo
+const BLOCKED_KEYS = ["mbc", "mbr", "mbs", "mbo"];
+const BLOCKED_SUB = ["blocked_credits", "blocked_row", "blocked_scales", "blocked_other"];
 function bucketCauses(m, k) {
   const g = x => m.get(x, k), n = m.bn[k] || 0;
   const out = {};
@@ -355,7 +365,12 @@ function bucketCauses(m, k) {
   const take = (key, v) => { const t = Math.max(0, Math.min(r, v)); out[key] = (out[key] || 0) + t; r -= t; };
   take("dram", g("bs"));
   take("starve", g("ms"));
-  take("blocked", g("mb"));
+  // the blocked cycles by cause when the profile has the split (the window's mbc mbr mbs mbo sum to mb), else as one
+  const mb = g("mb");
+  if (BLOCKED_KEYS.every(x => m.pre[x])) {
+    const t = Math.max(0, Math.min(r, mb));
+    BLOCKED_SUB.forEach((key, i) => take(key, mb ? t * g(BLOCKED_KEYS[i]) / mb : 0));
+  } else take("blocked", mb);
   take("arb", g("fm"));
   if (r > 0) take("mxu", m.cov[1][k] - busy);
   if (r > 0) {
@@ -422,7 +437,7 @@ function renderOverview() {
   const sl = p.slices[m.s] || {};
   const ports = sl.ports || {};
   const portB = ((ports.bmxu || 0) + (ports.bdma || 0)) / cyc;
-  let h = `<div class="card"><h2>${esc(p.name)} <small>${esc(p.kind)} · S=${cfg.S} D=${cfg.D} MCOLS=${cfg.MCOLS} LANES=${cfg.LANES}${cfg.WIN ? " WIN=" + cfg.WIN : ""}${cfg.WPB ? " WPB=" + cfg.WPB : ""}</small></h2>
+  let h = `<div class="card"><h2>${esc(p.name)} <small>${esc(p.kind)} · S=${cfg.S} D=${cfg.D} MCOLS=${cfg.MCOLS} LANES=${cfg.LANES}${cfg.C > 1 ? " C=" + cfg.C + " (" + fmt(cfg.C * cfg.D) + " B/cycle)" : ""}${cfg.WIN ? " WIN=" + cfg.WIN : ""}${cfg.WPB ? " WPB=" + cfg.WPB : ""}${cfg.TMEM_WORDS ? " TMEM=" + fmt(cfg.TMEM_WORDS) : ""}${cfg.MEM ? " MEM=" + esc(cfg.MEM) : ""}</small></h2>
   <div class="kpis">
     <div class="kpi"><div class="v">${fmt(cyc)}</div><div class="l">cycles${p.kind === "isa" ? " (analytic, serial)" : ""}</div></div>
     <div class="kpi"><div class="v">${us >= 1000 ? (us / 1000).toFixed(2) + " ms" : us.toFixed(1) + " µs"}</div><div class="l">at ${p.clock_mhz || 100} MHz</div></div>
@@ -652,6 +667,7 @@ function svg(tag, attrs, parent) {
 function buildFloor() {
   const root = $("fp"); root.innerHTML = "";
   const cfg = M.p.config, L = cfg.LANES || 8, CL = Math.min(cfg.CL || 2, L), WIN = cfg.WIN || 16, MC = cfg.MCOLS || 2;
+  const C = cfg.C || 1, NS = cfg.S || 1, HBM = cfg.MEM === "hbm", PCS = cfg.PCS || 32;   // a candidate's lanes / memory
   const defs = svg("defs", {}, root);
   for (let u = 0; u < 5; u++) {
     const mk = svg("marker", {id: "ar" + u, viewBox: "0 0 10 10", refX: 6, refY: 5, markerWidth: 4, markerHeight: 4, orient: "auto-start-reverse"}, defs);
@@ -668,7 +684,9 @@ function buildFloor() {
   for (const [id, [x, y, w, h, label]] of Object.entries(BOX)) {
     const g = svg("g", {"data-tip": id}, bg);
     const r = svg("rect", {x, y, width: w, height: h, class: "blk", fill: css("--panel"), rx: 8}, g);
-    const t = svg("text", {x: x + 10, y: y + 20, class: "lbl"}, g); t.textContent = label;
+    const t = svg("text", {x: x + 10, y: y + 20, class: "lbl"}, g);
+    t.textContent = HBM && id === "dram0" ? `HBM PCs 0-${PCS / 2 - 1}` : HBM && id === "dram1" ? `HBM PCs ${PCS / 2}-${PCS - 1}`
+      : HBM && id === "axi" ? "HBM ports" : id === "mxu" && C > 1 ? `MXU · ${C} lanes` : id === "seq" && NS > 1 ? `${label} (slice 0 of ${NS})` : label;
     const st = svg("text", {x: x + 10, y: y + h - 10, class: "small"}, g);
     FP.el.boxes[id] = {g, r, st, x, y, w, h};
   }
@@ -677,11 +695,14 @@ function buildFloor() {
   const fg2 = svg("g", {"data-tip": "fifo"}, mx.g);
   svg("rect", {x: mx.x + 12, y: mx.y + 34, width: 22, height: 120, fill: css("--grid"), rx: 3}, fg2);
   FP.el.fifo = svg("rect", {x: mx.x + 12, y: mx.y + 154, width: 22, height: 0, fill: css("--u0"), rx: 3}, fg2);
-  svg("text", {x: mx.x + 8, y: mx.y + 170, class: "small"}, fg2).textContent = "FIFO";
+  svg("text", {x: mx.x + 8, y: mx.y + 170, class: "small"}, fg2).textContent = C > 1 ? `FIFO ×${C}` : "FIFO";
   FP.el.cols = [];
-  const cw = Math.min(40, (mx.w - 70) / MC - 6);
-  for (let j = 0; j < MC; j++) FP.el.cols.push(svg("rect", {x: mx.x + 50 + j * (cw + 6), y: mx.y + 40, width: cw, height: 110, fill: css("--grid"), rx: 4, "data-tip": "col:" + j}, mx.g));
-  svg("text", {x: mx.x + 50, y: mx.y + 166, class: "small"}, mx.g).textContent = `${MC} columns × ${cfg.D} deep`;
+  // C chunk lanes (a candidate's) of MC columns each, drawn as C groups with a gap
+  const gap = C > 1 ? 8 : 0, gapc = 6;
+  const cw = Math.max(5, Math.min(40, (mx.w - 70 - (C - 1) * gap) / (MC * C) - gapc));
+  for (let l = 0; l < C; l++) for (let j = 0; j < MC; j++)
+    FP.el.cols.push(svg("rect", {x: mx.x + 50 + l * (MC * (cw + gapc) + gap) + j * (cw + gapc), y: mx.y + 40, width: cw, height: 110, fill: css("--grid"), rx: 3, "data-tip": "col:" + (l * MC + j)}, mx.g));
+  svg("text", {x: mx.x + 50, y: mx.y + 166, class: "small"}, mx.g).textContent = `${C > 1 ? C + " lanes × " : ""}${MC} columns × ${cfg.D} deep${C > 1 ? " · " + fmt(C * cfg.D) + " B/cycle" : ""}`;
   // TMEM banks
   const tm = FP.el.boxes.tmem; FP.el.banks = [];
   const bw = (tm.w - 20) / L;
@@ -689,17 +710,21 @@ function buildFloor() {
   svg("text", {x: tm.x + 10, y: tm.y + tm.h - 22, class: "small"}, tm.g).textContent = `${L} banks · ${fmt(cfg.TMEM_WORDS || 0)} words`;
   // VPU lanes: CL composite (10 slots) + simple
   const vp = FP.el.boxes.vpu; FP.el.clanes = []; FP.el.slanes = [];
-  const lh = Math.min(24, (vp.h - 70) / L - 4);
+  // lanes in columns of 8 (a candidate's 16 or 32 lanes): composite lanes first, 10 slots each
+  const rows = Math.min(L, 8), lh = Math.min(24, (vp.h - 70) / rows - 4), sp = L > 8 ? 14 : 19, sw0 = L > 8 ? 12 : 16;
+  const cx = col => vp.x + 10 + (col === 0 ? 0 : sp * 10 + 8 + (col - 1) * 20);
   for (let l = 0; l < L; l++) {
-    const y = vp.y + 34 + l * (lh + 4);
-    if (l < CL) {
+    const col = Math.floor(l / 8), y = vp.y + 34 + (l % 8) * (lh + 4);
+    if (l < CL && col === 0) {
       const segs = [];
       const lg = svg("g", {"data-tip": "clane:" + l}, vp.g);
-      for (let s = 0; s < 10; s++) segs.push(svg("rect", {x: vp.x + 10 + s * 19, y, width: 16, height: lh, fill: css("--grid"), rx: 2}, lg));
+      for (let s = 0; s < 10; s++) segs.push(svg("rect", {x: vp.x + 10 + s * sp, y, width: sw0, height: lh, fill: css("--grid"), rx: 2}, lg));
       FP.el.clanes.push(segs);
-    } else FP.el.slanes.push(svg("rect", {x: vp.x + 10, y, width: 16, height: lh, fill: css("--grid"), rx: 2, "data-tip": "slane:" + l}, vp.g));
+    } else if (l < CL) {              // (more composites than one column: as one slot each)
+      FP.el.clanes.push([svg("rect", {x: cx(col), y, width: 16, height: lh, fill: css("--grid"), rx: 2, "data-tip": "clane:" + l}, vp.g)]);
+    } else FP.el.slanes.push(svg("rect", {x: cx(col), y, width: 16, height: lh, fill: css("--grid"), rx: 2, "data-tip": "slane:" + l}, vp.g));
   }
-  svg("text", {x: vp.x + 40, y: vp.y + 34 + CL * (lh + 4) + lh * .7, class: "small"}, vp.g).textContent = `← ${L - CL} simple lanes`;
+  svg("text", {x: vp.x + (L > 8 ? 10 : 40), y: vp.y + 34 + Math.min(CL, 8) * (lh + 4) + lh * .7 + (L > 8 && CL >= 8 ? 4 : 0), class: "small"}, vp.g).textContent = `${L > 8 ? "" : "← "}${L - CL} simple lanes${L > 8 ? " (" + L + " lanes)" : ""}`;
   svg("text", {x: vp.x + 10, y: vp.y + vp.h - 24, class: "small"}, vp.g).textContent = `${CL} composite lanes (exp2 / recip / rsqrt)`;
   // DRAM channel meters
   for (const id of ["dram0", "dram1"]) {
@@ -713,7 +738,7 @@ function buildFloor() {
   for (let i = 0; i < WIN; i++) FP.el.slots.push(svg("rect", {x: sq.x + 10 + i * (sw + 3), y: sq.y + 30, width: sw, height: 26, fill: css("--grid"), rx: 3, "data-tip": "slot:" + i}, sq.g));
   // AXI ports B and A inside the AXI block
   const ax = FP.el.boxes.axi;
-  for (const [key, yy, hh, lab] of [["axiB", 205, 70, "port B · chunks"], ["axiA", 285, 40, "port A · words"]]) {
+  for (const [key, yy, hh, lab] of [["axiB", 205, 70, C > 1 ? `port B · ${C} chunks/cyc` : "port B · chunks"], ["axiA", 285, 40, "port A · words"]]) {
     const g = svg("g", {"data-tip": key}, ax.g);
     FP.el[key] = svg("rect", {x: ax.x + 8, y: yy, width: ax.w - 16, height: hh, fill: css("--grid"), rx: 4}, g);
     svg("text", {x: ax.x + 13, y: yy + 14, class: "port"}, g).textContent = lab;
@@ -889,6 +914,10 @@ const ADVICE = {
   dram: "The memory itself cannot keep up: this is the physical roof. Only more DRAM bandwidth (faster DDR, both channels busy) or fewer bytes (smaller weights) helps.",
   starve: "DRAM latency is not hidden: the MXU drained its prefetch FIFO. A deeper FIFO, or issuing the MM earlier (fewer DRAM dependencies, so its stream starts sooner), hides it.",
   blocked: "The MXU has data but its output side is slower (result FIFO full, row credits, missing scales): cheaper epilogues (no ACC/rescale), fewer TMEM conflicts on the drain.",
+  blocked_credits: "The MXU has chunks but no result-FIFO credit: rows popped are not yet written to TMEM (the drain side: the epilogue lanes, or a lost TMEM grant). More result rows (RF), more lanes, fewer TMEM conflicts on the drain.",
+  blocked_row: "The MXU has the row's first chunks but not all of them: a row pops only once whole, so an irregular stream (memory stalls, port A's scale requests between chunks) leaves the MXU waiting at every row start. A deeper prefetch lead (pop a row while the next streams), or a steadier memory, hides it.",
+  blocked_scales: "The MXU has the row's chunks but not all of its scale entries (port A): its lines arrive later than port B's chunks. Prefetch the scales ahead of the chunks, or fetch a row's Sw with its data.",
+  blocked_other: "The MXU has chunks but did not pop for none of the three counted reasons (a replay group boundary, a command handover).",
   arb: "Several units wanted the same TMEM banks: spread their addresses over the banks, or run fewer TMEM-heavy units at once.",
   mxu: "The MXU is computing without streaming (row turnarounds, the pipeline filling and draining at the start and end of each MM): longer rows (larger K) and back-to-back MMs keep the stream going.",
   w3: "The stream waits for VPU work (norms, RoPE, softmax): overlap it with the previous matmul (software pipelining) or make it shorter.",
@@ -1031,8 +1060,8 @@ function tipData(key) {
     case "mxu": return {
       title: "MXU (matrix unit)",
       what: "Multiplies weight rows streamed from DRAM by the activations held in ACT RAM — the matmuls of every projection, attention score and output.",
-      how: `Each cycle it takes one <b>${D}-byte chunk</b> (${D} int8 weights = one quantization block) and dots it with <b>${MC}</b> stationary activation rows: ${MC}×${D} = ${fmt(MC * D)} int8 MACs per cycle, exact integer sums. Then i2f, × weight scale × activation scale, accumulated into 4 interleaved fp32 partials (4-stage adder) and combined (p0+p2)+(p1+p3). Rows leave through a 32-row result FIFO to TMEM (optionally accumulate / rescale, and a row max).`,
-      live: unitLive(1) + `<div>Consuming a chunk: <b>${pct(frNow("mx"))}</b> of this window · ${fmt(cumNow("mx"))} chunks so far</div>` + stallRows([["ms", "starved (FIFO empty)"], ["mb", "has chunks, not consuming"], ["fm", "drain lost TMEM arbitration"]]),
+      how: `Each cycle it takes ${(c.C || 1) > 1 ? "<b>" + c.C + " " + D + "-byte chunks</b> (one per lane; a candidate architecture)" : "one <b>" + D + "-byte chunk</b>"} (${D} int8 weights = one quantization block) and dots ${(c.C || 1) > 1 ? "each" : "it"} with <b>${MC}</b> stationary activation rows: ${(c.C || 1) > 1 ? c.C + "×" : ""}${MC}×${D} = ${fmt((c.C || 1) * MC * D)} int8 MACs per cycle, exact integer sums. Then i2f, × weight scale × activation scale, accumulated into 4 interleaved fp32 partials (4-stage adder) and combined (p0+p2)+(p1+p3). Rows leave through a 32-row result FIFO to TMEM (optionally accumulate / rescale, and a row max).`,
+      live: unitLive(1) + `<div>Consuming a chunk: <b>${pct(frNow("mx"))}</b> of this window · ${fmt(cumNow("mx"))} chunks so far</div>` + stallRows([["ms", "starved (FIFO empty)"], ["mb", "has chunks, not consuming"], ["mbc", "&nbsp;· no result-FIFO credit (drain)"], ["mbr", "&nbsp;· row's chunks not all in"], ["mbs", "&nbsp;· row's scales not all in"], ["mbo", "&nbsp;· other"], ["fm", "drain lost TMEM arbitration"]]),
       why: "The MXU consumes exactly what DRAM port B delivers, so it sets the roofline: every cycle it does not consume a chunk is lost streaming — unless the memory itself is the limit.",
       more: "Pipeline: pop → products → +4 → +4 → tree → i2f (2) → ×ws (2) → ×ascale (2) → partial loop (4) → combine. Two commands in flight: the next MM's stream is prefetched while the current one drains.",
     };
@@ -1189,7 +1218,7 @@ function tipData(key) {
       return {
         title: "Roofline gap",
         what: "DRAM port B in the current window of cycles: teal = streaming (at the roofline); every other colour is a reason it was idle.",
-        how: `Idle cycles are attributed in order: memory not ready → MXU starved → MXU not consuming → TMEM arbitration → MXU computing between streams → waiting on other units' work (in proportion to what they were doing) → nothing in flight. Windows are ${fmt(M.bn[k] || 64)} cycles.`,
+        how: `Idle cycles are attributed in order: memory not ready → MXU starved → MXU not consuming (split by its cause: no result-FIFO credit, row's chunks not all in, scales not all in, other, when the profile has the counters) → TMEM arbitration → MXU computing between streams → waiting on other units' work (in proportion to what they were doing) → nothing in flight. Windows are ${fmt(M.bn[k] || 64)} cycles.`,
         live: `<table>${rows.map(r => `<tr><td><i style="display:inline-block;width:9px;height:9px;border-radius:2px;background:var(${r[2]})"></i> ${esc(r[1])}</td><td class="n mono">${pct(r[3] / n)}</td><td class="n mono">${pct(r[4] / T)}</td></tr>`).join("")}</table><div class="muted">now · so far</div>`,
         why: top && top[3] > 0 ? `Right now the biggest loss is <b>${esc(top[1])}</b>. ${ADVICE[top[0]] || ""}` : "Streaming at the roofline right now.",
       };

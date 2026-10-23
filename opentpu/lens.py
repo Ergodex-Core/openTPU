@@ -13,7 +13,8 @@ A <profile> is one run of one workload (see to_data for every field):
     instrs     per dynamic instruction: [slice, idx, pc, unit, name, detail, dispatch, ready,
                release, start, end, source id, unit counters, nominal work, port-B, port-A]
     slices     per slice: DRAM port totals, unit busy cycles, TMEM-arbitration losses and the
-               bucketed counters (P and Q trace lines: see profile.py)
+               bucketed counters (P and Q trace lines: see profile.py; mbc / mbr / mbs / mbo
+               split the MXU's blocked cycles mb by cause: blocked_split)
     roofline   DRAM-bound minimum cycles and the achieved fraction
     sources    kernel source lines the instructions came from
     board      counter snapshot from the card (kind "board")
@@ -129,6 +130,30 @@ def notes(p: Profile) -> list[dict]:
         n = sum(bk.get(key, []))
         if n > 0.02 * cyc:
             out.append({"level": "warn", "text": f"For {n} cycles ({_pct(n / cyc)}) {what}."})
+    bs = blocked_split(bk)
+    if bs and bs["mb"] > 0.02 * cyc:
+        why = ", ".join(f"{BLOCKED_SHORT[k]} {_pct(bs[k] / bs['mb'])}" for k in BLOCKED_KEYS
+                        if bs[k])
+        out.append({"level": "warn", "text":
+                    f"For {bs['mb']} cycles ({_pct(bs['mb'] / cyc)}) the MXU had chunks but did "
+                    f"not consume them: {why}."})
+        if bs["mbr"] > bs["mb"] / 2:
+            # rows arriving late with the FIFO near empty: the memory delivers fewer chunks a
+            # cycle than the MXU consumes (its rate under the port's load, the port's requests
+            # capped by the chunks in flight); with the FIFO well stocked it is the arrivals'
+            # irregularity at the row starts. The level in the windows with late rows, weighted
+            # by their late cycles.
+            lvl = fifo_level_at(bk, "mbr")
+            out.append({"level": "info", "text":
+                        f"The chunk FIFO held {lvl:.0f} chunks on average while rows were "
+                        f"incomplete: " + (
+                            "the stream delivered fewer chunks a cycle than the MXU consumes, so "
+                            "every row completed late (the memory's rate, which no row-gating "
+                            "change in the MXU recovers; a faster memory does)."
+                            if lvl < 16 else
+                            "the stream is ahead on average but irregular at the row starts; a "
+                            "row lead in the MXU (pop a row while the next streams) or steadier "
+                            "arrivals recover it.")})
     busy = p.unit_busy(0)
     if busy.get("VPU", 0) > 0.85 * cyc and eff < 0.95:
         out.append({"level": "bad", "text":
@@ -146,6 +171,38 @@ def _loc(ins) -> str:
         return "(compiler)"
     f, line, fn = ins.src[0]
     return f"{os.path.basename(f)}:{line} in {fn}"
+
+
+# The blocked MXU cycles (mb: chunks in its FIFO, no pop) by their one cause each, in the RTL's
+# priority order (otpu_mxu pf_bcause): mbc no result-FIFO credit (the drain side), mbr the row's
+# chunks not all in the chunk FIFO (the stream irregular, or behind), mbs its scale entries not
+# all in (port A), mbo other. Profiles recorded before the split have mb alone.
+BLOCKED_KEYS = ("mbc", "mbr", "mbs", "mbo")
+BLOCKED_SHORT = {"mbc": "no result-FIFO credit (drain)", "mbr": "row's chunks not all in",
+                 "mbs": "row's scales not all in", "mbo": "other"}
+BLOCKED_SUB = ("blocked_credits", "blocked_row", "blocked_scales", "blocked_other")
+
+
+def fifo_level_at(B: dict, key: str = "mbr", k0: int = 0, k1: int | None = None) -> float:
+    """The MXU chunk FIFO's mean level (ff / n per window) over buckets k0 .. k1 - 1, weighted
+    by the windows' `key` counter (mbr: the level while rows were incomplete): near empty, the
+    memory delivers fewer chunks a cycle than the MXU consumes; well stocked, the arrivals are
+    irregular at the row starts."""
+    w = (B.get(key) or [])[k0:k1]
+    ff = (B.get("ff") or [])[k0:k1]
+    n = (B.get("n") or [])[k0:k1]
+    tot = sum(w)
+    if not tot:
+        return 0.0
+    return sum(wk * fk / nk for wk, fk, nk in zip(w, ff, n) if nk) / tot
+
+
+def blocked_split(B: dict, k0: int = 0, k1: int | None = None) -> dict | None:
+    """Totals of mb and its causes over buckets k0 .. k1 - 1 (all by default), or None when
+    the buckets have no split (a profile recorded before it, or the card's)."""
+    if not B or not all(k in B for k in BLOCKED_KEYS):
+        return None
+    return {k: int(sum((B.get(k) or [])[k0:k1])) for k in ("mb",) + BLOCKED_KEYS}
 
 
 def _losses(p: Profile, s: int) -> dict:
@@ -231,20 +288,65 @@ def to_data(p: Profile, uarch: dict | None = None, kind: str = "rtl") -> dict:
     }
 
 
-def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None) -> dict:
+def parse_candidate(text: str | None) -> dict | None:
+    """A candidate architecture for isa_data's analytic timing: "C=4,LANES=16,MHZ=200" ->
+    {"C": 4, "LANES": 16, "MHZ": 200.0}. C: chunks streamed and consumed per cycle (the port
+    and MXU C times wider; MM work / C, the DRAM bound / C); LANES: VPU / quantizer lanes (the
+    VOP, QACT, QST, GATHER, LD and ST work at that width); MHZ: the core clock the times are
+    at. None for None or ""."""
+    if not text:
+        return None
+    out = {}
+    for item in text.replace(" ", "").split(","):
+        k, _, v = item.partition("=")
+        if k not in CANDIDATE_KEYS or not v:
+            raise ValueError(f"candidate {item!r}: C=<chunks/cycle>,LANES=<n>,MHZ=<f>"
+                             f"[,{','.join(k + '=' for k in CANDIDATE_KEYS[3:])}]")
+        out[k] = v if k == "MEM" else float(v) if k == "MHZ" else int(v)
+    return out
+
+
+# the keys a candidate takes: the three the timing uses, then the floorplan's (shown, not
+# timed): TMEM_WORDS, FIFO_DEPTH (chunks per lane), WIN (dispatch window), S (slices), MEM
+# ("hbm": the memory blocks drawn as HBM pseudo-channel groups), PCS (pseudo-channels)
+CANDIDATE_KEYS = ("C", "LANES", "MHZ", "TMEM_WORDS", "FIFO_DEPTH", "WIN", "S", "MEM", "PCS")
+
+
+def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = None,
+             args=None, candidate: dict | None = None, adopt: bool = False) -> dict:
     """An ISA-simulator run: the executed instruction stream (with loops unrolled) and an
     analytic timing -- every instruction issued back to back for its nominal work, no overlap
-    (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run."""
+    (an upper bound; the RTL overlaps units). Useful when the RTL is too slow to run. args:
+    the run's arguments (R8..R15: a resident decode program's position and token).
+    candidate (parse_candidate): the same instruction stream timed on a wider machine, C
+    chunks a cycle through the port and the MXU and LANES-wide vector units, at MHZ: a
+    model for comparing architecture candidates (docs/v4/), not a measurement. adopt: the
+    images (each a slice's whole DRAM) are the run's DRAM, not copied, and are left as the
+    run leaves them (a 4-slice 27B model: four 4 GiB images; _Capture's traced ISA step)."""
+    from dataclasses import replace
+
     from .isasim import Machine
-    m = Machine(cfg, programs, [None if i is None else i.copy() for i in images])
+    cand = dict(candidate or {})
+    C = int(cand.get("C", 1))
+    dcfg = replace(cfg, LANES=int(cand["LANES"])) if "LANES" in cand else cfg
+    m = Machine(cfg, programs, list(images) if adopt else
+                [None if i is None else i.copy() for i in images], args, adopt=adopt)
     seqs = [[] for _ in range(cfg.S)]
     for s, sl in enumerate(m.slices):
-        orig = sl.execute
+        orig, orig_step = sl.execute, sl.step
 
         def execute(ins, _orig=orig, _s=s, _sl=sl):
             seqs[_s].append(_sl.pc)
             return _orig(ins)
-        sl.execute = execute
+
+        def step(_orig=orig_step, _s=s, _sl=sl):
+            # a collective is not executed by the slice (Machine resolves it once every slice
+            # waits on it): counted as it is reached, once
+            if _sl.waiting is None and 0 <= _sl.pc < len(_sl.prog) and \
+                    _sl.prog[_sl.pc].op == I.GATHER:
+                seqs[_s].append(_sl.pc)
+            return _orig()
+        sl.execute, sl.step = execute, step
     m.run()
     src = _Sources()
     unit_of = {I.LD: 0, I.ST: 0, I.DSTEP: 0, I.STREAM: 0, I.MM: 1, I.QACT: 2, I.QST: 2, I.VOP: 3,
@@ -256,7 +358,9 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             ins = programs[s][pc]
             if ins.op not in unit_of:
                 continue
-            nm, det, work, pb, pa = _describe(ins, cfg)
+            nm, det, work, pb, pa = _describe(ins, dcfg)
+            if ins.op == I.MM and C > 1:            # C chunks a cycle into the MXU
+                work = -(-work // C)
             work = max(1, work)
             instrs.append([s, idx, pc, unit_of[ins.op], nm, det, t, t, -1, t, t + work,
                            src.id(ins), {}, work, pb, pa])
@@ -264,7 +368,7 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             b += pb
             a += pa
         cycles = max(cycles, t)
-        per.append({"portb": b, "porta": a, "bound": max(a, b)})
+        per.append({"portb": b, "porta": a, "bound": max(-(-a // C), -(-b // C))})
     bound = max((x["bound"] for x in per), default=0)
     busy = []
     for s in range(cfg.S):
@@ -273,21 +377,32 @@ def isa_data(name: str, cfg, programs: list, images: list, uarch: dict | None = 
             if r[0] == s:
                 u[UNITS[r[3]]] += r[10] - r[9]
         busy.append(u)
+    notes = [{"level": "info", "text":
+              "ISA simulator run: analytic timing (each instruction back to back for its "
+              "nominal work, no overlap between units). The roofline fraction is a lower "
+              "bound on what the RTL achieves; record with the RTL for real timing."}]
+    config = _config(cfg, uarch)
+    if cand:
+        config.update(C=C, LANES=dcfg.LANES, CL=dcfg.LANES // 4 if dcfg.LANES >= 8 else 1)
+        config.update({k: v for k, v in cand.items() if k in CANDIDATE_KEYS[3:]})
+        notes.append({"level": "warn", "text":
+                      f"Candidate architecture model: {C} chunk(s) of {cfg.D} B a cycle "
+                      f"through the port and the MXU, {dcfg.LANES} vector lanes, at "
+                      f"{cand.get('MHZ', CLOCK_MHZ):g} MHz. The same instruction stream as "
+                      f"the measured run, re-timed; not a measurement."})
     return {
-        "kind": "isa", "name": name, "cycles": cycles, "clock_mhz": CLOCK_MHZ,
-        "config": _config(cfg, uarch),
+        "kind": "isa", "name": name, "cycles": cycles,
+        "clock_mhz": float(cand.get("MHZ", CLOCK_MHZ)),
+        "config": config,
         "roofline": {"bound": bound, "efficiency": bound / cycles if cycles else 0,
                      "per_slice": per},
         "macs": 0, "bytes": sum(x["portb"] for x in per) * cfg.D,
-        "peak_macs": cfg.D * cfg.MCOLS * cfg.S, "peak_bytes": cfg.D * cfg.S,
+        "peak_macs": cfg.D * cfg.MCOLS * cfg.S * C, "peak_bytes": cfg.D * cfg.S * C,
         "units": UNITS,
         "slices": [{"ports": {}, "busy": busy[s], "lose": {}, "buckets": {}}
                    for s in range(cfg.S)],
         "instrs": instrs, "programs": _programs(programs, cfg, src), "sources": src.list,
-        "notes": [{"level": "info", "text":
-                   "ISA simulator run: analytic timing (each instruction back to back for its "
-                   "nominal work, no overlap between units). The roofline fraction is a lower "
-                   "bound on what the RTL achieves; record with the RTL for real timing."}],
+        "notes": notes,
         "mxu_gaps": {},
     }
 
@@ -441,14 +556,19 @@ def _tiny_qwen():
 
 class _Capture:
     """Engine backend: ISA simulator for every token but the last, which runs on the RTL with
-    tracing; keeps (programs, trace, stats)."""
+    tracing; keeps (programs, trace, stats). With `isa` the traced run stays on the ISA
+    simulator: keeps (programs, args, the DRAM before it) for isa_data (analytic timing).
+    Takes the run's arguments (a resident decode program's)."""
 
-    def __init__(self, cfg, images, uarch, run_kw):
+    args = True
+
+    def __init__(self, cfg, images, uarch, run_kw, isa: bool = False):
         from .llm.qwen3 import IsaBackend
-        self.cfg, self.uarch, self.run_kw = cfg, uarch, run_kw
-        self.isa = IsaBackend(cfg, images)
+        self.cfg, self.uarch, self.run_kw, self.isa_mode = cfg, uarch, run_kw, isa
+        self.isa = IsaBackend(cfg, images, adopt=True)     # (the images held once)
         self.traced = False
         self.last = None
+        self.cand = None                # isa: the candidate (parse_candidate) and MHZ
 
     def write(self, s, addr, data):
         self.isa.write(s, addr, data)
@@ -456,17 +576,123 @@ class _Capture:
     def read(self, s, addr, n):
         return self.isa.read(s, addr, n)
 
-    def run(self, programs):
+    def run(self, programs, args=None):
         if not self.traced:
-            return self.isa.run(programs)
+            return self.isa.run(programs, args)
+        if self.isa_mode:
+            # the traced step runs timed, on the live DRAM (adopted, no copy: a 4-slice 27B
+            # model's images are four 4 GiB arrays) and leaves it as the step would (the
+            # same simulator); its name is the caller's to fill in (_model_step)
+            self.last = isa_data("", self.cfg, programs,
+                                 [sl.dram for sl in self.isa.machine.slices], self.uarch,
+                                 args, self.cand, adopt=True)
+            return {"instructions": [0] * self.cfg.S}
         n = [len(sl.dram) for sl in self.isa.machine.slices]
         drams, _, st = rtlsim.run(self.cfg, programs, [sl.dram for sl in self.isa.machine.slices],
-                                  max_cycles=1 << 40, trace=True, uarch=self.uarch,
+                                  max_cycles=1 << 40, trace=True, uarch=self.uarch, args=args,
                                   **self.run_kw)
         for sl, d, k in zip(self.isa.machine.slices, drams, n):
             sl.dram[:] = d[:k]
         self.last = (programs, st)
         return st
+
+
+def _model_step(model: str, pos: int | None, board: bool, isa: bool, run_kw: dict, uarch,
+                prompt: str, resident: bool = True, wformat: str = "auto",
+                head_format: str | None = None, candidate: dict | None = None,
+                mhz: float | None = None, slices: int | None = None,
+                layers: int | None = None) -> dict:
+    """One decode token of a checkpoint (`model`: a MODELS name, models/<dir>, or a directory)
+    on its real weights: the prompt (a user turn of the chat template; plain text without
+    one) is prefilled and the tokens up to `pos` decoded greedily on the ISA simulator, then
+    the step at `pos` (default: the prompt's last token, whose step picks the first new token)
+    runs traced on the RTL (board model of the card's configuration where the model takes one
+    slice, as Gemma 3 / Gemma 4, or with --board), or on the ISA simulator with analytic
+    timing (`isa`). resident: the resident decode program (the token's rows gathered on the
+    device), as otpu-chat runs. slices: the board configuration with that many slices (Gemma
+    3 / Gemma 4's tensor-parallel split, docs/gemma4.md "Slices": a program per slice, the
+    ISA simulator's analytic timing per slice)."""
+    import numpy as np
+    from .host.board import sim_config
+    from .isasim import board_config, design_config
+    from .llm import formats as FM
+    from .llm import load_spec, model_dir
+    from .llm.qwen3 import Engine, device_config, load_weights
+    from .profile import parse
+    path = model_dir(model)
+    spec = load_spec(path)
+    if layers:                      # the checkpoint's first layers (Spec.truncated)
+        spec = spec.truncated(layers)
+    wformat = FM.auto(spec, wformat)
+    try:
+        spec.check(design_config())
+        maps = not getattr(spec, "one_slice_default", False)
+    except ValueError:
+        maps = False                            # one slice: the card's configuration
+    board = board or not maps or bool(slices)
+    uarch = dict(rtlsim.BOARD_UARCH) if board else uarch
+    import transformers
+    tok = transformers.AutoTokenizer.from_pretrained(path)
+    if getattr(tok, "chat_template", None):
+        ids = tok.apply_chat_template([{"role": "user", "content": prompt}],
+                                      add_generation_prompt=True, tokenize=True)
+        ids = list(ids["input_ids"] if hasattr(ids, "keys") else ids)
+    else:
+        ids = list(tok(prompt).input_ids)
+    if pos is None:
+        pos = len(ids) - 1
+    if pos < len(ids) - 1:
+        raise SystemExit(f"--pos {pos}: the prompt ends at position {len(ids) - 1}")
+    cap = max(256, -(-(pos + 2) // 256) * 256)
+    if board:
+        cfg = sim_config(spec, cap, board_config(PAIR=True, DSTEP=True, STREAM=True,
+                                                 **({"S": int(slices)} if slices else {})),
+                         lookup=resident, wformat=wformat, head_format=head_format)
+    else:
+        cfg = device_config(spec, cap, lookup=resident, wformat=wformat,
+                            head_format=head_format)
+    holder = {}
+
+    def mk(c, images):
+        holder["b"] = _Capture(c, images, uarch, run_kw, isa=isa)
+        return holder["b"]
+    eng = Engine(spec, load_weights(path), cap=cap, cfg=cfg, backend=mk, wformat=wformat,
+                 head_format=head_format, resident=resident)
+    logits = eng.prefill(ids[:-1]) if len(ids) > 1 else None
+    t = ids[-1]
+    for _ in range(pos - (len(ids) - 1)):           # greedy decode up to the traced step
+        logits = eng.step(t)
+        t = int(np.argmax(logits))
+    cand = dict(candidate or {})
+    if mhz:
+        cand["MHZ"] = mhz
+    holder["b"].cand = cand or None
+    holder["b"].traced = True
+    logits = eng.step(t)
+    nxt = int(np.argmax(logits))
+    tag = ""
+    if candidate:
+        tag = " [candidate " + ",".join(f"{k}={v:g}" if k == "MHZ" else f"{k}={v}"
+                                        for k, v in cand.items()) + "]"
+    name = (f"{path.name}" + (f" (first {layers} layers)" if layers else "") +
+            f" token at pos {pos}" +
+            ((f" (board config, {cfg.S} slices)" if cfg.S > 1 else " (board config)")
+             if board else "") + (" [ISA]" if isa else "") + tag +
+            f": {tok.decode([t])!r} -> {tok.decode([nxt])!r}")
+    if isa:
+        d = holder["b"].last            # (timed as it ran, on the live DRAM)
+        d["name"] = name
+        return d
+    if candidate:
+        raise SystemExit("--candidate is an ISA model: add --isa")
+    programs, st = holder["b"].last
+    p = parse(st["trace"], cfg, programs, name)
+    p.cycles = st["cycles"]
+    d = _mem(to_data(p, uarch), cfg, run_kw.get("axi"))
+    if mhz:                     # the same cycles at another clock (an F2 build's 200 MHz)
+        d["clock_mhz"] = float(mhz)
+        d["name"] += f" at {mhz:g} MHz"
+    return d
 
 
 def _qwen(real: bool, pos: int, board: bool, run_kw: dict, uarch):
@@ -558,12 +784,21 @@ WORKLOAD_HELP = {
     "layer": "full attention layer at position 1023",
     "qwen-tiny": "one decode token of a small random Qwen3 (use --pos)",
     "qwen": "one decode token of the real Qwen3-0.6B (models/Qwen3-0.6B; minutes)",
+    "model": "one decode token of --model NAME|DIR after --prompt (--model-pos; minutes)",
 }
+DEFAULT_PROMPT = "Why is the sky blue?"
 
 
 def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
-           bucket: int = 64, axi: bool | None = None, stall: int | None = None) -> dict:
-    """Run one workload and return its profile dict."""
+           bucket: int = 64, axi: bool | None = None, stall: int | None = None,
+           model: str | None = None, prompt: str = DEFAULT_PROMPT, model_pos: int | None = None,
+           resident: bool = True, wformat: str = "auto", head_format: str | None = None,
+           candidate: str | None = None, mhz: float | None = None,
+           slices: int | None = None, layers: int | None = None) -> dict:
+    """Run one workload and return its profile dict; `workload` "model" with `model` a
+    checkpoint: one decode token of it at `model_pos` (_model_step); `candidate` (with isa)
+    re-times it on a wider machine (parse_candidate), `mhz` labels the clock, `slices` runs
+    the board configuration with that many slices (the model's tensor-parallel split)."""
     from .profile import profile
     uarch = dict(rtlsim.BOARD_UARCH) if board else None
     run_kw = {"plusargs": [f"+bucket={bucket}"]}
@@ -571,6 +806,12 @@ def record(workload: str, board: bool = False, isa: bool = False, pos: int = 8,
         run_kw["axi"] = axi
     if stall is not None:
         run_kw["stall"] = stall
+    if workload == "model":
+        if model is None:
+            raise SystemExit("workload model: --model NAME|DIR")
+        return _model_step(model, model_pos, board, isa, run_kw, uarch, prompt, resident,
+                           wformat, head_format, parse_candidate(candidate), mhz, slices,
+                           layers)
     if workload in ("qwen", "qwen-tiny"):
         if isa:
             raise SystemExit("--isa is not supported for qwen workloads")
@@ -602,7 +843,11 @@ CAUSES = [
     ("busy", "DRAM port B streaming"),
     ("dram", "DRAM not ready (backpressure)"),
     ("starve", "MXU starved: chunk FIFO empty (latency)"),
-    ("blocked", "MXU not consuming (drain / row credits)"),
+    ("blocked", "MXU not consuming (drain / row credits)"),      # profiles without the split
+    ("blocked_credits", "MXU not consuming: no result-FIFO credit (drain)"),
+    ("blocked_row", "MXU not consuming: row's chunks not all in the FIFO"),
+    ("blocked_scales", "MXU not consuming: row's scales not all in"),
+    ("blocked_other", "MXU not consuming: other"),
     ("arb", "TMEM bank arbitration"),
     ("mxu", "MXU computing, not streaming"),
     ("w3", "waiting on VPU work"),
@@ -715,7 +960,15 @@ def _bucket_causes(B: dict, cov, k: int) -> dict:
 
     take("dram", g("bs"))
     take("starve", g("ms"))
-    take("blocked", g("mb"))
+    # the blocked cycles by cause when the profile has the split (in the proportions of the
+    # window's counters, which sum to mb), else the one "blocked" cause
+    mb = g("mb")
+    if all(k in B for k in BLOCKED_KEYS):
+        t = max(0.0, min(r, float(mb)))
+        for key, sub in zip(BLOCKED_SUB, BLOCKED_KEYS):
+            take(key, t * g(sub) / mb if mb else 0.0)
+    else:
+        take("blocked", mb)
     take("arb", g("fm"))
     if r > 0 and cov is not None and len(cov) > 1:
         take("mxu", cov[1][k] - busy)
@@ -778,6 +1031,7 @@ def summary_data(d: dict, s: int = 0) -> dict:
         "peak_macs": d.get("peak_macs") or 0, "bytes": d.get("bytes") or 0,
         "slice": s, "busy": busy, "lose": sl.get("lose") or {},
         "causes": port_b_causes(d, s), "classes": class_rows(d, s),
+        "blocked": blocked_split(sl.get("buckets") or {}),
         "notes": d.get("notes") or [], "board": d.get("board"),
         "n_instr": sum(1 for r in (d.get("instrs") or []) if r[0] == s),
     }
@@ -825,6 +1079,13 @@ def render_summary(d: dict, s: int = 0) -> str:
             lab = dict(CAUSES)
             bits = ", ".join(f"{lab[k]} ({_pct(v / cyc)})" for k, v in top)
             lines.append(f"  Biggest losses: {bits}.")
+    bs = m["blocked"]
+    if bs and bs["mb"]:
+        lines.append(f"MXU not consuming with chunks in its FIFO: {_fmt_n(bs['mb'])} cycles "
+                     f"({_pct(bs['mb'] / cyc)}), by cause")
+        for k in BLOCKED_KEYS:
+            lines.append(f"  {_bar(bs[k] / bs['mb'], 12)} {_pct(bs[k] / bs['mb']):>6}  "
+                         f"{BLOCKED_SHORT[k]}")
     units = d.get("units") or UNITS
     busy = m["busy"]
     if busy:
@@ -899,6 +1160,25 @@ def main(argv=None) -> None:
     r.add_argument("--axi", action="store_true", help="the board's AXI memory path (D=128)")
     r.add_argument("--stall", type=int, help="AXI model stall percent")
     r.add_argument("--pos", type=int, default=8, help="qwen workloads: token position")
+    r.add_argument("--model", help="workload model: a MODELS name (models/<dir>) or a "
+                   "checkpoint directory")
+    r.add_argument("--prompt", default=DEFAULT_PROMPT, help="workload model: the prompt")
+    r.add_argument("--model-pos", type=int, help="workload model: the traced step's position "
+                   "(default: the prompt's last token)")
+    r.add_argument("--per-position", action="store_true",
+                   help="workload model: per-position programs instead of the resident decode")
+    r.add_argument("--wformat", default="auto", help="workload model: the weights' format")
+    r.add_argument("--head-format", help="workload model: the LM head's format")
+    r.add_argument("--layers", type=int, metavar="N",
+                   help="workload model: the checkpoint's first N layers only (Spec.truncated; "
+                        "a model too slow to simulate whole, docs/qwen38.md)")
+    r.add_argument("--candidate", metavar="C=n,LANES=n,MHZ=f",
+                   help="workload model with --isa: re-time the token on a candidate machine "
+                        "(C chunks a cycle through port and MXU, LANES vector lanes, at MHZ)")
+    r.add_argument("--mhz", type=float, help="workload model: the clock the times are at")
+    r.add_argument("--slices", type=int, help="workload model: the board configuration with "
+                   "this many slices (Gemma 3 / Gemma 4's tensor-parallel split; implies "
+                   "--board)")
     r.add_argument("--bucket", type=int, default=64, help="cycles per counter bucket")
     r.add_argument("--open", action="store_true", help="open the app afterwards")
     o = sub.add_parser("open", help="open a profile file in the app")
@@ -925,7 +1205,10 @@ def main(argv=None) -> None:
         profs = []
         for w in a.workloads:
             d = record(w, board=a.board, isa=a.isa, pos=a.pos, bucket=a.bucket,
-                       axi=True if a.axi else None, stall=a.stall)
+                       axi=True if a.axi else None, stall=a.stall, model=a.model,
+                       prompt=a.prompt, model_pos=a.model_pos, resident=not a.per_position,
+                       wformat=a.wformat, head_format=a.head_format, candidate=a.candidate,
+                       mhz=a.mhz, slices=a.slices, layers=a.layers)
             print(f"{d['name']}: {d['cycles']} cycles, "
                   f"{100 * d['roofline']['efficiency']:.1f}% of roofline", flush=True)
             profs.append(d)

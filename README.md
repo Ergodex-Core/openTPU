@@ -192,7 +192,7 @@ it over JTAG, then run `sudo otpu-setup` and `otpu-chat --backend board`.
 
 | Command | What it does |
 |:--|:--|
-| `otpu-chat` | chat with Qwen3-0.6B, LFM2.5-230M (`--model lfm2`), Qwen3.5-0.8B (`--model qwen35`), LFM2-2.6B (`lfm2-2.6b`), SmolLM3-3B (`smollm3`), Phi-4-mini (`phi4-mini`) or Qwen3.5-2B / 4B (`qwen35-2b`, `qwen35-4b`), Gemma 4 E2B / E4B (`gemma4`, `gemma4-e4b`: the instruct checkpoints, gemma-4-E2B-it / E4B-it); MoE models bigger than the card with their experts streamed: LFM2.5-8B-A1B (`lfm2-8b`), Qwen3.5-35B-A3B (`qwen35-35b`), gemma-4-26B-A4B-it (`gemma4-26b`); a checkpoint without a chat template (a base model) only with `--raw` |
+| `otpu-chat` | chat with Qwen3-0.6B, LFM2.5-230M (`--model lfm2`), Qwen3.5-0.8B (`--model qwen35`), LFM2-2.6B (`lfm2-2.6b`), SmolLM3-3B (`smollm3`), Phi-4-mini (`phi4-mini`) or Qwen3.5-2B / 4B (`qwen35-2b`, `qwen35-4b`), Gemma 4 E2B / E4B (`gemma4`, `gemma4-e4b`: the instruct checkpoints, gemma-4-E2B-it / E4B-it); Gemma 3 1B (`gemma3`, gemma-3-1b-it; [docs/gemma3.md](docs/gemma3.md)); MoE models bigger than the card with their experts streamed: LFM2.5-8B-A1B (`lfm2-8b`), Qwen3.5-35B-A3B (`qwen35-35b`), gemma-4-26B-A4B-it (`gemma4-26b`); a checkpoint without a chat template (a base model) only with `--raw` |
 | `otpu-serve` | an OpenAI-style API server (`/v1/chat/completions`, `/v1/completions`, streamed or not; SGLang's `/generate`) for many clients at once: their contexts kept on the card and in host RAM / on disk (a prompt continuing a saved one feeds only the rest), their decode steps batched on the card for Qwen3 and the Llama-likes, every token picked on the card (Qwen3-0.6B: 78 tok/s with 4 clients, 25 alone); [docs/serve.md](docs/serve.md) |
 | `otpu-smi` | temperature, power, DRAM bandwidth and per-unit utilization; `-l --csv` logs a time series |
 | `otpu-lens` | record a run and open it in the profiler (`summary` prints the overview in the terminal) |
@@ -316,6 +316,7 @@ the card went from 0.052 (build 84989047, before K smoothing) to 0.012.
 3. [`opentpu/isasim.py`](opentpu/isasim.py): the simulator, which is the spec.
 4. [`rtl/`](rtl): the hardware, starting from [`rtl/top/otpu_top.sv`](rtl/top/otpu_top.sv).
 5. [docs/lfm2.md](docs/lfm2.md), [docs/qwen35.md](docs/qwen35.md), [docs/llama.md](docs/llama.md),
+   [docs/gemma4.md](docs/gemma4.md), [docs/gemma3.md](docs/gemma3.md),
    [docs/benchmarks.md](docs/benchmarks.md): whole models and where their cycles go.
 6. [docs/board.md](docs/board.md): the physical card, from clocks to PCIe.
 7. [docs/targets.md](docs/targets.md): how one design builds for several boards and chips (a
@@ -335,6 +336,11 @@ the card went from 0.052 (build 84989047, before K smoothing) to 0.012.
   [docs/targets.md](docs/targets.md)): the YPCB-00338 in production, the BCU1525 (Virtex
   UltraScale+ VU9P, four DDR4 DIMMs) being brought up, and ASICs, starting with NanGate45 and
   OpenROAD for area, clock and power numbers.
+
+The [AWS F2 burst200 port](boards/f2/burst200/README.md) (target `f2-burst200`,
+[docs/v4/f2-burst200.md](docs/v4/f2-burst200.md)) adds a Small Shell/HBM build,
+200/400/450 MHz core/TMEM/HBM-AXI clocking, and an OCL/PCIS host transport.
+Its source-only flow requires an external AWS FPGA HDK and licensed Vivado 2025.2.
 
 ## Contributing
 

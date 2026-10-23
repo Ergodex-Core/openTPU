@@ -205,7 +205,7 @@ def _sinks(b, m, spec, x, rows, kinds, pick, area) -> None:
     for r in pick:
         (slot, _), kind = rows[r], kinds[r]
         if kind is GREEDY:
-            sinks.append(G.Greedy(b, m.v_loc, chunk))
+            sinks.append(G.Greedy(b, m.v_loc, chunk, getattr(m, "v_max", None)))
             sts.append(None)
             continue
         if b.S != 1:

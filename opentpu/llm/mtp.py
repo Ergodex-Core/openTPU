@@ -715,7 +715,8 @@ def _verify_gen(m, pos, block: int, c: int, R: int, samp: G.Sampling | None = No
                  what="the verify's second part")
         return
     if samp is None:
-        m.lm_sinks = [G.Greedy(b, m.v_loc, head_rows_chunk(R)) for _ in range(R)]
+        m.lm_sinks = [G.Greedy(b, m.v_loc, head_rows_chunk(R), getattr(m, "v_max", None))
+                      for _ in range(R)]
     else:
         if b.S != 1:
             raise CompileError("the sampled MTP loop runs on one slice")

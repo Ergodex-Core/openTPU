@@ -10,11 +10,14 @@ The card exposes, through the XDMA bridge:
 
 The accelerator addresses one logical DRAM interleaved over the channels in 64-byte beats:
 logical beat b of chunk m = b // 2 lives at BASE[c] + m * 64 on channel c = b % 2, or, on a
-bitstream with CAPS.chash, c = (b % 2) ^ parity(m) (rtl/mem/otpu_native_dram.sv). This driver
-applies the same map, so the host works with logical addresses only. On a multi-slice bitstream
-(CFG_SLICES S > 1: the BCU1525's two) each slice has a logical DRAM of its own on its two
-channels, slice s's channel c being the card's channel 2s + c (Board.write / read take the
-slice).
+bitstream with CAPS.chash, c = (b % 2) ^ parity(m) (rtl/mem/otpu_native_dram.sv). On NCH > 2
+channels a slice (CFG_DRAM: the F2 HBM build's 8 or 16) the chunks rotate over NCH / 2 channel
+pairs: chunk m on pair p = m % (NCH / 2), with CHASH XOR fold(m // (NCH / 2)), at channel beat
+m // (NCH / 2) of channels 2p and 2p + 1 (beat_at; docs/f2_hbm.md). This driver applies the same
+map, so the host works with logical addresses only. On a multi-slice bitstream (CFG_SLICES S >
+1: the BCU1525's two, the F2 HBM build's 2 or 4) each slice has a logical DRAM of its own on its
+NCH channels, slice s's channel c being the card's channel NCH s + c (Board.write / read take
+the slice).
 
 BoardBackend implements the Engine backend interface (write / read / run, plus prepare and
 attach), so `Engine(..., cfg=device_config(board.info()), backend=BoardBackend)` runs Qwen3,
@@ -141,33 +144,78 @@ def hash_swap(addr: int, v: np.ndarray) -> None:
     v[p] = v[p][:, ::-1]
 
 
-def beat_at(addr: int, chash: bool = False) -> tuple[int, int]:
-    """(channel, channel offset) of the logical byte `addr`: beat b = addr // BEAT % 2 of chunk
-    m = addr // (2 * BEAT) on channel b, or b ^ parity(m) with CHASH."""
+def pair_fold(u, nch: int):
+    """CHASH's pair hash on nch channels (rtl/mem/otpu_native_dram.sv pair_of): the XOR of the
+    channel beat u's log2(nch / 2)-bit groups (0 at nch = 2). u: an int or a uint64 array."""
+    pb = (nch // 2).bit_length() - 1
+    if isinstance(u, np.ndarray):
+        f = np.zeros_like(u)
+        for k in range(0, 27, pb or 27):
+            f ^= (u >> np.uint64(k)) & np.uint64((1 << pb) - 1)
+        return f
+    f = 0
+    for k in range(0, 27, pb or 27):
+        f ^= (u >> k) & ((1 << pb) - 1)
+    return f
+
+
+def beat_at(addr: int, chash: bool = False, nch: int = 2) -> tuple[int, int]:
+    """(channel, channel offset) of the logical byte `addr`: chunk m = addr // (2 * BEAT) on pair
+    p = m % (nch / 2) (with CHASH XOR pair_fold(m // (nch / 2))), its beat b = addr // BEAT % 2 on
+    the pair's channel 2p + b (with CHASH b ^ parity(m)), at channel beat m // (nch / 2). nch = 2:
+    channel b (^ parity(m)) at m * BEAT."""
     m, c = addr // (2 * BEAT), addr // BEAT % 2
     if chash:
         c ^= m.bit_count() & 1
-    return c, m * BEAT + addr % BEAT
+    np_ = nch // 2
+    u, p = m // np_, m % np_
+    if chash:
+        p ^= pair_fold(u, nch) & (np_ - 1)
+    return 2 * p + c, u * BEAT + addr % BEAT
 
 
-def split(addr: int, data: np.ndarray, chash: bool = False) -> list[tuple[int, int, np.ndarray]]:
+def _pair_order(addr: int, groups: int, nch: int, chash: bool) -> np.ndarray:
+    """[groups, nch / 2]: for each group of nch / 2 chunks from `addr` (group aligned) and each
+    pair p, the chunk of the group on p (j = p ^ fold(u): its own inverse)."""
+    np_ = nch // 2
+    p = np.arange(np_, dtype=np.uint64)[None, :]
+    if not chash or np_ == 1:
+        return np.broadcast_to(p, (groups, np_)).astype(np.intp)
+    u = np.arange(addr // (nch * BEAT), addr // (nch * BEAT) + groups, dtype=np.uint64)
+    f = pair_fold(u, nch) & np.uint64(np_ - 1)
+    return (p ^ f[:, None]).astype(np.intp)
+
+
+def split(addr: int, data: np.ndarray, chash: bool = False,
+          nch: int = 2) -> list[tuple[int, int, np.ndarray]]:
     """Logical bytes at `addr` -> [(channel, channel offset, bytes)], beat-aligned pieces
     merged into one contiguous run per channel. `addr` and len(data) must be multiples of
-    2 * BEAT (the caller widens unaligned ranges)."""
-    assert addr % (2 * BEAT) == 0 and len(data) % (2 * BEAT) == 0
+    nch * BEAT, a group of nch / 2 chunks (the caller widens unaligned ranges)."""
+    assert addr % (nch * BEAT) == 0 and len(data) % (nch * BEAT) == 0
     v = data.reshape(-1, 2, BEAT)
     if chash:
         v = v.copy()
         hash_swap(addr, v)
-    off = addr // 2
-    return [(c, off, np.ascontiguousarray(v[:, c, :]).reshape(-1)) for c in (0, 1)]
+    off = addr // nch
+    if nch == 2:
+        return [(c, off, np.ascontiguousarray(v[:, c, :]).reshape(-1)) for c in (0, 1)]
+    g = v.reshape(-1, nch // 2, 2, BEAT)
+    w = g[np.arange(len(g))[:, None], _pair_order(addr, len(g), nch, chash)]
+    return [(c, off, np.ascontiguousarray(w[:, c // 2, c % 2, :]).reshape(-1))
+            for c in range(nch)]
 
 
 def join(parts: list[np.ndarray], addr: int = 0, chash: bool = False) -> np.ndarray:
-    """Inverse of split: the two channels' contiguous runs (from logical `addr`) -> logical
-    bytes."""
-    a, b = (p.reshape(-1, BEAT) for p in parts)
-    v = np.stack([a, b], axis=1)
+    """Inverse of split: the channels' contiguous runs (from logical `addr`; as many channels as
+    parts) -> logical bytes."""
+    nch = len(parts)
+    rows = [p.reshape(-1, BEAT) for p in parts]
+    if nch == 2:
+        v = np.stack(rows, axis=1)
+    else:
+        w = np.stack(rows, axis=1).reshape(len(rows[0]), nch // 2, 2, BEAT)
+        v = w[np.arange(len(w))[:, None], _pair_order(addr, len(w), nch, chash)]
+        v = v.reshape(-1, 2, BEAT)
     if chash:
         hash_swap(addr, v)
     return v.reshape(-1)
@@ -598,6 +646,15 @@ class SimTransport:
 
 
 # ------------------------------------------------------------------------------ the board
+def open_transport(dev: str | None = None, dma: bool = True):
+    """Open OTPU_DEVICE (default /dev/xdma0), or an explicit XDMA prefix / f2:slot / f2:BDF."""
+    dev = os.environ.get("OTPU_DEVICE", "/dev/xdma0") if dev is None else dev
+    if dev.startswith("f2:"):
+        from .f2 import F2Transport
+        return F2Transport(dev, dma=dma)
+    return XdmaTransport(dev) if dma else XdmaTransport(dev, dma=False)
+
+
 def _lock(t) -> DeviceLock | None:
     """The device lock, shared by every Board on the same transport object (a transport is one
     open of the device); a second transport on the same device, in this process or another,
@@ -656,11 +713,13 @@ class Board:
     the trace buffer."""
 
     def __init__(self, transport=None, check: bool = True, lock: bool = True,
-                 calibrate: bool = True):
+                 calibrate: bool = True, own_transport: bool | None = None):
         """check: the card must answer as openTPU; calibrate: then calibrate its DDR3 if the
         bitstream wants the host to (LiteDRAM, CAPS bit27: memcal.ensure; once per
-        configuration, as the STATUS calibration bits say)."""
-        self.t = transport or XdmaTransport()
+        configuration, as the STATUS calibration bits say). own_transport transfers cleanup
+        responsibility for a supplied transport; by default supplied transports are borrowed."""
+        self._owns_transport = transport is None if own_transport is None else own_transport
+        self.t = open_transport(dma=lock) if transport is None else transport
         self.lock = _lock(self.t) if lock else None
         self._info = None
         self._trace = None              # (depth, keep_first) of a started traced run
@@ -690,6 +749,8 @@ class Board:
         if self._pool is not None:
             self._pool.shutdown()
             self._pool = None
+        if self._owns_transport and hasattr(self.t, "close"):
+            self.t.close()
         if self.lock is not None:
             self.lock.release()
             self.t._otpu_lock = None
@@ -901,20 +962,30 @@ class Board:
         return d
 
     # ------------------------------------------------------------------ DRAM
+    @property
+    def nch(self) -> int:
+        """Memory channels per slice (CFG_DRAM; 2 before register map 4, and on the boards'
+        models: SimTransport's two per slice)."""
+        if self._info is None and getattr(self.t, "batched", False):
+            return getattr(self.t, "nch", 2)
+        c = (self._info or self.info())["cfg"]
+        return c["channels"] if c else 2
+
     def write(self, addr: int, data, s: int = 0) -> None:
         """Logical bytes to the card (slice s's DRAM). Only the 64-byte beats they fall in are written: the
-        bytes off the chunk grid go beat by beat to their channels (a partial beat's other
-        bytes kept by the transport: XdmaTransport.mem_write reads that beat alone), never the
-        rest of their chunks, which the card may store meanwhile (a generate run's state words
-        beside the host's stop word: widened to its chunk, the stop write put back the words it
-        had read before the card's store)."""
+        bytes off the group grid (nch / 2 chunks: one beat on every channel) go beat by beat to
+        their channels (a partial beat's other bytes kept by the transport: XdmaTransport.mem_write
+        reads that beat alone), never the rest of their chunks, which the card may store meanwhile
+        (a generate run's state words beside the host's stop word: widened to its chunk, the stop
+        write put back the words it had read before the card's store)."""
         self._own()
         data = np.ascontiguousarray(data).view(np.uint8).reshape(-1)
         if len(data) == 0:
             return
+        g = self.nch * BEAT                             # a group: a beat on every channel
         end = addr + len(data)
-        a0 = -(-addr // (2 * BEAT)) * (2 * BEAT)        # the whole chunks inside
-        a1 = end // (2 * BEAT) * (2 * BEAT)
+        a0 = -(-addr // g) * g                          # the whole groups inside
+        a1 = end // g * g
         if a1 <= a0:
             a0 = a1 = end                               # (none: beats only)
         self._beats(addr, data[:a0 - addr], s)
@@ -923,42 +994,40 @@ class Board:
         self._beats(a1, data[a1 - addr:], s)
 
     def _beats(self, addr: int, data: np.ndarray, s: int = 0) -> None:
-        """Bytes of at most a chunk's worth (a write's edges), beat by beat to their channels."""
+        """Bytes of at most a group's worth (a write's edges), beat by beat to their channels."""
         x, end = addr, addr + len(data)
+        nch = self.nch
         while x < end:
             k = min(end, (x // BEAT + 1) * BEAT) - x
-            c, off = beat_at(x, self.chash)
-            self.t.mem_write(2 * s + c, off, data[x - addr:x - addr + k])
+            c, off = beat_at(x, self.chash, nch)
+            self.t.mem_write(nch * s + c, off, data[x - addr:x - addr + k])
             x += k
 
     def _chunks(self, a0: int, data: np.ndarray, s: int = 0) -> None:
-        """Whole chunks from a0 (chunk aligned) to slice s's two channels."""
-        j = 2 * s                                       # its first channel
-        if self.chash:                                  # channel order (a copy)
-            data = data.copy()
-            hash_swap(a0, data.reshape(-1, 2, BEAT))
+        """Whole groups from a0 (group aligned) to slice s's channels."""
+        nch = self.nch
+        j = nch * s                                     # its first channel
         lim = getattr(self.t, "run_h2c", 0) if self.in_run else 0
         if lim:                                         # a run is in flight (RUN_H2C)
-            for c, off, part in split(a0, data):
+            for c, off, part in split(a0, data, self.chash, nch):
                 for i in range(0, len(part), lim):
                     self.t.mem_write(j + c, off + i, part[i:i + lim])
             return
         if not (getattr(self.t, "threaded", False) and len(data) > PIPE):
-            for c, off, part in split(a0, data):
+            for c, off, part in split(a0, data, self.chash, nch):
                 self.t.mem_write(j + c, off, part)
             return
         # pieces of PIPE bytes: the worker DMAs piece i while this thread splits piece i + 1
-        # into the other pair of buffers (placed for full DMA speed, see DMA_PLACE)
-        h = PIPE // 2
-        slots = [[placed(h, self._base(j + c) + a0 // 2) for c in (0, 1)] for _ in range(2)]
+        # into the other set of buffers (placed for full DMA speed, see DMA_PLACE)
+        h = PIPE // nch
+        slots = [[placed(h, self._base(j + c) + a0 // nch) for c in range(nch)] for _ in range(2)]
         ex, prev = self._worker(), None
         for i, pos in enumerate(range(0, len(data), PIPE)):
-            v = data[pos:pos + PIPE].reshape(-1, 2, BEAT)
             parts = []
-            for c in (0, 1):
-                buf = slots[i % 2][c][:len(v) * BEAT]
-                np.copyto(buf.reshape(-1, BEAT), v[:, c, :])
-                parts.append((j + c, a0 // 2 + i * h, buf))
+            for c, off, part in split(a0 + pos, data[pos:pos + PIPE], self.chash, nch):
+                buf = slots[i % 2][c][:len(part)]
+                np.copyto(buf, part)
+                parts.append((j + c, off, buf))
             if prev is not None:
                 prev.result()
             prev = ex.submit(lambda ps: [self.t.mem_write(*p) for p in ps], parts)
@@ -984,7 +1053,7 @@ class Board:
         z = placed(64 << 20, 0)             # zeros, placed: no bounce copies
         for ch in range(nch):
             for off in range(0, size, len(z)):
-                self.t.mem_write(ch, off, z)
+                self.t.mem_write(ch, off, z[:min(len(z), size - off)])
         # the ECC counters (STATUS ECC_DED) from here on: a read of a beat not yet written (an
         # earlier run's, a tool's) counted its random check bits as uncorrectable
         from opentpu.host import ddr4, memcal
@@ -995,40 +1064,40 @@ class Board:
 
     def read(self, addr: int, n: int, s: int = 0) -> np.ndarray:
         """n logical bytes from slice s's DRAM at addr."""
-        j = 2 * s                                       # its first channel
-        a0 = addr // (2 * BEAT) * (2 * BEAT)
-        a1 = -(-(addr + n) // (2 * BEAT)) * (2 * BEAT)
-        half = (a1 - a0) // 2
-        out = np.empty((half // BEAT, 2, BEAT), np.uint8)
-        if not (getattr(self.t, "threaded", False) and 2 * half > PIPE):
-            for c in (0, 1):                            # each channel's run, interleaved
-                out[:, c, :] = self.t.mem_read(j + c, a0 // 2, half).reshape(-1, BEAT)
+        nch = self.nch
+        j = nch * s                                     # its first channel
+        g = nch * BEAT
+        a0 = addr // g * g
+        a1 = -(-(addr + n) // g) * g
+        per = (a1 - a0) // nch                          # bytes per channel
+        if not (getattr(self.t, "threaded", False) and a1 - a0 > PIPE):
+            parts = [self.t.mem_read(j + c, a0 // nch, per) for c in range(nch)]
+            flat = join(parts, a0, self.chash)
         else:
-            # pieces of PIPE / 2 bytes per channel: the worker reads piece i + 1 into one pair of
-            # buffers while this thread interleaves piece i from the other pair
-            h = PIPE // 2
-            slots = [[placed(h, self._base(j + c) + a0 // 2) for c in (0, 1)] for _ in range(2)]
+            # pieces of PIPE / nch bytes per channel: the worker reads piece i + 1 into one set of
+            # buffers while this thread interleaves piece i from the other set
+            h = PIPE // nch
+            slots = [[placed(h, self._base(j + c) + a0 // nch) for c in range(nch)]
+                     for _ in range(2)]
 
             def get(i: int):
-                k = min(h, half - i * h)
-                return [self.t.mem_read(j + c, a0 // 2 + i * h, k, slots[i % 2][c][:k])
-                        for c in (0, 1)]
+                k = min(h, per - i * h)
+                return [self.t.mem_read(j + c, a0 // nch + i * h, k, slots[i % 2][c][:k])
+                        for c in range(nch)]
 
-            npieces = -(-half // h)
+            npieces = -(-per // h)
+            out = np.empty(a1 - a0, np.uint8)
             ex = self._worker()
             fut = ex.submit(get, 0)
             for i in range(npieces):
                 nxt = ex.submit(get, i + 1) if i + 1 < npieces else None
-                rows = slice(i * h // BEAT, (i * h + h) // BEAT)
-                for c, part in enumerate(fut.result()):
-                    out[rows, c, :] = part.reshape(-1, BEAT)
+                parts = fut.result()
+                out[i * h * nch:i * h * nch + len(parts[0]) * nch] = \
+                    join(parts, a0 + i * h * nch, self.chash)
                 fut = nxt
-        if self.chash:                                  # channel order -> logical
-            hash_swap(a0, out)
-        flat = out.reshape(-1)
+            flat = out
         return flat if (a0, a1) == (addr, addr + n) else flat[addr - a0:addr - a0 + n].copy()
 
-    # ------------------------------------------------------------------ programs
     def load_program(self, addr: int, words, entries=None) -> None:
         """Copy a program into DRAM at `addr` (chunk aligned) and into IMEM. A run started and
         not seen halted (a wait that raised) is stopped first: its reads in flight would land
@@ -1306,8 +1375,9 @@ def device_config(info: dict, **kw):
                                  f"a {k}={env} bitstream")
     caps = info.get("caps") or {}
     pair, dstep = bool(caps.get("pair")), bool(caps.get("dstep"))
-    stream = bool(caps.get("stream"))
+    stream, t2 = bool(caps.get("stream")), bool(caps.get("t2"))
     for k, have, what in (("PAIR", pair, "column reuse (CAPS bit5)"),
+                          ("T2", t2, "t2 weights (CAPS bit28)"),
                           ("DSTEP", dstep, "DSTEP (CAPS bit6)"),
                           ("STREAM", stream, "the stream engine (CAPS bit26)")):
         env = os.environ.get(f"OTPU_{k}")
@@ -1316,7 +1386,7 @@ def device_config(info: dict, **kw):
                                  f"OTPU_{k}={env}: unset OTPU_{k} (the host follows the "
                                  f"bitstream)")
     rows = info.get("act_rows") or 0              # 0: MCOLS rows (no MM replay)
-    dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep,
+    dev = {"MCOLS": info["MCOLS"], "LANES": info["LANES"], "PAIR": pair, "DSTEP": dstep, "T2": t2,
            "STREAM": stream, "ACT_ROWS": rows if rows > info["MCOLS"] else 0}
     c = info.get("cfg")
     if c:                                         # register map 4: the device says the rest
@@ -1383,6 +1453,7 @@ def check_hash(info: dict, cfg=None) -> None:
         sizes = {k: c[k] for k in ("S", "TMEM_WORDS", "IMEM_WORDS", "ACT_BLOCKS", "DRAM_BYTES")}
         cfg = board_config(D=info["D"], MCOLS=info["MCOLS"], LANES=info["LANES"],
                            PAIR=bool(caps.get("pair")), DSTEP=bool(caps.get("dstep")),
+                           T2=bool(caps.get("t2")),
                            STREAM=bool(caps.get("stream")), SEQ_WC=bool(c.get("SEQ_WC")),
                            ACT_ROWS=rows if rows > info["MCOLS"] else 0, **sizes)
     if arch_hash(cfg) != c["hash"]:
@@ -1441,8 +1512,17 @@ def sim_config(spec, cap: int, base=None, rows: int | None = None, lookup: bool 
     try:
         probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, **kw)
     except MemoryError:
-        probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
-                           head_format=head_format, **kw)
+        try:
+            probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
+                               head_format=head_format, **kw)
+        except MemoryError:
+            # the int8 embedding table of its own on the host (the Engine's fallback when the
+            # image does not fit otherwise: Qwen3.8-27B-INT4 on 4 slices, docs/qwen38.md)
+            from opentpu.llm.qwen3 import has_embed_host
+            if not (kw.get("lookup") and has_embed_host(spec)):
+                raise
+            probe = spec.image(big, cap, 1, rows or PREFILL_ROWS, wformat=wformat,
+                               head_format=head_format, embed_host=True, **kw)
     need = -(-probe.nbytes // 4096) * 4096 + 4 * base.IMEM_WORDS
     return replace(base, DRAM_BYTES=1 << max(22, (need - 1).bit_length()))
 
@@ -1485,19 +1565,27 @@ class BoardBackend:
     /tmp/otpu/<dev>.json (runstate.RunnerStatus) until close() or exit."""
 
     def __init__(self, cfg, images: list, transport=None, model: str | None = None,
-                 status: bool = True):
+                 status: bool = True, own_transport: bool | None = None):
         from opentpu import isa as I
         self.I = I
         self.cfg = cfg
-        self.board = Board(transport)
+        self.board = Board(transport, own_transport=own_transport)
+        self.status = None
+        try:
+            self._initialize(cfg, images, model, status)
+        except BaseException:
+            self.close()
+            raise
+
+    def _initialize(self, cfg, images: list, model: str | None, status: bool) -> None:
         self.board.scrub()
         info = self.info = self.board.info()
         try:
             check_fits(cfg, info)
             c = info.get("cfg")
-            if c and c["channels"] != 2:
+            if c and (c["channels"] < 2 or c["channels"] & (c["channels"] - 1)):
                 raise ConfigMismatch(f"the bitstream's slices have {c['channels']} memory "
-                                     "channels each: this driver interleaves two")
+                                     "channels each: this driver interleaves a power of two")
             # its sequencer takes wait entries (EXPERIMENTAL): each program loads with its own
             # (check_fits: the configuration has their room; Board.waitc: the window)
             self.waitc = self.board.waitc
@@ -1577,6 +1665,10 @@ class BoardBackend:
             self.board.close()
             raise ConfigMismatch("the programs use column reuse (MM PAIR / QACT DUP) and this "
                                  "bitstream lacks it (CAPS bit5 clear): use device_config")
+        if ("t2" in fmts or self.cfg.T2) and not caps.get("t2"):
+            self.board.close()
+            raise ConfigMismatch("the model image has t2 weights and this bitstream lacks them "
+                                 "(CAPS bit28 clear): use --wformat int4 or load a T2 bitstream")
         if self.cfg.DSTEP and not caps.get("dstep"):
             self.board.close()
             raise ConfigMismatch("the programs use DSTEP and this bitstream lacks it (CAPS bit6 "
@@ -1838,7 +1930,7 @@ class BoardBackend:
             last = addr + o + k - BEAT                  # the piece's last beat (64-byte aligned)
             probes += 1
             tries += 1
-            beat = t.mem_read(*beat_at(last, chash), BEAT)
+            beat = t.mem_read(*beat_at(last, chash, b.nch), BEAT)
             w = None
             if not (beat.view(np.uint32) == mark).any():
                 w = b.read(addr + o, k).view(np.uint32)

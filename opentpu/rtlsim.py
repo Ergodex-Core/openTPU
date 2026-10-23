@@ -267,6 +267,10 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
          "AXI": int(axi)}                                # otpu_top's memory path (2: LDC)
     p.update(UARCH)
     p.update(uarch or {})
+    if axi == 1 and os.environ.get("OTPU_NCH"):
+        # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
+        # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
+        p["NCH"] = int(os.environ["OTPU_NCH"])
     if p.get("TMEM_IMPL") == 3 and "TMEM_SBP" not in p:
         # the one copy's sub-bank bit sits above the lane banks' (otpu_tmem: SBP >= log2 LANES):
         # the pick's SBP 3 is LANES 8's, a LANES 16 configuration's 4
@@ -453,6 +457,12 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
     stats["act_reads"] = [dict(zip(("cyc", "rd", "pop", "use", "cols", "any"), map(int, m)))
                           for m in re.findall(r"MXACT s\d+ cyc=(\d+) rd=(\d+) pop=(\d+) "
                                               r"use=(\d+) cols=(\d+) any=(\d+)", out)]
+    # per slice, the MXU's blocked cycles (chunks in its FIFO, no pop; the trace's mb) and their
+    # one cause each (otpu_mxu xb_*): no result-FIFO credit, the row's chunks not all in, its
+    # scales not all in, other -- they sum to mb
+    stats["mxu_block"] = [dict(zip(("mb", "mbc", "mbr", "mbs", "mbo"), map(int, m)))
+                          for m in re.findall(r"MXBLOCK s\d+ mb=(\d+) mbc=(\d+) mbr=(\d+) "
+                                              r"mbs=(\d+) mbo=(\d+)", out)]
     if error_ok:
         stats["error"] = bool(err)
     if axi:
@@ -460,9 +470,9 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         # counters; reads and writes as (commands, beats) (a native command is one beat), ar_a:
         # the A runs and SW fill reads, rmw_a: the A and SW writes with a partial byte mask
         mem = [dict(zip(("rd", "wr", "row_miss", "rmw"), map(int, m))) for m in
-               re.findall(r"MEM ch\d rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
+               re.findall(r"MEM ch\d+ rd=(\d+) wr=(\d+) row_miss=(\d+) rmw=(\d+)", out)]
         nat = [dict(kv.split("=") for kv in m.split()) for m in
-               re.findall(r"NATIVE ch\d (.*)", out)]
+               re.findall(r"NATIVE ch\d+ (.*)", out)]
         nat = [{k: int(v) for k, v in d.items()} for d in nat]
         stats["native"] = nat
         stats["axi_reads"] = [(m["rd"], m["rd"]) for m in mem]

@@ -9,6 +9,7 @@
     otpu-chat --prompt "Why is the sky blue?" # one-shot
     otpu-chat --think                         # Qwen3 thinking mode
     otpu-chat --model gemma4                  # Gemma 4 E2B, its instruct checkpoint
+    otpu-chat --model gemma3                  # Gemma 3 1B (gemma-3-1b-it)
                                               # (gemma-4-E2B-it; --think: thinking mode too)
     otpu-chat --model qwen35-2b --mtp         # Qwen3.5 with its MTP drafter (docs/mtp.md)
     otpu-chat --model phi4-mini --wformat fp4 # the weights' format (default auto: the model's
@@ -67,7 +68,8 @@ from opentpu.llm.qwen3 import Engine, load_weights
 # command-line flags override them. LFM2's are LFM2.5-230M's generation_config.json; Qwen3's
 # and Qwen3.5's their model cards' non-thinking settings (Qwen3.5's without the presence
 # penalty); Gemma 4's its checkpoints' generation_config.json (the instruct and base ones').
-SAMPLING = {"qwen3": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
+SAMPLING = {"gemma3": dict(temperature=1.0, top_k=64, top_p=0.95, repetition_penalty=1.0),
+            "qwen3": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
             "lfm2": dict(temperature=0.1, top_k=50, top_p=1.0, repetition_penalty=1.05),
             "qwen35": dict(temperature=0.7, top_k=20, top_p=0.8, repetition_penalty=1.0),
             "gemma4": dict(temperature=1.0, top_k=64, top_p=0.95, repetition_penalty=1.0)}
@@ -927,23 +929,28 @@ def load_tokenizer(path):
     return get
 
 
-def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
+def make_backend(name: str, spec, cap: int, dev: str | None, model: str | None = None,
                  lookup: bool = False, wformat: str = "int8", head_format: str | None = None):
     """(backend, configuration) for Engine (lookup: room for the resident decode's tables;
     the weight formats size the board model's DRAM where an int8 image would not fit)."""
     if name == "isa":
         return "isa", None
     if name == "board":
-        from opentpu.host.board import (Board, BoardBackend, XdmaTransport,   # the PCIe driver
-                                        device_config)
-        tr = XdmaTransport(dev)
-        cfg = device_config(Board(tr, lock=False).info())     # MCOLS / LANES of the bitstream
-        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
+        from opentpu.host.board import Board, BoardBackend, device_config, open_transport
+        tr = open_transport(dev)
+        try:
+            cfg = device_config(Board(tr, lock=False).info())  # MCOLS / LANES of the bitstream
+        except BaseException:
+            tr.close()
+            raise
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "board-sim":
         from opentpu.host.board import BoardBackend, SimTransport, sim_config
         cfg = sim_config(spec, cap, lookup=lookup, wformat=wformat, head_format=head_format)
         tr = SimTransport(ch_bytes=cfg.DRAM_BYTES // 2)
-        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model)), cfg
+        return (lambda c, imgs: BoardBackend(c, imgs, transport=tr, model=model,
+                                            own_transport=True)), cfg
     if name == "rtl":
         from opentpu.llm.rtl_backend import RtlBackend
         return RtlBackend, None
@@ -952,8 +959,11 @@ def make_backend(name: str, spec, cap: int, dev: str, model: str | None = None,
 
 def _maps_on_design(spec) -> bool:
     """The model maps onto the design's configuration (two slices), the simulators' default; a
-    model that takes one slice (Gemma 4: one KV head) runs in the card's instead."""
+    model that takes one slice, or whose default is one (Gemma 3 / Gemma 4: one KV head, the
+    tensor-parallel split on request, Spec.one_slice_default), runs in the card's instead."""
     from opentpu.isasim import design_config
+    if getattr(spec, "one_slice_default", False):
+        return False
     try:
         spec.check(design_config())
     except ValueError:
@@ -1004,7 +1014,17 @@ def main(argv=None):
     ap.add_argument("--model", default="qwen3",
                     help=f"{' or '.join(MODELS)} (models/<name>), or a checkpoint directory")
     ap.add_argument("--backend", default="isa", choices=["isa", "board", "board-sim", "rtl"])
-    ap.add_argument("--dev", default="/dev/xdma0", help="XDMA device prefix (--backend board)")
+    ap.add_argument("--slices", type=int, metavar="S",
+                    help="--backend isa: the board configuration with S slices (the model's "
+                         "tensor-parallel split, a program per slice, as lens record model "
+                         "--slices; Qwen3.8-27B: 4, docs/qwen38.md). Default: the design's two "
+                         "slices where the model maps onto them, else the card's one")
+    ap.add_argument("--layers", type=int, metavar="N",
+                    help="a model of the checkpoint's first N layers (Spec.truncated: a quick "
+                         "end-to-end run of one too slow to simulate whole; its text is not "
+                         "the model's)")
+    ap.add_argument("--dev", default=None,
+                    help="board device (default: OTPU_DEVICE or /dev/xdma0; f2:0 for F2 slot 0)")
     ap.add_argument("--clock-mhz", type=float,
                     help="core clock, to turn device cycles into tokens/s (default: the "
                          "bitstream's CORE_KHZ, or 100 on a register map 1 bitstream)")
@@ -1099,6 +1119,12 @@ def main(argv=None):
                          f"feed the turns' text as is")
     tokenizer = load_tokenizer(path)        # (on a thread, while the model loads)
     spec = load_spec(path)
+    if a.layers:
+        if not hasattr(spec, "truncated"):
+            raise SystemExit("otpu-chat: --layers takes a Qwen3.5 model")
+        spec = spec.truncated(a.layers)
+        print(f"otpu-chat: the first {a.layers} layers only (--layers): the text is not the "
+              f"model's", flush=True)
     wformat = FM.auto(spec, a.wformat)
     streams = ST.streams(spec)          # a MoE: its experts streamed (opentpu/host/streamed.py)
     if streams:
@@ -1119,6 +1145,12 @@ def main(argv=None):
         raise SystemExit(f"otpu-chat: {e}") from None
     if a.mtp and (not hasattr(spec, "mtp") or a.per_position):
         raise SystemExit("otpu-chat: --mtp takes a Qwen3.5 model and resident decode")
+    if a.slices and cfg is None and not streams and not a.mtp:    # the board configuration
+        from opentpu.host.board import sim_config                  # with S slices
+        from opentpu.isasim import board_config
+        cfg = sim_config(spec, a.cap, board_config(PAIR=True, DSTEP=True, STREAM=True,
+                                                   S=a.slices),
+                         lookup=not a.per_position, wformat=wformat, head_format=a.head_format)
     if cfg is None and not streams and not a.mtp and not _maps_on_design(spec):
         from opentpu.host.board import sim_config     # Gemma 4 (one KV head): the card's
         from opentpu.isasim import board_config

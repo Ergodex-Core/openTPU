@@ -40,9 +40,10 @@ from .. import waits as WC
 from .. import language as ol
 from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, Tensor, arg_words,
                         Words, current, k_scale_bytes, trace_fit)
+from . import ctensors as CT
 from . import formats as FM
 from . import generate as G
-from . import rope_parameters
+from . import rope_parameters, yarn_rope
 from . import snapshot as SN
 from ..isasim import Config, Machine, design_config
 from ..kernels.attention import Additive, Bucket, _attend_heads
@@ -95,7 +96,13 @@ class Spec:
     @staticmethod
     def from_hf(model_dir) -> "Spec":
         c = json.loads((Path(model_dir) / "config.json").read_text())
-        rp = rope_parameters(c, model_dir)          # (Qwen3's YaRN: not supported)
+        rp = rope_parameters(c, model_dir, ("default", "yarn"))
+        theta = rp.get("rope_theta") or c.get("rope_theta") or 10000.0
+        hd = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
+        yarn = {}
+        if rp.get("rope_type", rp.get("type")) == "yarn":   # (Ternary-Bonsai's: factor 4 of 8192)
+            div, af = yarn_rope(rp, theta, hd, c.get("max_position_embeddings", 0))
+            yarn = dict(rope_div=div, rope_scale=af)
         if c.get("use_sliding_window"):
             raise ValueError(f"{model_dir}: sliding-window attention is not supported")
         if c.get("attention_bias"):
@@ -108,10 +115,10 @@ class Spec:
                     n_q=c["num_attention_heads"], n_kv=c["num_key_value_heads"],
                     head_dim=c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"],
                     ffn=c["intermediate_size"], vocab=c["vocab_size"], eps=c["rms_norm_eps"],
-                    theta=rp.get("rope_theta") or c.get("rope_theta") or 10000.0,
-                    tied=c.get("tie_word_embeddings", True),
+                    theta=theta, tied=c.get("tie_word_embeddings", True),
                     bos=c.get("bos_token_id", 151643),
-                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c))
+                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c),
+                    **yarn)
 
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
@@ -134,6 +141,26 @@ class Spec:
               formats: str | None = None) -> "Image":
         return Image(self, cfg, cap, batch, rows, wformat, head_format, lookup, embed_host,
                      formats)
+
+
+F32_CHUNK = 256 << 20       # bytes of fp32 a chunk when a checkpoint tensor is converted by rows
+
+
+def _f32_tensor(h, k: str) -> np.ndarray:
+    """Checkpoint tensor k of the safetensors handle h as fp32: whole when small, else by
+    rows into one fp32 array (a 248K x 5120 bf16 table is 2.5 GB; converted whole it and its
+    fp32 copy are both held at once: 7.5 GB at the peak of an image build)."""
+    import torch
+    sl = h.get_slice(k)
+    shape = tuple(sl.get_shape())
+    n = int(np.prod(shape)) if shape else 1
+    if not shape or 4 * n <= F32_CHUNK:
+        return h.get_tensor(k).to(torch.float32).numpy()
+    out = np.empty(shape, np.float32)
+    rows = max(1, F32_CHUNK // (4 * n // shape[0]))
+    for a in range(0, shape[0], rows):
+        out[a:a + rows] = sl[a:a + rows].to(torch.float32).numpy()
+    return out
 
 
 def finite(v: np.ndarray, name: str) -> np.ndarray:
@@ -177,6 +204,11 @@ class Weights(Mapping):
                     continue
                 self._where[k.replace("model.language_model.", "model.", 1)] = (h, k, None)
         self._split_fused(Path(model_dir))
+        # a compressed-tensors pack-quantized checkpoint (opentpu/llm/ctensors.py): every
+        # packed X.weight_packed / X.weight_scale is also "X.weight", dequantized when read
+        self._ct = CT.scheme(model_dir)
+        for n, t in (CT.names(self._where) if self._ct else {}).items():
+            self._where[n] = (None, t, CT.PACKED)
         self._small: dict = {}
         self._big: tuple | None = None
 
@@ -211,13 +243,24 @@ class Weights(Mapping):
             return self._big[1]
         import torch
         h, k, rows = self._where[name]
-        t = h.get_tensor(k) if rows is None else h.get_slice(k)[rows[0]:rows[1]]
-        v = finite(t.to(torch.float32).numpy(), name)
+        if rows == CT.PACKED:               # (k: the packed, scale and shape names)
+            v = finite(CT.dequantized(lambda n: self._where[n][0].get_tensor(self._where[n][1]),
+                                      k, self._ct), name)
+        elif rows is None:
+            v = finite(_f32_tensor(h, k), name)
+        else:
+            t = h.get_slice(k)[rows[0]:rows[1]]
+            v = finite(t.to(torch.float32).numpy(), name)
         if v.nbytes <= self.CACHE:
             self._small[name] = v
         else:
             self._big = (name, v)
         return v
+
+    def uncache(self) -> None:
+        """Drop the large cached tensor (an Engine whose image holds the embedding rows, once
+        it is built: a 248K x 5120 table is 5 GB in fp32; a later read converts it again)."""
+        self._big = None
 
     def __iter__(self):
         return iter(self._where)
@@ -237,9 +280,13 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
-    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
-                                                                          "gemma4_text"):
-        from .gemma4 import load_weights as gemma4_weights
+    from .bonsai2 import is_bonsai2
+    if is_bonsai2(model_dir):           # Ternary-Bonsai 2: a Qwen3.5 GGUF (prism-ml)
+        from .bonsai2 import Weights as Bonsai2Weights
+        return Bonsai2Weights(model_dir, mtp)
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in (
+            "gemma4", "gemma4_text", "gemma3", "gemma3_text"):
+        from .gemma4 import load_weights as gemma4_weights     # (Gemma 3: on Gemma 4's code)
         return gemma4_weights(model_dir)
     return Weights(model_dir, mtp)
 
@@ -273,6 +320,12 @@ class LazyWeights(dict):
                 self._at.update((k, (str(f), k)) for k in keys)
         if mtp and not any(k.startswith("mtp.") for k in self._at):
             raise ValueError(f"{mtp_from or model_dir}: no mtp.* tensors (the MTP drafter)")
+        # a compressed-tensors pack-quantized checkpoint (opentpu/llm/ctensors.py): every
+        # packed X.weight_packed / X.weight_scale is also "X.weight", dequantized when read
+        self._ct = CT.scheme(model_dir)
+        self._ctn = CT.names(self._at) if self._ct else {}
+        for n, (kp, _, _) in self._ctn.items():
+            self._at[n] = self._at[kp]
 
     def _open(self, k):
         from safetensors import safe_open
@@ -283,8 +336,11 @@ class LazyWeights(dict):
 
     def __getitem__(self, k):
         import torch
+        if k in self._ctn:
+            return finite(CT.dequantized(lambda n: self._open(n)[0].get_tensor(self._open(n)[1]),
+                                         self._ctn[k], self._ct), k)
         h, name = self._open(k)
-        return finite(h.get_tensor(name).to(torch.float32).numpy(), k)
+        return finite(_f32_tensor(h, name), k)
 
     def part(self, k, i):
         """Tensor k's i-th entry along its first axis (one expert of a fused expert tensor),
@@ -569,8 +625,10 @@ class EmbedHost:
         if not self.embed_host:
             return None
         lk = self.lookup
-        return RowServer(BackendDram(backend), RowLayout(lk["mbox"], lk["embed_q"][0],
-                                                         lk["rec"]),
+        # every slice's slot and mailbox (the slices post one request in lockstep, each
+        # waits on its own served word: Qwen3.8-27B on 4 slices, docs/qwen38.md)
+        return RowServer(BackendDram(backend, slices=range(self.cfg.S)),
+                         RowLayout(lk["mbox"], lk["embed_q"][0], lk["rec"]),
                          lambda t: lk["store"][t])
 
 
@@ -1417,11 +1475,12 @@ def fill_logits(m) -> None:
     cursor = b.tmem_next
     n = min(HEAD_CHUNK, ol.tmem_words() // 8, m.v_loc)
     t = ol.full([n], -math.inf)                     # FILL_SENTINEL
+    v0 = getattr(m, "v_off", sid * m.v_loc)
     for c0 in range(0, m.v_loc, n):
         k = min(n, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         ol.store(m.logits[0, col:col + k], t[:k])
-    last = sid * m.v_loc + m.v_loc - 1
+    last = v0 + m.v_loc - 1
     b.rld(0, ol.load(m.logits[0, last:last + 1], out=t[0:1]), comment="logits fill landed")
     del t
     b.tmem_next = cursor        # the rest of the program as compiled without the fill
@@ -1688,9 +1747,10 @@ def _lm_head(x, m, spec):
     xs = ol.quantize(rmsnorm(x, ol.load(m.g_final), spec.eps))
     chunk = min(HEAD_CHUNK, ol.tmem_words() // 8)
     sink = getattr(m, "lm_sink", None)
+    v0 = getattr(m, "v_off", sid * m.v_loc)   # its first row (gemma4.split_ranges: uneven)
     for c0 in range(0, m.v_loc, chunk):
         n = min(chunk, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         if sink is None:
             ol.store(m.logits[:, col:col + n], ol.dot(xs, m.head[c0:c0 + n, :]))
         else:
@@ -1850,9 +1910,10 @@ def _lm_head_rows(x, m, spec, logit_rows):
     xs = ol.quantize(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps))
     chunk = head_rows_chunk(e - a)
     sinks = getattr(m, "lm_sinks", None)
+    v0 = getattr(m, "v_off", sid * m.v_loc)
     for c0 in range(0, m.v_loc, chunk):
         n = min(chunk, m.v_loc - c0)
-        col = sid * m.v_loc + c0
+        col = v0 + c0
         if sinks is None:
             ol.store(m.logitsr[a:e, col:col + n], ol.dot(xs, m.head[c0:c0 + n, :]))
             continue
@@ -2286,6 +2347,8 @@ class Engine:
                                                getattr(W, "mtp_from", None)),
                                   extra=(getattr(self.image, "pool_extra", None) or (0,))[0])
         images = IC.build(self.image, W, self.layout)     # (opentpu/imgcache.py)
+        if self.device_inputs and hasattr(W, "uncache"):  # (the host never reads the table)
+            W.uncache()
         # rollback's snapshots of the state the KV caches do not hold (snapshot.py)
         self.stateful = SN.stateful(self.image)
         self._snaps = None
@@ -2633,7 +2696,8 @@ class Engine:
         self._write_host_rows([token])
         start = getattr(self.backend, "start", None)
         v_loc = self.image.v_loc
-        vocab = S * v_loc
+        ranges = getattr(self.image, "v_ranges", None)      # an uneven split's (_read_logits)
+        vocab = sum(n for _, n in ranges) if ranges else S * v_loc
         stream = None
         if start is not None and S == 1 and self.stream_logits and \
                 getattr(self.backend, "streams", False):
@@ -2673,9 +2737,7 @@ class Engine:
             st = self.backend.wait(feed)
         self.stats.append(st)
         if stream is None:
-            logits = np.concatenate([self.backend.read(s, io["logits"] + 4 * s * v_loc,
-                                                       4 * v_loc).view(np.float32)
-                                     for s in range(S)])
+            logits = self._read_logits(io["logits"])
             if sink is not None:
                 sink.feed(0, logits)
         self.pos += 1
@@ -2719,11 +2781,17 @@ class Engine:
         st = self.backend.run(programs)
         st["rows"] = len(rows)
         self.stats.append(st)
-        v, v_loc = spec.vocab, self.image.v_loc
-        out = [np.concatenate([self.backend.read(s, io["logits"] + 4 * (r * v + s * v_loc),
-                                                 4 * v_loc).view(np.float32) for s in range(S)])
-               for r in logit_rows]
+        v = spec.vocab
+        out = [self._read_logits(io["logits"] + 4 * r * v) for r in logit_rows]
         return np.array(out, np.float32).reshape(len(logit_rows), v)
+
+    def _read_logits(self, addr: int) -> np.ndarray:
+        """One row of logits at DRAM `addr` (the row's first column): every slice's own
+        columns (vocab / S each, or an image's per-slice ranges: gemma4.split_ranges)."""
+        S, v_loc = self.cfg.S, self.image.v_loc
+        ranges = getattr(self.image, "v_ranges", None) or [(s * v_loc, v_loc) for s in range(S)]
+        return np.concatenate([self.backend.read(s, addr + 4 * a, 4 * n).view(np.float32)
+                               for s, (a, n) in zip(range(S), ranges)])
 
     def _chunk(self, seq: int, p0: int, n: int, left: int, fit: int, toks=None,
                whole: bool = True, logits: bool = True):
@@ -3073,9 +3141,7 @@ class Engine:
             return None
         if not em:
             run("head", {"row": len(part) - 1})
-        io, S, v_loc = img.io, self.cfg.S, img.v_loc
-        return np.concatenate([self.backend.read(s, io["logits"] + 4 * s * v_loc, 4 * v_loc)
-                               .view(np.float32) for s in range(S)])
+        return self._read_logits(img.io["logits"])
 
     def _send_ahead(self, send, j: int) -> None:
         """MoE layer j's experts to the server's ahead_layer, as global ids in layer_ahead's
@@ -3313,10 +3379,7 @@ class Engine:
                 self.stats.append(st)
                 self.pos += len(got)
                 if self.gen_debug:          # the logits of the run's last token
-                    io, v = self.image.io, self.image.v_loc
-                    self.gen_logits = np.concatenate([
-                        self.backend.read(s, io["logits"] + 4 * s * v, 4 * v).view(np.float32)
-                        for s in range(self.cfg.S)])
+                    self.gen_logits = self._read_logits(self.image.io["logits"])
             out += got
             ctx += got
             n -= len(got)

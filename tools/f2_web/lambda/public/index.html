@@ -1,0 +1,162 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openTPU on F2</title>
+<style>
+:root{--bg:#f7f7f5;--fg:#1d1d1b;--muted:#6b6b66;--card:#fff;--line:#e2e1dc;--accent:#2a5bd7;--ok:#1f7a4d;--err:#b3261e}
+@media (prefers-color-scheme:dark){:root{--bg:#141413;--fg:#ecebe6;--muted:#9b9a94;--card:#1e1e1c;--line:#33322f;--accent:#7ea2ff;--ok:#5cc28f;--err:#ff8a80}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 48px}
+h1{font-size:20px;margin:0 0 4px}
+.sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin-bottom:16px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+label{font-size:13px;color:var(--muted)}
+select,input,textarea,button{font:inherit;color:inherit;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+textarea{width:100%;min-height:84px;resize:vertical}
+button{cursor:pointer;background:var(--accent);color:#fff;border-color:var(--accent)}
+button.ghost{background:transparent;color:var(--fg);border-color:var(--line)}
+button:disabled{opacity:.5;cursor:default}
+#out{white-space:pre-wrap;min-height:120px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(130px,1fr));gap:10px;margin-top:12px}
+.stat{border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.stat b{display:block;font-size:18px;font-variant-numeric:tabular-nums}
+.stat span{font-size:12px;color:var(--muted)}
+#status{font-size:13px;color:var(--muted)}
+#status.err{color:var(--err)} #status.ok{color:var(--ok)}
+</style>
+</head>
+<body>
+<main>
+  <h1>openTPU on an AWS F2 FPGA</h1>
+  <p class="sub">Every token is computed on the FPGA (one openTPU slice, xcvu47p); the host only moves bytes. Switching models reloads the card (10–40 s).</p>
+
+  <div class="card">
+    <div class="row">
+      <label for="pass">Passcode</label>
+      <input id="pass" type="password" autocomplete="current-password" style="flex:1;min-width:160px">
+      <label for="model">Model</label>
+      <select id="model" style="min-width:240px"></select>
+    </div>
+    <p id="status">Enter the passcode to load the model list.</p>
+  </div>
+
+  <div class="card">
+    <textarea id="prompt" placeholder="Ask anything…"></textarea>
+    <div class="row" style="margin-top:10px">
+      <button id="send">Run on FPGA</button>
+      <button id="random" class="ghost">Random query</button>
+      <label for="maxtok">Max tokens</label>
+      <input id="maxtok" type="number" min="1" max="512" value="128" style="width:90px">
+      <label for="temp">Temperature</label>
+      <input id="temp" type="number" min="0" max="2" step="0.1" value="0" style="width:80px">
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="out"></div>
+    <div class="stats">
+      <div class="stat"><b id="s-ttft">–</b><span>time to first token</span></div>
+      <div class="stat"><b id="s-dec">–</b><span>decode tokens/s</span></div>
+      <div class="stat"><b id="s-tok">–</b><span>prompt + output tokens</span></div>
+      <div class="stat"><b id="s-total">–</b><span>total seconds</span></div>
+    </div>
+  </div>
+</main>
+<script>
+const QUERIES = [
+  "Write one sentence about the Moon.",
+  "Explain what an FPGA is to a ten-year-old.",
+  "Give me three tips for writing clean Python code.",
+  "What is the capital of Australia, and why isn't it Sydney?",
+  "Write a haiku about silicon.",
+  "Summarize the plot of Romeo and Juliet in two sentences.",
+  "What is 17 multiplied by 23? Show your steps.",
+  "Name three uses of matrix multiplication in machine learning.",
+  "Translate 'good morning, how are you?' into French and Spanish.",
+  "Why is the sky blue? Answer briefly.",
+  "Suggest a name for a coffee shop run by robots.",
+  "What is the difference between a CPU and a GPU?",
+];
+const $ = (id) => document.getElementById(id);
+const status = (t, cls = "") => { $("status").textContent = t; $("status").className = cls; };
+try { $("pass").value = sessionStorage.getItem("otpu-pass") || ""; } catch (_) {}
+
+async function api(path, opts = {}) {
+  const r = await fetch(path, { ...opts, headers: { "content-type": "application/json",
+    "x-passcode": $("pass").value, ...(opts.headers || {}) } });
+  if (!r.ok && !(r.headers.get("content-type") || "").includes("event-stream")) {
+    let e; try { e = (await r.json()).error; } catch (_) { e = r.statusText; }
+    throw new Error(`${r.status}: ${e}`);
+  }
+  return r;
+}
+
+async function loadModels() {
+  try {
+    const d = await (await api("/api/models")).json();
+    try { sessionStorage.setItem("otpu-pass", $("pass").value); } catch (_) {}
+    const sel = $("model"), cur = sel.value;
+    sel.innerHTML = "";
+    for (const m of d.models) {
+      const o = document.createElement("option");
+      o.value = m.id; o.textContent = m.label + (m.id === d.loaded ? "  (loaded)" : "");
+      sel.appendChild(o);
+    }
+    sel.value = cur || d.loaded || d.models[0].id;
+    status(d.loaded ? `Loaded on the FPGA: ${d.loaded}` : "No model loaded yet; the first query loads it.",
+           d.state === "error" ? "err" : "ok");
+  } catch (e) { status(e.message, "err"); }
+}
+$("pass").addEventListener("change", loadModels);
+if ($("pass").value) loadModels();
+$("random").onclick = () => { $("prompt").value = QUERIES[Math.floor(Math.random() * QUERIES.length)]; };
+
+$("send").onclick = async () => {
+  const prompt = $("prompt").value.trim();
+  if (!prompt) { $("random").onclick(); return $("send").onclick(); }
+  $("send").disabled = true; $("out").textContent = "";
+  for (const k of ["s-ttft", "s-dec", "s-tok", "s-total"]) $(k).textContent = "–";
+  const model = $("model").value;
+  status(`Running on the FPGA with ${model}… (a model switch reloads the card first)`);
+  const t0 = performance.now(); let tFirst = 0, tLast = 0, nOut = 0, usage = null;
+  try {
+    const r = await api("/api/chat", { method: "POST", body: JSON.stringify({
+      model, messages: [{ role: "user", content: prompt }],
+      max_tokens: Number($("maxtok").value) || 128, temperature: Number($("temp").value) || 0 }) });
+    const rd = r.body.getReader(), dec = new TextDecoder(); let buf = "";
+    for (;;) {
+      const { value, done } = await rd.read(); if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf("\n")) >= 0) {
+        const line = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+        if (!line.startsWith("data:")) continue;
+        const data = line.slice(5).trim(); if (data === "[DONE]") continue;
+        let ev; try { ev = JSON.parse(data); } catch (_) { continue; }
+        if (ev.usage) usage = ev.usage;
+        const piece = ev.choices && ev.choices[0] && ev.choices[0].delta && ev.choices[0].delta.content;
+        if (piece) {
+          if (!tFirst) { tFirst = performance.now(); $("s-ttft").textContent = ((tFirst - t0) / 1000).toFixed(2) + " s"; }
+          tLast = performance.now(); nOut++; $("out").textContent += piece;
+        }
+      }
+    }
+    const t1 = performance.now(), toks = usage ? usage.completion_tokens : nOut;
+    // first to last token (the stream's end waits on the usage event); a burst (the tokens of a
+    // run read at once, as the ISA simulator gives them) has no decode time to divide by
+    if (tFirst && toks > 1 && tLast - tFirst >= 50)
+      $("s-dec").textContent = ((toks - 1) / ((tLast - tFirst) / 1000)).toFixed(1);
+    if (usage) $("s-tok").textContent = `${usage.prompt_tokens} + ${usage.completion_tokens}`;
+    $("s-total").textContent = ((t1 - t0) / 1000).toFixed(2);
+    await loadModels();                    // (its status first: the run's replaces it)
+    status(`Done on the FPGA (${model}).`, "ok");
+  } catch (e) { status(e.message, "err"); }
+  $("send").disabled = false;
+};
+</script>
+</body>
+</html>

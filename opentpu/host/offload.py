@@ -1689,14 +1689,22 @@ class SimDram:
 
 class BackendDram:
     """A backend's DRAM (write(s, addr, array) / read(s, addr, n): IsaBackend, RtlBackend,
-    BoardBackend) as ExpertServer's memory; one slice (the board's)."""
+    BoardBackend) as ExpertServer's memory; one slice (the board's), or with `slices` every
+    one of them written alike and the first read (a dense model's embedding rows on S slices,
+    qwen3.Image.row_server: the slices post one request in lockstep and each waits on its
+    own served word)."""
 
-    def __init__(self, backend, s: int = 0):
+    def __init__(self, backend, s: int = 0, slices=None):
         self.backend, self.s = backend, s
+        self.slices = list(slices) if slices is not None else [s]
+        if self.slices and self.s != self.slices[0]:
+            self.s = self.slices[0]
 
     def write(self, addr: int, data) -> None:
         b = data if isinstance(data, np.ndarray) else np.frombuffer(bytes(data), np.uint8)
-        self.backend.write(self.s, addr, np.ascontiguousarray(b).view(np.uint8).reshape(-1))
+        b = np.ascontiguousarray(b).view(np.uint8).reshape(-1)
+        for s in self.slices:
+            self.backend.write(s, addr, b)
 
     def read(self, addr: int, n: int) -> bytes:
         return np.asarray(self.backend.read(self.s, addr, n)).view(np.uint8).tobytes()
