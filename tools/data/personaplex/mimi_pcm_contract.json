@@ -1,0 +1,486 @@
+{
+  "installed_source_sha256": {
+    "models/compression.py": "7af4b2791d16fd0add4ef4f51d4322fc9fec159cc96604e569bbb53fe756b4ed",
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/seanet.py": "1611e47987b635bb90b19944fc3deca91c4100270f2117bf9fd9cc70bf0da9cc",
+    "modules/streaming.py": "9fbdd77237d53ef6d95d1a08bce3b2438d661223ad8b795edfccc1b87eb4b81b",
+    "server.py": "cdb9f68a326328308fa4acd43e7e75d79030d2214c43f828d186a0e03a13da99"
+  },
+  "native_constructor": {
+    "class": "moshi.modules.seanet.SEANetDecoder",
+    "defaults_used": {
+      "activation_params": {
+        "alpha": 1.0
+      },
+      "final_activation": null,
+      "trim_right_ratio": 1.0
+    },
+    "kwargs": {
+      "activation": "ELU",
+      "causal": true,
+      "channels": 1,
+      "compress": 2,
+      "dilation_base": 2,
+      "dimension": 512,
+      "disable_norm_outer_blocks": 0,
+      "kernel_size": 7,
+      "last_kernel_size": 3,
+      "n_filters": 64,
+      "n_residual_layers": 1,
+      "norm": "none",
+      "pad_mode": "constant",
+      "ratios": [
+        8,
+        6,
+        5,
+        4
+      ],
+      "residual_kernel_size": 3,
+      "true_skip": true
+    }
+  },
+  "native_decoder_order": [
+    {
+      "in_channels": 512,
+      "index": 0,
+      "kernel": 7,
+      "kind": "causal_conv1d",
+      "out_channels": 1024,
+      "stride": 1
+    },
+    {
+      "index": 1,
+      "kind": "ELU(alpha=1)"
+    },
+    {
+      "in_channels": 1024,
+      "index": 2,
+      "kernel": 16,
+      "kind": "causal_convtranspose1d",
+      "out_channels": 512,
+      "stride": 8
+    },
+    {
+      "branch": "ELU -> causal Conv1d k3 -> ELU -> Conv1d k1 -> StreamingAdd",
+      "channels": 512,
+      "hidden_channels": 256,
+      "index": 3,
+      "kind": "true_skip_residual"
+    },
+    {
+      "index": 4,
+      "kind": "ELU(alpha=1)"
+    },
+    {
+      "in_channels": 512,
+      "index": 5,
+      "kernel": 12,
+      "kind": "causal_convtranspose1d",
+      "out_channels": 256,
+      "stride": 6
+    },
+    {
+      "branch": "ELU -> causal Conv1d k3 -> ELU -> Conv1d k1 -> StreamingAdd",
+      "channels": 256,
+      "hidden_channels": 128,
+      "index": 6,
+      "kind": "true_skip_residual"
+    },
+    {
+      "index": 7,
+      "kind": "ELU(alpha=1)"
+    },
+    {
+      "in_channels": 256,
+      "index": 8,
+      "kernel": 10,
+      "kind": "causal_convtranspose1d",
+      "out_channels": 128,
+      "stride": 5
+    },
+    {
+      "branch": "ELU -> causal Conv1d k3 -> ELU -> Conv1d k1 -> StreamingAdd",
+      "channels": 128,
+      "hidden_channels": 64,
+      "index": 9,
+      "kind": "true_skip_residual"
+    },
+    {
+      "index": 10,
+      "kind": "ELU(alpha=1)"
+    },
+    {
+      "in_channels": 128,
+      "index": 11,
+      "kernel": 8,
+      "kind": "causal_convtranspose1d",
+      "out_channels": 64,
+      "stride": 4
+    },
+    {
+      "branch": "ELU -> causal Conv1d k3 -> ELU -> Conv1d k1 -> StreamingAdd",
+      "channels": 64,
+      "hidden_channels": 32,
+      "index": 12,
+      "kind": "true_skip_residual"
+    },
+    {
+      "index": 13,
+      "kind": "ELU(alpha=1)"
+    },
+    {
+      "in_channels": 64,
+      "index": 14,
+      "kernel": 3,
+      "kind": "causal_conv1d",
+      "out_channels": 1,
+      "stride": 1
+    }
+  ],
+  "source_pcm_output": {
+    "codec_frame_rate_hz": 12.5,
+    "expected_samples_per_code_frame": 1920,
+    "final_activation": null,
+    "input": "decoder transformer output [B,512,2] per code frame",
+    "mimi_clip_or_scale": "No explicit final tanh, clipping, or scaling in SEANetDecoder.forward, MimiModel.decode, or server handoff. server.py:231-234 transfers main_pcm[0,0].numpy() directly to sphn.OpusStreamWriter.append_pcm; downstream sphn/Opus encoding behavior is outside this source audit.",
+    "output": "MimiModel.decode returns raw floating [B,1,T]; source comment says output may contain encoder/decoder padding",
+    "sample_rate_hz": 24000
+  },
+  "source_streaming_state": {
+    "conv1d": "conv.py:239-275 uses effective_kernel=(kernel-1)*dilation+1, total causal left pad=effective_kernel-stride once per fresh stream, constant-zero mode. streaming.py:465-511 caches previous raw input, concatenates on next call, computes only full windows, and retains input from num_frames*stride onward. For all decoder Conv1d stride1, k7 history6, k3 history2, k1 history0.",
+    "convtranspose1d": "streaming.py:514-570 initial partial=None, reset->None. Each call computes full raw ConvTranspose1d, adds saved partial to the first K-S samples with `partial - bias` when bias is present, saves the new last K-S output samples as partial, and emits the prefix. Decoder four stages have K-S=8,6,5,4 and bias=True. conv.py:334-344 outer causal trim_right_ratio=1.0 trims all K-S on the right only when not streaming; no outer trim in streaming mode.",
+    "reset": "server.py:115-117 starts streaming_forever(1); server.py:263-267 resets both Mimi stream states at a new chat. A standalone native reference should use one decoder.streaming(1) context for consecutive frames and fresh/reset state for replay.",
+    "residual_add": "streaming.py:434-461 StreamingAdd buffers unmatched shortcut/branch tails, adds only min available length, and resets both previous_x/previous_y to None."
+  },
+  "source_weight_norm": "loaders.py:61-63 states training used weight_norm, checkpoint weights preprocessed for inference; norm=none. The header has only plain F32 weight+bias for all 14 convolution modules, no weight_g/weight_v or parametrization tensors.",
+  "cached_codec_header": {
+    "decoder_count": 28,
+    "decoder_tensors": {
+      "decoder.model.0.conv.conv.bias": {
+        "data_offsets": [
+          0,
+          4096
+        ],
+        "dtype": "F32",
+        "shape": [
+          1024
+        ]
+      },
+      "decoder.model.0.conv.conv.weight": {
+        "data_offsets": [
+          4096,
+          14684160
+        ],
+        "dtype": "F32",
+        "shape": [
+          1024,
+          512,
+          7
+        ]
+      },
+      "decoder.model.11.convtr.convtr.bias": {
+        "data_offsets": [
+          14684160,
+          14684416
+        ],
+        "dtype": "F32",
+        "shape": [
+          64
+        ]
+      },
+      "decoder.model.11.convtr.convtr.weight": {
+        "data_offsets": [
+          14684416,
+          14946560
+        ],
+        "dtype": "F32",
+        "shape": [
+          128,
+          64,
+          8
+        ]
+      },
+      "decoder.model.12.block.1.conv.conv.bias": {
+        "data_offsets": [
+          14946560,
+          14946688
+        ],
+        "dtype": "F32",
+        "shape": [
+          32
+        ]
+      },
+      "decoder.model.12.block.1.conv.conv.weight": {
+        "data_offsets": [
+          14946688,
+          14971264
+        ],
+        "dtype": "F32",
+        "shape": [
+          32,
+          64,
+          3
+        ]
+      },
+      "decoder.model.12.block.3.conv.conv.bias": {
+        "data_offsets": [
+          14971264,
+          14971520
+        ],
+        "dtype": "F32",
+        "shape": [
+          64
+        ]
+      },
+      "decoder.model.12.block.3.conv.conv.weight": {
+        "data_offsets": [
+          14971520,
+          14979712
+        ],
+        "dtype": "F32",
+        "shape": [
+          64,
+          32,
+          1
+        ]
+      },
+      "decoder.model.14.conv.conv.bias": {
+        "data_offsets": [
+          14979712,
+          14979716
+        ],
+        "dtype": "F32",
+        "shape": [
+          1
+        ]
+      },
+      "decoder.model.14.conv.conv.weight": {
+        "data_offsets": [
+          14979716,
+          14980484
+        ],
+        "dtype": "F32",
+        "shape": [
+          1,
+          64,
+          3
+        ]
+      },
+      "decoder.model.2.convtr.convtr.bias": {
+        "data_offsets": [
+          14980484,
+          14982532
+        ],
+        "dtype": "F32",
+        "shape": [
+          512
+        ]
+      },
+      "decoder.model.2.convtr.convtr.weight": {
+        "data_offsets": [
+          14982532,
+          48536964
+        ],
+        "dtype": "F32",
+        "shape": [
+          1024,
+          512,
+          16
+        ]
+      },
+      "decoder.model.3.block.1.conv.conv.bias": {
+        "data_offsets": [
+          48536964,
+          48537988
+        ],
+        "dtype": "F32",
+        "shape": [
+          256
+        ]
+      },
+      "decoder.model.3.block.1.conv.conv.weight": {
+        "data_offsets": [
+          48537988,
+          50110852
+        ],
+        "dtype": "F32",
+        "shape": [
+          256,
+          512,
+          3
+        ]
+      },
+      "decoder.model.3.block.3.conv.conv.bias": {
+        "data_offsets": [
+          50110852,
+          50112900
+        ],
+        "dtype": "F32",
+        "shape": [
+          512
+        ]
+      },
+      "decoder.model.3.block.3.conv.conv.weight": {
+        "data_offsets": [
+          50112900,
+          50637188
+        ],
+        "dtype": "F32",
+        "shape": [
+          512,
+          256,
+          1
+        ]
+      },
+      "decoder.model.5.convtr.convtr.bias": {
+        "data_offsets": [
+          50637188,
+          50638212
+        ],
+        "dtype": "F32",
+        "shape": [
+          256
+        ]
+      },
+      "decoder.model.5.convtr.convtr.weight": {
+        "data_offsets": [
+          50638212,
+          56929668
+        ],
+        "dtype": "F32",
+        "shape": [
+          512,
+          256,
+          12
+        ]
+      },
+      "decoder.model.6.block.1.conv.conv.bias": {
+        "data_offsets": [
+          56929668,
+          56930180
+        ],
+        "dtype": "F32",
+        "shape": [
+          128
+        ]
+      },
+      "decoder.model.6.block.1.conv.conv.weight": {
+        "data_offsets": [
+          56930180,
+          57323396
+        ],
+        "dtype": "F32",
+        "shape": [
+          128,
+          256,
+          3
+        ]
+      },
+      "decoder.model.6.block.3.conv.conv.bias": {
+        "data_offsets": [
+          57323396,
+          57324420
+        ],
+        "dtype": "F32",
+        "shape": [
+          256
+        ]
+      },
+      "decoder.model.6.block.3.conv.conv.weight": {
+        "data_offsets": [
+          57324420,
+          57455492
+        ],
+        "dtype": "F32",
+        "shape": [
+          256,
+          128,
+          1
+        ]
+      },
+      "decoder.model.8.convtr.convtr.bias": {
+        "data_offsets": [
+          57455492,
+          57456004
+        ],
+        "dtype": "F32",
+        "shape": [
+          128
+        ]
+      },
+      "decoder.model.8.convtr.convtr.weight": {
+        "data_offsets": [
+          57456004,
+          58766724
+        ],
+        "dtype": "F32",
+        "shape": [
+          256,
+          128,
+          10
+        ]
+      },
+      "decoder.model.9.block.1.conv.conv.bias": {
+        "data_offsets": [
+          58766724,
+          58766980
+        ],
+        "dtype": "F32",
+        "shape": [
+          64
+        ]
+      },
+      "decoder.model.9.block.1.conv.conv.weight": {
+        "data_offsets": [
+          58766980,
+          58865284
+        ],
+        "dtype": "F32",
+        "shape": [
+          64,
+          128,
+          3
+        ]
+      },
+      "decoder.model.9.block.3.conv.conv.bias": {
+        "data_offsets": [
+          58865284,
+          58865796
+        ],
+        "dtype": "F32",
+        "shape": [
+          128
+        ]
+      },
+      "decoder.model.9.block.3.conv.conv.weight": {
+        "data_offsets": [
+          58865796,
+          58898564
+        ],
+        "dtype": "F32",
+        "shape": [
+          128,
+          64,
+          1
+        ]
+      }
+    },
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318
+  },
+  "device_spec": {
+    "hidden": 512,
+    "n_filters": 64,
+    "ratios": [
+      8,
+      6,
+      5,
+      4
+    ],
+    "input_rows": 2
+  },
+  "scope": "SEANet raw FP32 PCM software/ISA qualification; no physical or speech-quality acceptance"
+}

@@ -1,0 +1,89 @@
+{
+  "format_version": 1,
+  "scope": "Cold duplex CPU/ISA candidate, not complete-checkpoint numerical or physical acceptance",
+  "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
+  "target": "f2-hbm:p4rl8a64c150",
+  "arch_hash": "dd6b92a6",
+  "image_context": "agfi-0001de1dd3df8e21e",
+  "physical_qualified": false,
+  "full_speech_enabled": false,
+  "raw_pcm": {
+    "sample_rate": 24000,
+    "samples_per_frame": 1920,
+    "representation": "raw FP32; no source clipping/scaling"
+  },
+  "max_raw_calls": 128,
+  "max_temporal_frames": 127,
+  "max_emitted_frames": 126,
+  "source_delays": [
+    0,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    0,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1,
+    1
+  ],
+  "native_sources": {
+    "models/lm.py": "73d6da43ca59bb5162cfb97d8d05e71acaf214b89dd6705effa0c65da04c015b",
+    "server.py": "cdb9f68a326328308fa4acd43e7e75d79030d2214c43f828d186a0e03a13da99"
+  },
+  "program_slots": 74,
+  "temporal_pages": [
+    [
+      0,
+      4,
+      "int8"
+    ],
+    [
+      4,
+      12,
+      "int4"
+    ],
+    [
+      12,
+      20,
+      "int4"
+    ],
+    [
+      20,
+      28,
+      "int4"
+    ],
+    [
+      28,
+      31,
+      "int4"
+    ],
+    [
+      31,
+      32,
+      "int8"
+    ]
+  ],
+  "temporal_page_bytes": [
+    831782912,
+    884473856,
+    884473856,
+    884473856,
+    331677696,
+    207945728
+  ],
+  "temporal_kv_bytes": 34603008,
+  "remaining_gates": [
+    "complete actual-checkpoint PCM/LM numerical sequence and reset",
+    "server voice/text prompt and saved-cache parity",
+    "retained native Mimi ring-position defect and context limits",
+    "coordinated same-image physical correctness and measured halted paging"
+  ]
+}

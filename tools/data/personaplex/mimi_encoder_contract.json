@@ -1,0 +1,445 @@
+{
+  "scope": "Original cached-checkpoint SEANetEncoder only; raw FP32 waveform to two encoder tokens per 1920-sample frame, offline CPU reference; no transformer, downsample, quantizer, hardware or serving",
+  "installed_source_sha256": {
+    "models/compression.py": "7af4b2791d16fd0add4ef4f51d4322fc9fec159cc96604e569bbb53fe756b4ed",
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/seanet.py": "1611e47987b635bb90b19944fc3deca91c4100270f2117bf9fd9cc70bf0da9cc",
+    "modules/streaming.py": "9fbdd77237d53ef6d95d1a08bce3b2438d661223ad8b795edfccc1b87eb4b81b",
+    "server.py": "cdb9f68a326328308fa4acd43e7e75d79030d2214c43f828d186a0e03a13da99"
+  },
+  "constructor_kwargs": {
+    "channels": 1,
+    "dimension": 512,
+    "causal": true,
+    "n_filters": 64,
+    "n_residual_layers": 1,
+    "activation": "ELU",
+    "compress": 2,
+    "dilation_base": 2,
+    "disable_norm_outer_blocks": 0,
+    "kernel_size": 7,
+    "residual_kernel_size": 3,
+    "last_kernel_size": 3,
+    "norm": "none",
+    "pad_mode": "constant",
+    "ratios": [
+      8,
+      6,
+      5,
+      4
+    ],
+    "true_skip": true
+  },
+  "native_encoder_order": "Fifteen model stages; initial convolution, four residual/ELU/causal-stride blocks in reversed ratio order 4,5,6,8, then ELU and final convolution",
+  "source_streaming_state": "Outer StreamingConv1d adds constant left padding of effective kernel minus stride once per stream. RawStreamingConv1d retains unfinished input[..., num_frames*stride:] and resets previous to None. Fixed 1920-sample frames yield exact 1920,480,96,16,2 row boundaries.",
+  "source_pcm_input": "Raw finite mono FP32 [frames,1920]; no clipping, scaling, normalization, resampling or int16 conversion",
+  "cached_codec_header": {
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318,
+    "encoder_count": 28,
+    "encoder_bytes": 50513024,
+    "encoder_tensors": {
+      "encoder.model.0.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          64
+        ],
+        "data_offsets": [
+          163854468,
+          163854724
+        ]
+      },
+      "encoder.model.0.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          64,
+          1,
+          7
+        ],
+        "data_offsets": [
+          163854724,
+          163856516
+        ]
+      },
+      "encoder.model.1.block.1.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          32
+        ],
+        "data_offsets": [
+          163856516,
+          163856644
+        ]
+      },
+      "encoder.model.1.block.1.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          32,
+          64,
+          3
+        ],
+        "data_offsets": [
+          163856644,
+          163881220
+        ]
+      },
+      "encoder.model.1.block.3.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          64
+        ],
+        "data_offsets": [
+          163881220,
+          163881476
+        ]
+      },
+      "encoder.model.1.block.3.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          64,
+          32,
+          1
+        ],
+        "data_offsets": [
+          163881476,
+          163889668
+        ]
+      },
+      "encoder.model.10.block.1.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          256
+        ],
+        "data_offsets": [
+          163889668,
+          163890692
+        ]
+      },
+      "encoder.model.10.block.1.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          256,
+          512,
+          3
+        ],
+        "data_offsets": [
+          163890692,
+          165463556
+        ]
+      },
+      "encoder.model.10.block.3.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          165463556,
+          165465604
+        ]
+      },
+      "encoder.model.10.block.3.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          256,
+          1
+        ],
+        "data_offsets": [
+          165465604,
+          165989892
+        ]
+      },
+      "encoder.model.12.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          1024
+        ],
+        "data_offsets": [
+          165989892,
+          165993988
+        ]
+      },
+      "encoder.model.12.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          1024,
+          512,
+          16
+        ],
+        "data_offsets": [
+          165993988,
+          199548420
+        ]
+      },
+      "encoder.model.14.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          199548420,
+          199550468
+        ]
+      },
+      "encoder.model.14.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          1024,
+          3
+        ],
+        "data_offsets": [
+          199550468,
+          205841924
+        ]
+      },
+      "encoder.model.3.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          128
+        ],
+        "data_offsets": [
+          205841924,
+          205842436
+        ]
+      },
+      "encoder.model.3.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          128,
+          64,
+          8
+        ],
+        "data_offsets": [
+          205842436,
+          206104580
+        ]
+      },
+      "encoder.model.4.block.1.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          64
+        ],
+        "data_offsets": [
+          206104580,
+          206104836
+        ]
+      },
+      "encoder.model.4.block.1.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          64,
+          128,
+          3
+        ],
+        "data_offsets": [
+          206104836,
+          206203140
+        ]
+      },
+      "encoder.model.4.block.3.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          128
+        ],
+        "data_offsets": [
+          206203140,
+          206203652
+        ]
+      },
+      "encoder.model.4.block.3.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          128,
+          64,
+          1
+        ],
+        "data_offsets": [
+          206203652,
+          206236420
+        ]
+      },
+      "encoder.model.6.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          256
+        ],
+        "data_offsets": [
+          206236420,
+          206237444
+        ]
+      },
+      "encoder.model.6.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          256,
+          128,
+          10
+        ],
+        "data_offsets": [
+          206237444,
+          207548164
+        ]
+      },
+      "encoder.model.7.block.1.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          128
+        ],
+        "data_offsets": [
+          207548164,
+          207548676
+        ]
+      },
+      "encoder.model.7.block.1.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          128,
+          256,
+          3
+        ],
+        "data_offsets": [
+          207548676,
+          207941892
+        ]
+      },
+      "encoder.model.7.block.3.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          256
+        ],
+        "data_offsets": [
+          207941892,
+          207942916
+        ]
+      },
+      "encoder.model.7.block.3.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          256,
+          128,
+          1
+        ],
+        "data_offsets": [
+          207942916,
+          208073988
+        ]
+      },
+      "encoder.model.9.conv.conv.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          208073988,
+          208076036
+        ]
+      },
+      "encoder.model.9.conv.conv.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          256,
+          12
+        ],
+        "data_offsets": [
+          208076036,
+          214367492
+        ]
+      }
+    }
+  },
+  "device_spec": {
+    "hidden": 512,
+    "n_filters": 64,
+    "ratios": [
+      8,
+      6,
+      5,
+      4
+    ],
+    "output_rows": 2
+  },
+  "stage_classes": [
+    "StreamingConv1d",
+    "SEANetResnetBlock",
+    "ELU",
+    "StreamingConv1d",
+    "SEANetResnetBlock",
+    "ELU",
+    "StreamingConv1d",
+    "SEANetResnetBlock",
+    "ELU",
+    "StreamingConv1d",
+    "SEANetResnetBlock",
+    "ELU",
+    "StreamingConv1d",
+    "ELU",
+    "StreamingConv1d"
+  ],
+  "stage_shapes": [
+    [
+      1920,
+      64
+    ],
+    [
+      1920,
+      64
+    ],
+    [
+      1920,
+      64
+    ],
+    [
+      480,
+      128
+    ],
+    [
+      480,
+      128
+    ],
+    [
+      480,
+      128
+    ],
+    [
+      96,
+      256
+    ],
+    [
+      96,
+      256
+    ],
+    [
+      96,
+      256
+    ],
+    [
+      16,
+      512
+    ],
+    [
+      16,
+      512
+    ],
+    [
+      16,
+      512
+    ],
+    [
+      2,
+      1024
+    ],
+    [
+      2,
+      1024
+    ],
+    [
+      2,
+      512
+    ]
+  ]
+}

@@ -1,0 +1,51 @@
+{
+  "scope": "Original cached-checkpoint Mimi input RVQ only: two independent semantic/acoustic input projections and eight greedy Euclidean codebooks; offline CPU reference, no hardware or serving",
+  "base_contract_sha256": "5342c087a41a95fd899bf62ac92c2c2ad31e8fa09d60788eda74214df5dd4aa1",
+  "installed_source_sha256": {
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "models/compression.py": "7af4b2791d16fd0add4ef4f51d4322fc9fec159cc96604e569bbb53fe756b4ed",
+    "quantization/vq.py": "2c07f475a1cfc939fef0c93805f2a134ef3bf268d7ed5a0f9a461255d1464158",
+    "quantization/core_vq.py": "14a32264b0cd414cc045cc614d1f593a9fc39fca44276978bb7450815b8de10d",
+    "modules/resample.py": "136931781a9de1e43afd19c4ffc9817e462f20b695853d415695d34f912405d9",
+    "modules/transformer.py": "0eccf9b539ba738910d201a66809c68f5dad14f6b020fee862a592fd00e1de55",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/seanet.py": "1611e47987b635bb90b19944fc3deca91c4100270f2117bf9fd9cc70bf0da9cc",
+    "server.py": "cdb9f68a326328308fa4acd43e7e75d79030d2214c43f828d186a0e03a13da99"
+  },
+  "codec_header": {
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318
+  },
+  "native_constructor": {
+    "dimension": 256,
+    "n_q": 32,
+    "bins": 2048,
+    "input_dimension": 512,
+    "output_dimension": 512
+  },
+  "active_codebooks": 8,
+  "semantic_codebooks": 1,
+  "normalization_epsilon": 1e-05,
+  "input_projection_keys": [
+    "quantizer.rvq_first.input_proj.weight",
+    "quantizer.rvq_rest.input_proj.weight"
+  ],
+  "input_projection_tensors": {
+    "quantizer.rvq_first.input_proj.weight": {
+      "dtype": "F32",
+      "shape": [256, 512, 1],
+      "data_offsets": [315129092, 315653380]
+    },
+    "quantizer.rvq_rest.input_proj.weight": {
+      "dtype": "F32",
+      "shape": [256, 512, 1],
+      "data_offsets": [318283016, 318807304]
+    }
+  },
+  "branch_contract": "Both input projections consume the same source [1,512,1]. The semantic branch uses one codebook, the acoustic branch seven. Each branch greedily subtracts its selected centroid from its own projected residual.",
+  "native_selection": "EuclideanCodebook._quantize computes torch.cdist(x[None], embedding[None], p=2)[0] then argmin(dim=-1), first index on a tie. Distances and first-versus-second winner margin are diagnostics in raw Euclidean units.",
+  "normalization": "The existing native_quantizer helper normalizes embedding_sum by cluster_usage clamped at 1e-5 and checks all eight tables bit-exact against the original native embedding property.",
+  "device_candidate_scope": "A future resident device candidate may minimize FP32 sum((residual-centroid)^2). Exact IDs must be independently verified for both raw accumulated and identical-input paths; Euclidean distances themselves are not claimed bit-exact to squared-distance arithmetic."
+}

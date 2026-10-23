@@ -1,0 +1,37 @@
+{
+  "instance": "i-0c78de2253f66519d",
+  "observed_date": "2026-10-21",
+  "required_owner": "Nanbeige task 01a159d9-b0a4-777c-9b65-06ee9956608e",
+  "release_confirmed": false,
+  "thread_read": "MCP -32000",
+  "thread_list": "MCP -32000",
+  "remote_results_read": {
+    "ssm_command_id": "1313205a-c5a3-4f97-aa95-a7f1f82c0ea7",
+    "examined_files": [
+      "/home/ubuntu/rachit/nanbeige-burst200/model-revisions.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/download.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-draft-device-heads.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-draft-device-heads.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-initial.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-runtime.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-cpu.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-device-heads-long.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-fpga-long.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-draft.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-fpga.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-initial.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-device-heads-long.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-fpga-long.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-device-heads-short.log",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-cpu.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-runtime.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-device-heads-short.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/compare-runtime-fpga.json",
+      "/home/ubuntu/rachit/nanbeige-burst200/runtime/results/hwcheck-draft.json"
+    ],
+    "release_terms_found": []
+  },
+  "interpretation": "Completed benchmarks or absence of active processes do not establish explicit ownership release.",
+  "personaplex_device_access": false
+}

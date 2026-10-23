@@ -1,0 +1,889 @@
+{
+  "scope": "Original cached-checkpoint encoder_transformer only; offline CPU reference on two-token FP32 encoder outputs; no SEANet, downsample, quantizer, hardware or serving",
+  "installed_source_sha256": {
+    "models/compression.py": "7af4b2791d16fd0add4ef4f51d4322fc9fec159cc96604e569bbb53fe756b4ed",
+    "models/loaders.py": "24d484efc2198c118f6d2b22877c765cd82e89887c52774c42aac5410b299148",
+    "modules/conv.py": "d4f9512cdc1343e959b0222dc2f18632f986ce8862d1cae5293542e0e282c51e",
+    "modules/resample.py": "136931781a9de1e43afd19c4ffc9817e462f20b695853d415695d34f912405d9",
+    "modules/rope.py": "10930a26f7241f53f1d6eb03ed04e8d2b94b49f23d225e206fdbddf8cf95b04f",
+    "modules/streaming.py": "9fbdd77237d53ef6d95d1a08bce3b2438d661223ad8b795edfccc1b87eb4b81b",
+    "modules/transformer.py": "0eccf9b539ba738910d201a66809c68f5dad14f6b020fee862a592fd00e1de55"
+  },
+  "cached_codec_header": {
+    "file_bytes": 384644900,
+    "header_bytes": 39320,
+    "header_sha256": "ec30eb84e7a32c11b2913db3d89595da90a422320dea3b66a3b39e16f821cc93",
+    "tensor_count": 318,
+    "selected_count": 80,
+    "selected_bytes": 100761600,
+    "selected_tensors": {
+      "encoder_transformer.transformer.layers.0.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          214367492,
+          214369540
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          214369540,
+          214371588
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          214371588,
+          218565892
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          218565892,
+          222760196
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          222760196,
+          222762244
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          222762244,
+          222764292
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          222764292,
+          222766340
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          222766340,
+          222768388
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          222768388,
+          225914116
+        ]
+      },
+      "encoder_transformer.transformer.layers.0.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          225914116,
+          226962692
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          226962692,
+          226964740
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          226964740,
+          226966788
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          226966788,
+          231161092
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          231161092,
+          235355396
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          235355396,
+          235357444
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          235357444,
+          235359492
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          235359492,
+          235361540
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          235361540,
+          235363588
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          235363588,
+          238509316
+        ]
+      },
+      "encoder_transformer.transformer.layers.1.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          238509316,
+          239557892
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          239557892,
+          239559940
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          239559940,
+          239561988
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          239561988,
+          243756292
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          243756292,
+          247950596
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          247950596,
+          247952644
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          247952644,
+          247954692
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          247954692,
+          247956740
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          247956740,
+          247958788
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          247958788,
+          251104516
+        ]
+      },
+      "encoder_transformer.transformer.layers.2.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          251104516,
+          252153092
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          252153092,
+          252155140
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          252155140,
+          252157188
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          252157188,
+          256351492
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          256351492,
+          260545796
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          260545796,
+          260547844
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          260547844,
+          260549892
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          260549892,
+          260551940
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          260551940,
+          260553988
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          260553988,
+          263699716
+        ]
+      },
+      "encoder_transformer.transformer.layers.3.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          263699716,
+          264748292
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          264748292,
+          264750340
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          264750340,
+          264752388
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          264752388,
+          268946692
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          268946692,
+          273140996
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          273140996,
+          273143044
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          273143044,
+          273145092
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          273145092,
+          273147140
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          273147140,
+          273149188
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          273149188,
+          276294916
+        ]
+      },
+      "encoder_transformer.transformer.layers.4.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          276294916,
+          277343492
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          277343492,
+          277345540
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          277345540,
+          277347588
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          277347588,
+          281541892
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          281541892,
+          285736196
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          285736196,
+          285738244
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          285738244,
+          285740292
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          285740292,
+          285742340
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          285742340,
+          285744388
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          285744388,
+          288890116
+        ]
+      },
+      "encoder_transformer.transformer.layers.5.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          288890116,
+          289938692
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          289938692,
+          289940740
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          289940740,
+          289942788
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          289942788,
+          294137092
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          294137092,
+          298331396
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          298331396,
+          298333444
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          298333444,
+          298335492
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          298335492,
+          298337540
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          298337540,
+          298339588
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          298339588,
+          301485316
+        ]
+      },
+      "encoder_transformer.transformer.layers.6.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          301485316,
+          302533892
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.layer_scale_1.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          302533892,
+          302535940
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.layer_scale_2.scale": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          302535940,
+          302537988
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.linear1.weight": {
+        "dtype": "F32",
+        "shape": [
+          2048,
+          512
+        ],
+        "data_offsets": [
+          302537988,
+          306732292
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.linear2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          2048
+        ],
+        "data_offsets": [
+          306732292,
+          310926596
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.norm1.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          310926596,
+          310928644
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.norm1.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          310928644,
+          310930692
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.norm2.bias": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          310930692,
+          310932740
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.norm2.weight": {
+        "dtype": "F32",
+        "shape": [
+          512
+        ],
+        "data_offsets": [
+          310932740,
+          310934788
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.self_attn.in_proj_weight": {
+        "dtype": "F32",
+        "shape": [
+          1536,
+          512
+        ],
+        "data_offsets": [
+          310934788,
+          314080516
+        ]
+      },
+      "encoder_transformer.transformer.layers.7.self_attn.out_proj.weight": {
+        "dtype": "F32",
+        "shape": [
+          512,
+          512
+        ],
+        "data_offsets": [
+          314080516,
+          315129092
+        ]
+      }
+    }
+  },
+  "device_spec": {
+    "hidden": 512,
+    "n_heads": 8,
+    "ffn": 2048,
+    "layers": 8,
+    "context": 250,
+    "max_frames": 128,
+    "eps": 1e-05,
+    "rope_base": 10000.0
+  },
+  "native_constructor": {
+    "input_dimension": 512,
+    "output_dimensions": [
+      512
+    ],
+    "d_model": 512,
+    "num_heads": 8,
+    "num_layers": 8,
+    "causal": true,
+    "context": 250,
+    "layer_scale": 0.01,
+    "conv_layout": true,
+    "max_period": 10000.0,
+    "gating": "none",
+    "norm": "layer_norm",
+    "positional_embedding": "rope",
+    "dim_feedforward": 2048,
+    "device": "cpu"
+  },
+  "native_ring_policy": "Preserve original two-token KV complete() positions, including full-ring delta<=0 defect that labels the end slot as the future and masks it; do not repair or approximate it.",
+  "native_operator_contract": {
+    "layers": "Eight pre-norm layers, FP32 original LayerNorm/learned layer scale, bias-free QKV/out/FFN, GELU, causal two-token attention.",
+    "rope": "Extract FP32 cosine/sine from installed apply_rope with adjacent real/imaginary pairs and 128 two-token positions.",
+    "stream": "A fresh native ProjectedTransformer.streaming(1) context per capture call. Capture actual cache.complete positions for each layer and frame."
+  }
+}
