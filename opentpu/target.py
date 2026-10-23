@@ -55,11 +55,15 @@ UARCH_KEYS = ("MXU_IMPL", "MXU_CL", "VPU_CL", "ULANES", "TMEM_IMPL", "RPB", "WPB
 # docs/tmem_nocopy.md; vivado/tmem_knobs.tcl's TMEM_X)
 TMEM3_KEYS = ("TMEM_NSB", "TMEM_SBP", "TMEM_SBH", "TMEM_RPL", "TMEM_TDP", "TMEM_GST", "TMEM_PMP",
               "TMEM_PRK", "TMEM_SDM")
+# TMEM_WARB (any TMEM_IMPL; optional, the RTL's default 0): the write-bank arbitration between
+# the VPU and the MXU drain (otpu_slice TMEM_WARB; docs/vla_frequency_plan.md L5)
+ARB_KEYS = ("TMEM_WARB",)
 PLATFORM_KEYS = ("board", "core_mhz", "mem", "channels_per_slice", "channel_bytes", "beat_bytes",
                  "host")
-# The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set
-# (OTPU_LANES=16): RPB = 0 ("every read lane": TMEM replicated per read port) simulates as
-# NRP x 16, the board build as NRP x LANES; both select the slice's write-mask arbiter.
+# The slice's TMEM read ports (otpu_slice NRP) and the most lanes a simulation may set over a
+# target's (OTPU_LANES=16 on the card's 8): RPB = 0 ("every read lane": TMEM replicated per
+# read port) simulates as NRP x max(16, LANES), the board build as NRP x LANES; both select the
+# slice's write-mask arbiter.
 NRP = 8
 SIM_LANES_MAX = 16
 
@@ -83,7 +87,16 @@ SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
          "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                          "boards/ypcb-00338/otpu_fpga_top_ld.sv"],
-          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"]}
+          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"],
+          # the F2 slot's: its top, cl_opentpu (boards/f2/design), takes the AWS shell's ports
+          # and sh_ddr from the HDK, so it is the HDK flow's, not in this list
+          "f2": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_nch.sv",
+                 "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
+          # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
+          # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
+          "f2-hbm": ["boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_hbm_nch.sv",
+                     "boards/f2/otpu_f2_hbm_port.sv", "boards/f2/otpu_f2_hbm_host.sv",
+                     "boards/f2/otpu_f2_hbm_mem.sv", "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -169,7 +182,7 @@ def load(name: str | None = None) -> Target:
         for k, v in variants[var].items():
             if k in raw["arch"]:
                 raw["arch"][k] = v
-            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS:
+            elif k in raw["uarch"] or k in UARCH_KEYS + ("MXU_E",) + TMEM3_KEYS + ARB_KEYS:
                 raw["uarch"][k] = v
             else:
                 raise TargetError(f"{path}: variant {var!r}: {k} is not an [arch] or [uarch] key")
@@ -244,8 +257,11 @@ def arch_hash(cfg) -> int:
     build without it stays, and a host that writes no entries refuses a build with it (its
     hash leaves it out: opentpu/host/board.py check_hash)."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
-    if not d.get("SEQ_WC"):
-        d.pop("SEQ_WC", None)
+    for k in ("SEQ_WC", "T2", "PACK"):    # (in the hash only when on: older builds keep theirs)
+        if not d.get(k):
+            d.pop(k, None)
+    if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
+        d.pop("PORTB", None)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -253,10 +269,12 @@ def arch_hash(cfg) -> int:
 
 def sim_uarch(t: Target | str | None = None) -> dict:
     """The Verilator builds' micro-architecture for `t` (rtlsim.BOARD_UARCH): the keys the
-    simulation top takes. RPB 0 (every read lane) is NRP x 16, as for any LANES <= 16."""
+    simulation top takes. RPB 0 (every read lane) is NRP x 16 for any LANES <= 16 (the
+    simulation may set more lanes than the target's), NRP x LANES above (f2-vla's 64)."""
     t = t if isinstance(t, Target) else load(t)
     u = t.uarch
-    d = {"WIN": u["WIN"], "RPB": u["RPB"] or NRP * SIM_LANES_MAX, "WPB": u["WPB"],
+    d = {"WIN": u["WIN"], "RPB": u["RPB"] or NRP * max(SIM_LANES_MAX, t.arch["LANES"]),
+         "WPB": u["WPB"],
          "FIFO_DEPTH": u["FIFO_DEPTH"]}
     if u["TMEM_IMPL"]:
         d["TMEM_IMPL"] = u["TMEM_IMPL"]
@@ -264,8 +282,15 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d.update({k: int(u[k]) for k in TMEM3_KEYS if k in u})
     if u.get("MXU_E"):
         d["MXU_E"] = u["MXU_E"]
+    for k in ARB_KEYS:
+        if u.get(k):
+            d[k] = int(u[k])
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
+    if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
+        d["T2"] = 1
+    if t.arch.get("PACK"):
+        d["PACK"] = 1
     return d
 
 
@@ -277,6 +302,7 @@ def rtl_params(t: Target | str | None = None) -> dict:
     a, u, p = t.arch, t.uarch, t.platform
     cfg = config(t)
     tm3 = {k: int(u[k]) for k in TMEM3_KEYS if k in u} if u["TMEM_IMPL"] == 3 else {}
+    tm3 |= {k: int(u[k]) for k in ARB_KEYS if k in u}
     return tm3 | {
         "S": a["S"], "D": a["D"], "MCOLS": a["MCOLS"], "ACT_ROWS": t.act_rows,
         "ACT_BLOCKS": a["ACT_BLOCKS"], "TMEM_WORDS": a["TMEM_WORDS"],
@@ -285,11 +311,15 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
-        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]),
+        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
+        "PACK": int(a.get("PACK", False)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
-        "DRAM_LOG2": (a["DRAM_BYTES"] - 1).bit_length(),
+        # what a slice's channels hold: the arch's DRAM_BYTES (what its programs address), or
+        # the platform's slice_bytes where the channels hold more (f2-hbm16: 16 x 512 MiB = 8
+        # GiB, of which the slice's 32-bit byte addresses reach 4 GiB today; docs/f2_hbm.md)
+        "DRAM_LOG2": (p.get("slice_bytes", a["DRAM_BYTES"]) - 1).bit_length(),
         "PLATFORM": t.platform_id,
         "ARCH_HASH": arch_hash(cfg),
     }
@@ -304,13 +334,16 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    board = t.platform["board"]
+    if board == "f2" and t.platform.get("mem") == "hbm":
+        board = "f2-hbm"
+    return core + SHELL + BOARDS.get(board, [])
 
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC; the CFG_HASH it reports): ACT_ROWS equal to
-    MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PACK; the CFG_HASH it reports): ACT_ROWS
+    equal to MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
     for k in ("MCOLS", "LANES", "ACT_ROWS", "TMEM_WORDS"):
@@ -322,6 +355,10 @@ def build_config(t: Target | str | None = None, **knobs):
         a["DSTEP"] = a["STREAM"] = bool(int(knobs["DSTEP"]))
     if knobs.get("SEQ_WC") is not None:
         a["SEQ_WC"] = bool(int(knobs["SEQ_WC"]))
+    if knobs.get("T2") is not None:
+        a["T2"] = bool(int(knobs["T2"]))
+    if knobs.get("PACK") is not None:
+        a["PACK"] = bool(int(knobs["PACK"]))
     return config(t, **a)
 
 

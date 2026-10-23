@@ -305,3 +305,52 @@ def test_quantizer_ties_qact_rtl(have_verilator, row):
     acc = np.where(d <= 16, q << np.maximum(16 - d, 0), 0)
     want = F.mul(F.i2f(acc), F.mul(s, F.f32(2.0 ** -16))[:, None, None])
     assert np.array_equal(got.view(np.uint32), want.transpose(1, 0, 2).view(np.uint32))
+
+
+@pytest.mark.parametrize("D,lanes", [(32, 8), (32, 16), (128, 8), (128, 16)])
+def test_quantizer_qst_t_rtl(have_verilator, D, lanes):
+    """QST T (docs/isa.md: the transposed rows of the KV cache's V^T appends, drs 1 and es a
+    multiple of 4, written a word of four rows a column through the quantizer's transposer):
+    the same bytes and scale rows as without T, at every alignment of dst in its word, with
+    1 to 9 rows (groups of fewer than four rows at both ends), ROW or the int8 scale row, HALF,
+    column strides 4 to 2 KB, KB 1 to the transposer's most (256 elements a row), rows not a
+    multiple of the lanes' chunk, and a T store right after another into the same region's
+    neighbour (the flush of one beside the next's passes)."""
+    cfg = Config(S=1, D=D, MCOLS=4, LANES=lanes, DRAM_BYTES=1 << 23)
+    rng = np.random.default_rng(1000 + D + lanes)
+    R = 9
+    KBM = I.QST_T_MAX // D
+    x = _qrows(rng, R, KBM * D, D)
+    dram = np.zeros(cfg.DRAM_BYTES, np.uint8)
+    _put(dram, X, x)
+    prog = [I.ld(X, 0, x.size)]
+    sd = 0x100000                                  # a case's columns span up to 512 KiB
+    # (rows, ROW, HALF, es, dst offset in its word, KB)
+    cases = [(R, True, False, 1024, 0, KBM), (R, True, False, 1024, 1, KBM),
+             (R, False, False, 512, 2, KBM), (5, True, True, 2048, 3, KBM),
+             (1, True, False, 4, 0, 1), (1, False, False, 4, 3, 1), (2, True, False, 8, 3, 1),
+             (3, False, False, 64, 1, max(1, KBM // 2)), (4, True, False, 4 * D, 0, 1),
+             (R, False, False, 2 * D, 2, 1), (8, True, True, 256, 0, KBM)]
+    for n, row, half, es, off, kb in cases:
+        prog.append(I.qst(0, sd + off, sd - 0x1000, n, kb, KBM * D, 1, es, row=row, half=half,
+                          t=True))
+        # the next T store's rows follow in the same words (the first group fewer than four)
+        prog.append(I.qst(0, sd + off + n, sd - 0x800, n, kb, KBM * D, 1, es, row=row,
+                          half=half, t=True))
+        sd += 0x90000
+    prog.append(I.halt())
+    _both(cfg, prog, dram)
+
+
+def test_qst_t_is_refused_without_its_strides():
+    """QST T needs drs 1, es a non-zero multiple of 4 and at most QST_T_MAX elements a row
+    (the assembler and the ISA simulator refuse the others)."""
+    with pytest.raises(Exception):
+        I.qst(0, 0x1000, 0x2000, 4, 1, 32, 2, 4, row=True, t=True)
+    with pytest.raises(Exception):
+        I.qst(0, 0x1000, 0x2000, 4, 1, 32, 1, 6, row=True, t=True)
+    cfg = Config(S=1, D=32, DRAM_BYTES=1 << 20)
+    ins = I.qst(0, 0x1000, 0x2000, 4, I.QST_T_MAX // 32 + 1, 32, 1, 4, row=True, t=True)
+    prog = [ins, I.halt()]
+    with pytest.raises(Exception):
+        Machine(cfg, [prog], [np.zeros(cfg.DRAM_BYTES, np.uint8)]).run()

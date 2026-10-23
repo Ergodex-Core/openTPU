@@ -783,6 +783,12 @@ def load(a):
     path = model_dir(a.model)
     tokenizer = CH.load_tokenizer(path)
     spec = load_spec(path)
+    rotated = getattr(a, "rotate", False) or a.wformat == "t2"
+    if rotated:                             # Ternary-Bonsai 2's latent weights (docs/ternary.md 4)
+        from ..llm import bonsai2
+        if not bonsai2.is_bonsai2(path):
+            raise SystemExit("otpu-serve: --rotate takes a Ternary-Bonsai 2 GGUF directory")
+        spec = bonsai2.spec(path, ternary=True)
     wformat = FM.auto(spec, a.wformat)
     streams = STR.streams(spec)
     formats = None
@@ -809,10 +815,16 @@ def load(a):
                          formats=formats, prog_cache=not a.no_prog_cache, snapshots=0, **mtp)
     elif getattr(a, "mtp", False):          # (a dense Qwen3.5 with its own mtp.* layer)
         from ..llm.mtp import mtp_engine
-        eng = mtp_engine(spec, load_weights(path, mtp=True), cap=a.cap, cfg=cfg, backend=backend,
+        if rotated:                         # (Ternary-Bonsai 2's -MTP GGUF, rotated)
+            from ..llm import bonsai2
+            W = bonsai2.Weights(path, mtp=True, latent=True, ffn=spec.ffn)
+            rkw = dict(embed_host=True)
+        else:
+            W, rkw = load_weights(path, mtp=True), {}
+        eng = mtp_engine(spec, W, cap=a.cap, cfg=cfg, backend=backend,
                          wformat=wformat, head_format=a.head_format,
-                         prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                         snapshots=0)
+                         prog_cache=not a.no_prog_cache,
+                         prompt_runs=not a.no_prompt_runs and not rotated, snapshots=0, **rkw)
     else:
         B = a.slots if batchable(spec) else 1
         if B > 1 and cfg is None:           # the simulator: room for the slots and their area, one
@@ -822,10 +834,16 @@ def load(a):
             c = device_config(spec, a.cap, batch=B, rows=PREFILL_ROWS, lookup=True,
                               wformat=wformat, head_format=a.head_format, S=1)
             cfg = replace(c, DRAM_BYTES=2 * c.DRAM_BYTES)
-        eng = Engine(spec, load_weights(path), cap=a.cap, cfg=cfg, backend=backend,
+        rot = {}
+        if rotated:                         # (the prompt runs' kernels do not rotate yet: the
+            from ..llm import bonsai2       # prompt goes token by token through the step program)
+            rot = dict(embed_host=True)
+        W = bonsai2.Weights(path, latent=True, ffn=spec.ffn) if rotated else load_weights(path)
+        eng = Engine(spec, W, cap=a.cap, cfg=cfg, backend=backend,
                      wformat=wformat, head_format=a.head_format, resident=True,
-                     prog_cache=not a.no_prog_cache, prompt_runs=not a.no_prompt_runs,
-                     batch=B, batch_area=B > 1)
+                     prog_cache=not a.no_prog_cache,
+                     prompt_runs=not a.no_prompt_runs and not rotated,
+                     batch=B, batch_area=B > 1, **rot)
     weights = CH.weights_label(eng.image, wformat)
     print(f"weights: {weights}; loaded in {time.perf_counter() - t0:.1f} s", flush=True)
     tok = tokenizer()
@@ -881,8 +899,12 @@ def main(argv=None):
     ap.add_argument("--served-model-name", help="the model's name in the API (default: the "
                                                 "checkpoint directory's)")
     ap.add_argument("--wformat", default=FM.AUTO,
-                    choices=[FM.AUTO, "int8", "fp4", "int4", "nvfp4", FM.MIX])
-    ap.add_argument("--head-format", default=None, choices=["int8", "fp4", "int4", "nvfp4"])
+                    choices=[FM.AUTO, "int8", "fp4", "int4", "nvfp4", FM.MIX, "t2"])
+    ap.add_argument("--head-format", default=None,
+                    choices=["int8", "fp4", "int4", "nvfp4", "t2"])
+    ap.add_argument("--rotate", action="store_true",
+                    help="Ternary-Bonsai 2: the latent ternary weights, rotated on the card "
+                         "(docs/ternary.md 4; implied by --wformat t2)")
     ap.add_argument("--slots", type=int, default=8,
                     help="KV slots on the card: requests decoded together, batched (Qwen3 and "
                          "the Llama-likes; other models run one sequence, requests in turns)")

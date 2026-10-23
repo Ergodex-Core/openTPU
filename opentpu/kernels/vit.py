@@ -319,13 +319,15 @@ def vit_out_mlp(v, lw, dst, N: int, R: int, eps: float, chunk: int, mlp: bool = 
 
 @ol.jit
 def vit_merge(v, mw, src, dst, N4: int, R: int, eps: float, chunk: int, mean: bool,
-              part: int, act=None):
+              part: int, act=None, norm: bool = True):
     """The N4 2 x 2 windows of src's rows ([4 N4, C], the card's window order: a window's rows
     (2i, 2j), (2i, 2j + 1), (2i + 1, 2j), (2i + 1, 2j + 1) consecutive, so its [4C] row is
     those rows' words as they are): LayerNorm (mw.pre_w, pre_b), then W2 act(W1 z + b1) + b2
     (+ the window's mean: the window merger) -> dst[window]. A window's row is never held
     whole: its LayerNorm takes three passes over `part`-wide pieces, the last quantizing each
-    piece into the operand."""
+    piece into the operand. norm=False: no LayerNorm over the [4C] row (Qwen3-VL's main
+    merger normalizes each token before the shuffle: vit_out_mlp's `post` did it), the pieces
+    quantized as they are."""
     C = v.C
     act = act or gelu_tanh
     K = 4 * C
@@ -343,6 +345,14 @@ def vit_merge(v, mw, src, dst, N4: int, R: int, eps: float, chunk: int, mean: bo
     def group(w0, n):
         s = ol.zeros([n])
         y = ol.zeros([n, mw.w2.shape[0]])
+        if not norm:
+            st = ol.stationary(n, K)
+            for c in pieces:
+                ol.quantize_into(st, ol.load(piece(w0, n, c)), c)
+            mlp_bias(st, mw.w1, mw.b1, mw.w2, chunk, act=act, acc=y, rows=n)
+            y.set(y + b2[None, :])
+            ol.store(dst[w0:w0 + n, :], y)
+            return
         for c in pieces:
             t = ol.load(piece(w0, n, c))
             s.set(s + ol.sum(t, axis=1))

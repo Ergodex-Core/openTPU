@@ -62,6 +62,8 @@ R_DDR4, DDR4_STRIDE = 0x40000, 0x10000
 # power-of-two offsets. Programs and images of the previous numerics compute garbage on such a
 # bitstream and vice versa (the CFG_HASH differs too: opentpu/target.py arch_hash)
 CAP_MX = 1 << 29
+# CAPS bit28: t2 weights (MM WF 1 with rs bit 0), MM QUAD and QACT DUP4 (docs/ternary.md)
+CAP_T2 = 1 << 28
 # CAPS bit30: the decode loop on the card (docs/isa.md RLD, VOP ARGMAX, HALT CHAIN; the
 # generate programs of opentpu/llm/generate.py)
 CAP_GEN = 1 << 30
@@ -75,13 +77,17 @@ CAPS2_SINCE, R_CAPS2 = 5, 0x5C
 # on a GATHER, and the host refuses to load a program with one (Board.load_program). Every
 # bitstream before version 5 has GATHER.
 CAP2_GATHER = 1
+# CAPS2 bit1: the MXU packs two int8 weight rows a DSP (otpu_mxu PACK, docs/mxu_packing.md):
+# an int8 MM's rate doubles; no program or result changes (Config.PACK, in the CFG_HASH when on)
+CAP2_PACK = 2
 
 
 def caps2(v: int | None) -> dict:
-    """CAPS2's value -> its capabilities; None (a register map before 5): all present."""
+    """CAPS2's value -> its capabilities; None (a register map before 5): GATHER present, the
+    rest absent."""
     if v is None:
-        return {"gather": True}
-    return {"gather": bool(v & CAP2_GATHER)}
+        return {"gather": True, "pack": False}
+    return {"gather": bool(v & CAP2_GATHER), "pack": bool(v & CAP2_PACK)}
 
 
 # ---- version 4: the configuration (otpu_ctrl CFG_*; docs/targets.md)
@@ -101,8 +107,12 @@ R_ICOUNT_S = 0xC0
 def cfg(vals: list[int]) -> dict:
     """The CFG_* registers' values (in CFG_REGS order) -> the configuration they report."""
     s, tmem, imem, act, dram, ua, plat, h = vals
-    return {"S": s, "TMEM_WORDS": tmem, "IMEM_WORDS": imem, "ACT_BLOCKS": act,
-            "DRAM_BYTES": 1 << (dram & 0xFF), "channels": (dram >> 8) & 0xFF,
+    # DRAM_BYTES: what a slice's programs address (32-bit DRAM byte addresses: at most 4 GiB);
+    # slice_bytes, where they differ: what its channels hold (f2-hbm16's 16 x 512 MiB: 8 GiB)
+    more = {"slice_bytes": 1 << (dram & 0xFF)} if dram & 0xFF > 32 else {}
+    return more | {"S": s, "TMEM_WORDS": tmem, "IMEM_WORDS": imem, "ACT_BLOCKS": act,
+            "DRAM_BYTES": 1 << min(dram & 0xFF, 32),
+            "channels": (dram >> 8) & 0xFF,
             "channel_bytes": 1 << ((dram >> 16) & 0xFF),
             "MXU_IMPL": ua & 0xF, "TMEM_IMPL": (ua >> 4) & 0xF, "VPU_CL": (ua >> 8) & 0xFF,
             "ULANES": (ua >> 16) & 0xFF, "SEQ_WC": (ua >> 24) & 1, "platform": plat, "hash": h}
@@ -111,7 +121,7 @@ def cfg(vals: list[int]) -> dict:
 def cfg_words(c: dict) -> list[int]:
     """cfg()'s inverse: the register values for a configuration (the fake card's)."""
     return [c["S"], c["TMEM_WORDS"], c["IMEM_WORDS"], c["ACT_BLOCKS"],
-            (c["DRAM_BYTES"] - 1).bit_length() | c["channels"] << 8
+            (c.get("slice_bytes", c["DRAM_BYTES"]) - 1).bit_length() | c["channels"] << 8
             | (c["channel_bytes"] - 1).bit_length() << 16,
             c["MXU_IMPL"] | c["TMEM_IMPL"] << 4 | c["VPU_CL"] << 8 | c["ULANES"] << 16
             | c.get("SEQ_WC", 0) << 24,
@@ -157,7 +167,7 @@ def caps(v: int) -> dict:
             "chash": bool(v & CAP_CHASH), "act_rows": bool(v & CAP_ACT),
             "args": bool(v & CAP_ARGS), "stream": bool(v & CAP_STREAM),
             "hostcal": bool(v & CAP_HOSTCAL), "gen": bool(v & CAP_GEN),
-            "waitw": bool(v & CAP_WAITW), "mx": bool(v & CAP_MX),
+            "waitw": bool(v & CAP_WAITW), "mx": bool(v & CAP_MX), "t2": bool(v & CAP_T2),
             "trace_depth": 1 << ((v >> 8) & 0xFF) if v & CAP_TRACE else 0,
             "pq_window": 1 << ((v >> 16) & 0xFF)}
 

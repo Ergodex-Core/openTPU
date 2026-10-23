@@ -1,0 +1,13 @@
+{
+  "name": "opentpu-f2-web",
+  "version": "0.1.0",
+  "private": true,
+  "description": "openTPU on AWS F2: the demo page as a Lambda web function (tools/f2_web)",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "engines": {
+    "node": ">=24"
+  }
+}

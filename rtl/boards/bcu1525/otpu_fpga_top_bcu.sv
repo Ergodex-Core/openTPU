@@ -51,6 +51,7 @@ module otpu_fpga_top_bcu #(
   parameter int TMEM_PMP   = 0,
   parameter int TMEM_PRK   = 0,
   parameter int TMEM_SDM   = -1,
+  parameter int TMEM_WARB  = 0,       // the VPU / MXU-drain write arbitration (otpu_slice)
   parameter int MXU_IMPL   = 2,
   parameter int MXU_CL     = 16,
   parameter int VPU_CL     = 2,
@@ -395,7 +396,7 @@ module otpu_fpga_top_bcu #(
                  .BUILD_ID(BUILD_ID), .SEQ_WC(SEQ_WC), .DDR_MTS(DDR_MTS), .PLATFORM(PLATFORM),
                  .ARCH_HASH(ARCH_HASH), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_sys (
+                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .TMEM_WARB(TMEM_WARB)) u_sys (
     .clk(core_clk), .clk_f, .rst(core_rst), .ctl_mrst(lrs2), .xclk(xdma_aclk), .xrst,
     .calib, .ded, .temp({device_temp, 2'b00}), .led(board_led), .i2c_lo,
     .i2c_pin({3'b111, i2c_lvl}),

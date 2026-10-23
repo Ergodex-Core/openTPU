@@ -287,13 +287,16 @@ def test_fuzz_two_slices(have_verilator, seed):
         assert np.array_equal(tmems[s], m.slices[s].tmem), f"slice {s} TMEM"
 
 
+# (16, 255) and (32, 255): the f2-vla target's rows (the ISA's most; the ACT RAM's last group
+# of 15 / 31 rows) at its two column counts, M drawn up to 255 (the input region holds 128 rows
+# of one block), with 16 lanes at 32 columns (the MXU's epilogue lanes, MCOLS / 2, at most LANES)
 @pytest.mark.parametrize("mcols,rows,seed", [(2, 8, 0), (2, 8, 1), (4, 8, 5), (2, 6, 3),
-                                              (4, 16, 4)])
+                                              (4, 16, 4), (16, 255, 6), (32, 255, 8)])
 def test_fuzz_mm_replay(have_verilator, mcols, rows, seed):
     """ACT RAM rows beyond the MXU columns (ACT_ROWS): an MM of M > MCOLS rows replays each
     streamed chunk for every group of MCOLS rows; the results are the ISA's."""
     rng = np.random.default_rng(3000 + seed)
-    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows)
+    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows, LANES=16 if mcols > 16 else 8)
     prog = _random_program(rng, cfg, n_ops=60)
     assert any(i.op == I.MM and (i.w[5] >> 16) & 0xFF > mcols for i in prog)
     imgs = _images(rng, 1)
@@ -352,6 +355,36 @@ def test_one_copy_tmem_of_128k_words(have_verilator, mcols, rows, seed):
     assert np.array_equal(tmems[0], m.slices[0].tmem)
 
 
+@pytest.mark.parametrize("warb", [1, 2, 3])
+def test_write_arbitration_policies_bit_exact(have_verilator, warb, tmp_path, monkeypatch):
+    """The VPU / MXU-drain write arbitration (otpu_slice TMEM_WARB, docs/vla_frequency_plan.md
+    L5): round-robin (1), the drain first (2) and the drain first while its result FIFO is half
+    full (3), on the board's arbiter with release r2's TMEM (R2_TMEM), run a hazard program
+    (VOPs, MMs, QSTs, loads and stores on a shared pool of addresses) to the ISA's results:
+    the policy moves grants between the two writers, never a word. The drain-first policy
+    leaves the drain no loss to the VPU (TMEMSTAT wcm 0); the VPU loses cycles under it."""
+    log = tmp_path / "tmemstat.log"
+    monkeypatch.setenv("OTPU_TMEMSTAT_LOG", str(log))
+    rng = np.random.default_rng(8001)             # (one program: its MMs and VOPs contend)
+    cfg = Config(S=1, MCOLS=4, ACT_ROWS=8)
+    prog = _hazard_program(rng, cfg, n_ops=60, gather=False)
+    imgs = _images(rng, 1)
+    m = Machine(cfg, [prog], [i.copy() for i in imgs]).run()
+    drams, tmems, _ = rtlsim.run(cfg, [prog], [i.copy() for i in imgs],
+                                 uarch={**rtlsim.BOARD_UARCH, **R2_TMEM, **R2_ARB,
+                                        "TMEM_WARB": warb},
+                                 max_cycles=1_000_000)
+    assert np.array_equal(drams[0], m.slices[0].dram)
+    assert np.array_equal(tmems[0], m.slices[0].tmem)
+    st = re.search(r"TMEMSTAT .* warb=(\d+) wv=(\d+) wm=(\d+) wc=(\d+) wcm=(\d+) wcv=(\d+)",
+                   log.read_text())
+    assert st and int(st.group(1)) == warb, st
+    wc, wcm, wcv = (int(st.group(k)) for k in (4, 5, 6))
+    assert wc > 0 and wcm + wcv <= wc, (wc, wcm, wcv)        # (the pair conflicted)
+    if warb == 2:
+        assert wcm == 0 and wcv > 0, (wc, wcm, wcv)
+
+
 def held_collective_program(out: int = SCRATCH) -> list:
     """Every slice: an ST of 4,096 TMEM words (the DMA asking TMEM for its words nearly every
     cycle) and, with no dependency on it, two GATHERs of other words back to back, then the
@@ -392,17 +425,17 @@ def test_collective_reads_held_behind_dma_reads(have_verilator, seed, tmp_path, 
     assert sorted(held) == [0, 1] and held[0] > 0, held
 
 
-@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16)])
+@pytest.mark.parametrize("mcols,rows", [(4, 8), (8, 16), (16, 255), (32, 255)])
 @pytest.mark.parametrize("M,wf,pair", [(1, I.W8, False), (3, I.W8, False), (1, I.W4F, True),
                                        (2, I.WNV, True), (4, I.W4I, False), (6, I.W4F, False),
-                                       (9, I.W8, False)])
+                                       (9, I.W8, False), (255, I.W8, False), (200, I.W4F, False)])
 def test_act_reads_follow_the_mm_rows(have_verilator, mcols, rows, M, wf, pair):
     """The ACT RAM reads only the columns of an MM's output rows (otpu_mxu act_ren): M of the
     MCOLS columns (PAIR: 2M), every column with replay (M > MCOLS); the results are the ISA's.
     Before the gating every column read every cycle (cyc * MCOLS)."""
     if (pair and 2 * M > mcols) or M > rows:
         pytest.skip("PAIR needs 2M <= MCOLS; M <= ACT_ROWS")
-    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows)
+    cfg = Config(S=1, MCOLS=mcols, ACT_ROWS=rows, LANES=16 if mcols > 16 else 8)
     D, KB, N = cfg.D, 3, 20
     srs = KB * D
     rs = KB * D if wf == I.W8 else -(-KB // 2) * D

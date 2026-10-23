@@ -73,7 +73,10 @@ def _hash_without_numerics(cfg) -> int:
     import hashlib
     import json
     d = dataclasses.asdict(cfg)
-    d.pop("SEQ_WC")                     # (a field that host's Config does not have)
+    d.pop("SEQ_WC")                     # (fields that host's Config does not have)
+    d.pop("T2")
+    d.pop("PORTB")
+    d.pop("PACK")
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -375,7 +378,10 @@ def test_bcu1525_target_matches_its_rtl_defaults():
 
 
 def test_tech_families_define_the_same_cells():
-    """rtl/tech/<family>/ files define the same modules with the same ports and parameters."""
+    """rtl/tech/<family>/ files define the same modules with the same ports and parameters.
+    The packed position (otpu_pe_pk, docs/mxu_packing.md) exists in the generic and the
+    DSP48E2 families only: the DSP48E1's 25-bit pre-adder cannot pack a chain (a PACK build
+    on xilinx7 does not elaborate)."""
     def iface(path: Path) -> dict:
         txt = re.sub(r"//.*", "", path.read_text())
         mods = {}
@@ -384,9 +390,10 @@ def test_tech_families_define_the_same_cells():
             mods[m.group(1)] = (norm(m.group(2)), norm(m.group(3)))
         return mods
     ref = iface(ROOT / "rtl/tech/generic/otpu_tech_dsp.sv")
-    assert set(ref) == {"otpu_pe", "otpu_mxce"}
-    for fam in ("xilinx7", "xilinxus"):
-        assert iface(ROOT / f"rtl/tech/{fam}/otpu_tech_dsp.sv") == ref, fam
+    assert set(ref) == {"otpu_pe", "otpu_pe_pk", "otpu_mxce"}
+    assert iface(ROOT / "rtl/tech/xilinxus/otpu_tech_dsp.sv") == ref
+    x7 = iface(ROOT / "rtl/tech/xilinx7/otpu_tech_dsp.sv")
+    assert x7 == {k: v for k, v in ref.items() if k != "otpu_pe_pk"}
 
 
 # the DRAM's handshakes and read data that otpu_slice's units, loader and arbiters see only through

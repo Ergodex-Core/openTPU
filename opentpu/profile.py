@@ -128,14 +128,27 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         N, KB, M = w[3] & 0xFFFF, (w[3] >> 16) & 0xFF, (w[5] >> 16) & 0xFF
         acc = " +acc" if ins.flags & I.F_ACC else ""
         scales = 0 if ins.flags & I.F_UNIT else N * KB
-        wf = (ins.flags >> I.WF_SHIFT) & 3
-        if wf == I.W8:
-            return "MM", f"{M}x{KB * D} . {N}x{KB * D}^T{acc}", N * KB, N * KB, scales
-        # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle
-        pair = bool(ins.flags & I.F_PAIR)
-        return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {'int4' if wf == I.W4I else 'fp4'}"
-                      f"{' pair' if pair else ''}{acc}",
-                N * (-(-KB // 2) if pair else KB), N * -(-KB // 2), scales)
+        wf, pair, quad = I.mm_format(ins)
+        # the MXU's advances: a row's blocks (4-bit: one a cycle, two a chunk; t2 four a chunk;
+        # PAIR / QUAD two / four a cycle) for every group of MCOLS stationary rows (replay,
+        # ACT_ROWS > MCOLS: ceil(M / MCOLS) passes). PACK (docs/mxu_packing.md): an int8 MM's
+        # rows go in pairs, two chunks an advance (port B's bound stays N x KB chunks: at PORTB
+        # 1 the stream, not the array, sets the pace, the roofline's max)
+        G = -(-M // cfg.MCOLS)
+        pack = bool(getattr(cfg, "PACK", False)) and wf == I.W8 and not pair and not quad
+        rows = -(-N // 2) if pack else N
+        if wf == I.W8:                  # (PAIR / QUAD: two / four chunks a cycle, PORTB)
+            per = 4 if quad else 2 if pair else 1
+            return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T"
+                          f"{' quad' if quad else ' pair' if pair else ''}{acc}",
+                    rows * -(-KB // per) * G, N * KB, scales)
+        # 4-bit: one block per cycle, two blocks per streamed chunk; PAIR: one chunk per cycle.
+        # t2 (docs/ternary.md): four blocks a chunk, one a cycle, PAIR two, QUAD four
+        per = 4 if quad else 2 if pair else 1           # blocks an advance
+        name = "int4" if wf == I.W4I else "t2" if wf == I.WT2 else "fp4"
+        return ("MM", f"{M}x{KB * D} . {N}x{KB * D}^T {name}"
+                      f"{' quad' if quad else ' pair' if pair else ''}{acc}",
+                N * -(-KB // per) * G, N * -(-KB // I.blocks_per_chunk(wf)), scales)
     if op == I.QACT:
         rows, KB = w[1] & 0xFF, w[1] >> 16
         n = rows * KB * D
@@ -144,7 +157,21 @@ def _describe(ins: I.Instr, cfg) -> tuple[str, str, int, int, int]:
         rows, KB = w[3] & 0xFFFF, w[3] >> 16
         n = rows * KB * D
         nw = n // 2 if ins.flags & I.F_HALF else n     # HALF: the rows' first halves written
-        return "QST", f"{rows}x{KB * D} -> DRAM int8", -(-n // L) + nw, 0, nw + rows * KB
+        # the store pass: a word (four contiguous bytes) a cycle when the elements are
+        # contiguous and the rows word-aligned (otpu_quant's `wide`: es 1 and the row's byte
+        # address a multiple of 4; dst's register part assumed aligned); T (the transposed V
+        # stores: es the column stride) reads the rows at LANES a cycle into the transposer and
+        # writes a word of four rows' bytes a column (otpu_quant's `is_t`: the groups of four
+        # rows are the words dst + r fall in, dst's register part assumed aligned); else a byte
+        # a cycle. The scale rows: a word (ROW) or 1 + ceil(KB / 4) words a row
+        if ins.flags & I.F_T:
+            sw = 1 if ins.flags & I.F_ROW else 1 + -(-KB // 4)
+            st = -(-(w[1] % 4 + rows) // 4) * (nw // rows)
+            return ("QST", f"{rows}x{KB * D} -> DRAM int8 T", 2 * -(-n // L) + st, 0,
+                    st + rows * sw)
+        wide = w[6] == 1 and w[5] % 4 == 0 and w[1] % 4 == 0
+        st = -(-nw // 4) if wide else nw
+        return "QST", f"{rows}x{KB * D} -> DRAM int8", -(-n // L) + st, 0, st + rows * KB
     if op == I.VOP:
         rows, cols = w[3] & 0xFFFF, w[3] >> 16
         func = (w[5] >> 16) & 0xFF
@@ -183,7 +210,9 @@ class Profile:
             b = sum(r.portb for r in rs)
             a = sum(r.porta for r in rs)
             # port A delivers one scale word per MXU cycle, a PAIR MM's 8-byte scale pair at once
-            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else r.porta
+            # (QUAD's four words)
+            ac = sum(r.porta // 2 if r.detail.endswith((" pair", " pair +acc")) else
+                     r.porta // 4 if r.detail.endswith((" quad", " quad +acc")) else r.porta
                      for r in rs)
             m = sum(r.work for r in rs if r.op == I.MM)
             per.append({"portb": b, "porta": a, "porta_cycles": ac, "mxu": m,
