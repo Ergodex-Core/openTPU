@@ -1,7 +1,14 @@
 # PersonaPlex on burst200
 
-Goal: full-duplex speech conversation with the PersonaPlex temporal transformer
-running on the existing openTPU FPGA, served through a localhost SSM tunnel.
+Completion goal: all PersonaPlex model inference on FPGA, including the codec,
+embeddings, temporal and depth transformers, output heads and sampling. The host
+may provide UI, transport and orchestration. The current implementation offloads
+the temporal transformer only and does not meet that completion goal.
+
+The [2026-10-23 precision and FPGA-only audit](personaplex_fpga_precision.md)
+records actual four-frame hardware results, the mixed precision correction and
+the remaining device implementation gates. Earlier readiness receipts below are
+historical; they do not establish current device availability or full speech.
 
 ## Current implementation and validation boundary
 
@@ -154,19 +161,24 @@ huggingface-hub 0.24.7, aiohttp 3.10.11 and sentencepiece 0.2.0.
 This dependency preparation does not establish checkpoint or port compatibility.
 Native imports of `LMModel`, `sphn`, PyTorch 2.4.1+cpu, aiohttp and sentencepiece
 passed (SSM command `a458b1a7-b858-4f91-8d1c-9c80e23500ed`).
-The shared card is reserved for the Nanbeige workload until explicitly released.
-No PersonaPlex image load, device access, HBM write, hardware inference,
-conversation service, or localhost tunnel has been performed. The 145.42 ms
-estimate below remains a simulation extrapolation, not a hardware receipt.
+At that historical preparation stage the shared card was reserved for Nanbeige
+and PersonaPlex had not accessed it. On 2026-10-23, after the user prioritized
+physical FPGA execution, fresh checks found no active holder or physical handles.
+The normal canonical and legacy locks were acquired for the bounded temporal
+runs documented in the precision audit. No image reload or reservation override
+occurred. A new run must check availability again. No conversation service or
+localhost tunnel was launched. The 145.42 ms estimate below remains an older
+simulation extrapolation; the audit contains measured device timings.
 
 The installed CLI qualifies the recorded burst200 configuration, 200 MHz clock,
 reported memory geometry, runtime-argument/INT4 capabilities, calibration, idle/drained state,
 and error status before backend construction. The probe disables calibration and
 quiescing and is repeated immediately before device-memory writes. **47 focused
 CLI tests passed**. The guard was delivered in the readiness overlay. It cannot
-authenticate the AFI or establish ownership: legacy and integrated runtimes use
-different lock names,
-so explicit confirmation of Nanbeige's release remains mandatory.
+authenticate the AFI or establish ownership. Legacy and integrated runtimes use
+different lock names; the hardware validation driver therefore checks physical
+handles and holds both normal lock names. An active reservation or conflicting
+job must be resolved with its owner before another run.
 
 The historical base archive SHA-256 is
 `e3310ac387b87961ce8337420df9eac8e39779ad63bfc96568cc56de3b12d016`.

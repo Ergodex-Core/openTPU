@@ -263,3 +263,99 @@ def test_actual_boardbackend_protocol_matches_isa_bits():
     np.testing.assert_array_equal(eng.step(x), ref.step(x))
     eng.close()
     ref.close()
+
+
+def test_explicit_mixed_formats_match_uniform_layer_bytes_and_quantized_reference(monkeypatch):
+    from opentpu import quant as Q
+
+    monkeypatch.setenv("OTPU_BUILD_JOBS", "1")
+    monkeypatch.setenv("OTPU_IMAGE_CACHE", "0")
+    spec, cfg, weights, norm, inputs = fixture_model(layers=4)
+    spec = replace(spec, ffn=768)
+    rng = np.random.default_rng(652)
+    for layer in weights:
+        for name, shape in (("wg", (768, 64)), ("wu", (768, 64)), ("wd", (64, 768))):
+            layer[name] = rng.normal(0, .03, shape).astype(np.float32)
+    formats = "attn@0-1=int8,mlp@0-1=int8"
+    image = Image(spec, cfg, cap=4, formats=formats)
+    assert image.lf == (("int8",) * 3,) * 2 + (("int4",) * 3,) * 2
+    assert len(image.runs) == 2
+    assert image.dchunks == {"int4": 64, "int8": 96}
+    mixed = image.build(weights, norm)[0]
+    code_bytes, weight_bytes = 0, 4 * spec.hidden * (2 * spec.layers + 1)
+    quantized = []
+    for index, layer in enumerate(weights):
+        fmt = "int8" if index < 2 else "int4"
+        single = Image(replace(spec, layers=1), cfg, cap=4, wformat=fmt)
+        uniform = single.build([layer], norm)[0]
+        base, offsets = image._off(index).const, image.bofs[image.lf[index]]
+        other_base, other_offsets = single._off(0).const, single.bofs[single.lf[0]]
+        parts = [(offsets[name], other_offsets[name], rows, cols)
+                 for name, (rows, cols) in image.mats.items()]
+        parts += [(a, b, spec.hidden, image.dchunks[fmt])
+                  for a, b in zip(offsets["wd"], other_offsets["wd"])]
+        assert len(offsets["wd"]) == spec.ffn // image.dchunks[fmt]
+        for (data, scales), (other_data, other_scales), rows, cols in parts:
+            qb = rows * Q.row_bytes(cols, fmt, cfg.D)
+            sb = rows * Q.scale_bytes(cols, fmt, cfg.D)
+            np.testing.assert_array_equal(mixed[base + data:base + data + qb],
+                                          uniform[other_base + other_data:other_base + other_data + qb])
+            np.testing.assert_array_equal(mixed[base + scales:base + scales + sb],
+                                          uniform[other_base + other_scales:other_base + other_scales + sb])
+            code_bytes += qb
+            weight_bytes += qb + sb
+        # Quantize original adjacent-order rows independently of image offsets.
+        # Per-row quantization commutes with the Q/K row permutation.
+        converted = {name: layer[name] for name in ("norm1", "norm2")}
+        for name in ("wq", "wk", "wv", "wo", "wg", "wu", "wd"):
+            q, scales = Q.quantize_mxu(layer[name], fmt, cfg.D)
+            converted[name] = Q.dequantize_mxu(q, scales, fmt, layer[name].shape[1], cfg.D)
+        quantized.append(converted)
+    assert image.weight_code_bytes == code_bytes
+    assert image.weight_bytes == weight_bytes
+    expected = reference(spec, quantized, norm, inputs[:4])
+    with Engine(spec, weights, norm, cfg=cfg, cap=4, formats=formats) as engine:
+        assert engine.image.lf == image.lf
+        actual = np.stack([engine.step(row) for row in inputs[:4]])
+        assert np.linalg.norm(actual - expected) / np.linalg.norm(expected) < .03
+        engine.reset()
+        replay = np.stack([engine.step(row) for row in inputs[:4]])
+        np.testing.assert_array_equal(actual.view(np.uint32), replay.view(np.uint32))
+
+
+def test_uniform_default_ignores_environment_format_overrides(monkeypatch):
+    spec, cfg, weights, norm, _ = fixture_model(layers=1)
+    baseline = Image(spec, cfg, cap=1, formats="").build(weights, norm)[0]
+    monkeypatch.setenv("OTPU_FORMATS", "attn=nvfp4,mlp=int8")
+    default = Image(spec, cfg, cap=1)
+    assert default.lf == (("int4",) * 3,)
+    np.testing.assert_array_equal(default.build(weights, norm)[0], baseline)
+    with Engine(spec, weights, norm, cfg=cfg, cap=1) as engine:
+        assert engine.image.lf == default.lf
+
+
+@pytest.mark.parametrize("formats", [None, True, 17, "attn=fp4", "down=nvfp4",
+                                      "attn=int3", "unknown=int8", "attn@2-1=int8"])
+def test_invalid_explicit_formats_fail_before_weight_reads(formats):
+    spec, cfg, _, _, _ = fixture_model(layers=1)
+    with pytest.raises(ValueError):
+        Image(spec, cfg, cap=1, formats=formats)
+    with pytest.raises(ValueError):
+        Engine(spec, None, None, cfg=cfg, cap=1, formats=formats)
+
+
+def test_first_four_and_last_int8_layer_candidate_layout_without_weight_allocation():
+    cfg = Config(S=1, D=128, MCOLS=4, ACT_ROWS=16, ACT_BLOCKS=128, TMEM_WORDS=65536,
+                 IMEM_WORDS=32768, PAIR=True, SEQ_WC=True, DRAM_BYTES=1 << 40)
+    spec = Spec()
+    baseline = Image(spec, cfg, cap=1024)
+    formats = "attn@0-3=int8,mlp@0-3=int8,attn@31=int8,mlp@31=int8"
+    candidate = Image(spec, cfg, cap=1024, formats=formats)
+    assert candidate.lf == (("int8",) * 3,) * 4 + (("int4",) * 3,) * 27 + (("int8",) * 3,)
+    assert len(candidate.runs) == 3
+    int8 = Image(replace(spec, layers=1), cfg, cap=1024, wformat="int8")
+    int4 = Image(replace(spec, layers=1), cfg, cap=1024, wformat="int4")
+    assert candidate.weight_bytes - baseline.weight_bytes == 5 * (int8.weight_bytes - int4.weight_bytes)
+    assert candidate.weight_code_bytes - baseline.weight_code_bytes == 5 * (
+        int8.weight_code_bytes - int4.weight_code_bytes)
+    assert candidate.required_bytes <= 1 << 32

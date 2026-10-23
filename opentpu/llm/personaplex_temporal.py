@@ -135,15 +135,21 @@ class Image(G.Image):
     additionally reserves the driver's program area. ``cap`` is the physical
     attention-block-aligned KV capacity; ``frame_limit`` is the logical limit.
     ``weight_code_bytes`` is the port-B matrix payload; ``weight_bytes`` also
-    includes scales and norms read through the other memory port.
+    includes scales and norms read through the other memory port. ``formats``
+    explicitly selects per-layer INT4/INT8 kinds; the default ignores OTPU_FORMATS.
     """
 
     def __init__(self, spec: Spec, cfg: Config, cap: int = 256,
-                 wformat: str = "int4"):
+                 wformat: str = "int4", formats: str = ""):
         if cfg.S != 1:
             raise ValueError("PersonaPlex temporal currently supports one FPGA slice")
         if wformat not in ("int4", "int8"):
             raise ValueError("wformat must be int4 or int8")
+        if not isinstance(formats, str):
+            raise ValueError("formats must be an explicit string; use '' for uniform weights")
+        rules = G.FM.rules(formats, G.KINDS)
+        if any(rule[-1] not in ("int4", "int8") for rule in rules):
+            raise ValueError("PersonaPlex formats support only int4 and int8")
         if isinstance(cap, bool) or not isinstance(cap, int) or not 0 < cap <= spec.context:
             raise ValueError(f"cap must be within 1..{spec.context} frames")
         if cfg.D > 256 or 256 % cfg.D:
@@ -156,7 +162,7 @@ class Image(G.Image):
         self.block = 256 if aligned_cap >= 256 else cfg.D
         aligned_cap = -(-cap // self.block) * self.block
         super().__init__(spec._core(), cfg, aligned_cap, wformat=wformat,
-                         head_format=wformat, lookup=False)
+                         head_format=wformat, lookup=False, formats=formats)
         self.zmask = (self.nbytes + 63) // 64 * 64
         self.nbytes = (self.zmask + 4 * (self.cap + self.block) + 63) // 64 * 64
         self.required_bytes = (self.nbytes + 4095) // 4096 * 4096 + \
@@ -164,16 +170,17 @@ class Image(G.Image):
         self.weight_bytes = 4 * spec.hidden * (2 * spec.layers + 1)
         self.weight_code_bytes = 0
         # Count the exact matrix+scale layouts, excluding alignment, KV and I/O.
-        mf = self.mats_formats(self.lf[0])
-        for name, (n, k) in self.mats.items():
-            self.weight_code_bytes += spec.layers * n * Q.row_bytes(k, mf[name], cfg.D)
-            self.weight_bytes += spec.layers * n * (
-                Q.row_bytes(k, mf[name], cfg.D) + Q.scale_bytes(k, mf[name], cfg.D))
-        c = self.dchunk
-        self.weight_code_bytes += spec.layers * (spec.ffn // c) * spec.hidden * \
-            Q.row_bytes(c, wformat, cfg.D)
-        self.weight_bytes += spec.layers * (spec.ffn // c) * spec.hidden * (
-            Q.row_bytes(c, wformat, cfg.D) + Q.scale_bytes(c, wformat, cfg.D))
+        for key in self.lf:
+            mf = self.mats_formats(key)
+            for name, (n, k) in self.mats.items():
+                self.weight_code_bytes += n * Q.row_bytes(k, mf[name], cfg.D)
+                self.weight_bytes += n * (
+                    Q.row_bytes(k, mf[name], cfg.D) + Q.scale_bytes(k, mf[name], cfg.D))
+            fd = mf["wd"]
+            c = self.dchunks[fd]
+            self.weight_code_bytes += (spec.ffn // c) * spec.hidden * Q.row_bytes(c, fd, cfg.D)
+            self.weight_bytes += (spec.ffn // c) * spec.hidden * (
+                Q.row_bytes(c, fd, cfg.D) + Q.scale_bytes(c, fd, cfg.D))
         if self.required_bytes > cfg.DRAM_BYTES:
             raise MemoryError(f"temporal image and program area need {self.required_bytes} "
                               f"bytes, device has {cfg.DRAM_BYTES}; reduce cap or use a "
@@ -202,6 +209,7 @@ class Image(G.Image):
         for i in range(spec.layers):
             lw = layer_weights[i]
             base, offsets = self._off(i).const, self.bofs[self.lf[i]]
+            mf = self.mats_formats(self.lf[i])
             for src, dst in (("norm1", "g_in"), ("norm2", "g_post")):
                 put(base + offsets[dst], _checked(lw[src], (spec.hidden,), f"layer {i} {src}"))
             qb = QC.Batch()
@@ -210,18 +218,20 @@ class Image(G.Image):
                 if name in ("wq", "wk"):
                     a = _split_pairs(a, spec)
                 da, sa = (base + v for v in offsets[name])
-                qb.submit(a, self.wformat, D,
+                qb.submit(a, mf[name], D,
                           lambda q, s, da=da, sa=sa: (put(da, q), put(sa, s)))
             a = _checked(lw["wd"], (spec.hidden, spec.ffn), f"layer {i} wd")
             addresses = [(base + da, base + sa) for da, sa in offsets["wd"]]
+            fd = mf["wd"]
+            chunk = self.dchunks[fd]
 
-            def down(q, s, addresses=addresses):
+            def down(q, s, addresses=addresses, fd=fd, chunk=chunk):
                 for (da, sa), (pq, ps) in zip(addresses, Q.column_parts(
-                        q, s, self.wformat, spec.ffn, self.dchunk, D)):
+                        q, s, fd, spec.ffn, chunk, D)):
                     put(da, pq)
                     put(sa, ps)
 
-            qb.submit(a, self.wformat, D, down)
+            qb.submit(a, fd, D, down)
             qb.wait()
         return [data]
 
@@ -250,7 +260,8 @@ class Engine:
     """
 
     def __init__(self, spec: Spec, layer_weights, final_norm, *, cfg: Config | None = None,
-                 backend="isa", cap: int = 256, wformat: str = "int4", transport=None):
+                 backend="isa", cap: int = 256, wformat: str = "int4", transport=None,
+                 formats: str = ""):
         if not (isinstance(backend, str) and backend in ("isa", "board")) and \
                 not callable(backend):
             raise ValueError("backend must be 'isa', 'board', or a backend factory")
@@ -267,10 +278,10 @@ class Engine:
             probe_cfg = Config(S=1, D=128, MCOLS=4, ACT_BLOCKS=128, ACT_ROWS=16,
                                TMEM_WORDS=65536, IMEM_WORDS=32768, PAIR=True,
                                DRAM_BYTES=1 << 40)
-            probe = Image(spec, probe_cfg, cap, wformat)
+            probe = Image(spec, probe_cfg, cap, wformat, formats=formats)
             cfg = replace(probe_cfg, DRAM_BYTES=probe.required_bytes)
         self.cfg = cfg
-        self.image = Image(spec, cfg, cap, wformat)
+        self.image = Image(spec, cfg, cap, wformat, formats=formats)
         # Catch hardware instruction/TMEM capacity errors before costly quantization.
         for bucket in range(1, (cap + self.image.block - 1) // self.image.block + 1):
             self._programs[bucket] = self.image.compile_bucket(bucket)

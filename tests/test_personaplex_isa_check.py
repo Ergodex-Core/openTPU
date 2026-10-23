@@ -143,3 +143,21 @@ def test_progress_layers_preserves_four_frame_image_isa_replay_and_metrics(isa_c
         assert -1 <= metrics["cosine_similarity"] <= 1
     assert isa_check.precision_metrics(outputs, expected) == isa_check.precision_metrics(
         plain_outputs, expected)
+
+
+@pytest.mark.parametrize("formats", ["", "attn@0-3=int8,mlp@0-3=int8"])
+def test_cli_passes_explicit_precision_rules_to_validation(isa_check, monkeypatch, tmp_path, formats):
+    calls = []
+
+    def run(*args, **kwargs):
+        calls.append((args, kwargs))
+        return {"status": "completed", "reset_bit_exact": True,
+                "precision_delta": {}, "accuracy_acceptance": "pending"}
+
+    monkeypatch.setattr(isa_check, "run", run)
+    argv = []
+    for flag in ("model-dir", "embeddings", "reference-dir", "output-dir", "cache-dir"):
+        argv.extend(["--" + flag, str(tmp_path / flag)])
+    isa_check.main([*argv, "--formats", formats])
+    assert len(calls) == 1
+    assert calls[0][1] == {"cap": 1024, "formats": formats}

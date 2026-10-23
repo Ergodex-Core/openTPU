@@ -161,13 +161,13 @@ class TimedEngine:
         }
 
 
-def inspect_layout(spec, cfg, cap, wformat):
+def inspect_layout(spec, cfg, cap, wformat, *, formats=""):
     from opentpu import waits
     from opentpu.llm.personaplex_temporal import Image
     # Layout only: permit oversized layouts to report their deficit. Engine
     # construction always receives the real device capacity and enforces fit.
     image = Image(spec, replace(cfg, DRAM_BYTES=max(cfg.DRAM_BYTES, 1 << 40)),
-                  cap=cap, wformat=wformat)
+                  cap=cap, wformat=wformat, formats=formats)
     traffic = image.weight_bytes
     code_bytes = image.weight_code_bytes
     size = image.nbytes
@@ -175,6 +175,8 @@ def inspect_layout(spec, cfg, cap, wformat):
     allocated = image.required_bytes
     # burst200's 128-byte port at 200 MHz. This is a lower bound, not a prediction.
     return {
+        "weight_formats": {"base": wformat, "rules": formats,
+                           "layers": [list(f) for f in image.lf]},
         "context_frames": cap, "context_seconds_before_reset": cap / 12.5,
         "image_bytes": size, "program_reservation_bytes": program,
         "required_bytes": allocated, "dram_bytes": cfg.DRAM_BYTES,
@@ -216,10 +218,12 @@ def preflight(args, weights, spec):
     if missing:
         errors.append("Missing runtime modules: " + ", ".join(missing))
     cfg = config(args.profile)
-    layout = inspect_layout(spec, cfg, args.cap, args.wformat)
+    layout = inspect_layout(spec, cfg, args.cap, args.wformat,
+                            formats=getattr(args, "formats", ""))
     programs = []
     if layout["fits"]:
-        image = Image(spec, cfg, cap=args.cap, wformat=args.wformat)
+        image = Image(spec, cfg, cap=args.cap, wformat=args.wformat,
+                      formats=getattr(args, "formats", ""))
         for bucket in range(1, (args.cap + image.block - 1) // image.block + 1):
             compiled, _ = image.compile_bucket(bucket)
             programs.append(len(compiled[0]) * 8)
@@ -337,6 +341,8 @@ def main():
     parser.add_argument("--cap", type=int, default=1024,
                         help="bounded temporal context including voice/text prompt frames")
     parser.add_argument("--wformat", choices=["int4", "int8"], default="int4")
+    parser.add_argument("--formats", default="",
+                        help="explicit INT4/INT8 per-kind/layer rules; empty keeps uniform precision")
     parser.add_argument("--embeddings", type=Path, help="benchmark input: float32 .npy [frames,hidden]")
     parser.add_argument("--output", type=Path, help="benchmark normalized hidden outputs: .npy")
     parser.add_argument("--port", type=int, default=8998)
@@ -369,7 +375,8 @@ def main():
     if args.cap > spec.context:
         parser.error(f"cap exceeds checkpoint context of {spec.context} frames")
     if args.mode == "inspect":
-        report = inspect_layout(spec, config(args.profile), args.cap, args.wformat)
+        report = inspect_layout(spec, config(args.profile), args.cap, args.wformat,
+                                formats=args.formats)
         print(json.dumps(report, indent=2))
         return 0 if report["fits"] else 2
     if args.mode in ("preflight", "serve"):
@@ -396,12 +403,13 @@ def main():
             print(json.dumps({"board": session.info}, default=str), flush=True)
         else:
             cfg, backend = config(args.profile), "isa"
-        report = inspect_layout(spec, cfg, args.cap, args.wformat)
+        report = inspect_layout(spec, cfg, args.cap, args.wformat, formats=args.formats)
         print(json.dumps(report, indent=2), flush=True)
         if not report["fits"]:
             raise MemoryError("PersonaPlex temporal image exceeds the probed device memory")
         engine = TimedEngine(Engine(spec, weights.layers, weights.final_norm, cfg=cfg,
-                                   backend=backend, cap=args.cap, wformat=args.wformat), args.backend)
+                                   backend=backend, cap=args.cap, wformat=args.wformat,
+                                   formats=args.formats), args.backend)
         if args.mode == "serve":
             serve(args, weights, engine)
         else:

@@ -480,7 +480,8 @@ def test_bad_output_is_rejected_before_backend_and_preserved(cli, monkeypatch, t
         assert actual.read_bytes() == b"preserved evidence"
 
 
-def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path):
+@pytest.mark.parametrize("formats", ["", "attn@0-3=int8,mlp@0-3=int8,attn@31=int8,mlp@31=int8"])
+def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path, formats):
     from opentpu import target
     from opentpu.llm import personaplex_temporal, personaplex_weights
 
@@ -489,14 +490,14 @@ def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path
     monkeypatch.setattr(personaplex_weights, "MLXWeights",
                         lambda path: SimpleNamespace(spec=spec, layers=[], final_norm=[]))
     monkeypatch.setattr(target, "config", lambda profile: object())
-    monkeypatch.setattr(cli, "inspect_layout", lambda *args: {"fits": True})
+    monkeypatch.setattr(cli, "inspect_layout", lambda *args, **kwargs: {"fits": True})
     closed = []
 
     class Engine:
         last_stats = {"frame": 0, "instructions": [1]}
 
         def __init__(self, *args, **kwargs):
-            pass
+            assert kwargs["formats"] == formats
 
         def step(self, value):
             output.write_bytes(b"another writer's evidence")
@@ -510,7 +511,7 @@ def test_benchmark_final_output_creation_is_exclusive(cli, monkeypatch, tmp_path
     np.save(inputs, np.ones((1, 4), np.float32))
     monkeypatch.setattr(sys, "argv", ["personaplex_fpga.py", "benchmark", "--backend", "isa",
                                      "--model-dir", str(tmp_path), "--embeddings", str(inputs),
-                                     "--output", str(output), "--cap", "4"])
+                                     "--output", str(output), "--cap", "4", "--formats", formats])
     with pytest.raises(FileExistsError):
         cli.main()
     assert output.read_bytes() == b"another writer's evidence" and closed == [True]

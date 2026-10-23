@@ -141,7 +141,8 @@ def precision_metrics(actual, expected):
     return result
 
 
-def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap=1024):
+def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap=1024,
+        formats=""):
     model_dir, embeddings_file, reference_dir, output_dir, cache_dir = (
         Path(path).resolve() for path in
         (model_dir, embeddings_file, reference_dir, output_dir, cache_dir))
@@ -261,7 +262,7 @@ def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap
                                  "payload_hashes_verified": False}
         profile = target.load(str(PROFILE))
         cfg = target.config(profile)
-        image = Image(weights.spec, cfg, cap=cap, wformat="int4")
+        image = Image(weights.spec, cfg, cap=cap, wformat="int4", formats=formats)
         receipt["temporal_spec"] = asdict(weights.spec)
         receipt["profile"] = {"path": str(PROFILE), "sha256": small_sha256(PROFILE),
                               "name": profile.name, "config": asdict(cfg)}
@@ -270,7 +271,8 @@ def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap
                             "isa_dram_bytes": cfg.DRAM_BYTES, "weight_bytes": image.weight_bytes,
                             "weight_code_bytes": image.weight_code_bytes}
         receipt["precision"] = {"source_weights": "MLX affine INT4/group64 dequantized to FP32",
-                                "isa_weights": "openTPU MX INT4 requantization",
+                                "isa_weights": "openTPU MX requantization; INT4 base with explicit per-layer overrides",
+                                "formats": formats, "layer_formats": [list(f) for f in image.lf],
                                 "activations": "openTPU QACT INT8 with MX scales",
                                 "kv_cache": "INT8", "arithmetic": "openTPU ISA FP32/FTZ and MX integer accumulation",
                                 "output_dtype": "float32", "reference_dtype": "float64"}
@@ -283,7 +285,7 @@ def run(model_dir, embeddings_file, reference_dir, output_dir, cache_dir, *, cap
         build_started = time.perf_counter()
         layers = ProgressLayers(weights.layers, emit)
         engine = Engine(weights.spec, layers, weights.final_norm, cfg=cfg,
-                        backend="isa", cap=cap, wformat="int4")
+                        backend="isa", cap=cap, wformat="int4", formats=formats)
         receipt["image_build_cpu_wall_seconds"] = time.perf_counter() - build_started
         emit("image_ready", completed_layers=layers.next_index, total_layers=len(layers))
         outputs, receipt["isa_runs"] = [], []
@@ -344,9 +346,11 @@ def main(argv=None):
     parser.add_argument("--output-dir", required=True, type=Path)
     parser.add_argument("--cache-dir", required=True, type=Path)
     parser.add_argument("--cap", type=int, default=1024)
+    parser.add_argument("--formats", default="",
+                        help="explicit INT4/INT8 per-kind/layer rules, e.g. attn@0-3=int8,mlp@0-3=int8")
     args = parser.parse_args(argv)
     receipt = run(args.model_dir, args.embeddings, args.reference_dir,
-                  args.output_dir, args.cache_dir, cap=args.cap)
+                  args.output_dir, args.cache_dir, cap=args.cap, formats=args.formats)
     print(json.dumps({"status": receipt["status"], "output_dir": str(args.output_dir.resolve()),
                       "reset_bit_exact": receipt["reset_bit_exact"],
                       "precision_delta": receipt["precision_delta"],
