@@ -1,0 +1,70 @@
+{
+  "acquisition-complete.json": {
+    "bytes": 1186,
+    "sha256": "6992b1dfa841d862bcdcbf228b6764a04a20f1a99196a98e8eb98b73f9aeaaaa"
+  },
+  "audio-checkpoint-manifest.json": {
+    "bytes": 529,
+    "sha256": "03681486a09145e6fa5222147e33a0c7aeae16a6c29f29c301d4686c629e469e"
+  },
+  "audio-config.json": {
+    "bytes": 2336,
+    "sha256": "ee65bb901c876664ab8707c487157aa1a6ee57c65969b28fb5ec9dc211e68167"
+  },
+  "checkpoint-manifest.json": {
+    "bytes": 507,
+    "sha256": "fa3430218ea1cc50a8257943a1e1c69c1f59a351116659303f2b5bd60f09121c"
+  },
+  "front-acceptance-01.json": {
+    "bytes": 17262,
+    "sha256": "1ef832d18dcbe70ffc1b7f981109618b98e7a66621508aa5d6d5b62bdd14e92f"
+  },
+  "front-acceptance-01.request.json": {
+    "bytes": 340,
+    "sha256": "84d71f3270c4921b59b22e6095166af3d1658eb5e9267de4cd75f0606637d5b1"
+  },
+  "front-acceptance-01.result.json": {
+    "bytes": 61,
+    "sha256": "a683445ce34093d9bf28213d23a1aa7b4f1ad28d306ca6382826776b2435fb97"
+  },
+  "front-acceptance-01.rows.json": {
+    "bytes": 150943,
+    "sha256": "bfa530b1327b11dc7023af838fe7d8c80b08ce17d2b73dca0060bb455b3e9a53"
+  },
+  "front-tests-01.log": {
+    "bytes": 98,
+    "sha256": "2ee117b17b8c204b0293ce386097cf04a509375380564789b7a3aa6ed3ebe09e"
+  },
+  "front-tests-01.request.json": {
+    "bytes": 188,
+    "sha256": "2fc70658cca4ba66ff2bf598f9f2c658122b49f1e3cb05c057e15e0a8c217972"
+  },
+  "front-tests-01.result.json": {
+    "bytes": 61,
+    "sha256": "c20ba08b537f57f8b83a90e13881022e91d1515094e803d3ced1e1ae194e7489"
+  },
+  "local-verification.json": {
+    "bytes": 538,
+    "sha256": "cca1fed8461d8a08ecc49bfb21069ee89be7010bbeeb374d04749f32f075a748"
+  },
+  "manifest.json": {
+    "bytes": 639,
+    "sha256": "9b3c2465b4c022d27faf0e56c17d65e201a71a28f26d2a00dde63aa4197c807c"
+  },
+  "official-model-metadata.json": {
+    "bytes": 6242,
+    "sha256": "00f323aa0d1e1d80c07e46a3134edd8bbdb0a1440bd0de7c5ec34c2038361c4d"
+  },
+  "prior-source-audit.json": {
+    "bytes": 466,
+    "sha256": "89a4cc118ceb7f6903c2066147d1e4e6e39eeb4d676e934147dc59b40bd58429"
+  },
+  "runtime-provenance.json": {
+    "bytes": 373,
+    "sha256": "76be5a8a7cf4f0ba0b3bee99612a728b993e699a0759859f7adb8415252a821d"
+  },
+  "source_tree_sha256.json": {
+    "bytes": 15042,
+    "sha256": "db3d8e6987c22a67154a77170d1229632bccebcca4f8e41fc83844293c38ef18"
+  }
+}

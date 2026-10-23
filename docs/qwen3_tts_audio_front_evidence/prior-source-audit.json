@@ -1,0 +1,10 @@
+{
+  "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+  "source_file": "qwen_tts/core/tokenizer_12hz/modeling_qwen3_tts_tokenizer_v2.py",
+  "source_sha256": "844e8dd8c0182ef9c6463c874631c22ef3c5a4fd1899dd657016164cc5379628",
+  "bytes": 40519,
+  "origin": "previous pinned read-only official source research",
+  "executed": false,
+  "source_license": "Apache-2.0",
+  "license_sha256": "a44a6081c73ad75f0255bb2bb5cab74ef1829565a895a24e53a4f11290ab7655"
+}

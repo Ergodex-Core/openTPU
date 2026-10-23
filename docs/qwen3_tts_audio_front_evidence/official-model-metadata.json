@@ -1,0 +1,233 @@
+{
+  "_id": "697095021b36e8744bdc8ea5",
+  "id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "private": false,
+  "pipeline_tag": "text-to-speech",
+  "tags": [
+    "safetensors",
+    "qwen3_tts",
+    "tts",
+    "qwen",
+    "audio",
+    "text-to-speech",
+    "zh",
+    "en",
+    "ja",
+    "ko",
+    "de",
+    "fr",
+    "ru",
+    "pt",
+    "es",
+    "it",
+    "arxiv:2601.15621",
+    "license:apache-2.0",
+    "region:us"
+  ],
+  "downloads": 870920,
+  "likes": 209,
+  "modelId": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+  "author": "Qwen",
+  "sha": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "lastModified": "2026-01-29T08:01:51.000Z",
+  "gated": false,
+  "disabled": false,
+  "model-index": null,
+  "config": {
+    "architectures": [
+      "Qwen3TTSForConditionalGeneration"
+    ],
+    "model_type": "qwen3_tts",
+    "tokenizer_config": {
+      "bos_token": null,
+      "eos_token": "<|im_end|>",
+      "pad_token": "<|endoftext|>",
+      "unk_token": null
+    }
+  },
+  "cardData": {
+    "license": "apache-2.0",
+    "pipeline_tag": "text-to-speech",
+    "language": [
+      "zh",
+      "en",
+      "ja",
+      "ko",
+      "de",
+      "fr",
+      "ru",
+      "pt",
+      "es",
+      "it"
+    ],
+    "tags": [
+      "tts",
+      "qwen",
+      "audio"
+    ],
+    "arxiv": 2601.15621
+  },
+  "siblings": [
+    {
+      "rfilename": ".gitattributes",
+      "blobId": "a6344aac8c09253b3b630fb776ae94478aa0275b",
+      "size": 1519
+    },
+    {
+      "rfilename": "README.md",
+      "blobId": "ed613da23a5e133a506b13b79055854938b9e67c",
+      "size": 3263
+    },
+    {
+      "rfilename": "config.json",
+      "blobId": "5e8d5fc100536984e3a89bd87ef08e59e322b29b",
+      "size": 4908
+    },
+    {
+      "rfilename": "generation_config.json",
+      "blobId": "1872b16d4535564abf2db5d6debe6cddd82b7f2e",
+      "size": 245
+    },
+    {
+      "rfilename": "merges.txt",
+      "blobId": "20024bfe7c83998e9aeaf98a0cd6a2ce6306c2f0",
+      "size": 1671839
+    },
+    {
+      "rfilename": "model.safetensors",
+      "blobId": "7fcbae5382ce4359e3b538bad87c7bad6b931050",
+      "size": 1811626576,
+      "lfs": {
+        "sha256": "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
+        "size": 1811626576,
+        "pointerSize": 135
+      }
+    },
+    {
+      "rfilename": "preprocessor_config.json",
+      "blobId": "0525dd953bb9241912f7147666f0d535165d5d4f",
+      "size": 127
+    },
+    {
+      "rfilename": "speech_tokenizer/config.json",
+      "blobId": "06cc8dc4c5ec8a1929086b71b98c313020d9268b",
+      "size": 2336
+    },
+    {
+      "rfilename": "speech_tokenizer/configuration.json",
+      "blobId": "ab58e2eaf53cd14a1a2a7527d9261ceea93a24cd",
+      "size": 76
+    },
+    {
+      "rfilename": "speech_tokenizer/model.safetensors",
+      "blobId": "026d66bfb5d730dcfd56450c5e9e51b3ef4e0712",
+      "size": 682293092,
+      "lfs": {
+        "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+        "size": 682293092,
+        "pointerSize": 134
+      }
+    },
+    {
+      "rfilename": "speech_tokenizer/preprocessor_config.json",
+      "blobId": "ba40914f4f49ab98a8ca545d4892ef7291a39592",
+      "size": 234
+    },
+    {
+      "rfilename": "tokenizer_config.json",
+      "blobId": "6ff9fd60cc623bb54bbd603cbd418c97a11528d7",
+      "size": 7344
+    },
+    {
+      "rfilename": "vocab.json",
+      "blobId": "4783fe10ac3adce15ac8f358ef5462739852c569",
+      "size": 2776833
+    }
+  ],
+  "spaces": [
+    "fastgpu/vram-and-gpu-cost-calculator",
+    "HuggingFaceM4/faster-qwen3-tts-demo",
+    "NeuralFalcon/Qwen3-TTS-Colab",
+    "anshu1357/Qwen3-tts-demo",
+    "Zyan11/LocalAI-Amlan-Edition",
+    "Davex256/LocalAI-Amlan-Edition",
+    "ArtFix0/reachy_conv_app",
+    "ArtFix0/speech-to-speech-dashboard",
+    "elielsilva/qwen-tts-ptbr",
+    "CJackHwang/qwentts",
+    "AayushT115/emotional-multilingual-tts",
+    "build-small-hackathon/Sign2Voice",
+    "1een/edge-tts",
+    "gsacco15/gsacco-voice-studio",
+    "ohmp/Ohm-Audio-Studio",
+    "Ryanus/Qwen3-TTS-12Hz-0.6B-CustomVo",
+    "3kmfi6hp/qwen3-tts-asr",
+    "King2473/voicenova-tts",
+    "broadfield-dev/qweb3-tts-cpu",
+    "aniketsirsikar/voiceapp2",
+    "krishna-zack/Qwen3-TTS-Colab",
+    "Heartsync/faster-qwen3-tts-demo",
+    "anyam12/faster-qwen3-tts-demo",
+    "dearhi/ttsv2",
+    "Ramtinhoss/faster-qwen3-tts-demo",
+    "underrate/qwen-tts",
+    "leey00nsu/qwen-3.5-tts-faster-gradio",
+    "lovegold/faster-qwen3-tts-demo",
+    "lainlives/faster-qwen3-tts-demo",
+    "adisaljusi/faster-qwen3-tts-demo",
+    "terrancemoon9/Boovore_Multi-Engine-TTS-Studio",
+    "marcosremar2/babelcast-mistral",
+    "oicui/faster-qwen3-tts-demo",
+    "SyedaZaidi13/Read2me",
+    "codexxx/faster-qwen3-tts-demo",
+    "userhugginggit/generaqtts",
+    "jora1313/juli-qwen-tts",
+    "NightfuryEquinn/Gefera",
+    "MersiLLC/Qwen3-TTS-Colab",
+    "spar4s/Qwen3-TTS-Colab",
+    "kyung-chul/stylevoicechat",
+    "moonjumtholvi23/testtts",
+    "lordacart/faster-qwen3-tts-demo",
+    "revistasobreorugas/faster-qwen3-tts-demo",
+    "milkybeany/faster-qwen3-tts-demo",
+    "iamdineshbasnet/voicebox-ai",
+    "juanmedina123/faster-qwen3-tts-demo",
+    "RyanSaleh/faster-qwen3-tts-demo",
+    "Magicbeee/faster-qwen3-tts-demo",
+    "wick8221/my-voicebox",
+    "Gooner777/faster-qwen3-tts-demo",
+    "sshtel/moms-voice-ai",
+    "jsmithbig/faster-qwen3-tts-demo",
+    "Ahmed35583/Voice",
+    "ahmetyasinn1/voice-box",
+    "leecher05/qwenTTS",
+    "DrSquare/MomsVoice",
+    "Jainish21/weather-fish",
+    "Tiro1221/animation-toolkit",
+    "antoniomae1234/faster-qwen3-tts-demo",
+    "YabinYu/qwen-tts",
+    "shenmir/advanced-ai-companion",
+    "marcosremar2/qwen3-tts-fast",
+    "marcosremar2/qwen3-tts-fast-2",
+    "Lainer93/LainerTTS",
+    "uulong950/qingming-qwen3-tts",
+    "marcosremar2/qwen3-tts-fr-9",
+    "marcosremar2/qwen3-tts-fr-5",
+    "marcosremar2/qwen3-tts-fr-6",
+    "marcosremar2/qwen3-tts-fr-8",
+    "marcosremar2/qwen3-tts-fr-7",
+    "pirzm1/video-generator",
+    "stephen123457/shanghai-guide-tts",
+    "LALAKLA/qwen3-tts-fast-2",
+    "hendrix313/dubavox-qwen3-free",
+    "pyloo/flux-actualites"
+  ],
+  "createdAt": "2026-01-21T08:57:38.000Z",
+  "safetensors": {
+    "parameters": {
+      "BF16": 905788672
+    },
+    "total": 905788672
+  },
+  "usedStorage": 2493919668
+}

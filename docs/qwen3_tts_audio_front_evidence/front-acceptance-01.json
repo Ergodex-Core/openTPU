@@ -1,0 +1,662 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "arithmetic_contract": "Pinned source weights evaluated with FP32 algebra; BF16 execution is not bit-exact and is not relabeled passed",
+  "decoder_checkpoint": {
+    "bytes": 682293092,
+    "sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+    "header_sha256": "2ba4e8dcbacb8aca087f1f8cfd8b7a2ab144d32486e635afaf2b3f6918b8cb65"
+  },
+  "source_views": 36,
+  "physical_parameters": 38,
+  "source_mapping": {
+    "audio.embedding.0": {
+      "source": "decoder.quantizer.rvq_first.vq.layers.0._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.0": {
+      "source": "decoder.quantizer.rvq_first.vq.layers.0._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.1": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.0._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.1": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.0._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.2": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.1._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.2": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.1._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.3": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.2._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.3": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.2._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.4": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.3._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.4": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.3._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.5": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.4._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.5": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.4._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.6": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.5._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.6": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.5._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.7": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.6._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.7": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.6._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.8": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.7._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.8": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.7._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.9": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.8._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.9": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.8._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.10": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.9._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.10": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.9._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.11": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.10._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.11": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.10._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.12": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.11._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.12": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.11._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.13": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.12._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.13": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.12._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.14": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.13._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.14": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.13._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.embedding.15": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.14._codebook.embedding_sum",
+      "shape": [
+        2048,
+        256
+      ],
+      "tap": null
+    },
+    "audio.usage.15": {
+      "source": "decoder.quantizer.rvq_rest.vq.layers.14._codebook.cluster_usage",
+      "shape": [
+        2048
+      ],
+      "tap": null
+    },
+    "audio.first.projection": {
+      "source": "decoder.quantizer.rvq_first.output_proj.weight",
+      "shape": [
+        512,
+        256,
+        1
+      ],
+      "tap": 0
+    },
+    "audio.rest.projection": {
+      "source": "decoder.quantizer.rvq_rest.output_proj.weight",
+      "shape": [
+        512,
+        256,
+        1
+      ],
+      "tap": 0
+    },
+    "audio.preconv.tap.0": {
+      "source": "decoder.pre_conv.conv.weight",
+      "shape": [
+        1024,
+        512,
+        3
+      ],
+      "tap": 0
+    },
+    "audio.preconv.tap.1": {
+      "source": "decoder.pre_conv.conv.weight",
+      "shape": [
+        1024,
+        512,
+        3
+      ],
+      "tap": 1
+    },
+    "audio.preconv.tap.2": {
+      "source": "decoder.pre_conv.conv.weight",
+      "shape": [
+        1024,
+        512,
+        3
+      ],
+      "tap": 2
+    },
+    "audio.preconv.bias": {
+      "source": "decoder.pre_conv.conv.bias",
+      "shape": [
+        1024
+      ],
+      "tap": null
+    }
+  },
+  "component_summary": {
+    "fp32": {
+      "semantic": 8.281517943590316e-08,
+      "acoustic": 1.1152322704244836e-07,
+      "latent": 9.753481582543625e-05,
+      "preconv": 9.112814500651454e-05
+    },
+    "fp64": {
+      "semantic": 7.831340035998981e-08,
+      "acoustic": 1.3100873601411506e-07,
+      "latent": 9.753054547850181e-05,
+      "preconv": 9.103170030449609e-05
+    }
+  },
+  "component_accepted": true,
+  "component_rows": 75,
+  "reset_replay_bitwise": true,
+  "integrated": {
+    "rows": [
+      {
+        "repetition": 0,
+        "frame": 0,
+        "ids": [
+          1995,
+          117,
+          1114,
+          1723,
+          1443,
+          1543,
+          1751,
+          240,
+          1242,
+          329,
+          293,
+          1347,
+          747,
+          2027,
+          1900,
+          786
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 5.101988922580203e-05,
+          "max_absolute": 0.0018758773803710938,
+          "actual_rms": 9.680507453599102,
+          "reference_rms": 9.68053741392763,
+          "actual_min": -89.47196960449219,
+          "actual_max": 42.840553283691406
+        },
+        "preconv": {
+          "relative_l2": 4.511387746042248e-05,
+          "max_absolute": 7.840245962142944e-05,
+          "actual_rms": 0.11932357089033156,
+          "reference_rms": 0.11932110411557657,
+          "actual_min": -1.0172892808914185,
+          "actual_max": 2.729733467102051
+        }
+      },
+      {
+        "repetition": 0,
+        "frame": 1,
+        "ids": [
+          215,
+          1782,
+          519,
+          1176,
+          350,
+          1573,
+          1636,
+          145,
+          883,
+          455,
+          743,
+          1382,
+          1677,
+          344,
+          1008,
+          803
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 4.952386637255442e-05,
+          "max_absolute": 0.0016651153564453125,
+          "actual_rms": 7.54011709609455,
+          "reference_rms": 7.5401114591347405,
+          "actual_min": -69.03653717041016,
+          "actual_max": 33.97004318237305
+        },
+        "preconv": {
+          "relative_l2": 7.362348744993463e-05,
+          "max_absolute": 0.0001863241195678711,
+          "actual_rms": 0.08851159403441287,
+          "reference_rms": 0.08851248917432633,
+          "actual_min": -0.9054593443870544,
+          "actual_max": 1.7438898086547852
+        }
+      },
+      {
+        "repetition": 0,
+        "frame": 2,
+        "ids": [
+          212,
+          1009,
+          519,
+          677,
+          1210,
+          1748,
+          1636,
+          1434,
+          1611,
+          1974,
+          743,
+          362,
+          1555,
+          781,
+          82,
+          1978
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 4.7611779237840326e-05,
+          "max_absolute": 0.0020351409912109375,
+          "actual_rms": 6.9677920648219684,
+          "reference_rms": 6.967787843381816,
+          "actual_min": -22.980968475341797,
+          "actual_max": 26.251211166381836
+        },
+        "preconv": {
+          "relative_l2": 4.744791254216318e-05,
+          "max_absolute": 0.00010526180267333984,
+          "actual_rms": 0.0902475362806096,
+          "reference_rms": 0.09024891850638665,
+          "actual_min": -1.7062444686889648,
+          "actual_max": 1.2191393375396729
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 0,
+        "ids": [
+          1995,
+          117,
+          1114,
+          1723,
+          1443,
+          1543,
+          1751,
+          240,
+          1242,
+          329,
+          293,
+          1347,
+          747,
+          2027,
+          1900,
+          786
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 5.101988922580203e-05,
+          "max_absolute": 0.0018758773803710938,
+          "actual_rms": 9.680507453599102,
+          "reference_rms": 9.68053741392763,
+          "actual_min": -89.47196960449219,
+          "actual_max": 42.840553283691406
+        },
+        "preconv": {
+          "relative_l2": 4.511387746042248e-05,
+          "max_absolute": 7.840245962142944e-05,
+          "actual_rms": 0.11932357089033156,
+          "reference_rms": 0.11932110411557657,
+          "actual_min": -1.0172892808914185,
+          "actual_max": 2.729733467102051
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 1,
+        "ids": [
+          215,
+          1782,
+          519,
+          1176,
+          350,
+          1573,
+          1636,
+          145,
+          883,
+          455,
+          743,
+          1382,
+          1677,
+          344,
+          1008,
+          803
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 4.952386637255442e-05,
+          "max_absolute": 0.0016651153564453125,
+          "actual_rms": 7.54011709609455,
+          "reference_rms": 7.5401114591347405,
+          "actual_min": -69.03653717041016,
+          "actual_max": 33.97004318237305
+        },
+        "preconv": {
+          "relative_l2": 7.362348744993463e-05,
+          "max_absolute": 0.0001863241195678711,
+          "actual_rms": 0.08851159403441287,
+          "reference_rms": 0.08851248917432633,
+          "actual_min": -0.9054593443870544,
+          "actual_max": 1.7438898086547852
+        }
+      },
+      {
+        "repetition": 1,
+        "frame": 2,
+        "ids": [
+          212,
+          1009,
+          519,
+          677,
+          1210,
+          1748,
+          1636,
+          1434,
+          1611,
+          1974,
+          743,
+          362,
+          1555,
+          781,
+          82,
+          1978
+        ],
+        "codec_ids_match_preserved_fp32_path": true,
+        "latent": {
+          "relative_l2": 4.7611779237840326e-05,
+          "max_absolute": 0.0020351409912109375,
+          "actual_rms": 6.9677920648219684,
+          "reference_rms": 6.967787843381816,
+          "actual_min": -22.980968475341797,
+          "actual_max": 26.251211166381836
+        },
+        "preconv": {
+          "relative_l2": 4.744791254216318e-05,
+          "max_absolute": 0.00010526180267333984,
+          "actual_rms": 0.0902475362806096,
+          "reference_rms": 0.09024891850638665,
+          "actual_min": -1.7062444686889648,
+          "actual_max": 1.2191393375396729
+        }
+      }
+    ],
+    "reset_replay_bitwise": true,
+    "dram_bytes": 2713376640,
+    "accepted": true
+  },
+  "standalone_dram_bytes": 37765248,
+  "programs": [
+    {
+      "name": "audio.rvq.lookup",
+      "instructions": 165,
+      "imem_words": 1320,
+      "tmem_peak_words": 1043,
+      "dram_bytes": 37765248
+    },
+    {
+      "name": "audio.rvq.project",
+      "instructions": 21,
+      "imem_words": 168,
+      "tmem_peak_words": 1538,
+      "dram_bytes": 37765248
+    },
+    {
+      "name": "audio.preconv",
+      "instructions": 35,
+      "imem_words": 280,
+      "tmem_peak_words": 7682,
+      "dram_bytes": 37765248
+    }
+  ],
+  "threshold_relative_l2": 0.035,
+  "upstream_overall_gate_passed": false,
+  "upstream_bf16_comparison": {
+    "generated_ids": 144,
+    "open_loop_id_agreement": 127,
+    "complete_frame_agreement": 6,
+    "open_loop_predictor_greedy_agreement": 118,
+    "predictor_decisions": 135,
+    "conditional_predictor_greedy_agreement": 127,
+    "max_open_loop_predictor_logit_error": 0.3664298384476359,
+    "max_conditional_predictor_logit_error": 0.07513693524724374,
+    "max_feedback_logit_error": 0.070254249313969,
+    "max_embedding_sum_error": 0.001841214192911817,
+    "prefill_final_greedy_agreement": 3,
+    "prefill_all_row_fixed_mask_greedy_agreement": 37,
+    "prefill_all_rows": 42,
+    "final_prefill_rows": 3,
+    "eos_decision_agreement": 9,
+    "eos_decisions": 9
+  },
+  "upstream_thresholds": {
+    "logit_relative_l2": 0.035,
+    "generated_greedy_agreement": 1.0
+  },
+  "waveform_produced": false,
+  "raw_waveform_scaling_validated": false,
+  "complete_utterances_validated": false,
+  "remaining_stages": [
+    "decoder input projection and 8-layer sliding transformer",
+    "2x2 causal upsampling and ConvNeXt",
+    "4 waveform decoder blocks/SnakeBeta/convolution",
+    "raw waveform clamp/scaling and full utterances",
+    "quality and coordinated physical/serving acceptance"
+  ],
+  "code_sha256": {
+    "tools/qwen3_tts_audio_front_acceptance.py": "64385deefb8eb0354ada77dd234a1276438e330a2ecfb878a4e214ac323a4a1c",
+    "opentpu/llm/qwen3_tts_audio_front.py": "d17bb4d2303665dd1f4192ffd299244d9ece981bc16b8aedefd50afa56096919",
+    "opentpu/kernels/tts_audio_front.py": "9d20a1a6979a69e68a31bc6afa068e6b35bab79a1a872d6e6c8cf712064a5386",
+    "tools/qwen3_tts_audio_checkpoint.py": "a7f52939d603e107e14e602f408dc50a101a7754232a5635de48c2c736ea089f",
+    "tests/qwen3_tts_audio_reference.py": "3a905ffc7c7231c64d134d1e8b38f8ed9d0f89a12ece8ca705f73bf0ed67c25b",
+    "tests/test_qwen3_tts_audio_front.py": "e8a08ca63dc2fe7bef6a89df021b3f71ca7c387f715206900082cb9eb15bd42c"
+  },
+  "seconds": 155.61907641898142,
+  "host": "opentpu-m8a-build",
+  "physical_hardware_access": false,
+  "upstream_custom_code_executed": false,
+  "tts_enabled": false,
+  "rows_sha256": "bfa530b1327b11dc7023af838fe7d8c80b08ce17d2b73dca0060bb455b3e9a53"
+}

@@ -1,0 +1,8 @@
+{
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "component_revision": "883edbdd7e6278055be382abe48807803ea9a3e1",
+  "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+  "arithmetic_target": "source weights evaluated with FP32 algebra; no BF16 bit-exact claim",
+  "overall_upstream_gate_passed": false,
+  "physical_hardware_access": false
+}

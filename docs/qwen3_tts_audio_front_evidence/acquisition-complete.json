@@ -1,0 +1,29 @@
+{
+  "files": [
+    {
+      "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+      "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+      "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "file": "speech_tokenizer/model.safetensors",
+      "local_path": "/home/ubuntu/qwen3-tts-waveform-20261023-01/data/audio-model.safetensors",
+      "file_bytes": 682293092,
+      "file_sha256": "836b7b357f5ea43e889936a3709af68dfe3751881acefe4ecf0dbd30ba571258",
+      "verified_lfs_sha256": true,
+      "license": "Apache-2.0",
+      "remote_code_executed": false
+    },
+    {
+      "model_id": "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice",
+      "model_revision": "85e237c12c027371202489a0ec509ded67b5e4b5",
+      "source_revision": "022e286b98fbec7e1e916cb940cdf532cd9f488e",
+      "file": "model.safetensors",
+      "local_path": "/home/ubuntu/qwen3-tts-waveform-20261023-01/data/model.safetensors",
+      "file_bytes": 1811626576,
+      "file_sha256": "bc3c7e785eb961179c25450d1acff03f839e0002f2f3a5aeb67b5735c0fa2adb",
+      "verified_lfs_sha256": true,
+      "license": "Apache-2.0",
+      "remote_code_executed": false
+    }
+  ],
+  "seconds": 7.527980429993477
+}
