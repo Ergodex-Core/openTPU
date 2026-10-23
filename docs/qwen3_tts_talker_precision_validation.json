@@ -1,0 +1,92 @@
+{
+  "base_preserved": "a9c02e7aa8fe07d40a9fe1b140a3a299b9785ad5",
+  "runtime_revision": "30100afb075374381601a6e01d9f914a58dbec91",
+  "instance": "i-0c78de2253f66519d",
+  "region": "us-east-1",
+  "command": "adbf1122-b4f4-4c4d-a7a2-105801582b8e",
+  "tests": {
+    "passed": 58,
+    "seconds": 102.32
+  },
+  "numerical_acceptance": {
+    "exit_code": 2,
+    "accepted": false,
+    "summary": {
+      "fp32": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 144,
+        "complete_frame_agreement": 9,
+        "open_loop_predictor_greedy_agreement": 135,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 135,
+        "max_open_loop_predictor_logit_error": 0.00027106587932356906,
+        "max_conditional_predictor_logit_error": 0.0001988854239718339,
+        "max_feedback_logit_error": 0.00026749757444859156,
+        "max_embedding_sum_error": 0.0,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 42,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      },
+      "bf16": {
+        "generated_ids": 144,
+        "open_loop_id_agreement": 127,
+        "complete_frame_agreement": 6,
+        "open_loop_predictor_greedy_agreement": 118,
+        "predictor_decisions": 135,
+        "conditional_predictor_greedy_agreement": 127,
+        "max_open_loop_predictor_logit_error": 0.3664298384476359,
+        "max_conditional_predictor_logit_error": 0.07513693524724374,
+        "max_feedback_logit_error": 0.070254249313969,
+        "max_embedding_sum_error": 0.001841214192911817,
+        "prefill_final_greedy_agreement": 3,
+        "prefill_all_row_fixed_mask_greedy_agreement": 37,
+        "prefill_all_rows": 42,
+        "final_prefill_rows": 3,
+        "eos_decision_agreement": 9,
+        "eos_decisions": 9
+      }
+    }
+  },
+  "unchanged_thresholds": true,
+  "independent_reference_sequences_unchanged": true,
+  "source_hashes_verified": true,
+  "receipts": {
+    "talker-01.json": {
+      "bytes": 232713,
+      "sha256": "d553b53081fcb0ff2f4bbfa325ebd53944cc590ea87c84f8dbc32913ba6abc1d"
+    },
+    "talker-01.prefill.json": {
+      "bytes": 23580,
+      "sha256": "053ce75b9fc63ab0cf07dc472710020ac670abbacb62b26aab4cda0e08dca246"
+    },
+    "transfer": {
+      "base64_bytes": 50892,
+      "chunk_bytes": 16000,
+      "chunks": 4
+    }
+  },
+  "development_failure": {
+    "first_native_compile": "176d5452-bb36-48fe-ad72-9ba9ddc4fe64",
+    "reason": "128-row K tiles exhausted fragmented TMEM at context511",
+    "fix": "64-row K tiles; same arithmetic order and thresholds",
+    "retest": "ed6384ee-84a6-4647-ad7c-51074761816c",
+    "focused_tests_passed": 2
+  },
+  "compute_preference": {
+    "future_target": "opentpu-m8a-build",
+    "instance": "i-0ec8d33362b3100be",
+    "type": "m8a.16xlarge",
+    "existing_ssh_verified": true,
+    "ssm_inventory_empty": true,
+    "registered_remotes_changed": false,
+    "credentials_changed": false,
+    "mac_control_bridge_required": true,
+    "running_model_job_migrated_or_duplicated": false
+  },
+  "hardware_access": false,
+  "serving_interruption_seconds": 0,
+  "tts_enabled": false
+}

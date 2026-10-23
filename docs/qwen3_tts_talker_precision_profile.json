@@ -1,0 +1,135 @@
+{
+  "profile": {
+    "agfi": "agfi-0001de1dd3df8e21e",
+    "profile": "f2-hbm:p4rl8a64c150",
+    "build_id": "417243f1",
+    "cfg_hash": "dd6b92a6",
+    "config": {
+      "S": 1,
+      "D": 128,
+      "MCOLS": 8,
+      "ACT_BLOCKS": 128,
+      "TMEM_WORDS": 65536,
+      "DRAM_BYTES": 4294967296,
+      "IMEM_WORDS": 32768,
+      "LANES": 8,
+      "PAIR": true,
+      "DSTEP": true,
+      "STREAM": true,
+      "ACT_ROWS": 16,
+      "PORTB": 4,
+      "T2": true,
+      "ROWLANES": true,
+      "ALINE": 64,
+      "SEQ_WC": true
+    },
+    "evidence": "Pinned 30100afb target plus historical exact-image register receipt; no live card query",
+    "physical_tts_accepted": false,
+    "max_serving_interruption_seconds": 30
+  },
+  "capacity": 512,
+  "device_dram_bytes": 2675611520,
+  "incremental_dram_bytes": 572211200,
+  "free_dram_bytes": 1619355776,
+  "fp32_talker_kv_bytes": 117440512,
+  "prefill_programs": 282,
+  "programs_per_frame": 395,
+  "representative_max_context_parts": [
+    {
+      "name": "input",
+      "instructions": 38,
+      "imem_words": 304,
+      "tmem_peak_words": 10243,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LI": 3,
+        "LD": 5,
+        "RLD": 2,
+        "QACT": 4,
+        "MM": 10,
+        "VOP": 10,
+        "ST": 3,
+        "HALT": 1
+      }
+    },
+    {
+      "name": "feedback",
+      "instructions": 36,
+      "imem_words": 288,
+      "tmem_peak_words": 10241,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LI": 2,
+        "LD": 5,
+        "RLD": 1,
+        "QACT": 4,
+        "MM": 10,
+        "VOP": 10,
+        "ST": 3,
+        "HALT": 1
+      }
+    },
+    {
+      "name": "qkv",
+      "instructions": 85,
+      "imem_words": 680,
+      "tmem_peak_words": 12449,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LD": 6,
+        "VOP": 31,
+        "QACT": 2,
+        "MM": 13,
+        "ST": 32,
+        "HALT": 1
+      }
+    },
+    {
+      "name": "attention_head",
+      "instructions": 3153,
+      "imem_words": 25224,
+      "tmem_peak_words": 28737,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LD": 1041,
+        "VOP": 2110,
+        "ST": 1,
+        "HALT": 1
+      }
+    },
+    {
+      "name": "finish",
+      "instructions": 209,
+      "imem_words": 1672,
+      "tmem_peak_words": 12035,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LD": 3,
+        "QACT": 20,
+        "MM": 110,
+        "VOP": 73,
+        "ST": 2,
+        "HALT": 1
+      }
+    },
+    {
+      "name": "codec_head",
+      "instructions": 26,
+      "imem_words": 208,
+      "tmem_peak_words": 7171,
+      "dram_bytes": 2675611520,
+      "opcodes": {
+        "LD": 2,
+        "VOP": 12,
+        "ST": 4,
+        "QACT": 2,
+        "MM": 5,
+        "HALT": 1
+      }
+    }
+  ],
+  "all_talker_layers_have_identical_program_geometry": true,
+  "full_32768_context_supported": false,
+  "no_offload": true,
+  "physical_hardware_access": false
+}
