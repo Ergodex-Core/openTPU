@@ -1,0 +1,101 @@
+{
+  "model_id": "FermionResearch/Phonon-2",
+  "model_revision": "fb09063c9dc8e130d97b3a2191ed5aed6b71bb31",
+  "base_model_revision": "541d1f99c6b0c3cd0b11a95167540bb8edefd82b",
+  "transformers_source_revision": "ea52711b4850c332be3f778396ce882ab84a9011",
+  "fermion_runtime_source_revision": "43b98dd54f13277715d9273b921792aba9aa94ce",
+  "review_date": "2026-10-23",
+  "review_method": "static source and JSON inspection; no remote model code installed or executed",
+  "checkpoint_location": "existing EC2 only; no model weights in this repository",
+  "files": {
+    "config.json": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/config.json",
+      "sha256": "422379e411f14dde97174554deead106ec1e4816e14dd78a1bf99517c6dcc663"
+    },
+    "README.md": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/README.md",
+      "sha256": "0db6f4c2d685297cdd4cf7a10a068b1cadc3552f0e5bd6d4bdaf4a77888ec654"
+    },
+    "packed_manifest.json": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/packed_manifest.json",
+      "sha256": "399e9397cf7415130a0d612b221bc8a37b91c29caafe5e0b20c515d317ffb308"
+    },
+    "SHA256SUMS.txt": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/SHA256SUMS.txt",
+      "sha256": "9dff945de787d8ef9c0e4ad09737356a814241a54f1e2edb1491719752fa7096"
+    },
+    "fermion_container.py": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/fermion_container.py",
+      "sha256": "5cf172e8cf6b313e951c4ef588ca913c7285b0aa3b92de413c3d7ec2b939c0e4"
+    },
+    "reference_transformers.py": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/reference_transformers.py",
+      "sha256": "8481cfc11537e6dc1e40a8296c93aa15f9b7437b1514564caf647f8773c0dcb3"
+    },
+    "NOTICE": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/NOTICE",
+      "sha256": "00624a5043e7ce74029317b024132ca5286116d6fbf3191d226374bc8273789f"
+    },
+    "LICENSE-CODE-Apache-2.0.txt": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/LICENSE-CODE-Apache-2.0.txt",
+      "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+    },
+    "LICENSE-WEIGHTS-CC-BY-4.0.txt": {
+      "url": "https://huggingface.co/FermionResearch/Phonon-2/blob/fb09063c9dc8e130d97b3a2191ed5aed6b71bb31/LICENSE-WEIGHTS-CC-BY-4.0.txt",
+      "sha256": "9ba9550ad48438d0836ddab3da480b3b69ffa0aac7b7878b5a0039e7ab429411"
+    },
+    "base-config.json": {
+      "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/config.json",
+      "sha256": "e747b85e1bdfd300c8b8ac63bac8dd5221f8fe9bc275b48d06c735fcd6971b6e"
+    },
+    "base-processor_config.json": {
+      "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/processor_config.json",
+      "sha256": "8346a93a3b987fa1dec57a78f045cd0817d21786589a5a096b41a57a446fd1d7"
+    },
+    "base-generation_config.json": {
+      "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/generation_config.json",
+      "sha256": "b141de6ec6d7f982ece13f98f604e3fe1807ea9c0e839185d0ab7064604209d0"
+    },
+    "base-tokenizer_config.json": {
+      "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/tokenizer_config.json",
+      "sha256": "0b2fe0037599ee335f0b972fa682bf0ece74e4ccfec755cb7daa3405d3d3e874"
+    },
+    "base-tokenizer.json": {
+      "url": "https://huggingface.co/nvidia/parakeet-tdt-0.6b-v3/blob/541d1f99c6b0c3cd0b11a95167540bb8edefd82b/tokenizer.json",
+      "sha256": "bd321b096832a3f270bd3b2a88823957920f1a5c5ada71114a26ea729d0cbe91"
+    },
+    "modeling_parakeet.py": {
+      "url": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/modeling_parakeet.py",
+      "sha256": "41790099a63adb77e87ba42667637c4c356e49f8423af6f8044f33b0bd98308f"
+    },
+    "generation_parakeet.py": {
+      "url": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/generation_parakeet.py",
+      "sha256": "ee5ac5310d699f7d48d9c04e525bebae6b905e663f74fb418470ce514703d0ba"
+    },
+    "configuration_parakeet.py": {
+      "url": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/configuration_parakeet.py",
+      "sha256": "ff8b0d27644915e9938ed2168cf3c8e838053a264eac67034d2b7df996ced73f"
+    },
+    "feature_extraction_parakeet.py": {
+      "url": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/feature_extraction_parakeet.py",
+      "sha256": "5ec8a9664456edfc0b56c64083bdcdd74dd78364504d35207ab917d1c3b9f575"
+    },
+    "processing_parakeet.py": {
+      "url": "https://github.com/huggingface/transformers/blob/ea52711b4850c332be3f778396ce882ab84a9011/src/transformers/models/parakeet/processing_parakeet.py",
+      "sha256": "b6f7e7628d6eb995077a41a393b456972489a0948b438bb5c138e6e3d4e2ca45"
+    },
+    "docker-phonon2/phonon2_cuda_engine.py": {
+      "url": "https://github.com/fermionresearch/phonon/blob/43b98dd54f13277715d9273b921792aba9aa94ce/docker-phonon2/phonon2_cuda_engine.py",
+      "sha256": "931d8aaf0b0ed640bd5f818749c3c9f957b213323fe1a2421493a1497ec0f8e0"
+    },
+    "docker-phonon2/entrypoint.py": {
+      "url": "https://github.com/fermionresearch/phonon/blob/43b98dd54f13277715d9273b921792aba9aa94ce/docker-phonon2/entrypoint.py",
+      "sha256": "5fe47679be0ce53d2f7a17127711d687bc0a5aee26fa3c59087bf554d47ec608"
+    },
+    "docker-cpu-phonon2/Dockerfile": {
+      "url": "https://github.com/fermionresearch/phonon/blob/43b98dd54f13277715d9273b921792aba9aa94ce/docker-cpu-phonon2/Dockerfile",
+      "sha256": "16b249bae1e07e8cf5284f36d932e8bd61d639fcad41bc04cb7765450be830a9"
+    }
+  },
+  "checksum_note": "Publisher SHA256SUMS matches config, manifests, loader/reference, NOTICE and both licenses; README checksum is stale at this revision. Archive and container hashes were independently verified on EC2."
+}
