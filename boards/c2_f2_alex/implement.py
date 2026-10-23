@@ -1,0 +1,500 @@
+#!/usr/bin/env python3
+"""Continue a verified C2/Alex synthesis DCP, without synthesis, publication or FPGA access.
+
+Each explicit stage writes to a fresh directory. Upstream receipt SHA-256 values
+are required so a path alone cannot silently select different evidence. Failed
+attempts and negative-timing candidates are retained, never overwritten.
+"""
+from __future__ import annotations
+import argparse
+import importlib.util
+import json
+import math
+from pathlib import Path
+import re
+import shutil
+import subprocess
+
+HERE = Path(__file__).resolve().parent
+ROOT = HERE.parents[1]
+_spec = importlib.util.spec_from_file_location('c2_alex_frozen_builder', HERE / 'build.py')
+b = importlib.util.module_from_spec(_spec)
+_spec.loader.exec_module(b)
+STAGES = ('link', 'implement', 'refine', 'qualify')
+PREVIOUS = {'implement': 'link', 'refine': 'implement', 'qualify': 'refine'}
+CHECKPOINTS = {'link': 'post_link.dcp', 'implement': 'post_route.dcp', 'refine': 'post_route.dcp'}
+FORBIDDEN_CONTROLS = ('tuning.tcl', 'incremental_reference.txt', 'incremental_reference.sha256')
+
+
+def require(ok, message):
+    if not ok:
+        raise RuntimeError(message)
+
+
+def digest(value):
+    require(isinstance(value, str) and re.fullmatch('[0-9a-f]{64}', value), 'Expected lowercase SHA-256')
+    return value
+
+
+def read_bound(path, expected):
+    require(path.is_file() and not path.is_symlink(), f'Missing or linked receipt: {path}')
+    require(b.sha(path) == digest(expected), f'Receipt hash mismatch: {path}')
+    return json.loads(path.read_text())
+
+
+def relative(name):
+    require(isinstance(name, str), 'Manifest path must be a string')
+    path = Path(name)
+    require(isinstance(name, str) and name and not path.is_absolute() and
+            '..' not in path.parts and '.' not in path.parts and str(path) == name,
+            f'Unsafe manifest path: {name}')
+    return path
+
+
+def verify_files(root, files):
+    require(isinstance(files, dict) and files, f'Empty file inventory: {root}')
+    for name, record in files.items():
+        path = root / relative(name)
+        require(path.is_file() and not path.is_symlink(), f'Missing or linked frozen file: {path}')
+        require(path.stat().st_size == record['bytes'] and b.sha(path) == digest(record['sha256']),
+                f'Frozen file changed: {path}')
+
+
+def verify_synthesis(run, receipt_sha256, hdk):
+    receipt = read_bound(run / 'synth-complete.json', receipt_sha256)
+    require(receipt.get('schema') == 1 and receipt.get('kind') == 'c2-alex-synthesis-only' and
+            receipt.get('qualification') == 'not-qualified', 'Not a C2/Alex synthesis receipt')
+    inputs = read_bound(run / 'inputs.json', receipt['inputs_sha256'])
+    require(inputs.get('schema') == 1 and inputs.get('kind') == 'c2-alex-burst200-build-inputs',
+            'Wrong synthesis input schema')
+    require(re.fullmatch('[0-9a-f]{40}', inputs.get('source_revision', '')) and
+            inputs.get('build_id') == inputs['source_revision'][:8] and inputs.get('source_status') == '',
+            'Synthesis source was not a clean, identified revision')
+    require((inputs.get('part'), inputs.get('core_khz'), inputs.get('hbm_mhz'),
+             inputs.get('hbm_ports'), inputs.get('channel_bytes')) ==
+            (b.PART, 200000, 450, 8, 2**29), 'Wrong synthesized device/clock/memory geometry')
+    require(inputs['alex_revision'] == b.ALEX_REVISION and inputs['archive_sha256'] == b.ARCHIVE_SHA256,
+            'Wrong Alex source/archive')
+    b.verify_support()
+    require(inputs['support_manifest_sha256'] == b.sha(b.SUPPORT / 'manifest.json'),
+            'Frozen Alex manifest changed')
+    require(b.safe_path(inputs['hdk']) == hdk, 'Installed HDK path differs from synthesis')
+    verify_files(run, inputs['prepared_files'])
+    # The executor may be a later tooling-only commit, but hardware/generation
+    # sources must still match the exact synthesized input bytes.
+    require(set(inputs['source_inputs']) == set(b.source_inputs()), 'Incomplete synthesized source inventory')
+    verify_files(ROOT, inputs['source_inputs'])
+    require(json.loads((run / 'synth/exit.json').read_text()) == {'returncode': 0},
+            'Synthesis process did not finish successfully')
+    require((run / 'synth/synth_done.txt').read_text().strip() == 'C2_ALEX_SYNTH_ONLY_COMPLETE',
+            'Synthesis completion marker missing')
+    checkpoint = run / 'synth/post_synth.dcp'
+    require(checkpoint.is_file() and not checkpoint.is_symlink() and
+            b.sha(checkpoint) == receipt['checkpoint_sha256'], 'Synthesis checkpoint changed')
+    binding = json.loads((run / 'ip-binding.json').read_text())
+    require(binding['receipt_sha256'] == receipt['ip_receipt_sha256'], 'Synthesis IP binding changed')
+    ip_run = b.safe_path(binding['run'])
+    require(b.sha(ip_run / 'ip-complete.json') == receipt['ip_receipt_sha256'], 'IP receipt changed')
+    b.verify_ip_run(ip_run, inputs)
+    installed = b.check_hdk(hdk)
+    require(installed == inputs['installed_inputs'], 'Installed HDK inputs differ from synthesis')
+    return {'run': run, 'receipt': receipt, 'receipt_sha256': receipt_sha256,
+            'inputs': inputs, 'ip_run': ip_run, 'checkpoint': checkpoint, 'installed': installed}
+
+
+def verify_previous(run, expected_sha256, expected_stage, origin):
+    result = read_bound(run / 'stage-result.json', expected_sha256)
+    require(result.get('schema') == 1 and result.get('kind') == 'c2-alex-checkpoint-stage' and
+            result.get('stage') == expected_stage, 'Wrong upstream checkpoint stage')
+    required_status = 'candidate' if expected_stage == 'implement' else 'complete'
+    require(result.get('status') == required_status and result.get('route_qualified') is False and
+            result.get('returncode') == 0 and result.get('hardware_actions') is False,
+            'Upstream stage did not complete at the required gate')
+    inputs = read_bound(run / 'stage-inputs.json', result['inputs_sha256'])
+    require(inputs.get('schema') == 1 and inputs.get('kind') == 'c2-alex-checkpoint-stage-inputs' and
+            inputs['stage'] == expected_stage and inputs.get('resynthesis') is False and
+            inputs.get('hardware_actions') is False and inputs.get('max_threads') == 4 and
+            inputs.get('shell_sha256') == b.SHELL_SHA256 and
+            inputs['synth_receipt_sha256'] == origin['receipt_sha256'] and
+            inputs['synth_inputs_sha256'] == origin['receipt']['inputs_sha256'] and
+            inputs['source_revision'] == origin['inputs']['source_revision'] and
+            inputs['build_id'] == origin['inputs']['build_id'] and
+            inputs['ip_receipt_sha256'] == origin['receipt']['ip_receipt_sha256'],
+            'Upstream stage belongs to different synthesized inputs')
+    verify_files(run, inputs['prepared_files'])
+    verify_files(run, result['outputs'])
+    checkpoint = run / CHECKPOINTS[expected_stage]
+    require(result.get('checkpoint') == CHECKPOINTS[expected_stage] and
+            b.sha(checkpoint) == result.get('checkpoint_sha256'), 'Upstream checkpoint binding mismatch')
+    require(result['source_checkpoint_sha256'] == inputs['source_checkpoint']['sha256'],
+            'Upstream source checkpoint binding mismatch')
+    if expected_stage == 'link':
+        require(inputs['previous_run'] is None and inputs['previous_receipt_sha256'] is None,
+                'Link must consume synthesis directly')
+        source = origin['checkpoint']
+    else:
+        ancestor = verify_previous(b.safe_path(inputs['previous_run']), inputs['previous_receipt_sha256'],
+                                   PREVIOUS[expected_stage], origin)
+        source = ancestor['checkpoint']
+    require(b.safe_path(inputs['source_checkpoint']['path']) == source and
+            b.sha(source) == inputs['source_checkpoint']['sha256'] and
+            source.stat().st_size == inputs['source_checkpoint']['bytes'],
+            'Upstream checkpoint ancestry changed')
+    if expected_stage == 'refine':
+        timing = timing_result(run / 'implementation_result.txt')
+        require(timing == result['timing'] and min(timing.values()) >= 0,
+                'Refinement has not passed setup/hold timing')
+    return {'run': run, 'result': result, 'receipt_sha256': expected_sha256,
+            'inputs': inputs, 'checkpoint': checkpoint}
+
+
+def timing_result(path):
+    lines = path.read_text().splitlines()
+    data = {}
+    for key in ('setup_slack_ns', 'hold_slack_ns'):
+        matches = [line[len(key)+1:] for line in lines if line.startswith(key + '=')]
+        require(len(matches) == 1, f'Missing/duplicate timing field: {key}')
+        try:
+            value = float(matches[0])
+        except ValueError as error:
+            raise RuntimeError(f'Invalid timing field: {key}') from error
+        require(math.isfinite(value), f'Nonfinite timing field: {key}')
+        data[key] = value
+    return data
+
+
+def machine_result(path, required):
+    result = {}
+    for line in path.read_text().splitlines():
+        require('=' in line, 'Malformed stage audit result')
+        key, value = line.split('=', 1)
+        require(key in required and key not in result, f'Unexpected/duplicate audit field: {key}')
+        result[key] = value
+    require(set(result) == set(required), 'Missing stage audit field')
+    return result
+
+
+def simulation_helper():
+    spec = importlib.util.spec_from_file_location('c2_alex_verified_simulator', HERE / 'simulate.py')
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def verify_simulation(run, receipt_sha256, origin):
+    sim = simulation_helper()
+    receipt = read_bound(run / 'simulation-complete.json', receipt_sha256)
+    require(receipt.get('schema') == 1 and receipt.get('kind') == 'c2-alex-vendor-fabric-simulation' and
+            receipt.get('state') == 'passed' and receipt.get('hardware_actions') is False and
+            receipt.get('qualification') == 'protocol-simulation-only-not-physical-timing',
+            'A passed actual-vendor simulation receipt is required')
+    inputs = read_bound(run / 'inputs.json', receipt['inputs_sha256'])
+    evidence = [run / 'vivado_version.txt']
+    for seed, phase in sim.SCENARIOS:
+        scenario = run / f'seed-{seed}-phase-{phase}'
+        evidence.extend(scenario / name for name in
+                        ('rtl', 'simulate.tcl', 'inputs.json', 'command.json',
+                         'console.log', 'exit.json', 'result.json'))
+    verify_files(run, receipt.get('evidence', {}))
+    require(b.inventory(evidence, run) == receipt['evidence'],
+            'Vendor simulation evidence inventory is incomplete or changed')
+    b.check_vivado((run / 'vivado_version.txt').read_text())
+    expected_ip_sha = origin['receipt']['ip_receipt_sha256']
+    ip_receipt = read_bound(origin['ip_run'] / 'ip-complete.json', expected_ip_sha)
+    ip_inputs = read_bound(origin['ip_run'] / 'inputs.json', ip_receipt['inputs_sha256'])
+    require(inputs.get('schema') == 1 and inputs.get('kind') == 'c2-alex-vendor-fabric-simulation' and
+            inputs.get('ip_receipt_sha256') == expected_ip_sha and
+            inputs.get('build_inputs_sha256') == ip_receipt['inputs_sha256'] and
+            inputs.get('ip_source_revision') == ip_inputs['source_revision'] and
+            inputs.get('ip_products') == ip_receipt['products'], 'Simulation belongs to different private IP')
+    require(inputs.get('clocks_mhz') == {'core': 200, 'host': 250, 'hbm_nominal': 450} and
+            inputs.get('hbm_simulated_period_ps') == 2222 and
+            inputs.get('hbm_model') == 'functional-not-silicon-timing' and
+            inputs.get('qualification') == 'protocol-simulation-only-not-physical-timing' and
+            inputs.get('hardware_actions') is False, 'Simulation clock/model contract changed')
+    expected_scenarios = [list(pair) for pair in sim.SCENARIOS]
+    require(inputs.get('scenarios') == expected_scenarios and len(receipt.get('results', [])) == 4,
+            'Four exact seed/phase simulation scenarios are required')
+    require(inputs.get('runner_sha256') == b.sha(HERE / 'simulate.py') and
+            inputs.get('builder_sha256') == b.sha(HERE / 'build.py'), 'Simulation tool source changed')
+    sources = {name: b.sha(path) for name, path in sim.SOURCES.items()}
+    require(inputs.get('sources') == sources, 'Simulation source ingredients changed')
+    private = run / 'private-ip'
+    sim.verified_ip(private, expected_ip_sha)
+    # Includes Tcl/headers used by vendor simulation, in addition to the private
+    # synthesis products. The simulator owns the precise immutable-file policy.
+    require(isinstance(inputs.get('simulation_ip_files'), dict) and inputs['simulation_ip_files'],
+            'Missing vendor simulation dependency inventory')
+    sim.verify_simulation_ip_files(private, inputs['simulation_ip_files'])
+    for (seed, phase), result in zip(sim.SCENARIOS, receipt['results']):
+        scenario = run / f'seed-{seed}-phase-{phase}'
+        command = json.loads((scenario / 'command.json').read_text())
+        require(isinstance(command, list) and len(command) == 5 and
+                isinstance(command[0], str) and command[0] and
+                command[1:] == ['-mode', 'batch', '-source', str(scenario / 'simulate.tcl')],
+                'Vendor scenario command changed')
+        require(json.loads((scenario / 'inputs.json').read_text()) ==
+                b.inventory([scenario / 'rtl', scenario / 'simulate.tcl'], scenario),
+                'Vendor scenario consumed input inventory changed')
+        require(json.loads((scenario / 'exit.json').read_text()) == {'returncode': 0},
+                'Vendor scenario process did not succeed')
+        require(sim.parse_result((scenario / 'console.log').read_text(), seed, phase) == result and
+                json.loads((scenario / 'result.json').read_text()) == result,
+                'Vendor scenario scoreboards/results do not match the receipt')
+        for name, wanted in sources.items():
+            require(b.sha(scenario / 'rtl' / name) == wanted, 'Vendor scenario source changed')
+        require((scenario / 'simulate.tcl').read_text() == sim.simulation_tcl(scenario, private, seed, phase),
+                'Vendor scenario invocation changed')
+    return {'run': run, 'receipt_sha256': receipt_sha256, 'inputs_sha256': receipt['inputs_sha256']}
+
+
+def write_hook_result(stage):
+    if stage == 'link':
+        return '''set result [::c2_alex_route::audit_linked $run]
+if {![dict exists $result structural_pass] || [dict get $result structural_pass] ne "1" ||
+    ![dict exists $result route_qualified] || [dict get $result route_qualified] ne "0"} {
+  error "C2 Alex linked structural audit did not pass"
+}
+set f [open $run/audit-result.txt {WRONLY CREAT EXCL}]
+puts $f "structural_pass=1\nroute_qualified=0"
+close $f
+'''
+    return '''set result [::c2_alex_route::qualify $run $checkpoint]
+if {![dict exists $result route_qualified] || [dict get $result route_qualified] ni {0 1} ||
+    ![dict exists $result checkpoint_sha256] ||
+    ![regexp {^[0-9a-f]{64}$} [dict get $result checkpoint_sha256]]} {
+  error "C2 Alex qualifier returned malformed result"
+}
+set f [open $run/audit-result.txt {WRONLY CREAT EXCL}]
+puts $f "route_qualified=[dict get $result route_qualified]"
+puts $f "checkpoint_sha256=[dict get $result checkpoint_sha256]"
+close $f
+'''
+
+
+def render_link(origin):
+    original = (origin['run'] / 'link/build.tcl').read_text()
+    start = original.index('# Linking the supplied static shell is mandatory; never substitute a shell stub.')
+    text = original[start:]
+    text = text[text.index('create_project -in_memory'):text.index('write_checkpoint -force $run/post_link.dcp')]
+    require(text.count('$run/post_synth.dcp') == 2, 'Alex shell-link checkpoint anchors changed')
+    text = text.replace('$run/post_synth.dcp', '$checkpoint')
+    header = '''# Link a verified existing synthesis DCP. No RTL synthesis is performed.
+set run [file normalize [lindex $argv 0]]
+set checkpoint [file normalize [lindex $argv 1]]
+set hdk [file normalize [lindex $argv 2]]
+set shell $hdk/common/shell_stable
+set part xcvu47p-fsvh2892-2-e
+set core_khz 200000
+cd $run
+set_param general.maxThreads 4
+set_param sta.enableAutoGenClkNamePersistence 0
+'''
+    script = header + text + '''write_checkpoint -force $run/post_link.dcp
+source $run/qualify_c2_alex.tcl
+''' + write_hook_result('link') + '''set f [open $run/link_done.txt {WRONLY CREAT EXCL}]
+puts $f C2_ALEX_LINK_COMPLETE_NOT_ROUTE_QUALIFIED
+close $f
+'''
+    require('synth_design' not in script and 'read_verilog' not in script and 'generate_target' not in script,
+            'Link continuation unexpectedly requests synthesis')
+    return script
+
+
+def executor_inputs(stage):
+    paths = [HERE / 'implement.py', HERE / 'build.py']
+    if stage in ('link', 'qualify'):
+        paths += [HERE / 'qualify_c2_alex.tcl', HERE / 'audit_c2_alex.tcl']
+    if stage == 'qualify':
+        paths += [HERE / 'simulate.py', HERE / 'routed_host_ready.tcl']
+    return b.inventory(paths, ROOT)
+
+
+def prepare(out, stage, origin, previous, hdk, simulation=None):
+    require(not out.exists(), f'Refusing existing stage output: {out}')
+    executor_revision = b.require_clean_source()
+    tools = executor_inputs(stage)
+    require((stage == 'qualify') == bool(simulation), 'Only qualification requires verified vendor simulation')
+    checkpoint = origin['checkpoint'] if stage == 'link' else previous['checkpoint']
+    source = {'path': str(checkpoint), 'sha256': b.sha(checkpoint), 'bytes': checkpoint.stat().st_size}
+    out.mkdir(parents=True)
+    if stage == 'link':
+        script = render_link(origin)
+    elif stage in ('implement', 'refine'):
+        script = (origin['run'] / stage / 'build.tcl').read_text()
+        require('synth_design' not in script, 'Physical continuation unexpectedly requests synthesis')
+        require(not re.search(r'general\.maxThreads (?!4\b)\d+', script), 'Thread limit changed')
+        if stage == 'implement':
+            for name in ('floorplan.tcl', 'core_timing.tcl', 'platform_constraints.tcl'):
+                shutil.copy2(origin['run'] / 'implement' / name, out / name)
+    else:
+        script = '''# Independent qualification: reopen the exact final DCP without modifications.
+set run [file normalize [lindex $argv 0]]
+set checkpoint [file normalize [lindex $argv 1]]
+cd $run
+set_param general.maxThreads 4
+open_checkpoint $checkpoint
+source $run/qualify_c2_alex.tcl
+''' + write_hook_result('qualify')
+    (out / 'run.tcl').write_text(script)
+    if stage in ('link', 'qualify'):
+        for name in ('qualify_c2_alex.tcl', 'audit_c2_alex.tcl'):
+            shutil.copy2(HERE / name, out / name)
+    if stage == 'qualify':
+        shutil.copy2(HERE / 'routed_host_ready.tcl', out / 'routed_host_ready.tcl')
+    inputs = {'schema': 1, 'kind': 'c2-alex-checkpoint-stage-inputs', 'stage': stage,
+              'executor_revision': executor_revision, 'executor_sources': tools,
+              'source_revision': origin['inputs']['source_revision'],
+              'build_id': origin['inputs']['build_id'], 'synth_run': str(origin['run']),
+              'synth_receipt_sha256': origin['receipt_sha256'],
+              'synth_inputs_sha256': origin['receipt']['inputs_sha256'],
+              'ip_run': str(origin['ip_run']), 'ip_receipt_sha256': origin['receipt']['ip_receipt_sha256'],
+              'hdk': str(hdk), 'shell_sha256': b.SHELL_SHA256,
+              'source_checkpoint': source, 'previous_run': str(previous['run']) if previous else None,
+              'previous_receipt_sha256': previous['receipt_sha256'] if previous else None,
+              'max_threads': 4, 'resynthesis': False, 'hardware_actions': False}
+    if simulation:
+        inputs['simulation'] = {**simulation, 'run': str(simulation['run'])}
+    inputs['prepared_files'] = b.inventory([out], out)
+    b.write_json(out / 'stage-inputs.json', inputs)
+    verify_files(ROOT, tools)
+    verify_files(out, inputs['prepared_files'])
+    return inputs
+
+
+def output_inventory(out):
+    # Receipt excludes itself and the input manifest to avoid self-references.
+    paths = [p for p in out.iterdir() if p.name not in ('stage-inputs.json', 'stage-result.json')]
+    return b.inventory(paths, out) if paths else {}
+
+
+def execute(out, stage, origin, previous, inputs, hdk, vivado):
+    checkpoint = Path(inputs['source_checkpoint']['path'])
+    require(json.loads((out / 'stage-inputs.json').read_text()) == inputs, 'Prepared input manifest changed')
+    inputs_sha256 = b.sha(out / 'stage-inputs.json')
+    def recheck():
+        require(b.sha(out / 'stage-inputs.json') == inputs_sha256, 'Prepared input manifest changed')
+        verify_files(out, inputs['prepared_files'])
+        verify_files(ROOT, inputs['executor_sources'])
+        require(not any((out / name).exists() for name in FORBIDDEN_CONTROLS),
+                'Unreviewed tuning or incremental checkpoint control appeared')
+        verify_synthesis(origin['run'], origin['receipt_sha256'], hdk)
+        if previous:
+            verify_previous(previous['run'], previous['receipt_sha256'], PREVIOUS[stage], origin)
+        if stage == 'qualify':
+            proof = inputs['simulation']
+            checked = verify_simulation(b.safe_path(proof['run']), proof['receipt_sha256'], origin)
+            require(checked['inputs_sha256'] == proof['inputs_sha256'], 'Simulation input binding changed')
+        require(b.sha(checkpoint) == inputs['source_checkpoint']['sha256'] and
+                checkpoint.stat().st_size == inputs['source_checkpoint']['bytes'], 'Source checkpoint changed')
+    recheck()
+    cmd = [vivado, '-mode', 'batch', '-source', str(out / 'run.tcl'),
+           '-tclargs', str(out), str(checkpoint)]
+    if stage in ('link', 'implement'):
+        cmd.append(str(hdk / 'hdk'))
+    b.write_json(out / 'command.json', cmd)
+    result = {'schema': 1, 'kind': 'c2-alex-checkpoint-stage', 'stage': stage,
+              'inputs_sha256': inputs_sha256,
+              'source_checkpoint_sha256': inputs['source_checkpoint']['sha256'],
+              'status': 'failed', 'route_qualified': False, 'hardware_actions': False}
+    try:
+        with (out / 'console.log').open('x') as log:
+            process = subprocess.run(cmd, cwd=out, stdout=log, stderr=subprocess.STDOUT)
+        result['returncode'] = process.returncode
+        recheck()
+        require(process.returncode == 0, f'{stage} Vivado process failed ({process.returncode})')
+        if stage == 'link':
+            require((out / 'link_done.txt').read_text().strip() == 'C2_ALEX_LINK_COMPLETE_NOT_ROUTE_QUALIFIED',
+                    'Linked-stage completion marker missing')
+            require(machine_result(out / 'audit-result.txt', ('structural_pass', 'route_qualified')) ==
+                    {'structural_pass': '1', 'route_qualified': '0'}, 'Linked structural gate did not pass')
+            result['status'] = 'complete'
+        elif stage in ('implement', 'refine'):
+            result['timing'] = timing_result(out / 'implementation_result.txt')
+            if stage == 'refine':
+                require(min(result['timing'].values()) >= 0, 'Refinement did not close setup/hold timing')
+                result['status'] = 'complete'
+            else:
+                result['status'] = 'candidate'
+        else:
+            audit = machine_result(out / 'audit-result.txt', ('route_qualified', 'checkpoint_sha256'))
+            require(audit['checkpoint_sha256'] == inputs['source_checkpoint']['sha256'],
+                    'Qualifier audited a different DCP')
+            require(audit['route_qualified'] in ('0', '1'), 'Invalid qualification result')
+            result['route_qualified'] = audit['route_qualified'] == '1'
+            result['status'] = 'complete' if result['route_qualified'] else 'pending-review'
+        if stage in CHECKPOINTS:
+            name = CHECKPOINTS[stage]
+            require((out / name).is_file() and not (out / name).is_symlink(), 'Stage checkpoint missing')
+            result['checkpoint'] = name
+            result['checkpoint_sha256'] = b.sha(out / name)
+        else:
+            result['checkpoint'] = str(checkpoint)
+            result['checkpoint_sha256'] = inputs['source_checkpoint']['sha256']
+    except Exception as error:
+        result['status'] = 'failed'
+        result['route_qualified'] = False
+        result['error'] = str(error)
+        result['outputs'] = output_inventory(out)
+        b.write_json(out / 'stage-result.json', result)
+        raise
+    result['outputs'] = output_inventory(out)
+    b.write_json(out / 'stage-result.json', result)
+    return result
+
+
+def main(argv=None):
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('--stage', required=True, choices=STAGES)
+    parser.add_argument('--out', required=True, type=Path)
+    parser.add_argument('--hdk', required=True, type=Path, help='Pinned aws-fpga repository root')
+    parser.add_argument('--synth-run', required=True, type=Path)
+    parser.add_argument('--synth-receipt-sha256', required=True)
+    parser.add_argument('--from-run', type=Path)
+    parser.add_argument('--from-receipt-sha256')
+    parser.add_argument('--simulation-run', type=Path)
+    parser.add_argument('--simulation-receipt-sha256')
+    parser.add_argument('--vivado', default='vivado')
+    parser.add_argument('--plan', action='store_true')
+    args = parser.parse_args(argv)
+    if args.stage == 'link':
+        if args.from_run or args.from_receipt_sha256:
+            parser.error('link consumes synthesis directly; do not specify --from-run')
+    elif not args.from_run or not args.from_receipt_sha256:
+        parser.error('later stages require --from-run and --from-receipt-sha256')
+    if args.stage == 'qualify':
+        if not args.simulation_run or not args.simulation_receipt_sha256:
+            parser.error('qualify requires --simulation-run and --simulation-receipt-sha256')
+        digest(args.simulation_receipt_sha256)
+    elif args.simulation_run or args.simulation_receipt_sha256:
+        parser.error('simulation evidence is required only for qualify')
+    digest(args.synth_receipt_sha256)
+    if args.from_receipt_sha256:
+        digest(args.from_receipt_sha256)
+    out, hdk, synth = map(b.safe_path, (args.out, args.hdk, args.synth_run))
+    if args.plan:
+        print(json.dumps({'stage': args.stage, 'out': str(out), 'synth_run': str(synth),
+              'source': str(args.from_run) if args.from_run else str(synth),
+              'max_threads': 4, 'resynthesis': False, 'hardware_actions': False,
+              'route_qualified': False}, indent=2))
+        return 0
+    b.require_clean_source()
+    origin = verify_synthesis(synth, args.synth_receipt_sha256, hdk)
+    previous = verify_previous(b.safe_path(args.from_run), args.from_receipt_sha256,
+                               PREVIOUS[args.stage], origin) if args.from_run else None
+    simulation = verify_simulation(b.safe_path(args.simulation_run), args.simulation_receipt_sha256,
+                                   origin) if args.stage == 'qualify' else None
+    version = b.command(args.vivado, '-version')
+    b.check_vivado(version)
+    inputs = prepare(out, args.stage, origin, previous, hdk, simulation)
+    (out / 'vivado_version.txt').write_text(version + '\n')
+    result = execute(out, args.stage, origin, previous, inputs, hdk, args.vivado)
+    print(json.dumps({'stage': args.stage, 'status': result['status'],
+                      'route_qualified': result['route_qualified'],
+                      'receipt': str(out / 'stage-result.json'),
+                      'receipt_sha256': b.sha(out / 'stage-result.json')}, indent=2))
+    return 3 if result['status'] == 'pending-review' else 0
+
+
+if __name__ == '__main__':
+    raise SystemExit(main())
