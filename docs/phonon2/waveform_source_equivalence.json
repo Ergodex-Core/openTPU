@@ -29,5 +29,6 @@
       "input_at": 1251840,
       "output_at": 13748608
     }
-  }
+  },
+  "qualified_source_archive": "docs/phonon2/waveform_qualified_source.py.txt"
 }
