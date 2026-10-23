@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible resident raw PCM encoder, eight-layer input transformer and learned downsample beside FP32 output codec; software qualification only",
+  "purpose": "Reproducible resident raw-PCM to eight input RVQ IDs beside FP32 output codec; software qualification only",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -173,7 +173,14 @@
     "tests/test_personaplex_mimi_input_downsample_check.py": "a05104abc31425534da7435a8d950b2ac07f3304fa76dabf282c8a2f1e57a956",
     "tools/data/personaplex/mimi_input_downsample_contract.json": "b427a4dbb78bdc11a6c69cd438d626a64c0a20690febb2dec5fe123adea9fe66",
     "tools/personaplex_mimi_input_downsample_check.py": "f89beb3f834046285631a329e48d0e8e80e25546ba7223337fd11b4c5cdee540",
-    "tools/personaplex_mimi_input_downsample_native.py": "a2b7ae83fb8787f701b588c3b910c99bc6a978908f350f4acaa37b1c1ab1139b"
+    "tools/personaplex_mimi_input_downsample_native.py": "a2b7ae83fb8787f701b588c3b910c99bc6a978908f350f4acaa37b1c1ab1139b",
+    "opentpu/llm/personaplex_mimi_input_rvq.py": "63ce80b5c488462ba4be17d4a012c66649ce7abdd587e03aa1f8590abb196992",
+    "tests/test_personaplex_mimi_input_rvq.py": "a972c241d37a8a911cc480e5a4aa800a83279139c07532001b9c6af718102822",
+    "tests/test_personaplex_mimi_input_rvq_check.py": "d99044e19efd66ff78a4e1e3a0b9df2ebdba4aed7324d2fbc43bd02229066c94",
+    "tools/data/personaplex/mimi_input_rvq_contract.json": "865b3bcb66d0bf6fe5e5f8043399dbe66f0ce3dcb8cccf5d5f09e78f4324a741",
+    "tools/personaplex_mimi_full_input_native.py": "0e88ad4aafdc8f9ebafe6f1b83141b13e5033376ad05bb9f14f4081427c7ee75",
+    "tools/personaplex_mimi_input_rvq_check.py": "b6a1edd1b892e71d2d129c998bdf3906e4ccbaa8acefa6362462764d61e2905e",
+    "tools/personaplex_mimi_input_rvq_native.py": "03ed829765f3610624a5a3839baf35a3015937a428a3d2ce04d99aa6c43aa1dd"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {
@@ -204,6 +211,10 @@
   "native_dependency_contracts": [
     "tools/data/personaplex/mimi_rvq_contract.json",
     "tools/data/personaplex/mimi_decoder_contract.json",
-    "tools/data/personaplex/mimi_pcm_contract.json"
+    "tools/data/personaplex/mimi_pcm_contract.json",
+    "tools/data/personaplex/mimi_encoder_contract.json",
+    "tools/data/personaplex/mimi_input_transformer_contract.json",
+    "tools/data/personaplex/mimi_input_downsample_contract.json",
+    "tools/data/personaplex/mimi_input_rvq_contract.json"
   ]
 }
