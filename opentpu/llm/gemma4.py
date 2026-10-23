@@ -1360,7 +1360,7 @@ class Image:
             raise ValueError("a prompt run needs lookup tables (lookup=True)")
         if self.spec.experts:
             raise ValueError("a MoE model's prompt runs layer-major (prefill_layers)")
-        if kind not in ("P", "L"):
+        if kind not in ("P", "L", "A"):
             raise ValueError(f"prompt run kind {kind!r}")
         if block != self.block:
             raise ValueError(f"the image is laid out for attention blocks of {self.block}")
@@ -1976,11 +1976,13 @@ def gemma4_step(m, pos, logit_rows=(0,), block: int = ATTN_BLOCK, tokens=None):
 @ol.jit
 def gemma4_prompt_run(m, pos, R: int, kind: str, block: int = ATTN_BLOCK):
     """A prompt run of R rows (docs/prefill.md), gemma4_step's rows with their tokens from
-    out[]: kind "P", or "L" (the prompt's last run: its last row's logits). pos: a RunRows
-    (toks_at 0) at the run-time position in the generate state's tpos word (RunWords)."""
+    out[]: kind "P", "L" (the prompt's last run: its last row's logits) or "A" (every row's: a
+    speculative verify run, docs/spec_draft.md). pos: a RunRows (toks_at 0) at the run-time
+    position in the generate state's tpos word (RunWords)."""
     from .qwen3 import RunWords
+    from .tiled import run_logit_rows
     with RunWords(m, pos):
-        gemma4_step.fn(m, pos, [R - 1] if kind == "L" else [], block)
+        gemma4_step.fn(m, pos, run_logit_rows(kind, R), block)
 
 
 @ol.jit

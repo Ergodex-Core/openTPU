@@ -251,6 +251,14 @@ def main():
     ap.add_argument("--gaps", action="store_true",
                     help="per phase: the cycles above its roofline, split by what the MXU and "
                          "port B did (64-cycle windows)")
+    ap.add_argument("--tile", action="store_true",
+                    help="--rows: the tiled prompt run (tiled.compile_tile_run: the run-time "
+                         "position of --pos's bucket in the state's tpos word, the tokens from "
+                         "out[]; --logits all is kind A, a speculative verify run, "
+                         "docs/spec_draft.md) instead of compile_rows' compile-time rows")
+    ap.add_argument("--vocab", type=int, default=None,
+                    help="the LM head (and its tied embedding table) cut to its first N rows: "
+                         "a draft model's truncated head (docs/spec_draft.md), timing")
     a = ap.parse_args()
     plus = list(a.plus)
     ldc = 0
@@ -275,6 +283,10 @@ def main():
     elif layers[0]:
         spec = dataclasses.replace(spec, **({"kinds": spec.kinds[:layers[0]]}
                                             if hasattr(spec, "kinds") else {"layers": layers[0]}))
+    if a.vocab:
+        if not 0 < a.vocab <= spec.vocab:
+            ap.error(f"--vocab {a.vocab}: 1 .. {spec.vocab}")
+        spec = dataclasses.replace(spec, vocab=a.vocab)
     if a.mtp:
         spec = dataclasses.replace(spec, mtp=True)
         a.rows, a.logits = 2, "all"
@@ -286,8 +298,10 @@ def main():
     if a.pos + (1 if a.batch else R) - 1 >= a.cap:
         ap.error(f"--pos {a.pos} needs --cap above it (the KV write would land past the cache)")
     W = load_weights(path, mtp=bool(a.mtp))
+    if a.tile and not a.rows:
+        ap.error("--tile takes --rows R")
     wkw = dict(wformat=a.wformat, head_format=a.head_format, rows=R,
-               **({"lookup": True} if a.resident else {}))
+               **({"lookup": True} if a.resident or a.tile else {}))
     qwen3_batch = bool(a.batch) and type(spec).__module__.endswith(".qwen3")
     if a.batch:
         wkw.update(batch=a.batch, **({"lookup": True} if qwen3_batch else {}))
@@ -343,6 +357,27 @@ def main():
     elif a.mtp == "verify":
         progs = img.compile_rows([(0, a.pos + r) for r in range(R)], list(range(R)),
                                  *([a.block] if a.block else []), fork=True, hidden=True)
+    elif a.tile:                        # a tiled prompt run at a run-time position
+        from opentpu.llm import generate as G
+        from opentpu.llm import tiled as TL
+        from opentpu.llm.qwen3 import ATTN_BLOCK
+        blk = a.block or ATTN_BLOCK
+        b = a.pos // blk + 1
+        if a.pos % blk + R > blk:
+            ap.error(f"--rows {R} from --pos {a.pos} leave the bucket")
+        kind = {"last": "L", "all": "A", "none": "P"}[a.logits]
+        # (its run-time values are RLDs of the state block's tpos word: no host arguments)
+        progs, _ = TL.compile_tile_run(img, b, R, kind, blk)
+        g = img.lookup["gen"]
+        st = np.zeros(G.STATE_WORDS, np.float32)
+        st[G.S_TPOS] = a.pos % blk
+        put = [(g["state"], st), (g["out"] + 4 * a.pos,
+                                  np.asarray([791 + r for r in range(R)], np.float32))]
+        for at, v in put:
+            v = np.ascontiguousarray(v).view(np.uint8).ravel()
+            dram[at:at + v.size] = v
+        print(f"tiled run kind {kind}: {R} rows at {a.pos} (bucket {b}), "
+              f"{len(progs[0])} instructions")
     elif a.rows:
         lr = {"last": [R - 1], "all": list(range(R)), "none": []}[a.logits]
         progs = img.compile_rows([(0, a.pos + r) for r in range(R)], lr,

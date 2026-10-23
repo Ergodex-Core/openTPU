@@ -1910,8 +1910,10 @@ def qwen3_prompt_run(m, pos, R: int, kind: str, block: int = ATTN_BLOCK):
 
 
 def head_rows_chunk(rows: int) -> int:
-    """The LM head's vocabulary rows per MM for `rows` token rows (their fp32 logits fit TMEM)."""
-    return min(HEAD_CHUNK, ol.tmem_words() // (8 * rows))
+    """The LM head's vocabulary rows per MM for `rows` token rows (their fp32 logits fit TMEM),
+    a multiple of 64: a chunk of a head in row-lane groups starts at a whole group (3, 5, 6 or 7
+    rows' TMEM share is not one; every logit and argmax is the same at any chunk size)."""
+    return min(HEAD_CHUNK, ol.tmem_words() // (8 * rows) // 64 * 64)
 
 
 def _lm_head_rows(x, m, spec, logit_rows):
