@@ -1,0 +1,40 @@
+{
+  "archive_sha256": "9e47a6e8917891b4137680c95fef41a4f24190f01f6793374dc1f24d3011def7",
+  "artifact_hashes_verified": true,
+  "acceptance_start_manifest_entries": 38,
+  "auxiliary_metadata_entries": {
+    "tests/._qwen3_tts_audio_transformer_reference.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-transformer-source-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._test_qwen3_tts_audio_chunks.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "resident-chunks-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    },
+    "tests/._test_qwen3_tts_audio_transformer.py": {
+      "sha256": "86af8c6e117dcacf9f4c59f54536ef35e93655d550cd27c58ddf0ee7e54bfa7d",
+      "verified_against_source_overlay": [
+        "audio-transformer-source-overlay.tar.gz"
+      ],
+      "executable_source": false,
+      "kind": "AppleDouble metadata matched by wildcard; hashed only, not imported"
+    }
+  },
+  "source_tree_component_files_verified": 58,
+  "source_tree_runtime_files_verified": 95,
+  "builder_path_aliases": {
+    "tests/fixtures/qwen3_tts_codec_frame_fp32_receipt.json": "docs/qwen3_tts_talker_precision_acceptance.json"
+  },
+  "rows_hash_verified": true,
+  "overall_main_gate_passed": false,
+  "supplemental_code_hashes_verified": 0,
+  "source_and_fixture_hashes_verified": 35
+}

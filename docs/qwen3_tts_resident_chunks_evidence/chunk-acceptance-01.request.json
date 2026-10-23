@@ -1,0 +1,1 @@
+{"command": ["/home/ubuntu/otpu-venv/bin/python", "-u", "tools/qwen3_tts_audio_chunks_acceptance.py", "--data", "/home/ubuntu/qwen3-tts-resident-chunks-20261023-01/data", "--output", "/home/ubuntu/qwen3-tts-resident-chunks-20261023-01/chunk-acceptance-01.json", "--integrated"], "cwd": "/home/ubuntu/qwen3-tts-resident-chunks-20261023-01/source", "timeout": 1800}
