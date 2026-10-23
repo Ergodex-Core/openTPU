@@ -16,13 +16,13 @@ class SwarmModel:
     def __init__(self, config, backend=None):
         self._owns_backend = backend is None
         self.config = config if isinstance(config, Config) else Config.from_dict(config)
+        self.weights = initialize(self.config)
         if backend is None and self.config.backend == "f2" and self.config.image:
             from .opentpu import OpenTPUBackend
             backend = OpenTPUBackend(image=self.config.image)
         self.backend = backend if backend is not None else ReferenceBackend()
         if self.backend.device != self.config.backend:
             raise ValueError("backend must match the explicitly selected device")
-        self.weights = initialize(self.config)
         self.step, self.cursor = 0, 0
         self.dataset_digest = None
         self._identity, self._programs = uuid.uuid4().hex, {}
@@ -64,7 +64,8 @@ class SwarmModel:
         ids, target = self._tokens(tokens), self._tokens(targets)
         if target.shape != ids.shape:
             raise ValueError("targets and tokens must have the same shape")
-        labels = np.eye(self.config.vocab_size, dtype=np.float32)[target]
+        labels = np.zeros((*target.shape, self.config.vocab_size), np.float32)
+        np.put_along_axis(labels, target[..., None], 1.0, axis=-1)
         started = time.perf_counter()
         result = self._run(ids, training=True, extra={"labels": labels})
         loss = float(result.pop("loss"))
@@ -74,21 +75,21 @@ class SwarmModel:
                 "tokens": ids.size, "device": self.backend.device}
 
     def train(self, dataset, steps=None):
+        count = self.config.steps if steps is None else steps
+        if type(count) is not int or count < 0:
+            raise ValueError("steps must be a nonnegative integer")
         data = self._tokens(dataset)
         if data.shape[1] != self.config.sequence_length + 1:
             raise ValueError("dataset rows must have sequence_length + 1 tokens")
         digest = hashlib.sha256(str(data.shape).encode() + data.tobytes()).hexdigest()
         if self.dataset_digest is not None and digest != self.dataset_digest:
             raise ValueError("training dataset contents or ordering changed")
-        self.dataset_digest = digest
-        count = self.config.steps if steps is None else steps
-        if type(count) is not int or count < 0:
-            raise ValueError("steps must be a nonnegative integer")
         history = []
         for _ in range(count):
             indices = (np.arange(self.config.batch_size) + self.cursor) % len(data)
             batch = data[indices]
             history.append(self.train_step(batch[:, :-1], batch[:, 1:]))
+            self.dataset_digest = digest
             self.cursor = (self.cursor + self.config.batch_size) % len(data)
         return history
 
@@ -120,7 +121,7 @@ class SwarmModel:
                 os.unlink(name)
 
     @classmethod
-    def load(cls, path, backend=None):
+    def load(cls, path, backend=None, expected_config=None):
         with np.load(path, allow_pickle=False) as archive:
             meta = json.loads(str(archive["metadata"]))
             if meta.get("format") != 1 or any(type(meta.get(k)) is not int or meta[k] < 0 for k in ("step", "cursor")):
@@ -129,6 +130,8 @@ class SwarmModel:
             if saved.pop("socket", ""):
                 raise ValueError("socket execution is no longer supported")
             config, weights = Config(**saved), {}
+            if expected_config is not None and config != expected_config:
+                raise ValueError("resume configuration differs from checkpoint")
             expected = shapes(config)
             if set(archive.files) != set(expected) | {"metadata"}:
                 raise ValueError("checkpoint parameter names differ")

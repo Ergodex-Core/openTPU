@@ -27,10 +27,10 @@ def main():
     args = parser.parse_args()
     if args.command == "train":
         config = load_config(args.config)
-        with (SwarmModel.load(args.resume) if args.resume else SwarmModel(config)) as model:
-            if model.config != config:
-                raise ValueError("resume configuration differs from checkpoint")
-            data = np.load(args.dataset, allow_pickle=False)
+        if args.steps is not None and args.steps < 0:
+            parser.error("steps must be a nonnegative integer")
+        data = np.load(args.dataset, allow_pickle=False)
+        with (SwarmModel.load(args.resume, expected_config=config) if args.resume else SwarmModel(config)) as model:
             for metrics in model.train(data, args.steps):
                 print(json.dumps(metrics))
             model.save(args.checkpoint)

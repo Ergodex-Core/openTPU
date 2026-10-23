@@ -6,7 +6,7 @@
 
 The new physical run **did not start**. A fresh check at 2026-10-23 08:58 UTC found both device locks held by a resident worker and a different loaded image. No owner was displaced and no image was loaded. See [`mixed-precision-hardware-status.json`](mixed-precision-hardware-status.json) for the exact blocked target and image identities. This is an ownership/image blocker, not an approval denial or an uncertain execution.
 
-Current local coverage includes 98 tests and 42 subtests, with full-decoder ISA parity for four validated precision policies. The [validation manifest](mixed-precision-isa-validation.json) records commands and source hashes. [`check_rounding.py`](check_rounding.py) separately checks the two-pass FP32 rounding model; its [receipt](rounding-emulation-verification.json) records 150,978,562 comparisons over selected exponent bins. These are simulator/arithmetic-model results, not physical measurements.
+Current local coverage includes 127 tests and 42 subtests, including 15 CLI/ISA end-to-end cases and full-decoder ISA parity for four validated precision policies. The [validation manifest](mixed-precision-isa-validation.json) records commands and source hashes. The [graph-pruning receipt](isa-graph-pruning-validation.json) records fewer ISA launches with bit-exact results for the tiny training configuration; it is not a hardware timing result. [`check_rounding.py`](check_rounding.py) separately checks the two-pass FP32 rounding model; its [receipt](rounding-emulation-verification.json) records 150,978,562 comparisons over selected exponent bins. These are simulator/arithmetic-model results, not physical measurements.
 
 When slot 0 is available with a qualified image, run from `tools/swarm-fpga`:
 

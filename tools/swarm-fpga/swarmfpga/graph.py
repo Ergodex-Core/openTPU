@@ -56,7 +56,12 @@ class Graph:
     def export(self, outputs):
         if not outputs or any(t.graph is not self for t in outputs.values()):
             raise ValueError("outputs must be nonempty and belong to this graph")
-        return {"nodes": list(self.nodes), "outputs": {name: t.id for name, t in outputs.items()}}
+        required, nodes = {t.id for t in outputs.values()}, []
+        for node in reversed(self.nodes):
+            if node["id"] in required:
+                nodes.append(node)
+                required.update(node["inputs"])
+        return {"nodes": list(reversed(nodes)), "outputs": {name: t.id for name, t in outputs.items()}}
 
     def grad(self, loss, params):
         if loss.graph is not self or loss.shape:

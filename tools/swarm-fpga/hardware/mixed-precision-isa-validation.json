@@ -1,19 +1,19 @@
 {
-  "utc": "2026-10-23T09:09:04.636278+00:00",
+  "utc": "2026-10-23T10:46:03.368585+00:00",
   "scope": "local reference and OpenTPU ISA simulation, no physical mixed-precision run",
-  "tests_passed": 98,
+  "tests_passed": 127,
   "subtests_passed": 42,
   "command": "PYTHONDONTWRITEBYTECODE=1 PYTHONPATH=../.. python -m pytest -q -p no:cacheprovider",
-  "framework_physical_lines": 928,
+  "framework_physical_lines": 936,
   "source_sha256": {
     "__init__.py": "ec94f53a2ec3866cd2e32e75b68abeeb82aefb468400dbab9a611eeebe31edee",
-    "__main__.py": "e107c7e8ee70c15c7f975f77eb51f09631488ea74c85f004fe2a6ebefd184ebe",
+    "__main__.py": "d6fdfb0a90da24f929f6ca15a093122d125112843205c491a55cb4123c62a40d",
     "backend.py": "c645478a75e9c880cd304146362b8516b086f1868638586da39f34f230d8f506",
     "config.py": "82a13d7a2572d701e204cf1c31cd8fef4d645ca9a00fd27f90b7b2c2e879e76e",
-    "graph.py": "368b87c8894906ad65afb1d3dae7936662b8575ea700a54d2f6c9f001ae852bb",
+    "graph.py": "64b9bb397b8d53b687e311b9dab64bed7133d4dc330c9902e5eedb159927f9b0",
     "model.py": "a6699dc182dd2c023274432720200b2ffef26ecffb99beea6835cb962284b036",
     "opentpu.py": "03a36804355b83386cfc54e807968728809c9929b0a66eb6596b7654b2774e20",
-    "runtime.py": "e0aeb7301f9204ab1e913871edaac0a649177f0f62479f1cf2653bf1bff71d68"
+    "runtime.py": "5f5704f8a4e0ef23415715b6260b84a4932521eaf209bd16e5ecf418a023758f"
   },
   "policies_tested": [
     "fp32/fp32",
@@ -32,5 +32,31 @@
     "int8/bf16 training",
     "checkpoint reload and cached generation"
   ],
-  "physical_status": "blocked_not_run; see mixed-precision-hardware-status.json"
+  "physical_status": "blocked_not_run; see mixed-precision-hardware-status.json",
+  "e2e_tests": {
+    "total": 15,
+    "fresh_process_cli": 11,
+    "isa_full_lifecycle": 4,
+    "policies": [
+      "fp32/fp32",
+      "int8/fp32",
+      "int8/bf16",
+      "int8/fp16"
+    ],
+    "coverage": [
+      "exact resumed parameters and losses across dataset wraparound",
+      "checkpoint persistence and failed-resume preservation",
+      "cached generation against full-prefix greedy oracle",
+      "instruction counters with physical constructor prohibited"
+    ]
+  },
+  "review_regressions": [
+    "failed or zero-step training leaves initial state unchanged",
+    "partial training progress can be checkpointed and resumed",
+    "labels avoid quadratic vocabulary allocation",
+    "weight initialization and resume mismatch fail before device acquisition",
+    "failed checkpoint publication preserves prior state",
+    "unused gradient nodes are omitted without changing outputs"
+  ],
+  "graph_pruning_receipt": "isa-graph-pruning-validation.json"
 }
