@@ -1,201 +1,113 @@
-# Candidate unified PersonaPlex residency and device chaining
+# Checked PersonaPlex duplex residency candidate
 
-This is a compiler/runtime design, not a demonstrated full-model fit or a
-hardware result. Its P/B depth-only subset now has a [shared ISA implementation](personaplex_depth_chain.md)
-and cached generated-sequence checks. Optional resident RVQ, causal upsample,
-decoder transformer and SEANet raw PCM now have software tests and budgets;
-temporal paging and full input/output integration remain unimplemented. PCM
-quality is unaccepted. No image change, synthesis, card access or paid resource is
-required to investigate it. Existing standalone images total5,270,028,288 bytes
-versus4,294,967,296 mapped bytes. Shared workspaces alone cannot solve residency:
-input embedding tables exceed the temporal/token free space by940,683,264 bytes.
+This software-only candidate targets the existing shared image
+`agfi-0001de1dd3df8e21e`, profile `f2-hbm:p4rl8a64c150`, architecture
+`dd6b92a6`, using runtime revision
+`18fb978033799f0f21258f0e6e085c0360322d96`. The builder verified D=128,
+one slice, 32,768 instruction words, SEQ_WC and a 4,294,967,296-byte mapping.
+No physical execution, full-speech readiness or waveform-quality acceptance
+is established by this plan.
 
-Use one backend with persistent state and tables separated from paged weights.
-Host transport may copy immutable prepacked weights and submit predetermined
-stages. During inference it must not convert weights, compute embeddings,
-normalize activations, calculate logits, select codebook heads or choose tokens.
-All such model operations remain device programs. Offline conversion is separate
-from inference and produces versioned, hashed packets.
+The old four-packet A-region proposal is invalid: the input/output codecs now
+own part of that region. It must never be used to overwrite resident codec
+weights, convolution histories or KV state. The earlier five-packet estimate
+also fails the exact runtime descriptors: nine INT4 layers need 995,033,088
+bytes, exceeding the actual 992,505,856-byte page window by 2,527,232 bytes.
+The retained failed preflight receipts document those rejected candidates.
 
-## Candidate address map
+## Physical ownership
 
-All intervals below are end-exclusive. The final2^32 endpoint is a size boundary,
-never a stored pointer. Estimates need actual allocator and compiler validation.
+`opentpu/llm/personaplex_duplex_layout.py` constructs the complete existing
+input/output codec and depth mapping, copies every prefix span unchanged,
+then reserves disjoint LM tables, controls, scratch, temporal KV and programs.
+All intervals are end-exclusive. `check_spans` rejects overlap, alignment,
+capacity and duplicate-owner errors; temporal aliases must match base and size.
 
-| Region | Interval | Capacity |
+| Owner | Interval or exact size |
+|---|---|
+| Native delay ring and controls | Allocated holes below `0x10000` |
+| Persistent temporal INT8 KV | `0x10000–0x02110000`, 34,603,008 B |
+| Existing depth KV | Retained in `0x02110000–0x02510000` |
+| Activation scratch | Checked holes in `0x02510000–0x03510000` |
+| Programs including WAITC data | `0x04000000–0x05000000` |
+| FP32 LM embedding tables, one zero row each | 1,061,715,968 B from `0x05000000` |
+| Voice replay reservation | 65,536 B, ending `0x44498000` |
+| Depth embeddings and audio heads | Existing addresses retained |
+| INT8 text head codes and scales | `0x539B8000–0x5B7D1400` |
+| Temporal static coefficients/norm/mask | Checked fixed spans from `0x5D831400` |
+| All input/output codec histories, KV and weights | Existing named spans retained |
+| Exclusive temporal immutable page lease | `1,960,284,160–0xB0000000` |
+| Depth B weights | Existing named spans retained |
+
+The 74 conservative program slots use 12,124,160 of 16,777,216 bytes, leaving
+4,653,056 bytes. Slots comprise 60 established codec/depth programs, six
+temporal pages, four scheduler programs, embedding gather, text head,
+temporal-to-depth handoff and reserved voice replay. Voice replay reservation
+does not establish server prompt parity.
+
+## Immutable temporal packets
+
+Each layer prefix comes from the pinned runtime's actual quantized descriptor:
+INT4 110,559,232 B; INT8 207,945,728 B. KV tails are excluded from refills and
+relocated to persistent P. The precision rule remains INT8 layers0–3 and31,
+INT4 layers4–30.
+
+| Packet | Layers | Bytes |
 |---|---|---:|
-| Persistent P | `0x00000000–0x60000000` | 1.5GiB |
-| Temporal overlay A | `0x60000000–0xB0000000` | 1.25GiB |
-| Depth/codec overlay B | `0xB0000000–0x100000000` | 1.25GiB |
+| 0 | 0–3 INT8 | 831,782,912 |
+| 1 | 4–11 INT4 | 884,473,856 |
+| 2 | 12–19 INT4 | 884,473,856 |
+| 3 | 20–27 INT4 | 884,473,856 |
+| 4 | 28–30 INT4 | 331,677,696 |
+| 5 | 31 INT8 | 207,945,728 |
 
-| Persistent content | Interval | Bytes |
-|---|---|---:|
-| State reservation | `0x00000000–0x04000000` | 67,108,864 |
-| Program slots including WAITC data | `0x04000000–0x05000000` | 16,777,216 |
-| FP32 temporal input tables including zero rows | `0x05000000–0x44488000` | 1,061,715,968 |
-| Four captured voice frames | `0x44488000–0x44498000` | 65,536 |
-| FP32 depth step embeddings including zero rows | `0x44498000–0x539B8000` | 257,032,192 |
-| INT8 text head | `0x539B8000–0x5B7D1400` | 132,224,000 |
-| All INT8 audio heads | `0x5B7D1400–0x5D831400` | 33,947,648 |
-| Resident temporal RoPE | `0x5D831400–0x5D841400` | 65,536 |
-| Final temporal norm | `0x5D841400–0x5D845400` | 16,384 |
-| Guard, uncommitted | `0x5D845400–0x60000000` | 41,659,392 |
+Only one packet owns the page lease at a time. The largest leaves 108,032,000
+bytes free. Full layer payload traffic is 4,024,827,904 B per temporal frame;
+this is a packed byte budget, not a DMA measurement or performance result.
+Final norm and RoPE tables are immutable initialization payloads. Residual
+activations and all layer KV remain resident across pages. Final RMSNorm runs
+once, after packet5.
 
-State subdivisions are control/token/delay/failure queues at`0–0x10000`, temporal
-KV at`0x10000–0x02110000` (34,603,008 bytes), a4MiB depth-KV reservation at
-`0x02110000–0x02510000`,16MiB activation/scratch at`0x02510000–0x03510000`, and
-remaining guard. Temporal KV derives from32 layers×32 heads×128 positions×
-(128 K bytes+4 K-scale bytes+128 V bytes+4 V-scale bytes).
-The compiled depth layout with six layers, 16 heads, 128 physical positions
-and 64-wide heads padded to 128 uses 3,244,032 bytes. The native runtime overrides
-JSON context8 to None and uses a 16-step cache; its final-step boundary defect
-excludes slot0. The [reusable depth layer](personaplex_depth_layer.md) implements
-that pinned policy, independent per-layer KV and reset. All six checkpoint
-layers now execute over16 saved diagnostic inputs with exact output/cache reset
-on CPU/ISA; source-reference error remains separate from implementation parity.
-Codec state, prompt-cache capacity and complete activation liveness remain
-unverified.
+Refill only after the prior program halts and transport drains. Check the
+whole packet or each contiguous layer block against its lease before writing.
+Active-run large H2C traffic is not qualified. Host transport may submit
+predetermined programs and copy immutable prepacked weights; it must not
+compute activations, embeddings, codec values, logits or token selection.
 
-The current Qwen-derived temporal layout interleaves KV within each layer's
-weight block (`opentpu/llm/qwen3.py`). It cannot be overwritten as a page. Refactor
-its descriptors so immutable weights/norms address A and every layer's KV points
-to fixed P addresses. Persist residual activations between page submissions.
+## Cold duplex routing and reset
 
-## Temporal packet sequence
+Pinned LMGen uses 16 audio streams plus text, initial IDs `[32000,2048×16]`,
+a four-column ring and delays `[0,0,1×7,0,1×7]`. Input RVQ IDs map to global
+slots9–16. All 16 depth heads sample on device. Keep raw samples, selected
+feedback and committed cache values distinct: a supplied target overrides
+feedback and cache commitment while the raw sample remains observable.
 
-Metadata arithmetic using existing mixed rules and current chunked weight/scale
-packing gives these candidate packets:
+Every raw PCM call advances the input codec. Cold call0 primes LMGen and skips
+LM compute; call1 computes without PCM emission; call2 first emits. Output
+Mimi reads committed, delay-aligned slots1–8, not current raw depth IDs.
+Four raw calls are therefore required for two consecutive emitted PCM frames.
+A six-call oracle covers ring wraparound. This cold slice omits voice/text
+prefixes; native server prompt scheduling and saved voice-cache restoration
+remain separate integration gates.
 
-| Packet | Layers | Packed layer bytes |
-|---|---|---:|
-| A0 | 0–3 INT8 | 829,915,136 |
-| A1 | 4–15 INT4 | 1,318,649,856 |
-| A2 | 16–27 INT4 | 1,318,649,856 |
-| A3 | 28–30 INT4;31 INT8 | 537,141,248 |
+Per-frame depth initialization must preserve codec and temporal conversation
+state. Conversation reset restarts all stage counters/histories once; native
+LMGen logical reset retains cache bytes and clears their validity. Do not call
+standalone Engine wrappers that upload overlapping images or read interstage
+activations. The final integrated runner must use one backend and resident
+seams throughout.
 
-Each is below A's1,342,177,280-byte capacity before actual aligned placement.
-Layer payload sums to4,004,356,096 bytes. Uploading fixed final norm once adds
-16,384 bytes at session initialization; explicitly refreshing it every frame
-would make per-frame weight traffic4,004,372,480 bytes. Report which policy is
-measured. These byte counts are packing estimates, not measured DMA transfers.
+## Acceptance limits
 
-The straightforward bounded schedule halts and drains the previous program,
-refills A, marks the complete packet ready, and runs that layer range. Repeat
-for all four packets, final norm and text head. Keep all KV and residuals in P.
-No host activation readback is required. Do not assume asynchronous large DMA
-can overlap active compute: `opentpu/host/board.py` documents corruption with
-large H2C writes during active runs and restricts such calls to4KiB. Establish
-correct halted paging before considering a separately qualified overlap scheme.
+The input codec and RoPE tables admit at most128 raw PCM calls in this cold
+candidate, hence127 temporal frames and126 emitted frames. The inherited
+native Mimi ring-position/all-mask defect is retained and remains a quality
+and longer-context gate. ISA F_BOUND guards are diagnostic checks, not physical
+RTL enforcement; host orchestration must also enforce admission and ordering.
 
-## Depth bank and codec limits
-
-Measured six-layer layout and compilation give 1,253,031,936 bytes for all
-16 INT8 banks per layer, including shared norms and repeated chunk scales.
-The program uses 24,088 of 32,768 instruction words with no host arguments.
-All six checkpoint layers have now been materialized and executed on CPU/ISA,
-including exact reset replay. This is standalone depth, not full speech. Sixteen 4096→1024 input projections add 67,698,688
-bytes, already materialized and CPU/ISA-validated. B would hold 1,320,730,624
-bytes with 21,446,656 bytes of slack. Programs, KV and interstage activations
-belong in P; the standalone layout must be relocated accordingly. Unified
-allocation/alignment checks and complete activation liveness remain pending.
-Step embeddings already reside in P. Individual capacity/compile evidence does
-not establish a working combined runtime or complete speech fit.
-
-The optional [Mimi RVQ latent slice](personaplex_mimi.md) now occupies unused P
-guard space beginning0x5D850000, with eight FP32 centroid tables and two INT8
-projections. Its [causal upsample and decoder transformer](personaplex_mimi_decoder.md)
-now keep overlap/KV/offset state in P and place25,616,384 decoder weight bytes at
-the start of A. The [SEANet-to-PCM stage](personaplex_mimi_pcm.md) adds 14,921,736
-matrix bytes after those weights, plus persistent convolution state in P. Depth
-B is unchanged. The input codec still needs lowering and capacity checks;
-SEANet precision and physical acceptance remain open. Temporal/codec A packet
-switching remains unimplemented. Prefer testing codec packets in A
-before temporal execution and after depth execution, when temporal weights are
-no longer live. If codec packets/scratch fit that overlay, B can retain the depth
-bank and the added per-frame traffic is encoder/decoder packet transfer rather
-than a depth reload. If codec must occupy B, depth weights must be reloaded when
-B changes back; add up to the full depth bank plus codec traffic. Codec state
-must persist independently of either overlay. This map is a plausible paged LM
-allocation only. It is not proof that the complete speech model fits4GiB.
-
-## Device chaining contract
-
-1. Create one qualified backend and allocate P/A/B once. Upload fixed tables,
-   initial states and program packets. Existing independent Engine wrappers
-   must not each upload/scrub their own overlapping images.
-2. Device input lookup/sum writes the persistent temporal input. Temporal page
-   submissions exchange only persistent addresses, never host activation math.
-3. Device final norm/text head stores its greedy text ID in a token slot.
-4. Depth step0 reads that ID, selects its projection/text embedding and runs
-   the six-layer depth program after shared-residency/integration validation. Its audio head stores the
-   greedy audio ID directly for the next step. Steps1–15 use device-selected
-   projection/previous-audio embeddings and appropriate per-step weights/state.
-5. Update delayed stream queues on device. Add Mimi stages only after their
-   compute/state/residency contract exists; final model output must be PCM.
-
-Initially the host may submit each program and predetermined packet transfer;
-activation/KV/token exchange stays in shared DRAM. Later use preloaded programs
-and `HALT CHAIN` where no packet refill is needed. CHAIN drains stores but resets
-temporary registers; crossing state must have explicit persistent locations
-(`docs/isa.md`). Preserve native audio0…15/text-last addition,`-1` positive-zero
-semantics, direct audio-head input and greedy lowest-ID tie behavior.
-
-Required runtime work: unified region/overlap/alignment/unsigned32 validation;
-relocatable descriptors and independent KV; bounded layer-range compilation for
-every context bucket; explicit IMEM/TMEM/WAITC budgets; packed-packet hash and
-generation identity; an empty/loading/ready/in-use/retired packet state machine;
-DMA-complete publication and drained retirement; failure-latched reset/replay;
-and transfer accounting split into weights/programs/control/PCM/diagnostics.
-Native depth ordering and reset are implemented in the standalone layer; shared
-state relocation, complete prompt/delay scheduling and integration remain. Greedy is the explicit final mode; stochastic sampling/RNG is
-optional additional scope.
-
-## Correctness, timing and hardware gate
-
-Require paged versus equivalent unpaged arithmetic to match bits for outputs,
-KV, logits and IDs across every packet boundary, all16 depth steps, resets and
-context exhaustion. Require device greedy to match its own saved logits without
-host replacement. Separately report source-reference relative L2/cosine/max error
-and token disagreements; implementation equality does not establish quality.
-Stop on nonfinite values, stale packet generations or corrupted state.
-
-Do not assume bandwidth or claim realtime. For the synchronous schedule:
-
-```text
-T_frame >= temporal_weight_DMA_bytes / measured_H2C_bytes_per_second
-           + measured_total_FPGA_compute_seconds
-           + measured_program/control/wait_seconds
-           + any depth/codec reload_seconds
-```
-
-Existing181.392ms/frame temporal compute already misses80ms, with32.9% reference
-relative L2 still unaccepted. New CPU image-build time is not FPGA latency.
-Combined DMA bandwidth, full depth/codec compute and complete-frame latency have
-not been measured. Full speech acceptance requires native-greedy sequence,
-prompt/delay and PCM end-to-end comparisons plus explicit quality thresholds.
-
-No new RTL or image requirement is established. First attempt relocation,
-partitioning and these supported ISA operations in CPU/ISA. Propose a hardware
-change only for demonstrated unsupported semantics, non-partitionable capacity,
-addressing outside the qualified mapping or an explicit performance requirement.
-That proposal must identify image/build scope and cost and receive authorization
-before synthesis or resource changes.
-
-Any eventual physical test requires a coordinated idle window with the UI owner,
-normal canonical/legacy locks and fresh exact image/profile/capability/calibration/
-idle/drained/error checks. Preserve warm Gemma and wide-port priority. Do not
-restore burst200 or infer compatibility from frequency. This planning step used
-no hardware and measured no new FPGA performance.
-
-## Bounded implementation sequence
-
-The [resident depth-chain plan](personaplex_depth_chain_plan.md) is the next
-concrete software deliverable. Reuse final P/B placements with A empty; combined
-listed depth weights/projections/step tables/audio heads/KV total1,614,954,496B
-before I/O/masks/programs/alignment. Add a sparse shared allocator and one runner,
-alias interstage vectors, and keep counter/token feedback on device. The current
-depth program increments the counter; audio selection must use counter−1.
-Validate this16-step resident chain before refactoring four temporal packets.
-The later depth-only shared runtime now implements P/B relocation and device
-feedback, with measured B slack21,495,808B after moving norms to P. Temporal
-paging and full-model scheduling are not supplied by that depth-only slice.
+Component correctness and a checked map do not establish complete checkpoint
+conversation quality. Required acceptance includes actual-checkpoint raw PCM
+through the whole input/temporal/depth/output chain for consecutive frames and
+reset, accumulated PCM and LM errors, native delay/prompt parity, measured
+halted transport, and coordinated physical execution on the unchanged shared
+image. Full speech stays disabled until those gates pass.

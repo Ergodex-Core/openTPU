@@ -1,6 +1,6 @@
 {
   "format_version": 1,
-  "purpose": "Reproducible resident raw-PCM to eight input RVQ IDs beside FP32 output codec; software qualification only",
+  "purpose": "Reproducible cold duplex scheduling and checked six-page shared-image residency; software candidate only",
   "runtime_revision": "18fb978033799f0f21258f0e6e085c0360322d96",
   "target": "f2-hbm:p4rl8a64c150",
   "image": "agfi-0001de1dd3df8e21e",
@@ -180,7 +180,19 @@
     "tools/data/personaplex/mimi_input_rvq_contract.json": "865b3bcb66d0bf6fe5e5f8043399dbe66f0ce3dcb8cccf5d5f09e78f4324a741",
     "tools/personaplex_mimi_full_input_native.py": "0e88ad4aafdc8f9ebafe6f1b83141b13e5033376ad05bb9f14f4081427c7ee75",
     "tools/personaplex_mimi_input_rvq_check.py": "b6a1edd1b892e71d2d129c998bdf3906e4ccbaa8acefa6362462764d61e2905e",
-    "tools/personaplex_mimi_input_rvq_native.py": "03ed829765f3610624a5a3839baf35a3015937a428a3d2ce04d99aa6c43aa1dd"
+    "tools/personaplex_mimi_input_rvq_native.py": "03ed829765f3610624a5a3839baf35a3015937a428a3d2ce04d99aa6c43aa1dd",
+    "opentpu/llm/personaplex_duplex.py": "56a56f90a06dcd89b06df85e05355344f580501152d750b38e97767476a65263",
+    "opentpu/llm/personaplex_duplex_handoff.py": "14d4b370b91a1539f75cb16dbd6cc913d9daaa3caabf5160568e18bac6f58775",
+    "opentpu/llm/personaplex_duplex_layout.py": "0718f0ff44a8fe12db822ae1aca92c9444b744281d888c9931d44101a297baa9",
+    "opentpu/llm/personaplex_duplex_schedule.py": "ee155edbd10a7e93c8a586b84a31952fc5c219d8065b30ff45c992af57ef13b2",
+    "opentpu/llm/personaplex_temporal_pages.py": "797839ee3aef300c9a5bbc0b2e6b5f772fc9c82305479dc46a66aefae86ab6f8",
+    "opentpu/llm/personaplex_token.py": "7aaf2fc0266a05961fb11701c5c6f3e647668d8f8405d1e89230dd38f0a42987",
+    "tests/test_personaplex_duplex.py": "ff7cefea5070287e81ccb81ca0adb739d0bf22d48aad128c20b7771664948036",
+    "tests/test_personaplex_duplex_handoff.py": "c81ac3c875b8b881052325301fd6ca5c9bb7bd5625a04ee93e7ccf9b003bc813",
+    "tests/test_personaplex_duplex_layout.py": "9807d2d5d35f3af344a3e9603abc839735c31c8bca2489f1bf630de351df0dc9",
+    "tests/test_personaplex_duplex_schedule.py": "3d3afa52fdf9f853d34c3c1a6240117d1a1c5bec77d9eb73d0de2aa210411233",
+    "tests/test_personaplex_temporal_pages.py": "559f764153f5b035cfdd3381d288f4c42d77c698c1b03fceb7cc554884d929ae",
+    "tools/data/personaplex/duplex_contract.json": "d09d92a34f76965d26ca3e7e35920508e11c35cc444d948f9b92aabe11f309e8"
   },
   "native_dependency_contract": "tools/data/personaplex/mimi_rvq_contract.json",
   "runtime_exclusion_policy": {
@@ -216,5 +228,7 @@
     "tools/data/personaplex/mimi_input_transformer_contract.json",
     "tools/data/personaplex/mimi_input_downsample_contract.json",
     "tools/data/personaplex/mimi_input_rvq_contract.json"
-  ]
+  ],
+  "duplex_contract": "tools/data/personaplex/duplex_contract.json",
+  "arch_hash": "dd6b92a6"
 }
