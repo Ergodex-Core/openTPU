@@ -1,0 +1,35 @@
+{
+  "base_commit": "71c9755d73fc4d112dd187fe96271eef5e5be416",
+  "tests": {
+    "passed": 124,
+    "seconds": 22.1,
+    "skips": 0,
+    "hardware_opens": 0,
+    "source_sha256": {
+      "opentpu/llm/nanbeige_strict.py": "9fc8d192a595bb0458933565a5a95fb9d8c2d3985221e92abc7250c3fe44bebd",
+      "tools/nanbeige_strict.py": "ebe89fe4237ae56488b20c5a2b6867bcba09c4180e50a06ee203a27f8eb4bc09",
+      "tests/test_nanbeige_strict.py": "ff3f02e06dd045843918e0eedca1862abf230a050a2cc2f742ac144283606ad7"
+    },
+    "finished_utc": "2026-10-23T08:50:32.148807+00:00"
+  },
+  "production_layout": {
+    "cap": 128,
+    "embedding_format": "int8",
+    "required_bytes": 4239351808,
+    "dram_bytes": 4294967296,
+    "prefill_words": [
+      9568
+    ],
+    "generate_words": [
+      [
+        9696
+      ],
+      [
+        840
+      ]
+    ]
+  },
+  "checkpoint_isa": "pending separately recorded validation",
+  "physical_fpga": "pending coordinated compatible burst200 window",
+  "published_checkpoint_quality_accepted": false
+}
