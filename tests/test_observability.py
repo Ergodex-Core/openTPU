@@ -108,10 +108,16 @@ def test_cfg_registers(have_verilator):
     c = info["cfg"]
     # CAPS2 bit0: the full collective unit, but BAR alone on the board's uarch (the card's
     # build, rtlsim.BOARD_UARCH COLL_GATHER 0)
-    assert info["regmap"] == 5 and info["caps2"] == {"gather": rtlsim.gathers(1)}
+    # CAPS2 [3:1]: the port B the configuration asks for (OTPU_PORTB; 0 there: one chunk)
+    assert info["regmap"] == 5 and info["caps2"] == {"gather": rtlsim.gathers(1),
+                                                     "portb": CFG.PORTB,
+                                                     "rowlanes": CFG.ROWLANES,
+                                                     "aline": CFG.ALINE}
     assert t.gather == rtlsim.gathers(1)
     assert (c["S"], c["TMEM_WORDS"], c["IMEM_WORDS"], c["ACT_BLOCKS"]) == (1, 1 << 16, 1 << 15, 128)
-    assert (c["DRAM_BYTES"], c["channels"], c["channel_bytes"]) == (1 << 32, 2, 1 << 31)
+    # the channels the model was built with (two; a wide port B's 2 PORTB), 4 GiB over them
+    assert (c["DRAM_BYTES"], c["channels"], c["channel_bytes"]) == \
+        (1 << 32, t.nch, (1 << 32) // t.nch)
     # the TMEM as the target builds it (the board model's: release r2, one copy, TMEM_IMPL 3)
     assert (c["MXU_IMPL"], c["TMEM_IMPL"], c["VPU_CL"], c["ULANES"]) == \
         (2, T.current().uarch["TMEM_IMPL"], 2, 8)
@@ -120,7 +126,8 @@ def test_cfg_registers(have_verilator):
     assert c["hash"] == T.arch_hash(cfg)
     # the board model's sequencer takes wait entries as the simulators' (rtlsim.UARCH SEQ_WC)
     assert cfg == T.build_config(T.current(), MCOLS=CFG.MCOLS, LANES=CFG.LANES,
-                                 ACT_ROWS=CFG.act_rows, DSTEP=1,
+                                 ACT_ROWS=CFG.act_rows, DSTEP=1, PORTB=CFG.PORTB,
+                                 ROWLANES=int(CFG.ROWLANES), ALINE=CFG.ALINE,
                                  SEQ_WC=int(bool(rtlsim.UARCH.get("SEQ_WC"))))
     assert t.reg_read(R.R_CFG_WIN0) == 0xDEADBEEF    # reserved
 
@@ -155,12 +162,15 @@ def test_caps2_coll_bar(have_verilator):
     from opentpu.host.board import NoGather
     # (the full unit named: the board's uarch builds the card's, BAR alone; rtlsim.BOARD_UARCH)
     full = SimTransport(ch_bytes=1 << 20, params={"COLL_GATHER": 1})
-    assert full.gather and full.reg_read_many([R_REGMAP, R.R_CAPS2]) == [5, 1]
+    pb = CFG.PORTB << R.CAP2_PORTB_SHIFT if CFG.PORTB > 1 else 0    # [3:1]: the wide port B
+    pb |= R.CAP2_ROWLANES if CFG.ROWLANES else 0                   # bit4: row lanes
+    pb |= R.CAP2_ALINE64 if CFG.ALINE == 64 else 0                 # bit5: a 64-byte port-A line
+    assert full.gather and full.reg_read_many([R_REGMAP, R.R_CAPS2]) == [5, pb | 1]
     # (SEQ_WC 0: the raw load below loads no wait entries, which the board's uarch would need)
     t = SimTransport(ch_bytes=1 << 20, params={"COLL_GATHER": 0, "SEQ_WC": 0},
                      plusargs=["+coll_gerr_ok"])
     assert not t.gather
-    assert t.reg_read_many([R_REGMAP, R.R_CAPS2]) == [5, 0]
+    assert t.reg_read_many([R_REGMAP, R.R_CAPS2]) == [5, pb]
     b = Board(t, check=False)
     assert not b.gather
     at, src, dst, n = 0x10000, 0, 1024, 32                      # 4 rows of 8 words
@@ -304,9 +314,15 @@ def test_mxu_starve_counter(have_verilator):
     wait = {lat: q[lat]["ms"] + q[lat]["mb"] for lat in q}
     assert wait[400] > 0.9 * (c[400]["MXU_BUSY"] - c[400]["MXU_MAC"]), (c[400], q[400])
     # near 0 at either latency: the card's uarch (r2's TMEM input stage and registered wait release) sees a
-    # few cycles at 20 (3 of 13,398 on release-2 d8fe2c15), the default uarch none
-    assert c[400]["DRAM_WAIT"] < wait[400] // 100 and c[20]["DRAM_WAIT"] <= cyc[20] // 1000, (c[400], c[20])
-    assert min(q[400]["ms"], q[400]["mb"]) > wait[400] // 5, q[400]
+    # few cycles at 20 (3 of 13,398 on release-2 d8fe2c15), the default uarch none. A wide port B
+    # (PORTB > 1): a two-chunk request across a group of channel pairs goes in two parts and
+    # holds the port a cycle (otpu_native_dram b_hold), each a DRAM_WAIT cycle: up to 1% of the
+    # run (20 of 7,332 on the MLP kernel at PORTB 2, NCH 4)
+    assert c[400]["DRAM_WAIT"] < wait[400] // 100 and \
+        c[20]["DRAM_WAIT"] <= cyc[20] // (1000 if CFG.PORTB == 1 else 100), (c[400], c[20])
+    # (a wide port B: an entry is two chunks, a 9-chunk row 5 entries, so less of the wait lands
+    # on a partial row -- blocked 17.9% of it at PORTB 2 against 25-50% at PORTB 1)
+    assert min(q[400]["ms"], q[400]["mb"]) > wait[400] // (5 if CFG.PORTB == 1 else 8), q[400]
     assert wait[20] < wait[400] // 20, (q[400], q[20])
     assert cyc[20] < 0.3 * cyc[400], cyc
 

@@ -1,7 +1,8 @@
 """FakeTransport: an in-memory card for tests and demos (otpu-smi --fake).
 
 It implements the register protocol the driver uses -- register map 3 (or 4: the CFG_*
-registers; or 5: CAPS2, bit0 GATHER = `gather`; or 2: no MXU_STARVE; or
+registers; or 5: CAPS2, bit0 GATHER = `gather`, [3:1] PORTB = `portb`; or 2: no
+MXU_STARVE; or
 1, regmap=1: 8-bit address decode, 0xDEADBEEF for registers v1 does not have) -- over two
 channel memories in RAM (two per slice when `cfg` reports more than one: ICOUNT_s as ICOUNT).
 It computes nothing: a run takes `run_s` seconds of wall time (HALTED rises then), reports
@@ -47,8 +48,10 @@ RATES = {"RUNNING": 0.80, "MXU_BUSY": 0.60, "MXU_MAC": 0.50, "VPU_BUSY": 0.12,
 
 
 def _target_cfg(D: int, MCOLS: int, LANES: int, pair: bool, dstep: bool, stream: bool,
-                act_rows: int = 0, seq_wc: bool = False) -> dict:
-    """The CFG_* registers of the current target's build with these VERSION / CAPS values."""
+                act_rows: int = 0, seq_wc: bool = False, portb: int = 1,
+                rowlanes: bool = False, aline: int = 32) -> dict:
+    """The CFG_* registers of the current target's build with these VERSION / CAPS / CAPS2
+    values (the hash takes the wide port B's PORTB, docs/wide_port.md)."""
     from ..target import arch_hash, current
     t = current()
     a, u, p = t.arch, t.uarch, t.platform
@@ -60,7 +63,8 @@ def _target_cfg(D: int, MCOLS: int, LANES: int, pair: bool, dstep: bool, stream:
     from ..isasim import Config
     full = Config(**{**a, "D": D, "MCOLS": MCOLS, "LANES": LANES,
                      "ACT_ROWS": act_rows if act_rows > MCOLS else 0, "PAIR": pair,
-                     "DSTEP": dstep, "STREAM": stream, "SEQ_WC": seq_wc})
+                     "DSTEP": dstep, "STREAM": stream, "SEQ_WC": seq_wc, "PORTB": portb,
+                     "ROWLANES": rowlanes, "ALINE": aline})
     cfg["hash"] = arch_hash(full)
     return cfg
 
@@ -75,11 +79,12 @@ class FakeTransport:
                  trace_drop: int = 0, D: int | None = None, MCOLS: int | None = None,
                  LANES: int | None = None,
                  i2c: list | None = None, ddr_mts: int | None = None,
-                 w4: bool = True, pair: bool = False, dstep: bool = False,
+                 w4: bool = True, pair: bool = False, dstep: bool = False, t2: bool = False,
                  args: bool = False, stream: bool = False, gen: bool = False,
                  chash: bool = False, calib: tuple = (True, True), ecc_ded: bool = False,
                  cfg: dict | None = None, act_rows: int | None = None, mx: bool = True,
-                 gather: bool = True, seq_wc: bool = False):
+                 gather: bool = True, seq_wc: bool = False, portb: int | None = None,
+                 rowlanes: bool | None = None, aline: int | None = None):
         self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2)]
         self.v, self.devname, self.dev = regmap, devname, devname and f"/dev/{devname}"
         self.run_s, self.cycles_per_run = run_s, cycles
@@ -88,17 +93,21 @@ class FakeTransport:
         self.trace, self.trace_extra, self.trace_drop = list(trace or []), trace_extra, trace_drop
         if act_rows is None:            # the target's rows, unless MCOLS is the caller's
             act_rows = MCOLS
-        if None in (D, MCOLS, LANES):
+        if None in (D, MCOLS, LANES, portb):
             from ..isasim import board_config
             c = board_config()
             if act_rows is None:
                 act_rows = c.act_rows
             D, MCOLS, LANES = (c.D if D is None else D, c.MCOLS if MCOLS is None else MCOLS,
                                c.LANES if LANES is None else LANES)
+            portb = c.PORTB if portb is None else portb      # (OTPU_PORTB: the "bitstream's")
+            rowlanes = c.ROWLANES if rowlanes is None else rowlanes
+            aline = c.ALINE if aline is None else aline
         self.version = D << 16 | MCOLS << 8 | LANES
         self.act_rows = act_rows        # > MCOLS: CAPS bit24 and the ACT_ROWS register
         self.cfg_words = R.cfg_words(cfg or _target_cfg(D, MCOLS, LANES, pair, dstep, stream,
-                                                        act_rows, seq_wc))
+                                                        act_rows, seq_wc, portb,
+                                                        bool(rowlanes), aline or 32))
         self.slices = R.cfg(self.cfg_words)["S"] if regmap >= R.CFG_SINCE else 1
         if self.slices > 1:             # two channels per slice (board.channel_map)
             self.ch = [np.zeros(ch_bytes, np.uint8) for _ in range(2 * self.slices)]
@@ -112,7 +121,11 @@ class FakeTransport:
         self.gen = gen                  # CAPS bit30: the decode loop (RLD, ARGMAX, HALT CHAIN)
         self.chash = chash              # CAPS bit7: the hashed channel interleave
         self.mx = mx                    # CAPS bit29: the MX numerics (every bitstream of this tree)
+        self.t2 = t2                    # CAPS bit28: t2 weights, MM QUAD, QACT DUP4
         self.gather = gather            # CAPS2 bit0 (register map 5): the collective's GATHER
+        self.portb = portb or 1         # CAPS2 [3:1]: chunks a cycle on port B (docs/wide_port.md)
+        self.rowlanes = bool(rowlanes)  # CAPS2 bit4: row lanes (docs/row_lanes.md)
+        self.aline = aline or 32        # CAPS2 bit5: port A's 64-byte line
         self.calib = list(calib)        # STATUS CALIB0 / CALIB1
         self.ecc_ded = ecc_ded          # STATUS ECC_DED
         self.regs = {R.R_CTRL: 0, R.R_PROG_ADDR: 0, R.R_PROG_N: 0, R.R_SCRATCH: 0,
@@ -230,7 +243,10 @@ class FakeTransport:
         if self.v >= R.CFG_SINCE and off in R.CFG_REGS:
             return self.cfg_words[R.CFG_REGS.index(off)]
         if self.v >= R.CAPS2_SINCE and off == R.R_CAPS2:
-            return R.CAP2_GATHER if self.gather else 0
+            return ((R.CAP2_GATHER if self.gather else 0)
+                    | (self.portb if self.portb > 1 else 0) << R.CAP2_PORTB_SHIFT
+                    | (R.CAP2_ROWLANES if self.rowlanes else 0)
+                    | (R.CAP2_ALINE64 if self.aline == 64 else 0))
         if off == R.R_CAPS:
             return (R.CAP_TRACE | R.CAP_TEMP | (R.CAP_I2C if self.i2c else 0)
                     | (R.CAP_DDR if self.ddr_mts else 0) | (R.CAP_W4 if self.w4 else 0)
@@ -238,6 +254,7 @@ class FakeTransport:
                     | (R.CAP_DSTEP if self.dstep else 0) | (R.CAP_ARGS if self.args else 0)
                     | (R.CAP_STREAM if self.stream else 0) | (R.CAP_GEN if self.gen else 0)
                     | (R.CAP_CHASH if self.chash else 0) | (R.CAP_MX if self.mx else 0)
+                    | (R.CAP_T2 if self.t2 else 0)
                     | (R.CAP_ACT if self.act_rows > self.version >> 8 & 0xFF else 0)
                     | self.trace_log2 << 8 | 6 << 16)
         if off == R.R_ACT_ROWS and self.act_rows > self.version >> 8 & 0xFF:

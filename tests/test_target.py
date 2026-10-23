@@ -73,7 +73,11 @@ def _hash_without_numerics(cfg) -> int:
     import hashlib
     import json
     d = dataclasses.asdict(cfg)
-    d.pop("SEQ_WC")                     # (a field that host's Config does not have)
+    d.pop("SEQ_WC")                     # (fields that host's Config does not have)
+    d.pop("T2")
+    d.pop("PORTB")
+    d.pop("ROWLANES")
+    d.pop("ALINE")
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -517,3 +521,38 @@ def test_config_summary_names_the_target(no_env):
     new = config_summary(Board(FakeTransport(regmap=4, **kw)).info())
     assert "register map 4, ypcb-00338 (S=1, 2 channels x 2048 MiB)" in new and "DDR3-1066" in new
     assert T.by_platform(2).name == "bcu1525" and T.by_platform(999) is None
+
+
+def test_f2_hbm_bonsai_variants():
+    """targets/f2-hbm.toml's variants for the Bonsai-2 t2 decode on the wide port
+    (docs/ternary.md 8 and 10): p2rl8 (PORTB 2, row lanes, MCOLS 8: t2 RL 2, the doubling at
+    M = 1) and p2m8 (PORTB 2, MCOLS 8: t2 QUAD at M = 2, MTP's verify), the f2-hbm arch
+    otherwise (T2, PAIR, NCH 8), each its own CFG_HASH (pinned: the nightly's images)."""
+    base = T.config("f2-hbm")
+    for name, mcols, rl, h in (("f2-hbm:p2rl8", 8, True, 0x4317000C),
+                               ("f2-hbm:p2m8", 8, False, 0x8A2B063D),
+                               ("f2-hbm:p2", 4, False, 0xA9D1D2B0)):
+        t = T.load(name)
+        cfg = T.config(t)
+        assert cfg == dataclasses.replace(base, PORTB=2, MCOLS=mcols, ROWLANES=rl), name
+        assert cfg.T2 and cfg.PAIR and t.platform["channels_per_slice"] == 8
+        assert T.arch_hash(cfg) == h != T.arch_hash(base), (name, hex(T.arch_hash(cfg)))
+        assert T.rtl_params(t)["PORTB"] == 2 and T.rtl_params(t)["ARCH_HASH"] == h
+
+
+def test_f2_hbm_row_lane_variants_and_the_port_a_line():
+    """targets/f2-hbm.toml's row-lane variants (docs/row_lanes.md): their hashes (ROWLANES in
+    the hash only when on, ALINE only when 64: f2-hbm's own 1f260779 stays), the MXU streams
+    (RL 4 at MCOLS 4, 8 at MCOLS 8) and the port-A line in the RTL parameters."""
+    want = {"f2-hbm": ("1f260779", 0, 32), "f2-hbm:p4rl": ("d6ed551d", 4, 32),
+            "f2-hbm:p4rl8": ("172e5c73", 8, 32), "f2-hbm:p2rl": ("e476f0b7", 4, 32),
+            "f2-hbm:p4rl8a64": ("dd6b92a6", 8, 64)}
+    for name, (h, rl, aline) in want.items():
+        cfg = T.config(name)
+        assert f"{T.arch_hash(cfg):08x}" == h, name
+        p = T.rtl_params(name)
+        assert (p["RL"], p["ALINE"]) == (rl, aline) and cfg.ALINE == aline, name
+    a64 = T.config("f2-hbm:p4rl8a64")
+    assert dataclasses.replace(a64, ALINE=32) == T.config("f2-hbm:p4rl8")
+    assert T.arch_hash(T.build_config("f2-hbm", PORTB=4, ROWLANES=1, MCOLS=8, ALINE=64)) == \
+        T.arch_hash(a64)

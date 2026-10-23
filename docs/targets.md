@@ -88,3 +88,5 @@ DRAM addresses are 32 bits per slice, so a slice addresses 4 GiB. A platform wit
 (the BCU1525's 64 GB) uses it through more slices (each on its own channels); offsets 0xA0 + 4s
 are reserved for per-slice DRAM windows the host would set, and far-memory DMA for MoE expert
 pools held on the card is a later ISA decision.
+The F2 HBM build's channels can hold more per slice (f2-hbm16: 8 GiB) than the 32-bit byte
+addresses reach; docs/f2_hbm.md ("Past 4 GiB a slice") lists the fields and the smallest fix.

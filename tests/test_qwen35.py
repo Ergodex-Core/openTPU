@@ -743,3 +743,33 @@ def test_tiny_image_from_the_quantization_cache(tiny, tmp_path, monkeypatch):
     assert qcache.stats["miss"] == n["miss"] and qcache.stats["hit"] == 2 * n["hit"] + n["miss"]
     for got in (first, again):
         assert all(np.array_equal(a, b) for a, b in zip(got, want))
+
+
+@pytest.mark.parametrize("fmt,portb,mcols", [("int8", 2, 8), ("int4", 2, 8), ("int8", 4, 4)])
+@pytest.mark.parametrize("grouped", [False, True], ids=["array", "group"])
+def test_tiny_decode_is_bit_identical_with_row_lanes(tiny_pairs, grouped, fmt, portb, mcols):
+    """A resident decode step's logits on a Config with ROWLANES (docs/row_lanes.md: the
+    image's one-row matrices in row-lane groups -- the projections, W_down's parts, the
+    DeltaNet's wh / wab / wout in both layouts (the array's pair loop slices wh at a
+    loop-dependent row, the group-major's pair and group blocks L D aligned) and the head's
+    copy beside its gather rows -- streamed by MM RL of the widest L) are the standard
+    image's, bit for bit. (The real Ternary-Bonsai-2-2B in t2 at PORTB 2 / MCOLS 8 / RL 2 gave
+    the plain image's logits too: docs/ternary.md 8.)"""
+    from opentpu import isa as I
+    from opentpu import quant as Q
+    W, spec = tiny_pairs
+    spec = dataclasses.replace(spec, pair_loop=grouped)
+    base = board_config(DRAM_BYTES=1 << 25, MCOLS=mcols, PORTB=portb, PAIR=True)
+    toks = [int(t) for t in np.random.default_rng(5).integers(0, 1000, 6)]
+    out = {}
+    for rl in (False, True):
+        cfg = dataclasses.replace(base, ROWLANES=rl)
+        eng = Engine(spec, W, cap=512, cfg=cfg, wformat=fmt, head_format=fmt, resident=True)
+        assert eng.image.grouped == grouped
+        out[rl] = np.array([eng.step(t) for t in toks]).view(np.uint32)
+        mms = [i for i in eng.image.compile_step(3)[0] if i.op == I.MM]
+        lanes = sorted({I.mm_lanes(i) for i in mms})
+        assert (lanes != [0]) == rl, lanes
+        if rl:
+            assert max(lanes) == Q.rl_lanes(fmt, portb, mcols)
+    np.testing.assert_array_equal(out[True], out[False])

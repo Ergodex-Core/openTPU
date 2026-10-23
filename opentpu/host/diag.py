@@ -423,9 +423,12 @@ def run(a, t, dev: str, sim: bool) -> tuple[list[Row], list[str]]:
             if i["regmap"] >= 2:
                 if v[2] not in (2, 3, 4, 5):
                     bad.append(f"REGMAP {v[2]}")
-                if c2 and (v[8] & ~R.CAP2_GATHER or not v[8] & R.CAP2_GATHER
+                pb = v[8] >> R.CAP2_PORTB_SHIFT & R.CAP2_PORTB_MASK if c2 else 0
+                if c2 and (v[8] & ~(R.CAP2_GATHER | R.CAP2_PORTB_MASK << R.CAP2_PORTB_SHIFT)
+                           or pb not in (0, 2, 4) or not v[8] & R.CAP2_GATHER
                            and (i.get("cfg") or {}).get("S", 1) > 1):
-                    bad.append(f"CAPS2 {v[8]:#x}")      # reserved bits, or no GATHER at S > 1
+                    # reserved bits, a PORTB other than 1, 2, 4, or no GATHER at S > 1
+                    bad.append(f"CAPS2 {v[8]:#x}")
                 if not 10_000 <= v[4] <= 300_000:
                     bad.append(f"CORE_KHZ {v[4]}")
                 if i["caps"]["trace"] and not 8 <= (v[3] >> 8 & 0xFF) <= 16:

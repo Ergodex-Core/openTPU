@@ -1,8 +1,9 @@
 // Board-level simulation: otpu_board (control registers, S slices, each with the native DRAM
 // adapter) in front of the channels' memory holding their physical images (ch0.bin, ch1.bin; slice
-// s's are ch<2s>.bin and ch<2s+1>.bin): MEM_NATIVE 2 (the
+// s's are ch<NCH s + c>.bin, c = 0 .. NCH - 1): MEM_NATIVE 2 (the
 // default) the build's channels, otpu_mem_ch in front of a LiteDRAM native-port model
-// (otpu_chmem); 1 the native memory model alone (otpu_native_mem) -- driven by a host script
+// (otpu_chmem; two channels a slice); 1 the native memory model alone (otpu_native_mem; NCH
+// channels a slice: the F2 HBM build's 8, and a wide port B's 2 PORTB at least) -- driven by a host script
 // (+dir=<d>, <d>/host.txt) -- the same register and memory protocol the PCIe host driver uses (opentpu/host/board.py). Script lines:
 //   W <addr> <value>          AXI-Lite write
 //   P <addr> <mask> <value>   poll until (read(addr) & mask) == value
@@ -15,8 +16,13 @@
 // channels' calibration flags (default all set: calibrated); +ded=<hex>: their uncorrectable-ECC
 // flags (default 0; STATUS ECC_DED).
 module tb_board;
-  parameter int S          = 1;           // slices, two channels each
-  parameter int WORDS      = 1 << 20;     // logical memory words (a slice's two channels)
+  parameter int S          = 1;           // slices, NCH channels each
+  parameter int NCH        = 2;           // memory channels a slice (otpu_board; CFG_DRAM's channels, each
+                                          //   2^32 / NCH bytes of the slice's 4 GiB; > 2: MEM_NATIVE 1)
+  parameter int PORTB      = 1;           // chunks a cycle on port B (otpu_board; NCH >= 2 PORTB; CAPS2 [3:1])
+  parameter int RL         = 0;           // row lanes (otpu_board; CAPS2 bit4; docs/row_lanes.md)
+  parameter int ALINE      = 32;          // port A's line, bytes (otpu_board; CAPS2 bit5)
+  parameter int WORDS      = 1 << 20;     // logical memory words (a slice's NCH channels)
   parameter int D          = 128;
   parameter int MCOLS      = 4;
   parameter int ACT_ROWS   = MCOLS;
@@ -82,19 +88,19 @@ module tb_board;
   logic [1:0]  bresp, rresp;
   logic [2:0]  led;
 
-  // native channels (slice s on 2s and 2s + 1)
-  logic [2*S-1:0] ncv, ncr, ncwe, nwv, nwr, nrv;
-  logic [2*S-1:0][24:0] nca;
-  logic [2*S-1:0][511:0] nwd, nrd;
-  logic [2*S-1:0][63:0] nwm;
-  logic [2*S-1:0][15:0] nwdone;
-  logic [2*S-1:0] nerr;
+  // native channels (slice s on NCH s .. NCH s + NCH - 1)
+  logic [NCH*S-1:0] ncv, ncr, ncwe, nwv, nwr, nrv;
+  logic [NCH*S-1:0][24:0] nca;
+  logic [NCH*S-1:0][511:0] nwd, nrd;
+  logic [NCH*S-1:0][63:0] nwm;
+  logic [NCH*S-1:0][15:0] nwdone;
+  logic [NCH*S-1:0] nerr;
 
   // I2C: wired AND of the board's drive-low bits and the outside's holds, pulled up
   logic [3:0] i2c_lo;
   logic [4:0] i2c_hold = '0;
   initial void'($value$plusargs("i2c_hold=%h", i2c_hold));
-  logic [2*S-1:0] calib = '1, ded = '0;
+  logic [NCH*S-1:0] calib = '1, ded = '0;
   initial begin
     void'($value$plusargs("calib=%h", calib));
     void'($value$plusargs("ded=%h", ded));
@@ -107,7 +113,10 @@ module tb_board;
                .ARCH_HASH(ARCH_HASH), .COLL_GATHER(COLL_GATHER || S > 1), .TMEM_IMPL(TMEM_IMPL),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL),
                .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK),
-               .TMEM_SDM(TMEM_SDM)) dut (
+               .TMEM_SDM(TMEM_SDM),
+               // the channels: NCH a slice of 2^32 / NCH bytes each (the DDR boards' two of 2 GiB), the
+               // adapter's wide port B (otpu_native_dram PORTB)
+               .NCH(NCH), .CH_LOG2(32 - $clog2(NCH)), .PORTB(PORTB), .RL(RL), .ALINE(ALINE)) dut (
     .clk, .clk_f, .rst, .ctl_mrst(1'b0), .calib, .ded, .temp(TEMP), .led,
     .i2c_lo, .i2c_pin(~({1'b0, i2c_lo} | i2c_hold)),
     .s_ctl_awaddr(awaddr), .s_ctl_awvalid(awvalid), .s_ctl_awready(awready),
@@ -119,12 +128,12 @@ module tb_board;
     .n_wdata(bwd), .n_wmask(bwm), .n_rvalid(brv), .n_rdata(brd), .n_wdone(bwdone), .n_err(berr));
 
   // the board's side of the channels, and the register slices where NREG asks for them
-  logic [2*S-1:0] bcv, bcr, bcwe, bwv, bwr, brv, berr;
-  logic [2*S-1:0][24:0] bca;
-  logic [2*S-1:0][511:0] bwd, brd;
-  logic [2*S-1:0][63:0] bwm;
-  logic [2*S-1:0][15:0] bwdone;
-  for (genvar j = 0; j < 2 * S; j++) begin : g_nreg
+  logic [NCH*S-1:0] bcv, bcr, bcwe, bwv, bwr, brv, berr;
+  logic [NCH*S-1:0][24:0] bca;
+  logic [NCH*S-1:0][511:0] bwd, brd;
+  logic [NCH*S-1:0][63:0] bwm;
+  logic [NCH*S-1:0][15:0] bwdone;
+  for (genvar j = 0; j < NCH * S; j++) begin : g_nreg
     if (NREG >> j & 1) begin : g_reg
       logic cv, cr, cwe, wv, wr, rv, err;
       logic [24:0] ca;
@@ -151,8 +160,10 @@ module tb_board;
     end
   end
 
+  initial if (MEM_NATIVE == 2 && NCH != 2)
+    $fatal(1, "tb_board: the LiteDRAM channels (MEM_NATIVE 2) are two a slice; NCH %0d needs MEM_NATIVE 1", NCH);
   for (genvar s = 0; s < S; s++) begin : g_slice
-    localparam int C = 2 * s;
+    localparam int C = NCH * s;
     if (MEM_NATIVE == 2) begin : g_ch
       otpu_chmem #(.WORDS(WORDS), .LAT(LAT), .PHYS(1), .SID(s)) u_mem (
         .clk, .rst,
@@ -161,13 +172,13 @@ module tb_board;
         .n_wdata(nwd[C +: 2]), .n_wmask(nwm[C +: 2]), .n_rvalid(nrv[C +: 2]),
         .n_rdata(nrd[C +: 2]), .n_wdone(nwdone[C +: 2]), .n_err(nerr[C +: 2]), .dump);
     end else begin : g_native
-      assign nerr[C +: 2] = '0;
-      otpu_native_mem #(.WORDS(WORDS), .LAT(LAT), .PHYS(1), .SID(s)) u_mem (
+      assign nerr[C +: NCH] = '0;
+      otpu_native_mem #(.WORDS(WORDS), .LAT(LAT), .PHYS(1), .SID(s), .NCH(NCH)) u_mem (
         .clk, .rst, .run_rst(1'b0),     // (no pokeb lines: the host writes through the board)
-        .n_cvalid(ncv[C +: 2]), .n_cready(ncr[C +: 2]), .n_cwe(ncwe[C +: 2]),
-        .n_caddr(nca[C +: 2]), .n_wvalid(nwv[C +: 2]), .n_wready(nwr[C +: 2]),
-        .n_wdata(nwd[C +: 2]), .n_wmask(nwm[C +: 2]), .n_rvalid(nrv[C +: 2]),
-        .n_rdata(nrd[C +: 2]), .n_wdone(nwdone[C +: 2]), .dump);
+        .n_cvalid(ncv[C +: NCH]), .n_cready(ncr[C +: NCH]), .n_cwe(ncwe[C +: NCH]),
+        .n_caddr(nca[C +: NCH]), .n_wvalid(nwv[C +: NCH]), .n_wready(nwr[C +: NCH]),
+        .n_wdata(nwd[C +: NCH]), .n_wmask(nwm[C +: NCH]), .n_rvalid(nrv[C +: NCH]),
+        .n_rdata(nrd[C +: NCH]), .n_wdone(nwdone[C +: NCH]), .dump);
     end
   end
 
@@ -181,13 +192,13 @@ module tb_board;
   for (genvar s = 0; s < S; s++) begin : g_swchk
     logic sw_v, a_v, b_v, b_w, b_rv, wi, ri, li;
     if (s == 0) begin : g_0
-      assign sw_v = dut.u_slice.sw_v;
+      assign sw_v = dut.u_slice.sw_any;      // (round 7: a write in either slot of the SW skid buffer)
       assign a_v = dut.u_slice.a_req;
       assign b_v = dut.u_slice.b_req; assign b_w = dut.u_slice.b_we;
       assign b_rv = dut.u_slice.b_rvalid_i;
       assign li = dut.u_slice.rd_idle_i;
     end else begin : g_s
-      assign sw_v = dut.g_slice[s].u_slice.sw_v;
+      assign sw_v = dut.g_slice[s].u_slice.sw_any;
       assign a_v = dut.g_slice[s].u_slice.a_req;
       assign b_v = dut.g_slice[s].u_slice.b_req; assign b_w = dut.g_slice[s].u_slice.b_we;
       assign b_rv = dut.g_slice[s].u_slice.b_rvalid_i;

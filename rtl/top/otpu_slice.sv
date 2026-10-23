@@ -80,7 +80,12 @@ module otpu_slice
                                       //   at bit 3p; 0: PRANK3, below)
   parameter int TMEM_SDM   = -1,      // TMEM_TDP: the read ports' RAM sides (bit p: port p on
                                       //   port A; -1: TM_SIDED, below)
-  parameter bit SEQ_WC     = 1'b0     // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
+  parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait counts (WAITC, docs/seq_vpu.md)
+  parameter bit T2         = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter int RL         = 0,       // row lanes: MM RL (otpu_mxu's streams, 4 or 8), QACT DUP8
+  parameter int ALINE      = 32,      // port A's line, bytes (32, 64): a scale read's response (otpu_mxu)
+  parameter int PORTB      = 1        // chunks a cycle on port B: the MXU's wide requests, MM
+                                      // PAIR / QUAD for every format, QACT DUP4 (docs/wide_port.md)
 ) (
   input  logic          clk,
   input  logic          clk_f,      // TMEM_PMP 1: 2 x clk, rising with it (the MMCM's); else unused
@@ -108,7 +113,7 @@ module otpu_slice
   output logic [31:0]   sw_wdata,
   output logic [3:0]    sw_be,
   input  logic          a_rvalid,
-  input  logic [255:0]  a_rdata,    // the aligned 32 bytes holding the word read (MM scale lines)
+  input  logic [8*ALINE-1:0] a_rdata,   // the aligned ALINE bytes holding the word read (MM scale lines)
   output logic          b_req,
   output logic          b_tag,
   output logic          b_we,
@@ -116,9 +121,12 @@ module otpu_slice
   output logic [D*8-1:0] b_wdata,
   output logic [31:0]   b_addr,
   output logic          b_par,      // ^b_addr[31:5] (the memory's channel hash; see the port mux)
+  output logic [1:0]    b_n,        // PORTB > 1: a read of b_n + 1 consecutive chunks (the MXU's)
   input  logic          b_rvalid,
   input  logic          b_rtag,
-  input  logic [D*8-1:0] b_rdata,
+  input  logic [PORTB*D*8-1:0] b_rdata,   // chunk c of a request at [c*D*8 +: D*8]
+  input  logic [PORTB-1:0] b_rcm,   // PORTB > 1: the chunks of the request this response carries
+  input  logic          b_rlast,    // PORTB > 1: ... its last (a memory may split a request)
   // collective
   output logic                    coll_req,
   output cmd_t                    coll_cmd,
@@ -147,8 +155,13 @@ module otpu_slice
   // port B as the units, the loader and the arbiters see it: through its output register (b_rdy_i,
   // rd_idle_i, wr_idle_i) and its input register (b_rvalid_i, b_rtag_i, b_rdata_i); see "port B's
   // registers"
-  logic b_rdy_i, rd_idle_i, b_rvalid_i, b_rtag_i;
-  logic [D*8-1:0] b_rdata_i;
+  logic b_rdy_i, rd_idle_i, b_rvalid_i, b_rtag_i, b_rlast_i;
+  logic [PORTB*D*8-1:0] b_rdata_i;
+  logic [PORTB-1:0] b_rcm_i;
+  // ACT RAM and quantizer: QACT DUP4 and MM QUAD's four blocks a cycle (t2, or a wide port)
+  localparam bit QD = T2 || PORTB > 1;
+  // row lanes (docs/row_lanes.md): MM RL in the MXU (RL streams), QACT DUP8 (eight copies)
+  localparam bit RLB = RL != 0;
   // port A's ready as the MXU sees it: through its output register (see "port A's register")
   logic a_rdy_i;
   // the stream engine (docs/stream.md): the DMA moves a stream (DSTEP, STREAM) through SE in
@@ -245,7 +258,7 @@ module otpu_slice
     .clk, .rst(srst), .ucmd(ucmd_s), .ustart(ustart_s), .urel, .urdy(urdy_s), .udone(udone_s),
     .halted(sq_halted), .error(sq_err),
     .icount(sq_icount), .ev(sq_ev), .rinit, .rl_v, .rl_val, .ch_req(sq_ch), .ch_addr(sq_cha),
-    .ch_n(sq_chn), .im_we, .im_row, .im_data(b_rdata_i),
+    .ch_n(sq_chn), .im_we, .im_row, .im_data(b_rdata_i[D*8-1:0]),
     .sc_we, .sc_row, .sc_data);
 
   // The units' handshake. In simulation, +tm_sdly=N starts every DMA, QUANT, VPU and collective
@@ -419,25 +432,32 @@ module otpu_slice
   logic [ULANES-1:0][7:0] act_data;
   logic                   asc_we;
   logic [7:0]             act_row, asc_row, act_off;
-  logic                   act_dup;
+  logic                   act_dup, act_dup4, act_dup8;
   logic [31:0]            act_idx;
   logic [63:0]            asc_data;     // {da3, da2, da1, da0, Sa}
-  logic [15:0]            asc_blk, act_rblk, act_rblk2;
-  logic [MCOLS-1:0]       act_rhi;
+  logic [15:0]            asc_blk, act_rblk, act_rblk2, act_rblk3, act_rblk4;
+  logic [MCOLS-1:0]       act_rhi, act_rhq;
   logic [7:0]             act_rgrp;
   logic [MCOLS-1:0]       act_ren;       // per column (otpu_mxu: the MM's columns)
   logic                   mxu_pop;       // the MXU consumes a block this cycle (its ACT read)
   logic [MCOLS*D*8-1:0]   act_rdata;
   logic [MCOLS*64-1:0]    act_rscale;
-  otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES)) u_act (
+  otpu_actram #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .BLOCKS(ACT_BLOCKS), .LANES(ULANES),
+                .T2(QD), .DUP8(RLB)) u_act (
     .clk, .we(act_we), .w_row(act_row), .w_idx(act_idx), .w_data(act_data), .w_dup(act_dup),
-    .w_off(act_off), .swe(asc_we),
+    .w_dup4(act_dup4), .w_dup8(act_dup8), .w_off(act_off), .swe(asc_we),
     .s_row(asc_row), .s_blk(asc_blk), .s_data(asc_data), .ren(act_ren), .r_use(mxu_pop), .r_blk(act_rblk),
-    .r_blk2(act_rblk2), .r_hi(act_rhi), .r_grp(act_rgrp),
+    .r_blk2(act_rblk2), .r_hi(act_rhi), .r_blk3(act_rblk3), .r_blk4(act_rblk4), .r_hq(act_rhq),
+    .r_grp(act_rgrp),
     .r_data(act_rdata), .r_scale(act_rscale));
 
   // ---- units
-  logic [NG-1:0] gnt;
+  // the grants: each unit's enable for its whole TMEM-side pipeline (the MXU's t_gnt: the drain,
+  // the lanes, the epilogue, ~5,000 flip-flops' enables; the second placed p4rl8 build,
+  // docs/wide_port.md "Placement", ran rl_pq through the arbiter into alpha, t_raddr, xo and
+  // the lanes over 8 ns of route). max_fanout: synthesis replicates the arbiter's last level
+  // per 256 loads, each copy beside its loads
+  (* max_fanout = 256 *) logic [NG-1:0] gnt;
   logic        q3_en;
   logic [31:0] q3_addr;
   logic d_dma, d_mxu, d_q, d_vpu, r_dma, r_mxu, r_q, r_vpu;
@@ -448,6 +468,7 @@ module otpu_slice
   logic [D/4-1:0] dma_bwmask;
   logic [D*8-1:0] dma_bwdata;
   logic [31:0] dma_baddr, mxu_baddr;
+  logic [1:0] mxu_bn;
   localparam int FW = $clog2(FIFO_DEPTH) + 1;
   logic [FW-1:0] mxu_level;
   logic mxu_starve, mxu_block, mxu_u, q_u, v_u;
@@ -488,20 +509,23 @@ module otpu_slice
     .clk, .rst(rst_dma), .start(ustart[U_DMA]), .cmd(ucmd[U_DMA]), .rdy(r_dma), .done(d_dma),
     .err(dma_err), .ww_held(a_inval),
     .b_req(dma_breq), .b_gnt(b_rdy_i), .b_we(dma_bwe), .b_wmask(dma_bwmask), .b_wdata(dma_bwdata),
-    .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i), .wr_idle(wr_idle_i),
+    .b_addr(dma_baddr), .b_rvalid(b_rvalid_i && b_rtag_i), .b_rdata(b_rdata_i[D*8-1:0]),
+    .wr_idle(wr_idle_i),
     .t_ren(dma_ren), .t_raddr(dma_raddr), .t_rdata(r_data[P_DMA]),
     .t_wen(dma_wen), .t_waddr(dma_waddr), .t_wdata(dma_wdata),
     .ss_req, .ss_gnt, .ss_cfg, .ss_pe, .ss_in_v, .ss_in_d, .ss_fk, .ss_fi, .ss_fd,
     .ss_y_v, .ss_y_d, .ss_o_v, .ss_o_d);
 
   otpu_mxu #(.D(D), .MCOLS(MCOLS), .ROWS(ACT_ROWS), .DEPTH(FIFO_DEPTH), .LANES(ULANES), .IMPL(MXU_IMPL),
-             .CL(MXU_CL), .E(MXU_E), .SID(SID)) u_mxu (
+             .CL(MXU_CL), .E(MXU_E), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .SID(SID)) u_mxu (
     .clk, .rst(rst_mxu), .start(ustart[U_MXU]), .go(urel), .cmd(ucmd[U_MXU]), .rdy(r_mxu), .done(d_mxu),
     .computing(mxu_pop), .pf_level(mxu_level), .pf_starve(mxu_starve), .pf_block(mxu_block),
     .pf_u(mxu_u), .pf_uv(mxu_uv),
-    .act_blk(act_rblk), .act_blk2(act_rblk2), .act_hi(act_rhi), .act_grp(act_rgrp), .act_ren, .act_data(act_rdata), .act_scale(act_rscale),
+    .act_blk(act_rblk), .act_blk2(act_rblk2), .act_hi(act_rhi), .act_blk3(act_rblk3),
+    .act_blk4(act_rblk4), .act_hq(act_rhq), .act_grp(act_rgrp), .act_ren, .act_data(act_rdata), .act_scale(act_rscale),
     .a_req(mxu_areq), .a_addr(mxu_aaddr), .a_gnt(mxu_agnt), .a_rvalid, .a_rdata,
-    .b_req(mxu_breq), .b_addr(mxu_baddr), .b_gnt(mxu_bgnt), .b_rvalid(b_rvalid_i && !b_rtag_i),
+    .b_req(mxu_breq), .b_addr(mxu_baddr), .b_n(mxu_bn), .b_gnt(mxu_bgnt),
+    .b_rvalid(b_rvalid_i && !b_rtag_i), .b_rcm(b_rcm_i), .b_rlast(b_rlast_i),
     .b_rdata(b_rdata_i),
     .t_ren(mxu_ren), .t_raddr(mxu_raddr), .t_rdata(r_data[P_MXU][ULANES-1:0]),
     .t_wen(mxu_wen), .t_waddr(mxu_waddr), .t_wdata(mxu_wdata), .t_gnt(gnt[G_MXU]));
@@ -511,12 +535,12 @@ module otpu_slice
   // every QACT and QST the ISA's bounds allow fits (the card: 512)
   localparam int QG = (4 * ACT_BLOCKS > TMEM_WORDS / D) ? 4 * ACT_BLOCKS : TMEM_WORDS / D;
   localparam int Q_GR = (QG <= 8) ? 8 : (1 << $clog2(QG));
-  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .SID(SID)) u_quant (
+  otpu_quant #(.D(D), .LANES(ULANES), .GR(Q_GR), .XD(QUANT_XD), .T2(QD), .DUP8(RLB), .SID(SID)) u_quant (
     .clk, .rst(rst_q), .start(ustart[U_Q]), .cmd(ucmd[U_Q]), .rdy(r_q), .done(d_q), .gnt(gnt[G_Q]),
     .t_ren(q_ren), .t_raddr(q_raddr), .t_rdata(r_data[P_Q][ULANES-1:0]),
     .t_ren2(q_ren2), .t_raddr2(q_raddr2), .t_rdata2(r_data[P_Q2][ULANES-1:0]),
     .t_ren3(q3_en), .t_raddr3(q3_addr), .t_rdata3(r_data[P_Q3][0]),
-    .act_we, .act_row, .act_idx, .act_data, .act_dup, .act_off, .asc_we, .asc_row, .asc_blk, .asc_data,
+    .act_we, .act_row, .act_idx, .act_data, .act_dup, .act_dup4, .act_dup8, .act_off, .asc_we, .asc_row, .asc_blk, .asc_data,
     .a_want(q_awant), .wr_idle(wr_idle_i),
     .a_req(q_areq), .a_we(q_awe), .a_addr(q_aaddr), .a_wdata(q_awdata), .a_be(q_abe),
     .pf_u(q_u), .pf_frz(q_frz));
@@ -545,7 +569,8 @@ module otpu_slice
   // from rl_pend's second cycle (rl_pq): TMEM's input stage puts every unit's read a cycle after
   // it forms, and the writes a cycle after their grant, so RLD's read moves with them
   // (release r2, docs/tmem_nocopy.md 7)
-  logic        rl_pend, rl_pq, rl_got, rl_cv, rl_c1, rl_c2, rl_raw;
+  logic        rl_pend, rl_got, rl_cv, rl_c1, rl_c2, rl_raw;
+  (* max_fanout = 8 *) logic rl_pq;    // into the request arrays and the arbiter: a copy per 8
   logic [31:0] rl_a, rl_w, rl_m, rl_x, rl_pl;
   logic [15:0] rl_ph;
   wire         rl_busy = rl_pend || rl_got || rl_cv || rl_c1 || rl_c2 || rl_v;
@@ -895,18 +920,20 @@ module otpu_slice
   // gave is taken once wr_idle && !sw_req && !(b_req && b_we) (otpu_board's STATUS WR_IDLE and
   // go_ok). Only the loader's reset clears it: a write the quantizer gave before a run's reset
   // (rst) still goes out, as one in the DRAM's queues does. The units and the arbiters read the
-  // DRAM's sw_rdy and wr_idle only through it (tests/test_target.py)
+  // DRAM's sw_rdy and wr_idle only through it (tests/test_target.py).
+  // Round 7 (docs/wide_port.md "Round 7 RTL"): the register is a two-entry skid buffer
+  // (otpu_skidbuf, u_sw), so what the arbiters see (sw_rdy_i: its second slot free, a flip-flop
+  // of the slice's own) no longer depends on the DRAM's sw_rdy in the cycle: round 6 placed
+  // the adapter's queue count through sw_rdy and the quantizer's grant into the ACT RAM's write
+  // enables over 6.8 ns of route. The DRAM's ready moves only the buffer's exit (its take, next
+  // to the buffer); the quantizer is withheld when both slots hold a write
   wire  sw_req_c = q_areq && q_awe;
-  logic sw_v;
-  assign sw_rdy_i  = !sw_v || sw_rdy;
-  assign wr_idle_i = wr_idle && !sw_v && !(b_req && b_we);
-  assign sw_req    = sw_v;
-  always_ff @(posedge clk) begin : sw_reg
-    if (sys_rst) sw_v <= 1'b0;
-    else if (sw_rdy_i) sw_v <= sw_req_c;
-    if (sw_rdy_i && sw_req_c) begin
-      sw_addr <= q_aaddr; sw_wdata <= q_awdata; sw_be <= q_abe;
-    end
+  logic sw_any;
+  if (1) begin : sw_reg                 // (the block tests/test_target.py knows as the SW register)
+    otpu_skidbuf #(.W(4 + 32 + 32)) u_sw (
+      .clk, .rst(sys_rst), .i_v(sw_req_c), .i_r(sw_rdy_i), .i_d({q_abe, q_awdata, q_aaddr}),
+      .o_v(sw_req), .o_r(sw_rdy), .o_d({sw_be, sw_wdata, sw_addr}), .any(sw_any));
+    assign wr_idle_i = wr_idle && !sw_any && !(b_req && b_we);
   end : sw_reg
 `ifndef SYNTHESIS
   // the arbiters withhold the quantizer's grant while the port cannot take its write
@@ -918,6 +945,7 @@ module otpu_slice
   // ---- DRAM ports: the MXU's port A reads, and port B's requests (b_*_c), into their output
   // registers (below)
   logic           b_req_c, b_tag_c, b_we_c, b_par_c;
+  logic [1:0]     b_n_c;
   logic [D/4-1:0] b_wmask_c;
   logic [D*8-1:0] b_wdata_c;
   logic [31:0]    b_addr_c;
@@ -938,8 +966,10 @@ module otpu_slice
     // every write of otpu_native_dram's queues (DMA occ -> qbm, 11 levels, the 959b425 build's
     // worst DMA -> memory paths, -0.390 ns at 133.33 MHz); it now ends at the output register
     b_par_c   = dma_breq ? ^dma_baddr[31:5] : ^mxu_baddr[31:5];
+    b_n_c     = (PORTB > 1 && !dma_breq) ? mxu_bn : 2'd0;   // (the DMA's: a chunk each)
     if (ld_busy) begin                // the units are held in reset
       b_req_c = ld_req; b_tag_c = 1'b1; b_we_c = 1'b0; b_addr_c = ld_a; b_par_c = ^ld_a[31:5];
+      b_n_c = 2'd0;
     end
   end
 
@@ -966,11 +996,12 @@ module otpu_slice
     else if (b_rdy_i) b_req <= b_req_c;
     if (b_rdy_i && b_req_c) begin
       b_tag <= b_tag_c; b_we <= b_we_c; b_wmask <= b_wmask_c; b_wdata <= b_wdata_c;
-      b_addr <= b_addr_c; b_par <= b_par_c;
+      b_addr <= b_addr_c; b_par <= b_par_c; b_n <= b_n_c;
     end
     b_rvalid_i <= !sys_rst && b_rvalid;
     if (b_rvalid) begin
       b_rtag_i <= b_rtag; b_rdata_i <= b_rdata;
+      b_rcm_i <= (PORTB > 1) ? b_rcm : '1; b_rlast_i <= (PORTB > 1) ? b_rlast : 1'b1;
     end
   end : pb_reg
 

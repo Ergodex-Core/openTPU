@@ -42,7 +42,7 @@ from ..compiler import (Affine, CompileError, DevVar, KVDesc, QTensor, RunVar, T
                         Words, current, k_scale_bytes, trace_fit)
 from . import formats as FM
 from . import generate as G
-from . import rope_parameters
+from . import rope_parameters, yarn_rope
 from . import snapshot as SN
 from ..isasim import Config, Machine, design_config
 from ..kernels.attention import Additive, Bucket, _attend_heads
@@ -53,6 +53,7 @@ from ..kernels import gather as GA
 from ..kernels.gather import gather_row, onehot, onehot_blocks
 from ..kernels.gather import operand as gather_operand
 from ..kernels.lib import rmsnorm, rope, rope_rows, sigmoid, softcap
+from ..kernels.hadamard import rotate
 from ..kernels.mlp import _chunk, down_chunk, swiglu_down
 from ..runtime import ALIGN
 
@@ -95,7 +96,13 @@ class Spec:
     @staticmethod
     def from_hf(model_dir) -> "Spec":
         c = json.loads((Path(model_dir) / "config.json").read_text())
-        rp = rope_parameters(c, model_dir)          # (Qwen3's YaRN: not supported)
+        rp = rope_parameters(c, model_dir, ("default", "yarn"))
+        theta = rp.get("rope_theta") or c.get("rope_theta") or 10000.0
+        hd = c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"]
+        yarn = {}
+        if rp.get("rope_type", rp.get("type")) == "yarn":   # (Ternary-Bonsai's: factor 4 of 8192)
+            div, af = yarn_rope(rp, theta, hd, c.get("max_position_embeddings", 0))
+            yarn = dict(rope_div=div, rope_scale=af)
         if c.get("use_sliding_window"):
             raise ValueError(f"{model_dir}: sliding-window attention is not supported")
         if c.get("attention_bias"):
@@ -108,10 +115,10 @@ class Spec:
                     n_q=c["num_attention_heads"], n_kv=c["num_key_value_heads"],
                     head_dim=c.get("head_dim") or c["hidden_size"] // c["num_attention_heads"],
                     ffn=c["intermediate_size"], vocab=c["vocab_size"], eps=c["rms_norm_eps"],
-                    theta=rp.get("rope_theta") or c.get("rope_theta") or 10000.0,
-                    tied=c.get("tie_word_embeddings", True),
+                    theta=theta, tied=c.get("tie_word_embeddings", True),
                     bos=c.get("bos_token_id", 151643),
-                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c))
+                    eos=tuple(eos) if isinstance(eos, list) else (eos,), mix=FM.mix_for(c),
+                    **yarn)
 
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
@@ -237,6 +244,13 @@ def load_weights(model_dir, mtp: bool = False) -> Weights:
     `mtp` (Qwen3.5's drafter,
     opentpu/llm/mtp.py). Gemma 4: gemma4.load_weights (its PLE table read by rows)."""
     cfg = Path(model_dir) / "config.json"
+    from .bonsai2 import is_bonsai2
+    if is_bonsai2(model_dir):           # Ternary-Bonsai 2: a Qwen3.5 GGUF (prism-ml)
+        from .bonsai2 import Weights as Bonsai2Weights
+        return Bonsai2Weights(model_dir, mtp)
+    if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma3", "gemma3_text"):
+        from .gemma3 import load_weights as gemma3_weights
+        return gemma3_weights(model_dir)
     if cfg.exists() and json.loads(cfg.read_text()).get("model_type") in ("gemma4",
                                                                           "gemma4_text"):
         from .gemma4 import load_weights as gemma4_weights
@@ -463,12 +477,18 @@ def put_head(img, W, qb, put, put_q, rows) -> None:
     spec, D = img.spec, img.cfg.D
     head = W["model.embed_tokens.weight"] if spec.tied else W["lm_head.weight"]
     lk = img.lookup
+    rl = getattr(img, "head_rl", 0)
     if lk.get("head_gsc"):
         qb.submit(head, img.head_format, D, lambda q, sc: (
             put(0, img.head[0], q), put(0, img.head[1], sc),
-            put(0, lk["embed_q"][1], Q.gather_scales(sc, "int8", spec.hidden, D))))
+            put(0, lk["embed_q"][1], Q.gather_scales(sc, "int8", spec.hidden, D)),
+            rl and (put(0, img.head_rlq[0], Q.rl_rows(q, rl, D)),
+                    put(0, img.head_rlq[1], Q.rl_scales(sc, img.head_format, spec.hidden, rl, D,
+                                                        rl_line(img.cfg))))))
     else:
         put_q(img.head, rows(head, img.v_loc), img.head_format)
+        if rl:                  # (one slice: the groups beside the rows the gather reads)
+            put_q(img.head_rlq, rows(head, img.v_loc), img.head_format, rl)
 
 
 def _lookup_build(put, S: int, W: dict, spec, cap: int, lk: dict) -> None:
@@ -867,10 +887,40 @@ class _Bump:
     def __init__(self, start: int = 0):
         self.next = start
 
-    def alloc(self, nbytes: int) -> int:
-        a = self.next
+    def alloc(self, nbytes: int, align: int = ALIGN) -> int:
+        a = (self.next + align - 1) // align * align
         self.next = (a + nbytes + ALIGN - 1) // ALIGN * ALIGN
         return a
+
+
+# ---- row lanes (docs/row_lanes.md): an image on a Config with ROWLANES stores the matrices
+# its decode streams at M = 1 in row-lane groups of L rows (quant.rl_rows / rl_scales, L =
+# quant.rl_lanes of the format), which the compiler streams with MM RL
+def rl_lanes_of(cfg, fmt: str) -> int:
+    """The row-lane count of a matrix of format fmt on cfg (0: the standard layout)."""
+    if not getattr(cfg, "ROWLANES", False):
+        return 0
+    return Q.rl_lanes(fmt, cfg.PORTB, cfg.MCOLS)
+
+
+def rl_line(cfg) -> int:
+    """The port-A line the scale groups are rounded to and aligned at (Config.ALINE: 32, 64)."""
+    return int(getattr(cfg, "ALINE", 32))
+
+
+def rl_alloc(b: _Bump, n: int, k: int, fmt: str, D: int, L: int, line: int = 32) -> tuple:
+    """(data, scale) addresses of an [n, k] matrix in row-lane groups of L: the groups' element
+    rows (L D aligned: an advance's L chunks one aligned run) and scale groups (port-A lines of
+    `line` bytes, aligned)."""
+    G = Q.rl_groups(n, L)
+    return (b.alloc(G * Q.rl_row_stride(k, fmt, L, D), align=L * D),
+            b.alloc(G * Q.rl_scale_bytes(k, fmt, L, D, line), align=line))
+
+
+def rl_arrays(q: np.ndarray, sc: np.ndarray, fmt: str, k: int, L: int, D: int,
+              line: int = 32) -> tuple:
+    """quantize_mxu's rows and scale rows of an [n, k] matrix as its row-lane groups."""
+    return Q.rl_rows(q, L, D), Q.rl_scales(sc, fmt, k, L, D, line)
 
 
 def _qdesc(daddr: int, saddr: int, n: int, k: int, D: int, fmt: str = "int8") -> QTensor:
@@ -940,14 +990,16 @@ class Image(EmbedHost):
         from .prefill import tile_scratch   # a tiled run's attention outputs, a part at a time
         if tile_scratch(spec, layer_runs=False):    # (tiled.py; a dense image's)
             self.io["o"] = b.alloc(4 * cfg.act_rows * self.nq_loc * d)
-        self.layer0 = b.next
+        # (the layer blocks are 4096-byte units, so a run's loop steps stay L D aligned for
+        # the row-lane groups: the region starts on one too, as gemma4's)
+        self.layer0 = b.next = (b.next + 4095) // 4096 * 4096
         self.mats = {"wq": (self.nq_loc * d, H), "wk": (self.nkv_loc * d, H),
                      "wv": (self.nkv_loc * d, H), "wo": (self.h_loc, spec.n_q * d),
                      "wg": (self.f_loc, H), "wu": (self.f_loc, H)}
         # W_down in column parts of the MLP's F chunk: each down MM streams one part, whose
         # scales are then contiguous (with row-major scales every row would cost a DRAM beat);
         # the chunk by W_down's format
-        self.dchunks = {fd: _chunk(self.f_loc, D, D if fd == "int8" else 2 * D)
+        self.dchunks = {fd: _chunk(self.f_loc, D, Q.per_chunk(fd) * D)
                         for fd in sorted({f[2] for f in self.lf})}
         self.dchunk = self.dchunks[self.lf[0][2]]
         self.bofs, self.bsize = {}, {}                  # per layout: offsets inside its block
@@ -959,11 +1011,15 @@ class Image(EmbedHost):
                 L.update(qn=lb.alloc(4 * d), kn=lb.alloc(4 * d))
             if spec.nope:
                 L["rg"] = lb.alloc(8)
+            L["rl"] = {name: rl_lanes_of(cfg, mf[name]) for name in list(self.mats) + ["wd"]}
             for name, (n, k) in self.mats.items():
-                L[name] = (lb.alloc(n * rb(k, mf[name])),
-                           lb.alloc(n * Q.scale_bytes(k, mf[name], D)))
-            L["wd"] = [(lb.alloc(self.h_loc * rb(C, mf["wd"])),
-                        lb.alloc(self.h_loc * Q.scale_bytes(C, mf["wd"], D)))
+                L[name] = rl_alloc(lb, n, k, mf[name], D, L["rl"][name], rl_line(cfg)) \
+                    if L["rl"][name] else \
+                    (lb.alloc(n * rb(k, mf[name])), lb.alloc(n * Q.scale_bytes(k, mf[name], D)))
+            L["wd"] = [rl_alloc(lb, self.h_loc, C, mf["wd"], D, L["rl"]["wd"], rl_line(cfg))
+                       if L["rl"]["wd"]
+                       else (lb.alloc(self.h_loc * rb(C, mf["wd"])),
+                             lb.alloc(self.h_loc * Q.scale_bytes(C, mf["wd"], D)))
                        for _ in range(F_ // C)]
             L["kvs"] = [[{"k": lb.alloc(cap * d), "ks": lb.alloc(cap * k_scale_bytes(d, D)),
                           "vt": lb.alloc(d * cap), "vs": lb.alloc(4 * cap)}
@@ -993,6 +1049,11 @@ class Image(EmbedHost):
         self.kv_bytes = spec.layers * self.nkv_loc * head         # per sequence
         self.head = (b.alloc(self.v_loc * Q.row_bytes(H, self.head_format, D)),
                      b.alloc(self.v_loc * Q.scale_bytes(H, self.head_format, D)))
+        # row lanes: the head the LM-head MMs stream, in groups (the standard rows above stay
+        # for the embedding gather: a group's row is not affine in its index, docs/row_lanes.md)
+        self.head_rl = rl_lanes_of(cfg, self.head_format)
+        self.head_rlq = rl_alloc(b, self.v_loc, H, self.head_format, D, self.head_rl,
+                                 rl_line(cfg)) if self.head_rl else None
         # the int8 embedding rows of the resident decode are the tied int8 head's (S = 1)
         shared = spec.tied and self.head_format == "int8" and S == 1
         if embed_host is None:      # dense: the int8 table stays on the card (the Engine moves
@@ -1023,17 +1084,23 @@ class Image(EmbedHost):
 
         qb = QC.Batch()                 # the matrices, quantized in worker processes
 
-        def put_q(addr_pair, parts, fmt):
-            for s, p in enumerate(parts):
-                qb.submit(p, fmt, D, lambda q, sc, s=s: (put(s, addr_pair[0], q),
-                                                         put(s, addr_pair[1], sc)))
+        line = rl_line(cfg)                 # (the scale groups' port-A line)
 
-        def put_parts(addrs, parts, fmt, C):
+        def put_q(addr_pair, parts, fmt, rl=0):
+            for s, p in enumerate(parts):
+                qb.submit(p, fmt, D, lambda q, sc, s=s, p=p: (
+                    put(s, addr_pair[0], Q.rl_rows(q, rl, D) if rl else q),
+                    put(s, addr_pair[1], Q.rl_scales(sc, fmt, p.shape[1], rl, D, line)
+                        if rl else sc)))
+
+        def put_parts(addrs, parts, fmt, C, rl=0):
             """Each slice's rows quantized whole and stored in column parts of C (compiler
-            QTensor parts: each part's scale rows the rows' Sw and its blocks' offsets)."""
+            QTensor parts: each part's scale rows the rows' Sw and its blocks' offsets; rl: in
+            row-lane groups)."""
             for s, p in enumerate(parts):
                 qb.submit(p, fmt, D, lambda q, sc, s=s: [
-                    (put(s, a0, pq), put(s, a1, ps))
+                    (put(s, a0, Q.rl_rows(pq, rl, D) if rl else pq),
+                     put(s, a1, Q.rl_scales(ps, fmt, C, rl, D, line) if rl else ps))
                     for (a0, a1), (pq, ps) in zip(addrs, Q.column_parts(q, sc, fmt, p.shape[1],
                                                                          C, D))])
 
@@ -1063,15 +1130,16 @@ class Image(EmbedHost):
                 W[p + "self_attn.q_proj.weight"], W[p + "self_attn.k_proj.weight"],
                 W[p + "self_attn.v_proj.weight"], W[p + "self_attn.o_proj.weight"],
                 spec.n_q, spec.n_kv, d, S)
-            put_q(Lo["wq"], rows(wq, self.nq_loc * d), mf["wq"])
-            put_q(Lo["wk"], rows(wk, self.nkv_loc * d), mf["wk"])
-            put_q(Lo["wv"], rows(wv, self.nkv_loc * d), mf["wv"])
-            put_q(Lo["wo"], rows(wo, self.h_loc), mf["wo"])
-            put_q(Lo["wg"], rows(W[p + "mlp.gate_proj.weight"], self.f_loc), mf["wg"])
-            put_q(Lo["wu"], rows(W[p + "mlp.up_proj.weight"], self.f_loc), mf["wu"])
+            rl = lofs["rl"]
+            put_q(Lo["wq"], rows(wq, self.nq_loc * d), mf["wq"], rl["wq"])
+            put_q(Lo["wk"], rows(wk, self.nkv_loc * d), mf["wk"], rl["wk"])
+            put_q(Lo["wv"], rows(wv, self.nkv_loc * d), mf["wv"], rl["wv"])
+            put_q(Lo["wo"], rows(wo, self.h_loc), mf["wo"], rl["wo"])
+            put_q(Lo["wg"], rows(W[p + "mlp.gate_proj.weight"], self.f_loc), mf["wg"], rl["wg"])
+            put_q(Lo["wu"], rows(W[p + "mlp.up_proj.weight"], self.f_loc), mf["wu"], rl["wu"])
             put_parts([(base + x, base + y) for x, y in lofs["wd"]],
                       rows(W[p + "mlp.down_proj.weight"], self.h_loc), mf["wd"],
-                      self.dchunks[mf["wd"]])
+                      self.dchunks[mf["wd"]], rl["wd"])
         put_head(self, W, qb, put, put_q, rows)
         qb.wait()
         if self.lookup:
@@ -1155,10 +1223,12 @@ class Image(EmbedHost):
             for name, (n, k) in self.mats.items():
                 da, sa = lofs[name]
                 fm = mf[name]
-                setattr(ns, name, QTensor.weight(off + da, off + sa, n, k, fm, D))
+                setattr(ns, name, QTensor.weight(off + da, off + sa, n, k, fm, D,
+                                                 rl=lofs["rl"][name], line=rl_line(cfg)))
             fm = mf["wd"]
             C, n = self.dchunks[fm], self.h_loc
-            parts = tuple(QTensor.weight(off + da, off + sa, n, C, fm, D)
+            parts = tuple(QTensor.weight(off + da, off + sa, n, C, fm, D, rl=lofs["rl"]["wd"],
+                                         line=rl_line(cfg))
                           for da, sa in lofs["wd"])
             ns.wd = QTensor(parts[0].data, parts[0].scale, (n, spec.ffn), parts[0].rs,
                             parts[0].srs, D, parts=parts, pw=C, wf=parts[0].wf)
@@ -1179,7 +1249,10 @@ class Image(EmbedHost):
             logitsr=_tdesc(self.io["logits"], (self.rows, spec.vocab)),
             oscr=_tdesc(self.io["o"], (cfg.act_rows, self.nq_loc * d)) if "o" in self.io
             else None,
-            head=_qdesc(*self.head, self.v_loc, H, D, self.head_format), v_loc=self.v_loc,
+            head=QTensor.weight(*self.head_rlq, self.v_loc, H, self.head_format, D, rl=self.head_rl,
+                                line=rl_line(cfg))
+            if self.head_rl else _qdesc(*self.head, self.v_loc, H, D, self.head_format),
+            v_loc=self.v_loc,
             **_lookup_desc(self.lookup, spec, self.cap))
 
 
@@ -1322,7 +1395,8 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     kv = lw.kv
     kpos = pos.pos if isinstance(pos, RunPos) else pos
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [1, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     sg = sigmoid(ol.dot(xs, lw.wgate)) if gated else None       # [1, nq_loc*d]
@@ -1372,14 +1446,15 @@ def _attention(x, lw, c, s_, pos: int, spec: Spec, block: int, gated: bool = Fal
         else:
             o_loc[r0:r1, :].set((acc / l[:, None]) * sg.reshape(G * nh, d)[r0:r1, :])
     o_all = ol.all_gather(o_row)                # [1, n_q*d], slice-major head order
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [1, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [1, H]
     return x + y
 
 
 def _mlp(x, lw, spec: Spec):
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_post), spec.eps))
-    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False))
+    rot = getattr(lw, "rot", None)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_post), spec.eps), rot))
+    y = swiglu_down(xs, lw.wg, lw.wu, lw.wd, loop=getattr(lw, "mlp_loop", False), rot=rot)
     h_loc = lw.wd.shape[0]
     mine = slice(sid * h_loc, (sid + 1) * h_loc)
     return ol.all_gather(x[:, mine] + y)
@@ -1685,7 +1760,7 @@ def _lm_head(x, m, spec):
         ol.store(split, x)
         return
     sid = ol.program_id()
-    xs = ol.quantize(rmsnorm(x, ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(m.g_final), spec.eps), getattr(m, "rot", None)))
     chunk = min(HEAD_CHUNK, ol.tmem_words() // 8)
     sink = getattr(m, "lm_sink", None)
     for c0 in range(0, m.v_loc, chunk):
@@ -1746,7 +1821,8 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
     layer's prompt rows in a layer-major prefill, qwen35.qwen35_mtp_kv_run)."""
     d, G, eps = spec.head_dim, spec.n_q // spec.n_kv, spec.eps
     R = rows.R if isinstance(rows, RunRows) else len(rows)
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)              # Hadamard-folded projections (qwen35 Spec.rot)
+    xs = ol.quantize(rotate(rmsnorm(x, ol.load(lw.g_in), eps), rot))
     k = ol.dot(xs, lw.wk)                       # [R, nkv_loc*d]
     v = ol.dot(xs, lw.wv)
     q = None if kv_only else ol.dot(xs, lw.wq)  # [R, nq_loc*d]
@@ -1806,7 +1882,7 @@ def _attention_rows(x, lw, c, s_, rows, spec, block: int, gated: bool = False,
             cols = slice(h0 * d, min(nq, h0 + mc) * d)      # a time (TMEM)
             o[:, cols].set(o[:, cols] * sigmoid(ol.dot(xs, lw.wgate[cols, :])))
     o_all = ol.all_gather(o)                    # [R, n_q*d]
-    y = ol.all_gather(ol.dot(o_all, lw.wo))     # [R, H]
+    y = ol.all_gather(ol.dot(rotate(o_all, rot), lw.wo))     # [R, H]
     return x + y
 
 
@@ -1847,7 +1923,8 @@ def _lm_head_rows(x, m, spec, logit_rows):
         return
     sid = ol.program_id()
     a, e = logit_rows[0], logit_rows[-1] + 1
-    xs = ol.quantize(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps))
+    xs = ol.quantize(rotate(rmsnorm(x[a:e, :], ol.load(m.g_final), spec.eps),
+                            getattr(m, "rot", None)))
     chunk = head_rows_chunk(e - a)
     sinks = getattr(m, "lm_sinks", None)
     for c0 in range(0, m.v_loc, chunk):
@@ -2060,7 +2137,7 @@ def fit_chunk(image, block: int, seq: int, p0: int, n: int, left: int, fit: int,
 
 def mxu_time(progs) -> float:
     """A run's MXU time, statically, in weight blocks: each MM's streamed rows times its K
-    blocks, half of that PAIRed (two 4-bit blocks a cycle), times its loops' counts (a loop
+    blocks, half of that PAIRed (two 4-bit blocks a cycle), a quarter with QUAD, times its loops' counts (a loop
     with a run-time count once); the slowest slice's."""
     best = 0.0
     for prog in progs:
@@ -2072,8 +2149,9 @@ def mxu_time(progs) -> float:
                 loops.append((pc + ins.w[0], ins.w[1] if ins.ra == 0 else 1))
             elif ins.op == I.MM:
                 mult = math.prod(c for _, c in loops)
+                wf, pair, quad = I.mm_format(ins)        # (QUAD: a t2 chunk, 4 blocks, a cycle)
                 t += mult * (ins.w[3] & 0xFFFF) * ((ins.w[3] >> 16) & 0xFF) * \
-                    (0.5 if ins.flags & I.F_PAIR else 1.0)
+                    (0.25 if quad else 0.5 if pair else 1.0)
         best = max(best, t)
     return best
 

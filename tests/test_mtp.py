@@ -493,3 +493,56 @@ def test_chat_with_mtp(sampled):
             assert t1.mtp_iters and "MTP acceptance" in t3.line()
     assert got[True] == got[False]
     assert len(set(got[True][2])) > 4
+
+
+def test_mtp_loop_programs_warmed_ahead(tmp_path, monkeypatch):
+    """opentpu/host/gen_warm.py warm_mtp: an MTP engine's background process compiles the MTP
+    loop's programs of every bucket (V, E per parity, D, D1; the sampled V and E under the
+    sampler's key) into the program cache under the `what` MTPDecoder._gen_programs asks
+    for, so a reply's first loop in a bucket compiles none of them (the host work that made
+    the 4B's long-prompt replies slower than its short ones on the F2, docs/ternary.md 8);
+    the tokens read back are plain greedy decode's. A second warm compiles nothing, and
+    start() on an MTP engine runs warm_mtp."""
+    import shutil
+
+    from opentpu import progcache as PC
+    from opentpu.host import gen_warm as GW
+    from opentpu.llm import mtp as M
+    if shutil.disk_usage(tmp_path).free < PC.FREE_FLOOR + (1 << 30):
+        pytest.skip("the program cache writes nothing when the disk is under its free floor")
+    monkeypatch.setenv("OTPU_PROG_CACHE", str(tmp_path / "a"))
+    PC.clear()
+    _, W, spec = _tiny_model(8, init=0.2)
+    W = _mtp_weights(W, spec)
+    P, N = 30, 12
+    prompt = [int(t) for t in np.random.default_rng(P).integers(0, 1000, P)]
+    want = _plain(spec, W, prompt, N, {}, CFG)
+    eng = mtp_engine(spec, W, cap=512, cfg=CFG, prog_cache=True)
+    keys = [("mtpgen", 1, k, eng.block, False, None) for k in range(M.NK)]
+    assert not any(PC.has(eng.layout, w) for w in keys)
+    assert GW.warm_mtp(eng.image, eng.layout, eng.block, 1)
+    assert all(PC.has(eng.layout, w) for w in keys)
+    assert not GW.warm_mtp(eng.image, eng.layout, eng.block, 1)
+    samp = G.Sampling(temperature=0.8, top_k=5, top_p=0.9, repetition_penalty=1.1)
+    assert GW.warm_mtp(eng.image, eng.layout, eng.block, 1, samp)
+    assert PC.has(eng.layout, ("mtpgen", 1, M.V0, eng.block, False, samp.key)) and \
+        PC.has(eng.layout, ("mtpgen", 1, M.E0 + 1, eng.block, False, samp.key)) and \
+        not PC.has(eng.layout, ("mtpgen", 1, M.D1, eng.block, False, samp.key))
+    PC.clear()                              # (read back from the disk, as a new process would)
+
+    def no_compile(*a, **k):
+        raise AssertionError("the MTP loop's program compiled in the reply")
+    monkeypatch.setattr(M, "compile_gen", no_compile)
+    dec = MTPDecoder(eng)
+    st = dec.generate_card(prompt, max_new=N)
+    assert st.tokens == want and st.iterations
+    monkeypatch.undo()
+    monkeypatch.setenv("OTPU_PROG_CACHE", str(tmp_path / "b"))
+    PC.clear()
+    p = GW.start(eng)
+    assert p is not None
+    p.join(600)
+    assert p.exitcode == 0
+    assert all(PC.has(eng.layout, w) for w in keys)
+    assert not GW.warm_mtp(eng.image, eng.layout, eng.block, 1)
+    PC.clear()

@@ -14,12 +14,19 @@
 // reads their levels back (the host bit-bangs I2C).
 // At S > 1 every slice sits in its own SLR (the BCU1525's), a crossing away from the control
 // block and the collective unit: everything between a slice and them goes through two register
-// stages each way (otpu_xr: one on each side of the crossing; g_xs), the slices' control too (so
+// stages each way (otpu_xr, rtl/shell/otpu_xr.sv: one on each side of the crossing; g_xs), the slices' control too (so
 // they keep starting together), and the collective runs through otpu_coll_hub and a port per
 // slice (otpu_coll_port: each slice grants the collective's TMEM accesses on its own). At S = 1
 // the signals are wired as before (g_x1: the same logic, tools/synth/board_equiv.sh).
 module otpu_board #(
-  parameter int S          = 1,         // slices, each on two memory channels
+  parameter int S          = 1,         // slices, each on NCH memory channels
+  parameter int NCH        = 2,         // memory channels per slice (a power of two: the DDR
+                                        //   boards' 2, the F2 HBM build's 8; otpu_native_dram)
+  parameter int CH_LOG2    = 31,        // log2 bytes a slice addresses per channel (CFG_DRAM)
+  parameter int DRAM_LOG2  = 32,        // log2 DRAM bytes per slice (CFG_DRAM). The adapter and
+                                        //   the channels take up to 34 (the word address's 16
+                                        //   GiB; NCH 16 on HBM: 33); the slice's DRAM byte-address
+                                        //   registers reach 4 GiB of it (docs/f2_hbm.md)
   parameter int D          = 128,
   parameter int MCOLS      = 2,
   parameter int ACT_BLOCKS = 128,
@@ -63,6 +70,11 @@ module otpu_board #(
   parameter bit COLL_GATHER = 1'b1,    // 0 (S = 1 only): the collective unit runs BAR alone, no
                                        // GATHER (otpu_coll_bar; CAPS2 bit0 = 0, docs/infra_hunt.md 5)
   parameter bit SEQ_WC     = 1'b0,    // EXPERIMENTAL: otpu_seq's wait entries (WAITC, docs/seq_vpu.md; CFG_UARCH bit24)
+  parameter bit T2          = 1'b0,    // t2 weights, MM QUAD, QACT DUP4 (docs/ternary.md; CAPS bit28)
+  parameter int RL          = 0,       // row lanes (MM RL, QACT DUP8; docs/row_lanes.md; CAPS2 bit4)
+  parameter int ALINE       = 32,      // port A's line, bytes (32, 64; CAPS2 bit5; docs/row_lanes.md)
+  parameter int PORTB       = 1,       // chunks a cycle on port B (docs/wide_port.md; CAPS2 [3:1];
+                                       //   NCH >= 2 PORTB: otpu_native_dram)
   parameter int PLATFORM    = 0,       // the target's platform id (CFG_PLATFORM; opentpu/target.py)
   parameter logic [31:0] ARCH_HASH = 32'h0  // the target's arch_hash (CFG_HASH)
 ) (
@@ -71,8 +83,8 @@ module otpu_board #(
   input  logic         rst,            // synchronous, active high
   input  logic         ctl_mrst,       // the control master's reset (the SmartConnect's, in clk:
                                        //   PCIe hot reset or link down too): otpu_axil_iso
-  input  logic [2*S-1:0] calib,        // memory controllers calibrated (any clock domain)
-  input  logic [2*S-1:0] ded,          // a channel's ECC counted an uncorrectable word (any clock
+  input  logic [NCH*S-1:0] calib,      // memory controllers calibrated (any clock domain)
+  input  logic [NCH*S-1:0] ded,        // a channel's ECC counted an uncorrectable word (any clock
                                        //   domain; STATUS ECC_DED)
   input  logic [11:0]  temp,           // XADC die-temperature code (any clock domain, slow)
   output logic [2:0]   led,
@@ -97,31 +109,51 @@ module otpu_board #(
   output logic [1:0]   s_ctl_rresp,
   output logic         s_ctl_rvalid,
   input  logic         s_ctl_rready,
-  // ---- memory channels 0 .. 2S-1: native masters (otpu_native_dram; slice s on 2s, 2s + 1)
-  output logic [2*S-1:0]        n_cvalid,
-  input  logic [2*S-1:0]        n_cready,
-  output logic [2*S-1:0]        n_cwe,
-  output logic [2*S-1:0][24:0]  n_caddr,   // the 64-byte beat in the channel (address bits 30:6)
-  output logic [2*S-1:0]        n_wvalid,  // write data: a beat per write command, in their order
-  input  logic [2*S-1:0]        n_wready,
-  output logic [2*S-1:0][511:0] n_wdata,
-  output logic [2*S-1:0][63:0]  n_wmask,   // 1 = write the byte
-  input  logic [2*S-1:0]        n_rvalid,  // read data in read-command order, no backpressure
-  input  logic [2*S-1:0][511:0] n_rdata,
-  input  logic [2*S-1:0][15:0]  n_wdone,   // write beats the controller has taken (mod 2^16)
-  input  logic [2*S-1:0]        n_err      // a channel's controller broke its port contract (sticky)
+  // ---- memory channels 0 .. NCH S - 1: native masters (otpu_native_dram; slice s on NCH s ..
+  // NCH s + NCH - 1)
+  output logic [NCH*S-1:0]        n_cvalid,
+  input  logic [NCH*S-1:0]        n_cready,
+  output logic [NCH*S-1:0]        n_cwe,
+  output logic [NCH*S-1:0][24:0]  n_caddr,   // the 64-byte beat in the channel (address bits 30:6)
+  output logic [NCH*S-1:0]        n_wvalid,  // write data: a beat per write command, in their order
+  input  logic [NCH*S-1:0]        n_wready,
+  output logic [NCH*S-1:0][511:0] n_wdata,
+  output logic [NCH*S-1:0][63:0]  n_wmask,   // 1 = write the byte
+  input  logic [NCH*S-1:0]        n_rvalid,  // read data in read-command order, no backpressure
+  input  logic [NCH*S-1:0][511:0] n_rdata,
+  input  logic [NCH*S-1:0][15:0]  n_wdone,   // write beats the controller has taken (mod 2^16)
+  input  logic [NCH*S-1:0]        n_err      // a channel's controller broke its port contract (sticky)
 );
   import otpu_pkg::*;
   localparam int XR = 2;              // register stages each way across an SLR (S > 1)
+  // the native adapter's B read beats in flight per channel: 128 on two channels; on more, each
+  // carries 2 / NCH of a stream (and the F2 HBM bridges hold 64 reads a channel)
+  localparam int NRD = (NCH > 2) ? 64 : 128;
+  initial if (NCH < 2 || NCH != (1 << $clog2(NCH)) || DRAM_LOG2 > (NCH > 2 ? 34 : 32) ||
+              DRAM_LOG2 > CH_LOG2 + $clog2(NCH))
+    $fatal(1, "otpu_board: NCH a power of two >= 2, DRAM_LOG2 <= 32 (34 at NCH > 2) and <= CH_LOG2 + log2(NCH)");
+
+  // ---- the resets. rst (the board's, from the top's synchronizer: on the F2 an ASYNC_REG
+  // flip-flop synthesis does not replicate) reaches the control block, the trace, every slice's
+  // loader and port registers (sys_rst) and every adapter's counters (~2,200 flip-flops at
+  // NCH 8), ~3,000 in all besides the units' trees (core_rst, below; otpu_slice's). The p4rl8
+  // placement (docs/wide_port.md "Placement") ran the one flip-flop 4 levels and 92% route into
+  // 406 of the 200 MHz domain's worst 600 paths: rst_q is its register here, replicated by
+  // synthesis (max_fanout, as core_rst) with each replica next to its loads; everything below
+  // takes rst_q and leaves reset a cycle after the top (nothing can ask anything that cycle:
+  // the control registers' first access is cycles away). go_ok and core_rst keep rst itself:
+  // the run's reset holds until RUN either way.
+  (* max_fanout = 128 *) logic rst_q;
+  always_ff @(posedge clk) rst_q <= rst;
 
   // ---- calibration and uncorrectable-ECC flags from the memory controllers' clock domains
   // (registers there; levels, each bit on its own)
-  (* ASYNC_REG = "TRUE" *) logic [2*S-1:0] cal_s1, cal_s2, ded_s1, ded_s2;
-  // CALIB0 / CALIB1: every slice's first / second channel
+  (* ASYNC_REG = "TRUE" *) logic [NCH*S-1:0] cal_s1, cal_s2, ded_s1, ded_s2;
+  // CALIB0 / CALIB1: every slice's first / second channel (more channels: the even / odd ones)
   logic [1:0] cal_all;
   always_comb begin
     cal_all = 2'b11;
-    for (int k = 0; k < S; k++) cal_all &= cal_s2[2*k +: 2];
+    for (int k = 0; k < NCH * S / 2; k++) cal_all &= cal_s2[2*k +: 2];
   end
   always_ff @(posedge clk) begin
     cal_s1 <= calib;
@@ -141,7 +173,7 @@ module otpu_board #(
     tmp_s1 <= temp;
     tmp_s2 <= tmp_s1;
     tmp_s3 <= tmp_s2;
-    if (rst) begin
+    if (rst_q) begin
       temp_q <= '0;
       temp_v <= 1'b0;
     end else if (tmp_s2 == tmp_s3 && tmp_s3 != '0) begin
@@ -173,13 +205,13 @@ module otpu_board #(
   logic [S-1:0][31:0] x_ld_addr, x_ld_n;
   logic [31:0] x_arg [S][8];
   // the free-running counters' increments: every channel's beats, every slice's instructions
-  localparam int CW = $clog2(S * 2 + 1), IW = $clog2(2 * S + 1);
+  localparam int CW = $clog2(S * NCH + 1), IW = $clog2(2 * S + 1);
   logic [CW-1:0] dram_rd, dram_wr;
   logic [IW-1:0] instr;
   logic [31:0] arg [8];               // the run's arguments (ARG0..7: R8..R15 at the start)
   logic a_req, a_we, a_rvalid, a_rdy, b_req, b_tag, b_we, b_par, b_rvalid, b_rtag, b_rdy;
   logic [31:0] a_addr, a_wdata, b_addr;
-  logic [255:0] a_rdata;
+  logic [8*ALINE-1:0] a_rdata;
   logic [3:0]  a_be, sw_be;
   logic        sw_req, sw_rdy;
   logic        m_wr_idle, m_rd_idle;   // slice 0's adapter's wr_idle and rd_idle (q_wr_idle[0],
@@ -187,7 +219,11 @@ module otpu_board #(
                                        //   m_rv: a b_rvalid the cycle before
   logic [31:0] sw_addr, sw_wdata;
   logic [D/4-1:0] b_wmask;
-  logic [D*8-1:0] b_wdata, b_rdata;
+  logic [D*8-1:0] b_wdata;
+  logic [PORTB*D*8-1:0] b_rdata;
+  logic [PORTB-1:0] b_rcm;
+  logic [1:0]     b_n;
+  logic           b_rlast;
 
   perf_t pf, pf_c;                   // slice 0's, and as the control block sees it
   logic        tr_en, tr_stop, tr_clear, tr_busy;
@@ -203,7 +239,7 @@ module otpu_board #(
   logic c_awvalid, c_awready, c_wvalid, c_wready, c_bvalid, c_bready;
   logic c_arvalid, c_arready, c_rvalid, c_rready;
   otpu_axil_iso #(.AW(12)) u_iso (
-    .clk, .m_rst(ctl_mrst), .s_rst(rst),
+    .clk, .m_rst(ctl_mrst), .s_rst(rst_q),
     .m_awaddr(s_ctl_awaddr), .m_awvalid(s_ctl_awvalid), .m_awready(s_ctl_awready),
     .m_wdata(s_ctl_wdata), .m_wstrb(s_ctl_wstrb), .m_wvalid(s_ctl_wvalid),
     .m_wready(s_ctl_wready), .m_bresp(s_ctl_bresp), .m_bvalid(s_ctl_bvalid),
@@ -219,14 +255,15 @@ module otpu_board #(
   otpu_ctrl #(.D(D), .MCOLS(MCOLS), .ACT_ROWS(ACT_ROWS), .LANES(LANES), .CORE_KHZ(CORE_KHZ), .BUILD_ID(BUILD_ID),
               .DDR_MTS(DDR_MTS), .TRACE_DEPTH(TRACE_DEPTH), .PQ_WIN(PQ_WIN), .HAS_TEMP(1'b1),
               .HAS_I2C(HAS_I2C), .CHASH(CHASH), .DSTEP(DSTEP), .HOSTCAL(HOSTCAL),
-              .COLL_GATHER(COLL_GATHER),
+              .COLL_GATHER(COLL_GATHER), .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE),
               .LDP(S > 1 ? 2 + 2 * XR : 2),  // LOAD to a slice's busy and back
-              // each slice on its two channels' 2 GiB each (otpu_native_dram): 4 GiB
+              // each slice on its NCH channels' 2^CH_LOG2 bytes each (otpu_native_dram): the
+              // DDR boards' two of 2 GiB, the F2 HBM build's eight 512 MiB pseudo-channels
               .S(S), .TMEM_WORDS(TMEM_WORDS), .IMEM_WORDS(IMEM_WORDS), .ACT_BLOCKS(ACT_BLOCKS),
-              .DRAM_LOG2(32), .NCH(2), .CH_LOG2(31), .MXU_IMPL(MXU_IMPL), .TMEM_IMPL(TMEM_IMPL),
+              .DRAM_LOG2(DRAM_LOG2), .NCH(NCH), .CH_LOG2(CH_LOG2), .MXU_IMPL(MXU_IMPL), .TMEM_IMPL(TMEM_IMPL),
               .VPU_CL(VPU_CL), .ULANES(ULANES), .SEQ_WC(SEQ_WC), .PLATFORM(PLATFORM),
               .ARCH_HASH(ARCH_HASH)) u_ctrl (
-    .clk, .rst,
+    .clk, .rst(rst_q),
     .s_awaddr(c_awaddr), .s_awvalid(c_awvalid), .s_awready(c_awready),
     .s_wdata(c_wdata), .s_wstrb(c_wstrb), .s_wvalid(c_wvalid),
     .s_wready(c_wready), .s_bresp(c_bresp), .s_bvalid(c_bvalid),
@@ -251,7 +288,7 @@ module otpu_board #(
   // ---- hardware trace
   if (TRACE_DEPTH != 0) begin : g_trace
     otpu_trace #(.DEPTH(TRACE_DEPTH), .QD(TRACE_QD), .WIN(WIN)) u_trace (
-      .clk, .rst, .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
+      .clk, .rst(rst_q), .pf(pf_c), .en(tr_en && run), .stop(tr_stop), .clear(tr_clear), .raddr(tr_addr),
       .rdata(tr_rdata), .count(tr_count), .drop(tr_drop), .busy(tr_busy));
   end else begin : g_no_trace
     assign tr_rdata = '0;
@@ -303,15 +340,16 @@ module otpu_board #(
                .MXU_CL(MXU_CL), .MXU_E(MXU_E), .VPU_CL(VPU_CL), .ULANES(ULANES), .PQ_WIN(PQ_WIN),
                .SEQ_WC(SEQ_WC), .HAS_DSTEP(DSTEP), .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_slice (
+               .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2),
+               .PORTB(PORTB), .RL(RL), .ALINE(ALINE)) u_slice (
     .clk, .clk_f, .sys_rst(x_srst[0]), .rst(x_rst[0]), .rinit(x_arg[0]), .ld_start(x_ld_start[0]),
     .ld_addr(x_ld_addr[0]), .ld_n(x_ld_n[0]),
     .ld_busy(q_ld_busy[0]), .a_rdy, .b_rdy, .sw_rdy, .wr_idle(m_wr_idle),
     .rd_idle(m_rd_idle),
     .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
     .sw_req, .sw_addr, .sw_wdata, .sw_be,
-    .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
-    .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
+    .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag, .b_rdata,
+    .b_rcm, .b_rlast, .coll_req(sc_req[0]), .coll_cmd(sc_cmd[0]), .coll_ack(sc_ack[0]),
     .coll_ren(sc_ren[0]), .coll_raddr(sc_raddr[0]), .coll_rdata(sc_rdata[0]),
     .coll_wen(sc_wen[0]), .coll_waddr(sc_waddr[0]), .coll_wdata(sc_wdata[0]),
     .coll_gnt_local(sc_gl[0]), .coll_gnt(sc_gnt[0]),
@@ -354,27 +392,32 @@ module otpu_board #(
   assign q_wr_idle[0] = m_wr_idle && !sw_req && !(b_req && b_we);
   assign q_rd_idle[0] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
   always_ff @(posedge clk) m_rv <= !x_srst[0] && b_rvalid;
-  otpu_native_dram #(.D(D), .CHASH(CHASH)) u_mem (
+  otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+                     .APR(RL != 0 ? 16 : 1)) u_mem (
     .clk, .rst(x_srst[0]), .a_flush(x_rst[0] || x_ld_start[0] || a_inval),
     .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
         .a_be_x(a_be), .a_rvalid, .a_rdata,
     .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-    .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-    .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
-    .n_cvalid(n_cvalid[1:0]), .n_cready(n_cready[1:0]), .n_cwe(n_cwe[1:0]),
-    .n_caddr(n_caddr[1:0]), .n_wvalid(n_wvalid[1:0]), .n_wready(n_wready[1:0]),
-    .n_wdata(n_wdata[1:0]), .n_wmask(n_wmask[1:0]), .n_rvalid(n_rvalid[1:0]),
-    .n_rdata(n_rdata[1:0]), .n_wdone(n_wdone[1:0]));
+    .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag,
+    .b_rdata, .b_rcm, .b_rlast, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
+    .n_cvalid(n_cvalid[NCH-1:0]), .n_cready(n_cready[NCH-1:0]), .n_cwe(n_cwe[NCH-1:0]),
+    .n_caddr(n_caddr[NCH-1:0]), .n_wvalid(n_wvalid[NCH-1:0]), .n_wready(n_wready[NCH-1:0]),
+    .n_wdata(n_wdata[NCH-1:0]), .n_wmask(n_wmask[NCH-1:0]), .n_rvalid(n_rvalid[NCH-1:0]),
+    .n_rdata(n_rdata[NCH-1:0]), .n_wdone(n_wdone[NCH-1:0]));
 
-  // ---- slices 1 .. S-1, each on its two channels
+  // ---- slices 1 .. S-1, each on its NCH channels
   for (genvar s = 1; s < S; s++) begin : g_slice
     logic           a_req, a_we, a_rvalid, a_rdy, b_req, b_tag, b_we, b_par, b_rvalid, b_rtag;
     logic           b_rdy, a_inval, sw_req, sw_rdy, m_wr_idle, m_rd_idle, m_rv;
     logic [31:0]    a_addr, a_wdata, b_addr, sw_addr, sw_wdata;
-    logic [255:0]   a_rdata;
+    logic [8*ALINE-1:0] a_rdata;
     logic [3:0]     a_be, sw_be;
     logic [D/4-1:0] b_wmask;
-    logic [D*8-1:0] b_wdata, b_rdata;
+    logic [D*8-1:0] b_wdata;
+    logic [PORTB*D*8-1:0] b_rdata;
+    logic [PORTB-1:0] b_rcm;
+    logic [1:0]     b_n;
+    logic           b_rlast;
     perf_t          pf;
     assign q_ret[s] = pf.sq.ret;
 
@@ -385,32 +428,36 @@ module otpu_board #(
                  .ULANES(ULANES), .PQ_WIN(PQ_WIN), .SEQ_WC(SEQ_WC), .HAS_DSTEP(DSTEP),
                  .TMEM_IMPL(TMEM_IMPL), .TMEM_RQ(TMEM_RQ),
                  .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH), .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP),
-                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM)) u_slice (
+                 .TMEM_GST(TMEM_GST), .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .T2(T2),
+               .PORTB(PORTB), .RL(RL), .ALINE(ALINE)) u_slice (
       .clk, .clk_f, .sys_rst(x_srst[s]), .rst(x_rst[s]), .rinit(x_arg[s]), .ld_start(x_ld_start[s]),
       .ld_addr(x_ld_addr[s]), .ld_n(x_ld_n[s]),
       .ld_busy(q_ld_busy[s]), .a_rdy, .b_rdy, .sw_rdy, .wr_idle(m_wr_idle),
       .rd_idle(m_rd_idle),
       .a_req, .a_we, .a_addr, .a_wdata, .a_be, .a_rvalid, .a_rdata,
       .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag, .b_rdata,
-      .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
+      .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag, .b_rdata,
+      .b_rcm, .b_rlast, .coll_req(sc_req[s]), .coll_cmd(sc_cmd[s]), .coll_ack(sc_ack[s]),
       .coll_ren(sc_ren[s]), .coll_raddr(sc_raddr[s]), .coll_rdata(sc_rdata[s]),
       .coll_wen(sc_wen[s]), .coll_waddr(sc_waddr[s]), .coll_wdata(sc_wdata[s]),
       .coll_gnt_local(sc_gl[s]), .coll_gnt(sc_gnt[s]),
       .halted(q_halted[s]), .error(q_error[s]), .wait_to(q_wait_to[s]), .a_inval,
       .icount(q_icount[s]), .pf, .dump(1'b0));
 
-    otpu_native_dram #(.D(D), .CHASH(CHASH)) u_mem (
+    otpu_native_dram #(.D(D), .CHASH(CHASH), .NCH(NCH), .RD(NRD), .PORTB(PORTB), .ALINE(ALINE),
+                       .APR(RL != 0 ? 16 : 1)) u_mem (
       .clk, .rst(x_srst[s]), .a_flush(x_rst[s] || x_ld_start[s] || a_inval),
       .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
           .a_be_x(a_be), .a_rvalid, .a_rdata,
       .sw_rdy, .sw_req, .sw_addr, .sw_wdata, .sw_be,
-      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_rvalid, .b_rtag,
-      .b_rdata, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
-      .n_cvalid(n_cvalid[2*s +: 2]), .n_cready(n_cready[2*s +: 2]), .n_cwe(n_cwe[2*s +: 2]),
-      .n_caddr(n_caddr[2*s +: 2]), .n_wvalid(n_wvalid[2*s +: 2]),
-      .n_wready(n_wready[2*s +: 2]), .n_wdata(n_wdata[2*s +: 2]), .n_wmask(n_wmask[2*s +: 2]),
-      .n_rvalid(n_rvalid[2*s +: 2]), .n_rdata(n_rdata[2*s +: 2]), .n_wdone(n_wdone[2*s +: 2]));
+      .b_rdy, .b_req, .b_tag, .b_we, .b_wmask, .b_wdata, .b_addr, .b_par, .b_n, .b_rvalid, .b_rtag,
+      .b_rdata, .b_rcm, .b_rlast, .wr_idle(m_wr_idle), .rd_idle(m_rd_idle),
+      .n_cvalid(n_cvalid[NCH*s +: NCH]), .n_cready(n_cready[NCH*s +: NCH]),
+      .n_cwe(n_cwe[NCH*s +: NCH]), .n_caddr(n_caddr[NCH*s +: NCH]),
+      .n_wvalid(n_wvalid[NCH*s +: NCH]), .n_wready(n_wready[NCH*s +: NCH]),
+      .n_wdata(n_wdata[NCH*s +: NCH]), .n_wmask(n_wmask[NCH*s +: NCH]),
+      .n_rvalid(n_rvalid[NCH*s +: NCH]), .n_rdata(n_rdata[NCH*s +: NCH]),
+      .n_wdone(n_wdone[NCH*s +: NCH]));
     assign q_wr_idle[s] = m_wr_idle && !sw_req && !(b_req && b_we);     // as slice 0's
     assign q_rd_idle[s] = m_rd_idle && !a_req && !(b_req && !b_we) && !m_rv;
     always_ff @(posedge clk) m_rv <= !x_srst[s] && b_rvalid;
@@ -419,7 +466,7 @@ module otpu_board #(
   if (S == 1) begin : g_x1
     // ---- one slice: wired
     assign x_rst[0] = core_rst;
-    assign x_srst[0] = rst;
+    assign x_srst[0] = rst_q;
     assign x_ld_start[0] = ld_start;
     assign x_ld_addr[0] = ld_addr;
     assign x_ld_n[0] = ld_n;
@@ -437,7 +484,7 @@ module otpu_board #(
       dram_rd = '0;
       dram_wr = '0;
       instr = '0;
-      for (int c = 0; c < 2 * S; c++) begin
+      for (int c = 0; c < NCH * S; c++) begin
         dram_rd += CW'(n_rvalid[c]);
         dram_wr += CW'(n_wvalid[c] && n_wready[c]);
       end
@@ -467,14 +514,15 @@ module otpu_board #(
     localparam int DW = 3 + L + 32 * L + L + 64 * L + 3 + 64 + 256;
     // up, per slice: levels / pulses (request, read data, pop; cleared by reset), the data, the
     // command, the status, the channels' beats this cycle
-    localparam int UW = 3 + 32 * L + CB + 6 + 2 + 32 + 4;
+    localparam int DCW = $clog2(NCH + 1);      // a slice's channels' beats this cycle
+    localparam int UW = 3 + 32 * L + CB + 6 + 2 + 32 + 2 * DCW;
     logic                   h_ack, h_wv;
     logic [S-1:0]           h_rv, h_req, h_dv, h_pop;
     logic [L-1:0]           h_rm, h_wm;
     logic [L-1:0][31:0]     h_ra, h_wa, h_wd;
     logic [S-1:0][L-1:0][31:0] h_dd;
     cmd_t                   h_cmd [S];
-    logic [S-1:0][1:0]      sl_drd, sl_dwr;
+    logic [S-1:0][DCW-1:0]  sl_drd, sl_dwr;
 
     otpu_coll_hub #(.S(S), .LANES(L)) u_chub (
       .clk, .rst(coll_rst),
@@ -494,12 +542,12 @@ module otpu_board #(
       logic [L-1:0]       p_rm, p_wm;
       logic [L-1:0][31:0] p_ra, p_wa, p_wd;
       logic          p_rv, p_wv, rx_crst;
-      logic [1:0]    drd, dwr;
+      logic [DCW-1:0] drd, dwr;
       for (genvar k = 0; k < 8; k++) begin : g_arg
         assign arg_d[32*k +: 32] = arg[k];
         assign x_arg[s][k] = arg_q[32*k +: 32];
       end
-      assign dn_d = {arg_d, ld_n, ld_addr, ld_start, core_rst, rst, h_wd, h_wa, h_wm, h_ra, h_rm,
+      assign dn_d = {arg_d, ld_n, ld_addr, ld_start, core_rst, rst_q, h_wd, h_wa, h_wm, h_ra, h_rm,
                      h_wv, h_rv[s], h_ack};
       otpu_xr #(.W(DW), .RW(3)) u_dn_tx (.clk, .rst(coll_rst), .d(dn_d), .q(dn_m));
       otpu_xr #(.W(DW), .RW(3)) u_dn_rx (.clk, .rst(rx_crst), .d(dn_m), .q(dn_q));
@@ -518,9 +566,9 @@ module otpu_board #(
       always_comb begin
         drd = '0;
         dwr = '0;
-        for (int c = 2 * s; c < 2 * s + 2; c++) begin
-          drd += 2'(n_rvalid[c]);
-          dwr += 2'(n_wvalid[c] && n_wready[c]);
+        for (int c = NCH * s; c < NCH * s + NCH; c++) begin
+          drd += DCW'(n_rvalid[c]);
+          dwr += DCW'(n_wvalid[c] && n_wready[c]);
         end
       end
       assign up_d = {drd, dwr, q_icount[s], q_ret[s], q_ld_busy[s], q_halted[s], q_error[s],
@@ -557,22 +605,3 @@ module otpu_board #(
   assign led = {halted && !error, run && !halted, hb[26]};
 endmodule
 
-// One register stage of an SLR crossing (otpu_board at S > 1: a pair per direction and slice, one
-// stage on each side). The low RW bits (valid pulses, request levels) clear with rst; the others
-// are data. max_fanout: a stage's reset bit drives a slice's whole core reset (as core_rst).
-module otpu_xr #(
-  parameter int W  = 1,
-  parameter int RW = 0
-) (
-  input  logic         clk,
-  input  logic         rst,
-  input  logic [W-1:0] d,
-  output logic [W-1:0] q
-);
-  (* max_fanout = 256 *) logic [W-1:0] r;     // r_reg: the floorplan's USER_SLL_REG cells
-  assign q = r;
-  always_ff @(posedge clk) begin
-    r <= d;
-    if (rst) for (int i = 0; i < RW; i++) r[i] <= 1'b0;
-  end
-endmodule

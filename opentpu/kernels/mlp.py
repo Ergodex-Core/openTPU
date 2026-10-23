@@ -1,7 +1,8 @@
 """SwiGLU MLP block with pre-RMSNorm and residual, sharded over slices along F."""
 from dataclasses import replace
 
-from .. import language as ol
+from .. import isa as I, language as ol, quant as Q
+from .hadamard import rotate
 from .lib import rmsnorm, silu
 
 
@@ -27,10 +28,11 @@ def _chunk(f_loc: int, D: int, q: int | None = None) -> int:
 def down_chunk(f_loc: int, D: int, fmt: str) -> int:
     """The F-chunk of a W_down in format fmt (_chunk): the columns each down MM's activations
     are quantized over (one QACT)."""
-    return _chunk(f_loc, D, D if fmt == "int8" else 2 * D)
+    return _chunk(f_loc, D, Q.per_chunk(fmt) * D)
 
 
-def swiglu_down(xs, w_gate, w_up, w_down, chunk=None, act=silu, loop=False, each=None):
+def swiglu_down(xs, w_gate, w_up, w_down, chunk=None, act=silu, loop=False, each=None,
+                rot=None):
     """This slice's output columns of W_down( act(W_gate x) * (W_up x) ), x quantized in `xs`
     (act: SiLU, or e.g. lib.gelu_tanh for Gemma's GeGLU).
 
@@ -40,17 +42,18 @@ def swiglu_down(xs, w_gate, w_up, w_down, chunk=None, act=silu, loop=False, each
     instructions (a model whose program would not fit IMEM with every chunk unrolled).
     `each(i)`: called as chunk i's work begins, once the next chunk's gate and up MMs are
     issued (instructions of the caller's that wait while the MXU works: moe_prologue_rows'
-    need lines), not with `loop`.
+    need lines), not with `loop`. `rot` (kernels/hadamard.py): W_down is Hadamard-folded, each
+    chunk's activations are rotated first (a chunk is whole blocks of rot.block).
     """
     S = ol.num_programs()
     f_loc = w_gate.shape[0]
     D = ol.block_size()
     C = chunk or (w_down.pw if w_down.parts is not None else
-                  _chunk(f_loc, D, D if w_down.wf == 0 else 2 * D))
+                  _chunk(f_loc, D, I.blocks_per_chunk(w_down.wf) * D))
     if loop and f_loc // C >= 6:                # two iterations at least
         if each is not None:
             raise ol.CompileError("swiglu_down: each= with the chunks as a hardware loop")
-        return _swiglu_down_loop(xs, w_gate, w_up, w_down, C, act)
+        return _swiglu_down_loop(xs, w_gate, w_up, w_down, C, act, rot)
     starts = list(range(0, f_loc, C))
 
     def gate_up(c0):
@@ -67,7 +70,7 @@ def swiglu_down(xs, w_gate, w_up, w_down, chunk=None, act=silu, loop=False, each
         a = ol.all_gather(act(g) * u)                   # [M, S*C]: chunk c of every slice
         for t in ol.static_range(S):
             cols = w_down[:, t * f_loc + c0:t * f_loc + c0 + C]
-            at = a[:, t * C:(t + 1) * C]
+            at = rotate(a[:, t * C:(t + 1) * C], rot, S * f_loc, t * f_loc + c0)
             if y is None:
                 y = ol.dot(at, cols)
             else:
@@ -90,7 +93,7 @@ def _down_cols(w_down, j, C: int):
     return replace(p[0], data=p[0].data + j * dd, scale=p[0].scale + j * ds)
 
 
-def _swiglu_down_loop(xs, w_gate, w_up, w_down, C: int, act=silu):
+def _swiglu_down_loop(xs, w_gate, w_up, w_down, C: int, act=silu, rot=None):
     """swiglu_down with its chunks in a hardware loop, software-pipelined as the unrolled
     chunks are (gate / up of chunk k + 1 stream while the VPU computes a_k): two buffers A, B
     hold gate / up of alternate chunks, and each iteration runs two chunks, 2 j + 1 from B and
@@ -108,7 +111,7 @@ def _swiglu_down_loop(xs, w_gate, w_up, w_down, C: int, act=silu):
     def down(k, buf, y):
         a = ol.all_gather(act(buf[0]) * buf[1])         # [M, S*C]: chunk k of every slice
         for t in ol.static_range(S):
-            at = a[:, t * C:(t + 1) * C]
+            at = rotate(a[:, t * C:(t + 1) * C], rot, S * f_loc, t * f_loc + k * C)
             if y is None:
                 y = ol.dot(at, _down_cols(w_down, t * n + k, C))
             else:

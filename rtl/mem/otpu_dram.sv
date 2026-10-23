@@ -1,14 +1,18 @@
 // Behavioural per-slice DRAM for simulation (the board version sits behind a DDR3/HBM
-// controller). Port A: one read of the aligned 32 bytes holding word a_addr (the MXU's scale
+// controller). Port A: one read of the aligned ALINE bytes holding word a_addr (the MXU's scale
 // lines) or one byte-enabled word write per cycle; port SW: one
 // byte-enabled word write per cycle (the quantizer's QST stores). Port B: one
 // D-byte burst per cycle, read (the MXU's streamed operand, DMA loads) or word-masked write
 // (DMA stores). Reads return LAT cycles later, in order; data is sampled at the request.
+// PORTB > 1 (docs/wide_port.md): a read takes b_n + 1 consecutive chunks (at most PORTB) and
+// returns them in one response (b_rcm its chunks, b_rlast always: never split).
 module otpu_dram #(
   parameter int WORDS = 1 << 18,
   parameter int D     = 32,
   parameter int LAT   = 8,
-  parameter int SID   = 0
+  parameter int SID   = 0,
+  parameter int PORTB = 1,
+  parameter int ALINE = 32        // port A's line, bytes (32, 64)
 ) (
   input  logic              clk,
   input  logic              a_req,
@@ -17,7 +21,7 @@ module otpu_dram #(
   input  logic [31:0]       a_wdata,
   input  logic [3:0]        a_be,
   output logic              a_rvalid,
-  output logic [255:0]      a_rdata,    // words (a_addr & ~7) .. (a_addr | 7), the lowest first
+  output logic [8*ALINE-1:0] a_rdata,   // the ALINE/4 words of the aligned line, the lowest first
   input  logic              sw_req,
   input  logic [31:0]       sw_addr,
   input  logic [31:0]       sw_wdata,
@@ -28,20 +32,25 @@ module otpu_dram #(
   input  logic [D/4-1:0]    b_wmask,    // word enables for a burst write
   input  logic [D*8-1:0]    b_wdata,
   input  logic [31:0]       b_addr,     // word address of the chunk
+  input  logic [1:0]        b_n,        // PORTB > 1: a read's chunks - 1
   output logic              b_rvalid,
   output logic              b_rtag,
-  output logic [D*8-1:0]    b_rdata,
+  output logic [PORTB*D*8-1:0] b_rdata, // chunk c at [c*D*8 +: D*8] (past b_n: zero)
+  output logic [PORTB-1:0]  b_rcm,
+  output logic              b_rlast,
   output logic              rd_idle,    // no read in flight
   input  logic              dump
 );
   localparam int AW = $clog2(WORDS);
   localparam int CW = D / 4;
+  localparam int LWW = $clog2(ALINE / 4);     // the word index in a port-A line
 
   logic [31:0] mem [WORDS];
 
   logic [LAT-1:0]    av, bv, bt;
-  logic [255:0]      ad [LAT];
-  logic [D*8-1:0]    bd [LAT];
+  logic [8*ALINE-1:0] ad [LAT];
+  logic [PORTB*D*8-1:0] bd [LAT];
+  logic [PORTB-1:0]  bm [LAT];
 
 `ifndef SYNTHESIS
   // the host's writes during the run (WAITW's tests): <dir>/poke_<SID>.txt, lines "cycle word
@@ -69,10 +78,12 @@ module otpu_dram #(
         if (sw_be[b]) mem[sw_addr[AW-1:0]][8*b +: 8] <= sw_wdata[8*b +: 8];
     end
     av[0] <= a_req && !a_we;
-    for (int w = 0; w < 8; w++) ad[0][32*w +: 32] <= mem[{a_addr[AW-1:3], 3'(w)}];
+    for (int w = 0; w < ALINE / 4; w++) ad[0][32*w +: 32] <= mem[{a_addr[AW-1:LWW], LWW'(w)}];
     bv[0] <= b_req && !b_we;
     bt[0] <= b_tag;
-    for (int w = 0; w < CW; w++) bd[0][32*w +: 32] <= mem[AW'(b_addr + w)];
+    for (int w = 0; w < PORTB * CW; w++)
+      bd[0][32*w +: 32] <= (PORTB == 1 || w / CW <= int'(b_n)) ? mem[AW'(b_addr + w)] : '0;
+    for (int c = 0; c < PORTB; c++) bm[0][c] <= PORTB == 1 || c <= int'(b_n);
     if (b_req && b_we)
       for (int w = 0; w < CW; w++) if (b_wmask[w]) mem[AW'(b_addr + w)] <= b_wdata[32*w +: 32];
     for (int k = 1; k < LAT; k++) begin
@@ -81,6 +92,7 @@ module otpu_dram #(
       bv[k] <= bv[k-1];
       bt[k] <= bt[k-1];
       bd[k] <= bd[k-1];
+      bm[k] <= bm[k-1];
     end
   end
   assign a_rvalid = av[LAT-1];
@@ -88,6 +100,8 @@ module otpu_dram #(
   assign b_rvalid = bv[LAT-1];
   assign b_rtag   = bt[LAT-1];
   assign b_rdata  = bd[LAT-1];
+  assign b_rcm    = bm[LAT-1];
+  assign b_rlast  = 1'b1;
   assign rd_idle  = !(|av) && !(|bv);
 
 `ifndef SYNTHESIS

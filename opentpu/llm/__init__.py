@@ -1,8 +1,9 @@
-"""Running real LLMs on openTPU: Qwen3 (qwen3.py), LFM2 (lfm2.py), Qwen3.5 (qwen35.py), Gemma 4
-(gemma4.py) and the Llama-likes SmolLM3 and Phi-3 / Phi-4-mini (llama.py, on Qwen3's code)."""
+"""Running real LLMs on openTPU: Qwen3, LFM2, Qwen3.5, Gemma 3 / FunctionGemma, Gemma 4,
+and the Llama-likes SmolLM3 and Phi-3 / Phi-4-mini (llama.py, on Qwen3's code)."""
 from __future__ import annotations
 
 import json
+import math
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -11,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 # file (opentpu/host/streamed.py), as is MiniCPM-V 4.7's language model (Qwen3.5-35B-A3B's
 # architecture: docs/minicpmv.md). Gemma 4's are the instruct checkpoints (-it): the base ones
 # (gemma-4-E2B, ...) have no chat template and continue a chat's text instead of answering
-MODELS = {"qwen3": "Qwen3-0.6B", "lfm2": "LFM2.5-230M", "qwen35": "Qwen3.5-0.8B",
+MODELS = {"gemma3": "gemma-3-1b-it", "gemma3-int4": "gemma-3-1b-it-int4",
+          "functiongemma": "functiongemma-270m-it",
+          "qwen3": "Qwen3-0.6B", "bonsai": "Ternary-Bonsai-1.7B", "lfm2": "LFM2.5-230M", "qwen35": "Qwen3.5-0.8B",
           "lfm2-2.6b": "LFM2-2.6B", "smollm3": "SmolLM3-3B", "phi4-mini": "Phi-4-mini-instruct",
           "qwen35-2b": "Qwen3.5-2B", "qwen35-4b": "Qwen3.5-4B", "gemma4": "gemma-4-E2B-it",
           "gemma4-e4b": "gemma-4-E4B-it", "lfm2-8b": "LFM2.5-8B-A1B",
@@ -36,6 +39,37 @@ def rope_parameters(c: dict, model_dir, types=("default",)) -> dict:
     return rp
 
 
+def yarn_rope(rp: dict, theta: float, dim: int, max_pos: int) -> tuple[tuple, float]:
+    """Hugging Face's YaRN (transformers _compute_yarn_parameters) as LongRoPE's form: the
+    divisor of each frequency's angle and the factor on cos and sin (qwen3.rope_tables). Each
+    inverse frequency blends its extrapolated (1 / base^(2i/d)) and interpolated (that / factor)
+    values by YaRN's linear ramp between the correction dimensions of beta_fast and beta_slow,
+    so its divisor is 1 / ((1 - e) / factor + e), e the ramp's extrapolation weight."""
+    factor = float(rp["factor"])
+    orig = rp.get("original_max_position_embeddings") or max_pos
+    def mscale(s, m=1.0):
+        return 0.1 * m * math.log(s) + 1.0 if s > 1 else 1.0
+    af = rp.get("attention_factor")
+    if af is None:
+        m, m_all = rp.get("mscale"), rp.get("mscale_all_dim")
+        af = mscale(factor, m) / mscale(factor, m_all) if m and m_all else mscale(factor)
+    beta_fast, beta_slow = rp.get("beta_fast") or 32, rp.get("beta_slow") or 1
+    def corr(n_rot):
+        return dim * math.log(orig / (n_rot * 2 * math.pi)) / (2 * math.log(theta))
+    lo, hi = corr(beta_fast), corr(beta_slow)
+    if rp.get("truncate", True):
+        lo, hi = math.floor(lo), math.ceil(hi)
+    lo, hi = max(lo, 0), min(hi, dim - 1)
+    if lo == hi:
+        hi += 0.001
+    div = []
+    for i in range(dim // 2):
+        ramp = min(max((i - lo) / (hi - lo), 0.0), 1.0)
+        e = 1.0 - ramp                          # extrapolation weight
+        div.append(1.0 / ((1.0 - e) / factor + e))
+    return tuple(div), float(af)
+
+
 def load_spec(path):
     """The Spec of a Hugging Face checkpoint directory, chosen by its config's model_type."""
     t = json.loads((Path(path) / "config.json").read_text()).get("model_type")
@@ -44,9 +78,14 @@ def load_spec(path):
     elif t in ("lfm2", "lfm2_moe"):
         from .lfm2 import Spec
     elif t in ("qwen3_5", "qwen3_5_text", "qwen3_5_moe", "qwen3_5_moe_text"):
+        from .bonsai2 import is_bonsai2, spec as bonsai2_spec
+        if is_bonsai2(path):
+            return bonsai2_spec(path)
         from .qwen35 import Spec
     elif t == "minicpmv4_7":            # (qwen35's Spec with the vision side)
         from .minicpmv import Spec
+    elif t in ("gemma3", "gemma3_text"):
+        from .gemma3 import Spec
     elif t in ("gemma4", "gemma4_text"):
         from .gemma4 import Spec
     else:

@@ -72,18 +72,28 @@ SIM_LANES_MAX = 16
 CORE = ["vpu/otpu_fp.sv", "vpu/otpu_fpipe.sv", "top/otpu_pkg.sv", "mem/otpu_tmem.sv",
         "mem/otpu_actram.sv", "seq/otpu_seq.sv", "vpu/otpu_vtree.sv", "dma/otpu_dma.sv",
         "mxu/otpu_mxu.sv", "vpu/otpu_quant.sv", "vpu/otpu_se_comp.sv", "vpu/otpu_se_tail.sv",
-        "vpu/otpu_vpu.sv", "top/otpu_coll.sv", "top/otpu_slice.sv"]
+        "vpu/otpu_vpu.sv", "top/otpu_coll.sv", "shell/otpu_skidbuf.sv", "top/otpu_slice.sv"]
 TECH = {"generic": ["tech/generic/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         "xilinx7": ["tech/xilinx7/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         "xilinxus": ["tech/xilinxus/otpu_tech_dsp.sv", "tech/generic/otpu_tech_ram.sv"],
         # the RAMs on SRAM macros: the leaves (otpu_sram_*) come from tools/asic/flow.py
         "asic": ["tech/generic/otpu_tech_dsp.sv", "tech/asic/otpu_tech_ram.sv"]}
-SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_board.sv",
+SHELL = ["shell/otpu_ctrl.sv", "shell/otpu_trace.sv", "shell/otpu_xr.sv", "shell/otpu_board.sv",
          "mem/otpu_native_dram.sv", "shell/otpu_afifo.sv", "shell/otpu_mem_ch.sv",
          "shell/otpu_axi_split2.sv"]
 BOARDS = {"ypcb-00338": ["boards/ypcb-00338/otpu_native_sys.sv",
                          "boards/ypcb-00338/otpu_fpga_top_ld.sv"],
-          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"]}
+          "bcu1525": ["boards/bcu1525/otpu_bcu_sys.sv", "boards/bcu1525/otpu_fpga_top_bcu.sv"],
+          # the F2 slot's: its top, cl_opentpu (boards/f2/design), takes the AWS shell's ports
+          # and sh_ddr from the HDK, so it is the HDK flow's, not in this list
+          "f2": ["shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_f2_nch.sv",
+                 "boards/f2/otpu_f2_mem.sv", "boards/f2/otpu_f2_sys.sv"],
+          # the F2 slot with the HBM (a target of board f2 and mem "hbm": targets/f2-hbm*.toml;
+          # its top, cl_opentpu_hbm.sv, takes the HDK's cl_mem_hbm_wrapper: docs/f2_hbm.md)
+          "f2-hbm": ["shell/otpu_link.sv", "boards/f2/otpu_axil_cdc.sv", "boards/f2/otpu_axil_xr.sv",
+                     "boards/f2/otpu_f2_hbm_nch.sv", "boards/f2/otpu_f2_hbm_port.sv",
+                     "boards/f2/otpu_f2_hbm_host.sv", "boards/f2/otpu_f2_hbm_mem.sv",
+                     "boards/f2/otpu_f2_hbm_sys.sv"]}
 
 
 class TargetError(ValueError):
@@ -244,8 +254,13 @@ def arch_hash(cfg) -> int:
     build without it stays, and a host that writes no entries refuses a build with it (its
     hash leaves it out: opentpu/host/board.py check_hash)."""
     d = dict(dataclasses.asdict(cfg), NUMERICS=NUMERICS)
-    if not d.get("SEQ_WC"):
-        d.pop("SEQ_WC", None)
+    for k in ("SEQ_WC", "T2", "ROWLANES"):   # (in the hash only when on: older builds keep theirs)
+        if not d.get(k):
+            d.pop(k, None)
+    if d.get("PORTB", 1) == 1:            # (the one-chunk port of every build before it)
+        d.pop("PORTB", None)
+    if d.get("ALINE", 32) == 32:          # (the 32-byte port-A line of every build before it)
+        d.pop("ALINE", None)
     s = json.dumps({k: (int(v) if isinstance(v, bool) else v) for k, v in sorted(d.items())},
                    separators=(",", ":"))
     return int.from_bytes(hashlib.sha256(s.encode()).digest()[:4], "big")
@@ -266,6 +281,8 @@ def sim_uarch(t: Target | str | None = None) -> dict:
         d["MXU_E"] = u["MXU_E"]
     if t.arch["SEQ_WC"]:
         d["SEQ_WC"] = 1
+    if t.arch.get("T2"):                        # (only when on: the other builds' cache keys)
+        d["T2"] = 1
     return d
 
 
@@ -285,11 +302,17 @@ def rtl_params(t: Target | str | None = None) -> dict:
         "VPU_CL": u["VPU_CL"], "ULANES": u["ULANES"], "TMEM_IMPL": u["TMEM_IMPL"],
         "RPB": u["RPB"] or NRP * a["LANES"], "WPB": u["WPB"], "WIN": u["WIN"],
         "FIFO_DEPTH": u["FIFO_DEPTH"], "TRACE_DEPTH": u["TRACE_DEPTH"], "PQ_WIN": u["PQ_WIN"],
-        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]),
+        "CHASH": int(u["CHASH"]), "SEQ_WC": int(a["SEQ_WC"]), "T2": int(a.get("T2", False)),
+        "PORTB": int(a.get("PORTB", 1)),
+        "RL": rl_streams(cfg),
+        "ALINE": int(a.get("ALINE", 32)),
         "DDR_MTS": int(p.get("mem_mts", 0)),
         "NCH": p["channels_per_slice"],
         "CH_LOG2": (p["channel_bytes"] - 1).bit_length(),
-        "DRAM_LOG2": (a["DRAM_BYTES"] - 1).bit_length(),
+        # what a slice's channels hold: the arch's DRAM_BYTES (what its programs address), or
+        # the platform's slice_bytes where the channels hold more (f2-hbm16: 16 x 512 MiB = 8
+        # GiB, of which the slice's 32-bit byte addresses reach 4 GiB today; docs/f2_hbm.md)
+        "DRAM_LOG2": (p.get("slice_bytes", a["DRAM_BYTES"]) - 1).bit_length(),
         "PLATFORM": t.platform_id,
         "ARCH_HASH": arch_hash(cfg),
     }
@@ -304,13 +327,17 @@ def sources(t: Target | str | None = None, family: str | None = None) -> list[st
     core = CORE[:CORE.index("mxu/otpu_mxu.sv") + 1] + tech + CORE[CORE.index("mxu/otpu_mxu.sv") + 1:]
     if t.kind != "fpga":
         return core
-    return core + SHELL + BOARDS.get(t.platform["board"], [])
+    board = t.platform["board"]
+    if board == "f2" and t.platform.get("mem") == "hbm":
+        board = "f2-hbm"
+    return core + SHELL + BOARDS.get(board, [])
 
 
 def build_config(t: Target | str | None = None, **knobs):
     """The Config of an FPGA build of `t` with the board flow's knobs (run_vivado.sh MCOLS,
-    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC; the CFG_HASH it reports): ACT_ROWS equal to
-    MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too (STREAM)."""
+    LANES, ACT_ROWS, TMEM_WORDS, DSTEP, SEQ_WC, T2, PORTB, ROWLANES, ALINE; the CFG_HASH it
+    reports): ACT_ROWS equal to MCOLS is 0 (no replay), DSTEP 0 leaves out the stream engine too
+    (STREAM)."""
     t = t if isinstance(t, Target) else load(t)
     a = dict(t.arch)
     for k in ("MCOLS", "LANES", "ACT_ROWS", "TMEM_WORDS"):
@@ -322,7 +349,24 @@ def build_config(t: Target | str | None = None, **knobs):
         a["DSTEP"] = a["STREAM"] = bool(int(knobs["DSTEP"]))
     if knobs.get("SEQ_WC") is not None:
         a["SEQ_WC"] = bool(int(knobs["SEQ_WC"]))
+    if knobs.get("T2") is not None:
+        a["T2"] = bool(int(knobs["T2"]))
+    if knobs.get("PORTB") is not None:
+        a["PORTB"] = int(knobs["PORTB"])
+    if knobs.get("ROWLANES") is not None:
+        a["ROWLANES"] = bool(int(knobs["ROWLANES"]))
+    if knobs.get("ALINE") is not None:
+        a["ALINE"] = int(knobs["ALINE"])
     return config(t, **a)
+
+
+def rl_streams(cfg) -> int:
+    """The MXU's weight streams of a build with row lanes (otpu_mxu RL: 0 without the mode;
+    4 or 8: the columns, since column J takes stream J -- at least QUAD's four, 8 at MCOLS 8,
+    where int4 L 4 and t2 L 2 take eight): docs/row_lanes.md."""
+    if not getattr(cfg, "ROWLANES", False):
+        return 0
+    return max(4, min(cfg.MCOLS, 8))
 
 
 def _fmt(v) -> str:

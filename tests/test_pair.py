@@ -117,8 +117,12 @@ def test_pair_scales_are_aligned(wf, ssa, srs, align):
 
 
 def test_pair_needs_4bit_and_room():
-    with pytest.raises(ValueError, match="PAIR needs 4-bit"):
-        I.mm(0, 0, 0, 1, 1, 32, 1, 1, 0, 4, pair=True)
+    """int8 PAIR (two chunks a cycle) encodes, and runs only with a wide port B (PORTB 2:
+    tests/test_wide_port.py)."""
+    dram = np.zeros(1 << 16, np.uint8)
+    with pytest.raises(Exception, match="PORTB"):
+        _run(Config(S=1, D=32, MCOLS=2, PAIR=True), dram,
+             [I.mm(WA, SA, OUT, 1, 2, 32, 1, 1, 0, 4, pair=True)])
     with pytest.raises(ValueError, match="even k0"):
         I.mm(0, 0, 0, 1, 2, 32, 1, 1, 0, 16, wf=I.W4F, pair=True, k0=1)
     dram = np.zeros(1 << 16, np.uint8)

@@ -71,6 +71,7 @@ from ..host.offload import LINE, ExpertServer, Layout
 from ..isasim import Config
 from ..kernels.layouts import head_parallel_attention_weights
 from ..kernels.deltanet import gates, l2norm_rows
+from ..kernels.hadamard import rotate
 from ..kernels.lib import rmsnorm, silu
 from ..kernels.mlp import _chunk, down_chunk
 from .lfm2 import _place, plan, run_layers, subs
@@ -84,7 +85,8 @@ from .qwen3 import (ATTN_BLOCK, HEAD_CHUNK, OutTokens, RunPos, RunRows, RunWords
                     _qk, gathered_rows,
                     _lm_head, _lm_head_rows, _lookup_alloc, _lookup_build, _lookup_desc, _mlp,
                     _pv, _qdesc, _tdesc, _tok_arg, _tokens_arg, _v_parts, compile_decode,
-                    put_head, rope_tables, EmbedHost, fill_logits, step_descriptors)
+                    put_head, rope_tables, EmbedHost, fill_logits, step_descriptors,
+                    rl_alloc, rl_lanes_of)
 
 LIN, ATTN = "linear", "attn"
 PAIR_LOOP = 8       # pairs of DeltaNet heads per slice that decode unrolled at a run-time position
@@ -131,6 +133,9 @@ class Spec:
                                     # shared expert (ffn: its width, the layer block's MLP)
     formats: str = ""       # weight formats per kind over the image's wformat (KINDS)
     mix: str = ""           # the recommended mix (wformat "mix": formats.named, MIXES)
+    rot: int = 0            # the projections are Hadamard-folded latent weights (Ternary-Bonsai
+                            # 2): the kernels rotate their inputs in blocks of `rot`
+                            # (kernels/hadamard.py, docs/ternary.md 4); 0: plain weights
     mtp: bool = False       # the image holds the MTP drafter (the checkpoint's mtp.* layer, a
                             # draft head) and two slots of every DeltaNet state and convolution
                             # window for the speculative verify (opentpu/llm/mtp.py, docs/mtp.md 9)
@@ -182,6 +187,14 @@ class Spec:
                     or 4 * c["vocab_size"] * c["hidden_size"] > EMBED_F32_MAX else "f32",
                     mix=FM.mix_for(c))
 
+    def _down_chunk(self, cfg: Config) -> int:
+        """The widest chunk of W_down's input (this slice's MLP width) the image's layouts
+        can take through ACT RAM (_layout's dchunk over the formats' chunk quanta and the
+        rotation block), or the width itself where a quantum does not divide it."""
+        f_loc, D = self.ffn // cfg.S, cfg.D
+        qs = {q for q in (D, 2 * D, 4 * D, max(4 * D, self.rot)) if f_loc % q == 0}
+        return max((_chunk(f_loc, D, q) for q in qs), default=f_loc)
+
     def check(self, cfg: Config) -> None:
         S, D = cfg.S, cfg.D
         need = [(self.head_dim % D == 0, f"head_dim {self.head_dim} % D"),
@@ -198,10 +211,19 @@ class Spec:
                 (self.n_kv % S == 0, f"n_kv {self.n_kv} % S"),
                 (self.n_q % self.n_kv == 0, "n_q % n_kv"),
                 (self.vocab % S == 0, f"vocab {self.vocab} % S"),
-                (max(self.ffn, self.n_q * self.head_dim, self.hidden) <= cfg.ACT_BLOCKS * D,
-                 "an inner dimension exceeds ACT RAM")]
+                # (W_down's input goes through ACT a chunk at a time, swiglu_down: the widest
+                # chunk any format or rotation block takes; the 27B's 17408 is wider than ACT)
+                (max(self._down_chunk(cfg), self.n_q * self.head_dim, self.hidden)
+                 <= cfg.ACT_BLOCKS * D, "an inner dimension exceeds ACT RAM")]
         if self.mtp:
             need += [(S == 1, "MTP decoding runs on one slice")]
+        if self.rot:
+            B = self.rot
+            need += [(self.hidden % B == 0 and (self.ffn // S) % B == 0,
+                      f"widths (the MLP's per slice) in blocks of {B}"),
+                     (B % 512 == 0 and (self.lin_heads // S) * self.lin_dv % B == 0,
+                      f"a slice's DeltaNet heads in whole blocks of {B} (a multiple of 512)"),
+                     (self.n_q * self.head_dim % B == 0, f"o_proj's input in blocks of {B}")]
         if self.moe is not None:
             mo = self.moe
             need += [(S == 1, "MoE layers run on one slice"),
@@ -749,6 +771,8 @@ class Image(EmbedHost):
             self.io["xbuf"] = b.alloc(4 * H * self.prefill_rows)     # request's ids and a sink)
             if spec.moe is not None:
                 self.io["moe_scratch"] = b.alloc(4 * H * (LINE // 4 + 1))
+        if getattr(cfg, "ROWLANES", False):     # (row lanes: the blocks are 4096-byte sized, so
+            b.next = -(-b.next // 4096) * 4096  # an aligned first keeps every RL group L D aligned)
         self.layer0 = b.next
         mlp = {"wg": (self.f_loc, H), "wu": (self.f_loc, H)}
         mo = spec.moe
@@ -800,6 +824,26 @@ class Image(EmbedHost):
                                 b.alloc(self.nd * Q.scale_bytes(H, "fp4", D)))}
         self.head = (b.alloc(self.v_loc * Q.row_bytes(H, self.head_format, D)),
                      b.alloc(self.v_loc * Q.scale_bytes(H, self.head_format, D)))
+        # row lanes (docs/row_lanes.md; qwen3.Image): the head the LM-head MMs stream, in
+        # groups (the standard rows above stay for the embedding gather); a Config with
+        # ROWLANES makes a decode image (the one-row MMs as MM RL; rows > 1 are refused)
+        self.head_rl = rl_lanes_of(cfg, self.head_format)
+        self.head_rlq = rl_alloc(b, self.v_loc, H, self.head_format, D, self.head_rl) \
+            if self.head_rl else None
+        self.rot = None
+        if spec.rot:                # H (UNIT: t2 where the MXU has it, else int4) and s' per width
+            from ..kernels.hadamard import BASE
+            B, B0 = spec.rot, min(spec.rot, BASE)
+            hf = "t2" if cfg.T2 else "int4"
+            widths = sorted({H, F_, spec.n_q * d, spec.lin_heads * dv})
+            self.rot = SimpleNamespace(block=B, base=B0, fmt=hf,
+                                       H=b.alloc(B0 * Q.row_bytes(B0, hf, D)),
+                                       signs={k: b.alloc(4 * k) for k in widths},
+                                       # the heads' outputs gather here before out_proj
+                                       # (_flush_rotated): a rows run's always, a step's where
+                                       # a block is wider than a head group
+                                       onrows=b.alloc(4 * self.dnrows * self.nl * dv),
+                                       wide=B > self.og * dv)
         # the int8 embedding rows of the resident decode are the tied int8 head's (S = 1)
         shared = spec.tied and self.head_format == "int8" and S == 1
         if embed_host is None:      # an int8 table of its own on the host by default where its
@@ -856,37 +900,46 @@ class Image(EmbedHost):
         D, H, d, F_ = cfg.D, spec.hidden, spec.head_dim, spec.ffn
         dk, dv, nl, og = spec.lin_dk, spec.lin_dv, self.nl, self.og
         sb = lambda k, f: Q.scale_bytes(k, f, D)                        # noqa: E731
+        rl = lambda f: rl_lanes_of(cfg, f)                              # noqa: E731
         fl, fa, fg, fd = g
         mf = {"wh": fl, "wab": fl, "wout": fl, "wq": fa, "wgate": fa, "wk": fa, "wv": fa,
               "wo": fa, "wg": fg, "wu": fg, "wd": fd}       # each projection's format (KINDS)
+        if spec.rot or "t2" in (fl, fa, fg, fd):    # a and b are not ternary (nor rotated)
+            mf["wab"] = "int8" if fl == "t2" else fl
         lb = _Bump()                                    # offsets inside one layer block
         common = {"g_in": lb.alloc(4 * H), "g_post": lb.alloc(4 * H)}
         for name, (n, k) in mlp.items():
-            common[name] = (lb.alloc(n * rb(k, mf[name])), lb.alloc(n * sb(k, mf[name])))
-        dchunk = _chunk(self.f_loc, D, D if fd == "int8" else 2 * D)
-        common["wd"] = [(lb.alloc(self.h_loc * rb(dchunk, fd)),
+            common[name] = rl_alloc(lb, n, k, mf[name], D, rl(mf[name])) if rl(mf[name]) else \
+                (lb.alloc(n * rb(k, mf[name])), lb.alloc(n * sb(k, mf[name])))
+        dchunk = _chunk(self.f_loc, D, max(Q.per_chunk(fd) * D, spec.rot))   # (rotated: whole
+        #                                                               blocks a chunk)
+        common["wd"] = [rl_alloc(lb, self.h_loc, dchunk, fd, D, rl(fd)) if rl(fd) else
+                        (lb.alloc(self.h_loc * rb(dchunk, fd)),
                          lb.alloc(self.h_loc * sb(dchunk, fd)))
                         for _ in range(F_ // dchunk)]
         mo = spec.moe
         if mo is not None:          # the router (int8, the shared expert's gate its last row)
             common.update(router=(lb.alloc((mo.E + 1) * H), lb.alloc((mo.E + 1) * sb(H, "int8"))),
                           gbase=lb.alloc(4))
-        ns = SimpleNamespace(mf=mf, dchunk=dchunk)
+        ns = SimpleNamespace(mf=mf, dchunk=dchunk, rl={k: rl(f) for k, f in mf.items()})
         lnb = _Bump(lb.next)
         lin = dict(common, alog=lnb.alloc(4 * nl), dtb=lnb.alloc(4 * nl), gn=lnb.alloc(4 * dv))
         if self.grouped:            # per head group: its pairs' blocks, then its out_proj block
             pb, gb = _Bump(), _Bump()
-            ns.pofs = {"wh": (pb.alloc(self.RP * rb(H, fl)), pb.alloc(self.RP * sb(H, fl))),
+            Lw = rl(fl)             # (row lanes: the blocks and their strides L D aligned)
+            al = Lw * D if Lw else 1
+            ns.pofs = {"wh": rl_alloc(pb, self.RP, H, fl, D, Lw) if Lw else
+                       (pb.alloc(self.RP * rb(H, fl)), pb.alloc(self.RP * sb(H, fl))),
                        "cv": pb.alloc(4 * self.CVW),
                        "state": pb.alloc(4 * 2 * dv * dk * self.slots)}
-            ns.PS = pb.next                             # a pair's block, bytes
+            ns.PS = -(-pb.next // al) * al              # a pair's block, bytes
             for _ in range(og // 2):
                 gb.alloc(ns.PS)
-            ns.gofs = {"wout": (gb.alloc(H * rb(og * dv, fl)),
-                                gb.alloc(H * sb(og * dv, fl))),
+            ns.gofs = {"wout": rl_alloc(gb, H, og * dv, fl, D, Lw) if Lw else
+                       (gb.alloc(H * rb(og * dv, fl)), gb.alloc(H * sb(og * dv, fl))),
                        "eb": gb.alloc(4 * 4 * (og // 2))}       # its pairs' gates, per token
-            ns.GS = gb.next                             # a head group's block
-            lin["groups"] = lnb.alloc(nl // og * ns.GS)
+            ns.GS = -(-gb.next // al) * al              # a head group's block
+            lin["groups"] = lnb.alloc(nl // og * ns.GS, **({"align": al} if Lw else {}))
         else:
             lin.update(cv=lnb.alloc(4 * nl // 2 * self.CVW),  # per pair: taps, then the ring
                        state=lnb.alloc(4 * nl * dv * dk * self.slots))
@@ -895,7 +948,8 @@ class Image(EmbedHost):
         for kind, bump, L in ((LIN, lnb, lin), (ATTN, ab, attn)):
             for name, (n, k) in self.mats[kind].items():
                 if name not in L:
-                    L[name] = (bump.alloc(n * rb(k, mf[name])), bump.alloc(n * sb(k, mf[name])))
+                    L[name] = rl_alloc(bump, n, k, mf[name], D, rl(mf[name])) if rl(mf[name]) \
+                        else (bump.alloc(n * rb(k, mf[name])), bump.alloc(n * sb(k, mf[name])))
         attn["kv"] = [{"k": ab.alloc(cap * d), "ks": ab.alloc(cap * k_scale_bytes(d, D)),
                        "vt": ab.alloc(d * cap), "vs": ab.alloc(4 * cap)}
                       for _ in range(self.nkv_loc)]
@@ -939,19 +993,23 @@ class Image(EmbedHost):
 
         qb = QC.Batch()                 # the matrices, quantized in worker processes
 
-        def put_q1(s, addr_pair, a, fmt):
-            qb.submit(a, fmt, D, lambda q, sc: (put(s, addr_pair[0], q),
-                                                put(s, addr_pair[1], sc)))
+        def put_q1(s, addr_pair, a, fmt, rl=0):
+            # (rl: in row-lane groups of rl rows, quant.rl_rows / rl_scales: docs/row_lanes.md)
+            k = a.shape[1]
+            qb.submit(a, fmt, D, lambda q, sc: (
+                put(s, addr_pair[0], Q.rl_rows(q, rl, D) if rl else q),
+                put(s, addr_pair[1], Q.rl_scales(sc, fmt, k, rl, D) if rl else sc)))
 
-        def put_q(addr_pair, parts, fmt):
+        def put_q(addr_pair, parts, fmt, rl=0):
             for s, p in enumerate(parts):
-                put_q1(s, addr_pair, p, fmt)
+                put_q1(s, addr_pair, p, fmt, rl)
 
-        def put_parts(addrs, parts, fmt, C):
+        def put_parts(addrs, parts, fmt, C, rl=0):
             """Each slice's rows quantized whole and stored in column parts of C (qwen3's)."""
             for s, p in enumerate(parts):
                 qb.submit(p, fmt, D, lambda q, sc, s=s: [
-                    (put(s, a0, pq), put(s, a1, ps))
+                    (put(s, a0, Q.rl_rows(pq, rl, D) if rl else pq),
+                     put(s, a1, Q.rl_scales(ps, fmt, C, rl, D) if rl else ps))
                     for (a0, a1), (pq, ps) in zip(addrs, Q.column_parts(q, sc, fmt, p.shape[1],
                                                                          C, D))])
 
@@ -1007,28 +1065,35 @@ class Image(EmbedHost):
                 gouts = Q.column_parts(*QC.quantize_mxu(wout, fo, D), fo, wout.shape[1],
                                        og * dv, D)
                 gouts = [gouts[s * nl // og:(s + 1) * nl // og] for s in range(S)]
+                Lo_ = lay.rl["wout"]        # (row lanes: a group's rows in groups of L)
+                grp = lambda gq, gs: ((Q.rl_rows(gq, Lo_, D), Q.rl_scales(gs, fo, og * dv, Lo_, D))
+                                      if Lo_ else (gq, gs))                 # noqa: E731
                 if self.grouped:
                     for s in range(S):
                         for q, (pr, pt) in enumerate(zip(prows[s], ptaps[s])):
                             o = base + self.pair_offset(q, lay)
                             put_q1(s, (o + lay.pofs["wh"][0], o + lay.pofs["wh"][1]), pr,
-                                   mf["wh"])
+                                   mf["wh"], lay.rl["wh"])
                             put(s, o + lay.pofs["cv"], pt)
                         for g, (gq, gs) in enumerate(gouts[s]):
                             o = Lo["groups"] + g * lay.GS
+                            gq, gs = grp(gq, gs)
                             put(s, o + lay.gofs["wout"][0], gq)
                             put(s, o + lay.gofs["wout"][1], gs)
                 else:
-                    put_q(Lo["wh"], [np.concatenate(pr) for pr in prows], mf["wh"])
+                    put_q(Lo["wh"], [np.concatenate(pr) for pr in prows], mf["wh"],
+                          lay.rl["wh"])
                     for s in range(S):
-                        put(s, Lo["wout"][0], np.concatenate([gq for gq, _ in gouts[s]]))
-                        put(s, Lo["wout"][1], np.concatenate([gs for _, gs in gouts[s]]))
+                        gq, gs = grp(np.concatenate([gq for gq, _ in gouts[s]]),
+                                     np.concatenate([gs for _, gs in gouts[s]]))
+                        put(s, Lo["wout"][0], gq)
+                        put(s, Lo["wout"][1], gs)
                     for s in range(S):
                         for q, pt in enumerate(ptaps[s]):
                             put(s, Lo["cv"] + q * 4 * self.CVW, pt)
                 put_q(Lo["wab"], [np.concatenate([W[a + "in_proj_a.weight"][hh.start:hh.stop],
                                                   W[a + "in_proj_b.weight"][hh.start:hh.stop]])
-                                  for hh in hs], mf["wab"])
+                                  for hh in hs], mf["wab"], lay.rl["wab"])
                 for s, hh in enumerate(hs):
                     put(s, Lo["alog"], f32(W[a + "A_log"][hh.start:hh.stop]))
                     put(s, Lo["dtb"], f32(W[a + "dt_bias"][hh.start:hh.stop]))
@@ -1043,16 +1108,16 @@ class Image(EmbedHost):
                         spec.n_q, spec.n_kv, d, S)
                 wq, wk, wv, wo = head_parallel_attention_weights(qg[:, 0].reshape(-1, H), *args)
                 wgate = head_parallel_attention_weights(qg[:, 1].reshape(-1, H), *args)[0]
-                put_q(Lo["wq"], rows(wq, self.nq_loc * d), mf["wq"])
-                put_q(Lo["wgate"], rows(wgate, self.nq_loc * d), mf["wgate"])
-                put_q(Lo["wk"], rows(wk, self.nkv_loc * d), mf["wk"])
-                put_q(Lo["wv"], rows(wv, self.nkv_loc * d), mf["wv"])
-                put_q(Lo["wo"], rows(wo, n), mf["wo"])
+                put_q(Lo["wq"], rows(wq, self.nq_loc * d), mf["wq"], lay.rl["wq"])
+                put_q(Lo["wgate"], rows(wgate, self.nq_loc * d), mf["wgate"], lay.rl["wgate"])
+                put_q(Lo["wk"], rows(wk, self.nkv_loc * d), mf["wk"], lay.rl["wk"])
+                put_q(Lo["wv"], rows(wv, self.nkv_loc * d), mf["wv"], lay.rl["wv"])
+                put_q(Lo["wo"], rows(wo, n), mf["wo"], lay.rl["wo"])
             mp = spec.mlp_prefix(p)
-            put_q(Lo["wg"], rows(W[mp + "gate_proj.weight"], self.f_loc), mf["wg"])
-            put_q(Lo["wu"], rows(W[mp + "up_proj.weight"], self.f_loc), mf["wu"])
+            put_q(Lo["wg"], rows(W[mp + "gate_proj.weight"], self.f_loc), mf["wg"], lay.rl["wg"])
+            put_q(Lo["wu"], rows(W[mp + "up_proj.weight"], self.f_loc), mf["wu"], lay.rl["wu"])
             put_parts([(base + a0, base + a1) for a0, a1 in lay.lofs[kind]["wd"]],
-                      rows(W[mp + "down_proj.weight"], n), mf["wd"], lay.dchunk)
+                      rows(W[mp + "down_proj.weight"], n), mf["wd"], lay.dchunk, lay.rl["wd"])
             if spec.moe is not None:
                 put_q(Lo["router"], [np.concatenate([W[p + "mlp.gate.weight"],
                                                      W[p + "mlp.shared_expert_gate.weight"]])],
@@ -1065,8 +1130,22 @@ class Image(EmbedHost):
                          ("gm", "norm")):
                 put(0, mo[k], g1(f"mtp.{n}.weight"))
             put_q(mo["fc"], [W["mtp.fc.weight"]], self.mtp_fc)
-            put_q(mo["dh"], [head[:self.nd]], "fp4")
+            # (rotated: the draft head takes the MTP's normed rows, in the model's basis)
+            dh = W["model.embed_tokens.weight"] if spec.rot else head
+            put_q(mo["dh"], [dh[:self.nd]], "fp4")
         put_head(self, W, qb, put, put_q, rows)     # (and the tied int8 head's gather scales)
+        if self.rot is not None:
+            from .bonsai2 import hadamard
+            r, B, B0 = self.rot, self.rot.block, self.rot.base
+            code = np.where(hadamard(B0) > 0, 1, -1)                    # the integers +-1
+            hq = Q.pack2((code + 1).astype(np.uint8)) if r.fmt == "t2" else \
+                Q.pack4((code & 15).astype(np.uint8))
+            hrows = np.zeros((B0, Q.row_bytes(B0, r.fmt, cfg.D)), np.uint8)
+            hrows[:, :hq.shape[1]] = hq
+            for s_ in range(S):
+                put(s_, r.H, hrows)
+                for k, a in r.signs.items():
+                    put(s_, a, f32(W.signs(k) * np.float32(B ** -0.5)))
         qb.wait()
         if self.lookup:
             _lookup_build(put, S, W, spec, self.cap, self.lookup)
@@ -1340,6 +1419,16 @@ class Image(EmbedHost):
         sl = dict(tp=K * self.CP, wwords=(K - 1) * self.CP, slot=slot,
                   sbytes=self.sbytes if self.slots > 1 else 0)
 
+        rot = None
+        if self.rot is not None:
+            from ..kernels.hadamard import Rotation
+            r = self.rot
+            rot = Rotation(block=r.block, base=r.base, signs=dict(r.signs),
+                           H=QTensor(Affine.of(r.H), None, (r.base, r.base),
+                                     Q.row_bytes(r.base, r.fmt, D), 0, D, wf=Q.mxu_wf(r.fmt)),
+                           onrows=Tensor(r.onrows, (self.dnrows, nl * dv), (nl * dv, 1)),
+                           wide=r.wide)
+
         def layer(li, it=None, jt=None):
             """Descriptors of layer `li` (static), or of element li of its run's unit at
             iteration `it` (a hardware-loop variable) and, jt = (loop variable, layers, bytes):
@@ -1354,7 +1443,9 @@ class Image(EmbedHost):
             lofs, mf = lay.lofs[kind], lay.mf
             ns = SimpleNamespace(g_in=Tensor(off + lofs["g_in"], (H,), (1,)),
                                  g_post=Tensor(off + lofs["g_post"], (H,), (1,)),
-                                 moe=spec.moe is not None, kind=kind)
+                                 moe=spec.moe is not None, kind=kind,
+                                 # (the MTP layer is the checkpoint's plain weights)
+                                 rot=None if li == spec.layers else rot)
             if ns.moe:
                 E = spec.moe.E
                 da, sa = lofs["router"]
@@ -1363,10 +1454,11 @@ class Image(EmbedHost):
             for name, (r, k) in self.mats[kind].items():
                 da, sa = lofs[name]
                 fm = mf[name]
-                setattr(ns, name, QTensor.weight(off + da, off + sa, r, k, fm, D))
+                setattr(ns, name, QTensor.weight(off + da, off + sa, r, k, fm, D,
+                                                 rl=lay.rl[name]))
             Cd = lay.dchunk
             fm = mf["wd"]
-            parts = tuple(QTensor.weight(off + da, off + sa, n, Cd, fm, D)
+            parts = tuple(QTensor.weight(off + da, off + sa, n, Cd, fm, D, rl=lay.rl["wd"])
                           for da, sa in lofs["wd"])
             ns.wd = QTensor(parts[0].data, parts[0].scale, (n, spec.ffn), parts[0].rs,
                             parts[0].srs, D, parts=parts, pw=Cd, wf=parts[0].wf)
@@ -1380,10 +1472,11 @@ class Image(EmbedHost):
                     g0 = off + lofs["groups"]
                     (whd, whs), (wod, wos) = lay.pofs["wh"], lay.gofs["wout"]
                     ns.dn = DeltaNetParts(
-                        nl, og, QTensor.weight(g0 + whd, g0 + whs, R2, H, fm, D),
+                        nl, og, QTensor.weight(g0 + whd, g0 + whs, R2, H, fm, D, rl=lay.rl["wh"]),
                         Tensor(g0 + lay.pofs["cv"], (self.CV0,), (1,)),
                         Tensor(g0 + lay.pofs["state"], (2, dv, dk), (dv * dk, dk, 1)),
-                        QTensor.weight(g0 + wod, g0 + wos, H, og * dv, fm, D), H, lay.GS, lay.PS,
+                        QTensor.weight(g0 + wod, g0 + wos, H, og * dv, fm, D, rl=lay.rl["wout"]),
+                        H, lay.GS, lay.PS,
                         Tensor(g0 + lay.gofs["eb"], (og // 2, 4), (4, 1)), self.shared, **sl)
                 else:
                     # (a pair's taps and window 0: the decode loads them at once; window 1
@@ -1437,7 +1530,9 @@ class Image(EmbedHost):
             gr=_tdesc(self.io["gr"], (self.dnrows, 2 * nl)),
             on=_tdesc(self.io["on"], (self.dnrows, self.og * dv)),
             xbuf=_tdesc(self.io["xbuf"], (self.prefill_rows, H)) if self.prefill_rows else None,
-            head=_qdesc(*self.head, self.v_loc, H, D, self.head_format), v_loc=self.v_loc,
+            head=QTensor.weight(*self.head_rlq, self.v_loc, H, self.head_format, D, rl=self.head_rl)
+            if self.head_rl else _qdesc(*self.head, self.v_loc, H, D, self.head_format),
+            v_loc=self.v_loc, rot=rot,
             **_lookup_desc(self.lookup, spec, self.cap))
 
 
@@ -1493,7 +1588,11 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
     nb, bw = (4, dk) if sh else (2, C)                  # the pair's blocks of channels
     CP, RP = nb * bw, nb * bw + 2 * dv                  # its convolved channels, its rows
     TP = K * CP                                         # taps words of a pair (then its ring)
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)          # Hadamard-folded projections (Spec.rot)
+    xn = rmsnorm(x, ol.load(lw.g_in), eps)
+    xp = ol.quantize(rotate(xn, rot)) if rot is not None else None      # the projections'
+    xs = ol.quantize(xn)                                                # a and b: not rotated
+    xp = xs if xp is None else xp
     ab = ol.dot(xs, lw.wab)                             # [1, 2nl]: a, then b, of each head
     decay, beta = gates(ab[0, 0:nl], ab[0, nl:2 * nl], ol.load(lw.alog), ol.load(lw.dtb))
     eb = ol.empty([4 * NP]).reshape(NP, 4)              # per pair: decays of a, b; betas
@@ -1534,7 +1633,7 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
         ha = hb(0)[1] * bw                              # head a's channels first
         cuts = ((0, ha), (ha, CP), (CP, RP)) if split else ((0, CP), (CP, RP))
         for c0, c1 in cuts:
-            ol.dot(xs, dn.wh(p)[c0:c1, :], out=P[t][:, c0:c1])
+            ol.dot(xp, dn.wh(p)[c0:c1, :], out=P[t][:, c0:c1])
 
     def fetch_cv(p):
         """Pair p's taps and convolution window (one load; slot 1's window: two)."""
@@ -1616,6 +1715,15 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
 
     def flush(g, k=None):
         """out_proj of head group g (k: only its k-th pair)."""
+        if rot is not None:                 # a group is whole rotation blocks: at its end
+            if k == 0:
+                return
+            if rot.wide:                    # a block spans groups: _flush_rotated, at the end
+                ol.store(rot.onrows[0:1, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
+                return
+            ol.dot(rotate(ON.reshape(1, og * dv), rot, spec.lin_heads * dv,
+                          (ol.program_id() * nl + g * og) * dv), dn.wout(g), acc=y)
+            return
         c0, c1 = (0, og) if k is None else (2 * k, 2 * k + 2)
         ol.dot(ON[c0:c1, :].reshape(1, (c1 - c0) * dv),
                dn.wout(g)[:, c0 * dv:c1 * dv], acc=y)
@@ -1701,7 +1809,24 @@ def _deltanet(x, lw, pos: int, spec: Spec, hs):
         _pair_segment(p, p % 2, p + 1 >= NP, p + 2 >= NP, group(p - 1))
     post((NP - 1) % 2)
     flush(group(NP - 1), 1 if og == 4 and NP > 1 else None)
+    if rot is not None and rot.wide:
+        _flush_rotated(rot, dn, y, spec, 1)
     return x + ol.all_reduce(y)
+
+
+def _flush_rotated(rot, dn, y, spec, R: int):
+    """out_proj of every head group once all have run, for R rows: their outputs, gathered in
+    rot.onrows (a rows run's always; a step's where a rotation block spans several groups,
+    Bonsai-2-9B: B = 4096, a slice's 32 heads), rotated a block at a time, then each group's
+    column part."""
+    nl, og, dv, B = dn.nl, dn.og, spec.lin_dv, rot.block
+    v = ol.load(rot.onrows[0:R, :])
+    for b in range(nl * dv // B):
+        vb = rotate(v[:, b * B:(b + 1) * B], rot, spec.lin_heads * dv,
+                    (ol.program_id() * nl * dv) + b * B)
+        for g in range(b * B // (og * dv), (b + 1) * B // (og * dv)):
+            c0 = g * og * dv - b * B
+            ol.dot(vb[:, c0:c0 + og * dv], dn.wout(g), acc=y)
 
 
 def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
@@ -1728,7 +1853,11 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
     nb, bw = (4, dk) if sh else (2, C)                  # the pair's blocks of channels
     CP, RP = nb * bw, nb * bw + 2 * dv                  # its convolved channels, its rows
     TP = K * CP
-    xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    rot = getattr(lw, "rot", None)          # Hadamard-folded projections (Spec.rot)
+    xn = rmsnorm(x, ol.load(lw.g_in), eps)
+    xp = ol.quantize(rotate(xn, rot)) if rot is not None else None      # the projections'
+    xs = ol.quantize(xn)                                                # a and b: not rotated
+    xp = xs if xp is None else xp
     ab = ol.dot(xs, lw.wab)
     decay, beta = gates(ab[0, 0:nl], ab[0, nl:2 * nl], ol.load(lw.alog), ol.load(lw.dtb))
     eb = ol.empty([4 * NP]).reshape(NP, 4)
@@ -1764,7 +1893,7 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
         ha = hb(0)[1] * bw                              # head a's channels first
         cuts = ((0, ha), (ha, CP), (CP, RP)) if split else ((0, CP), (CP, RP))
         for c0, c1 in cuts:
-            ol.dot(xs, dn.wh(p)[c0:c1, :], out=P[t][:, c0:c1])
+            ol.dot(xp, dn.wh(p)[c0:c1, :], out=P[t][:, c0:c1])
 
     def fetch_cv(p):
         if dn.slot:                                     # (slot 1's window: two loads)
@@ -1829,6 +1958,15 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
         ON[r0:r0 + 2, :].set(rmsnorm(O[t], gn, eps) * GZ[t])
 
     def flush(g, k=None):
+        if rot is not None:                 # a group is whole rotation blocks: at its end
+            if k == 0:
+                return
+            if rot.wide:                    # a block spans groups: _flush_rotated, at the end
+                ol.store(rot.onrows[0:1, g * og * dv:(g + 1) * og * dv], ON.reshape(1, og * dv))
+                return
+            ol.dot(rotate(ON.reshape(1, og * dv), rot, spec.lin_heads * dv,
+                          (ol.program_id() * nl + g * og) * dv), dn.wout(g), acc=y)
+            return
         c0, c1 = (0, og) if k is None else (2 * k, 2 * k + 2)
         ol.dot(ON[c0:c1, :].reshape(1, (c1 - c0) * dv),
                dn.wout(g)[:, c0 * dv:c1 * dv], acc=y)
@@ -1888,6 +2026,8 @@ def _deltanet_dstep(x, lw, pos: int, spec: Spec, hs):
             _pair_segment(2 * i + 2, 0, False, False, None if og == 4 else 2 * i + 2)
     for p in range(1 + 2 * n_it, NP):
         _pair_segment(p, p % 2, p + 1 >= NP, p + 2 >= NP, group(p))
+    if rot is not None and rot.wide:
+        _flush_rotated(rot, dn, y, spec, 1)
     return x + ol.all_reduce(y)
 
 
@@ -1953,8 +2093,18 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
     CP, RP = nb * bw, nb * bw + 2 * dv                  # its convolved channels, its rows
     NP, ng, gp = nl // 2, nl // og, og // 2             # pairs, head groups, pairs per group
     TP = K * CP                                         # taps words of a pair (then its ring)
+    rot = getattr(lw, "rot", None)                      # Hadamard-folded (Spec.rot)
+    xp = None
+    if rot is not None:
+        if xs is not None:
+            raise CompileError("a tiled run of a rotated model")
+        g_in = ol.load(lw.g_in)                         # (the norm twice, and the operands
+        xs = ol.quantize(rmsnorm(x, g_in, eps), free=True)      # in ACT RAM only: no [R, H]
+        xp = ol.quantize(rotate(rmsnorm(x, g_in, eps), rot), free=True)   # tiles kept) a, b:
+        del g_in                                        # not rotated; the projections' rotated
     if xs is None:                                      # (a tiled run's: tiled.py)
         xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
+    xp = xs if xp is None else xp
     ab = ol.dot(xs, lw.wab)                             # [R, 2nl]: a, then b, of each head
     alog, dtb = ol.load(lw.alog), ol.load(lw.dtb)
     for r in range(R):
@@ -1982,7 +2132,11 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
     split = og == 4 and NP > 1                          # _deltanet's last group, in pairs
 
     def flush(g, ON, c0, c1):
-        """y += ON . out_proj columns [c0, c1) of head group g (heads of dv columns)."""
+        """y += ON . out_proj columns [c0, c1) of head group g (heads of dv columns); rotated,
+        ON to rot.onrows, out_proj after every group (_flush_rotated)."""
+        if rot is not None:
+            ol.store(rot.onrows[0:R, (g * og + c0) * dv:(g * og + c1) * dv], ON)
+            return
         ol.dot(ON, dn.wout(g)[:, c0 * dv:c1 * dv], acc=y)
 
     def head_in(X, taps, a, out=None, act=True):
@@ -2105,8 +2259,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
         for j in range(1, min(K, p0 + 1)):              # positions p0-K+1 ..: the window
             sl = (K - 1 - j) * CP                       # (_past)
             ol.load(win[sl:sl + CP], out=X[K - 1 - j, :])
-        ol.dot(xs, dn.wh(p)[0:CP, :], out=X[K - 1:K - 1 + R, :])
-        ol.dot(xs, dn.wh(p)[CP:RP, :], out=Z)                            # z of a, of b
+        ol.dot(xp, dn.wh(p)[0:CP, :], out=X[K - 1:K - 1 + R, :])
+        ol.dot(xp, dn.wh(p)[CP:RP, :], out=Z)                            # z of a, of b
         if window:
             store_window(p, b)
 
@@ -2190,10 +2344,10 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
         ON = ol.empty([R, og * dv])                     # the group's normed, gated o
 
         def mm_x(p, t):
-            ol.dot(xs, dn.wh(p)[0:CP, :], out=PB[t][1][K - 1:K - 1 + R, :])
+            ol.dot(xp, dn.wh(p)[0:CP, :], out=PB[t][1][K - 1:K - 1 + R, :])
 
         def mm_z(p, t):
-            ol.dot(xs, dn.wh(p)[CP:RP, :], out=PB[t][2])                 # z of a, of b
+            ol.dot(xp, dn.wh(p)[CP:RP, :], out=PB[t][2])                 # z of a, of b
 
         def fetch(p, t, taps=True):
             X = PB[t][1]
@@ -2280,6 +2434,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
 
     if NB == 2:
         _rows_pipelined()
+        if rot is not None:
+            _flush_rotated(rot, dn, y, spec, R)
         return x + ol.all_reduce(y)
     ONp = ol.empty([R, 2 * dv])                         # normed, gated o of a pair per row
     GDB = ol.empty([R, 4])                              # decays, then betas, of the pair's heads
@@ -2298,6 +2454,8 @@ def _deltanet_rows(x, lw, p0: int, spec: Spec, gr, on, fork: bool = False, xs=No
             #                     immediate)
             pair((ng - 1, q))
             flush(ng - 1, ONp, 2 * q, 2 * q + 2)
+    if rot is not None:
+        _flush_rotated(rot, dn, y, spec, R)
     return x + ol.all_reduce(y)
 
 

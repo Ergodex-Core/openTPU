@@ -1,5 +1,7 @@
 # openTPU — architecture design v3 (as built)
 
+Superseded for the F2 HBM wide-port variant by 2026-10-18-opentpu-design-v4.md; the K7 design stays as described here.
+
 Date: 2026-09-23. Status: v3 describes what is implemented in `rtl/`, `opentpu/` and verified by
 `tests/`. Sections 0 to 8 below are the v2 draft kept for rationale; where they disagree, this
 section wins.
