@@ -215,6 +215,10 @@ def main():
     ap.add_argument("--aline", type=int, default=None, choices=[32, 64],
                     help="port A's line in bytes (Config.ALINE; 64: an RL group's Sw shares "
                          "its first advance's line, docs/row_lanes.md)")
+    ap.add_argument("--slices", type=int, default=None, metavar="S",
+                    help="S slices, the model sharded over them by rows (Config.S; Gemma 3 "
+                         "and Qwen3; docs/full_hbm.md): each slice's own image and program, "
+                         "the token's cycles those of the slowest; default the target's")
     ap.add_argument("--block", type=int, default=None, help="attention block (tokens)")
     ap.add_argument("--depth", type=int, default=None, help="attention score blocks in flight")
     ap.add_argument("--check", action="store_true", help="compare with the ISA simulator")
@@ -298,11 +302,16 @@ def main():
         mk.update(ROWLANES=True)
     if a.aline:
         mk.update(ALINE=a.aline)
+    if a.slices:
+        mk.update(S=a.slices)
     need = spec.image(board_config(DRAM_BYTES=1 << 40, **mk), a.cap, **wkw).nbytes
     need += (64 << 20) if qwen3_batch else 0           # the batch area (batch.alloc)
     cfg = board_config(DRAM_BYTES=1 << max(20, (need - 1).bit_length()), **mk)
     img = spec.image(cfg, a.cap, **wkw)
-    dram = img.build(W)[0]
+    drams = img.build(W)                # one image per slice (--slices: docs/full_hbm.md)
+    if len(drams) != cfg.S:
+        ap.error(f"--slices {cfg.S}: this model's image builds {len(drams)} slices")
+    dram = drams[0]
     # the rows' (slot, position): a batched step's slots at pos, or one sequence's positions
     rows = [(s, a.pos) for s in range(a.batch)] if a.batch else [(0, a.pos + r) for r in range(R)]
     # the rows' inputs (the KV cache before pos stays zero: timing does not depend on it)
@@ -314,13 +323,15 @@ def main():
         tabs = [rope_tables(spec, p) for _, p in rows]
         c, s = np.stack([t[0] for t in tabs]), np.stack([t[1] for t in tabs])
         parts = [(img.io[k], v) for k, v in (("x", emb), ("cos", c), ("sin", s))]
-    for addr, v in parts:
+    for addr, v in parts:               # (every slice gets the inputs)
         b = np.ascontiguousarray(v, np.float32).view(np.uint8).ravel()
-        dram[addr:addr + b.size] = b
+        for d_ in drams:
+            d_[addr:addr + b.size] = b
     # rows of tables the host keeps (Gemma 4 E4B's PLE records), as the Engine writes them
     for addr, v in getattr(img, "host_rows", lambda t: [])([791 + r for r in range(R)]):
         b = np.ascontiguousarray(v).view(np.uint8).ravel()
-        dram[addr:addr + b.size] = b
+        for d_ in drams:
+            d_[addr:addr + b.size] = b
     if a.depth:
         import opentpu.llm.qwen3 as Q
         Q.ATTN_DEPTH = a.depth
@@ -395,7 +406,10 @@ def main():
         cfg = dataclasses.replace(cfg, IMEM_WORDS=1 << (8 * len(progs[0]) - 1).bit_length())
         print(f"(IMEM grown to {cfg.IMEM_WORDS} words for {len(progs[0])} instructions)")
     t = time.time()
-    drams, _, st = rtlsim.run(cfg, progs, [dram], trace=True,
+    if a.batch and cfg.S > 1:
+        ap.error("--batch runs on one slice")
+    isa_in = [d_.copy() for d_ in drams] if a.check else []   # (the RTL run's inputs, kept)
+    drams, _, st = rtlsim.run(cfg, progs, drams, trace=True,
                               uarch=rtlsim.BOARD_UARCH,
                               axi=True, boot=True, stall=a.stall, bw=a.bw, lat=a.lat,
                               max_cycles=1 << 40, args=args, ldc=ldc,
@@ -425,6 +439,8 @@ def main():
           f"({wall:.0f}s sim), core-port roofline {ideal:.0f} cycles (port B {ps['portb']} "
           f"chunks{f' / {portb} a cycle' if portb > 1 else ''}, port A {ps['porta_cycles']}, "
           f"MXU {ps['mxu']}), efficiency {100 * ideal / p.cycles:.1f}%")
+    for line in st.get("naxi", []):     # OTPU_NAXI: the F2 HBM channel path's read bursts
+        print(line)
     ar = st.get("axi_reads", [])
     if ar:
         print("DRAM read / write beats per channel: " +
@@ -549,10 +565,11 @@ def main():
         from opentpu import lens as L
         Path(a.dump).write_text(json.dumps(L.to_data(p)))
     if a.check:
-        m = Machine(cfg, [progs[0]], [dram.copy()], args)
+        m = Machine(cfg, progs, [d_.copy() for d_ in isa_in], args)
         m.run()
-        ok = np.array_equal(m.slices[0].dram[:img.nbytes], drams[0][:img.nbytes])
-        print("bit-exact vs ISA:", ok)
+        ok = all(np.array_equal(m.slices[s].dram[:img.nbytes], drams[s][:img.nbytes])
+                 for s in range(cfg.S))
+        print("bit-exact vs ISA:", ok, f"({cfg.S} slice{'s' if cfg.S > 1 else ''})")
 
 
 if __name__ == "__main__":

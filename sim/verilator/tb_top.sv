@@ -47,6 +47,21 @@ module tb_top;
   parameter bit COLL_GATHER = 1'b1;   // 0: the BAR-only collective unit (otpu_coll_bar) at S = 1,
                                       // as the card builds it (rtlsim.BOARD_UARCH); S > 1 has GATHER
   parameter int NCH        = 2;       // AXI = 1: memory channels per slice (OTPU_NCH; F2 HBM: 8)
+  parameter bit NAXI       = 1'b0;    // AXI = 1: the F2 HBM build's channel path (OTPU_NAXI;
+  parameter int NAXI_XR    = 3;       //   otpu_top NAXI)
+  parameter int NAXI_BURST = 4;
+  parameter int NAXI_IDLE  = 1;
+  parameter bit NAXI_WAIT  = 1'b0;
+  parameter int NAXI_OT    = 32;
+  parameter int NRD        = 0;       // AXI = 1: the adapter's reads in flight a channel (0: the default)
+  parameter bit HBMENG     = 1'b0;    // AXI = 1: the v5 engine path's model (OTPU_HBMENG; otpu_top)
+  parameter int HBMENG_XR  = 3;
+  parameter int HBMENG_BURST = 8;
+  parameter int HBMENG_IDLE = 2;
+  parameter int HBMENG_OT  = 64;
+  parameter int HBMENG_RATE = 0;
+  parameter int HBMENG_DN  = 3;
+  parameter int HBMENG_UP  = 7;        // (otpu_hbmeng_mem LAT_UP: 7 since the read path's URAM FIFO, otpu_hbm_rpath)
 
   logic clk = 1'b0, clk_f = 1'b0, sys_rst = 1'b1, rst = 1'b1, dump = 1'b0;
   logic ld_start = 1'b0, ld_busy;
@@ -63,6 +78,9 @@ module tb_top;
              .TMEM_NSB(TMEM_NSB), .TMEM_SBP(TMEM_SBP), .TMEM_SBH(TMEM_SBH),
              .TMEM_RPL(TMEM_RPL), .TMEM_TDP(TMEM_TDP), .TMEM_GST(TMEM_GST),
              .TMEM_PMP(TMEM_PMP), .TMEM_PRK(TMEM_PRK), .TMEM_SDM(TMEM_SDM), .SEQ_WC(SEQ_WC), .NCH(NCH),
+             .NAXI(NAXI), .NAXI_XR(NAXI_XR), .NAXI_BURST(NAXI_BURST), .NAXI_IDLE(NAXI_IDLE), .NAXI_WAIT(NAXI_WAIT), .NAXI_OT(NAXI_OT),
+             .NRD(NRD), .HBMENG(HBMENG), .HBMENG_XR(HBMENG_XR), .HBMENG_BURST(HBMENG_BURST), .HBMENG_IDLE(HBMENG_IDLE),
+             .HBMENG_OT(HBMENG_OT), .HBMENG_RATE(HBMENG_RATE), .HBMENG_DN(HBMENG_DN), .HBMENG_UP(HBMENG_UP),
              .T2(T2), .PORTB(PORTB), .RL(RL), .ALINE(ALINE), .COLL_GATHER(COLL_GATHER || S > 1)) dut (
     .clk, .clk_f, .sys_rst, .rst, .rinit, .ld_start, .ld_addr, .ld_n, .ld_busy, .all_halted, .any_error,
     .icount, .dump);

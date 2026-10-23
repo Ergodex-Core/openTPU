@@ -256,9 +256,12 @@ def test_package_only_rejects_unverified_runs(tmp_path, fault):
 @pytest.mark.parametrize('fault', ['none', 'timing', 'skew', 'setup', 'hold', 'route',
                                  'drc', 'methodology', 'drc_fatal', 'methodology_fatal',
                                  'drc_schema', 'methodology_schema', 'classification',
-                                 'gray', 'crossing', 'firmware'])
+                                 'gray', 'crossing', 'firmware', 'hbm', 'hbm_crossing', 'hbm_gray',
+                                 'eng', 'eng_crossing', 'eng_gray'])
 def test_route_qualification_never_marks_a_failed_design_passed(tmp_path, fault):
-    """Exercise gate failures without claiming to simulate Vivado timing itself."""
+    """Exercise gate failures without claiming to simulate Vivado timing itself (the DDR CL, the
+    SmartConnect HBM CL (hbm*), the engine HBM CL (eng*: two engines, core <-> hclk bounded,
+    16 gray buses of its own))."""
     tclsh = shutil.which('tclsh')
     if not tclsh:
         pytest.skip('Tcl is unavailable')
@@ -285,12 +288,14 @@ proc report_bus_skew {args} {
   if {$::fault eq "skew"} {incr ::criticals}
   set f [open [lindex $args end] w]
   puts $f "1. Bus Skew Report Summary"
-  set count [expr {$::fault eq "gray" ? 13 : 14}]
-  for {set i 0} {$i < $count} {incr i} {puts $f "$i 100 u_sys/g_ch"}
+  set own [expr {[string match eng* $::fault] ? "u_sys/u_mem/g_port" : "u_sys/g_ch"}]
+  set count [expr {$::fault eq "gray" ? 13 : $::fault eq "eng_gray" ? 15 : [string match eng* $::fault] ? 16 :
+                   [string match hbm* $::fault] ? ($::fault eq "hbm_gray" ? 1 : 0) : 14}]
+  for {set i 0} {$i < $count} {incr i} {puts $f "$i 100 $own"}
   puts $f "2. Bus Skew Report Per Constraint"
   close $f
 }
-foreach command {report_drc report_methodology report_cdc report_exceptions
+foreach command {report_drc report_methodology report_cdc report_exceptions report_design_analysis
                  report_clock_interaction report_utilization} {proc $command {args} {}}
 proc get_drc_violations {} {if {[string match drc* $::fault]} {return blocker}; return {}}
 proc get_methodology_violations {} {if {[string match methodology* $::fault]} {return blocker}; return {}}
@@ -308,11 +313,39 @@ proc get_pins {args} {return [lindex $args end]}
 proc get_clocks {args} {return [lindex $args end]}
 proc report_timing {args} {
   if {$::fault eq "crossing"} {return "No paths found"}
+  set to [lindex $args [expr {[lsearch $args -to] + 1}]]
+  # the SmartConnect HBM CL: main -> core at the core period (150 MHz here), core -> main 4 ns
+  if {[string match hbm* $::fault] && $to eq "WRAPPER/CL/u_clk/O"} {
+    if {$::fault eq "hbm_crossing"} {return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"}
+    return "Requirement: 6.667ns (MaxDelay Path 6.667ns)"
+  }
+  # the engine HBM CL (200 MHz): into the core at 5 ns, into hclk at 2.222 ns, into main 4 ns
+  if {[string match eng* $::fault] && $to eq "WRAPPER/CL/u_clk/O"} {return "Requirement: 5.000ns (MaxDelay Path 5.000ns)"}
+  if {[string match eng* $::fault] && $to eq "WRAPPER/CL/u_hclk/O"} {
+    if {$::fault eq "eng_crossing"} {return "No paths found"}
+    return "Requirement: 2.222ns (MaxDelay Path 2.222ns)"
+  }
   return "Requirement: 4.000ns (MaxDelay Path 4.000ns)"
 }
-proc get_cells {args} {return {SH_DDR/mcs0/inst/lmb_bram_I/ramloop[0].ram.r/primitive}}
+proc get_cells {args} {
+  set last [lindex $args end]
+  if {$last eq "WRAPPER/CL/u_sc"} {
+    if {[string match hbm* $::fault]} {return WRAPPER/CL/u_sc}
+    return {}
+  }
+  if {[string match {*u_mem/g_port*} $last]} {
+    if {[string match eng* $::fault]} {return {WRAPPER/CL/u_sys/u_mem/g_port[0].u_eng WRAPPER/CL/u_sys/u_mem/g_port[1].u_eng}}
+    return {}
+  }
+  if {[string match hbm* $::fault] || [string match eng* $::fault]} {return {}}
+  return {SH_DDR/mcs0/inst/lmb_bram_I/ramloop[0].ram.r/primitive}
+}
 proc get_property {prop obj} {
   if {$prop eq "NAME"} {return $obj}
+  if {$prop eq "PERIOD"} {
+    if {[string match eng* $::fault]} {return [expr {[string match *u_hclk* $obj] ? 2.22222 : 5.0}]}
+    return [expr {[string match hbm* $::fault] ? 6.66666 : 10.0}]
+  }
   if {$prop eq "SEVERITY"} {
     if {[string match *_fatal $::fault]} {return Fatal}
     return Error
@@ -328,9 +361,14 @@ proc get_property {prop obj} {
                f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n')
     result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
     marker = tmp_path / 'test.12345678.route_validation.passed'
-    if fault == 'none':
+    if fault in ('none', 'hbm', 'eng'):
         assert result.returncode == 0, result.stderr
         assert marker.is_file()
+        validation = (tmp_path / 'test.12345678.route_validation.txt').read_text()
+        assert f"gray_bus_constraints={ {'none': 14, 'hbm': 0, 'eng': 16}[fault] }" in validation
+        if fault == 'eng':
+            assert (tmp_path / 'test.12345678.route_core_to_hbm.rpt').read_text().startswith('Requirement: 2.222ns')
+            assert (tmp_path / 'test.12345678.route_hbm_to_core.rpt').read_text().startswith('Requirement: 5.000ns')
     else:
         assert result.returncode != 0
         assert not marker.exists()
@@ -470,12 +508,13 @@ def test_unmaterialized_ddr_ip_is_rejected(tmp_path, monkeypatch):
         flow.check_hdk(tmp_path, t, shell=False)
 
 
-@pytest.mark.parametrize('name,S,nch,dram_log2,portb',
-                         [('f2-hbm', 1, 8, 32, 1), ('f2-hbm:s2', 2, 8, 32, 1),
-                          ('f2-hbm:s4', 4, 8, 32, 1), ('f2-hbm16', 1, 16, 33, 1),
-                          ('f2-hbm:p2', 1, 8, 32, 2), ('f2-hbm16:p4', 1, 16, 33, 4)])
+@pytest.mark.parametrize('name,S,nch,dram_log2,portb,khz',
+                         [('f2-hbm', 1, 8, 32, 1, 200000), ('f2-hbm:s2', 2, 8, 32, 1, 200000),
+                          ('f2-hbm16', 1, 16, 33, 1, 200000),
+                          ('f2-hbm:p2', 1, 8, 32, 2, 200000), ('f2-hbm16:p4', 1, 16, 33, 4, 200000),
+                          ('f2-hbm:p4rl8a64c150', 1, 8, 32, 4, 150000)])
 def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, nch, dram_log2,
-                                                              portb):
+                                                              portb, khz):
     """An HBM target (docs/f2_hbm.md): the HBM top in cl_opentpu's place, its synthesis script
     and CDC constraints in the DDR ones' places, the HDK's wrapper copied in, the geometry the
     target's (S x NCH ports of 512 MiB), the programs' architecture the f2 target's with T2 (the
@@ -487,8 +526,8 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
     wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
     t = T.load(name)
-    assert flow.is_hbm(t) and t.core_khz == 200000 and t.uarch['TMEM_PMP'] == 1
-    if S == 1:                          # f2's programs and T2 (docs/ternary.md)
+    assert flow.is_hbm(t) and t.core_khz == khz and t.uarch['TMEM_PMP'] == 1
+    if S == 1 and khz == 200000:        # f2's programs and T2 (docs/ternary.md)
         assert T.config(t) == dataclasses.replace(T.config('f2'), T2=True, PORTB=portb)
         assert T.rtl_params(t)['ARCH_HASH'] == T.arch_hash(T.config(t)) != 0x4FFD1E17
         if portb > 1:                   # in the hash only when wide (docs/wide_port.md)
@@ -498,12 +537,20 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     d = cl / 'design'
     assert not (d / 'cl_opentpu.sv').exists() and (d / 'cl_opentpu_hbm.sv').is_file()
     assert (d / 'cl_mem_hbm_wrapper.sv').read_text() == wrapper.read_text()
+    # the core MMCM from clk_main_a0 (250 MHz): the core clock and the pumped TMEM's at 2x
+    div, mult, d0, d1 = {200000: (5, 24.0, 6.0, 3), 150000: (5, 24.0, 8.0, 4)}[khz]
+    assert 250000 * mult / div / d0 == khz and d0 == 2 * d1 and 800 <= 250 * mult / div <= 1600
     assert (d / 'opentpu_geometry.vh').read_text() == (
-        f'localparam int S = {S};\nlocalparam int NCH = {nch};\n')
+        f'localparam int S = {S};\nlocalparam int NCH = {nch};\n'
+        f'localparam int CORE_KHZ_CL = {khz};\nlocalparam int MMCM_DIVCLK = {div};\n'
+        f'localparam real MMCM_MULT = {mult};\nlocalparam real MMCM_DIV0 = {d0};\n'
+        f'localparam int MMCM_DIV1 = {d1};\n')
     assert (cl / 'build/scripts/synth_cl_opentpu.tcl').read_bytes() == \
         (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm.tcl').read_bytes()
     assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
         (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm.tcl').read_bytes()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm5.tcl').exists()
     pnr = (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
     assert 'hbm_reset_n}' in pnr
     # the floorplan after the reset exception, in the one file build_level_1_cl.tcl reads
@@ -516,14 +563,46 @@ def test_hbm_snapshot_takes_the_hbm_top_scripts_and_geometry(tmp_path, name, S, 
     params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
     assert (params['S'], params['NCH'], params['CH_LOG2'], params['DRAM_LOG2']) == \
         (S, nch, 29, dram_log2)
-    assert params['CORE_KHZ'] == 200000 and 'CH_BYTES' not in params and 'DDR_MTS' not in params
+    assert params['CORE_KHZ'] == khz and 'CH_BYTES' not in params and 'DDR_MTS' not in params
     vh = (d / 'opentpu_params.vh').read_text()
     assert f".NCH(32'h{nch:x})" in vh and ".TMEM_PMP(32'h1)" in vh
     assert params['PORTB'] == portb and f".PORTB(32'h{portb:x})" in vh
     srcs = (d / 'sources.tcl').read_text()
     assert 'rtl/boards/f2/otpu_f2_hbm_sys.sv' in srcs and 'otpu_f2_sys.sv' not in srcs
+    # Alex's shell: otpu_native_axi into the SmartConnect fabric, the 450 MHz bridges out of it,
+    # the block design's generator in the snapshot (build.py runs it before synthesis)
+    for f in ('otpu_native_axi.sv', 'otpu_f2_pcis_gate.sv', 'otpu_f2_hbm_axi.sv', 'otpu_hbm_geometry.sv'):
+        assert f'rtl/boards/f2/{f}' in srcs
+    for f in ('otpu_f2_hbm_nch', 'otpu_f2_hbm_port', 'otpu_f2_hbm_host', 'otpu_f2_hbm_mem', 'otpu_afifo.sv x'):
+        assert f'{f}.sv' not in srcs or f.endswith(' x')
+    for f in ('create_hbm_sc.tcl', 'hbm_sc_inst.tcl'):
+        assert (cl / 'build/scripts' / f).read_bytes() == (ROOT / 'boards/f2/build/scripts' / f).read_bytes()
+    assert flow.hbm_sc_command(cl, t, out / 'hbm_sc.log', tmp_path / 'hdk')[-5:] == [
+        str(cl / 'ip'), str(S * nch), 'xcvu47p-fsvh2892-2-e', str(khz * 1000),
+        str(tmp_path / 'hdk' / flow.HBM_BD_SRC)]
+    # the CL: AWS's cl_dram_hbm_dma chain per channel and for the host's own port, both HBM
+    # monitor APBs connected as the AWS Shell Interface Specification asks (else AFI creation fails)
+    top = (d / 'cl_opentpu_hbm.sv').read_text()
+    for inst in ('axi_register_slice u_rs512', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512',
+                 'cl_axi_sc_1x1_wrapper u_hsc', 'cl_axi3_256b_reg_slice u_hrs256',
+                 'cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NHBM)'):
+        assert inst in top
+    for k in (0, 1):
+        assert f'.i_hbm_apb_preset_n_{k}(hbm_apb_preset_n_{k})' in top
+        for sig in ('paddr', 'pprot', 'psel', 'penable', 'pwrite', 'pwdata', 'pstrb', 'pready',
+                    'prdata', 'pslverr'):
+            assert f'.o_hbm_apb_{sig}_{k}(hbm_apb_{sig}_{k})' in top
     for f in T.sources(t):
         assert (d / 'rtl' / f).read_bytes() == (ROOT / 'rtl' / f).read_bytes()
+
+
+def test_hbm_snapshot_refuses_32_ports(tmp_path):
+    """f2-hbm:s4 (4 x 8 channels: every HBM port) leaves the host no port of its own."""
+    shell = tmp_path / 'shell'
+    (shell / 'build/scripts').mkdir(parents=True)
+    (shell / 'build/scripts/build_all.tcl').write_text('#\n')
+    with pytest.raises(RuntimeError, match='S x NCH <= 31'):
+        flow.prepare(tmp_path / 'run', shell, T.load('f2-hbm:s4'), '01234567', tmp_path / 'w.sv')
 
 
 def test_ddr_snapshot_leaves_the_hbm_files_out(tmp_path):
@@ -552,16 +631,29 @@ set props {}
 set sites {CLOCKREGION_X0Y0:CLOCKREGION_X3Y3 {s0a} CLOCKREGION_X4Y0:CLOCKREGION_X7Y0 {s0b}
            CLOCKREGION_X0Y4:CLOCKREGION_X3Y7 {s1a} CLOCKREGION_X5Y5:CLOCKREGION_X5Y6 {s1b}
            CLOCKREGION_X4Y3:CLOCKREGION_X4Y3 {s0c}
+           CLOCKREGION_X0Y0:CLOCKREGION_X0Y1 {s0a} CLOCKREGION_X1Y0:CLOCKREGION_X1Y1 {s0b}
+           CLOCKREGION_X5Y1:CLOCKREGION_X5Y3 {s0a} CLOCKREGION_X6Y1:CLOCKREGION_X6Y1 {s0b}
+           {SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119} {s0c}
            CLOCKREGION_X0Y8:CLOCKREGION_X7Y11 {s2a s2b shell}
            CLOCKREGION_X2Y9:CLOCKREGION_X5Y10 {s2b} P0 {s0a s0b s0c} P1 {s1a s1b} P2 {s2a s2b}}
 set ranges {{pblock_CL P0} {pblock_CL P1} {pblock_CL P2}}
 proc create_pblock {name} { lappend ::pblocks $name }
 proc get_pblocks {name} { if {$name ni $::pblocks} { error "no pblock $name" }; return $name }
+proc get_clock_regions {args} {
+  set o [lindex $args end]
+  if {[regexp {BLI_HBM_AXI_INTF_X(\d+)Y0} $o -> p]} { return "X[expr {$p / 4}]Y0" }
+  return $o
+}
+proc get_slrs {args} { return SLR1 }
 proc get_property {prop name} {
+  if {$prop eq "NAME"} { return $name }
+  if {$prop eq "IS_PRIMITIVE"} { return [expr {![string match */u_rp $name]}] }   ;# (the engine walk: every child a leaf but the read path)
+  if {$prop eq "PRIMITIVE_TYPE"} { return [expr {[string match *bram* $name] ? "BLOCKRAM.BRAM.RAMB36E2" : "REGISTER.SDR.FDRE"}] }
   foreach p $::props { if {[lindex $p 0] eq $name && [lindex $p 1] eq $prop} { return [lindex $p 2] } }
   error "no $prop on $name"
 }
 proc get_sites {flag name} {
+  if {$flag eq "-quiet"} { return $name }   ;# the HBM AXI port sites: found
   if {$flag ne "-of_objects"} { error "get_sites $flag" }
   set out {}
   foreach r $::ranges {
@@ -616,40 +708,53 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
         return
     assert result.returncode == 0, result.stderr
     out = result.stdout
-    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=6' in out
-    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_xs pb_otpu_board pb_otpu_tmem' in out
+    # 4 channel ports (the mock) in X0Y0 and the host's port 4 in X1Y0: two boxes by the ports
+    assert 'OTPU_FLOORPLAN ports=4' in out and 'OTPU_FLOORPLAN_APPLIED pblocks=7' in out
+    assert 'PBLOCKS pblock_CL pb_otpu_hbm pb_otpu_mid pb_otpu_pcis pb_otpu_board pb_otpu_tmem pb_otpu_hbmx0 pb_otpu_hbmx1' in out
+    assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
     ranges = {}
     for line in out.splitlines():
         if line.startswith('RANGE ') and not line.startswith('RANGE pblock_CL'):
             _, pb, rng = line.split(' ', 2)
             ranges.setdefault(pb, []).append(rng)
-    # whole clock regions, one SLR per pblock (Y0-3 SLR0, Y4-7 SLR1, Y8-11 SLR2)
+    # whole clock regions, one SLR per pblock (Y0-3 SLR0, Y4-7 SLR1, Y8-11 SLR2); X4Y3 (round 6's
+    # pb_otpu_xs, gone with otpu_f2_hbm_host) joins the HBM side, as in Alex's pblock_CL_SLR0
     assert ranges == {
-        'pb_otpu_hbm': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y3', 'CLOCKREGION_X4Y0:CLOCKREGION_X7Y0'],
+        'pb_otpu_hbm': ['CLOCKREGION_X0Y0:CLOCKREGION_X3Y3', 'CLOCKREGION_X4Y0:CLOCKREGION_X7Y0',
+                        'CLOCKREGION_X4Y3:CLOCKREGION_X4Y3', 'CLOCKREGION_X5Y1:CLOCKREGION_X5Y3',
+                        'CLOCKREGION_X6Y1:CLOCKREGION_X6Y1',
+                        'SLICE_X120Y120:SLICE_X145Y179 SLICE_X118Y60:SLICE_X145Y119 '
+                        'SLICE_X206Y60:SLICE_X219Y119 SLICE_X221Y60:SLICE_X232Y119'],
         'pb_otpu_mid': ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'],
         'pb_otpu_pcis': ['CLOCKREGION_X5Y5:CLOCKREGION_X5Y6'],
-        'pb_otpu_xs': ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3'],
         'pb_otpu_board': ['CLOCKREGION_X0Y8:CLOCKREGION_X7Y11'],
-        'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10']}
+        'pb_otpu_tmem': ['CLOCKREGION_X2Y9:CLOCKREGION_X5Y10'],
+        'pb_otpu_hbmx0': ['CLOCKREGION_X0Y0:CLOCKREGION_X0Y1'],
+        'pb_otpu_hbmx1': ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y1']}
     cells = {}
     for line in out.splitlines():
         if line.startswith('CELL '):
             _, pb, cell = line.split(' ', 2)
             cells.setdefault(pb, []).append(cell)
-    hbm, mid, pcis, xs, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_xs', 'pb_otpu_board', 'pb_otpu_tmem'))
-    # the SLR0 ends of the PCIS link stages (round 6) in SLR0's top corner, apart from the SLR1 ends
-    assert sorted(xs) == [f'WRAPPER/CL/u_sys/u_mem/u_host/u_xs_{k}' for k in ('ar', 'aw', 'b', 'r', 'w', 'wb')]
-    assert not (set(xs) & set(pcis))
-    # the PCIS registers (round 4) beside the shell's DMA column, SLR1, apart from u_host (SLR0)
-    # (round 7's write-pending registers with them; round 8: the OCL's crossing too)
-    assert sorted(pcis) == sorted([f'WRAPPER/CL/u_sys/u_mem/u_host/u_pcis_{k}' for k in
-                                   ('ar', 'aw', 'b', 'r', 'w', 'aw_tx', 'w_tx', 'ar_tx', 'b_rx', 'r_rx', 'wb')]
-                                  + ['WRAPPER/CL/u_sys/u_ocl'])
-    assert 'WRAPPER/CL/u_sys/u_ocl' not in hbm
+    hbm, mid, pcis, board, tmem = (cells[k] for k in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem'))
+    # the PCIS gate (Alex's shell: otpu_f2_pcis_gate, every output a register) and the OCL's
+    # crossing beside the shell, SLR1
+    # (and the host chain's first register slice: the shell's PCIS SLR, the spec's crossing rule)
+    assert sorted(pcis) == ['WRAPPER/CL/u_hrs512', 'WRAPPER/CL/u_sys/u_mem/u_pcis', 'WRAPPER/CL/u_sys/u_ocl']
     # the core and pump clock nets in one delay group (round 8)
     assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
-    assert all(c.startswith('WRAPPER/CL/u_sys/') for pb in cells.values() for c in pb)
-    assert len([c for c in hbm if '.u_nch' in c]) == 4 and 'WRAPPER/CL/u_sys/u_mem/u_host' in hbm
+    assert all(c.startswith(('WRAPPER/CL/u_sys/', 'WRAPPER/CL/u_sc', 'WRAPPER/CL/g_ch', 'WRAPPER/CL/u_h'))
+               for pb in cells.values() for c in pb)
+    # each channel's SmartConnect and 450 MHz register slice beside its port, the host's chain
+    # beside its own (port NPORT)
+    assert sorted(cells['pb_otpu_hbmx0']) == sorted(
+        [f'WRAPPER/CL/u_sc/otpu_hbm_sc_i/sc_c{p}' for p in range(4)] +
+        [f'WRAPPER/CL/g_ch[{p}].u_rs256' for p in range(4)])
+    assert sorted(cells['pb_otpu_hbmx1']) == ['WRAPPER/CL/u_hrs256', 'WRAPPER/CL/u_hsc']
+    assert 'WRAPPER/CL/g_ch[*].u_rs512' in hbm
+    # the channels' otpu_native_axi and the SmartConnect fabric by the HBM's ports
+    assert len([c for c in hbm if '.u_naxi' in c]) == 4 and 'WRAPPER/CL/u_sc' in hbm
+    assert not any('u_nch' in c or 'u_host' in c or 'u_hreg' in c or 'u_port' in c for c in hbm)
     assert 'WRAPPER/CL/u_sys/u_board' in board
     # the crossing chains: stage k in SLR k, the control path's two sides with their SLRs
     for k, pb in enumerate((hbm, mid, board)):
@@ -662,10 +767,12 @@ foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
     assert not (set(hbm) & set(mid)) and not (set(hbm) & set(board)) and not (set(mid) & set(board))
     assert not (set(pcis) & (set(hbm) | set(mid) | set(board)))
     props = {(l.split()[1], l.split()[2]): l.split()[3] for l in out.splitlines() if l.startswith('PROP ')}
-    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_xs', 'pb_otpu_board', 'pb_otpu_tmem'):
+    for pb in ('pb_otpu_hbm', 'pb_otpu_mid', 'pb_otpu_pcis', 'pb_otpu_board', 'pb_otpu_tmem',
+               'pb_otpu_hbmx0', 'pb_otpu_hbmx1'):
         assert props[(pb, 'CONTAIN_ROUTING')] == '0' and props[(pb, 'IS_SOFT')] == '0'
         assert props[(pb, 'SNAPPING_MODE')] == 'OFF'
-        assert props[(pb, 'PARENT')] == ('pb_otpu_board' if pb == 'pb_otpu_tmem' else 'pblock_CL')
+        assert props[(pb, 'PARENT')] == {'pb_otpu_tmem': 'pb_otpu_board', 'pb_otpu_hbmx0': 'pb_otpu_hbm',
+                                         'pb_otpu_hbmx1': 'pb_otpu_hbm'}.get(pb, 'pblock_CL')
     # containment: the one site of SLR2's clock regions that pblock_CL does not hold leaves
     # pb_otpu_board (and pb_otpu_tmem, inside it, is checked against the trimmed board)
     removed = [l.split(' ', 2)[1:] for l in out.splitlines() if l.startswith('REMOVED ')]
@@ -734,3 +841,764 @@ foreach l $log {{ puts "LOG $l" }}
     else:
         assert 'STOPPED bad tcl' in out and 'opt_design' not in ' '.join(log)
         assert 'CLK2X_TCL_RAN' not in out
+
+
+
+# build_level_1_cl.tcl with an incremental reference (build.py --incremental-from): the pinned
+# reference read once, immediately before the HDK's place_design (after its post_opt checkpoint),
+# its reuse reported; a wrong digest, an unknown directive or an HDK sequence that never places
+# stops the run
+@pytest.mark.parametrize('fault', ['none', 'force', 'bad_hash', 'bad_directive', 'no_place'])
+def test_incremental_reference_is_read_once_right_before_place_design(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    steps = 'opt_design -directive Explore\nwrite_checkpoint post_opt\n'
+    if fault != 'no_place':
+        steps += 'place_design -directive SSI_SpreadLogic_high -no_bufg_opt\nphys_opt_design\nroute_design\n'
+    (hdk / 'build_level_1_cl.tcl').write_text(steps)
+    cons = tmp_path / 'constraints'
+    cons.mkdir()
+    (cons / 'cl_pnr_user.tcl').write_text('')
+    (cons / 'otpu_clk2x.tcl').write_text('')
+    ref = tmp_path / 'ref.dcp'
+    ref.write_bytes(b'reference routed checkpoint, not a real DCP')
+    good = 'a' * 64
+    env = dict(os.environ, OTPU_INCR_DCP=str(ref), OTPU_INCR_SHA256=good,
+               OTPU_INCR_DIRECTIVE='Bogus' if fault == 'bad_directive' else 'TimingClosure',
+               OTPU_INCR_FORCE='1' if fault == 'force' else '0')
+    digest = 'b' * 64 if fault == 'bad_hash' else good
+    harness = f"""
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set reports_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set log {{}}
+rename exec otpu_test_exec
+proc exec {{args}} {{
+  if {{[lindex $args 0] eq "sha256sum"}} {{ return "{digest}  [lindex $args end]" }}
+  otpu_test_exec {{*}}$args
+}}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
+proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc write_checkpoint {{args}} {{ lappend ::log "write_checkpoint $args" }}
+proc read_checkpoint {{args}} {{ lappend ::log "read_checkpoint $args" }}
+proc report_incremental_reuse {{args}} {{ lappend ::log "report_incremental_reuse" }}
+proc place_design {{args}} {{ lappend ::log "place_design $args" }}
+proc phys_opt_design {{args}} {{ lappend ::log "phys_opt_design" }}
+proc route_design {{args}} {{ lappend ::log "route_design" }}
+proc close_project {{}} {{ error "stop" }}
+if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
+  puts "STOPPED $result"
+}}
+foreach l $log {{ puts "LOG $l" }}
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
+    force = ' -force_incr' if fault == 'force' else ''
+    if fault in ('none', 'force'):
+        assert log == ['read_xdc -unmanaged', 'read_xdc -unmanaged', 'opt_design',
+                       'write_checkpoint post_opt',
+                       f'read_checkpoint -incremental -directive TimingClosure{force} {ref}',
+                       'report_incremental_reuse',
+                       'place_design -directive SSI_SpreadLogic_high -no_bufg_opt',
+                       'phys_opt_design', 'route_design']
+        assert (f'OTPU_INCREMENTAL_REFERENCE ref.dcp directive=TimingClosure '
+                f'force={1 if force else 0}') in out
+        assert 'STOPPED openTPU: implementation produced no routed checkpoint' in out
+    elif fault == 'bad_hash':
+        assert 'STOPPED openTPU: incremental reference checkpoint hash mismatch' in out
+        assert not any(l.startswith(('read_checkpoint', 'place_design')) for l in log)
+    elif fault == 'bad_directive':
+        assert 'STOPPED openTPU: unknown incremental directive Bogus' in out and log == []
+    else:
+        assert 'STOPPED openTPU: the HDK sequence ran no place_design' in out
+        assert not any(l.startswith('read_checkpoint') for l in log)
+
+
+# build.py --incremental-from: the reference is one finished run's routed checkpoint (met or
+# VIOLATED, never both), pinned by digest, for the same platform and device; the run gets a
+# verified copy, its provenance in inputs.json, and the OTPU_INCR_* environment
+@pytest.mark.parametrize('case', ['met', 'violated', 'both', 'none', 'digest', 'unfinished',
+                                  'platform', 'directive'])
+def test_incremental_reference_is_pinned_copied_and_recorded(tmp_path, case):
+    shell, run, synth_dcp = completed_synthesis(tmp_path)
+    met = synth_dcp.with_name('cl_opentpu.01234567.post_route.dcp')
+    violated = synth_dcp.with_name('cl_opentpu.01234567.post_route.VIOLATED.dcp')
+    if case != 'violated' and case != 'none':
+        met.write_bytes(b'routed reference, not a real DCP')
+    if case in ('violated', 'both'):
+        violated.write_bytes(b'violated routed reference, not a real DCP')
+    if case == 'unfinished':
+        (run / 'exit_code').unlink()
+    ref = violated if case == 'violated' else met
+    digest = flow.sha(ref) if ref.is_file() and case != 'digest' else '0' * 64
+    t = T.load('f2-hbm' if case == 'platform' else 'f2')
+    if case in ('both', 'none', 'digest', 'unfinished', 'platform'):
+        with pytest.raises(RuntimeError):
+            flow.load_incremental_reference(run, digest, t)
+        return
+    info, dcp = flow.load_incremental_reference(run, digest, t)
+    assert dcp == ref
+    out = tmp_path / 'impl'
+    flow.prepare(out, shell, t, '89abcdef')
+    if case == 'directive':
+        with pytest.raises(RuntimeError, match='Unknown incremental directive'):
+            flow.attach_incremental(out, run, info, dcp, digest, 'Explore', False)
+        return
+    env = flow.attach_incremental(out, run, info, dcp, digest, 'TimingClosure', case == 'violated')
+    copy = out / 'incremental_reference' / ref.name
+    assert copy.read_bytes() == ref.read_bytes()
+    assert env == {'OTPU_INCR_DCP': str(copy), 'OTPU_INCR_SHA256': digest,
+                   'OTPU_INCR_DIRECTIVE': 'TimingClosure',
+                   'OTPU_INCR_FORCE': '1' if case == 'violated' else '0'}
+    record = json.loads((out / 'inputs.json').read_text())['incremental_reference']
+    assert record['timing_met'] == (case == 'met')
+    assert record['checkpoint_sha256'] == digest and record['build_id'] == '01234567'
+    assert record['inputs_sha256'] == flow.sha(run / 'inputs.json')
+    assert record['directive'] == 'TimingClosure' and record['copy'] == str(copy)
+
+
+# build_level_1_cl.tcl with QoR suggestions (build.py --qor-suggestions): the pinned .rqs read
+# inside the opt_design wrapper, after the placement Tcl and before opt_design; a wrong digest
+# stops the run before opt_design
+@pytest.mark.parametrize('fault', ['none', 'bad_hash'])
+def test_qor_suggestions_are_read_once_before_opt_design(tmp_path, fault):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    hdk = tmp_path / 'hdk/build/scripts'
+    hdk.mkdir(parents=True)
+    (hdk / 'build_level_1_cl.tcl').write_text('opt_design -directive Explore\nplace_design\n')
+    cons = tmp_path / 'constraints'
+    cons.mkdir()
+    (cons / 'cl_pnr_user.tcl').write_text('')
+    (cons / 'otpu_clk2x.tcl').write_text('')
+    rqs = tmp_path / 'ref.rqs'
+    rqs.write_text('# suggestions\n')
+    good = 'c' * 64
+    env = {k: v for k, v in os.environ.items() if not k.startswith('OTPU_')}
+    env.update(OTPU_RQS=str(rqs), OTPU_RQS_SHA256=good)
+    digest = 'd' * 64 if fault == 'bad_hash' else good
+    harness = f"""
+set HDK_SHELL_DIR {{{tmp_path / 'hdk'}}}
+set constraints_dir {{{cons}}}
+set checkpoints_dir {{{tmp_path}}}
+set reports_dir {{{tmp_path}}}
+set scripts_dir {{{tmp_path}}}
+set CL cl
+set TAG t
+set DEVICE_TYPE xcvu47p
+set log {{}}
+rename exec otpu_test_exec
+proc exec {{args}} {{
+  if {{[lindex $args 0] eq "sha256sum"}} {{ return "{digest}  [lindex $args end]" }}
+  otpu_test_exec {{*}}$args
+}}
+proc set_param {{args}} {{}}
+proc create_project {{args}} {{}}
+proc read_xdc {{args}} {{ lappend ::log "read_xdc [lindex $args 0]" }}
+proc read_qor_suggestions {{args}} {{ lappend ::log "read_qor_suggestions $args" }}
+proc get_qor_suggestions {{args}} {{ return {{RQS_TIMING-3-1 RQS_NETLIST-26-1}} }}
+proc opt_design {{args}} {{ lappend ::log "opt_design" }}
+proc place_design {{args}} {{ lappend ::log "place_design" }}
+proc close_project {{}} {{ error "stop" }}
+if {{[catch {{source {{{ROOT / 'boards/f2/build/scripts/build_level_1_cl.tcl'}}}}} result]}} {{
+  puts "STOPPED $result"
+}}
+foreach l $log {{ puts "LOG $l" }}
+"""
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True, env=env)
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    log = [l[4:] for l in out.splitlines() if l.startswith('LOG ')]
+    if fault == 'none':
+        assert log == ['read_xdc -unmanaged', 'read_xdc -unmanaged',
+                       f'read_qor_suggestions {rqs}', 'opt_design', 'place_design']
+        assert 'OTPU_QOR_SUGGESTIONS ref.rqs 2' in out
+    else:
+        assert 'STOPPED openTPU: QoR suggestions file hash mismatch' in out
+        assert 'opt_design' not in log
+
+
+@pytest.mark.parametrize('case', ['ok', 'digest', 'suffix'])
+def test_qor_suggestions_file_is_pinned_copied_and_recorded(tmp_path, case):
+    shell = tmp_path / 'shell'
+    (shell / 'build/scripts').mkdir(parents=True)
+    (shell / 'build/scripts/build_all.tcl').write_text('# pinned HDK driver\n')
+    out = tmp_path / 'impl'
+    flow.prepare(out, shell, T.load('f2'), '89abcdef')
+    rqs = tmp_path / ('ref.rqs' if case != 'suffix' else 'ref.txt')
+    rqs.write_text('# suggestions\n')
+    digest = '0' * 64 if case == 'digest' else flow.sha(rqs)
+    if case != 'ok':
+        with pytest.raises(RuntimeError):
+            flow.attach_qor_suggestions(out, rqs, digest)
+        return
+    env = flow.attach_qor_suggestions(out, rqs, digest)
+    copy = out / 'qor_suggestions/ref.rqs'
+    assert copy.read_text() == '# suggestions\n'
+    assert env == {'OTPU_RQS': str(copy), 'OTPU_RQS_SHA256': digest}
+    record = json.loads((out / 'inputs.json').read_text())['qor_suggestions']
+    assert record == {'file': str(rqs), 'sha256': digest, 'copy': str(copy)}
+
+# The SmartConnect fabric's instance (hbm_sc_inst.tcl, sourced by create_hbm_sc.tcl after
+# make_wrapper): a wrapper's ports as Vivado declares them, mapped onto the CL's signals
+def _sc_wrapper(nport, *, mid=False, drop=None, wide=None, extra=None, sid=16):
+    """a Vivado-style wrapper of the channels' block design: per channel S_N<p> (AXI4 512 b,
+    64-bit addresses, sid-bit IDs: cl_axi_sc_1x1's settings) and M_H<p> (AXI3 256 b, 64-bit
+    addresses, IDs only with `mid`)"""
+    s4 = [('araddr', 'input', 64), ('arburst', 'input', 2), ('arcache', 'input', 4), ('arid', 'input', sid),
+          ('arlen', 'input', 8), ('arlock', 'input', 1), ('arprot', 'input', 3), ('arqos', 'input', 4),
+          ('arready', 'output', 1), ('arsize', 'input', 3), ('arvalid', 'input', 1),
+          ('awaddr', 'input', 64), ('awburst', 'input', 2), ('awcache', 'input', 4), ('awid', 'input', sid),
+          ('awlen', 'input', 8), ('awlock', 'input', 1), ('awprot', 'input', 3), ('awqos', 'input', 4),
+          ('awready', 'output', 1), ('awsize', 'input', 3), ('awvalid', 'input', 1),
+          ('bid', 'output', sid), ('bready', 'input', 1), ('bresp', 'output', 2), ('bvalid', 'output', 1),
+          ('rdata', 'output', 512), ('rid', 'output', sid), ('rlast', 'output', 1), ('rready', 'input', 1),
+          ('rresp', 'output', 2), ('rvalid', 'output', 1), ('wdata', 'input', 512), ('wlast', 'input', 1),
+          ('wready', 'output', 1), ('wstrb', 'input', 64), ('wvalid', 'input', 1)]
+    sn = [p for p in s4 if sid or p[0] not in ('arid', 'awid', 'bid', 'rid')]
+    m3 = [(n, {'input': 'output', 'output': 'input'}[d], w) for n, d, w in s4
+          if n not in ('arid', 'awid', 'bid', 'rid')]
+    m3 = [(n, d, {'arlen': 4, 'awlen': 4, 'rdata': 256, 'wdata': 256,
+                  'wstrb': 32, 'arlock': 2, 'awlock': 2}.get(n, w)) for n, d, w in m3]
+    if mid:
+        m3 += [('arid', 'output', 2), ('awid', 'output', 2), ('rid', 'input', 2), ('bid', 'input', 2)]
+    lines = ['module otpu_hbm_sc_wrapper', '   (core_clk);']
+    lines += [f'  input {n};' for n in ('aresetn', 'core_clk', 'hbm_clk')]
+    ports = []
+    for p in range(nport):
+        ports += [(f'M_H{p}_{n}', d, w) for n, d, w in m3] + [(f'S_N{p}_{n}', d, w) for n, d, w in sn]
+    ports += extra or []
+    for n, d, w in ports:
+        if n == drop:
+            continue
+        w = wide if (wide and n == 'S_N1_wdata') else w
+        lines.append(f'  {d} {f"[{w - 1}:0]" if w > 1 else ""}{n};')
+    return '\n'.join(lines) + '\nendmodule\n'
+
+
+@pytest.mark.parametrize('case', ['aws', 'ids', 'noid', 'unknown', 'width', 'missing'])
+def test_hbm_sc_instance_maps_every_wrapper_port_and_fails_closed(tmp_path, case):
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    kw = {'ids': {'mid': True}, 'noid': {'sid': 0}, 'unknown': {'extra': [('S_N0_foo', 'input', 3)]},
+          'width': {'wide': 256}, 'missing': {'drop': 'M_H3_rdata'}}.get(case, {})
+    w = tmp_path / 'w.v'
+    w.write_text(_sc_wrapper(8, **kw))
+    script = ROOT / 'boards/f2/build/scripts/hbm_sc_inst.tcl'
+    r = subprocess.run([tclsh], input=f'source {{{script}}}\nset f [open {{{w}}}]\n'
+                       'if {[catch {puts [otpu_sc_instance [read $f] 8]} e]} {puts stderr $e; exit 1}\n',
+                       text=True, capture_output=True)
+    if case in ('unknown', 'width', 'missing'):
+        assert r.returncode != 0 and 'openTPU SmartConnect' in r.stderr, r.stdout[-500:]
+        return
+    assert r.returncode == 0, r.stderr
+    out = r.stdout
+    assert out.count('otpu_hbm_sc_wrapper u_sc (') == 1
+    for k in range(8):
+        # the 512-bit side: the channel's register slice (64-bit addresses, 16-bit IDs)
+        assert f'.S_N{k}_araddr(cs_araddr[{k}])' in out and f'.S_N{k}_arlen(cs_arlen[{k}])' in out
+        assert f'.S_N{k}_wlast(cs_wlast[{k}])' in out and f".S_N{k}_arlock('0)" in out
+        if case == 'noid':
+            assert f"assign cs_bid[{k}] = '0;" in out and f'.S_N{k}_awid' not in out
+        else:
+            assert f'.S_N{k}_awid(cs_awid[{k}])' in out and f'.S_N{k}_rid(cs_rid[{k}])' in out
+        # the 256-bit side: 64-bit SmartConnect addresses onto the slice's 34 through a wire
+        assert f'.M_H{k}_awaddr(sc_M_H{k}_awaddr)' in out and f'logic [63:0] sc_M_H{k}_awaddr;' in out
+        assert f"assign cm_awaddr[{k}] = 34'(sc_M_H{k}_awaddr);" in out
+        assert f'.M_H{k}_rdata(cm_rdata[{k}])' in out and f'.M_H{k}_awcache()' in out
+        if case == 'ids':
+            assert f".M_H{k}_arid(sc_M_H{k}_arid)" in out and f"assign cm_arid[{k}] = 6'(sc_M_H{k}_arid);" in out
+            assert f".M_H{k}_rid(2'(cm_rid[{k}]))" in out and f"assign cm_arid[{k}] = '0;" not in out
+        else:
+            assert f"assign cm_arid[{k}] = '0;" in out and f"assign cm_awid[{k}] = '0;" in out
+    assert '.core_clk(clk)' in out and '.hbm_clk(hclk)' in out and '.aresetn(sc_aresetn)' in out
+    assert 'S_HOST' not in out and 'M_HOST' not in out
+
+
+# create_hbm_sc.tcl under a Vivado mock: the block design's cells, clocks, connections and address
+# map as built (per channel a 2 x 1 SmartConnect on three clocks, the host's 1 x NPORT demux, two
+# levels past 16; every master at p x 512 MiB from its channel and from the host), then the
+# instance from the (mock) wrapper and ip_done.txt
+SC_MOCK = r'''
+set calls {}
+set opened {}
+proc rec {args} { lappend ::calls $args }
+foreach c {set_param create_project create_bd_design validate_bd_design save_bd_design generate_target
+           write_bd_tcl launch_runs wait_on_run create_ip_run add_files remove_files close_bd_design} { proc $c {args} [format {rec %s {*}$args} $c] }
+proc open_bd_design {args} { rec open_bd_design {*}$args; set ::opened ref }
+proc set_property {args} { rec set_property {*}$args }
+proc create_bd_port {args} { rec create_bd_port {*}$args; return [lindex $args end] }
+proc create_bd_intf_port {args} { rec create_bd_intf_port {*}$args; return [lindex $args end] }
+proc create_bd_cell {args} { rec create_bd_cell {*}$args; return [lindex $args end] }
+# the reference block design (AWS's cl_axi_sc_1x1): one SmartConnect, an AXI4 slave, an AXI3 master
+proc get_bd_cells {args} { return ref_sc }
+proc get_bd_intf_ports {args} {
+  if {[lindex $args 0] eq "-filter"} { return [expr {[string match *Slave* [lindex $args 1]] ? "AXI4" : "AXI3"}] }
+  return [lindex $args end]
+}
+proc get_bd_designs {args} { return [lindex $args end] }
+proc list_property {obj pat} {
+  return [dict get {ref_sc {CONFIG.NUM_SI CONFIG.NUM_MI CONFIG.NUM_CLKS CONFIG.ADVANCED_PROPERTIES CONFIG.Component_Name}
+                    AXI4 {CONFIG.PROTOCOL CONFIG.DATA_WIDTH CONFIG.ADDR_WIDTH CONFIG.FREQ_HZ CONFIG.NUM_READ_OUTSTANDING CONFIG.MAX_BURST_LENGTH CONFIG.ID_WIDTH}
+                    AXI3 {CONFIG.PROTOCOL CONFIG.DATA_WIDTH CONFIG.FREQ_HZ CONFIG.NUM_READ_OUTSTANDING CONFIG.MAX_BURST_LENGTH CONFIG.ID_WIDTH}} $obj]
+}
+proc get_property {args} {
+  set k [lindex $args 0]; set o [lindex $args end]
+  set v {ref_sc {CONFIG.NUM_SI 1 CONFIG.NUM_MI 1 CONFIG.NUM_CLKS 2 CONFIG.ADVANCED_PROPERTIES 0 CONFIG.Component_Name cl_axi_sc_1x1_smartconnect_0 NAME smartconnect_0 VLNV xilinx.com:ip:smartconnect:1.0}
+                     AXI4 {CONFIG.PROTOCOL AXI4 CONFIG.DATA_WIDTH 512 CONFIG.ADDR_WIDTH 64 CONFIG.FREQ_HZ 250000000 CONFIG.NUM_READ_OUTSTANDING 32 CONFIG.MAX_BURST_LENGTH 64 CONFIG.ID_WIDTH 16 NAME AXI4}
+                     AXI3 {CONFIG.PROTOCOL AXI3 CONFIG.DATA_WIDTH 256 CONFIG.FREQ_HZ 450000000 CONFIG.NUM_READ_OUTSTANDING 64 CONFIG.MAX_BURST_LENGTH 16 CONFIG.ID_WIDTH 0 NAME AXI3}}
+  if {[string match *S00_AXI $o]} {
+    # the channel SmartConnect's slave pin after validation: AWS's 32 / 32, bursts to 64 (or the
+    # fault's)
+    if {$k eq "CONFIG.MAX_BURST_LENGTH"} { return 64 }
+    return [expr {$::sc_fault ? 16 : 32}]
+  }
+  if {[dict exists $v $o $k]} { return [dict get $v $o $k] }
+  return 100%
+}
+foreach c {get_bd_pins get_bd_intf_pins get_bd_ports get_bd_addr_spaces get_bd_addr_segs} {
+  proc $c {args} { return [lindex $args end] }
+}
+proc connect_bd_net {a b} { rec net $a $b }
+proc connect_bd_intf_net {a b} { rec intf $a $b }
+proc assign_bd_address {args} { rec addr {*}$args }
+proc get_files {f} { return $f }
+proc current_project {} { return p }
+proc get_runs {args} { return {} }
+proc make_wrapper {args} {
+  set d $::ipdir_mock/project/otpu_hbm_sc.gen/sources_1/bd/otpu_hbm_sc/hdl
+  file mkdir $d
+  file copy -force $::wrapper_mock $d/otpu_hbm_sc_wrapper.v
+}
+'''
+
+
+@pytest.mark.parametrize('nport,khz,sc_fault', [(8, 150000, 0), (16, 200000, 0), (8, 150000, 1)])
+def test_hbm_sc_block_design_is_per_channel(tmp_path, nport, khz, sc_fault):
+    """create_hbm_sc.tcl under a Vivado mock: per channel a 1 x 1 SmartConnect with every setting
+    copied from the HDK's cl_axi_sc_1x1 (its cell's CONFIG, its AXI4 / AXI3 ports' CONFIG) but the
+    slave side's clock, the core's; no host branch, no crossbar"""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    w = tmp_path / 'w.v'
+    w.write_text(_sc_wrapper(nport))
+    ipdir = tmp_path / 'ip'
+    bd = tmp_path / 'bd/cl_axi_sc_1x1'
+    bd.mkdir(parents=True)
+    (bd / 'cl_axi_sc_1x1.bd').write_text('{}\n')
+    script = ROOT / 'boards/f2/build/scripts/create_hbm_sc.tcl'
+    report = 'foreach c $calls { puts "CALL $c" }\n'
+    harness = (f'set argv [list {{{ipdir}}} {nport} xcvu47p-fsvh2892-2-e {khz * 1000} {{{tmp_path / "bd"}}}]\n'
+               f'set ipdir_mock {{{ipdir}}}\nset wrapper_mock {{{w}}}\nset sc_fault {sc_fault}\n' + SC_MOCK +
+               f'if {{[catch {{source {{{script}}}}} e]}} {{puts stderr $e; exit 1}}\n' + report)
+    r = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if sc_fault:                        # a SmartConnect taking 16 transactions: the build stops
+        assert r.returncode != 0 and 'NUM_READ_OUTSTANDING is 16' in r.stderr
+        return
+    assert r.returncode == 0, r.stderr[-2000:]
+    calls = [l[5:] for l in r.stdout.splitlines() if l.startswith('CALL ')]
+    assert (ipdir / 'ref/cl_axi_sc_1x1.bd').is_file()          # a copy read, the HDK's untouched
+    cells = [c.split()[-1] for c in calls if c.startswith('create_bd_cell')]
+    assert cells == [f'sc_c{p}' for p in range(nport)]
+    assert all('xilinx.com:ip:smartconnect:1.0' in c for c in calls if c.startswith('create_bd_cell'))
+    for p in range(nport):
+        for k, v in (('NUM_SI', 1), ('NUM_MI', 1), ('NUM_CLKS', 2), ('ADVANCED_PROPERTIES', 0)):
+            assert f'set_property CONFIG.{k} {v} sc_c{p}' in calls
+        assert f'set_property CONFIG.Component_Name' not in ' '.join(c for c in calls if c.endswith(f'sc_c{p}'))
+        assert f'set_property CONFIG.PROTOCOL AXI4 S_N{p}' in calls and f'set_property CONFIG.ADDR_WIDTH 64 S_N{p}' in calls
+        assert f'set_property CONFIG.PROTOCOL AXI3 M_H{p}' in calls and f'set_property CONFIG.DATA_WIDTH 256 M_H{p}' in calls
+        assert f'set_property CONFIG.FREQ_HZ {khz * 1000} S_N{p}' in calls
+        assert f'set_property CONFIG.FREQ_HZ 250000000 S_N{p}' not in calls
+        assert f'set_property CONFIG.FREQ_HZ 450000000 M_H{p}' in calls
+        assert f'net core_clk sc_c{p}/aclk' in calls and f'net hbm_clk sc_c{p}/aclk1' in calls
+        assert f'intf S_N{p} sc_c{p}/S00_AXI' in calls and f'intf sc_c{p}/M00_AXI M_H{p}' in calls
+        base = f'0x{p << 29:09X}'
+        assert f'addr -offset {base} -range 0x20000000 -target_address_space S_N{p} M_H{p}/Reg -force' in calls
+    # the reference's port settings as they are (reads in flight 32 / 64, bursts 64 / 16), and
+    # the SmartConnect's slave checked after validation: >= 32 a direction, bursts >= 8 beats
+    for p in range(nport):
+        assert f'set_property CONFIG.NUM_READ_OUTSTANDING 32 S_N{p}' in calls
+        assert f'set_property CONFIG.MAX_BURST_LENGTH 64 S_N{p}' in calls
+        assert f'set_property CONFIG.MAX_BURST_LENGTH 16 M_H{p}' in calls
+    assert 'OTPU_HBM_SC sc_c0/S00_AXI CONFIG.NUM_READ_OUTSTANDING 32' in r.stdout
+    assert f'set_property CONFIG.FREQ_HZ {khz * 1000} core_clk' in calls
+    assert 'set_property CONFIG.FREQ_HZ 450000000 hbm_clk' in calls
+    assert not any('S_HOST' in c or 'sc_host' in c for c in calls)
+    assert (ipdir / 'ip_done.txt').read_text().startswith('IP_DONE')
+    inst = (ipdir / 'otpu_hbm_sc_inst.vh').read_text()
+    assert f'.S_N{nport - 1}_araddr(cs_araddr[{nport - 1}])' in inst
+
+
+# ---- v5 (docs/full_hbm.md): the engine path's floorplan, cl_pnr_user_hbm5.tcl
+# The mock's geometry: S 4 x NCH 2 (8 engines, g_slice[1..3]), the host muxed onto port 7; the
+# chains' register vectors answered as r_reg[i] cells for a `-hierarchical -filter` query
+FLOORPLAN5_HARNESS = FLOORPLAN_HARNESS + r'''
+dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y2 {s0a}
+dict set sites CLOCKREGION_X2Y1:CLOCKREGION_X3Y3 {s0a}
+dict set sites CLOCKREGION_X1Y5:CLOCKREGION_X3Y6 {s1a}
+dict set sites CLOCKREGION_X0Y9:CLOCKREGION_X3Y10 {s2a}
+dict set sites CLOCKREGION_X4Y9:CLOCKREGION_X7Y10 {s2b}
+dict set sites CLOCKREGION_X0Y8:CLOCKREGION_X3Y11 {s2a}
+dict set sites CLOCKREGION_X4Y8:CLOCKREGION_X7Y11 {s2b}
+dict set sites CLOCKREGION_X4Y4:CLOCKREGION_X4Y4 {s1b}
+dict set sites CLOCKREGION_X4Y6:CLOCKREGION_X4Y7 {s1b}
+dict set sites CLOCKREGION_X5Y4:CLOCKREGION_X5Y4 {s1b}
+dict set sites CLOCKREGION_X5Y7:CLOCKREGION_X5Y7 {s1b}
+dict set sites CLOCKREGION_X1Y0:CLOCKREGION_X1Y3 {s0b}
+proc get_cells {args} {
+  set pattern [lindex $args end]
+  if {$::fault eq "missing" && [string match *u_chub* $pattern]} { return {} }
+  if {[regexp {^(.*)/r_reg\[\*\]$} $pattern -> stage]} {
+    set out {}
+    for {set i 0} {$i < [expr {8 * 517}]} {incr i} { lappend out "$stage/r_reg\[$i\]" }
+    return $out
+  }
+  if {[string match {*g_port\[\*\]*} $pattern]} {
+    set out {}
+    for {set i 0} {$i < 8} {incr i} { lappend out "${pattern}$i" }
+    return $out
+  }
+  if {[string match {*g_slice\[\*\]*} $pattern]} { return [list ${pattern}1 ${pattern}2 ${pattern}3] }
+  if {[string match {*g_x\[\*\]*} $pattern]} { return [list ${pattern}0 ${pattern}1 ${pattern}2 ${pattern}3] }
+  # an engine's children: one fake leaf and its read path (hierarchical: the walk must skip it)
+  if {[string match {*.u_eng/\*} $pattern]} { return [list $pattern "[string range $pattern 0 end-2]/u_rp"] }
+  return [list $pattern]
+}
+'''
+
+
+@pytest.mark.parametrize('fault', ['none', 'missing'])
+def test_hbm5_floorplan_places_slices_per_slr_and_fails_closed(fault):
+    """v5: slice 0 with the engines in SLR0, slice 1 with the hub, ctrl and trace in SLR1,
+    slices 2 and 3 in SLR2; the chains' bits by port and stage; a TMEM box a slice; the host's
+    chain and mux beside port NPORT - 1; a renamed hierarchy stops the build."""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm5.tcl'
+    report = r'''
+puts "PBLOCKS $pblocks"
+foreach r $ranges { puts "RANGE [lindex $r 0] [lindex $r 1]" }
+foreach c $cells { puts "CELL [lindex $c 0] [lindex $c 1]" }
+foreach p $props { puts "PROP [lindex $p 0] [lindex $p 1] [lindex $p 2]" }
+'''
+    harness = (f'set fault {fault}\n' + FLOORPLAN5_HARNESS +
+               f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if fault == 'missing':
+        assert result.returncode != 0 and 'no cells match' in result.stderr
+        assert 'OTPU_FLOORPLAN_APPLIED' not in result.stdout
+        return
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert 'OTPU_FLOORPLAN ports=8 slices=4 nch=2' in out
+    assert 'OTPU_FLOORPLAN host port 7 mux=1' in out
+    # 4 (hbm, mid, pcis, board) + 2 port columns + hsc + hxs + mid3 + s2 + s3 + 4 TMEM boxes
+    assert 'OTPU_FLOORPLAN_APPLIED pblocks=15' in out
+    assert 'OTPU_FLOORPLAN shell PCIS SLR1' in out and 'OTPU_FLOORPLAN_WARNING' not in out
+    assert 'OTPU_FLOORPLAN pb_otpu_s2 CLOCKREGION_X0Y8:CLOCKREGION_X3Y11 slice 2' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_s3 CLOCKREGION_X4Y8:CLOCKREGION_X7Y11 slice 3' in out
+    assert 'OTPU_FLOORPLAN pb_otpu_hsc X1Y0:X1Y3 cells=1' in out and 'OTPU_FLOORPLAN pb_otpu_hxs X4Y3 cells=1' in out
+    ranges = {}
+    for line in out.splitlines():
+        if line.startswith('RANGE '):
+            _, pb, r = line.split(' ', 2)
+            ranges.setdefault(pb, []).append(r)
+    # a pblock per slice: SLR2's halves; slice 1's SLR1 with the CL's columns beside the shell
+    # (the PCIS box left out), slice 3's chain middle stages in those columns; the host's
+    # SmartConnect its port's column (the mock's host port is in X1: the left half, no more)
+    assert ranges['pb_otpu_s2'] == ['CLOCKREGION_X0Y8:CLOCKREGION_X3Y11']
+    assert ranges['pb_otpu_s3'] == ['CLOCKREGION_X4Y8:CLOCKREGION_X7Y11']
+    right = ['CLOCKREGION_X4Y4:CLOCKREGION_X4Y4', 'CLOCKREGION_X4Y6:CLOCKREGION_X4Y7',
+             'CLOCKREGION_X5Y4:CLOCKREGION_X5Y4', 'CLOCKREGION_X5Y7:CLOCKREGION_X5Y7']
+    assert ranges['pb_otpu_mid'] == ['CLOCKREGION_X0Y4:CLOCKREGION_X3Y7'] + right
+    assert ranges['pb_otpu_mid3'] == right
+    assert ranges['pb_otpu_hsc'] == ['CLOCKREGION_X1Y0:CLOCKREGION_X1Y3']
+    assert ranges['pb_otpu_hxs'] == ['CLOCKREGION_X4Y3:CLOCKREGION_X4Y3']
+    assert ranges['pb_otpu_tmem2'] == ['CLOCKREGION_X0Y9:CLOCKREGION_X3Y10'] and ranges['pb_otpu_tmem3'] == ['CLOCKREGION_X4Y9:CLOCKREGION_X7Y10']
+    cells = {}
+    for line in out.splitlines():
+        if line.startswith('CELL '):
+            _, pb, cell = line.split(' ', 2)
+            cells.setdefault(pb, []).append(cell)
+    hbm, mid, board = cells['pb_otpu_hbm'], cells['pb_otpu_mid'], cells['pb_otpu_board']
+    s2, s3 = cells['pb_otpu_s2'], cells['pb_otpu_s3']
+    # (the mock echoes a pattern as the cell: an index built with escaped brackets reads g_x\[2\])
+    e = lambda name: name                      # noqa: E731 (Vivado names generate indices literally)
+    # the slices by SLR, each with its adapter in its own pblock
+    assert 'WRAPPER/CL/u_sys/u_board/u_slice' in hbm and 'WRAPPER/CL/u_sys/u_board/u_mem' in hbm
+    assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_slice' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.u_chub' in mid
+    assert 'WRAPPER/CL/u_sys/u_board/g_slice[1].u_mem' in mid
+    assert 'WRAPPER/CL/u_sys/u_board/u_ctrl' in mid and 'WRAPPER/CL/u_sys/u_board/g_trace.u_trace' in mid
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_slice') in s2 and e('WRAPPER/CL/u_sys/u_board/g_slice[2].u_mem') in s2
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') in s3 and e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_mem') in s3
+    assert not any('g_slice' in c for c in board) and 'WRAPPER/CL/u_sys/u_cx/g_xr.u_s' in board
+    # the engines in SLR0 and in their port columns (ports 0-3 X0, 4-7 X1 with the host's 450 MHz
+    # slice and mux); the host SmartConnect in pb_otpu_hsc, the chain's register slices u_hrs512
+    # with the PCIS gate and u_hrs512x at the crossing
+    assert all(f'WRAPPER/CL/u_sys/u_mem/g_port[*].u_eng{p}' in hbm for p in range(8))
+    assert 'WRAPPER/CL/u_sys/u_mem/g_mux.u_mux' in cells['pb_otpu_hbmx1'] and 'WRAPPER/CL/u_hrs256' in cells['pb_otpu_hbmx1']
+    assert cells['pb_otpu_hsc'] == ['WRAPPER/CL/u_hsc'] and cells['pb_otpu_hxs'] == ['WRAPPER/CL/u_hrs512x']
+    assert 'WRAPPER/CL/u_hrs512' in cells['pb_otpu_pcis'] and 'WRAPPER/CL/u_sys/u_mem/u_pcis' in cells['pb_otpu_pcis']
+    assert not any('u_hsc' in c or 'u_hrs512' in c for c in hbm + cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
+    # (an engine joins its port box as its non-BRAM leaf cells: the mock answers one fake leaf,
+    # '<engine>/*', per engine; the engine's RAMs float in pb_otpu_hbm)
+    assert e('WRAPPER/CL/g_ch[0].u_rs256') in cells['pb_otpu_hbmx0'] and e('WRAPPER/CL/u_sys/u_mem/g_port[7].u_eng/*') in cells['pb_otpu_hbmx1']
+    assert not any(c.endswith('.u_eng') for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
+    # the read path (u_rp: the URAM FIFO and the crossing FIFO) floats with its URAMs in pb_otpu_hbm
+    assert not any('u_rp' in c for c in cells['pb_otpu_hbmx0'] + cells['pb_otpu_hbmx1'])
+    # the hub links: slice 2's rx / tx / port in its pblock, the hub's tx / rx in SLR1
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_dn_rx') in s2 and e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[3].u_up_tx') in s3
+    # the collective's port (it writes the TMEM) in the TMEM box, with the DMA
+    assert e('WRAPPER/CL/u_sys/u_board/g_xs.g_x[2].u_cport') in cells['pb_otpu_tmem2'] and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[0].u_cport' in cells['pb_otpu_tmem0']
+    assert not any('u_cport' in c for c in s2 + s3 + hbm + mid)
+    assert 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_dn_tx2' in mid and 'WRAPPER/CL/u_sys/u_board/g_xs.g_x[*].u_up_rx0' in mid
+    # the chains' bits: port 0 (slice 0) every stage in SLR0; port 2 (slice 1) stage 1 and 2 in
+    # SLR1; port 4 (slice 2) stage 1 in SLR1, stage 2 in slice 2's half; port 6 (slice 3) stage 1
+    # in SLR1's right columns, stage 2 in slice 3's half
+    def stage(k, p, lo, w):
+        return e(f'WRAPPER/CL/u_sys/u_mem/g_xr.g_x[{k}].u_up') + f'/r_reg[{lo + p * w}]'
+    mid3 = cells['pb_otpu_mid3']
+    assert stage(0, 0, 0, 517) in hbm and stage(1, 0, 0, 517) in hbm and stage(2, 0, 0, 517) in hbm
+    assert stage(1, 2, 0, 517) in mid and stage(2, 2, 516, 517) in mid
+    assert stage(1, 4, 0, 517) in mid and stage(2, 4, 0, 517) in s2
+    assert stage(1, 6, 0, 517) in mid3 and stage(2, 6, 0, 517) in s3 and stage(0, 6, 0, 517) in hbm
+    assert not any('u_mem/g_xr' in c for c in board)     # (the native chains' last stages are the slices')
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[1160]' in s2        # slice 2's write bus end
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[1].u_wb') + '/r_reg[1740]' in mid3      # slice 3's middle stage
+    assert e('WRAPPER/CL/u_sys/u_mem/g_xw.g_x[2].u_wb') + '/r_reg[0]' in hbm          # slice 0's
+    # a TMEM box a slice, within the slice's pblock, with the slice's DMA
+    assert 'PROP pb_otpu_tmem0 PARENT pb_otpu_hbm' in out and 'PROP pb_otpu_tmem1 PARENT pb_otpu_mid' in out
+    assert 'PROP pb_otpu_tmem2 PARENT pb_otpu_s2' in out and 'PROP pb_otpu_tmem3 PARENT pb_otpu_s3' in out
+    assert 'PROP pb_otpu_s3 PARENT pb_otpu_board' in out and 'PROP pb_otpu_mid3 PARENT pb_otpu_mid' in out
+    assert 'PROP pb_otpu_hsc PARENT pb_otpu_hbm' in out and 'PROP pb_otpu_hxs PARENT pb_otpu_hbm' in out
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_tmem' in cells['pb_otpu_tmem3']
+    assert e('WRAPPER/CL/u_sys/u_board/g_slice[3].u_slice') + '/u_dma' in cells['pb_otpu_tmem3']
+    assert 'WRAPPER/CL/u_sys/u_board/u_slice/u_dma' in cells['pb_otpu_tmem0']
+    assert 'PROP net_of_WRAPPER/CL/u_clk/O net_of_WRAPPER/CL/u_clk_f/O CLOCK_DELAY_GROUP otpu_core_pump' in out
+
+
+# The engine path's post-synthesis CDC script (cl_timing_user_hbm5.tcl) over a mock of the
+# synthesized hierarchy: eight engines (S = 4, NCH = 2), each with its four asynchronous FIFOs
+# (both pointers, both synchronizer stages, the binary twins) and its error level, the mux; the
+# three clocks. Vivado takes a name's brackets literally, so does the mock.
+CDC5_HARNESS = r'''
+set n_eng 8
+set fifos {u_cq 6 u_wq 5 u_rp/u_rq 6 u_bq 6}
+set cells {u_sys/u_mem/g_mux.u_mux}
+for {set p 0} {$p < $n_eng} {incr p} {
+  set e "u_sys/u_mem/g_port\[$p\].u_eng"
+  lappend cells $e $e/herr_s1_reg $e/herr_s2_reg $e/u_rp
+  for {set u 0} {$u < 4} {incr u} { lappend cells $e/u_rp/mem_reg_uram_$u }
+  foreach {f bits} $fifos {
+    lappend cells $e/$f
+    for {set b 0} {$b < $bits} {incr b} {
+      foreach r {wgray wbin rgray rbin wgray_r1 wgray_r2 rgray_w1 rgray_w2} { lappend cells "$e/$f/${r}_reg\[$b\]" }
+    }
+  }
+}
+proc drop {pattern} { set ::cells [lsearch -all -inline -not -glob $::cells $pattern] }
+switch $fault {
+  sc_present     { lappend cells u_sc }
+  no_engines     { drop *.u_eng }
+  fifo_missing   { drop {*g_port\[5\].u_eng/u_bq*} }
+  sync_missing   { drop {*g_port\[3\].u_eng/u_rp/u_rq/wgray_r1_reg\[5\]} }
+  stage_missing  { drop {*g_port\[3\].u_eng/u_cq/rgray_w2_reg*} }
+  width_mismatch { drop {*u_wq/rgray_w1_reg\[4\]} }
+  herr_missing   { drop {*g_port\[0\].u_eng/herr_s1_reg} }
+  uram_missing   { drop {*g_port\[6\].u_eng/u_rp/mem_reg_uram_3} }
+  bram_fallback  { lappend cells "u_sys/u_mem/g_port\[6\].u_eng/u_rp/mem_reg_bram_0" }
+}
+# a cell's primitive type by its name: the read path's RAMs, else a flip-flop
+proc ptype {c} {
+  if {[string match *mem_reg_uram* $c]} { return BLOCKRAM.URAM.URAM288 }
+  if {[string match *mem_reg_bram* $c]} { return BLOCKRAM.BRAM.RAMB36E2 }
+  return REGISTER.SDR.FDRE
+}
+proc get_cells {args} {
+  set pats {}
+  set tpat *
+  for {set i 0} {$i < [llength $args]} {incr i} {
+    set a [lindex $args $i]
+    if {$a in {-quiet -hier -hierarchical}} continue
+    if {$a eq "-filter"} {
+      incr i
+      if {[regexp {NAME =~ (\S+)} [lindex $args $i] -> p]} { lappend pats $p }
+      if {[regexp {PRIMITIVE_TYPE =~ (\S+)} [lindex $args $i] -> t]} { set tpat $t }
+      continue
+    }
+    lappend pats {*}$a
+  }
+  set out {}
+  foreach c $::cells {
+    if {![string match $tpat [ptype $c]]} continue
+    foreach p $pats {
+      if {[string match [string map [list {[} {\[} {]} {\]}] $p] $c]} { lappend out $c; break }
+    }
+  }
+  return $out
+}
+proc get_clocks {args} {
+  set o [lindex $args end]
+  if {$o eq "u_clk/O"} { return [expr {$::fault eq "two_core_clocks" ? {c_core c_core_f} : {c_core}}] }
+  if {$o eq "u_hclk/O"} { return c_hbm }
+  if {$o eq "clk_main_a0"} { return c_main }
+  error "get_clocks $args"
+}
+proc get_pins {args} { return [lindex $args end] }
+proc get_ports {args} { return [lindex $args end] }
+proc get_property {prop obj} {
+  if {$prop ne "PERIOD"} { error "get_property $prop" }
+  return [dict get {c_core 5.000 c_main 4.000 c_hbm 2.222} $obj]
+}
+set max_delays {}
+set bus_skews {}
+set false_paths {}
+proc set_max_delay {args} { lappend ::max_delays $args }
+proc set_bus_skew {args} {
+  set from [lindex $args [expr {[lsearch -exact $args -from] + 1}]]
+  set to [lindex $args [expr {[lsearch -exact $args -to] + 1}]]
+  if {![llength $from] || ![llength $to]} { error "set_bus_skew: an empty side" }
+  lappend ::bus_skews [list [llength $from] [llength $to] [lindex $args end] [lindex $to 0]]
+}
+proc set_false_path {args} { lappend ::false_paths $args }
+'''
+
+
+@pytest.mark.parametrize('fault', ['none', 'no_engines', 'sc_present', 'fifo_missing', 'sync_missing',
+                                   'stage_missing', 'width_mismatch', 'herr_missing', 'two_core_clocks',
+                                   'uram_missing', 'bram_fallback'])
+def test_hbm5_cdc_bounds_every_engine_crossing_and_fails_closed(fault):
+    """v5: core <-> main and core <-> hclk each bounded at the destination's period, a bus skew
+    per gray pointer of every FIFO of every engine at the shorter period, the counts printed;
+    a missing engine, FIFO, synchronizer flip-flop or stage, an inconsistent pointer width, a
+    missing error level, a SmartConnect fabric, a second core clock, a missing UltraRAM or a
+    block RAM in an engine (the read path's memory fell back) stops the build."""
+    tclsh = shutil.which('tclsh')
+    if not tclsh:
+        pytest.skip('Tcl is unavailable')
+    script = ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm5.tcl'
+    report = r'''
+foreach m $max_delays { puts "MAXDELAY $m" }
+foreach s $bus_skews { puts "BUSSKEW [join $s]" }
+puts "FALSEPATHS [llength $false_paths]"
+'''
+    harness = (f'set fault {fault}\n' + CDC5_HARNESS +
+               f'if {{[catch {{source {{{script}}}}} result]}} {{puts stderr $result; exit 1}}\n' + report)
+    result = subprocess.run([tclsh], input=harness, text=True, capture_output=True)
+    if fault != 'none':
+        assert result.returncode != 0 and 'OTPU_HBM_CDC' not in result.stdout
+        assert {'no_engines': 'missing the HBM port engines',
+                'sc_present': 'a SmartConnect fabric u_sc in the engine build',
+                'fifo_missing': 'u_bq: 7 FIFOs for 8 engines',
+                'sync_missing': 'u_rp/u_rq/wgray_r1: 47 synchronizer flip-flops over 8 engines',
+                'stage_missing': 'u_cq/rgray_w2: 42 synchronizer flip-flops over 8 engines',
+                'width_mismatch': "u_wq/rgray_w1: 32 flip-flops, the write pointer's synchronizer has 40",
+                'herr_missing': '7 engine error synchronizers for 8 engines',
+                'two_core_clocks': 'expected one core, shell and HBM AXI clock',
+                'uram_missing': '31 UltraRAMs in the engines, expected 4 x 8',
+                'bram_fallback': '1 block RAMs in the engines'}[fault] in result.stderr
+        assert 'MAXDELAY' not in result.stdout
+        return
+    assert result.returncode == 0, result.stderr
+    out = result.stdout
+    assert ('OTPU_HBM_CDC core=5.000 main=4.000 hbm=2.222 engines=8 fifos=32 bits=cq=6,wq=5,rq=6,bq=6 '
+            'sync_ffs=368 bus_skews=64 err_levels=8 mux=1 urams=32 brams=0') in out
+    lines = out.splitlines()
+    assert [l for l in lines if l.startswith('MAXDELAY')] == [
+        'MAXDELAY -datapath_only -from c_main -to c_core 5.000',
+        'MAXDELAY -datapath_only -from c_core -to c_main 4.000',
+        'MAXDELAY -datapath_only -from c_core -to c_hbm 2.222',
+        'MAXDELAY -datapath_only -from c_hbm -to c_core 5.000']
+    skews = [l for l in lines if l.startswith('BUSSKEW')]
+    assert len(skews) == 64 and all(l.split()[3] == '2.222' for l in skews)
+    # the gray and binary twins on the from side, the first stage on the to side, both pointers
+    assert 'BUSSKEW 12 6 2.222 u_sys/u_mem/g_port[3].u_eng/u_rp/u_rq/wgray_r1_reg[0]' in skews
+    assert 'BUSSKEW 12 6 2.222 u_sys/u_mem/g_port[7].u_eng/u_cq/rgray_w1_reg[0]' in skews
+    assert 'BUSSKEW 10 5 2.222 u_sys/u_mem/g_port[0].u_eng/u_wq/wgray_r1_reg[0]' in skews
+    assert len({l.split()[4] for l in skews}) == 64
+    assert 'FALSEPATHS 3' in out
+    # the bounds come after every check: nothing is applied on a failed one (above)
+
+
+@pytest.mark.parametrize('name,S,nch,host_mux,khz,mmcm', [
+    ('f2-hbm:v5', 4, 8, 1, 200000, (1, 4.8, 6.0, 3)), ('f2-hbm:v5s3', 3, 8, 0, 200000, (1, 4.8, 6.0, 3)),
+    ('f2-hbm:v5c150', 4, 8, 1, 150000, (1, 4.8, 8.0, 4))])
+def test_hbm5_snapshot_takes_the_engine_top_and_leaves_the_smartconnect_path_out(tmp_path, name, S,
+                                                                                nch, host_mux, khz, mmcm):
+    """v5 (docs/full_hbm.md): the engine top in cl_opentpu's place, its synthesis script (no
+    channel block design), the v5 floorplan, the engine sources, HOST_MUX at 32 ports, the
+    adapter's NRD, the core MMCM of the variant's clock (v5c150: 150 / 300); the SmartConnect
+    path's files left out and no SmartConnect to generate."""
+    shell = tmp_path / 'shell'
+    scripts = shell / 'build/scripts'
+    scripts.mkdir(parents=True)
+    (scripts / 'build_all.tcl').write_text('# test HDK script\n')
+    wrapper = tmp_path / 'cl_mem_hbm_wrapper.sv'
+    wrapper.write_text('module cl_mem_hbm_wrapper; endmodule\n')
+    t = T.load(name)
+    assert flow.is_hbm(t) and flow.is_engine(t) and t.arch['S'] == S and t.core_khz == khz
+    out = tmp_path / 'run'
+    cl = flow.prepare(out, shell, t, '89abcdef', wrapper)
+    d = cl / 'design'
+    geo = (d / 'opentpu_geometry.vh').read_text()
+    assert f'localparam int CORE_KHZ_CL = {khz};' in geo and f'localparam int S = {S};' in geo
+    assert f'localparam real MMCM_DIV0 = {mmcm[2]};' in geo and f'localparam int MMCM_DIV1 = {mmcm[3]};' in geo
+    assert not (d / 'cl_opentpu.sv').exists() and not (d / 'cl_opentpu_hbm.sv').exists()
+    assert (d / 'cl_opentpu_hbm5.sv').is_file()
+    assert (cl / 'build/scripts/synth_cl_opentpu.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/scripts/synth_cl_opentpu_hbm5.tcl').read_bytes()
+    assert not (cl / 'build/scripts/synth_cl_opentpu_hbm.tcl').exists()
+    for f in ('create_hbm_sc.tcl', 'hbm_sc_inst.tcl'):
+        assert not (cl / 'build/scripts' / f).exists()
+    pnr = (cl / 'build/constraints/cl_pnr_user.tcl').read_text()
+    floorplan = (ROOT / 'boards/f2/build/constraints/cl_pnr_user_hbm5.tcl').read_text()
+    assert pnr.endswith('\n' + floorplan) and 'hbm_reset_n}' in pnr
+    assert not (cl / 'build/constraints/cl_pnr_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_pnr_user_hbm5.tcl').exists()
+    # the engine path's CDC script (the SmartConnect one requires u_sc, which this top lacks)
+    assert (cl / 'build/constraints/cl_timing_user.tcl').read_bytes() == \
+        (ROOT / 'boards/f2/build/constraints/cl_timing_user_hbm5.tcl').read_bytes()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm.tcl').exists()
+    assert not (cl / 'build/constraints/cl_timing_user_hbm5.tcl').exists()
+    assert 'u_sc' not in (cl / 'build/scripts/synth_cl_opentpu.tcl').read_text()
+    params = json.loads((out / 'inputs.json').read_text())['rtl_parameters']
+    assert (params['S'], params['NCH'], params['HOST_MUX'], params['NRD']) == (S, nch, host_mux, 128)
+    assert params['FIFO_DEPTH'] == 256 and params['ACT_ROWS'] == 8 and params['TRACE_DEPTH'] == 4096
+    assert params['PORTB'] == 4 and params['RL'] == 4 and params['ALINE'] == 64 and params['MCOLS'] == 4
+    vh = (d / 'opentpu_params.vh').read_text()
+    assert f".HOST_MUX(1'h{host_mux})" in vh and ".NRD(32'h80)" in vh
+    srcs = (d / 'sources.tcl').read_text()
+    for f in ('otpu_hbm_ch.sv', 'otpu_hbm_afifo.sv', 'otpu_hbm_rpath.sv', 'otpu_hbm_mux2.sv', 'otpu_f2_hbm_eng.sv',
+              'otpu_f2_hbmeng_sys.sv', 'otpu_f2_pcis_gate.sv', 'otpu_hbm_geometry.sv'):
+        assert f'rtl/boards/f2/{f}' in srcs
+    for f in ('otpu_native_axi.sv', 'otpu_f2_hbm_axi.sv', 'otpu_f2_hbm_sys.sv'):
+        assert f not in srcs
+    top = (d / 'cl_opentpu_hbm5.sv').read_text()
+    for inst in ('otpu_f2_hbmeng_sys #(', 'cl_axi3_256b_reg_slice u_rs256', 'axi_register_slice u_hrs512 (',
+                 'axi_register_slice u_hrs512x (', '.s_axi_awid(hb_awid)', '.m_axi_awid(hb_awid)',
+                 'cl_axi_sc_1x1_wrapper u_hsc', 'cl_axi3_256b_reg_slice u_hrs256',
+                 'cl_mem_hbm_wrapper #(.NUM_OF_AXI_PORTS(NHBM)', 'localparam bit HOST_MUX = NPORT == 32'):
+        assert inst in top
+    assert 'otpu_hbm_sc_inst' not in top and 'u_rs512' not in top
+    for k in (0, 1):
+        assert f'.i_hbm_apb_preset_n_{k}(hbm_apb_preset_n_{k})' in top
+    for f in T.sources(t):
+        assert (d / 'rtl' / f).read_bytes() == (ROOT / 'rtl' / f).read_bytes()
+    # the SmartConnect path's targets keep their flow: the engine files out of their snapshots
+    assert not flow.is_engine(T.load('f2-hbm:p4rl8a64'))

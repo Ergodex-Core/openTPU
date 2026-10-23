@@ -34,6 +34,10 @@ RTL_SOURCES = [
 # Verilator's flags (in the build cache's key, with its version and the sources' names)
 VFLAGS = ["--binary", "-j", "0", "-Wno-fatal", "-Wno-WIDTHEXPAND", "-Wno-WIDTHTRUNC",
           "-Wno-UNUSEDSIGNAL", "-Wno-UNUSEDPARAM", "-O3", "--x-assign", "0", "--x-initial", "0"]
+# OTPU_VL_THREADS=N: a multi-threaded model (--threads N; ~1.8x on the decode receipts at 4);
+# in the cache key through VFLAGS, so the single-threaded builds keep theirs
+if os.environ.get("OTPU_VL_THREADS"):
+    VFLAGS += ["--threads", str(int(os.environ["OTPU_VL_THREADS"]))]
 _VERSION: str | None = None
 
 
@@ -273,6 +277,22 @@ def top_params(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool | in
         # the board's memory path on NCH channels per slice (the F2 HBM build's 8: the adapter's
         # pair rotation, otpu_native_dram NCH; otpu_native_mem models them)
         p["NCH"] = int(os.environ["OTPU_NCH"])
+    if axi == 1 and os.environ.get("OTPU_NAXI", "0") == "1":
+        # the F2 HBM build's channel path in front of the model (sim/verilator/otpu_naxi_mem.sv:
+        # the SLR chain, otpu_native_axi; docs/f2_hbm.md): only when asked (the cache keys stay)
+        p["NAXI"] = 1
+        for k in ("XR", "BURST", "IDLE", "WAIT", "OT"):
+            if os.environ.get("OTPU_NAXI_" + k):
+                p["NAXI_" + k] = int(os.environ["OTPU_NAXI_" + k])
+    if axi == 1 and os.environ.get("OTPU_HBMENG", "0") == "1":
+        # the v5 engine path's receipt model in front of the native model (sim/verilator/
+        # otpu_hbmeng_mem.sv: the SLR chains, a per-channel burst engine with the HBM's
+        # latencies; docs/full_hbm.md): only when asked (the cache keys stay)
+        p["HBMENG"] = 1
+        for k, dflt in (("XR", 3), ("BURST", 8), ("IDLE", 2), ("OT", 64), ("RATE", 0),
+                        ("DN", 3), ("UP", 7)):
+            if os.environ.get("OTPU_HBMENG_" + k):
+                p["HBMENG_" + k] = int(os.environ["OTPU_HBMENG_" + k])
     if getattr(cfg, "PORTB", 1) > 1:    # a wide port B (otpu_slice PORTB; only when on: the
         p["PORTB"] = cfg.PORTB          # other builds' cache keys stay); the Config's, always
     if getattr(cfg, "ROWLANES", False):     # row lanes (otpu_mxu RL: its streams; only when on)
@@ -298,6 +318,10 @@ def build_top(cfg, dram_lat: int = 8, uarch: dict | None = None, axi: bool = Fal
     shell = RTL / "shell"
     mem = ([shell / "otpu_afifo.sv", shell / "otpu_mem_ch.sv", TB / LDC_MODELS[ldc],
             TB / "otpu_ldc_mem.sv"] if ldc else [TB / "otpu_native_mem.sv"] if axi else [])
+    if axi and not ldc and os.environ.get("OTPU_NAXI", "0") == "1":
+        mem += [RTL / "boards/f2/otpu_native_axi.sv", TB / "otpu_naxi_mem.sv"]
+    if axi and not ldc and os.environ.get("OTPU_HBMENG", "0") == "1":
+        mem += [TB / "otpu_hbmeng_mem.sv"]      # the v5 engine path's receipt model
     return build("tb_top", [RTL / s for s in RTL_SOURCES] + mem + [TB / "tb_top.sv"],
                  top_params(cfg, dram_lat, uarch, 2 if ldc else axi, dram_bytes))
 
@@ -489,6 +513,11 @@ def _run(cfg, programs: list, images: list, dram_lat: int = 8, max_cycles: int =
         # the co-simulated controller's cycle breakdown (+ldc_break) and the H2C load's bursts
         # and bytes per channel (+h2c_bpk; sim/verilator/otpu_ldc_mem.sv)
         stats["brk"] = re.findall(r"^BRK .*$", out, re.M)
+        # OTPU_NAXI: otpu_native_axi's read bursts per channel (sim/verilator/otpu_naxi_mem.sv)
+        stats["naxi"] = re.findall(r"^NAXI .*$", out, re.M)
+        # OTPU_HBMENG: the engine model's per-channel lines (sim/verilator/otpu_hbmeng_mem.sv:
+        # reads, writes, bursts, the beats in flight x1000, the burst lengths' histogram)
+        stats["hbmeng"] = re.findall(r"^HBMENG .*$", out, re.M)
         stats["h2c"] = [dict(zip(("bursts", "bytes", "bresp"), map(int, m))) for m in
                         re.findall(r"H2C ch\d bursts=(\d+) bytes=(\d+) bresp=(\d+)", out)]
     if trace:

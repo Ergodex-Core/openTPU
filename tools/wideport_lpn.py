@@ -36,7 +36,15 @@ each a credit held for its beats at RD / round-trip beats a cycle; graded +1 .. 
     kernel source: attention / MLP / DeltaNet / the head as "other") and fires when every
     command of a run is complete, so the native run's --trace gives each run's end and the
     phase cycles add up exactly as opentpu.profile.Profile.phases charges them (the running
-    max of the ends in dispatch order).
+    max of the ends in dispatch order);
+  * S slices (v5, docs/full_hbm.md; --slices): the ISA simulator runs every slice's program
+    (the command trace of each), the net models slice 0 alone with its NCH channels (the
+    slices are alike: the same program over their own rows), and a GATHER is a collective-unit
+    op of otpu_coll's structure (upstream refuses S > 1): the S segments streamed in turn at
+    LANES words a cycle, each through the hub's registered links (otpu_board's otpu_xr pairs:
+    +COLL_LINK cycles a segment), plus the request and release crossings (COLL_SYNC). The
+    slices' skew at the barrier (the slowest slice's arrival) is not modelled: the estimate is
+    a lower bound there, labelled as every number here.
 
 Nothing here is fitted: every constant is the RTL's (otpu_mxu's row pipeline CL + MCOLS + 5
 and lanes 9, otpu_vpu's slots, otpu_quant's 60, otpu_board's NRD 64, the adapter's 14 cycles of
@@ -68,6 +76,13 @@ HWLOOP = Path(os.environ.get("HWLOOP_TREE", str(Path.home() / "ergodex-03" / "op
 LABEL = "lpn-estimate"
 GATE = 0.10          # the brief's rule: no tok/s from a calibration whose mean |error| is above ~10%
 SMALL = 0.02         # a phase under 2% of the token's cycles is shown but kept out of the mean
+# a GATHER on S slices (otpu_coll, rtl/top/otpu_coll.sv; otpu_board's hub at S > 1): the
+# request's crossing to the hub and the release back (3 otpu_xr stages each way between SLRs
+# on the F2: 6), and per segment the read's path through a slice's link and the request
+# register before its first word streams (2 stages each way + RQ: 5). Derived from the RTL's
+# structure, not fitted (the brief's rule), as the adapter's 14 cycles are.
+COLL_SYNC = 6 + 4    # (+ upstream's 4 of the unit's own ack / cool states)
+COLL_LINK = 5
 
 NATIVE_RE = {"cycles": r"Simulation finished at t=([0-9.]+)", "wall_s": r"Wall window elapsed: ([0-9.]+)",
              "rollbacks": r"rollbacks: (\d+)", "completed": r"place program_completed: (\d+) token",
@@ -90,6 +105,10 @@ def build_workload(a):
         mk["ROWLANES"] = True
     if a.aline:
         mk["ALINE"] = a.aline
+    if a.slices:
+        mk["S"] = a.slices
+    if a.act_rows:
+        mk["ACT_ROWS"] = a.act_rows
     pos, R = a.pos, 1
     if a.bonsai:
         # perf_bonsai2's Config: the target's (its T2 on), the run's PORTB / MCOLS / ROWLANES
@@ -122,8 +141,8 @@ def build_workload(a):
     cfg = board_config(DRAM_BYTES=1 << max(20, (need - 1).bit_length()), **mk)
     img = spec.image(cfg, cap, **wkw)
     progs = img.compile_step(pos)
-    if 8 * len(progs[0]) > cfg.IMEM_WORDS:
-        cfg = dataclasses.replace(cfg, IMEM_WORDS=1 << (8 * len(progs[0]) - 1).bit_length())
+    if 8 * max(len(p) for p in progs) > cfg.IMEM_WORDS:
+        cfg = dataclasses.replace(cfg, IMEM_WORDS=1 << (8 * max(len(p) for p in progs) - 1).bit_length())
     return name, spec, cfg, progs, np.zeros(need, np.uint8)
 
 
@@ -151,7 +170,9 @@ def execute(cfg, programs, images, args=None):
     for s in machine.slices:
         s.step = MethodType(record_step, s)
     machine.run(max_steps=1 << 40)
-    return Workload(cfg, programs, images, commands, machine, {}, args)
+    # S slices: every slice ran (the trace is the real one, collectives included); the net
+    # models slice 0 alone (wp: the header)
+    return Workload(cfg, programs[:1], images[:1], commands[:1], machine, {}, args)
 
 
 # ------------------------------------------------------------------------------ the model
@@ -302,6 +323,14 @@ def model_classes(wide, cfg_isa):
 
         def _simple_timing(self, ins, memory, I):
             cfg, t, w = self.workload.config, self.timing, ins.w
+            if ins.op in (I.BAR, I.GATHER) and cfg.S > 1:
+                # wp: the collective on S slices (the header): BAR the sync alone; GATHER
+                # every slice's segment in turn, each through its link
+                if ins.op == I.BAR:
+                    return COLL_SYNC, None, 0
+                rows, cols = w[2] & 65535, w[2] >> 16
+                seg = rows * ceil(cols / cfg.LANES) + COLL_LINK
+                return COLL_SYNC + cfg.S * seg, None, 0
             if ins.op in (I.DSTEP, I.STREAM):
                 # wp: the DeltaNet state update on the DMA unit: DSTEP_LANES state words a
                 # cycle, every state chunk read and written on port B (profile._describe), the
@@ -351,10 +380,14 @@ def model_classes(wide, cfg_isa):
             barriers, dispatch_delays, pipeline_delays = [], [], []
             last_register = nsig
             tally = {"mm": 0, "chunks": 0, "requests": 0, "steps": 0, "lines": 0, "issue_extra": 0,
-                     "wide_reads": 0, "two_part": 0, "chan_beats": [0] * t.nch, "dma_chunks": 0, "by_kind": {}}
+                     "wide_reads": 0, "two_part": 0, "chan_beats": [0] * t.nch, "dma_chunks": 0, "by_kind": {},
+                     "gathers": 0, "gather_words": 0}
             for idx, c in enumerate(commands):
                 ins, w = c.instruction, c.instruction.w
                 u = W.UNIT.get(ins.op, 5)
+                if ins.op == I.GATHER:
+                    tally["gathers"] += 1
+                    tally["gather_words"] += cfg.S * (w[2] & 65535) * (w[2] >> 16)
                 kinds.append(u)
                 barriers.append(last_register)
                 dispatch_delays.append(2 if ins.op == I.LOOP else 1)
@@ -550,11 +583,25 @@ def target_uarch(target: str) -> dict:
     name = target.split(":")[0]
     p = ROOT / "targets" / f"{name}.toml"
     out = {}
-    for k in ("FIFO_DEPTH", "WIN", "MXU_E", "CHASH"):
+    for k in ("FIFO_DEPTH", "WIN", "MXU_E", "CHASH", "NRD"):
         m = re.search(rf"^{k}\s*=\s*(\w+)", p.read_text(), re.M) if p.is_file() else None
         if m:
             v = m.group(1)
             out[k] = (v == "true") if v in ("true", "false") else int(v)
+    # a variant's own values over the file's ([variants.<name>]: the v5 variants' NRD 128,
+    # FIFO_DEPTH 256; opentpu.target applies them the same way)
+    _, _, var = target.partition(":")
+    if var and p.is_file():
+        try:
+            from opentpu import target as TG
+            u = TG.load(target).uarch
+            for k in out:
+                if k in u:
+                    out[k] = u[k]
+            if "NRD" in u:
+                out["NRD"] = int(u["NRD"])
+        except Exception as e:                      # (an unknown variant: the file's values)
+            print(f"(target {target}: {e}; the file's [uarch] values)")
     return out
 
 
@@ -590,11 +637,19 @@ def main() -> None:
     ap.add_argument("--mcols", type=int, default=None)
     ap.add_argument("--rowlanes", action="store_true")
     ap.add_argument("--aline", type=int, default=None, choices=[32, 64])
+    ap.add_argument("--slices", type=int, default=None, help="S slices (Config.S; v5, docs/full_hbm.md): slice 0 modelled, the collectives as the header says")
+    ap.add_argument("--act-rows", type=int, default=None, help="Config.ACT_ROWS (the v5 slice's 8)")
     ap.add_argument("--nch", type=int, default=int(os.environ.get("OTPU_NCH", "8")))
     ap.add_argument("--lat", type=int, default=60, help="the receipt's --lat: the port's read latency")
     ap.add_argument("--adapter-latency", type=int, default=None, help="cycles of path over --lat (default 14 on the native path, 4 behavioral)")
     ap.add_argument("--channel-depth", type=int, default=None, help="B read beats in flight a channel (default otpu_board NRD: 64 at NCH > 2)")
     ap.add_argument("--window", type=int, default=None, help="the dispatch window (default the target's WIN)")
+    ap.add_argument("--fifo-chunks", type=int, default=None,
+                    help="the model's prefetch FIFO (default the target's FIFO_DEPTH). Upstream's matrix engine prefetches "
+                         "in batches of --batch-rows rows that must fit it; the RTL issues advances continuously up to "
+                         "FIFO_DEPTH entries, so a target whose FIFO_DEPTH is below batch x advances (the v5 slice's 256 "
+                         "against the down projection's 8 x 54) is modelled at 1024, the setting the S = 4 receipt "
+                         "calibrates (+3.8 percent) where 256 reads +68 percent (docs/full_hbm.md \"LPN\")")
     ap.add_argument("--epilogue-lanes", type=int, default=None, help="default the target's MXU_E")
     ap.add_argument("--batch-rows", type=int, default=8, help="upstream's validated rows a prefetch event")
     ap.add_argument("--mhz", type=float, default=200.0)
@@ -616,7 +671,7 @@ def main() -> None:
     wide, wide_info = load_wide(a)
     t0 = time.time()
     name, spec, cfg, progs, img = build_workload(a)
-    work = execute(cfg, progs, [img])
+    work = execute(cfg, progs, [img] * cfg.S)    # (S slices: every slice's zero image)
     commands = work.commands[0]
     fe = time.time() - t0
     ops = {}
@@ -627,14 +682,14 @@ def main() -> None:
     nch = a.nch
     WpTiming, WpCompact, plan_mm = model_classes(wide, I)
     timing = WpTiming(dram_latency=a.lat, dram_bytes_per_cycle=cfg.D,
-                      window=a.window or ua.get("WIN", 32), fifo_chunks=ua.get("FIFO_DEPTH", 128),
+                      window=a.window or ua.get("WIN", 32), fifo_chunks=a.fifo_chunks or ua.get("FIFO_DEPTH", 128),
                       chain_length=16, epilogue_lanes=a.epilogue_lanes or ua.get("MXU_E", 2),
                       quant_buffer_chunks=1024, batch_rows=a.batch_rows,
                       port_chunks=cfg.PORTB, nch=nch, chash=ua.get("CHASH", True),
-                      channel_depth=a.channel_depth or (64 if nch > 2 else 128),
+                      channel_depth=a.channel_depth or ua.get("NRD") or (64 if nch > 2 else 128),
                       adapter_latency=a.adapter_latency if a.adapter_latency is not None else (14 if nch > 1 else 4),
                       aline=getattr(cfg, "ALINE", 32), dstep_lanes=I.DSTEP_LANES)
-    tag = f"{name}_l{a.layers}_{a.wformat}_{a.head_format or a.wformat}_p{cfg.PORTB}_m{cfg.MCOLS}{'_rl' if a.rowlanes else ''}_a{timing.aline}"
+    tag = f"{name}_l{a.layers}_{a.wformat}_{a.head_format or a.wformat}_p{cfg.PORTB}_m{cfg.MCOLS}{'_rl' if a.rowlanes else ''}_a{timing.aline}_s{cfg.S}_rd{timing.channel_depth}_lat{a.lat}"
     wd = Path(a.work) / tag
     wd.mkdir(parents=True, exist_ok=True)
     print(f"{name}: {len(progs[0])} instructions, {len(commands)} commands, {len(runs)} phase runs; "
@@ -702,7 +757,8 @@ def main() -> None:
     rtl_cycles = (meas or {}).get("cycles") or a.rtl_cycles
     # ---- the table
     print(f"\n{name} {a.wformat}/{a.head_format or a.wformat}, {'all' if not a.layers else a.layers} layers + head, PORTB {cfg.PORTB}, "
-          f"MCOLS {cfg.MCOLS}{', row lanes' if a.rowlanes else ''}, ALINE {timing.aline}, NCH {nch} at --lat {a.lat}")
+          f"MCOLS {cfg.MCOLS}{', row lanes' if a.rowlanes else ''}, ALINE {timing.aline}, NCH {nch} at --lat {a.lat}"
+          + (f", S {cfg.S} (slice 0 modelled, GATHER {tally.get('gathers', 0)} of the slice's commands)" if cfg.S > 1 else ""))
     print(f"LPN ({LABEL}): {cycles:,} cycles" + (f"; RTL (measured): {rtl_cycles:,}, error {100 * (cycles / rtl_cycles - 1):+.2f}%" if rtl_cycles else "")
           + f"; wall: frontend {fe:.0f} s, model {build_s:.0f} s, compile {comp_s:.0f} s, native {nat['process_s']:.1f} s")
     print(f"rooflines: port B {rl_all['port_b']:,} / MXU {rl_all['mxu']:,} / port A {rl_all['port_a']:,} / channel {rl_all['channel']:,} "

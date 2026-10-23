@@ -240,7 +240,11 @@ class Spec:
 
     def check(self, cfg: Config) -> None:
         D = cfg.D
-        need = [(cfg.S == 1, "one slice (a single KV head)"),
+        need = [(cfg.S == 1 or (self.hidden % cfg.S == 0 and not self.ple_dim and
+                                not self.experts and self.n_kv_global in (0, self.n_kv) and
+                                self.head_dim == self.global_head_dim),
+                 "S slices: hidden % S, no per-layer inputs, no experts, one KV head count "
+                 "(docs/full_hbm.md)"),
                 (self.head_dim % D == 0 and self.global_head_dim % D == 0, "head dims % D"),
                 (self.hidden % D == 0 and self.ple_dim % D == 0, "hidden, ple_dim % D"),
                 (all(self.n_q % self.kvh(i) == 0 for i in range(self.layers)),
@@ -672,11 +676,17 @@ PREFILL_CHUNK = 512     # a MoE model's layer-major prefill: prompt rows a chunk
 RUN_ROWS = 4            # and at most rows a run (its mask rows; moe_ffn_rows' request: R k ids)
 
 
-def _mlp_chunk(f: int, D: int, q: int, tmem: int = 1 << 16) -> int:
+def _mlp_chunk(f: int, D: int, q: int, tmem: int = 1 << 16, S: int = 1) -> int:
     """mlp's F chunk (about 8 per MLP), else the largest multiple of q up to MLP_CHUNK (scaled
     to a TMEM of `tmem` words) that divides the MLP (E4B's 10240: 512 at fp4, where _chunk
-    takes 1280)."""
+    takes 1280). On S > 1 slices f is a slice's share and the chunk is the largest multiple of
+    q dividing it up to max(MLP_CHUNK, f / 2) (docs/full_hbm.md: every chunk is six MMs and a
+    gather on every slice, so few, wide chunks; Gemma-3-1B's 1792 a slice on 4: 896, two
+    chunks; 3456 on 2 and 2304 on 3: 1152)."""
     lim = max(q, MLP_CHUNK * tmem // (1 << 16))
+    if S > 1:
+        lim = max(lim, f // 2)
+        return next((k for k in range(lim - lim % q, 0, -q) if f % k == 0), q)
     c = _chunk(f, D, q)
     if c <= lim:
         return c
@@ -689,12 +699,30 @@ def _fit_bytes(cfg: Config) -> int:
     return min(cfg.DRAM_BYTES, CARD_BYTES)
 
 
-def _ffn_pad(f: int, fd: str, D: int) -> int:
+def _ffn_pad(f: int, fd: str, D: int, S: int = 1) -> int:
     """The MLP width a layer block holds: f rounded up to its down projection's column quantum
     (D for int8, 2D for 4-bit: 26B-A4B's 2112 -> 2176 / 2304), the gate / up rows and down
-    columns past f zero (gelu_tanh(0) * 0 = 0: the same sums)."""
-    q = D if fd == "int8" else 2 * D
+    columns past f zero (gelu_tanh(0) * 0 = 0: the same sums). On S slices (docs/full_hbm.md:
+    the gate / up rows and the activation chunks sharded by rows, swiglu_down's rule) to a
+    multiple of S quanta, so every slice's share is whole chunks (Gemma-3-1B's 6912 on 4
+    slices: 7168, 1792 a slice)."""
+    q = (D if fd == "int8" else 2 * D) * S
     return -(-f // q) * q
+
+
+def _sharding(spec: "Spec", S: int) -> dict:
+    """How the model's rows split over S slices (1: nothing splits; docs/full_hbm.md "The
+    compiler"): the query heads a slice owns (every head when S does not divide n_q: then
+    wq is replicated), the K / V projection rows a slice holds (all of them when S does not
+    divide n_kv d: replicated; else its share, all-gathered before the norm and RoPE), the
+    output rows of wo and the down projections (hidden / S), the LM head rows (vocab / S
+    rounded up to whole row-lane groups of 8: the last slice's tail rows are zero)."""
+    d = spec.head_dim
+    nq_loc = spec.n_q // S if spec.n_q % S == 0 else spec.n_q
+    kv = spec.n_kv * d
+    kv_loc = kv // S if kv % S == 0 else kv
+    v_loc = -(-spec.vocab // (8 * S)) * 8 if S > 1 else spec.vocab
+    return {"nq_loc": nq_loc, "kv_loc": kv_loc, "h_loc": spec.hidden // S, "v_loc": v_loc}
 
 
 def _norms(P: int, moe: bool = False) -> dict:
@@ -850,7 +878,11 @@ class Image:
         self.choices = dict(formats=formats, ple_format=ple_format, ple_host=self.ple_host,
                             head_format=self.head_format)
         rb = lambda k, f: Q.row_bytes(k, f, D)                          # noqa: E731
-        self.v_loc = spec.vocab
+        # the rows a slice holds of what is sharded (S slices: docs/full_hbm.md; one: all)
+        S = cfg.S
+        sh = _sharding(spec, S)
+        self.nq_loc, self.kv_loc, self.h_loc, self.v_loc = \
+            sh["nq_loc"], sh["kv_loc"], sh["h_loc"], sh["v_loc"]
         self.ring = min(cap, spec.window + RING_BLOCKS * block)         # sliding cache slots
         hs, hg, rot = spec.head_dim, spec.global_head_dim, spec.global_rot
         self.rw = hs + 2 * rot                  # a RoPE row: cos, sin (sliding), cos, sin (global)
@@ -874,7 +906,7 @@ class Image:
         mr = RUN_ROWS if self.prefill_rows else (R if lookup else 1)
         self.io = {"x": b.alloc(4 * H * R), "pe": b.alloc(4 * self.ple_S * D * R),
                    "rope": b.alloc(4 * self.rw * R), "gf": b.alloc(4 * H),
-                   "logits": b.alloc(4 * spec.vocab * R), "pli": b.alloc(4 * R * L * P),
+                   "logits": b.alloc(4 * S * self.v_loc * R), "pli": b.alloc(4 * R * L * P),
                    "mask": b.alloc(4 * 2 * block * mr), "z2": b.alloc(4 * 2 * block),
                    "g_pln": b.alloc(4 * P)}
         from .prefill import tile_scratch   # a tiled run's attention outputs, a part at a time
@@ -893,8 +925,9 @@ class Image:
                       (b.alloc(L * P * rb(H, self.pformat)), b.alloc(L * P * sb(H, self.pformat)))) \
             if P else None
         # layer blocks: one layout per key
-        self.dchunk = {(f, fd): _mlp_chunk(_ffn_pad(f, fd, D), D, D if fd == "int8" else 2 * D,
-                                           cfg.TMEM_WORDS)
+        # (S slices: the chunk divides a slice's share of the padded width, swiglu_down's rule)
+        self.dchunk = {(f, fd): _mlp_chunk(_ffn_pad(f, fd, D, S) // S, D,
+                                           D if fd == "int8" else 2 * D, cfg.TMEM_WORDS, S)
                        for f, (_, _, fd, _) in zip(spec.ffn, self.lf)}
         self.bofs, self.bsize = {}, {}
         for i in range(L):
@@ -910,16 +943,20 @@ class Image:
             if mo:                  # moe_ffn's input norm (ones: the router's gains are
                 o["g_post"], o["gbase"] = lb.alloc(4 * H), lb.alloc(4)      # folded), j * E,
                 o["router"] = (lb.alloc(mo.E * H), lb.alloc(mo.E * sb(H, "int8")))  # int8
-            fp_ = _ffn_pad(ff, fd, D)
-            mats = {"wq": (nq, H, fa), "wo": (H, nq, fa), "wg": (fp_, H, fg), "wu": (fp_, H, fg)}
+            fp_ = _ffn_pad(ff, fd, D, S)
+            # (S slices: the rows a slice holds -- its query heads, its share of K / V, its
+            # output rows of wo and gate / up's share of the padded width; the down's rows below)
+            mats = {"wq": (self.nq_loc * d, H, fa), "wo": (self.h_loc, nq, fa),
+                    "wg": (fp_ // S, H, fg), "wu": (fp_ // S, H, fg)}
             if P:
                 mats.update(wpg=(P, H, fp), wpp=(H, P, fp))
             nkv = spec.kvh(i)
             if own:
                 o["kn"] = lb.alloc(4 * d)
-                mats.update(wk=(nkv * d, H, fa))
+                mats.update(wk=(self.kv_loc, H, fa))
                 if not spec.kv_same(i):
-                    mats.update(wv=(nkv * d, H, fa))
+                    mats.update(wv=(self.kv_loc, H, fa))
+            o["fp"] = fp_
             # row lanes (docs/row_lanes.md): the projections in groups (qwen3.rl_alloc)
             o["rl"] = {n: rl_lanes_of(cfg, f) for n, (_, _, f) in mats.items()}
             o["rl"]["wd"] = rl_lanes_of(cfg, fd)
@@ -927,8 +964,9 @@ class Image:
                 o[n] = rl_alloc(lb, r, c, f, D, o["rl"][n], rl_line(cfg)) if o["rl"][n] else \
                     (lb.alloc(r * rb(c, f)), lb.alloc(r * sb(c, f)))
             C = self.dchunk[ff, fd]
-            o["wd"] = [rl_alloc(lb, H, C, fd, D, o["rl"]["wd"], rl_line(cfg)) if o["rl"]["wd"] else
-                       (lb.alloc(H * rb(C, fd)), lb.alloc(H * sb(C, fd)))
+            o["wd"] = [rl_alloc(lb, self.h_loc, C, fd, D, o["rl"]["wd"], rl_line(cfg))
+                       if o["rl"]["wd"] else
+                       (lb.alloc(self.h_loc * rb(C, fd)), lb.alloc(self.h_loc * sb(C, fd)))
                        for _ in range(fp_ // C)]
             if own:
                 ck = self.ring if kind == SLIDE else cap
@@ -966,8 +1004,13 @@ class Image:
         # row lanes: the head the LM-head MMs stream, in groups (the rows above stay for the
         # gather: a group's row is not affine in its index, docs/row_lanes.md)
         self.head_rl = rl_lanes_of(cfg, self.head_format)
-        self.head_rlq = rl_alloc(b, spec.vocab, H, self.head_format, D, self.head_rl,
+        self.head_rlq = rl_alloc(b, self.v_loc, H, self.head_format, D, self.head_rl,
                                  rl_line(cfg)) if self.head_rl else None
+        # S slices without row lanes: the slice's own rows of the head for its LM-head MMs
+        # (the gather's full copy above stays on every slice)
+        self.head_sh = (b.alloc(self.v_loc * Q.row_bytes(H, self.head_format, D)),
+                        b.alloc(self.v_loc * sb(H, self.head_format))) \
+            if S > 1 and not self.head_rl else None
         self.ple = b.alloc((rows if self.ple_host else spec.vocab) * self.ple_rec)
         self.ple_store = None           # ple_host: [vocab, ple_rec] uint8, filled by build
         self.lookup = {}
@@ -1024,16 +1067,22 @@ class Image:
         spec, cfg = self.spec, self.cfg
         D, H, P, L = cfg.D, spec.hidden, spec.ple_dim, spec.layers
         self._W = W                                     # host_inputs gathers its rows
-        img = np.zeros(self.nbytes, np.uint8)
+        S = cfg.S
+        imgs = [np.zeros(self.nbytes, np.uint8) for _ in range(S)]
+        img = imgs[0]
 
-        def put(addr, a):
+        def put(addr, a, s=None):
+            """Into slice s's image (None: every slice's: the norms, the tables, the gather's
+            copy of the head)."""
             v = np.ascontiguousarray(a).view(np.uint8).reshape(-1)
-            img[addr:addr + v.size] = v
+            for im in (imgs if s is None else [imgs[s]]):
+                im[addr:addr + v.size] = v
 
         def f32(a):
             return F.ftz(np.asarray(a, np.float32))
 
-        tasks = []          # (DRAM addresses, (kind, tensor, selection, scale, format, ...))
+        tasks = []          # (DRAM addresses, (kind, tensor, selection, scale, format, ...),
+                            #  row-lane info, the slice (None: every slice))
         put(self.io["gf"], f32(_gain(spec, W["model.norm.weight"])))
         if P:
             put(self.io["g_pln"], f32(W["model.per_layer_projection_norm.weight"]
@@ -1067,14 +1116,35 @@ class Image:
             if k[1]:
                 put(base + o["kn"], f32(_gain(spec, W[a + "k_norm.weight"])))
             for n, (r, c, f) in o["mats"].items():     # gate / up: rows padded with zeros
-                sel = ("pad", r) if n in ("wg", "wu") and r != spec.ffn[i] else None
-                tasks.append((tuple(base + x for x in o[n]),
-                              ("mat", src[n] + ".weight", sel, 1.0, f, D), (o["rl"][n], c)))
+                if S == 1:
+                    sel = ("pad", r) if n in ("wg", "wu") and r != spec.ffn[i] else None
+                    tasks.append((tuple(base + x for x in o[n]),
+                                  ("mat", src[n] + ".weight", sel, 1.0, f, D), (o["rl"][n], c)))
+                    continue
+                # S slices: slice s's rows of the matrix (docs/full_hbm.md "The compiler"):
+                # gate / up rows s r .. (s + 1) r of the width padded to o["fp"] (zeros past
+                # the model's); wq / wk / wv their share, or all rows when replicated
+                for s in range(S):
+                    if n in ("wg", "wu"):
+                        sel = ("padrows", o["fp"], s * r, (s + 1) * r)
+                    elif n in ("wq", "wo", "wk", "wv") and r * S == self._full_rows(n, k):
+                        sel = ("rowrange", s * r, (s + 1) * r)
+                    else:
+                        sel = None                  # replicated (S does not divide its rows)
+                    tasks.append((tuple(base + x for x in o[n]),
+                                  ("mat", src[n] + ".weight", sel, 1.0, f, D), (o["rl"][n], c), s))
             fd = self.lf[i][2]
             C = self.dchunk[k[2], fd]               # whole rows, stored in column parts
-            tasks.append((tuple(base + x for pair in o["wd"] for x in pair),
-                          ("parts", p + "mlp.down_proj.weight",
-                           ("cols", 0, C * len(o["wd"])), 1.0, fd, D, C), (o["rl"]["wd"], C)))
+            if S == 1:
+                tasks.append((tuple(base + x for pair in o["wd"] for x in pair),
+                              ("parts", p + "mlp.down_proj.weight",
+                               ("cols", 0, C * len(o["wd"])), 1.0, fd, D, C), (o["rl"]["wd"], C)))
+            else:               # slice s's output rows, the columns padded to the sharded width
+                for s in range(S):
+                    tasks.append((tuple(base + x for pair in o["wd"] for x in pair),
+                                  ("parts", p + "mlp.down_proj.weight",
+                                   ("rowscols", s * self.h_loc, (s + 1) * self.h_loc, 0,
+                                    C * len(o["wd"])), 1.0, fd, D, C), (o["rl"]["wd"], C), s))
         head = "model.embed_tokens.weight" if spec.tied else "lm_head.weight"
         hf = self.head_format
         rb, sb, gb = (Q.row_bytes(H, hf, D), Q.scale_bytes(H, hf, D),
@@ -1082,13 +1152,28 @@ class Image:
         for r in range(0, spec.vocab, HEAD_CHUNK):
             e = min(spec.vocab, r + HEAD_CHUNK)
             addrs = (self.head[0] + r * rb, self.head[1] + r * sb, self.head_gs + r * gb)
-            if self.head_rl:                # (the groups' copy: chunks at whole groups)
+            if self.head_rl and S == 1:     # (the groups' copy: chunks at whole groups)
                 L = self.head_rl
                 addrs += (self.head_rlq[0] + (r // L) * Q.rl_row_stride(H, hf, L, D),
                           self.head_rlq[1] + (r // L) * Q.rl_scale_bytes(H, hf, L, D,
                                                                          rl_line(self.cfg)))
             tasks.append((addrs, ("gather", head, ("rowrange", r, e), 1.0, hf, D),
-                          (self.head_rl, H, "head")))
+                          (self.head_rl if S == 1 else 0, H, "head")))
+        # S slices: slice s's rows of the head for its LM-head MMs (in groups with row lanes,
+        # else plain rows), the last slice's rows past the vocabulary zero
+        for s in range(S if S > 1 else 0):
+            for r in range(0, self.v_loc, HEAD_CHUNK):
+                e = min(self.v_loc, r + HEAD_CHUNK)
+                if self.head_rl:
+                    L = self.head_rl
+                    addrs = (self.head_rlq[0] + (r // L) * Q.rl_row_stride(H, hf, L, D),
+                             self.head_rlq[1] + (r // L) * Q.rl_scale_bytes(H, hf, L, D,
+                                                                            rl_line(self.cfg)))
+                else:
+                    addrs = (self.head_sh[0] + r * rb, self.head_sh[1] + r * sb)
+                tasks.append((addrs, ("mat", head, ("padrows", S * self.v_loc, s * self.v_loc + r,
+                                                    s * self.v_loc + e), 1.0, hf, D),
+                              (self.head_rl, H), s))
         if self.ple_host:                               # the host's store: record t at t rec
             self.ple_store = np.zeros((spec.vocab, self.ple_rec), np.uint8)
         for r in range(0, spec.vocab if P else 0, PLE_CHUNK):
@@ -1098,7 +1183,9 @@ class Image:
                            self.ple_format, D, self.ple_S, (P / 2) ** 0.5), None))
         if P:                                           # (the PLE projection's groups)
             tasks[0] = tasks[0][:2] + ((self.wproj_rl, H),)
-        for (addrs, job, rl), arrays in zip(tasks, _run_tasks(W, [t[1] for t in tasks], jobs)):
+        for t, arrays in zip(tasks, _run_tasks(W, [t[1] for t in tasks], jobs)):
+            addrs, job, rl = t[:3]
+            sl = t[3] if len(t) > 3 else None           # the slice (None: every slice)
             if rl and rl[0]:                            # row-lane groups (docs/row_lanes.md)
                 L, K = rl[0], rl[1]
                 fmt, line = job[4], rl_line(self.cfg)
@@ -1114,7 +1201,7 @@ class Image:
                     v = np.ascontiguousarray(arr).view(np.uint8).reshape(-1, self.ple_rec)
                     self.ple_store[-1 - addr:-1 - addr + len(v)] = v
                 else:
-                    put(addr, arr)
+                    put(addr, arr, sl)
         if self.lookup:
             lk = self.lookup
             put(lk["rope_t"], np.concatenate(
@@ -1127,7 +1214,14 @@ class Image:
             for f, addr in lk["onehot"].items():
                 put(addr, GA.onehot(D, cfg.MCOLS, "int8" if f == "int8" else "fp4"))
             G.build(lambda s, addr, a: put(addr, a), 0, 1, spec, self.cap, lk["gen"])
-        return [img]
+        return imgs
+
+    def _full_rows(self, n: str, k: tuple) -> int:
+        """The checkpoint's rows of projection n of a layer of key k (the sharded one's are
+        the slice's share): wq n_q d, wk / wv n_kv d, wo hidden."""
+        kind = k[0]
+        d = self.spec.global_head_dim if kind == FULL else self.spec.head_dim
+        return {"wq": self.spec.n_q * d, "wo": self.spec.hidden}.get(n, self.spec.n_kv * d)
 
     def _cols(self) -> np.ndarray:
         """The columns of the checkpoint's PLE table that this model's layers read."""
@@ -1341,14 +1435,17 @@ class Image:
             if len(tokens) != len(rows):
                 raise ValueError(f"{len(tokens)} tokens for {len(rows)} rows")
             kw["tokens"] = [int(t) for t in tokens]
-        def bound():
-            m = self.descriptors(0)
+        def bound(s=0):
+            m = self.descriptors(s)
             m.fill = bool(fill)
             return {"m": m, "pos": [p for _, p in rows], "logit_rows": list(logit_rows),
                     "block": block, **kw}
+        # (one program per slice: the slices' programs differ only where their rows do --
+        # the query heads a slice attends with and its LM-head columns)
         if len(rows) == 1:          # a decode step: placed best-fit where next-fit fails
-            return [trace_fit(gemma4_step, self.cfg, 0, bound).finish()]
-        return [gemma4_step.trace(self.cfg, 0, bound()).finish()]
+            return [trace_fit(gemma4_step, self.cfg, s, lambda s=s: bound(s)).finish()
+                    for s in range(self.cfg.S)]
+        return [gemma4_step.trace(self.cfg, s, bound(s)).finish() for s in range(self.cfg.S)]
 
     def compile_prompt_run(self, blocks: int, R: int, kind: str, block: int = ATTN_BLOCK):
         """gemma4_prompt_run's (programs, run_args) (docs/prefill.md): R rows of a prompt at a
@@ -1369,9 +1466,10 @@ class Image:
         lk = self.lookup
         amask = (lk["amask"], 4 * lk["amask_M"] * (block + 1)) if "amask" in lk else None
         pos = RunRows(blocks, block, (blocks - 1) * block, 0, self.cap, R, 0, amask)
-        b = gemma4_prompt_run.trace(self.cfg, 0, {"m": self.descriptors(0), "pos": pos, "R": R,
-                                                  "kind": kind, "block": block})
-        return [b.finish()], list(b.run_args)
+        bs = [gemma4_prompt_run.trace(self.cfg, s, {"m": self.descriptors(s), "pos": pos,
+                                                    "R": R, "kind": kind, "block": block})
+              for s in range(self.cfg.S)]
+        return [b.finish() for b in bs], list(bs[0].run_args)
 
     @property
     def prompt_host_rows(self) -> bool:
@@ -1410,11 +1508,12 @@ class Image:
                 setattr(ns, n, QTensor.weight(off + da, off + sa, r, c, f, D, rl=o["rl"][n],
                                               line=rl_line(cfg)))
             C = self.dchunk[ff, fd]
-            parts = tuple(QTensor.weight(off + da, off + sa, H, C, fd, D, rl=o["rl"]["wd"],
-                                         line=rl_line(cfg))
+            # (S slices: the slice's h_loc output rows of the down projection)
+            parts = tuple(QTensor.weight(off + da, off + sa, self.h_loc, C, fd, D,
+                                         rl=o["rl"]["wd"], line=rl_line(cfg))
                           for da, sa in o["wd"])
-            ns.wd = QTensor(parts[0].data, parts[0].scale, (H, C * len(parts)), parts[0].rs,
-                            parts[0].srs, D, parts=parts, pw=C, wf=parts[0].wf)
+            ns.wd = QTensor(parts[0].data, parts[0].scale, (self.h_loc, C * len(parts)),
+                            parts[0].rs, parts[0].srs, D, parts=parts, pw=C, wf=parts[0].wf)
             if own:
                 ns.kn = Tensor(off + o["kn"], (d,), (1,))
                 ns.kv = kv(li, off)
@@ -1444,8 +1543,8 @@ class Image:
             x=_tdesc(self.io["x"], (R, H)), pe=_tdesc(self.io["pe"], (R, self.ple_S * D)),
             rope=_tdesc(self.io["rope"], (R, self.rw)), g_final=_tdesc(self.io["gf"], (H,)),
             g_pln=_tdesc(self.io["g_pln"], (P,)),
-            logits=_tdesc(self.io["logits"], (1, spec.vocab)),
-            logitsr=_tdesc(self.io["logits"], (R, spec.vocab)),
+            logits=_tdesc(self.io["logits"], (1, cfg.S * self.v_loc)),
+            logitsr=_tdesc(self.io["logits"], (R, cfg.S * self.v_loc)),
             oscr=_tdesc(self.io["o"], (self.cfg.act_rows,
                                        spec.n_q * max(spec.head_dim, spec.global_head_dim)))
             if "o" in self.io else None,
@@ -1455,9 +1554,11 @@ class Image:
             wproj=QTensor.weight(*self.wproj, L * P, H, self.pformat, D, rl=self.wproj_rl,
                                  line=rl_line(cfg))
             if P else None,
-            head=QTensor.weight(*self.head_rlq, spec.vocab, H, self.head_format, D,
+            head=QTensor.weight(*self.head_rlq, self.v_loc, H, self.head_format, D,
                                 rl=self.head_rl, line=rl_line(cfg)) if self.head_rl
-            else _qdesc(*self.head, spec.vocab, H, D, self.head_format), v_loc=spec.vocab,
+            else _qdesc(*(self.head_sh or self.head), self.v_loc, H, D, self.head_format),
+            v_loc=self.v_loc, nq_loc=self.nq_loc, kv_loc=self.kv_loc,
+            q0=sid * self.nq_loc if self.nq_loc != spec.n_q else 0,
             head_tab=GA.table(self.head[0], self.head_gs, spec.vocab, H, self.head_format, D),
             ple=GA.record_table(self.ple, R if self.ple_host else spec.vocab, self.ple_S,
                                 self.ple_format, D) if P else None)
@@ -1510,6 +1611,14 @@ def _job_init(model_dir, cls=Weights) -> None:
     _JOB_W = cls(model_dir)
 
 
+def _shape(W, name) -> tuple:
+    """A tensor's shape without loading it (a checkpoint's Weights: from its file)."""
+    files = getattr(W, "_files", None)
+    if isinstance(W, Weights) and files and name in files:
+        return tuple(_Rows(*files[name]).shape)
+    return tuple(np.asarray(W[name]).shape)
+
+
 def _job_matrix(W, name, sel, scale) -> np.ndarray:
     if sel is None:
         a = W[name]
@@ -1523,6 +1632,16 @@ def _job_matrix(W, name, sel, scale) -> np.ndarray:
     elif sel[0] == "pad":                   # the first sel[1] rows, zeros past the tensor's
         a = np.asarray(W[name], np.float32)
         a = np.pad(a, ((0, sel[1] - len(a)), (0, 0)))
+    elif sel[0] == "padrows":               # rows sel[2] .. sel[3] of the tensor padded with
+        _, _, r0, r1 = sel                  # zero rows to sel[1] (a slice's share of gate /
+        n, k = _shape(W, name)              # up or the head)
+        a = _job_matrix(W, name, ("rowrange", r0, min(r1, n)), 1.0) if r0 < n else \
+            np.zeros((0, k), np.float32)
+        a = np.pad(a, ((0, r1 - r0 - len(a)), (0, 0)))
+    elif sel[0] == "rowscols":              # rows sel[1] .. sel[2], columns sel[3] .. sel[4]
+        _, r0, r1, c0, c1 = sel             # (zeros past the tensor's: a slice's rows of
+        a = _job_matrix(W, name, ("rowrange", r0, r1), 1.0)[:, c0:c1]   # the down projection)
+        a = np.pad(a, ((0, 0), (0, c1 - c0 - a.shape[1])))
     else:                                   # columns, zeros past the tensor's
         a = np.asarray(W[name], np.float32)[:, sel[1]:sel[2]]
         a = np.pad(a, ((0, 0), (0, sel[2] - sel[1] - a.shape[1])))
@@ -1667,11 +1786,24 @@ def _attention(x, lw, m, pos, ropes, block: int):
         return ropes[r, c0:c0 + nr], ropes[r, c0 + nr:c0 + 2 * nr]
 
     kv = lw.kv
+    # S slices (docs/full_hbm.md "The compiler"): this slice's query heads q0 .. q0 + nq_loc
+    # - 1 (every head when S does not divide n_q), its share of the K / V projection rows
+    # all-gathered to the full rows (every slice norms, RoPEs and appends the same K / V into
+    # its own copy of the cache), the heads' outputs all-gathered before wo (sharded by output
+    # rows), wo's result all-gathered before the norm. One slice: all_gather is the identity.
+    q0, nq_loc = getattr(m, "q0", 0), getattr(m, "nq_loc", spec.n_q)
     xs = ol.quantize(rmsnorm(x, ol.load(lw.g_in), eps))
-    q = ol.dot(xs, lw.wq)                                   # [R, nq*d]
+    q = ol.dot(xs, lw.wq)                                   # [R, nq_loc*d]
     if lw.own:
-        k = ol.dot(xs, lw.wk)                               # [R, nkv*d]
-        v = k if lw.same else ol.dot(xs, lw.wv)
+        k = ol.dot(xs, lw.wk)                               # [R, kv_loc] -> [R, nkv*d]
+        if lw.wk.shape[0] != nkv * d:
+            k = ol.all_gather(k)
+        if lw.same:
+            v = k
+        else:
+            v = ol.dot(xs, lw.wv)
+            if lw.wv.shape[0] != nkv * d:
+                v = ol.all_gather(v)
         kn = ol.load(lw.kn)
         for r in range(R):
             c, s_ = cos_sin(r)
@@ -1686,29 +1818,38 @@ def _attention(x, lw, m, pos, ropes, block: int):
     qn = ol.load(lw.qn)
     mc = min(G, ol.mxu_columns())
     # the queries normed and RoPE'd in place, then in place the attention output: an entry's
-    # output rows are its own queries' (quantized into ACT RAM when its attention starts)
+    # output rows are its own queries' (quantized into ACT RAM when its attention starts).
+    # An entry: a row, a KV head j and a run [g0, g1) of this slice's query heads attending
+    # it (local indices: head q0 + g is the model's), at most mc at a time
     o = q
     Qs, ent = [], []
+    groups = []
+    for j in range(nkv):
+        a, b = max(0, j * G - q0), min(nq_loc, (j + 1) * G - q0)
+        groups += [(j, g0, min(b, g0 + mc)) for g0 in range(a, b, mc)]
     for r in range(R):
         c, s_ = cos_sin(r)
-        qr = o[r, :].reshape(spec.n_q, d)
+        qr = o[r, :].reshape(nq_loc, d)
         Qs.append(_rope(rmsnorm(qr, qn, eps), c, s_, qr))
         pr = pos[r] if isinstance(pos, list) else pos
         seq = (_slide_seq if lw.kind == SLIDE else _full_seq)(m, pr, block)
-        ent += [(r, j, g0, min(G, g0 + mc), seq) for j in range(nkv)
-                for g0 in range(0, G, mc)]
+        ent += [(r, j, g0, g1, seq) for j, g0, g1 in groups]
     del q, qr
 
     def emit(i, acc, l, o=o):                               # (o is freed below)
         r, j, g0, g1, _ = ent[i]
-        o[r, (j * G + g0) * d:(j * G + g1) * d].reshape(g1 - g0, d).set(acc / l[:, None])
+        o[r, g0 * d:g1 * d].reshape(g1 - g0, d).set(acc / l[:, None])
 
-    _attend_heads([Qs[r][j * G + g0:j * G + g1, :] for r, j, g0, g1, _ in ent], kv,
+    _attend_heads([Qs[r][g0:g1, :] for r, j, g0, g1, _ in ent], kv,
                   [j for _, j, _, _, _ in ent], [e[4] for e in ent], block, ol.LOG2E * spec.attn_scale,
                   depth=ATTN_DEPTH, emit=emit)
     del Qs
-    y = ol.dot(o, lw.wo)                                    # [R, H]
+    if nq_loc != spec.n_q:
+        o = ol.all_gather(o)                                # [R, n_q*d], slice-major heads
+    y = ol.dot(o, lw.wo)                                    # [R, H / S]
     del o
+    if lw.wo.shape[0] != spec.hidden:
+        y = ol.all_gather(y)                                # [R, H]
     _add_norm(x, y, ol.load(lw.g_attn), eps)
 
 
@@ -1755,6 +1896,8 @@ def _mlp(x, lw, spec, m=None):
         del acc
     else:
         y = dense()
+    if y.cols != spec.hidden:               # S slices: this slice's output rows -> the row
+        y = ol.all_gather(y)                # (docs/full_hbm.md "The compiler")
     _add_norm(x, y, ol.load(lw.g_ffn), spec.eps,
               None if spec.ple_dim or not spec.layer_scale else ol.load(lw.ls))
 

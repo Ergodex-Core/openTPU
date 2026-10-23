@@ -49,7 +49,23 @@ module otpu_top
                                       // delivers them: otpu_dram, otpu_native_dram NCH >= 2 PORTB)
   parameter bit COLL_GATHER = 1'b1,   // 0 (S = 1 only): the collective unit runs BAR alone
                                       // (otpu_coll_bar), as the card builds it (otpu_board)
-  parameter int NCH        = 2        // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
+  parameter int NCH        = 2,       // AXI = 1: the adapter's and the model's channels (F2 HBM: 8)
+  parameter bit NAXI       = 1'b0,    // AXI = 1: the F2 HBM build's channel path in front of the
+  parameter int NAXI_XR    = 3,       //   model (sim/verilator/otpu_naxi_mem.sv: NAXI_XR SLR
+  parameter int NAXI_BURST = 4,       //   stages each way, otpu_native_axi with its read bursts
+  parameter int NAXI_IDLE  = 1,       //   and gather timeout; rtlsim OTPU_NAXI)
+  parameter bit NAXI_WAIT  = 1'b0,
+  parameter int NAXI_OT    = 32,
+  parameter int NRD        = 0,       // AXI = 1: the adapter's B read beats in flight a channel
+                                      //   (0: otpu_board's default, 64 at NCH > 2)
+  parameter bit HBMENG     = 1'b0,    // AXI = 1: the v5 engine path's model in front of the
+  parameter int HBMENG_XR  = 3,       //   memory model (sim/verilator/otpu_hbmeng_mem.sv: the
+  parameter int HBMENG_BURST = 8,     //   SLR chains, a burst engine per channel with the
+  parameter int HBMENG_IDLE = 2,      //   HBM's latencies; rtlsim OTPU_HBMENG)
+  parameter int HBMENG_OT  = 64,
+  parameter int HBMENG_RATE = 0,
+  parameter int HBMENG_DN  = 3,
+  parameter int HBMENG_UP  = 7
 ) (
   input  logic          clk,
   input  logic          clk_f,         // TMEM_PMP 1: 2 x clk, rising with it (otpu_slice)
@@ -105,7 +121,7 @@ module otpu_top
       logic [NCH-1:0][511:0] wdata, rdata;
       logic [NCH-1:0][63:0] wmask;
       logic [NCH-1:0][15:0] wdone;
-      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NCH > 2 ? 64 : 128), .PORTB(PORTB), .ALINE(ALINE),
+      otpu_native_dram #(.D(D), .NCH(NCH), .RD(NRD != 0 ? NRD : NCH > 2 ? 64 : 128), .PORTB(PORTB), .ALINE(ALINE),
                          .APR(RL != 0 ? 16 : 1)) u_adapt (
         .clk, .rst(sys_rst), .a_flush(rst || ld_start || a_inval),   // as otpu_board
         .a_rdy_x(a_rdy), .a_req_x(a_req), .a_we_x(a_we), .a_addr_x(a_addr), .a_wdata_x(a_wdata),
@@ -120,6 +136,22 @@ module otpu_top
       if (AXI == 2) begin : g_ldc
         otpu_ldc_mem #(.WORDS(DRAM_WORDS), .SID(s)) u_mem (
           .clk, .rst(sys_rst),
+          .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
+          .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
+          .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
+      end else if (HBMENG) begin : g_hbmeng
+        otpu_hbmeng_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(NCH), .NXR(HBMENG_XR),
+                          .BURST(HBMENG_BURST), .IDLE(HBMENG_IDLE), .OT(HBMENG_OT), .RATE(HBMENG_RATE),
+                          .LAT_DN(HBMENG_DN), .LAT_UP(HBMENG_UP)) u_mem (
+          .clk, .rst(sys_rst), .run_rst(rst),
+          .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
+          .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
+          .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
+      end else if (NAXI) begin : g_naxi
+        otpu_naxi_mem #(.WORDS(DRAM_WORDS), .LAT(DRAM_LAT), .SID(s), .NCH(NCH), .NXR(NAXI_XR),
+                        .READ_BURST(NAXI_BURST), .READ_IDLE(NAXI_IDLE), .READ_WAIT(NAXI_WAIT),
+                        .OT(NAXI_OT)) u_mem (
+          .clk, .rst(sys_rst), .run_rst(rst),
           .n_cvalid(cvalid), .n_cready(cready), .n_cwe(cwe), .n_caddr(caddr),
           .n_wvalid(wvalid), .n_wready(wready), .n_wdata(wdata), .n_wmask(wmask),
           .n_rvalid(rvalid), .n_rdata(rdata), .n_wdone(wdone), .dump);
