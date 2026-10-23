@@ -1012,7 +1012,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
                 k = ol.dot(xs, lw.wk[j * d:(j + 1) * d, :])
                 v = k if lw.same else ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
                 kr = _rope_rows_g(rmsnorm(k, kn, eps), c, s_, ol.empty([T, d]))
-                vr = rmsnorm(v, None, eps)
+                vr = rmsnorm(v, None, eps) if spec.v_norm else v
                 for r in range(T):
                     ol.kv_append(kv, j, _slot(m, lw.kind, rows[r]), kr[r:r + 1, :],
                                  vr[r:r + 1, :])
@@ -1038,7 +1038,7 @@ def _gemma_attention_tile(res: Res, lw, m, pos: RunRows, ropes, T: int, block: i
             k = ol.dot(xs, lw.wk[j * d:(j + 1) * d, :])
             v = k if lw.same else ol.dot(xs, lw.wv[j * d:(j + 1) * d, :])
             kr = _rope_rows_g(rmsnorm(k, kn, eps), c, s_, ol.empty([T, d]))
-            vr = rmsnorm(v, None, eps)
+            vr = rmsnorm(v, None, eps) if spec.v_norm else v
             for r in range(T):
                 ol.kv_append(kv, j, _slot(m, lw.kind, rows[r]), kr[r:r + 1, :], vr[r:r + 1, :])
             del k, v, kr, vr
